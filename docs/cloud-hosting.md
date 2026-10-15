@@ -26,7 +26,7 @@ deployment sets `ORCHESTER_CLOUD_PUBLIC_URL=https://orchester-cloud.lurq.dev` in
 | --- | --- | --- |
 | `LISTEN` | no (`127.0.0.1:8090`) | Address and port to listen on; `0.0.0.0:8090` in the container |
 | `PUBLIC_URL` | yes | Where people reach the cloud and its web front, without a trailing `/`. Email links point to `<it>/confirm/<token>` and `<it>/reset/<token>`, and identity tokens name it as their issuer |
-| `DATABASE_URL` | yes, secret | A PostgreSQL connection string. `sslmode=require` for a database across a network, verified against the OS trust store; `sslmode=disable` only on a private network such as the compose network |
+| `DATABASE_URL` | yes, secret | A PostgreSQL connection string that names its `sslmode`. `sslmode=require` (TLS verified against the OS trust store) for a database across a network. `sslmode=disable` is accepted only for a host on the local network: a loopback or private address, a Unix socket, or a single-label name such as the compose service `postgres`. Without `sslmode`, or with `prefer`, the cloud refuses to start |
 | `SMTP_URL` | yes, secret | The relay, as lettre reads it: `smtps://user:pass@host:465` (TLS), `smtp://user:pass@host:587?tls=required` (STARTTLS required), or plain `smtp://host:25` only for a relay on the same host or a private network. URL-encode the user and password |
 | `SMTP_FROM` | yes | The sender, e.g. `Orchester <no-reply@lurq.dev>` |
 | `KEY_ENCRYPTION_KEY` | yes, secret | 64 hex characters (32 random bytes, e.g. `openssl rand -hex 32`). It seals the signing keys' private halves in the database. Losing it means rotating to a new signing key; changing it makes the stored keys unusable |
@@ -97,8 +97,13 @@ docker compose cp signed.jws cloud:/tmp/signed.jws
 docker compose exec cloud orchester-cloud keys publish /tmp/signed.jws
 ```
 
-`keys rotate` makes a key the cloud uses only once a published key set lists it. The previous key keeps signing
-until then, so tokens do not stop between `rotate` and `publish`.
+`keys rotate` makes a key the cloud uses only once a published key set lists it. While another key signs, the new
+one starts signing two days after the rotation, so team servers (which refresh the key set daily) have it before
+any token signed with it arrives. The previous key signs until then. So rotate at least two days before the current
+key's 30 days end; `keys sign` prints every key's dates. The very first key signs at once.
+
+`keys sign` refuses a statement prepared more than a day ago, and one whose lifetimes exceed the rules. Team
+servers apply the same limits, so even a stolen root key cannot make a long-lived key set.
 
 ## Docker with Caddy
 
@@ -123,11 +128,14 @@ Then start it with `docker compose up -d --build` in `deploy/cloud`, and run the
 
 ## Running the tests
 
-`cargo test -p orchester-cloud --test cloud <filter>` runs the cloud against a real PostgreSQL. With
+`cargo test -p orchester-cloud --test cloud <filter>` runs the cloud against a real PostgreSQL (`::` runs every
+test). Without a filter it runs nothing and says so, so a plain `cargo test --workspace` needs no database; CI runs
+them in a Linux job with a PostgreSQL service. With
 `ORCHESTER_CLOUD_TEST_DATABASE_URL` set (a server URL whose user may create databases, e.g.
 `postgres://postgres:pw@127.0.0.1:5432`), it uses that server. Otherwise it starts a throwaway `postgres:18-alpine`
 container on 127.0.0.1 (`orchester-cloud-test-…`) and removes it when the run ends. Each test creates and drops
 its own database. Without Docker or the variable, the run fails; it never passes without a database. At the end
 the run checks its whole log for every password, token, link, key and email the tests used.
 `cargo test -p orchester-api --features identity --test identity identity` checks tokens and key sets over explicit
-keys and times, with no database.
+keys and times, and `cargo test -p orchester-cloud --test limits limits` the bounded limiters and hashing pool,
+both with no database.

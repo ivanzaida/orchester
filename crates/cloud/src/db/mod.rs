@@ -28,6 +28,7 @@ impl Database {
     // The parser's message may quote the connection string, which holds the password.
     let config = tokio_postgres::Config::from_str(url.expose())
       .map_err(|_| CloudError::Configuration("DATABASE_URL is not a PostgreSQL connection string"))?;
+    tls::check_transport(&config)?;
     let manager = Manager::from_config(
       config,
       tls::connector()?,

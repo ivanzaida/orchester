@@ -19,6 +19,10 @@ pub struct IdentityClaims {
   pub email: String,
   pub name: String,
   pub device: DeviceInfo,
+  /// The invite the token accepts, when it was issued for one (`docs/architecture/server.md`, "Identity tokens and
+  /// keys"); the team server then admits the verified email to that invite.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub invite: Option<String>,
   /// Unique per token; a team server accepts each once.
   pub jti: String,
   pub iat: i64,
@@ -33,6 +37,7 @@ pub struct TokenSubject {
   pub email: String,
   pub name: String,
   pub device: DeviceInfo,
+  pub invite: Option<String>,
 }
 
 impl IdentityClaims {
@@ -48,6 +53,7 @@ impl IdentityClaims {
       email: subject.email,
       name: subject.name,
       device: subject.device,
+      invite: subject.invite,
       jti: jws::encode(&jti),
       iat: now,
       exp: now + TOKEN_LIFETIME_SECS,

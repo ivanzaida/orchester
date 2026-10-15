@@ -3,7 +3,7 @@ use std::{future::Future, net::IpAddr, pin::Pin, time::Duration};
 use actix_web::{
   FromRequest, HttpMessage, HttpRequest,
   dev::Payload,
-  http::header::{AUTHORIZATION, HeaderMap},
+  http::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap},
   web,
 };
 use orchester_api::{Credential, cloud::CloudErrorCode};
@@ -24,8 +24,12 @@ impl<T: DeserializeOwned + 'static> FromRequest for SafeJson<T> {
   type Future = Extracted<Self>;
 
   fn from_request(request: &HttpRequest, payload: &mut Payload) -> Self::Future {
+    let json = json_content(request.headers());
     let body = web::Payload::from_request(request, payload).into_inner();
     Box::pin(async move {
+      if !json {
+        return Err(CloudErrorCode::UnsupportedMediaType.into());
+      }
       let body = body.map_err(|_| CloudError::from(CloudErrorCode::BadRequest))?;
       let bytes = tokio::time::timeout(Duration::from_secs(10), body.to_bytes_limited(BODY_LIMIT))
         .await
@@ -84,6 +88,16 @@ fn cloud(request: &HttpRequest) -> Result<Cloud, CloudError> {
     .app_data::<web::Data<Cloud>>()
     .map(|data| Cloud::clone(data))
     .ok_or(CloudError::Worker)
+}
+
+/// `Content-Type: application/json`, with or without parameters (review 1, L2): a body sent as a form or as plain
+/// text is refused, so a browser's simple cross-site request can never reach a JSON endpoint.
+fn json_content(headers: &HeaderMap) -> bool {
+  headers
+    .get(CONTENT_TYPE)
+    .and_then(|value| value.to_str().ok())
+    .and_then(|value| value.split(';').next())
+    .is_some_and(|essence| essence.trim().eq_ignore_ascii_case("application/json"))
 }
 
 fn bearer(headers: &HeaderMap) -> Result<Credential, CloudError> {

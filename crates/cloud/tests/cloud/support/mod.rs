@@ -1,3 +1,4 @@
+pub mod args;
 pub mod http;
 pub mod log;
 pub mod mailer;
@@ -151,6 +152,10 @@ impl TestCloud {
     }
   }
 
+  pub fn address(&self) -> SocketAddr {
+    self.address
+  }
+
   pub async fn finish(mut self) {
     self.stop.take().expect("running").send(()).expect("the server listens");
     tokio::time::timeout(Duration::from_secs(30), self.task.take().expect("server task"))
@@ -234,12 +239,19 @@ impl TestCloud {
     signed
   }
 
-  /// The whole key ceremony: a new signing key, its statement signed by the root, published.
-  pub async fn publish_keys(&self) {
+  /// The whole key ceremony: a new signing key, its statement signed by the root, published. Returns what was
+  /// published.
+  pub async fn publish_keys(&self) -> String {
     self.cloud.host_rotate_keys().await.expect("rotate");
+    self.publish_key_set().await
+  }
+
+  /// The weekly ceremony without a rotation.
+  pub async fn publish_key_set(&self) -> String {
     let statement = self.cloud.host_prepare_key_set().await.expect("prepare");
-    let signed = self.root.sign_key_set(&statement).expect("sign");
+    let signed = self.root.sign_key_set(&statement, statement.issued_at).expect("sign");
     self.cloud.host_publish_key_set(&signed).await.expect("publish");
+    signed
   }
 }
 

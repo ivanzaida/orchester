@@ -2,7 +2,7 @@ use orchester_api::cloud::{AccountResponse, CloudSignedIn, DevicesResponse};
 use orchester_cloud::mail::EmailPurpose;
 use serde_json::json;
 
-use crate::support::{DAY, HOUR, PASSWORD, TestCloud, remember};
+use crate::support::{DAY, HOUR, PASSWORD, TestCloud, postgres, remember};
 
 const NEW_PASSWORD: &str = "a brand new passphrase";
 
@@ -231,5 +231,50 @@ pub async fn web_sessions_end_twelve_hours_after_sign_in() {
     .await
     .json::<DevicesResponse>();
   assert_eq!(listed.devices.len(), 1, "the browser's session is gone from the list");
+  cloud.finish().await;
+}
+
+/// Review 1, M1: a sign-in whose password check passed just before a reset commits must not leave a device behind.
+/// The reset here is held open after it changed the password and signed every device out; the sign-in then waits
+/// for it and finds the password changed.
+pub async fn a_sign_in_racing_a_reset_does_not_survive_it() {
+  let cloud = TestCloud::start().await;
+  let email = "race@example.test";
+  cloud.register(email).await;
+  let mut admin = postgres().database(&cloud.database).await;
+  let reset = admin.transaction().await.expect("a reset's transaction");
+  reset
+    .execute(
+      "UPDATE accounts SET password_hash = 'set by a reset' WHERE email = $1",
+      &[&email],
+    )
+    .await
+    .expect("a new password");
+  reset
+    .execute(
+      "UPDATE devices SET revoked_at = now() FROM accounts a WHERE devices.account = a.id AND a.email = $1",
+      &[&email],
+    )
+    .await
+    .expect("every device signed out");
+  let commit_later = async move {
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    reset.commit().await.expect("the reset commits");
+  };
+  let (signed_in, ()) = tokio::join!(cloud.try_sign_in(email, PASSWORD, "Laptop"), commit_later);
+  assert_eq!(
+    (signed_in.status, signed_in.error()),
+    (401, "invalid_credentials".into())
+  );
+  let left: i64 = admin
+    .query_one(
+      "SELECT count(*) FROM devices d JOIN accounts a ON a.id = d.account WHERE a.email = $1 AND d.revoked_at IS NULL",
+      &[&email],
+    )
+    .await
+    .expect("count devices")
+    .get(0);
+  assert_eq!(left, 0, "no device outlives the reset");
+  drop(admin);
   cloud.finish().await;
 }

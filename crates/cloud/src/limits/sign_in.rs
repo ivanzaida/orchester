@@ -2,9 +2,13 @@
 //! cloud"): 5 failures for an email (or an account's password change) in 15 minutes block it for 15 minutes, 20
 //! failures from one address block that address. A place is reserved before the hashing pool, so parallel guesses
 //! cannot pass the limit while their hashes run.
+//!
+//! The maps are bounded (review 1, M6): idle keys are pruned once a minute, not on every sign-in, and while a map
+//! holds `max_keys` keys a new key is refused with `503 busy` rather than grow it; keys already counted go on.
 
 use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
+use orchester_api::cloud::CloudErrorCode;
 use orchester_core::id::CloudAccountId;
 use parking_lot::Mutex;
 
@@ -47,33 +51,69 @@ impl Failures {
   }
 }
 
-#[derive(Default)]
 struct Counters {
   emails: HashMap<String, Failures>,
   addresses: HashMap<IpAddr, Failures>,
   password_accounts: HashMap<CloudAccountId, Failures>,
+  max_keys: usize,
+  pruned_at: i64,
 }
 
-#[derive(Default)]
-pub(crate) struct SignInLimit(Arc<Mutex<Counters>>);
+impl Counters {
+  fn prune(&mut self, now: i64) {
+    if now.saturating_sub(self.pruned_at) < PRUNE_MS {
+      return;
+    }
+    self.pruned_at = now;
+    self.emails.retain(|_, failures| failures.retain(now));
+    self.addresses.retain(|_, failures| failures.retain(now));
+    self.password_accounts.retain(|_, failures| failures.retain(now));
+  }
+}
+
+const PRUNE_MS: i64 = 60 * 1000;
+
+/// Whether `key` is counted already or the map has room for it.
+fn room<K: std::hash::Hash + Eq, V>(map: &HashMap<K, V>, key: &K, max_keys: usize) -> Result<(), CloudError> {
+  if map.contains_key(key) || map.len() < max_keys {
+    Ok(())
+  } else {
+    Err(CloudErrorCode::Busy.into())
+  }
+}
+
+pub struct SignInLimit(Arc<Mutex<Counters>>);
 
 enum AttemptKeys {
   SignIn { email: String, address: IpAddr },
   PasswordChange(CloudAccountId),
 }
 
-pub(crate) struct Attempt {
+/// A place reserved for one sign-in or password check; it ends as `succeeded` or `failed`.
+pub struct Attempt {
   counters: Arc<Mutex<Counters>>,
   keys: Option<AttemptKeys>,
   started_at: Option<i64>,
 }
 
 impl SignInLimit {
+  /// Each of its maps holds at most `max_keys` emails, addresses or accounts.
+  pub fn new(max_keys: usize) -> Self {
+    Self(Arc::new(Mutex::new(Counters {
+      emails: HashMap::new(),
+      addresses: HashMap::new(),
+      password_accounts: HashMap::new(),
+      max_keys,
+      pruned_at: i64::MIN,
+    })))
+  }
+
   pub fn sign_in(&self, email: String, address: IpAddr, now: i64) -> Result<Attempt, CloudError> {
     let address = rate_address(address);
     let mut counters = self.0.lock();
-    counters.emails.retain(|_, failures| failures.retain(now));
-    counters.addresses.retain(|_, failures| failures.retain(now));
+    counters.prune(now);
+    room(&counters.emails, &email, counters.max_keys)?;
+    room(&counters.addresses, &address, counters.max_keys)?;
     let email_retry = counters
       .emails
       .get(&email)
@@ -96,7 +136,8 @@ impl SignInLimit {
 
   pub fn password(&self, account: CloudAccountId, now: i64) -> Result<Attempt, CloudError> {
     let mut counters = self.0.lock();
-    counters.password_accounts.retain(|_, failures| failures.retain(now));
+    counters.prune(now);
+    room(&counters.password_accounts, &account, counters.max_keys)?;
     let failures = counters.password_accounts.entry(account).or_default();
     if let Some(retry) = failures.capacity(now, 5) {
       return Err(CloudError::RateLimited(retry));

@@ -14,6 +14,8 @@ orchester-api = { workspace = true, features = ["identity"] }
 orchester-core.workspace = true
 actix-web.workspace = true
 argon2.workspace = true
+# Readable UTC dates in the key ceremony's output.
+chrono.workspace = true
 deadpool-postgres.workspace = true
 lettre.workspace = true
 parking_lot.workspace = true

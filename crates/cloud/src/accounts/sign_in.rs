@@ -52,12 +52,14 @@ impl Cloud {
     let token = random_token(DEVICE_PREFIX)?;
     let id = CloudDeviceId::generate();
     let client = self.inner.db.client().await?;
-    // Only while the password is still the one just verified: a change or reset meanwhile wins.
+    // Only while the password is still the one just verified: a change or reset meanwhile wins. `FOR SHARE` waits
+    // for a reset or change that holds the account row and then checks its new hash, so a device can never be added
+    // after a reset signed every device out (review 1, M1).
     let added = client
       .execute(
         "INSERT INTO devices (id, account, name, platform, token_hash, created_at, last_used_at)
          SELECT $1, id, $2, $3, $4, $5, $5 FROM accounts
-         WHERE id = $6 AND password_hash = $7 AND confirmed_at IS NOT NULL",
+         WHERE id = $6 AND password_hash = $7 AND confirmed_at IS NOT NULL FOR SHARE",
         &[
           &id.as_uuid(),
           &device.name,

@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use orchester_api::cloud::{AccountResponse, CloudPlatform, DevicesResponse};
 use orchester_cloud::mail::EmailPurpose;
 use serde_json::json;
 
-use crate::support::{BASE_URL, DAY, PASSWORD, TestCloud, remember};
+use crate::support::{BASE_URL, DAY, PASSWORD, TestCloud, postgres, remember};
 
 pub async fn sign_up_confirm_sign_in() {
   let cloud = TestCloud::start().await;
@@ -81,46 +83,48 @@ pub async fn wrong_password_and_unknown_email_answer_alike() {
   cloud.finish().await;
 }
 
-/// Signing up with a registered email answers as a new one does and changes nothing but sending an email; a repeated
-/// sign-up of an unconfirmed email sends a new link and keeps the first password.
+/// Signing up with a registered email answers as a new one does and changes nothing but sending an email.
 async fn repeated_sign_ups_change_nothing(cloud: &TestCloud, email: &str) {
   let again = cloud.sign_up(email, "another password of mine").await;
   let fresh = cloud.sign_up("new@example.test", "another password of mine").await;
   assert_eq!((again.status, &again.body), (fresh.status, &fresh.body));
   assert_eq!(cloud.mail.nth(email, 2).await.purpose, EmailPurpose::AlreadyRegistered);
-  assert_eq!(
-    cloud
-      .try_sign_in(email, "another password of mine", "Laptop")
-      .await
-      .status,
-    401
-  );
+  let changed = cloud.try_sign_in(email, "another password of mine", "Laptop").await;
+  assert_eq!(changed.status, 401);
   assert_eq!(cloud.try_sign_in(email, PASSWORD, "Laptop").await.status, 201);
+}
+
+/// Review 1, H1: someone signs up first with another person's email and their own password. When the owner signs
+/// up and confirms through their own link, the owner's password is the account's and the first one never works.
+pub async fn an_earlier_sign_up_cannot_take_the_account() {
+  let cloud = TestCloud::start().await;
+  let email = "victim@example.test";
+  assert_eq!(cloud.sign_up(email, "the attacker's password").await.status, 202);
+  let attacker_link = cloud.mail.nth(email, 1).await.link_token();
+  assert_eq!(cloud.sign_up(email, "the owner's own password").await.status, 202);
+  let owner_link = cloud.mail.nth(email, 2).await.link_token();
+  let earlier = cloud
+    .request(
+      "POST",
+      "/auth/confirm",
+      None,
+      Some(json!({"link_token": attacker_link})),
+    )
+    .await;
   assert_eq!(
-    cloud.sign_up("new@example.test", "a stranger's password").await.status,
-    202
+    (earlier.status, earlier.error()),
+    (422, "invalid_link".into()),
+    "a newer sign-up ends older links"
   );
-  let link = cloud.mail.nth("new@example.test", 2).await;
-  assert_eq!(link.purpose, EmailPurpose::Confirm);
-  let confirm = json!({"link_token": link.link_token()});
-  assert_eq!(
-    cloud.request("POST", "/auth/confirm", None, Some(confirm)).await.status,
-    204
-  );
-  assert_eq!(
-    cloud
-      .try_sign_in("new@example.test", "a stranger's password", "Laptop")
-      .await
-      .status,
-    401
-  );
-  assert_eq!(
-    cloud
-      .try_sign_in("new@example.test", "another password of mine", "Laptop")
-      .await
-      .status,
-    201
-  );
+  let confirmed = cloud
+    .request("POST", "/auth/confirm", None, Some(json!({"link_token": owner_link})))
+    .await;
+  assert_eq!(confirmed.status, 204);
+  let attacker = cloud.try_sign_in(email, "the attacker's password", "Laptop").await;
+  assert_eq!((attacker.status, attacker.error()), (401, "invalid_credentials".into()));
+  let owner = cloud.sign_in(email, "the owner's own password", "Laptop").await;
+  assert_eq!(owner.account.email, email);
+  cloud.finish().await;
 }
 
 /// A reset request answers alike for any email and mails only an account.
@@ -140,4 +144,30 @@ async fn resets_answer_alike(cloud: &TestCloud, email: &str) {
   assert_eq!((known.status, &known.body), (stranger.status, &stranger.body));
   assert_eq!(cloud.mail.nth(email, 3).await.purpose, EmailPurpose::Reset);
   assert_eq!(cloud.mail.count("nobody@example.test"), 0);
+}
+
+/// Review 1, M5: a reset request answers before it touches the database, so how long it takes says nothing about
+/// whether the email has an account. With the tables locked, both answers still come at once.
+pub async fn a_reset_request_answers_before_any_database_work() {
+  let cloud = TestCloud::start().await;
+  let email = "timing@example.test";
+  cloud.register(email).await;
+  remember("nobody-timing@example.test");
+  let mut admin = postgres().database(&cloud.database).await;
+  let lock = admin.transaction().await.expect("a locking transaction");
+  lock
+    .batch_execute("LOCK TABLE accounts, email_links IN ACCESS EXCLUSIVE MODE")
+    .await
+    .expect("lock the tables");
+  for address in [email, "nobody-timing@example.test"] {
+    let request = cloud.request("POST", "/auth/reset", None, Some(json!({"email": address})));
+    let answer = tokio::time::timeout(Duration::from_secs(2), request)
+      .await
+      .expect("the answer does not wait for the database");
+    assert_eq!(answer.status, 202);
+  }
+  lock.commit().await.expect("release the tables");
+  assert_eq!(cloud.mail.nth(email, 2).await.purpose, EmailPurpose::Reset);
+  drop(admin);
+  cloud.finish().await;
 }

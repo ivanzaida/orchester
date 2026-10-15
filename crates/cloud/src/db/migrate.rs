@@ -7,7 +7,10 @@ use tokio_postgres::Client;
 
 use crate::error::CloudError;
 
-const MIGRATIONS: &[(i32, &str)] = &[(1, include_str!("../../migrations/0001_accounts.sql"))];
+const MIGRATIONS: &[(i32, &str)] = &[
+  (1, include_str!("../../migrations/0001_accounts.sql")),
+  (2, include_str!("../../migrations/0002_pending_sign_up.sql")),
+];
 
 /// The newest schema version this binary knows.
 pub const LATEST_SCHEMA: i32 = MIGRATIONS[MIGRATIONS.len() - 1].0;

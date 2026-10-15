@@ -1,59 +1,88 @@
-//! The words of the cloud's emails, in English: the cloud has no locale of the person yet (reported in the C1
-//! notes). Links point to the web front's pages (`/confirm/{token}`, `/reset/{token}`), which call the API with the
-//! token from their server side.
+//! The cloud's emails, with their words from `assets/locales/<locale>.json` (AGENTS.md rule 13). The cloud keeps no
+//! locale of the person, so every email is in the one shipped locale, English. No email carries text a sign-up chose
+//! (review 1, L1). Links point to the web front's pages (`/confirm/{token}`, `/reset/{token}`), which call the API
+//! with the token from their server side.
 
 use orchester_api::Credential;
+use serde::Deserialize;
 
 use super::{Email, EmailPurpose};
+use crate::error::CloudError;
+
+const ENGLISH: &str = include_str!("../../assets/locales/en.json");
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Locale {
+  email: Emails,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct Emails {
+  confirm: Template,
+  already_registered: Template,
+  reset: Template,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Template {
+  subject: String,
+  body: String,
+}
 
 pub(crate) struct Messages {
   base_url: String,
+  emails: Emails,
 }
 
 impl Messages {
-  pub fn new(base_url: String) -> Self {
-    Self { base_url }
+  /// Fails when the locale lacks a text or a text lacks its placeholder, so a broken locale stops the start.
+  pub fn new(base_url: String) -> Result<Self, CloudError> {
+    let locale: Locale = serde_json::from_str(ENGLISH)
+      .map_err(|_| CloudError::Configuration("the email locale does not have every email text"))?;
+    let emails = locale.email;
+    let placeholders = [
+      (&emails.confirm, "{link}"),
+      (&emails.already_registered, "{url}"),
+      (&emails.reset, "{link}"),
+    ];
+    if placeholders
+      .iter()
+      .any(|(template, name)| !template.body.contains(name))
+    {
+      return Err(CloudError::Configuration("an email text lacks its link placeholder"));
+    }
+    Ok(Self { base_url, emails })
   }
 
-  pub fn confirm(&self, to: String, display_name: &str, token: &Credential) -> Email {
+  pub fn confirm(&self, to: String, token: &Credential) -> Email {
     let link = format!("{}/confirm/{}", self.base_url, token.expose());
-    Email {
-      purpose: EmailPurpose::Confirm,
-      to,
-      subject: "Confirm your Orchester account".into(),
-      body: format!(
-        "Hello {display_name},\n\nconfirm the email of your Orchester account by opening this link within 24 \
-         hours:\n\n{link}\n\nIf you did not sign up for Orchester, ignore this email; no account is created \
-         without the confirmation.\n"
-      ),
-    }
+    email(EmailPurpose::Confirm, to, &self.emails.confirm, "{link}", &link)
   }
 
   pub fn already_registered(&self, to: String) -> Email {
-    Email {
-      purpose: EmailPurpose::AlreadyRegistered,
+    email(
+      EmailPurpose::AlreadyRegistered,
       to,
-      subject: "You already have an Orchester account".into(),
-      body: format!(
-        "Someone tried to sign up for Orchester with this email, which already has an account.\n\nIf it was you, \
-         sign in at {} instead. If you forgot your password, choose Forgot password there.\n\nIf it was not you, \
-         you can ignore this email; nothing changed.\n",
-        self.base_url
-      ),
-    }
+      &self.emails.already_registered,
+      "{url}",
+      &self.base_url,
+    )
   }
 
   pub fn reset(&self, to: String, token: &Credential) -> Email {
     let link = format!("{}/reset/{}", self.base_url, token.expose());
-    Email {
-      purpose: EmailPurpose::Reset,
-      to,
-      subject: "Reset your Orchester password".into(),
-      body: format!(
-        "Choose a new password for your Orchester account by opening this link within 1 hour:\n\n{link}\n\n\
-         Setting a new password signs out every device of the account. If you did not ask for this, ignore this \
-         email; your password stays as it is.\n"
-      ),
-    }
+    email(EmailPurpose::Reset, to, &self.emails.reset, "{link}", &link)
+  }
+}
+
+fn email(purpose: EmailPurpose, to: String, template: &Template, placeholder: &str, value: &str) -> Email {
+  Email {
+    purpose,
+    to,
+    subject: template.subject.clone(),
+    body: template.body.replace(placeholder, value),
   }
 }

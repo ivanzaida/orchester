@@ -10,9 +10,9 @@ mod db;
 pub mod error;
 mod http;
 mod keys;
-mod limits;
+pub mod limits;
 pub mod mail;
-mod passwords;
+pub mod passwords;
 mod sweep;
 mod tokens;
 

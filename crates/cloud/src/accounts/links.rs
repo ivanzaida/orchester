@@ -9,6 +9,7 @@ use crate::{
   clock::{DAY_MS, HOUR_MS},
   db::time,
   error::CloudError,
+  passwords::PasswordHash,
   tokens::{random_token, token_hash, well_formed},
 };
 
@@ -30,27 +31,54 @@ impl LinkPurpose {
   }
 }
 
+/// What a sign-up asked for: the account takes it only when the link sent for that sign-up is confirmed (review 1,
+/// H1), so whoever signed up first with someone else's email never sets that account's password.
+pub(super) struct Pending<'a> {
+  pub hash: &'a PasswordHash,
+  pub display_name: &'a str,
+}
+
+pub(super) enum NewLink<'a> {
+  Confirm(Pending<'a>),
+  Reset,
+}
+
+/// A link just used: its account, and for a confirmation link the sign-up it was sent for.
+pub(super) struct UsedLink {
+  pub account: CloudAccountId,
+  pub hash: Option<PasswordHash>,
+  pub display_name: Option<String>,
+}
+
 /// Records a one-time link for the account and returns its token, which only the email carries.
 pub(super) async fn new_link(
   client: &impl GenericClient,
   account: CloudAccountId,
-  purpose: LinkPurpose,
+  link: NewLink<'_>,
   now: i64,
 ) -> Result<Credential, CloudError> {
   let token = random_token("")?;
-  let lifetime = match purpose {
-    LinkPurpose::Confirm => CONFIRM_MS,
-    LinkPurpose::Reset => RESET_MS,
+  let (purpose, lifetime, hash, display_name) = match &link {
+    NewLink::Confirm(pending) => (
+      LinkPurpose::Confirm,
+      CONFIRM_MS,
+      Some(pending.hash.expose()),
+      Some(pending.display_name),
+    ),
+    NewLink::Reset => (LinkPurpose::Reset, RESET_MS, None, None),
   };
   client
     .execute(
-      "INSERT INTO email_links (token_hash, account, purpose, created_at, expires_at) VALUES ($1, $2, $3, $4, $5)",
+      "INSERT INTO email_links (token_hash, account, purpose, created_at, expires_at, password_hash, display_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)",
       &[
         &token_hash(&token),
         &account.as_uuid(),
         &purpose.as_str(),
         &time(now),
         &time(now + lifetime),
+        &hash,
+        &display_name,
       ],
     )
     .await?;
@@ -63,21 +91,44 @@ pub(super) async fn use_link(
   token: &Credential,
   purpose: LinkPurpose,
   now: i64,
-) -> Result<Option<CloudAccountId>, CloudError> {
+) -> Result<Option<UsedLink>, CloudError> {
   if !well_formed(token.expose(), "") {
     return Ok(None);
   }
   let row = client
     .query_opt(
       "UPDATE email_links SET used_at = $1
-       WHERE token_hash = $2 AND purpose = $3 AND used_at IS NULL AND expires_at > $1 RETURNING account",
+       WHERE token_hash = $2 AND purpose = $3 AND used_at IS NULL AND expires_at > $1
+       RETURNING account, password_hash, display_name",
       &[&time(now), &token_hash(token), &purpose.as_str()],
     )
     .await?;
-  Ok(match row {
-    Some(row) => Some(CloudAccountId::from_uuid(row.try_get(0)?)),
-    None => None,
-  })
+  let Some(row) = row else {
+    return Ok(None);
+  };
+  Ok(Some(UsedLink {
+    account: CloudAccountId::from_uuid(row.try_get(0)?),
+    hash: row.try_get::<_, Option<String>>(1)?.map(PasswordHash::stored),
+    display_name: row.try_get(2)?,
+  }))
+}
+
+/// Ends the account's open links of `purpose`, or of every purpose: a newer sign-up ends older confirmation links,
+/// and a password set by a reset or a change ends them all.
+pub(super) async fn end_links(
+  client: &impl GenericClient,
+  account: CloudAccountId,
+  purpose: Option<LinkPurpose>,
+  now: i64,
+) -> Result<(), CloudError> {
+  client
+    .execute(
+      "UPDATE email_links SET used_at = $1
+       WHERE account = $2 AND used_at IS NULL AND ($3::text IS NULL OR purpose = $3)",
+      &[&time(now), &account.as_uuid(), &purpose.map(LinkPurpose::as_str)],
+    )
+    .await?;
+  Ok(())
 }
 
 /// Whether a link could be used now, without using it: lets a reset refuse a bad link before hashing a password.

@@ -4,7 +4,7 @@ use orchester_api::{PasswordChange, cloud::CloudErrorCode};
 
 use super::{
   Authenticated, Cloud,
-  reset::end_reset_links,
+  links::end_links,
   rows::{account, revoke_devices},
 };
 use crate::{
@@ -75,7 +75,7 @@ impl Cloud {
       return Err(CloudErrorCode::InvalidCredentials.into());
     }
     attempt.succeeded();
-    end_reset_links(&transaction, auth.account, now).await?;
+    end_links(&transaction, auth.account, None, now).await?;
     revoke_devices(&transaction, auth.account, Some(auth.device), now).await?;
     audit(
       &transaction,

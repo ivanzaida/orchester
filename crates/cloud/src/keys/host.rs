@@ -3,7 +3,7 @@
 
 use orchester_api::identity::{KeySetStatement, ListedKey, PrivateKey, PublicKey, SigningKey, VerifiedKeySet};
 
-use super::{LISTED_AFTER_MS, SIGNS_MS};
+use super::{LISTED_AFTER_MS, OVERLAP_MS, SIGNS_MS};
 use crate::{
   Cloud,
   clock::seconds,
@@ -12,25 +12,35 @@ use crate::{
 };
 
 impl Cloud {
-  /// Makes a new signing key, usable from now for 30 days once a published key set lists it. The previous key keeps
-  /// signing until then, so tokens never stop between `rotate` and `publish`.
+  /// Makes a new signing key that signs for 30 days once a published key set lists it. While another key signs, the
+  /// new one starts only two days later, so team servers have it before tokens signed with it arrive (review 1,
+  /// L4); the previous key signs until then. Rotate at least two days before the current key stops signing.
   pub async fn host_rotate_keys(&self) -> Result<String, CloudError> {
     let private = PrivateKey::generate()?;
     let key = SigningKey::new(&private)?;
     let sealed = self.inner.sealing.seal(key.kid(), &private)?;
     let now = self.now();
     let client = self.inner.db.client().await?;
+    let signing = client
+      .query_opt(
+        "SELECT 1 FROM signing_keys WHERE not_before <= $1 AND signs_until > $1",
+        &[&time(now)],
+      )
+      .await?
+      .is_some();
+    let not_before = if signing { now + OVERLAP_MS } else { now };
     client
       .execute(
         "INSERT INTO signing_keys (kid, public_key, sealed_private_key, not_before, signs_until, listed_until, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $4)",
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
         &[
           &key.kid(),
           &key.public_key().as_bytes().as_slice(),
           &sealed,
+          &time(not_before),
+          &time(not_before + SIGNS_MS),
+          &time(not_before + SIGNS_MS + LISTED_AFTER_MS),
           &time(now),
-          &time(now + SIGNS_MS),
-          &time(now + SIGNS_MS + LISTED_AFTER_MS),
         ],
       )
       .await?;
@@ -102,7 +112,7 @@ impl Cloud {
         ));
       }
     }
-    client
+    let inserted = client
       .execute(
         "INSERT INTO key_sets (issued_at, expires_at, compact, published_at) VALUES ($1, $2, $3, $4)
          ON CONFLICT (issued_at) DO NOTHING",
@@ -114,6 +124,11 @@ impl Cloud {
         ],
       )
       .await?;
+    if inserted == 0 {
+      return Err(CloudError::Configuration(
+        "a key set issued at that time is published already",
+      ));
+    }
     audit(
       &client,
       None,

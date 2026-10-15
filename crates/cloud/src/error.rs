@@ -117,6 +117,9 @@ impl ResponseError for CloudError {
     if let Self::RateLimited(seconds) = self {
       response.insert_header(("Retry-After", seconds.to_string()));
     }
+    if code == CloudErrorCode::Busy {
+      response.insert_header(("Retry-After", "1"));
+    }
     response.json(ApiError {
       error: code,
       message: message.into(),
@@ -130,6 +133,7 @@ fn status_message(code: CloudErrorCode) -> (StatusCode, &'static str) {
     CloudErrorCode::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "Request body too large"),
     CloudErrorCode::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
     CloudErrorCode::RequestTimeout => (StatusCode::REQUEST_TIMEOUT, "Request body timed out"),
+    CloudErrorCode::UnsupportedMediaType => (StatusCode::UNSUPPORTED_MEDIA_TYPE, "Request body must be JSON"),
     CloudErrorCode::NotFound => (StatusCode::NOT_FOUND, "Not found"),
     CloudErrorCode::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
     CloudErrorCode::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials"),
@@ -138,6 +142,7 @@ fn status_message(code: CloudErrorCode) -> (StatusCode, &'static str) {
     CloudErrorCode::Invalid => (StatusCode::UNPROCESSABLE_ENTITY, "Invalid input"),
     CloudErrorCode::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Try again later"),
     CloudErrorCode::KeysUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "Signing keys unavailable"),
+    CloudErrorCode::Busy => (StatusCode::SERVICE_UNAVAILABLE, "Busy, try again shortly"),
     CloudErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Cloud operation failed"),
   }
 }

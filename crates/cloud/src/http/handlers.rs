@@ -93,7 +93,7 @@ pub(super) async fn revoke_device(cloud: web::Data<Cloud>, device: Device, reque
 }
 
 pub(super) async fn keys(cloud: web::Data<Cloud>) -> Answer {
-  let key_set = cloud.key_set().await?;
+  let key_set = cloud.key_set(&cloud.client().await?).await?;
   Ok(HttpResponse::Ok().json(KeySetResponse { key_set }))
 }
 

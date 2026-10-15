@@ -25,8 +25,10 @@ pub enum IdentityError {
   KeySetExpired,
   #[error("invalid key")]
   InvalidKey,
-  #[error("the key set statement is inconsistent")]
+  #[error("the key set statement is inconsistent or outlives the rules")]
   InvalidStatement,
+  #[error("the key set statement was not prepared within the last day")]
+  StaleStatement,
   #[error("cannot generate random data")]
   Random,
 }

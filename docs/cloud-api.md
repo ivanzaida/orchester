@@ -28,8 +28,9 @@ Two kinds of client call it:
 - Times are milliseconds since the Unix epoch, UTC, except in identity tokens and key sets, which use JWT seconds.
 - Ids are UUIDv7 strings.
 - Every response carries `Cache-Control: no-store`.
+- A request with a body must say `Content-Type: application/json` (`415 unsupported_media_type` otherwise).
 - Errors have the form `{ "error": "<code>", "message": "<English, for logs>" }`. Clients show their own words by
-  `error`. A `429` carries `Retry-After` in seconds.
+  `error`. A `429` and a `503 busy` carry `Retry-After` in seconds.
 
 | Code | Status | Meaning |
 | --- | --- | --- |
@@ -41,10 +42,12 @@ Two kinds of client call it:
 | `method_not_allowed` | 405 | |
 | `request_timeout` | 408 | The body did not arrive within 10 seconds |
 | `payload_too_large` | 413 | The body is over 1 MiB |
+| `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
+| `busy` | 503 | The cloud is at a capacity limit: its limiters track 100,000 keys each, or no password hashing slot freed within 10 seconds |
 | `internal` | 500 | |
 
 ## Shapes
@@ -77,8 +80,11 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
 
 - a new email gets a confirmation link, valid for 24 hours;
-- an email whose account is not confirmed yet gets a new link, and its first password stays (someone else's
-  sign-up cannot set it);
+- an email whose account is not confirmed yet gets a new link, and every earlier confirmation link ends. Each link
+  carries the password and display name of the sign-up that sent it, and confirming it sets them on the account.
+  So the person who can read the email chooses the password, not whoever signed up first with that email. Someone
+  who opens a link from a sign-up they did not make gives the account that sign-up's password; the email says not
+  to open a link from a sign-up you did not make just now;
 - a confirmed email gets a *you already have an account* note.
 
 An account that is never confirmed is deleted once its last link has expired.
@@ -92,8 +98,8 @@ it offers to sign up again. Confirming does not sign anyone in.
 comes only after the right password. The token in `201` is shown once; the cloud keeps only its SHA-256. `device`
 names the computer (the desktop) or the browser (the web front, platform `web`).
 
-**Forgot password.** `POST /auth/reset { email }` answers `202` for any email and mails a link, valid for 1 hour,
-only when the email has an account.
+**Forgot password.** `POST /auth/reset { email }` answers `202` for any email, before it touches the database. The
+lookup, the link (valid for 1 hour) and the email happen in the background, and only an account gets one.
 
 **Reset page** (`<public URL>/reset/<token>`). It asks for the new password and sends
 `POST /auth/reset/finish { link_token, new_password }`. A password outside 12–256 characters is refused

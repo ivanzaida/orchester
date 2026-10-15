@@ -2,8 +2,15 @@ use serde::{Deserialize, Serialize};
 
 use super::{CLOCK_SKEW_SECS, IdentityClaims, IdentityError, PublicKey, RootKey, jws};
 
+const DAY_SECS: i64 = 24 * 60 * 60;
 /// A key set is valid for 30 days after it was issued; the cloud publishes a new one at least weekly.
-pub const KEY_SET_LIFETIME_SECS: i64 = 30 * 24 * 60 * 60;
+pub const KEY_SET_LIFETIME_SECS: i64 = 30 * DAY_SECS;
+/// A signing key signs tokens for at most 30 days ...
+pub const KEY_SIGNS_SECS: i64 = 30 * DAY_SECS;
+/// ... and stays listed at most 60 days longer, so the tokens it signed last still verify.
+pub const KEY_LISTED_AFTER_SECS: i64 = 60 * DAY_SECS;
+/// The root signs only a statement prepared within the last day: an old statement may list keys since replaced.
+pub const STATEMENT_FRESH_SECS: i64 = DAY_SECS;
 const TYPE: &str = "orchester-key-set+jws";
 
 /// A signing key as a key set lists it. Times are seconds since the Unix epoch: the key signs tokens issued in
@@ -38,9 +45,12 @@ impl KeySetStatement {
     }
   }
 
-  /// Every listed key parses, carries the id its key derives, and has ordered times; at least one is listed.
+  /// At least one key is listed; the set lives at most 30 days; every listed key parses, carries the id its key
+  /// derives, and has ordered times within the 30 and 60 days of the rules. Both the signer and every verifier
+  /// check this, so even a careless or stolen signer cannot make a long-lived key set that team servers believe.
   fn checked_keys(&self) -> Result<Vec<(ListedKey, PublicKey)>, IdentityError> {
-    if self.keys.is_empty() || self.issued_at >= self.expires_at {
+    let lifetime = self.expires_at - self.issued_at;
+    if self.keys.is_empty() || lifetime <= 0 || lifetime > KEY_SET_LIFETIME_SECS {
       return Err(IdentityError::InvalidStatement);
     }
     self
@@ -48,8 +58,10 @@ impl KeySetStatement {
       .iter()
       .map(|listed| {
         let key = PublicKey::parse(&listed.public_key)?;
-        let ordered = listed.not_before < listed.signs_until && listed.signs_until <= listed.listed_until;
-        if key.kid() != listed.kid || !ordered {
+        let signs = listed.signs_until - listed.not_before;
+        let listed_after = listed.listed_until - listed.signs_until;
+        let within = (1..=KEY_SIGNS_SECS).contains(&signs) && (0..=KEY_LISTED_AFTER_SECS).contains(&listed_after);
+        if key.kid() != listed.kid || !within {
           return Err(IdentityError::InvalidStatement);
         }
         Ok((listed.clone(), key))
@@ -59,8 +71,12 @@ impl KeySetStatement {
 }
 
 impl RootKey {
-  pub fn sign_key_set(&self, statement: &KeySetStatement) -> Result<String, IdentityError> {
+  /// Signs a statement prepared at most a day before `now` (seconds since the Unix epoch, the signer's clock).
+  pub fn sign_key_set(&self, statement: &KeySetStatement, now: i64) -> Result<String, IdentityError> {
     statement.checked_keys()?;
+    if statement.issued_at > now + CLOCK_SKEW_SECS || statement.issued_at < now - STATEMENT_FRESH_SECS {
+      return Err(IdentityError::StaleStatement);
+    }
     let input = jws::signing_input(&jws::Header::new(TYPE, None), statement)?;
     let signature = self.sign(input.as_bytes());
     Ok(jws::finish(&input, &signature))
@@ -79,7 +95,7 @@ impl VerifiedKeySet {
     let compact = jws::decode(compact, TYPE)?;
     root.verify(&compact.signing_input, &compact.signature)?;
     let statement: KeySetStatement = jws::parse(&compact.payload)?;
-    let keys = statement.checked_keys().map_err(|_| IdentityError::Malformed)?;
+    let keys = statement.checked_keys()?;
     if statement.issued_at > now + CLOCK_SKEW_SECS {
       return Err(IdentityError::NotYetValid);
     }
@@ -95,6 +111,9 @@ impl VerifiedKeySet {
 
   /// Verifies an identity token for the team server `audience` at `now` (seconds since the Unix epoch).
   pub fn verify_token(&self, token: &str, audience: &str, now: i64) -> Result<IdentityClaims, IdentityError> {
+    if now >= self.statement.expires_at {
+      return Err(IdentityError::KeySetExpired);
+    }
     let compact = jws::decode(token, IdentityClaims::TYPE)?;
     let kid = compact.header.kid.as_deref().ok_or(IdentityError::Malformed)?;
     let (listed, key) = self

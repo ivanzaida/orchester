@@ -145,6 +145,8 @@ pub enum CloudErrorCode {
   PayloadTooLarge,
   MethodNotAllowed,
   RequestTimeout,
+  /// A request body that is not `application/json`.
+  UnsupportedMediaType,
   NotFound,
   Unauthorized,
   InvalidCredentials,
@@ -155,6 +157,8 @@ pub enum CloudErrorCode {
   RateLimited,
   /// No published key set lists a signing key the cloud may use now.
   KeysUnavailable,
+  /// The cloud is at a capacity limit (its limiters' memory, its password hashing); try again shortly.
+  Busy,
   Internal,
 }
 

@@ -4,7 +4,7 @@ use orchester_api::{
 };
 use serde_json::json;
 
-use crate::support::{DAY, PASSWORD, TestCloud, remember};
+use crate::support::{DAY, PASSWORD, TestCloud, postgres, remember};
 
 const SERVER: &str = "0199f0a0-0000-7000-8000-00000000c10d";
 
@@ -42,18 +42,7 @@ pub async fn identity_token_verifies_with_the_published_key_set() {
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
   let device = signed.token.expose();
-  let early = cloud
-    .request(
-      "POST",
-      "/identity-tokens",
-      Some(device),
-      Some(json!({"audience": SERVER})),
-    )
-    .await;
-  assert_eq!((early.status, early.error()), (503, "keys_unavailable".into()));
-  assert_eq!(cloud.request("GET", "/keys", None, None).await.status, 503);
-
-  cloud.publish_keys().await;
+  publish_for_the_first_time(&cloud, device).await;
   let set = key_set(&cloud).await;
   let token = identity_token(&cloud, device).await;
   let now = seconds(&cloud);
@@ -105,8 +94,9 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
   let first = identity_token(&cloud, device).await;
   let issued_at = seconds(&cloud);
 
-  // A rotation lists the previous key beside the new one, and new tokens come from the new key.
-  cloud.clock.advance(29 * DAY);
+  // A rotation lists the new key beside the previous one; the new key signs only two days later, once team servers
+  // have it (review 1, L4), and the previous one signs until then.
+  cloud.clock.advance(27 * DAY);
   cloud.publish_keys().await;
   let both = key_set(&cloud).await;
   assert_eq!(both.statement().keys.len(), 2);
@@ -114,6 +104,9 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
     both.verify_token(&first, SERVER, issued_at + 60).is_ok(),
     "the previous key still verifies"
   );
+  let overlap = identity_token(&cloud, device).await;
+  assert_eq!(kid(&first), kid(&overlap), "the new key does not sign yet");
+  cloud.clock.advance(2 * DAY);
   let second = identity_token(&cloud, device).await;
   assert_ne!(kid(&first), kid(&second));
 
@@ -142,6 +135,17 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
   cloud.finish().await;
 }
 
+/// Before the first ceremony nothing is signed; publishing one key set twice is refused (review 1, L5).
+async fn publish_for_the_first_time(cloud: &TestCloud, device: &str) {
+  let body = Some(json!({"audience": SERVER}));
+  let early = cloud.request("POST", "/identity-tokens", Some(device), body).await;
+  assert_eq!((early.status, early.error()), (503, "keys_unavailable".into()));
+  assert_eq!(cloud.request("GET", "/keys", None, None).await.status, 503);
+  let published = cloud.publish_keys().await;
+  let again = cloud.cloud.host_publish_key_set(&published).await;
+  assert!(again.is_err(), "publishing one key set twice is not reported as done");
+}
+
 fn kid(token: &str) -> String {
   use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
   let header = URL_SAFE_NO_PAD
@@ -151,4 +155,40 @@ fn kid(token: &str) -> String {
     .as_str()
     .expect("kid")
     .to_owned()
+}
+
+/// Review 1, M4: more concurrent issuances than the pool has connections (16) all succeed; an issuance holds one
+/// connection, never two. The accounts table is locked while the requests come in, so they all hold their
+/// connection at once when it is released.
+pub async fn many_concurrent_identity_tokens_do_not_starve_the_pool() {
+  let cloud = TestCloud::start().await;
+  let email = "busy@example.test";
+  cloud.register(email).await;
+  let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
+  cloud.publish_keys().await;
+  let bearer = format!("Bearer {}", signed.token.expose());
+  let body = serde_json::to_vec(&json!({"audience": SERVER})).expect("JSON");
+  let mut admin = postgres().database(&cloud.database).await;
+  let lock = admin.transaction().await.expect("a locking transaction");
+  lock
+    .batch_execute("LOCK TABLE accounts IN ACCESS EXCLUSIVE MODE")
+    .await
+    .expect("lock accounts");
+  let mut running = tokio::task::JoinSet::new();
+  for _ in 0..24 {
+    let (address, bearer, body) = (cloud.address(), bearer.clone(), body.clone());
+    running.spawn(async move {
+      let headers = [("Content-Type", "application/json"), ("Authorization", bearer.as_str())];
+      crate::support::http::exchange(address, "POST", "/api/v1/identity-tokens", &headers, &body).await
+    });
+  }
+  tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+  lock.commit().await.expect("release accounts");
+  while let Some(answer) = running.join_next().await {
+    let answer = answer.expect("the request task");
+    assert_eq!(answer.status, 201);
+    remember(answer.json::<IdentityTokenIssued>().identity_token.expose());
+  }
+  drop(admin);
+  cloud.finish().await;
 }

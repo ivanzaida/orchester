@@ -9,14 +9,20 @@ mod issue;
 
 use std::fmt;
 
-use orchester_api::{Credential, identity::PrivateKey};
+use orchester_api::{
+  Credential,
+  identity::{KEY_LISTED_AFTER_SECS, KEY_SIGNS_SECS, PrivateKey},
+};
 use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 use zeroize::Zeroize;
 
 use crate::{clock::DAY_MS, error::CloudError, tokens::random_bytes};
 
-const SIGNS_MS: i64 = 30 * DAY_MS;
-const LISTED_AFTER_MS: i64 = 60 * DAY_MS;
+const SIGNS_MS: i64 = KEY_SIGNS_SECS * 1000;
+const LISTED_AFTER_MS: i64 = KEY_LISTED_AFTER_SECS * 1000;
+/// A rotated key waits this long before it signs, so team servers that refresh the key set daily have it by then
+/// (review 1, L4). The first key signs at once: no team server holds a key set before it.
+const OVERLAP_MS: i64 = 2 * DAY_MS;
 
 /// Seals signing keys' private halves with the key-encryption key from the host's environment.
 pub(crate) struct KeySealing(LessSafeKey);
@@ -26,7 +32,8 @@ impl KeySealing {
   pub fn new(key: &Credential) -> Result<Self, CloudError> {
     let invalid = || CloudError::Configuration("KEY_ENCRYPTION_KEY must be 64 hex characters");
     let text = key.expose().trim();
-    if text.len() != 64 || !text.is_ascii() {
+    // Strict hex: `from_str_radix` alone would also take a sign (`+f`).
+    if text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
       return Err(invalid());
     }
     let mut bytes = (0..32)

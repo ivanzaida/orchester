@@ -7,14 +7,17 @@ mod sign_in;
 use std::net::IpAddr;
 
 use orchester_core::id::CloudDeviceId;
-pub(crate) use sign_in::{Attempt, SignInLimit};
+pub use quota::Quota;
+pub use sign_in::{Attempt, SignInLimit};
 
-use self::quota::Quota;
 use crate::{
   addresses::rate_address,
   clock::{HOUR_MS, MINUTE_MS},
   error::CloudError,
 };
+
+/// Keys each limiter map tracks at most: about 10 MB per map when full.
+const MAX_KEYS: usize = 100_000;
 
 pub(crate) struct Limits {
   pub sign_in: SignInLimit,
@@ -27,11 +30,11 @@ pub(crate) struct Limits {
 impl Limits {
   pub fn new() -> Self {
     Self {
-      sign_in: SignInLimit::default(),
-      email_per_address: Quota::new(20, HOUR_MS),
-      email_per_email: Quota::new(5, HOUR_MS),
-      identity_tokens: Quota::new(60, HOUR_MS),
-      link_failures: Quota::new(20, 15 * MINUTE_MS),
+      sign_in: SignInLimit::new(MAX_KEYS),
+      email_per_address: Quota::new(20, HOUR_MS, MAX_KEYS),
+      email_per_email: Quota::new(5, HOUR_MS, MAX_KEYS),
+      identity_tokens: Quota::new(60, HOUR_MS, MAX_KEYS),
+      link_failures: Quota::new(20, 15 * MINUTE_MS, MAX_KEYS),
     }
   }
 

@@ -4,8 +4,8 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use orchester_api::{
   cloud::{CloudPlatform, DeviceInfo},
   identity::{
-    CLOCK_SKEW_SECS, IdentityClaims, IdentityError, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey,
-    TOKEN_LIFETIME_SECS, TokenSubject, VerifiedKeySet,
+    CLOCK_SKEW_SECS, IdentityClaims, IdentityError, KeySetStatement, ListedKey, PrivateKey, RootKey,
+    STATEMENT_FRESH_SECS, SigningKey, TOKEN_LIFETIME_SECS, TokenSubject, VerifiedKeySet,
   },
 };
 use orchester_core::id::CloudAccountId;
@@ -35,7 +35,7 @@ fn listed(key: &SigningKey, not_before: i64) -> ListedKey {
 
 fn key_set(root: &RootKey, keys: Vec<ListedKey>, issued_at: i64) -> VerifiedKeySet {
   let compact = root
-    .sign_key_set(&KeySetStatement::new(ISSUER.into(), keys, issued_at))
+    .sign_key_set(&KeySetStatement::new(ISSUER.into(), keys, issued_at), issued_at)
     .expect("sign key set");
   VerifiedKeySet::verify(&compact, &root.public_key(), issued_at).expect("verify key set")
 }
@@ -52,6 +52,7 @@ fn token(key: &SigningKey, audience: &str, now: i64) -> String {
         name: "Ada's laptop".into(),
         platform: CloudPlatform::Macos,
       },
+      invite: None,
     },
     now,
   )
@@ -181,7 +182,7 @@ fn identity_key_set_needs_the_pinned_root_and_expires() {
   let root = root();
   let key = signing_key();
   let statement = KeySetStatement::new(ISSUER.into(), vec![listed(&key, NOW - DAY)], NOW);
-  let compact = root.sign_key_set(&statement).expect("sign");
+  let compact = root.sign_key_set(&statement, NOW).expect("sign");
   let stranger = self::root();
   assert_eq!(
     VerifiedKeySet::verify(&compact, &stranger.public_key(), NOW).map(|_| ()),
@@ -193,7 +194,7 @@ fn identity_key_set_needs_the_pinned_root_and_expires() {
   );
   let mut wrong = statement;
   wrong.keys[0].kid = signing_key().kid().into();
-  assert_eq!(root.sign_key_set(&wrong), Err(IdentityError::InvalidStatement));
+  assert_eq!(root.sign_key_set(&wrong, NOW), Err(IdentityError::InvalidStatement));
 }
 
 #[test]
@@ -206,4 +207,70 @@ fn identity_debug_never_shows_private_keys() {
   assert!(!debug.contains(&document));
   assert!(!debug.contains(&format!("{:?}", private.pkcs8())));
   assert!(debug.contains(key.kid()));
+}
+
+/// Review 1, M3: a token is refused once the key set it is checked against has expired, even when that key set was
+/// verified while it was valid.
+#[test]
+fn identity_token_is_refused_once_the_key_set_expired() {
+  let root = root();
+  let key = signing_key();
+  let set = key_set(&root, vec![listed(&key, NOW)], NOW);
+  let expires = set.statement().expires_at;
+  let late = token(&key, SERVER, expires - 10);
+  assert!(set.verify_token(&late, SERVER, expires - 1).is_ok());
+  assert_eq!(
+    set.verify_token(&late, SERVER, expires),
+    Err(IdentityError::KeySetExpired)
+  );
+}
+
+/// Review 1, M2: a key set whose lifetime or key windows are longer than the rules allow is refused, even when the
+/// root signed it.
+#[test]
+fn identity_key_set_with_overlong_lifetimes_is_refused() {
+  let private = PrivateKey::generate().expect("root key");
+  let root = RootKey::new(&private).expect("root");
+  let key = signing_key();
+  let mut long_set = KeySetStatement::new(ISSUER.into(), vec![listed(&key, NOW - DAY)], NOW);
+  long_set.expires_at = NOW + 365 * DAY;
+  let mut long_key = KeySetStatement::new(ISSUER.into(), vec![listed(&key, NOW - DAY)], NOW);
+  long_key.keys[0].signs_until = NOW + 365 * DAY;
+  long_key.keys[0].listed_until = NOW + 400 * DAY;
+  for statement in [long_set, long_key] {
+    assert_eq!(root.sign_key_set(&statement, NOW), Err(IdentityError::InvalidStatement));
+    let compact = signed_by_hand(&private, &statement);
+    assert!(
+      VerifiedKeySet::verify(&compact, &root.public_key(), NOW).is_err(),
+      "an overlong key set must not verify"
+    );
+  }
+}
+
+/// Review 1, M2: the root signs only a statement prepared within the last day.
+#[test]
+fn identity_root_signs_only_a_fresh_statement() {
+  let root = root();
+  let key = signing_key();
+  let statement = KeySetStatement::new(ISSUER.into(), vec![listed(&key, NOW - DAY)], NOW);
+  assert!(root.sign_key_set(&statement, NOW + STATEMENT_FRESH_SECS).is_ok());
+  assert_eq!(
+    root.sign_key_set(&statement, NOW + STATEMENT_FRESH_SECS + 1),
+    Err(IdentityError::StaleStatement)
+  );
+  assert_eq!(
+    root.sign_key_set(&statement, NOW - CLOCK_SKEW_SECS - 1),
+    Err(IdentityError::StaleStatement)
+  );
+}
+
+/// Signs a statement with the root's raw key, past `RootKey::sign_key_set`'s own checks, as a careless or stolen
+/// signer could.
+fn signed_by_hand(root: &PrivateKey, statement: &KeySetStatement) -> String {
+  let pair = ring::signature::Ed25519KeyPair::from_pkcs8(root.pkcs8()).expect("root pair");
+  let header = URL_SAFE_NO_PAD.encode(br#"{"alg":"EdDSA","typ":"orchester-key-set+jws"}"#);
+  let payload = URL_SAFE_NO_PAD.encode(serde_json::to_vec(statement).expect("statement"));
+  let input = format!("{header}.{payload}");
+  let signature = URL_SAFE_NO_PAD.encode(pair.sign(input.as_bytes()).as_ref());
+  format!("{input}.{signature}")
 }

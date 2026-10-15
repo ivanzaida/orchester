@@ -88,6 +88,10 @@ pub async fn requests_follow_the_contract() {
   assert_eq!((missing.status, missing.error()), (404, "not_found".into()));
   let method = cloud.request("GET", "/auth/signup", None, None).await;
   assert_eq!((method.status, method.error()), (405, "method_not_allowed".into()));
+  let untyped = cloud
+    .raw("POST", "/api/v1/auth/reset", &[], br#"{"email": "a@example.test"}"#)
+    .await;
+  assert_eq!(untyped.status, 415, "a JSON body needs its content type");
   let anonymous = cloud.request("GET", "/me", None, None).await;
   assert_eq!((anonymous.status, anonymous.error()), (401, "unauthorized".into()));
   let wrong_scheme = cloud
@@ -103,4 +107,43 @@ pub async fn requests_follow_the_contract() {
   let short = cloud.sign_up("short@example.test", "too short").await;
   assert_eq!((short.status, short.error()), (422, "invalid".into()));
   cloud.finish().await;
+}
+
+/// Review 1, L3 and L6: a database connection that may fall back to plain text, or plain text to a host outside the
+/// local network, and a key-encryption key that is not strict hex are refused at start.
+pub async fn unsafe_configuration_is_refused() {
+  let database = postgres().create_database().await;
+  let root = RootKey::new(&PrivateKey::generate().expect("key")).expect("root");
+  let url = postgres().url(&database);
+  let open = |change: &dyn Fn(&mut orchester_cloud::config::Config)| {
+    let mut config = config(&database, &root, Vec::new());
+    change(&mut config);
+    Cloud::open(
+      config,
+      Arc::new(TestClock::at(1_791_000_000_000)),
+      Arc::new(RecordingMailer::default()),
+    )
+  };
+  let without_mode = url.replace("?sslmode=disable", "");
+  let refused = [
+    open(&|config| config.database_url = Credential::new(without_mode.clone())).await,
+    open(&|config| config.database_url = Credential::new(url.replace("disable", "prefer"))).await,
+    open(&|config| {
+      config.database_url = Credential::new("postgres://u:p@db.example.com:5432/d?sslmode=disable".into());
+    })
+    .await,
+    open(&|config| config.key_encryption_key = Credential::new("+f".repeat(32))).await,
+  ];
+  for (index, result) in refused.into_iter().enumerate() {
+    assert!(
+      matches!(result, Err(CloudError::Configuration(_))),
+      "configuration {index} must be refused, got {:?}",
+      result.map(|_| ())
+    );
+  }
+  assert!(
+    open(&|_| {}).await.is_ok(),
+    "loopback with sslmode=disable is the tests' own setup"
+  );
+  postgres().drop_database(&database).await;
 }

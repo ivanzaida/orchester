@@ -10,7 +10,7 @@ mod rows;
 mod sign_in;
 mod sign_up;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 pub(crate) use rows::Authenticated;
 
@@ -48,7 +48,7 @@ impl Cloud {
     config.validate()?;
     let sealing = KeySealing::new(&config.key_encryption_key)?;
     let db = Database::open(&config.database_url, clock.now_ms()).await?;
-    let messages = Messages::new(config.public_url.clone());
+    let messages = Messages::new(config.public_url.clone())?;
     Ok(Self {
       inner: Arc::new(State {
         config,
@@ -56,11 +56,15 @@ impl Cloud {
         db,
         mailer,
         messages,
-        passwords: Passwords::new(),
+        passwords: Passwords::new(4, Duration::from_secs(10)),
         limits: Limits::new(),
         sealing,
       }),
     })
+  }
+
+  pub(crate) async fn client(&self) -> Result<deadpool_postgres::Object, CloudError> {
+    self.inner.db.client().await
   }
 
   pub(crate) fn now(&self) -> i64 {
