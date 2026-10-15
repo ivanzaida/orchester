@@ -1,4 +1,4 @@
-//! A person's desktop with a local project, signed in to a real `orchester-server` on loopback, for
+//! A person's desktop with a local project, joined to a real `orchester-server` on loopback, for
 //! the shared-project tests: its servers on a temporary application database, a keychain in memory
 //! and a runtime of its own on which the service's blocking work waits.
 
@@ -24,8 +24,8 @@ use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   secrets::Vault,
   sharing::{
-    ServerEntry, Servers, SignedIn,
-    project::{ProjectServer, store::RemoteTaskStore},
+    CodeRequest, ServerEntry, Servers, Trust,
+    project::{LinkFirst, ProjectServer, store::RemoteTaskStore},
   },
   workspace::Workspace,
 };
@@ -33,7 +33,7 @@ use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-use crate::server_support::{SERVER_NAME, TestServer};
+use crate::server_support::TestServer;
 
 /// The repository every test shares.
 pub const REMOTE: &str = "https://github.com/ivanzaida/kontur.git";
@@ -68,8 +68,9 @@ pub struct Person {
 }
 
 impl Person {
-  /// `username`, signed in to `server` with their own password, with a local project of `titles`.
-  pub fn signed_in(server: &TestServer, (username, first): (&str, &Credential), titles: &[&str]) -> Self {
+  /// `(username, display name, code)`, joined to `server` from this computer with the code (a setup or invite code),
+  /// with a local project of `titles`.
+  pub fn signed_in(server: &TestServer, person: (&str, &str, &Credential), titles: &[&str]) -> Self {
     let repo = TempDir::new().expect("repository");
     std::fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -87,49 +88,40 @@ impl Person {
       .expect("tasks");
     }
     drop(db);
-    Self::with_repo(server, (username, first), repo)
+    Self::with_repo(server, person, repo)
   }
 
-  /// `username`, signed in to `server` with their own password, with the project in `repo`.
-  pub fn with_repo(server: &TestServer, (username, first): (&str, &Credential), repo: TempDir) -> Self {
+  /// `username`, joined to `server` from this computer with `code`, with the project in `repo`.
+  pub fn with_repo(server: &TestServer, person: (&str, &str, &Credential), repo: TempDir) -> Self {
     let data = TempDir::new().expect("application data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(MemoryVault::default())));
     workspace.open(repo.path()).expect("register the project");
-    let person = Self {
+    let desktop = Self {
       servers,
       runtime: Runtime::new().expect("desktop runtime"),
       repo,
       _data: data,
     };
-    person.sign_in(server, username, first);
-    person
+    desktop.join(server, person);
+    desktop
   }
 
-  fn sign_in(&self, server: &TestServer, username: &str, first: &Credential) {
+  /// Joins as `username`, called `display_name`, with `code`.
+  fn join(&self, server: &TestServer, (username, display_name, code): (&str, &str, &Credential)) {
     let address = ServerAddress::parse(&server.url()).expect("address");
+    let request = CodeRequest {
+      code: Credential::new(code.expose().into()),
+      username: Some(username.into()),
+      display_name: Some(display_name.into()),
+    };
     self
-      .block_on(self.servers.add(&address, SERVER_NAME.into(), PlainHttp::NotAllowed))
-      .expect("add the server");
-    let entry = self.entry();
-    let signed = self
       .block_on(
         self
           .servers
-          .sign_in(&entry, username.into(), Credential::new(first.expose().into())),
+          .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request),
       )
-      .expect("sign in");
-    let SignedIn::PasswordChangeRequired(pending) = signed else {
-      panic!("a first password asks for the person's own");
-    };
-    self
-      .block_on(self.servers.choose_password(
-        &entry,
-        &pending,
-        Credential::new(first.expose().into()),
-        Credential::new(format!("{username}'s own long password")),
-      ))
-      .expect("choose a password");
+      .expect("join with a code");
   }
 
   pub fn block_on<T>(&self, work: impl Future<Output = T>) -> T {
@@ -152,15 +144,18 @@ impl Person {
     self.db().tasks().expect("tasks")
   }
 
-  /// Shares the project on the server.
-  pub fn share(&self) {
-    let identity = RepositoryIdentity::from_remote_url(REMOTE).expect("identity");
+  /// Links the project, as its first checkout, to the empty project `kontur` the server's admin made for the
+  /// repository: every task keeps its number.
+  pub fn share(&self, server: &TestServer) {
+    server.create_project("kontur", Some(REMOTE));
+    let request = LinkFirst {
+      slug: "kontur".into(),
+      remote: Some(RepositoryIdentity::from_remote_url(REMOTE).expect("identity")),
+      key: IdempotencyKey::generate(),
+      write_discovery: true,
+    };
     self
-      .block_on(
-        self
-          .servers
-          .share(&self.entry(), self.root(), identity, IdempotencyKey::generate(), true),
-      )
+      .block_on(self.servers.link_first(&self.entry(), self.root(), request))
       .expect("share");
   }
 
@@ -197,7 +192,7 @@ pub struct Other {
 impl Other {
   pub fn new(server: &TestServer, username: &str, name: &str) -> Self {
     let first = server.create_user(username, name, false);
-    let token = server.sign_in_elsewhere(username, first.expose(), &format!("{username}'s own long password"));
+    let token = SecretValue::new(first.expose().to_owned()).expect("a token");
     let client = Client::new(
       ServerAddress::parse(&server.url()).expect("address"),
       PlainHttp::NotAllowed,
@@ -209,13 +204,13 @@ impl Other {
 
 /// Alice, the server's first admin, with a local project of three tasks, shared.
 pub fn shared(server: &TestServer) -> Person {
-  let first = server.create_user("alice", "Alice Moreau", true);
+  let code = server.code_for("alice", true);
   let alice = Person::signed_in(
     server,
-    ("alice", &first),
+    ("alice", "Alice Moreau", &code),
     &["Repository switcher", "Fix reconnect", "Merge queue"],
   );
-  alice.share();
+  alice.share(server);
   alice
 }
 

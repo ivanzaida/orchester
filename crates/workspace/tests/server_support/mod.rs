@@ -1,12 +1,15 @@
 //! A real `orchester-server` on loopback with a temporary data directory, on a runtime of its own so
 //! a test can drive the desktop (which has its own runtime) or call the service directly beside it.
+//! People join it as API 3 has them join: the first admin with the setup code, the others with
+//! invite codes; what the desktop never does (inviting, creating projects) is set up here through the
+//! server's API, as the server admin would.
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
-  CodeJoin, Credential, PasswordChange, SignIn, UserChanges,
+  CodeJoin, Credential, SharedProject, UserChanges,
   client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::secret::SecretValue;
@@ -16,6 +19,7 @@ use orchester_server::{
   config::{Config, TlsMode},
 };
 use parking_lot::Mutex;
+use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::{
   io::{AsyncReadExt, AsyncWriteExt},
@@ -32,13 +36,24 @@ pub struct TestServer {
   pub address: SocketAddr,
   runtime: Runtime,
   stop: Option<oneshot::Sender<()>>,
-  /// The first account's device token, which invites the later ones.
-  admin: Mutex<Option<String>>,
+  tls: bool,
+  /// The first admin's username, once a code made them, and a device token of theirs for setting tests up.
+  admin: Mutex<(Option<String>, Option<String>)>,
   _directory: TempDir,
 }
 
 impl TestServer {
+  /// A server on plain HTTP.
   pub fn start() -> Self {
+    Self::with(TlsMode::Off)
+  }
+
+  /// A server that presents its own generated certificate.
+  pub fn start_tls() -> Self {
+    Self::with(TlsMode::SelfSigned)
+  }
+
+  fn with(tls: TlsMode) -> Self {
     let runtime = Runtime::new().expect("server runtime");
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/desktop-sharing/tests");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
@@ -50,7 +65,7 @@ impl TestServer {
       data_dir: directory.path().into(),
       listen: "127.0.0.1:0".parse().expect("loopback"),
       name: SERVER_NAME.into(),
-      tls: TlsMode::Off,
+      tls,
       ..Config::default()
     };
     let (server, listener) = runtime.block_on(async {
@@ -71,14 +86,16 @@ impl TestServer {
       address,
       runtime,
       stop: Some(stop),
-      admin: Mutex::new(None),
+      tls: tls != TlsMode::Off,
+      admin: Mutex::new((None, None)),
       _directory: directory,
     }
   }
 
   /// The address as a person types it.
   pub fn url(&self) -> String {
-    format!("http://localhost:{}", self.address.port())
+    let scheme = if self.tls { "https" } else { "http" };
+    format!("{scheme}://localhost:{}", self.address.port())
   }
 
   /// Runs `work` on the server's runtime.
@@ -86,22 +103,29 @@ impl TestServer {
     self.runtime.block_on(work)
   }
 
-  /// An account joined with a code: the first with the setup code (an admin), later ones with an invite code the
-  /// first account makes. Returns the account's device token. API 3 has no passwords, so the tests that sign in
-  /// with a password fail until the workspace joins with codes and cloud identities (S1c's workspace part).
-  pub fn create_user(&self, username: &str, display_name: &str, admin: bool) -> Credential {
-    let first = self.admin.lock().clone();
-    let code = match first {
-      None => self
+  /// A code that makes the account `username`: the setup code for the first, which becomes the admin, and after it
+  /// an invite code from that admin, as the server admin hands them out.
+  pub fn code_for(&self, username: &str, admin: bool) -> Credential {
+    let first = self.admin.lock().0.is_none();
+    if first {
+      self.admin.lock().0 = Some(username.to_owned());
+      return self
         .block_on(self.server.host_setup_code())
         .expect("setup code")
-        .expect("no admin yet"),
-      Some(token) => {
-        let body = format!(r#"{{"kind":"server","delivery":"code","admin":{admin}}}"#);
-        let invite = self.block_on(post(self.address, &token, "/invites", &body));
-        Credential::new(invite["code"].as_str().expect("invite code").into())
-      }
-    };
+        .expect("no admin yet");
+    }
+    let invite = self.admin_request(
+      "POST",
+      "/invites",
+      &json!({"kind":"server","delivery":"code","admin":admin}),
+    );
+    Credential::new(invite["code"].as_str().expect("invite code").into())
+  }
+
+  /// The account `username` joined on a test computer; returns that device's token. API 3 has no passwords: the
+  /// frozen `crates/desktop`'s tests use this name for what a first password was.
+  pub fn create_user(&self, username: &str, display_name: &str, admin: bool) -> Credential {
+    let code = self.code_for(username, admin);
     let client = self.client();
     let joined = self
       .block_on(client.join_with_code(&CodeJoin {
@@ -111,49 +135,72 @@ impl TestServer {
         display_name: Some(display_name.into()),
       }))
       .expect("join with a code");
-    self
-      .admin
-      .lock()
-      .get_or_insert_with(|| joined.token.expose().to_owned());
     joined.token
+  }
+
+  /// Another device of `username`, joined with an account code from the host: that device's token.
+  pub fn device_of(&self, username: &str) -> SecretValue {
+    let code = self
+      .block_on(self.server.host_account_code(username.into()))
+      .expect("account code");
+    let client = self.client();
+    let joined = self
+      .block_on(client.join_with_code(&CodeJoin {
+        code,
+        device: "BUILD-02 · Windows".into(),
+        username: None,
+        display_name: None,
+      }))
+      .expect("join with an account code");
+    SecretValue::new(joined.token.expose().to_owned()).expect("a token")
+  }
+
+  /// Another computer of `username` (the passwords stand for nothing since API 3); returns its device token.
+  pub fn sign_in_elsewhere(&self, username: &str, _first: &str, _own: &str) -> SecretValue {
+    self.device_of(username)
+  }
+
+  /// A pairing code made on the device whose token is `token`, for the same person's next computer.
+  pub fn pairing_code(&self, token: &SecretValue) -> Credential {
+    let pairing = self.request("POST", "/auth/pairings", Some(token.expose()), &json!({}));
+    Credential::new(pairing["code"].as_str().expect("pairing code").into())
+  }
+
+  /// The project `slug`, made empty by the first admin in the server admin, with `remote_hint` when given.
+  pub fn create_project(&self, slug: &str, remote_hint: Option<&str>) -> SharedProject {
+    let body = json!({"idempotency_key": orchester_core::id::IdempotencyKey::generate(), "name": "Kontur",
+      "slug": slug, "key": "ORC", "remote_hint": remote_hint, "tasks": []});
+    let created = self.admin_request("POST", "/projects", &body);
+    serde_json::from_value(created["project"].clone()).expect("project")
+  }
+
+  /// Links the server to an Orchester Cloud whose root key is `root_key`, with the key set it signed, as the first
+  /// admin does at setup; returns the server's id, the audience of identity tokens for it.
+  pub fn link_cloud(&self, root_key: &str, key_set: &str) -> String {
+    let linked = self.admin_request(
+      "PATCH",
+      "/server/cloud",
+      &json!({"link": {"root_key": root_key, "key_set": key_set}}),
+    );
+    linked["cloud"]["server"].as_str().expect("server id").to_owned()
+  }
+
+  /// An invite to the server by email, which the cloud routes; returns its id.
+  pub fn email_invite(&self, email: &str) -> String {
+    let invite = self.admin_request(
+      "POST",
+      "/invites",
+      &json!({"kind":"server","delivery":"cloud","email":email}),
+    );
+    invite["invite"]["id"].as_str().expect("invite id").to_owned()
   }
 
   fn client(&self) -> Client {
     Client::new(
-      ServerAddress::parse(&self.url()).expect("address"),
+      ServerAddress::parse(&format!("http://localhost:{}", self.address.port())).expect("address"),
       PlainHttp::NotAllowed,
     )
     .expect("client")
-  }
-
-  /// Signs `username` in from another computer, choosing `own` as the password when `first` is a
-  /// first password; returns that session's token.
-  pub fn sign_in_elsewhere(&self, username: &str, first: &str, own: &str) -> SecretValue {
-    let client = self.client();
-    self.block_on(async {
-      let signed = client
-        .sign_in(&SignIn {
-          username: username.into(),
-          password: Credential::new(first.into()),
-          device: "BUILD-02 · Windows".into(),
-        })
-        .await
-        .expect("sign in elsewhere");
-      let token = SecretValue::new(signed.token.expose().to_owned()).expect("a token");
-      if signed.password_change_required {
-        client
-          .change_password(
-            &token,
-            &PasswordChange {
-              current_password: Credential::new(first.into()),
-              new_password: Credential::new(own.into()),
-            },
-          )
-          .await
-          .expect("choose a password");
-      }
-      token
-    })
   }
 
   /// Whether the server still accepts `token`.
@@ -162,17 +209,16 @@ impl TestServer {
     self.block_on(async { client.me(token).await.is_ok() })
   }
 
-  /// An admin's reset of `username`'s password, which signs every session of theirs out.
+  /// An admin signs every device of `username` out (the frozen app's tests call this a password reset).
   pub fn reset_password(&self, admin: &SecretValue, username: &str) {
     let client = self.client();
-    self.block_on(async {
-      let users = client.users(admin).await.expect("users");
-      let user = users
-        .into_iter()
-        .find(|user| user.username == username)
-        .expect("the user exists");
-      client.reset_password(admin, user.id).await.expect("reset");
-    });
+    let users = self.block_on(client.users(admin)).expect("users");
+    let user = users
+      .into_iter()
+      .find(|user| user.username == username)
+      .expect("the user exists");
+    let path = format!("/admin/users/{}/sessions", user.id);
+    self.request("DELETE", &path, Some(admin.expose()), &Value::Null);
   }
 
   /// An admin's change of whether `username` is an admin of the server.
@@ -192,6 +238,30 @@ impl TestServer {
       client.update_user(admin, user.id, &changes).await.expect("admin flag");
     });
   }
+
+  /// A request of the first admin, from a device of theirs this support joins once.
+  fn admin_request(&self, method: &str, path: &str, body: &Value) -> Value {
+    let token = {
+      let (username, token) = self.admin.lock().clone();
+      match token {
+        Some(token) => token,
+        None => {
+          let token = self.device_of(&username.expect("the first admin joined"));
+          self.admin.lock().1 = Some(token.expose().to_owned());
+          token.expose().to_owned()
+        }
+      }
+    };
+    self.request(method, path, Some(&token), body)
+  }
+
+  /// A request over plain HTTP to the server's API; panics unless it succeeds.
+  fn request(&self, method: &str, path: &str, token: Option<&str>, body: &Value) -> Value {
+    assert!(!self.tls, "set-up requests speak plain HTTP");
+    let (status, answer) = self.block_on(exchange(self.address, method, path, token, body));
+    assert!((200..300).contains(&status), "{method} {path}: {status}");
+    answer
+  }
 }
 
 impl Drop for TestServer {
@@ -203,32 +273,31 @@ impl Drop for TestServer {
   }
 }
 
-/// A request the desktop never makes (an admin action of the server admin), sent to set a test up.
-async fn post(address: SocketAddr, token: &str, path: &str, body: &str) -> serde_json::Value {
-  let mut stream = TcpStream::connect(address).await.expect("connect");
-  let request = format!(
-    "POST /api/v1{path} HTTP/1.1
-Host: localhost
-Connection: close
-Authorization: Bearer {token}
-Content-Type: application/json
-Content-Length: {}
-
-{body}",
+async fn exchange(address: SocketAddr, method: &str, path: &str, token: Option<&str>, body: &Value) -> (u16, Value) {
+  let body = if body.is_null() {
+    String::new()
+  } else {
+    body.to_string()
+  };
+  let mut request = format!(
+    "{method} /api/v1{path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
     body.len()
   );
+  if let Some(token) = token {
+    request.push_str(&format!("Authorization: Bearer {token}\r\n"));
+  }
+  request.push_str("\r\n");
+  request.push_str(&body);
+  let mut stream = TcpStream::connect(address).await.expect("connect");
   stream.write_all(request.as_bytes()).await.expect("send");
   let mut response = Vec::new();
   stream.read_to_end(&mut response).await.expect("read");
-  let start = response
-    .windows(4)
-    .position(|part| {
-      part
-        == b"
-
-"
-    })
-    .expect("HTTP response")
-    + 4;
-  serde_json::from_slice(&response[start..]).expect("JSON answer")
+  let text = String::from_utf8(response).expect("UTF-8 answer");
+  let (head, answer) = text.split_once("\r\n\r\n").expect("HTTP response");
+  let status = head
+    .split_whitespace()
+    .nth(1)
+    .and_then(|status| status.parse().ok())
+    .expect("status");
+  (status, serde_json::from_str(answer).unwrap_or(Value::Null))
 }

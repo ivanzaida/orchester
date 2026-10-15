@@ -1,5 +1,6 @@
 //! *Join* (`docs/architecture/server.md`, "Two people share one repository"; design 10.21, 10.22,
-//! 10.26 D): the repository is shared on a server already and the person is a member. Their local
+//! 10.26 D): a checkout is linked to a server project that has tasks already, found by its address (the slug on a
+//! server the person joined), and the person is a member. Their local
 //! tasks are reviewed first, all ticked, with the server's similar titles as a hint; a task with a
 //! run that has not ended stays ticked, as working on a shared task needs a claim. Confirming
 //! uploads the ticked tasks in one import with new numbers, their ids and their former keys (those
@@ -36,10 +37,12 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// The server project a repository is shared as, and what joining it would do (10.21).
+/// The server project a checkout is linked to, and what joining it would do (10.21).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JoinReview {
   pub project: orchester_core::id::ProjectId,
+  /// The project's address, its identity.
+  pub address: String,
   pub key: ProjectKey,
   /// The number the first uploaded task gets.
   pub next: u32,
@@ -106,15 +109,42 @@ struct Upload {
 }
 
 impl Servers {
-  /// What joining the project `identity` is shared as on `entry` would do for the project at
-  /// `repo_root`. `403 not_member` when the person is not a member.
+  /// What linking the project at `repo_root` to the project at `slug` on `entry` would do. Not a member, or no
+  /// project there: [`SharingError::NoProject`].
+  pub async fn join_review_at(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    slug: &str,
+  ) -> Result<JoinReview, SharingError> {
+    let project = self.find_project(entry, slug).await?;
+    self.review(entry, repo_root, project).await
+  }
+
+  /// What joining the person's project on `entry` that was set up for `identity` (its remote hint) would do for the
+  /// project at `repo_root`. Since API 3 a project is found by its address ([`Self::join_review_at`]).
   pub async fn join_review(
     &self,
     entry: &ServerEntry,
     repo_root: &Path,
     identity: RepositoryIdentity,
   ) -> Result<JoinReview, SharingError> {
-    let project = self.shared_project(entry, identity).await?;
+    let project = self
+      .project_by_hint(entry, &identity)
+      .await?
+      .ok_or(SharingError::NoProject {
+        name: None,
+        owners: Vec::new(),
+      })?;
+    self.review(entry, repo_root, project).await
+  }
+
+  async fn review(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    project: SharedProject,
+  ) -> Result<JoinReview, SharingError> {
     let id = project.id;
     let server_tasks = self
       .with_token(entry, |client, token| async move { client.tasks(&token, id).await })
@@ -132,6 +162,7 @@ impl Servers {
     let tasks = background::run(move || review_tasks(&root, &hints)).await??;
     Ok(JoinReview {
       project: project.id,
+      address: project.address,
       key: ProjectKey::new(&project.key).map_err(|_| SharingError::InvalidAnswer("project key"))?,
       next: u32::try_from(project.next_number).map_err(|_| SharingError::InvalidAnswer("next number"))?,
       tasks,
@@ -237,6 +268,7 @@ impl Servers {
       cursor: tasks.cursor,
       last_synced_at: Timestamp::now(),
       removed_at: None,
+      address: Some(review.address.clone()),
     };
     let (root, workspace, servers) = (repo_root.to_owned(), self.inner.workspace.clone(), self.clone());
     let read = (claimed.clone(), revisions.clone());
@@ -253,22 +285,6 @@ impl Servers {
     .await??;
     self.shared_changed();
     Ok(open)
-  }
-
-  /// The project `identity` is shared as on `entry`.
-  async fn shared_project(
-    &self,
-    entry: &ServerEntry,
-    identity: RepositoryIdentity,
-  ) -> Result<SharedProject, SharingError> {
-    self
-      .with_token(entry, |client, token| async move {
-        client.projects(&token, Some(&identity)).await
-      })
-      .await?
-      .into_iter()
-      .next()
-      .ok_or(SharingError::InvalidAnswer("no project for the repository"))
   }
 }
 

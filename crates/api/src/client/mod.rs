@@ -6,6 +6,7 @@
 //! error or `Debug` output.
 
 mod address;
+mod cloud;
 mod error;
 mod pinned;
 mod sharing;
@@ -26,6 +27,7 @@ use zeroize::Zeroize;
 
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
+  cloud::CloudClient,
   error::ClientError,
 };
 use crate::{

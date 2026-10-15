@@ -30,6 +30,9 @@ CREATE TABLE servers (
 ) STRICT;
 ";
 
+/// API 3 (`docs/architecture/server.md`, row 39): the team server's own certificate, pinned by its SHA-256.
+pub(super) const PIN_MIGRATION: &str = "ALTER TABLE servers ADD COLUMN certificate_pin TEXT;";
+
 /// A server in the list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredServer {
@@ -40,6 +43,9 @@ pub struct StoredServer {
   pub name: String,
   /// The person's opt-in to plain HTTP for a server on another computer.
   pub plain_http_allowed: bool,
+  /// The SHA-256 of the certificate this computer trusts for the server, in lowercase hex, when it pinned the
+  /// server's own certificate; `None` when the operating system's trust store decides.
+  pub certificate_pin: Option<String>,
   pub added_at: Timestamp,
   /// Who is signed in there from this computer: kept while the token is valid, and after the
   /// server stopped accepting it until the person signs in again or signs out.
@@ -60,8 +66,8 @@ impl AppDb {
   /// The servers, in the order they were added.
   pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT id, url, name, plain_http_allowed, added_at, user_id, username, display_name, admin, signed_in_at \
-       FROM servers ORDER BY added_at, id",
+      "SELECT id, url, name, plain_http_allowed, added_at, user_id, username, display_name, admin, signed_in_at, \
+       certificate_pin FROM servers ORDER BY added_at, id",
     )?;
     let rows = statement
       .query_map([], ServerRow::read)?
@@ -74,13 +80,15 @@ impl AppDb {
   pub fn add_server(&mut self, server: &StoredServer) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     transaction.execute(
-      "INSERT INTO servers (id, url, name, plain_http_allowed, added_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+      "INSERT INTO servers (id, url, name, plain_http_allowed, added_at, certificate_pin) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
       params![
         server.id.to_string(),
         server.url,
         server.name,
         server.plain_http_allowed,
         server.added_at.unix_millis(),
+        server.certificate_pin,
       ],
     )?;
     update_account(&transaction, server.id, server.account.as_ref())?;
@@ -91,6 +99,19 @@ impl AppDb {
   /// Records who is signed in to `server` from this computer; `None` after signing out.
   pub fn set_server_account(&mut self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
     update_account(&self.connection, server, account)
+  }
+
+  /// Records how this computer trusts `server`: `pin` (hex SHA-256 of its certificate) when it pinned the server's own
+  /// certificate, otherwise the system's trust store with `plain_http` allowed or not.
+  pub fn set_server_trust(&mut self, server: ServerId, pin: Option<&str>, plain_http: bool) -> Result<(), StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE servers SET certificate_pin = ?2, plain_http_allowed = ?3 WHERE id = ?1",
+      params![server.to_string(), pin, plain_http],
+    )?;
+    if changed == 0 {
+      return Err(StoreError::ServerNotFound(server));
+    }
+    Ok(())
   }
 
   /// Records the name the server gives itself now.
@@ -139,6 +160,7 @@ struct ServerRow {
   plain_http_allowed: bool,
   added_at: i64,
   account: Option<AccountColumns>,
+  certificate_pin: Option<String>,
 }
 
 impl ServerRow {
@@ -155,6 +177,7 @@ impl ServerRow {
       plain_http_allowed: row.get(3)?,
       added_at: row.get(4)?,
       account,
+      certificate_pin: row.get(10)?,
     })
   }
 
@@ -174,6 +197,7 @@ impl ServerRow {
       url: self.url,
       name: self.name,
       plain_http_allowed: self.plain_http_allowed,
+      certificate_pin: self.certificate_pin,
       added_at: Timestamp::from_unix_millis(self.added_at),
       account,
     })

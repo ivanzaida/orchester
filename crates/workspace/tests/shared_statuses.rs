@@ -196,7 +196,7 @@ fn statuses_a_claim_taken_over_meanwhile_sends_nothing() {
   run_moved(&alice, task.id(), (from, WorkflowStatus::InReview));
   // Alice's other computer lets the task go; Oleh takes it.
   let project = alice.server().link().project;
-  let elsewhere = server.sign_in_elsewhere("alice", "alice's own long password", "");
+  let elsewhere = server.device_of("alice");
   alice
     .block_on(oleh.client.release_claim(&elsewhere, project, task.id()))
     .expect("released elsewhere");
@@ -237,7 +237,7 @@ fn statuses_a_claim_taken_on_the_other_computer_stays() {
   member(&alice, "oleh");
   let task = alice.tasks().remove(0);
   let project = alice.server().link().project;
-  let elsewhere = server.sign_in_elsewhere("alice", "alice's own long password", "");
+  let elsewhere = server.device_of("alice");
   alice
     .block_on(
       oleh

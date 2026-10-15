@@ -1,4 +1,4 @@
-use orchester_api::{CodeJoin, Credential, ErrorCode, JoinedVia, SignIn, client::ClientError};
+use orchester_api::{CodeJoin, Credential, ErrorCode, JoinedVia, client::ClientError};
 
 use crate::support::{TestServer, token};
 
@@ -51,7 +51,7 @@ async fn client_joins_with_a_code_and_a_wrong_code_answers_invalid_code() {
 }
 
 #[tokio::test]
-async fn client_signs_out_revokes_another_device_and_finds_password_sign_in_gone() {
+async fn client_signs_out_and_revokes_another_device() {
   let server = TestServer::start(|_| {}).await;
   let here = server.admin().await;
   let client = server.client();
@@ -69,15 +69,6 @@ async fn client_signs_out_revokes_another_device_and_finds_password_sign_in_gone
     client.me(&laptop_token).await.expect_err("revoked").code(),
     Some(ErrorCode::Unauthorized)
   );
-  let gone = client
-    .sign_in(&SignIn {
-      username: "alice".into(),
-      password: Credential::new("a password nobody has".into()),
-      device: "test".into(),
-    })
-    .await
-    .expect_err("API 3 has no passwords");
-  assert_eq!(gone.code(), Some(ErrorCode::MethodNotAllowed));
   client.sign_out(&here).await.expect("sign out");
   let expired = client.me(&here).await.expect_err("the token stopped working");
   assert_eq!(expired.code(), Some(ErrorCode::Unauthorized));

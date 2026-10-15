@@ -86,12 +86,12 @@ async fn client_sharing_reads_a_project_with_its_address_and_hides_it_from_other
     created.tasks[0].claim.as_ref().map(|claim| claim.kind),
     Some(ClaimKind::Run)
   );
-  let listed = client.projects(&alice, None).await.expect("projects");
+  let listed = client.projects(&alice).await.expect("projects");
   assert_eq!(
     listed.iter().map(|project| project.id).collect::<Vec<_>>(),
     [created.project.id]
   );
-  assert!(client.projects(&bohdan, None).await.expect("projects").is_empty());
+  assert!(client.projects(&bohdan).await.expect("projects").is_empty());
   let refused = client
     .project(&bohdan, created.project.id)
     .await

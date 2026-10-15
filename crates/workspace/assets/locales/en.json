@@ -745,18 +745,25 @@
         "macos": "macOS doesn't trust the certificate of {{host}}. Add your team's certificate authority to the macOS keychain, then check again. Orchester has no switch to skip this check."
       }
     },
-    "signIn": {
-      "wrong": "The username or password is not right. Check both, or ask an admin of {{name}} to reset your password."
-    },
     "errors": {
-      "signedOut": "This computer is signed out of the server. Sign in again with your password.",
+      "signedOut": "This computer is signed out of the server. Join it again with a code, or through Orchester Cloud.",
       "plainHttp": "Plain HTTP to {{host}} is not allowed for this server.",
-      "passwordChangeRequired": "Choose your own password first.",
       "forbidden": "Only an admin of the server can do this.",
       "notFound": "The server no longer knows this.",
       "rateLimited": "The server asks to wait before trying again.",
       "refused": "The server refused this.",
-      "setup": "Orchester cannot set up its connection to servers on this computer."
+      "setup": "Orchester cannot set up its connection to servers on this computer.",
+      "noPasswords": "Team servers no longer have passwords. Join with a code from the server's admin, or through Orchester Cloud.",
+      "certificateChanged": "{{host}} presents a different certificate than the one this computer trusts, so nothing was sent. Compare its new check code with the server's console, or join again through an invite.",
+      "cloudRefused": "Orchester Cloud refused this. Sign in to it again, then try once more."
+    },
+    "join": {
+      "invalidCode": "This code doesn't work: it is wrong, used already or expired. Ask for a new one.",
+      "invalidIdentity": "The server didn't accept the sign-in from Orchester Cloud. Try again.",
+      "notInvited": "The server has no account or invite for you. Ask its admin for an invite.",
+      "cloudOff": "This server doesn't accept Orchester Cloud sign-ins now. Join with a code instead.",
+      "keySetStale": "The server's copy of Orchester Cloud's keys is out of date. Try again; Orchester brings the current keys.",
+      "approvalRefused": "Joining this computer was not approved."
     }
   },
   "time": {
@@ -1448,8 +1455,9 @@
       "unavailable": "The server of this shared project can't be asked now.",
       "notEditable": "The server didn't take the change: the task can't be edited in its state.",
       "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
-      "remoteTaken": "This repository is shared on the server already.",
-      "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished."
+      "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished.",
+      "notMemberOf": "You aren't a member of {{project}} yet. Ask one of its owners for an invite: {{owners}}.",
+      "noProject": "The server has no project at this address."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

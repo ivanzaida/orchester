@@ -36,12 +36,26 @@ pub struct SharingLink {
   pub last_synced_at: Timestamp,
   /// When the server answered that this person is no longer a member; the list is read-only since.
   pub removed_at: Option<Timestamp>,
+  /// The project's address, its identity since API 3 (`<server>/<slug>`); `None` for a link made before, until the
+  /// project is read from the server again.
+  pub address: Option<String>,
 }
 
 impl ProjectDb {
   /// The project's server project; `None` while the project is local.
   pub fn sharing(&self) -> Result<Option<SharingLink>, StoreError> {
     link(&self.connection)
+  }
+
+  /// Records the project's address, read from the server for a link made before API 3.
+  pub fn record_project_address(&mut self, address: &str) -> Result<(), StoreError> {
+    let updated = self
+      .connection
+      .execute("UPDATE sharing SET project_address = ?1", [address])?;
+    if updated == 0 {
+      return Err(StoreError::NotShared);
+    }
+    Ok(())
   }
 
   /// Records this person's role in the server project, the time the cache matched it and whether
@@ -97,8 +111,8 @@ impl ProjectDb {
 pub(super) fn link(connection: &Connection) -> Result<Option<SharingLink>, StoreError> {
   connection
     .query_row(
-      "SELECT server_id, project_id, project_key, role, joined_at, event_cursor, last_synced_at, removed_at \
-       FROM sharing",
+      "SELECT server_id, project_id, project_key, role, joined_at, event_cursor, last_synced_at, removed_at, \
+       project_address FROM sharing",
       [],
       LinkRow::read,
     )
@@ -111,7 +125,7 @@ pub(super) fn link(connection: &Connection) -> Result<Option<SharingLink>, Store
 pub(super) fn insert_link(connection: &Connection, link: &SharingLink) -> Result<(), StoreError> {
   connection.execute(
     "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, last_synced_at, \
-     removed_at) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+     removed_at, project_address) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     params![
       link.server.to_string(),
       link.project.to_string(),
@@ -121,6 +135,7 @@ pub(super) fn insert_link(connection: &Connection, link: &SharingLink) -> Result
       crate::rows::tokens_column("event cursor", link.cursor)?,
       link.last_synced_at.unix_millis(),
       link.removed_at.map(Timestamp::unix_millis),
+      link.address,
     ],
   )?;
   Ok(())
@@ -175,6 +190,7 @@ struct LinkRow {
   cursor: i64,
   last_synced_at: i64,
   removed_at: Option<i64>,
+  address: Option<String>,
 }
 
 impl LinkRow {
@@ -188,6 +204,7 @@ impl LinkRow {
       cursor: row.get(5)?,
       last_synced_at: row.get(6)?,
       removed_at: row.get(7)?,
+      address: row.get(8)?,
     })
   }
 
@@ -201,6 +218,7 @@ impl LinkRow {
       cursor: u64::try_from(self.cursor).map_err(|error| corrupt("event cursor", error))?,
       last_synced_at: Timestamp::from_unix_millis(self.last_synced_at),
       removed_at: self.removed_at.map(Timestamp::from_unix_millis),
+      address: self.address,
     })
   }
 }

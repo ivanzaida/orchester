@@ -44,7 +44,8 @@ impl CertificatePin {
     groups.join("-")
   }
 
-  fn hex(&self) -> String {
+  /// The pin as 64 lowercase hex characters, as it is serialized and stored.
+  pub fn to_hex(&self) -> String {
     self.0.iter().map(|byte| format!("{byte:02x}")).collect()
   }
 
@@ -68,7 +69,7 @@ impl fmt::Debug for CertificatePin {
 
 impl Serialize for CertificatePin {
   fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(&self.hex())
+    serializer.serialize_str(&self.to_hex())
   }
 }
 

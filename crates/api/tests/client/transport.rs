@@ -147,6 +147,11 @@ async fn client_pinned_to_the_server_s_own_certificate_trusts_it_and_nothing_els
   let https = address(&format!("https://localhost:{}", server.address.port()));
   let pin = generated_pin(&server);
   assert_eq!(Some(pin.check_code()), server.server.check_code());
+  // Read without trusting it, before anything is sent: what the person compares.
+  let presented = Client::presented_certificate(&https)
+    .await
+    .expect("presented certificate");
+  assert_eq!(presented, pin);
   let pinned = Client::pinned(https.clone(), pin).expect("pinned client");
   assert_eq!(pinned.server_info().await.expect("pinned").api_version, 3);
   let other = CertificatePin::of(b"another certificate");

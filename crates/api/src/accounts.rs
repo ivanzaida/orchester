@@ -57,26 +57,7 @@ pub struct Session {
   pub via: JoinedVia,
 }
 
-/// API 2's password sign-in (`POST /auth/sessions`), removed in API 3: the server answers `404`. Kept while the
-/// workspace's password service, which the frozen `crates/desktop` calls, still sends it.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SignIn {
-  pub username: String,
-  pub password: Credential,
-  pub device: String,
-}
-
-/// The answer to API 2's password sign-in; see [`SignIn`].
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SignedIn {
-  pub token: Credential,
-  pub session: Session,
-  pub user: User,
-  pub password_change_required: bool,
-}
-
-/// API 2's `POST /auth/password`, removed in API 3; see [`SignIn`].
+/// A password change: Orchester Cloud's `POST /auth/password` (team servers have no passwords since API 3).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PasswordChange {
@@ -99,7 +80,8 @@ pub struct UsersResponse {
   pub users: Vec<User>,
 }
 
-/// API 2's `POST /admin/users`, removed in API 3 (accounts come from invites and codes); see [`SignIn`].
+/// API 2's `POST /admin/users`, removed in API 3 (accounts come from invites and codes). Kept while the frozen
+/// `crates/desktop` names it through the workspace's refusing `create_user`.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateUser {
@@ -123,7 +105,7 @@ pub struct UserChanges {
   pub disabled: Option<bool>,
 }
 
-/// The answer to API 2's `POST /admin/users/{id}/password`, removed in API 3; see [`SignIn`].
+/// The answer to API 2's `POST /admin/users/{id}/password`, removed in API 3; kept like [`CreateUser`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PasswordReset {
   pub initial_password: Credential,
