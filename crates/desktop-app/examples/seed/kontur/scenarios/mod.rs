@@ -63,7 +63,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 24] = [
+pub const ALL: [Scenario; 25] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -88,6 +88,7 @@ pub const ALL: [Scenario; 24] = [
   Scenario::of("accounts", accounts::seed),
   Scenario::of("usage", usage::seed),
   Scenario::of("usage-empty", usage::no_runs_today),
+  Scenario::of("usage-bare", usage::bare),
 ];
 
 /// The scenario called `name`.

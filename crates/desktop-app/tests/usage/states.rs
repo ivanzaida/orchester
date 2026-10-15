@@ -71,8 +71,14 @@ fn usage_page_reads_every_chart_as_a_table() {
     }
   }
   assert!(page.shows("usage-limits-table-row-6"));
-  assert!(!page.shows("usage-limits-table-row-7"), "the seven newest readings, the chart has them all");
-  assert!(!page.shows("usage-failed-view"), "Failed runs' figures are exact: no table view");
+  assert!(
+    !page.shows("usage-limits-table-row-7"),
+    "the seven newest readings, the chart has them all"
+  );
+  assert!(
+    !page.shows("usage-failed-view"),
+    "Failed runs' figures are exact: no table view"
+  );
 }
 
 #[test]
@@ -168,4 +174,27 @@ fn usage_page_names_the_years_of_a_range_across_new_year() {
   let mut page = Seeded::usage("usage", query);
   let readback = page.text("usage-readback");
   assert!(readback.starts_with("Dec 28, 2025 – Jan 3, 2026"), "{readback}");
+}
+
+#[test]
+fn usage_page_shows_the_reviewer_and_both_clis_five_hour_windows() {
+  let mut page = Seeded::usage("usage", UsageQuery::default());
+  let profiles = page.text("usage-breakdown-profiles");
+  assert!(
+    profiles.contains("claude-haiku-4-5"),
+    "auto mode's reviewer: {profiles}"
+  );
+  assert_eq!(
+    page.text("usage-breakdown-subtitle"),
+    "Auto mode reviewer rows can’t be selected as a filter."
+  );
+  assert!(page.shows("usage-limits-window-1-300"), "Claude's 5-hour window");
+}
+
+#[test]
+fn usage_page_without_tags_or_plan_limits_says_so() {
+  let mut page = Seeded::usage("usage-bare", UsageQuery::default());
+  assert!(page.shows("usage-limits-none"));
+  page.click("usage-filter-tag");
+  assert_eq!(page.text("usage-filter-tag-menu-empty"), "No tags yet");
 }
