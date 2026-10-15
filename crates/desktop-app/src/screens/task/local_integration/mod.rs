@@ -7,6 +7,7 @@ mod evidence;
 mod fields;
 mod files;
 mod notes;
+mod refresh;
 mod resolver;
 mod selection;
 mod strip;
@@ -107,6 +108,7 @@ struct LocalPage {
   name: Signal<String>,
   work: Work,
   stop: Arc<AtomicBool>,
+  last: refresh::LastRead,
   _poll: Interval,
 }
 
@@ -130,8 +132,14 @@ impl Component for LocalPage {
     let completed_editor = resolver.editor.clone();
     let completed_leave = resolver.leave.clone();
     let navigation = crate::navigation::Navigation::of(ctx);
-    let (completed_mode, completed_revision) = (mode.clone(), revision.clone());
+    let completed_mode = mode.clone();
+    let last = refresh::LastRead::default();
+    let completed_last = last.clone();
+    // The work's own `feed.saved()` already reads the view again once; the last read must not stand in for it.
     ctx.watch(&action.state(), move |state| {
+      if !state.is_pending() {
+        completed_last.forget();
+      }
       if !state.is_pending()
         && state.error.is_none()
         && let Some(outcome) = &state.data
@@ -143,7 +151,6 @@ impl Component for LocalPage {
           },
           Outcome::Changed | Outcome::Aborted | Outcome::DraftSaved(_) | Outcome::Resolved(_) => Mode::Review,
         });
-        completed_revision.update(|value| *value += 1);
         if let Outcome::DraftSaved(captured) = outcome {
           completed_editor.saved(captured);
           if !completed_editor.dirty() {
@@ -166,6 +173,7 @@ impl Component for LocalPage {
       name: Signal::new(String::new()),
       work: action,
       stop: Arc::new(AtomicBool::new(false)),
+      last,
       _poll: poll,
     }
   }
@@ -181,6 +189,7 @@ impl Component for LocalPage {
     };
     let root = task.project.open.repo_root.clone();
     let vault = Services::of(ctx).vault;
+    let last = self.last.clone();
     let read = ctx
       .future(
         (
@@ -191,22 +200,20 @@ impl Component for LocalPage {
           self.shown_file.get(),
         ),
         move |(root, run, _, policy_revision, selected)| {
-          let vault = vault.clone();
+          let (vault, last) = (vault.clone(), last.clone());
           async move {
-            background::run(move || {
-              orchester_workspace::tasks::local_integration::read(&root, run, selected.0.as_ref(), vault.get())
-                .map(|view| Shown(Arc::new(view), policy_revision))
-                .map_err(work::problem)
-            })
-            .await
-            .map_err(|_| Problem("local_integration.error.io"))?
+            background::run(move || last.read((&root, run), selected.0.as_ref(), policy_revision, vault.get()))
+              .await
+              .map_err(|_| Problem("local_integration.error.io"))?
           }
         },
       )
       .state()
       .get();
-    if self.reading.get_untracked() != read.is_pending() {
-      self.reading.set(read.is_pending());
+    // The poll waits while a read or the page's own work runs: the work reads the view again when it ends.
+    let paused = read.is_pending() || self.work.state().get().is_pending();
+    if self.reading.get_untracked() != paused {
+      self.reading.set(paused);
     }
     if let Some(reason) = read.error {
       return self.read_error(ctx, &task, &reason);

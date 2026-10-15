@@ -41,7 +41,8 @@ pub(super) fn column(
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Lg)
     .child(notes::phase(ctx, phase, &mode, narrow))
-    .with_children(external_notice(ctx, view));
+    .with_children(external_notice(ctx, view))
+    .with_children(hook_notice(ctx, view, phase));
   if let Some(problem) = page.work.state().get().error {
     column = column.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
   }
@@ -161,6 +162,34 @@ fn external_notice(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
         ("target", evidence.target.as_str()),
       ],
     ))
+    .into(),
+  )
+}
+
+/// What the repository's commit hooks changed when the last commit stopped before the branch moved.
+fn hook_notice(ctx: &Ctx, view: &IntegrationView, phase: LocalPhase) -> Option<Element> {
+  let change = view.operation.as_ref()?.hook_change()?;
+  if phase != LocalPhase::Review {
+    return None;
+  }
+  let paths = change
+    .paths
+    .iter()
+    .map(|path| path.as_str())
+    .collect::<Vec<_>>()
+    .join(&ctx.t("local_integration.separator"));
+  let body = match (change.paths.is_empty(), change.message) {
+    (false, true) => ctx.t_args("local_integration.hookBoth", [("paths", paths.as_str())]),
+    (false, false) => ctx.t_args("local_integration.hookPaths", [("paths", paths.as_str())]),
+    (true, _) => ctx.t("local_integration.hookMessage"),
+  };
+  Some(
+    Notice::new(
+      "local-hook-change",
+      NoticeTone::Warning,
+      ctx.t("local_integration.hookTitle"),
+    )
+    .body(body)
     .into(),
   )
 }

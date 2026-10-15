@@ -64,7 +64,10 @@ pub enum Action {
   FinishRestore,
   Reconcile,
   Abort,
-  Cleanup,
+  Cleanup {
+    /// The restored files the person changed since and saw listed, which cleanup leaves as they are.
+    accepted: Vec<LocalPath>,
+  },
   Cancel,
 }
 
@@ -245,7 +248,7 @@ fn execute(
       session.abort_task()?;
       return Ok(Outcome::Aborted);
     }
-    Action::Cleanup => session.remove_preservation()?,
+    Action::Cleanup { accepted } => session.remove_preservation_accepting(&accepted)?,
     Action::Cancel => session.cancel_preservation()?,
   }
   Ok(Outcome::Changed)

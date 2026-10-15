@@ -36,6 +36,9 @@ impl SecretVault for PrivateVault {
     SecretValue::new(PRIVATE_VALUE.into()).map_err(|_| VaultError::Unsupported)
   }
 }
+/// One display frame, at 60 Hz.
+const FRAME: std::time::Duration = std::time::Duration::from_millis(16);
+
 pub struct Page {
   pub window: Window,
   pub fixture: Fixture,
@@ -79,12 +82,16 @@ impl Page {
   }
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Window) -> bool) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    let mut frame = std::time::Instant::now();
     loop {
-      // Match the native event pump: timers drive retained reads, and idle polls need no forced layout.
+      // Match the native event pump: timers drive retained reads, and idle polls need no forced layout. A running
+      // animation (a turning loader) is drawn once a frame, as a display would, not on every 5 ms poll.
       self.window.tree.tick_timers();
       self.window.tree.tick_futures();
-      if self.window.tree.needs_redraw() || self.window.tree.has_active_timeline() {
+      let animating = self.window.tree.has_active_timeline() && frame.elapsed() >= FRAME;
+      if self.window.tree.needs_redraw() || animating {
         self.window.pass();
+        frame = std::time::Instant::now();
       }
       if done(&mut self.window) {
         return;

@@ -8,6 +8,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::integration::local::LocalPhase;
+use orchester_workspace::tasks::local_integration::LocalOrigin;
 
 use super::{Action, Inspector, Mode, Props, action_panel, button, guard_note, mode_button};
 use crate::{
@@ -118,7 +119,9 @@ pub(super) fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<
         "local_integration.cleanupAgree",
         "local_integration.cleanup",
       ],
-      Action::Cleanup,
+      Action::Cleanup {
+        accepted: props.view.changed_since_restoration.clone(),
+      },
     ),
     Mode::Review => review_decision(props, phase)?,
   })
@@ -171,7 +174,9 @@ impl Inspector {
     (mode, phase): (&Mode, LocalPhase),
     decision: Decision,
   ) -> Element {
-    let mut panel = action_panel(ctx, decision.title, Some(decision.body)).with_children(field(ctx, props, mode));
+    let mut panel = action_panel(ctx, decision.title, Some(decision.body))
+      .with_children(field(ctx, props, mode))
+      .with_children(edited_since_restoration(ctx, props, mode));
     if *mode == Mode::Preserve {
       // Restoration always follows the merge and pauses on conflicts; the box says so and cannot be changed.
       panel = panel.child(
@@ -197,7 +202,9 @@ impl Inspector {
       .label_style(LocalText::Explanation.role())
       .wrap_label()
       .on_change(move |on| {
-        if gate.local_input(input_source()).allowed() {
+        // The acknowledgement is the person's in every decision: window automation never ticks it.
+        let input = gate.local_input(input_source());
+        if input.origin() == LocalOrigin::Native && input.allowed() {
           checked.set(on);
         }
       }),
@@ -317,6 +324,25 @@ fn field(ctx: &mut Ctx, props: &Props, mode: &Mode) -> Option<Element> {
           .variant(LocalText::Explanation.role()),
       )
       .child(input)
+      .into(),
+  )
+}
+
+/// Before cleanup: the restored files the person changed since restoration, which cleanup leaves as they are.
+fn edited_since_restoration(ctx: &Ctx, props: &Props, mode: &Mode) -> Option<Element> {
+  let changed = &props.view.changed_since_restoration;
+  if *mode != Mode::Cleanup || changed.is_empty() {
+    return None;
+  }
+  let paths = changed
+    .iter()
+    .map(|path| path.as_str())
+    .collect::<Vec<_>>()
+    .join(&ctx.t("local_integration.separator"));
+  Some(
+    Text::new(&ctx.t_args("local_integration.cleanupEdited", [("paths", paths.as_str())]))
+      .id("local-cleanup-edited")
+      .variant(LocalText::Explanation.role())
       .into(),
   )
 }

@@ -50,15 +50,6 @@ impl Inspector {
         "local_integration.prepareNote",
       )
     };
-    let unstaged_only = selection.iter().any(|path| {
-      props
-        .view
-        .checkout
-        .files
-        .iter()
-        .find(|file| file.path == *path)
-        .is_none_or(|file| file.head == file.staged && file.head.is_some())
-    });
     let mut panel = action_panel(ctx, title, None)
       .child(
         Text::new(&body)
@@ -71,7 +62,7 @@ impl Inspector {
         "local-review-commit",
         commit,
         Some(Action::ReviewCommit(selection.0.clone())),
-        selection.is_empty() || unstaged_only,
+        !props.view.commit_selectable(&selection),
       ))
       .child(mode_button(
         ctx,

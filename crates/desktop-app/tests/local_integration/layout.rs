@@ -275,3 +275,47 @@ fn local_layout_preservation_review_names_the_selection_and_explains_no_discard(
   nothing_outside(&mut page, "local-actions");
   nothing_outside(&mut page, "local-evidence");
 }
+
+fn acknowledged(page: &mut Page) -> bool {
+  let check = orchester_app::ui::icon::Icon::Check.glyph().to_string();
+  super::integration_support::contains(
+    page
+      .window
+      .tree
+      .get_element_by_id("local-confirm-scope")
+      .expect("acknowledgement"),
+    &check,
+  )
+}
+
+#[test]
+fn local_layout_acknowledgement_is_the_persons_in_commit_and_preservation_reviews() {
+  let mut page = dirty();
+  resize(&mut page, 1440, 1080);
+  // Window automation is on, so only the acknowledgement's own rule refuses it.
+  page.window.link.input_gate().bind_window_control(true);
+  review(&mut page);
+  select(
+    &mut page,
+    &["local-select-local_integration.staged-local.txt".to_owned()],
+  );
+  page.click("local-review-preserve");
+  page.ready("local-confirm-scope");
+  lurq::app::events::with_synthetic_input(|| page.click("local-confirm-scope"));
+  assert!(
+    !acknowledged(&mut page),
+    "window automation cannot acknowledge a preservation"
+  );
+  page.click("local-confirm-scope");
+  assert!(acknowledged(&mut page), "the person's own input does");
+  page.click("local-cancel-review");
+  page.click("local-review-commit");
+  page.ready("local-commit-message-label");
+  lurq::app::events::with_synthetic_input(|| page.click("local-confirm-scope"));
+  assert!(
+    !acknowledged(&mut page),
+    "window automation cannot acknowledge a commit"
+  );
+  page.click("local-confirm-scope");
+  assert!(acknowledged(&mut page));
+}
