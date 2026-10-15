@@ -1,5 +1,5 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, SETTINGS, TASKS, files::FILES,
+  ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS, files::FILES,
   project_screen_path,
 };
 
@@ -168,7 +168,7 @@ impl Screen {
       Self::Orchestrator => Some(ORCHESTRATOR),
       Self::Tasks => Some(TASKS),
       Self::MergeQueue => Some("merge-queue"),
-      Self::PullRequests => Some("pull-requests"),
+      Self::PullRequests => Some(PULL_REQUESTS),
       Self::Usage => Some("usage"),
       Self::Pipelines => Some("pipelines"),
       Self::Agents => Some("agents"),

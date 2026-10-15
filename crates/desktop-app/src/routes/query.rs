@@ -1,7 +1,7 @@
 //! The query of a route's path (`?tab=needs_you&q=retry%20jitter`). Every value is percent-encoded, so a
 //! search with spaces or a file path with `&`, `?` or `#` stays one value and reads back as it was.
 
-use std::fmt::Write as _;
+pub(super) use orchester_workspace::links::with_query;
 
 use super::RouteError;
 
@@ -61,32 +61,7 @@ impl Params {
   }
 }
 
-/// `path` with a query of the `params` that have a value, in their order.
-pub(super) fn with_query(mut path: String, params: &[(&str, Option<&str>)]) -> String {
-  let mut separator = '?';
-  for (name, value) in params {
-    if let Some(value) = value {
-      write!(path, "{separator}{name}={}", encode(value)).expect("writing to a String cannot fail");
-      separator = '&';
-    }
-  }
-  path
-}
-
-/// `value` with every byte outside the unreserved characters and `/` percent-encoded.
-pub(super) fn encode(value: &str) -> String {
-  let mut encoded = String::with_capacity(value.len());
-  for byte in value.bytes() {
-    if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
-      encoded.push(char::from(byte));
-    } else {
-      write!(encoded, "%{byte:02X}").expect("writing to a String cannot fail");
-    }
-  }
-  encoded
-}
-
-/// [`encode`] undone; `None` for a malformed escape or bytes that are not UTF-8.
+/// [`orchester_workspace::links::encode`] undone; `None` for a malformed escape or bytes that are not UTF-8.
 pub(super) fn decode(value: &str) -> Option<String> {
   let mut bytes = Vec::with_capacity(value.len());
   let mut rest = value.bytes();

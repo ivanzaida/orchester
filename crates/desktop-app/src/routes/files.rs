@@ -5,11 +5,14 @@
 //! leading one, as in an absolute path, or a doubled one) is encoded, so even a path the page refuses
 //! reads back and the page can say why.
 
-use orchester_workspace::files::{LineRange, Version};
+use orchester_workspace::{
+  files::{LineRange, Version},
+  links,
+};
 
 use super::{
   RouteError,
-  query::{Params, decode, encode, with_query},
+  query::{Params, decode, with_query},
 };
 
 pub(super) const FILES: &str = "files";
@@ -123,7 +126,7 @@ fn encode_path(file: &str) -> String {
         encoded.push('/');
       }
     }
-    encoded.push_str(&encode(part));
+    encoded.push_str(&links::encode(part));
   }
   encoded
 }

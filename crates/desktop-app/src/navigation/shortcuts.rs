@@ -61,7 +61,7 @@ impl<'a> Keys<'a> {
 
   /// Only the platform's command modifier, Ctrl (Cmd on macOS), and no Shift: Ctrl+F, Cmd+F.
   pub const fn only_command(self) -> bool {
-    !self.shift && platform::only_command(self)
+    !self.shift && platform::command_only(self)
   }
 }
 
@@ -77,11 +77,18 @@ pub fn shortcut(keys: Keys<'_>) -> Option<Shortcut> {
   platform::shortcut(keys)
 }
 
+/// Whether `keys` open the title bar's tab list: Ctrl+Shift+A, Cmd+Shift+A on macOS (`YAOSy`). The list
+/// takes them while it is offered; they are no window shortcut otherwise.
+pub fn opens_tab_list(keys: Keys<'_>) -> bool {
+  keys.shift && platform::command_only(keys) && keys.is("a", "KeyA")
+}
+
 #[cfg(not(target_os = "macos"))]
 mod platform {
   use super::{Keys, Shortcut};
 
-  pub(super) const fn only_command(keys: Keys<'_>) -> bool {
+  /// Ctrl and no other modifier but Shift.
+  pub(super) const fn command_only(keys: Keys<'_>) -> bool {
     keys.only_ctrl()
   }
 
@@ -110,7 +117,8 @@ mod platform {
 mod platform {
   use super::{Keys, Shortcut};
 
-  pub(super) const fn only_command(keys: Keys<'_>) -> bool {
+  /// Cmd and no other modifier but Shift.
+  pub(super) const fn command_only(keys: Keys<'_>) -> bool {
     keys.meta && !keys.ctrl && !keys.alt
   }
 

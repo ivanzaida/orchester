@@ -25,6 +25,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  links::{Link, TaskPage},
   sharing::project::WorkClaim,
   tasks::{
     approvals::pending,
@@ -56,23 +57,29 @@ pub enum Control {
 pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let root = services.project(&args.project)?.repo_root;
+    let open = services.project(&args.project)?;
+    let (project, root) = (open.project.id(), open.repo_root);
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &args.run)?;
     let task = db
       .task(run.task())?
       .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+    let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
     let waiting: Vec<Value> = pending(&db, &root)?
       .iter()
       .filter(|shown| shown.approval.run == run.id())
-      .map(approval)
+      .map(|shown| approval(shown, project))
       .collect();
-    let questions = questions::waiting(&db.questions(run.id())?);
+    let questions = questions::waiting(&db.questions(run.id())?, &conversation);
     let auto_mode = db.run_auto_mode(run.id())?;
     let worktree = worktree_state(&db, &root, run.id())?;
     let view = run_view(&db, run)?;
-    let plan = PlanReview::of(&view).map(|review| plans::waiting(&review, true));
-    let decided = decided_plans(&view);
+    let plan = PlanReview::of(&view).map(|review| {
+      let mut plan = plans::waiting(&review, true);
+      plan["link"] = json!(conversation);
+      plan
+    });
+    let decided = decided_plans(&view, &conversation);
     let usage = view.usage();
     let reviewer = reviewer_tokens(&view.reviews);
     let run = &view.run;
@@ -114,6 +121,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       },
       "created_at": wire::time(run.created_at()),
       "finished_at": view.finished_at.map(wire::time),
+      "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
     }))
   })
   .await
@@ -203,8 +211,8 @@ pub fn find_run(db: &ProjectDb, named: &str) -> Result<Run, ToolError> {
 }
 
 /// The run's decided plans, oldest first, each with its step and who decided it, as the plan cards
-/// say it.
-fn decided_plans(view: &RunView) -> Vec<Value> {
+/// say it, and `link`, the task's Conversation where the cards are.
+fn decided_plans(view: &RunView, link: &str) -> Vec<Value> {
   let mut shown: Vec<&Plan> = view.plans.iter().collect();
   shown.sort_by_key(|plan| (plan.created_at, plan.version));
   shown
@@ -217,6 +225,7 @@ fn decided_plans(view: &RunView) -> Vec<Value> {
         .find(|step| step.key == plan.step)
         .map_or_else(|| plan.step.to_string(), |step| step.name.to_string());
       decided["step"] = json!({ "key": plan.step.to_string(), "name": name });
+      decided["link"] = json!(link);
       Some(decided)
     })
     .collect()

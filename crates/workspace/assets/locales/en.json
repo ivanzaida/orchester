@@ -268,6 +268,9 @@
       "all": "All",
       "needsYou": "Needs you"
     },
+    "needsYou": {
+      "outsideTasks": "{{count}} things wait for you outside the tasks"
+    },
     "readiness": {
       "ready": "Ready to queue",
       "missingBrief": "Needs a brief",
@@ -1078,6 +1081,8 @@
       "questionAmbiguous": "Several questions wait in this run; name one by its id, as get_run lists them.",
       "noWaitingQuestion": "No question waits for an answer in this run.",
       "noPlanWaiting": "No plan waits for a decision in run #{{run}}.",
+      "noPlan": "Run #{{run}} has no plan: none of its steps proposed one.",
+      "projectNotOpenedYet": "This version of Orchester has not opened {{project}} yet, so its data waits for an update. Open the project once in the app, then read it again.",
       "planApproved": "Plan v{{version}} of {{step}} was approved already; no plan waits for a decision.",
       "planChangesRequested": "Changes to plan v{{version}} of {{step}} were requested already; its agent revises it, and the revised plan waits for a decision of its own.",
       "planRunPaused": "Run #{{run}} is paused; plan v{{version}} of {{step}} takes a decision once the run is resumed (resume_run).",

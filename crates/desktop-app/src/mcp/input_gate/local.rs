@@ -20,18 +20,25 @@ impl InputGate {
     } else {
       LocalOrigin::Native
     };
+    // Its own statement, so the workspace lock is let go before `protecting` takes it again: a lock guard made inside
+    // the literal below would live until the literal ends, and parking_lot's locks are not reentrant.
+    let consent_revision = self.consent_revision();
     LocalInput {
       gate: self.clone(),
       origin,
       epoch: self.0.local_epoch.load(Ordering::Acquire),
-      consent_revision: self
-        .0
-        .workspace
-        .lock()
-        .as_ref()
-        .map(|workspace| workspace.automation_consent_revision()),
+      consent_revision,
       admitted: origin == LocalOrigin::Native || (self.0.window_control.load(Ordering::Acquire) && !self.protecting()),
     }
+  }
+
+  fn consent_revision(&self) -> Option<(u64, u64)> {
+    self
+      .0
+      .workspace
+      .lock()
+      .as_ref()
+      .map(|workspace| workspace.automation_consent_revision())
   }
 
   /// The existing server scope is independent of the two widening/approval opt-ins.
@@ -53,14 +60,7 @@ impl LocalInput {
         || (self.gate.0.window_control.load(Ordering::Acquire)
           && !self.gate.protecting()
           && self.epoch == self.gate.0.local_epoch.load(Ordering::Acquire)
-          && self.consent_revision
-            == self
-              .gate
-              .0
-              .workspace
-              .lock()
-              .as_ref()
-              .map(|workspace| workspace.automation_consent_revision())))
+          && self.consent_revision == self.gate.consent_revision()))
   }
 
   /// Read applicable consent again immediately before queued work; failed reads cannot authorize input.

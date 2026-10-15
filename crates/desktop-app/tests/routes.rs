@@ -279,7 +279,6 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
     "/settings/general",
     "/project",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope",
-    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/summary/more",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12/edit/more",
@@ -295,7 +294,6 @@ fn paths_that_name_no_screen_are_no_screen_and_fall_back_in_the_router() {
   let table = routes();
   let screens: Vec<String> = Screen::ALL.into_iter().map(Screen::pattern).collect();
   for path in [
-    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/tasks/KON-12",
     "/nope",
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/nope?tab=all",
     "/settings/general",

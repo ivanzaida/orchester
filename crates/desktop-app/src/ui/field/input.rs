@@ -4,7 +4,8 @@
 //! 12 `text_muted` unit after it (`Limit field` `eesXH`); a text area is 84 high at least, 7 over and
 //! under its lines (`IBFli`). The box takes the `border_focus` stroke while its input has the focus
 //! (`QWfRV` in `C0Qk5`) and the `danger` stroke while its value is not accepted (`wbLGz` in `CqBFL`).
-//! A search that holds text can end in a 13 `text_muted` cross that clears it (`Clear search` `rUHLV`).
+//! A search that holds text can end in a 13 `text_muted` cross that clears it (`Clear search` `rUHLV`);
+//! an empty one can end in the key cap of the shortcut that reaches it (`Kbd` in `nsdST`).
 //! It types each key once: the input writes into the value itself. A locked field shows its value in
 //! `text_secondary` on `surface_panel` and takes no input or focus (`Bzakf` in New task · queued
 //! `H8GYVZ`).
@@ -28,7 +29,10 @@ use orchester_core::tokens::regroup;
 use super::field_error;
 use crate::{
   theme::{ControlHeight, ExtraSpacing, IconSize, SecretsText},
-  ui::icon::{Icon, icon},
+  ui::{
+    icon::{Icon, icon},
+    kbd::key_cap,
+  },
 };
 
 /// A text area's least height (`IBFli` in `s72p3L`).
@@ -65,6 +69,8 @@ pub struct FieldInput {
   group_separator: Option<Arc<str>>,
   /// The cross that clears a value, named this for tools.
   clear: Option<Arc<str>>,
+  /// The keys of the shortcut that reaches the field, in a cap at its end while it is empty.
+  keys: Option<Arc<str>>,
   width: Dimension,
   area_height: f32,
   /// A single-line box's height.
@@ -100,6 +106,7 @@ impl PartialEq for FieldInput {
       && self.error == other.error
       && self.group_separator == other.group_separator
       && self.clear == other.clear
+      && self.keys == other.keys
       && self.width == other.width
       && self.area_height == other.area_height
       && self.box_height == other.box_height
@@ -130,6 +137,7 @@ impl FieldInput {
       error: None,
       group_separator: None,
       clear: None,
+      keys: None,
       width: Dimension::Pct(100.0),
       area_height: TEXT_AREA_HEIGHT,
       box_height: ControlHeight::Md.value(),
@@ -166,6 +174,12 @@ impl FieldInput {
   /// A glyph before the value that says what the field is for (`pencil-line` in the plan's note `c2mWh`).
   pub fn leading(mut self, glyph: Icon) -> Self {
     self.leading = Some(glyph);
+    self
+  }
+
+  /// The key cap of the shortcut that reaches the field, at its end while it is empty.
+  pub fn keys(mut self, keys: impl Into<Arc<str>>) -> Self {
+    self.keys = Some(keys.into());
     self
   }
 
@@ -347,6 +361,13 @@ impl Component for FieldBox {
       )
       .child(input)
       .with_children(clear_button(&props))
+      .with_children(
+        props
+          .keys
+          .as_deref()
+          .filter(|_| props.value.get().is_empty())
+          .map(|keys| key_cap(&format!("{}-keys", props.id), keys)),
+      )
       .with_children(props.unit.as_deref().map(|unit| {
         Text::new(unit)
           .variant(TypographyStyle::Description)

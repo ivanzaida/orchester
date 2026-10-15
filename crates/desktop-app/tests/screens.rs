@@ -31,6 +31,7 @@ use orchester_app::{
     OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
+  shell::needs_you::PanelOpen,
   startup::Launch,
   theme::{self, Mode},
 };
@@ -95,6 +96,7 @@ struct ScreensRoot {
   router: RouterHandle,
   navigation: Navigation,
   projects: Projects,
+  needs_you: PanelOpen,
 }
 
 impl Component for ScreensRoot {
@@ -112,6 +114,7 @@ impl Component for ScreensRoot {
         Some((project, ProjectState::Open(kontur(project)))),
         ProjectJobs::default(),
       ),
+      needs_you: PanelOpen::new(ctx.signal(false)),
     }
   }
 
@@ -123,6 +126,7 @@ impl Component for ScreensRoot {
     )));
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
+    ctx.provide(self.needs_you.clone());
     Router::mount(ctx, self.router.clone())
   }
 }

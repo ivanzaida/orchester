@@ -356,17 +356,29 @@ included. The tooltip names the reason: *Personal website · 1 needs you* or *Pe
 Could not create worktree for PW-14*. It clears when the count is 0 and the failure is opened or
 dismissed. All projects tabs never show it.
 
-**Overflow.** Tabs shrink together from 224 to 120; the active tab keeps at least 160. Below 140
-an inactive tab drops its close button (middle-click still closes it). When 120-wide tabs do not
-fit, the strip stops shrinking and scrolls horizontally (wheel or trackpad over the strip, and
-switching tabs scrolls the active one into view), with a 24px fade to `$canvas` on each clipped
-edge. A tab list button appears after the strip: the tab count (Geist Mono 11) and
-`chevron-down` 12, 24 high, radius 6, `$hover` fill and `chevron-up` while open. The list uses
-the select menu's style (`u0ByM`: `$raised`, `$border`, radius 11, padding 4, elevation shadow),
-320 wide, right-aligned under the button, 4px below the title bar, rows 32 high with the avatar,
-the full location and the check on the active tab; at most 8 rows, then it scrolls with the
-overlay thumb. A click switches, middle-click closes, Escape or a click outside closes the list.
-The + and 48px of drag area always stay visible.
+**Overflow** (decided 2026-10-15; the new app's frames are `oHEGQ`, `qWCBQ`, `a1i6Ws` and `YAOSy` in
+`orchester2.pen`). While every tab fits, a labelled tab keeps its natural width with its label capped at
+160. As tabs open, the inactive labelled tabs shrink together down to 120 (`Kontur · Ove…`); the active tab
+never shrinks, and All projects stays 28. When 120-wide tabs no longer fit, the strip does not scroll:
+it shows the longest run of tabs from the left that fits beside the active tab, those tabs at 120, and
+the rest are hidden. An active tab outside that run takes the last slot after it, so the tabs on the left
+never move under the pointer. The + and 48px of drag area always stay visible.
+
+The tab list button sits after the last visible tab, before +, only while a tab is hidden: the count of
+hidden tabs (Geist Mono 11 `$text_secondary`) and `chevron-down` 12, 26 high, radius 6. Hovered it takes
+`$hover` and says *N more tabs · Ctrl Shift A*; open it takes `$pressed` and `chevron-up`. Ctrl/Cmd+Shift+A
+opens and closes the list. The list is the menu surface (`$surface_raised`, radius 10, `$border_strong`,
+padding 6), 320 wide, its start under the button's, 4 under the title bar, and 8 inside the window's right
+edge where it would cross it; it grows up to the window height less 48, then its rows scroll. It holds
+every open tab in strip order: the tab's icon, its page, its project, `eye-off` while the tab is hidden,
+the needs-you mark, a check on the current tab (filled `$accent_muted`), and a close button in a reserved
+slot while the row is hovered. With more than eight tabs a search field leads the list, focused, matching
+page and project; with no match it says *No open tab matches “…”*. Up/Down move a focus ring over the rows
+(a list without search opens with the current row ringed), Enter switches, Ctrl/Cmd+W closes the ringed
+tab, Escape clears the search and then closes the list; a click switches and closes the list, a
+middle-click closes that tab. A tab chosen from the list becomes active, so it takes the last slot. A
+choice or Escape gives the focus back to the button (a Tab stop whose ring shows only after keyboard use);
+when the list goes away because every tab fits again, *New tab* takes the focus.
 
 **Order.** Press on a tab and move 4px to drag it along the strip (horizontal only; it does not
 activate the tab). The other tabs slide aside to show where it will land; release drops it there,
@@ -1114,6 +1126,8 @@ Workflow status is fixed: **Backlog, Todo, In progress, In review, Done, Cancele
 *Where the displayed status comes from (ORC-51).* The tabs and the overview's In review count read the workflow status; the run label, the progress text, Needs you and the status bar's Queued count read the task's phase, derived from its latest run (*Ready for review* is a succeeded run not yet merged). Neither comes from the stored task status (`tasks.status`), which only says whether the task is a draft or was submitted, and stays *queued* after its run ends (`docs/architecture/storage.md`, "State machines").
 
 *Work settled without Orchester (ORC-11, 2026-10-14).* A succeeded run that Orchester did not merge is checked against git each time the tasks are read (`orchester_core::integration::Branches`, `tasks::delivery`), the same way for the task list's rows, the Overview and the task page. It reads as *Merged into <base>* only when its branch has commits past the revision the run started from and the base branch holds all of them, as after a merge made with git or a pull request pulled back into the checkout. A run whose branch has no commit of its own reads *Nothing to merge*: neither Ready to merge nor Merged, no Merge action, not in Needs you. A task moved to Done or Canceled is no longer Ready to merge either. Known limits: git cannot see a squash-merged or rebased pull request (the base holds other commits), a base branch not pulled since the merge, or a run branch deleted or force-pushed; such work stays Ready to merge until the task is moved to Done. Without git, it stays Ready to merge too, logged once per checkout and base branch in a session.
+
+*What the Tasks page's Needs you tab counts (2026-10-15).* The tab lists and counts the tasks something of waits for: a tab's count is what it lists, so a task that waits on several things (a plan and a question, say) counts once on the tab, while the pill and every other *Needs you* count each thing. What waits and belongs to no task (the project's memory records waiting for approval, a tool request whose run cannot be read) is counted by every other *Needs you* (the title bar pill and its panel, the status bar, a tab's mark, the Overview, All projects) and is named on this tab in an information notice under the search, above the rows or the tab's empty state (where `Epiq5` and `oDyZB` put a notice): the item's own words (*1 memory record waits for approval*) or how many wait (*2 things wait for you outside the tasks*), *This list shows tasks only. The Needs you panel lists everything that waits for you.*, and *Open Needs you*, which opens the pill's panel. Not drawn; built with the Notice component (`R3Pyx`) and the hand icon of the pill.
 
 Priority choices are **Urgent, High, Medium, Low, No priority**. The neutral icon scale is circle-alert for Urgent, signal-high/medium/low and minus for No priority. Priority only changes task-list sorting/filtering. Workflow sort follows the fixed status order above; priority sort is urgent-first; ties use most recently updated first. The runner queue keeps its configured order.
 
