@@ -41,7 +41,7 @@ pub mod ready_to_run;
 pub mod run;
 pub mod run_again;
 pub mod run_approvals;
-mod run_times;
+pub(crate) mod run_times;
 pub mod standing;
 pub mod timeline;
 pub mod transcript;

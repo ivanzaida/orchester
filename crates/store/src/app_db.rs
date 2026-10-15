@@ -51,6 +51,7 @@ CREATE TABLE ui_state (
   settings::APP_MCP_MIGRATION,
   accounts::MIGRATION,
   servers::PIN_MIGRATION,
+  settings::ORCHESTRATOR_PUBLISHES_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

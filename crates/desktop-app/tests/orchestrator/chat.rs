@@ -114,8 +114,8 @@ fn orchestrator_acts_through_the_tools_as_any_client_of_the_app() {
     "{outcomes:?}"
   );
 
-  // Another project's work and the window are not the Orchestrator's.
-  screen.send(r#"Call list_tasks {"project":"Atlas"}"#);
+  // Another project's work and the window are not the Orchestrator's to change.
+  screen.send(r#"Call create_task {"project":"Atlas","title":"Not ours"}"#);
   screen.until("the other project's refusal", |screen| {
     screen.text("orchestrator-conversation").contains("other_project")
   });

@@ -1,5 +1,5 @@
-//! Settings › *Let automation change agent permissions*: off until a person turns it on in the window,
-//! where it reads the stored value and saves what the person chooses.
+//! Settings › *Let automation change agent permissions* and *Let the Orchestrator publish drafts*: each off until
+//! a person turns it on in the window, where it reads the stored value and saves what the person chooses.
 
 mod support;
 
@@ -8,9 +8,15 @@ use orchester_app::routes::Route;
 use support::Window;
 
 const SWITCH: &str = "settings-change-permissions";
+const PUBLISH: &str = "settings-publish-drafts";
 
 /// Whether the switch shows on: its knob at the end of its track.
 fn on(window: &mut Window) -> bool {
+  switch_on(window, SWITCH)
+}
+
+/// Whether the switch `switch` shows on.
+fn switch_on(window: &mut Window, switch: &str) -> bool {
   let mut bounds = |id: String| {
     window
       .tree
@@ -18,7 +24,7 @@ fn on(window: &mut Window) -> bool {
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
-  let (track, knob) = (bounds(format!("{SWITCH}-mark")), bounds(format!("{SWITCH}-knob")));
+  let (track, knob) = (bounds(format!("{switch}-mark")), bounds(format!("{switch}-knob")));
   knob.x - track.x > track.width / 2.0 - knob.width / 2.0
 }
 
@@ -136,4 +142,69 @@ fn settings_synthetic_pointer_cannot_change_its_own_opt_in() {
       "synthetic input is visibly rejected"
     );
   }
+}
+
+/// Clicks the element `id` where it is, laid out below the window's fold or not.
+fn press_element(window: &mut Window, id: &str) {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .unwrap_or_else(|| panic!("{id} exists"))
+    .click();
+  window.pass();
+}
+
+#[test]
+fn settings_only_a_person_lets_the_orchestrator_publish_drafts() {
+  use lurq::app::events::with_synthetic_input;
+  let mut window = Window::open();
+  let workspace = window.launch.workspace().expect("session").clone();
+  window.navigation().go(Route::Settings);
+  window.until("the setting's row", |window| {
+    window.texts(&format!("{PUBLISH}-row")).is_some()
+  });
+  let texts = window.texts(&format!("{PUBLISH}-row")).expect("the row shows");
+  assert!(
+    texts.iter().any(|text| text == "Let the Orchestrator publish drafts"),
+    "{texts:?}"
+  );
+  assert!(!switch_on(&mut window, PUBLISH), "off until turned on");
+  window.until("synthetic input rejected", |window| {
+    with_synthetic_input(|| press_element(window, PUBLISH));
+    window.texts(&format!("{PUBLISH}-blocked")).is_some()
+  });
+  assert!(!workspace.orchestrator_publishes_drafts().expect("the setting reads"));
+  window.until("the person's choice to be saved", |window| {
+    let stored = workspace.orchestrator_publishes_drafts().expect("the setting reads");
+    if !stored {
+      press_element(window, PUBLISH);
+    }
+    stored
+  });
+  window.until("the switch to show it", |window| switch_on(window, PUBLISH));
+  assert!(
+    !workspace
+      .automation_changes_permissions()
+      .expect("the other setting reads"),
+    "publishing drafts turns nothing else on"
+  );
+}
+
+#[test]
+fn settings_turning_off_publishing_drafts_holds_from_the_click() {
+  let mut window = Window::open();
+  let workspace = window.launch.workspace().expect("session").clone();
+  workspace
+    .set_orchestrator_publishes_drafts(true)
+    .expect("the person turned it on");
+  window.navigation().go(Route::Settings);
+  window.until("the switch on", |window| {
+    window.texts(&format!("{PUBLISH}-row")).is_some() && switch_on(window, PUBLISH)
+  });
+  // The person's click; its save has not run yet.
+  window.tree.get_element_by_id_mut(PUBLISH).expect("the switch").click();
+  assert!(
+    !workspace.orchestrator_publishes_drafts().expect("read"),
+    "the chat stops publishing from the click, before the save"
+  );
 }

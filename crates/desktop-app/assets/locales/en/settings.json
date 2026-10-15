@@ -9,6 +9,14 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
+      "publishDrafts": {
+        "title": "Let the Orchestrator publish drafts",
+        "description": "Lets the Orchestrator's chat publish the pipelines, agent profiles, instructions, skills and tools it drafts, without your click. Off: it proposes each publish as a card you apply. A draft that widens what agents may do still needs Let automation change agent permissions. Only you can change this, here in the window.",
+        "on": "The chat publishes without asking in every project and keeps each publish as an action in its conversation. A draft that widens what agents may do is still proposed while Let automation change agent permissions is off.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
       "server": {
         "section": "Orchester MCP server",
         "meta": {

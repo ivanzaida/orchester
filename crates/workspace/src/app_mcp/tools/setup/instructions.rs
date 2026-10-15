@@ -203,6 +203,10 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
     let open = services.project(&args.project)?;
     let data = ProjectInstructions::load_in(&open.repo_root)?;
     let entry = entry_named(&data, &args.instruction)?;
+    services.draft_decided::<orchester_core::resource::Instruction>(
+      &orchester_store::ProjectDb::open(&open.repo_root)?,
+      entry.id,
+    )?;
     let id = editor::publish_in(&open.repo_root, entry)
       .map_err(|error| write_error(&error))?
       .id;
@@ -220,10 +224,10 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
 
 fn entry_named<'a>(data: &'a ProjectInstructions, named: &str) -> Result<&'a InstructionEntry, ToolError> {
   let lowered = named.to_lowercase();
-  data
-    .entries
-    .iter()
-    .find(|entry| entry.id.to_string() == named || entry.name.to_lowercase() == lowered)
+  // An id names one instruction for certain; a name could also be another instruction's id.
+  let by_id = data.entries.iter().find(|entry| entry.id.to_string() == named);
+  by_id
+    .or_else(|| data.entries.iter().find(|entry| entry.name.to_lowercase() == lowered))
     .ok_or_else(|| ToolError::not_found(Missing::Instruction, named))
 }
 

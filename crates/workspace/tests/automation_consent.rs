@@ -154,3 +154,20 @@ fn automation_consent_old_pending_grant_cannot_clear_a_later_human_revocation() 
     "older grant completion cannot undo later revocation"
   );
 }
+
+#[test]
+fn orchestrator_publish_consent_is_off_from_a_persons_revocation_before_it_is_saved() {
+  let dir = tempfile::tempdir().expect("private consent directory");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
+  workspace.set_orchestrator_publishes_drafts(true).expect("human opt-in");
+  assert!(workspace.orchestrator_publishes_drafts().expect("read"));
+  workspace.revoke_orchestrator_publish_consent();
+  assert!(
+    !workspace.orchestrator_publishes_drafts().expect("read"),
+    "off from the person's click, though the stored setting is still on"
+  );
+  workspace
+    .set_orchestrator_publishes_drafts(true)
+    .expect("turned on again");
+  assert!(workspace.orchestrator_publishes_drafts().expect("read"));
+}

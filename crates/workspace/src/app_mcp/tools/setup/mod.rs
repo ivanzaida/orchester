@@ -9,6 +9,7 @@ mod connections;
 mod instructions;
 mod mcp_servers;
 mod merge;
+pub(crate) use self::merge::merge_proposed;
 mod pipeline_steps;
 mod pipelines;
 mod profile_input;

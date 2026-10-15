@@ -5,11 +5,14 @@
 //! took, History, and choosing what the Orchestrator runs on. Run with
 //! `cargo test -p orchester-app --test orchestrator <filter>`; the first test builds the runner with its fakes.
 
+mod changes;
 mod chat;
+mod decisions;
 mod harness;
 mod history;
 mod proposal;
 mod queue;
+mod review;
 mod settings;
 mod start;
 #[path = "../support/mod.rs"]
