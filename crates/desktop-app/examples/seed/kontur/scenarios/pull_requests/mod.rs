@@ -257,8 +257,8 @@ fn pull_request(kontur: &Kontur, listed: &Listed, head: BranchName) -> Result<Pu
 
 /// A head revision made up from the pull request's number.
 fn revision(number: u64) -> Result<Revision, SeedError> {
-  let hex = format!("{:x}", number * 0x9e37_79b9);
-  Revision::new(&format!("{hex:0>40}")).map_err(|error| SeedError::Invalid(error.to_string()))
+  let hex = format!("{:016x}", number.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+  Revision::new(&hex.repeat(3)[..40]).map_err(|error| SeedError::Invalid(error.to_string()))
 }
 
 fn repo() -> Result<GitHubRepo, SeedError> {
