@@ -84,7 +84,7 @@ impl ProjectDb {
          COALESCE((SELECT json_extract(step.value, '$.name') FROM json_each(runs.snapshot, '$.body.body.steps') AS step \
            WHERE json_extract(step.value, '$.key') = executions.step_key), executions.step_key), \
          profiles.name, connections.provider, invocations.started_at, invocations.ended_at, invocations.inactive_ms, \
-         invocations.waiting_since, index_use.body, edits.body \
+         invocations.waiting_since, index_use.body, edits.body, profiles.id, accounts.account_id \
        FROM invocations \
        JOIN runs ON runs.id = invocations.run_id \
        JOIN step_executions AS executions ON executions.id = invocations.step_execution_id \
@@ -93,6 +93,7 @@ impl ProjectDb {
        LEFT JOIN connections ON connections.id = json_extract(versions.body, '$.body.connection') \
        LEFT JOIN invocation_code_index AS index_use ON index_use.invocation_id = invocations.id \
        LEFT JOIN invocation_edit_progress AS edits ON edits.invocation_id = invocations.id \
+       LEFT JOIN invocation_accounts AS accounts ON accounts.invocation_id = invocations.id \
        WHERE {RAN_SINCE} ORDER BY invocations.started_at, invocations.rowid"
     ))?;
     let rows = statement
@@ -104,7 +105,7 @@ impl ProjectDb {
   fn runs_since(&self, since: Timestamp) -> Result<Vec<RunFacts>, StoreError> {
     let tags = self.task_tag_names()?;
     let mut statement = self.connection.prepare(&format!(
-      "SELECT runs.id, runs.number, runs.task_id, runs.status, tasks.number, tasks.title, pipelines.name \
+      "SELECT runs.id, runs.number, runs.task_id, runs.status, tasks.number, tasks.title, pipelines.name, pipelines.id \
        FROM runs JOIN tasks ON tasks.id = runs.task_id \
        LEFT JOIN resources AS pipelines ON pipelines.id = json_extract(runs.snapshot, '$.body.pipeline.resource') \
        WHERE runs.id IN (SELECT run_id FROM invocations WHERE {RAN_SINCE}) ORDER BY runs.number"
@@ -119,24 +120,28 @@ impl ProjectDb {
           row.get::<_, i64>(4)?,
           row.get::<_, String>(5)?,
           row.get::<_, Option<String>>(6)?,
+          row.get::<_, Option<String>>(7)?,
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
     let key = self.project().key().as_str().to_owned();
     rows
       .into_iter()
-      .map(|(id, number, task, status, task_number, title, pipeline)| {
-        Ok(RunFacts {
-          id: parse("run id", &id)?,
-          number: run_number(number)?,
-          tags: tags.get(&task).cloned().unwrap_or_default(),
-          task: parse("task id", &task)?,
-          task_key: format!("{key}-{task_number}").into(),
-          task_title: title.into(),
-          pipeline: pipeline.map(Arc::from),
-          outcome: outcome(&status)?,
-        })
-      })
+      .map(
+        |(id, number, task, status, task_number, title, pipeline, pipeline_id)| {
+          Ok(RunFacts {
+            id: parse("run id", &id)?,
+            number: run_number(number)?,
+            tags: tags.get(&task).cloned().unwrap_or_default(),
+            task: parse("task id", &task)?,
+            task_key: format!("{key}-{task_number}").into(),
+            task_title: title.into(),
+            pipeline: pipeline.map(Arc::from),
+            pipeline_id: pipeline_id.as_deref().map(|id| parse("pipeline id", id)).transpose()?,
+            outcome: outcome(&status)?,
+          })
+        },
+      )
       .collect()
   }
 
@@ -186,6 +191,8 @@ struct InvocationRow {
   waiting_since: Option<i64>,
   index: Option<String>,
   edit: Option<String>,
+  profile_id: Option<String>,
+  account: Option<String>,
 }
 
 impl InvocationRow {
@@ -204,6 +211,8 @@ impl InvocationRow {
       waiting_since: row.get(10)?,
       index: row.get(11)?,
       edit: row.get(12)?,
+      profile_id: row.get(13)?,
+      account: row.get(14)?,
     })
   }
 
@@ -234,6 +243,12 @@ impl InvocationRow {
       },
       model: agent.then(|| Arc::from(self.model.as_str())),
       profile: self.profile.filter(|_| agent).map(Arc::from),
+      profile_id: self
+        .profile_id
+        .filter(|_| agent)
+        .map(|id| parse("profile id", &id))
+        .transpose()?,
+      account: self.account.map(|account| parse("account id", &account)).transpose()?,
       step: self.step.into(),
       started_at,
       ended_at,

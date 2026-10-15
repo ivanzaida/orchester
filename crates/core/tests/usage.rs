@@ -54,6 +54,7 @@ fn run(number: u32, task: TaskId, key: &str, pipeline: &str, tags: &[&str], outc
     task_key: key.into(),
     task_title: format!("Task {key}").into(),
     pipeline: Some(pipeline.into()),
+    pipeline_id: None,
     tags: tags.iter().map(|tag| Arc::from(*tag)).collect(),
     outcome,
   }
@@ -72,6 +73,8 @@ fn invocation(
     cli: Some(cli),
     model: Some(model.into()),
     profile: Some(profile.into()),
+    profile_id: None,
+    account: None,
     step: "implement".into(),
     started_at: from,
     ended_at: Some(to),

@@ -1,31 +1,40 @@
 //! The dashboard's filters (*CLI*, *Model*, *Agent profile*, *Pipeline*, *Tag*, and *Project* across
-//! projects): each is a set of chosen values, empty for all; a turn counts when every filter admits
-//! it. *Tag* matches a run whose task has any chosen tag. Plan limits follow the CLI filter only. A review
-//! of auto mode's reviewer is matched by the reviewer's CLI and model; it has no agent profile.
+//! projects) and the narrower ones a link or a tool asks for (a task, a run, a step, an account): each is
+//! a set of chosen values, empty for all; a turn counts when every filter admits it. *Tag* matches a run
+//! whose task has any chosen tag. An agent profile or a pipeline is chosen by its id or its name, a task by
+//! its key or its id. Plan limits follow the CLI filter only. A review of auto mode's reviewer is matched by
+//! the reviewer's CLI and model and by the step whose request it judged; it has no agent profile and no
+//! account.
 
 use std::{collections::BTreeMap, sync::Arc};
 
 use super::facts::{InvocationFacts, ProjectFacts, RunFacts};
-use crate::{connection::AgentProvider, id::ProjectId};
+use crate::{
+  connection::AgentProvider,
+  id::{AgentAccountId, ProjectId, ResourceId, RunId},
+};
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct UsageFilter {
   pub clis: Vec<AgentProvider>,
   pub models: Vec<Arc<str>>,
+  /// Agent profiles by id or name.
   pub profiles: Vec<Arc<str>>,
+  /// Pipelines by id or name.
   pub pipelines: Vec<Arc<str>>,
   pub tags: Vec<Arc<str>>,
   pub projects: Vec<ProjectId>,
+  /// Tasks by key (`KON-12`, any case) or id.
+  pub tasks: Vec<Arc<str>>,
+  pub runs: Vec<RunId>,
+  /// Steps by name, in whichever pipeline.
+  pub steps: Vec<Arc<str>>,
+  pub accounts: Vec<AgentAccountId>,
 }
 
 impl UsageFilter {
   pub fn is_empty(&self) -> bool {
-    self.clis.is_empty()
-      && self.models.is_empty()
-      && self.profiles.is_empty()
-      && self.pipelines.is_empty()
-      && self.tags.is_empty()
-      && self.projects.is_empty()
+    self == &Self::default()
   }
 
   /// Whether `invocation` of `run` in `project` counts.
@@ -33,22 +42,32 @@ impl UsageFilter {
     self.admits_run(project, run)
       && chosen(&self.clis, invocation.cli.as_ref())
       && chosen(&self.models, invocation.model.as_ref())
-      && chosen(&self.profiles, invocation.profile.as_ref())
+      && named(&self.profiles, invocation.profile_id, invocation.profile.as_deref())
+      && chosen(&self.steps, Some(&invocation.step))
+      && chosen(&self.accounts, invocation.account.as_ref())
   }
 
-  /// Whether a review by auto mode's reviewer on `cli` with `model` of a request of `run` in `project`
-  /// counts.
-  pub fn admits_review(&self, project: ProjectId, run: &RunFacts, (cli, model): (AgentProvider, &Arc<str>)) -> bool {
+  /// Whether a review by auto mode's reviewer on `cli` with `model` of a request `invocation` of `run` in
+  /// `project` made counts.
+  pub fn admits_review(
+    &self,
+    (project, run, invocation): (ProjectId, &RunFacts, &InvocationFacts),
+    (cli, model): (AgentProvider, &Arc<str>),
+  ) -> bool {
     self.admits_run(project, run)
       && chosen(&self.clis, Some(&cli))
       && chosen(&self.models, Some(model))
       && chosen(&self.profiles, None)
+      && chosen(&self.steps, Some(&invocation.step))
+      && chosen(&self.accounts, None)
   }
 
   fn admits_run(&self, project: ProjectId, run: &RunFacts) -> bool {
     chosen(&self.projects, Some(&project))
-      && chosen(&self.pipelines, run.pipeline.as_ref())
+      && named(&self.pipelines, run.pipeline_id, run.pipeline.as_deref())
       && (self.tags.is_empty() || run.tags.iter().any(|tag| self.tags.contains(tag)))
+      && chosen(&self.runs, Some(&run.id))
+      && (self.tasks.is_empty() || self.tasks.iter().any(|task| names_task(task, run)))
   }
 
   /// Whether the plan limits of `cli` are shown.
@@ -61,6 +80,20 @@ impl UsageFilter {
 /// does not have is admitted only then.
 fn chosen<T: PartialEq>(values: &[T], value: Option<&T>) -> bool {
   values.is_empty() || value.is_some_and(|value| values.contains(value))
+}
+
+/// [`chosen`] for a resource chosen by its id or its name.
+fn named(values: &[Arc<str>], id: Option<ResourceId>, name: Option<&str>) -> bool {
+  let id = id.map(|id| id.to_string());
+  values.is_empty()
+    || values
+      .iter()
+      .any(|value| Some(&**value) == name || id.as_deref() == Some(&**value))
+}
+
+/// Whether `value` names the task of `run`: its key, in any case, or its id.
+fn names_task(value: &str, run: &RunFacts) -> bool {
+  run.task_key.eq_ignore_ascii_case(value) || run.task.to_string() == value
 }
 
 /// Adds `value` to the chosen values, or removes it when it was chosen.

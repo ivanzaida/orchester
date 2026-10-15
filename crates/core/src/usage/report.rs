@@ -147,13 +147,13 @@ impl<'a> Turn<'a> {
 }
 
 /// Every turn and invocation the filters admit, in all ranges.
-struct Matched<'a> {
+pub(super) struct Matched<'a> {
   turns: Vec<Turn<'a>>,
   launches: Vec<Launch<'a>>,
 }
 
 impl<'a> Matched<'a> {
-  fn of(projects: &'a [ProjectFacts], filter: &UsageFilter) -> Self {
+  pub(super) fn of(projects: &'a [ProjectFacts], filter: &UsageFilter) -> Self {
     let mut matched = Self {
       turns: Vec::new(),
       launches: Vec::new(),
@@ -190,7 +190,7 @@ impl<'a> Matched<'a> {
         let (launch, _) = launches.get(&review.invocation)?;
         let reviewer = (review.cli, &review.model);
         filter
-          .admits_review(project.project, launch.run, reviewer)
+          .admits_review((project.project, launch.run, launch.invocation), reviewer)
           .then_some(Turn {
             launch: *launch,
             at: review.at,
@@ -206,7 +206,7 @@ impl<'a> Matched<'a> {
   }
 
   /// The turns that completed in `range` and the invocations that ran in it.
-  fn within(&self, range: DayRange, now: Timestamp) -> Within<'a> {
+  pub(super) fn within(&self, range: DayRange, now: Timestamp) -> Within<'a> {
     let (start, end) = (range.start(), range.end());
     let turns = self
       .turns
@@ -217,24 +217,29 @@ impl<'a> Matched<'a> {
     let launches = self
       .launches
       .iter()
-      .filter_map(|launch| active_within(launch.invocation, range, now).map(|active| (*launch, active)))
+      .filter_map(|launch| active_between(launch.invocation, (start, end), now).map(|active| (*launch, active)))
       .collect();
     Within {
       turns,
       launches,
       start,
       end,
+      now,
     }
   }
 }
 
 /// How long `invocation` was active between `start` and `end`; `None` when it did not run then. An
 /// invocation's waits for a person are kept as a total, not as times, so one that crosses an edge
-/// is counted for its part of the range, at most its active time.
-fn active_within(invocation: &InvocationFacts, range: DayRange, now: Timestamp) -> Option<u64> {
-  let (start, end) = (range.start(), range.end());
+/// is counted for its part of the stretch, at most its active time.
+pub(super) fn active_between(
+  invocation: &InvocationFacts,
+  (start, end): (Timestamp, Timestamp),
+  now: Timestamp,
+) -> Option<u64> {
   let stop = invocation.ended_at.unwrap_or(now).max(invocation.started_at);
-  if !range.contains(invocation.started_at) && (invocation.started_at >= start || stop <= start) {
+  let started_within = start <= invocation.started_at && invocation.started_at < end;
+  if !started_within && (invocation.started_at >= start || stop <= start) {
     return None;
   }
   let overlap = stop.min(end).unix_millis() - invocation.started_at.max(start).unix_millis();
@@ -248,6 +253,8 @@ pub(super) struct Within<'a> {
   pub launches: Vec<(Launch<'a>, u64)>,
   pub start: Timestamp,
   pub end: Timestamp,
+  /// What invocations that still run are measured to.
+  pub now: Timestamp,
 }
 
 impl Within<'_> {

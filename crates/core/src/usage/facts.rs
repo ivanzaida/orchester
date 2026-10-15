@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::{
   connection::AgentProvider,
-  id::{InvocationId, ProjectId, RunId, TaskId},
+  id::{AgentAccountId, InvocationId, ProjectId, ResourceId, RunId, TaskId},
   run::{EditProgress, RunNumber, TokenUsage},
   time::Timestamp,
 };
@@ -66,6 +66,11 @@ pub struct InvocationFacts {
   pub model: Option<Arc<str>>,
   /// The agent profile's name; `None` for a command tool.
   pub profile: Option<Arc<str>>,
+  /// The agent profile's resource; `None` for a command tool.
+  pub profile_id: Option<ResourceId>,
+  /// The CLI account it started on; `None` for a command tool, a native agent, or one started before
+  /// accounts were recorded.
+  pub account: Option<AgentAccountId>,
   /// The step's name in the run's pinned pipeline (*Implement*).
   pub step: Arc<str>,
   pub started_at: Timestamp,
@@ -114,6 +119,8 @@ pub struct RunFacts {
   pub task_title: Arc<str>,
   /// The pinned pipeline's name; `None` when its resource is gone.
   pub pipeline: Option<Arc<str>>,
+  /// The pinned pipeline's resource; `None` when it is gone.
+  pub pipeline_id: Option<ResourceId>,
   /// The task's tags by name.
   pub tags: Vec<Arc<str>>,
   pub outcome: RunOutcome,
