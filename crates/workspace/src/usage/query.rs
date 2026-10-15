@@ -6,13 +6,15 @@
 //! | Parameter | Values |
 //! |---|---|
 //! | `period` | `today`, `7d`, `30d` (not with `from`/`to`) |
-//! | `from`, `to` | a custom range of local days, `2026-10-01`, both given |
+//! | `from`, `to` | a custom range of local days, `2026-10-01`, both given, at most 366 days |
 //! | `group` | `hour`, `day`, `task`, `pipeline`, `step`, `agent`, `model`, `account` |
 //! | `cli` | `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api` |
 //! | `model`, `tag`, `step` | a name |
 //! | `agent`, `pipeline` | a profile's or pipeline's id, or its name |
 //! | `task` | a task's key (`KON-12`) or id |
 //! | `run`, `account` | an id |
+//!
+//! An empty value (`model=`) is refused, as is a range longer than [`LONGEST_DAYS`].
 
 use std::sync::Arc;
 
@@ -152,14 +154,14 @@ impl UsageQuery {
       clis: parsed(CLI, all(CLI)?, cli_of)?,
       ..UsageFilter::default()
     };
-    let texts = |values: Vec<String>| values.into_iter().map(Arc::from).collect();
-    filter.models = texts(all(MODEL)?);
-    filter.profiles = texts(all(AGENT)?);
-    filter.pipelines = texts(all(PIPELINE)?);
-    filter.tags = texts(all(TAG)?);
-    filter.tasks = texts(all(TASK)?);
+    let text = |value: &str| (!value.trim().is_empty()).then(|| Arc::from(value));
+    filter.models = parsed(MODEL, all(MODEL)?, text)?;
+    filter.profiles = parsed(AGENT, all(AGENT)?, text)?;
+    filter.pipelines = parsed(PIPELINE, all(PIPELINE)?, text)?;
+    filter.tags = parsed(TAG, all(TAG)?, text)?;
+    filter.tasks = parsed(TASK, all(TASK)?, text)?;
     filter.runs = parsed(RUN, all(RUN)?, |value| value.parse().ok())?;
-    filter.steps = texts(all(STEP)?);
+    filter.steps = parsed(STEP, all(STEP)?, text)?;
     filter.accounts = parsed(ACCOUNT, all(ACCOUNT)?, |value| value.parse().ok())?;
     Ok(Self {
       period: period_of(period, from, to)?,
@@ -217,8 +219,10 @@ fn period_of(period: Option<String>, from: Option<String>, to: Option<String>) -
     (None, Some(from), Some(to)) => {
       let (first, last) = (day(FROM, from)?, day(TO, to.clone())?);
       DayRange::new(first, last)
+        .ok()
+        .filter(|range| range.days() <= LONGEST_DAYS)
         .map(Period::Custom)
-        .map_err(|_| invalid(TO, to))
+        .ok_or_else(|| invalid(TO, to))
     }
     (Some(period), ..) => Err(invalid(PERIOD, period)),
     (None, Some(from), None) => Err(invalid(FROM, from)),
@@ -233,13 +237,22 @@ pub enum CustomRangeError {
   Unreadable,
   #[error("the range ends before it starts")]
   Reversed,
+  #[error("a range covers at most 366 days")]
+  TooLong,
 }
 
+/// The most days a range covers: a year, a leap day included.
+pub const LONGEST_DAYS: u64 = 366;
+
 /// The range *Custom…* shows for the days typed as `from` and `to` (`2026-09-01`, spaces around them
-/// ignored).
+/// ignored), at most [`LONGEST_DAYS`] long.
 pub fn custom_range(from: &str, to: &str) -> Result<DayRange, CustomRangeError> {
   let day = |text: &str| NaiveDate::parse_from_str(text.trim(), DAY_FORMAT).map_err(|_| CustomRangeError::Unreadable);
-  DayRange::new(day(from)?, day(to)?).map_err(|_| CustomRangeError::Reversed)
+  let range = DayRange::new(day(from)?, day(to)?).map_err(|_| CustomRangeError::Reversed)?;
+  if range.days() > LONGEST_DAYS {
+    return Err(CustomRangeError::TooLong);
+  }
+  Ok(range)
 }
 
 /// How a day is written in a link and typed in *Custom…*.

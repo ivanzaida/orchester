@@ -82,8 +82,35 @@ fn domain_usage_refuses_what_it_cannot_read() {
     json!({ "project": "Kontur", "from": "2026-10-15", "to": "2026-10-01" }),
     json!({ "project": "Kontur", "from": "yesterday" }),
     json!({ "project": "Kontur", "run": "KON-1" }),
+    json!({ "project": "Kontur", "group": "hour", "from": "2026-09-01", "to": "2026-09-30" }),
+    json!({ "project": "Kontur", "from": "2025-01-01", "to": "2026-01-02" }),
+    json!({ "project": "Kontur", "model": "" }),
+    json!({ "project": " " }),
   ] {
     let error = served.refused("get_usage", &arguments);
     assert_eq!(error["code"], "invalid_arguments", "{arguments}: {error}");
   }
+}
+
+#[test]
+fn domain_usage_names_values_that_match_nothing_and_rounds_rows_to_the_total() {
+  let (mut served, _) = Served::seeded("usage");
+  let usage = served.ok(
+    "get_usage",
+    &json!({ "project": "Kontur", "group": "step", "agent": "builder", "task": "KON-999" }),
+  );
+  assert_eq!(
+    usage["unmatched"],
+    json!([{ "filter": "task", "value": "KON-999" }]),
+    "an agent's name in any case matches: {usage}"
+  );
+  let agents = served.ok("get_usage", &json!({ "project": "Kontur", "group": "agent" }));
+  let seconds: u64 = agents["rows"]
+    .as_array()
+    .expect("rows")
+    .iter()
+    .map(|row| row["active_seconds"].as_u64().expect("seconds"))
+    .sum();
+  assert_eq!(json!(seconds), agents["total"]["active_seconds"], "{agents}");
+  assert_eq!(agents["unmatched"], json!([]));
 }

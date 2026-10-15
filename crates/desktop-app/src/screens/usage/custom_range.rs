@@ -18,7 +18,7 @@ use orchester_core::{
   time::Timestamp,
   usage::{Period, local_date},
 };
-use orchester_workspace::usage::{CustomRangeError, DAY_FORMAT, custom_range};
+use orchester_workspace::usage::{CustomRangeError, DAY_FORMAT, LONGEST_DAYS, custom_range};
 
 use super::{Requery, toolbar::ToolbarProps, words};
 use crate::{
@@ -93,7 +93,7 @@ impl Component for CustomRange {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<RangeProps>().clone();
     let range = custom_range(&self.from.get(), &self.to.get());
-    let reversed = range == Err(CustomRangeError::Reversed);
+    let reversed = matches!(range, Err(CustomRangeError::Reversed | CustomRangeError::TooLong));
     let from = FieldInput::new("usage-custom-from", ctx.t("usage.custom.from"), self.from.clone()).mono();
     let to = FieldInput::new("usage-custom-to", ctx.t("usage.custom.to"), self.to.clone()).mono();
     let to = if reversed { to.invalid() } else { to };
@@ -125,6 +125,10 @@ impl Component for CustomRange {
         .into(),
       Err(CustomRangeError::Reversed) => field_error("usage-custom-error", &ctx.t("usage.custom.reversed")).into(),
       Err(CustomRangeError::Unreadable) => field_error("usage-custom-error", &ctx.t("usage.custom.unreadable")).into(),
+      Err(CustomRangeError::TooLong) => {
+        let text = ctx.t_args("usage.custom.tooLong", [("days", LONGEST_DAYS.to_string())]);
+        field_error("usage-custom-error", &text).into()
+      }
     };
     let show: Element = match range {
       Ok(range) => {

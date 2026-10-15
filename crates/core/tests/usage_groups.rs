@@ -152,7 +152,7 @@ fn rows(facts: &ProjectFacts, filter: &UsageFilter, by: GroupBy) -> Vec<orcheste
     filter,
     now: on(30, 12),
   };
-  grouped(std::slice::from_ref(facts), query, by)
+  grouped(std::slice::from_ref(facts), query, by).rows
 }
 
 fn spent_of(facts: &ProjectFacts, filter: &UsageFilter) -> u64 {
@@ -264,6 +264,12 @@ fn usage_groups_filters_narrow_to_a_task_run_step_account_and_resource() {
   );
   assert_eq!(with(|filter, _| filter.pipelines.push("Quick fix".into())), 4_500);
   assert_eq!(
+    with(|filter, _| filter.pipelines.push("quick FIX".into())),
+    4_500,
+    "a name in any case"
+  );
+  assert_eq!(with(|filter, _| filter.profiles.push("builder".into())), 10_000);
+  assert_eq!(
     with(|filter, _| filter.tasks.push("KON-9".into())),
     0,
     "a task with no runs matches nothing"
@@ -290,4 +296,40 @@ fn usage_groups_spread_an_invocations_active_time_over_its_days() {
     &active[4..],
     &[3_600_000 * 15 / 48, 3_600_000 * 24 / 48, 3_600_000 * 9 / 48]
   );
+}
+
+#[test]
+fn usage_groups_total_what_the_rows_add_up_to_and_say_whether_a_filter_matches_anything() {
+  let fixture = fixture();
+  let query = UsageQuery {
+    range: week(),
+    grouping: Grouping::Day,
+    filter: &UsageFilter::default(),
+    now: on(30, 12),
+  };
+  let facts = std::slice::from_ref(&fixture.facts);
+  for by in [GroupBy::Day, GroupBy::Agent, GroupBy::Task] {
+    let grouped = grouped(facts, query, by);
+    assert_eq!(
+      grouped.summary.spent(),
+      grouped.rows.iter().map(|row| row.spent()).sum::<u64>()
+    );
+    assert_eq!(
+      grouped.summary.agent_ms,
+      grouped.rows.iter().map(|row| row.agent_ms).sum::<u64>()
+    );
+    assert_eq!(grouped.summary.runs, 2);
+  }
+  let only = |change: fn(&mut UsageFilter)| {
+    let mut filter = UsageFilter::default();
+    change(&mut filter);
+    filter.admits_any(facts)
+  };
+  assert!(
+    only(|filter| filter.models.push("claude-haiku-4-5".into())),
+    "the reviewer's model"
+  );
+  assert!(only(|filter| filter.tasks.push("KON-2".into())));
+  assert!(!only(|filter| filter.tasks.push("KON-9".into())));
+  assert!(!only(|filter| filter.steps.push("Plan".into())));
 }

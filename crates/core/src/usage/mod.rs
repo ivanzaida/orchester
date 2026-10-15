@@ -23,7 +23,7 @@ pub use self::{
   expensive::{RunCost, TaskCost},
   facts::{IndexGiven, InvocationFacts, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts},
   filter::{FilterOptions, UsageFilter, toggle},
-  grouped::{GroupBy, GroupKey, GroupRow, Named, grouped},
+  grouped::{GroupBy, GroupKey, GroupRow, Grouped, Named, grouped},
   period::{Bucket, DayRange, DayRangeError, Grouping, HOURLY_DAYS, Period, bucket_of, day_start, local_date},
   report::{Summary, UsageQuery, UsageReport},
   series::{Measure, SeriesBar},

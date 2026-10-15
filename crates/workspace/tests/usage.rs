@@ -90,6 +90,13 @@ fn usage_query_refuses_wrong_values_by_name() {
   assert_eq!(refused(&[("cli", "copilot")]), "cli");
   assert_eq!(refused(&[("run", "KON-1")]), "run");
   assert_eq!(refused(&[("group", "day"), ("group", "hour")]), "group");
+  assert_eq!(refused(&[("model", "")]), "model", "an empty value");
+  assert_eq!(
+    refused(&[("from", "2025-01-01"), ("to", "2026-01-02")]),
+    "to",
+    "367 days"
+  );
+  assert!(read_back(&[("from", "2025-01-01".to_owned()), ("to", "2026-01-01".to_owned())]).is_ok());
 }
 
 #[test]
@@ -150,6 +157,11 @@ fn usage_custom_range_reads_typed_days() {
     Err(CustomRangeError::Reversed)
   );
   assert_eq!(custom_range("Sep 1", "2026-09-30"), Err(CustomRangeError::Unreadable));
+  assert_eq!(
+    custom_range("2024-01-01", "2024-12-31").map(|range| range.days()),
+    Ok(366)
+  );
+  assert_eq!(custom_range("2025-01-01", "2026-01-02"), Err(CustomRangeError::TooLong));
 }
 
 /// One run today of KON-1 on Feature delivery: Builder on Codex with gpt-5.5 spent 1,000 tokens.

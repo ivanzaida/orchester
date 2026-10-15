@@ -13,7 +13,7 @@ use std::{
 use super::{
   facts::{InvocationFacts, RunFacts},
   period::{Bucket, Grouping},
-  report::{Launch, Matched, Spender, Turn, UsageQuery, Within, active_between},
+  report::{Launch, Matched, Spender, Summary, Turn, UsageQuery, Within, active_between},
 };
 use crate::{
   id::{AgentAccountId, ProjectId, ResourceId, RunId, TaskId},
@@ -85,14 +85,29 @@ impl GroupRow {
   }
 }
 
-/// The range's usage by `by`: by hour or day one row per bucket in order, empty ones included; otherwise
-/// the groups that used tokens or time, most spent first, then most time.
-pub fn grouped(projects: &[super::ProjectFacts], query: UsageQuery<'_>, by: GroupBy) -> Vec<GroupRow> {
+/// The range's usage in total and by a grouping.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Grouped {
+  pub summary: Summary,
+  pub rows: Vec<GroupRow>,
+}
+
+/// The range's usage in total and by `by`: by hour or day one row per bucket in order, empty ones included;
+/// otherwise the groups that used tokens or time, most spent first, then most time. The rows' tokens and
+/// active time add up to the total's.
+pub fn grouped(projects: &[super::ProjectFacts], query: UsageQuery<'_>, by: GroupBy) -> Grouped {
   let matched = Matched::of(projects, query.filter);
   let within = matched.within(query.range, query.now);
+  Grouped {
+    summary: within.summary(),
+    rows: rows_by(&within, query.range, by),
+  }
+}
+
+fn rows_by(within: &Within<'_>, range: super::DayRange, by: GroupBy) -> Vec<GroupRow> {
   let facet = match by {
-    GroupBy::Hour => return by_bucket(&within, &query.range.buckets(Grouping::Hour)),
-    GroupBy::Day => return by_bucket(&within, &query.range.buckets(Grouping::Day)),
+    GroupBy::Hour => return by_bucket(within, &range.buckets(Grouping::Hour)),
+    GroupBy::Day => return by_bucket(within, &range.buckets(Grouping::Day)),
     GroupBy::Task => Facet::Task,
     GroupBy::Pipeline => Facet::Pipeline,
     GroupBy::Step => Facet::Step,

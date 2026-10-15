@@ -17,7 +17,7 @@ pub use self::{
   link::{SEGMENT, usage_link},
   load::{Scope, UsageData},
   query::{
-    CustomRangeError, DAY_FORMAT, ParamsError, QueryError, UsageQuery, cli_name, cli_of, custom_range, group_name,
-    group_of,
+    CustomRangeError, DAY_FORMAT, LONGEST_DAYS, ParamsError, QueryError, UsageQuery, cli_name, cli_of, custom_range,
+    group_name, group_of,
   },
 };

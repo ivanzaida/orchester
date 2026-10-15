@@ -1,17 +1,20 @@
 //! The dashboard's filters (*CLI*, *Model*, *Agent profile*, *Pipeline*, *Tag*, and *Project* across
 //! projects) and the narrower ones a link or a tool asks for (a task, a run, a step, an account): each is
 //! a set of chosen values, empty for all; a turn counts when every filter admits it. *Tag* matches a run
-//! whose task has any chosen tag. An agent profile or a pipeline is chosen by its id or its name, a task by
-//! its key or its id. Plan limits follow the CLI filter only. A review of auto mode's reviewer is matched by
+//! whose task has any chosen tag. An agent profile or a pipeline is chosen by its id or its name in any case, a
+//! task by its key or its id. Plan limits follow the CLI filter only. A review of auto mode's reviewer is matched by
 //! the reviewer's CLI and model and by the step whose request it judged; it has no agent profile and no
 //! account.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+  collections::{BTreeMap, HashMap},
+  sync::Arc,
+};
 
 use super::facts::{InvocationFacts, ProjectFacts, RunFacts};
 use crate::{
   connection::AgentProvider,
-  id::{AgentAccountId, ProjectId, ResourceId, RunId},
+  id::{AgentAccountId, InvocationId, ProjectId, ResourceId, RunId},
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -70,6 +73,27 @@ impl UsageFilter {
       && (self.tasks.is_empty() || self.tasks.iter().any(|task| names_task(task, run)))
   }
 
+  /// Whether anything in `projects` counts: an invocation, or a review by auto mode's reviewer.
+  pub fn admits_any(&self, projects: &[ProjectFacts]) -> bool {
+    projects.iter().any(|project| {
+      let runs: HashMap<RunId, &RunFacts> = project.facts.runs.iter().map(|run| (run.id, run)).collect();
+      let invocations: HashMap<InvocationId, (&RunFacts, &InvocationFacts)> = project
+        .facts
+        .invocations
+        .iter()
+        .filter_map(|invocation| Some((invocation.id, (*runs.get(&invocation.run)?, invocation))))
+        .collect();
+      invocations
+        .values()
+        .any(|(run, invocation)| self.admits(project.project, run, invocation))
+        || project.facts.reviews.iter().any(|review| {
+          invocations.get(&review.invocation).is_some_and(|(run, invocation)| {
+            self.admits_review((project.project, run, invocation), (review.cli, &review.model))
+          })
+        })
+    })
+  }
+
   /// Whether the plan limits of `cli` are shown.
   pub fn admits_cli(&self, cli: AgentProvider) -> bool {
     self.clis.is_empty() || self.clis.contains(&cli)
@@ -82,13 +106,14 @@ fn chosen<T: PartialEq>(values: &[T], value: Option<&T>) -> bool {
   values.is_empty() || value.is_some_and(|value| values.contains(value))
 }
 
-/// [`chosen`] for a resource chosen by its id or its name.
+/// [`chosen`] for a resource chosen by its id or its name, in any case.
 fn named(values: &[Arc<str>], id: Option<ResourceId>, name: Option<&str>) -> bool {
   let id = id.map(|id| id.to_string());
+  let name = name.map(str::to_lowercase);
   values.is_empty()
     || values
       .iter()
-      .any(|value| Some(&**value) == name || id.as_deref() == Some(&**value))
+      .any(|value| name.as_deref() == Some(&*value.to_lowercase()) || id.as_deref() == Some(&**value))
 }
 
 /// Whether `value` names the task of `run`: its key, in any case, or its id.

@@ -279,7 +279,7 @@ impl Within<'_> {
     runs
   }
 
-  fn summary(&self) -> Summary {
+  pub(super) fn summary(&self) -> Summary {
     let runs = self.runs();
     Summary {
       usage: self.turns.iter().map(|turn| turn.usage).sum(),

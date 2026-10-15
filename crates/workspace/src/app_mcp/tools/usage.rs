@@ -1,14 +1,18 @@
 //! `get_usage`: the tokens and active agent time of one project's runs, or of every project's, over a
 //! range of local days, filtered and grouped as the Usage page reads them (`crate::usage`), with the link
-//! of the page that shows the same and, for every row, the page filtered to it.
+//! of the page that shows the same and, for every row, the page filtered to it. A range covers at most
+//! 366 days, by hour at most 7; an empty value is refused, and a filter value nothing in the range matches
+//! is named under `unmatched`.
+
+use std::sync::Arc;
 
 use chrono::{Days, NaiveDate};
 use orchester_core::{
   id::ProjectId,
   time::Timestamp,
   usage::{
-    DayRange, GroupBy, GroupKey, GroupRow, Named, Period, ProjectFacts, Summary, UsageFilter,
-    UsageQuery as ReportQuery, UsageReport, grouped, local_date,
+    DayRange, GroupBy, GroupKey, GroupRow, Grouped, HOURLY_DAYS, Named, Period, ProjectFacts, Summary, UsageFilter,
+    UsageQuery as ReportQuery, grouped, local_date,
   },
 };
 use rmcp::schemars::JsonSchema;
@@ -20,7 +24,7 @@ use crate::{
     error::ToolError,
     services::{Services, blocking},
   },
-  usage::{Dashboard, Scope, UsageData, UsageQuery, group_name, group_of, usage_link},
+  usage::{LONGEST_DAYS, Scope, UsageData, UsageQuery, group_name, group_of, usage_link},
 };
 
 /// How many days a range without `from` covers, ending with `to`: the page's default *7 days*.
@@ -69,46 +73,56 @@ pub struct GetUsage {
 pub async fn get_usage(services: &Services, args: GetUsage) -> Result<Value, ToolError> {
   let now = Timestamp::now();
   let query = query(&args, local_date(now))?;
-  let (services, since) = (services.clone(), Dashboard::since(&query, now));
-  let (project, data) = blocking(move || {
-    let open = args
-      .project
-      .as_deref()
-      .map(|named| services.project(named))
-      .transpose()?;
+  let project = given("project", args.project.as_ref())?.map(str::to_owned);
+  let services = services.clone();
+  blocking(move || {
+    let open = project.as_deref().map(|named| services.project(named)).transpose()?;
     let scope = open.as_ref().map_or(Scope::All, |open| Scope::Project(&open.repo_root));
+    let since = query.range(local_date(now)).start();
     let data = UsageData::read(&services.workspace, scope, since, now)?;
-    Ok((open.map(|open| open.project.id()), data))
+    Ok(answer(open.map(|open| open.project.id()), &query, &data, now))
   })
-  .await?;
-  Ok(answer(project, &query, &data, now))
+  .await
 }
 
 /// The query the arguments ask for.
 fn query(args: &GetUsage, today: NaiveDate) -> Result<UsageQuery, ToolError> {
-  let day = |name: &str, value: &str| {
-    NaiveDate::parse_from_str(value, "%Y-%m-%d")
-      .map_err(|_| ToolError::InvalidArguments(format!("`{name}` is a local day such as 2026-10-01, not `{value}`")))
-  };
-  let from = args.from.as_deref().map(|from| day("from", from)).transpose()?;
-  let to = args.to.as_deref().map(|to| day("to", to)).transpose()?;
+  let invalid = ToolError::InvalidArguments;
+  let (from, to) = (day("from", args.from.as_ref())?, day("to", args.to.as_ref())?);
   let period = if from.is_none() && to.is_none() {
     Period::Week
   } else {
     let last = to.unwrap_or(today);
-    let first = from.unwrap_or_else(|| last - Days::new(DEFAULT_DAYS - 1));
-    let range =
-      DayRange::new(first, last).map_err(|_| ToolError::InvalidArguments("`to` is before `from`".to_owned()))?;
+    let first = match from {
+      Some(first) => first,
+      None => last
+        .checked_sub_days(Days::new(DEFAULT_DAYS - 1))
+        .ok_or_else(|| invalid(format!("`to` {last} is too early for a range")))?,
+    };
+    let range = DayRange::new(first, last).map_err(|_| invalid("`to` is before `from`".to_owned()))?;
+    if range.days() > LONGEST_DAYS {
+      return Err(invalid(format!(
+        "a range covers at most {LONGEST_DAYS} days; {first} to {last} covers {}",
+        range.days()
+      )));
+    }
     Period::Custom(range)
   };
-  let group = match args.group.as_deref() {
+  let group = match given("group", args.group.as_ref())? {
     None => GroupBy::Day,
     Some(name) => group_of(name).ok_or_else(|| {
-      ToolError::InvalidArguments(format!(
+      invalid(format!(
         "`group` is hour, day, task, pipeline, step, agent, model or account, not `{name}`"
       ))
     })?,
   };
+  let days = period.range(today).days();
+  if group == GroupBy::Hour && days > HOURLY_DAYS {
+    return Err(invalid(format!(
+      "`group=hour` covers ranges up to {HOURLY_DAYS} days and this one covers {days}: ask for `group=day` or a \
+       shorter range"
+    )));
+  }
   Ok(UsageQuery {
     period,
     group,
@@ -116,18 +130,80 @@ fn query(args: &GetUsage, today: NaiveDate) -> Result<UsageQuery, ToolError> {
   })
 }
 
+/// The local day given for `name`.
+fn day(name: &str, value: Option<&String>) -> Result<Option<NaiveDate>, ToolError> {
+  given(name, value)?
+    .map(|value| {
+      NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map_err(|_| ToolError::InvalidArguments(format!("`{name}` is a local day such as 2026-10-01, not `{value}`")))
+    })
+    .transpose()
+}
+
+/// The value given for `name`; an empty one is refused.
+fn given<'a>(name: &str, value: Option<&'a String>) -> Result<Option<&'a str>, ToolError> {
+  match value {
+    Some(value) if value.trim().is_empty() => Err(ToolError::InvalidArguments(format!(
+      "`{name}` is empty; leave it out to not narrow by it"
+    ))),
+    value => Ok(value.map(String::as_str)),
+  }
+}
+
 fn filter(args: &GetUsage) -> Result<UsageFilter, ToolError> {
-  let text = |value: &Option<String>| value.iter().map(|value| value.as_str().into()).collect();
+  let text = |name: &str, value: &Option<String>| -> Result<Vec<_>, ToolError> {
+    Ok(given(name, value.as_ref())?.map(Into::into).into_iter().collect())
+  };
   Ok(UsageFilter {
-    tasks: text(&args.task),
-    runs: ids("run", args.run.as_deref())?,
-    pipelines: text(&args.pipeline),
-    steps: text(&args.step),
-    profiles: text(&args.agent),
-    models: text(&args.model),
-    accounts: ids("account", args.account.as_deref())?,
+    tasks: text("task", &args.task)?,
+    runs: ids("run", given("run", args.run.as_ref())?)?,
+    pipelines: text("pipeline", &args.pipeline)?,
+    steps: text("step", &args.step)?,
+    profiles: text("agent", &args.agent)?,
+    models: text("model", &args.model)?,
+    accounts: ids("account", given("account", args.account.as_ref())?)?,
     ..UsageFilter::default()
   })
+}
+
+/// One of a filter's lists of names.
+type TextField = fn(&mut UsageFilter) -> &mut Vec<Arc<str>>;
+
+/// The filter values that, each on its own, match nothing in `projects`, with their argument's name.
+fn unmatched(filter: &UsageFilter, projects: &[ProjectFacts]) -> Vec<Value> {
+  let alone = |name: &str, only: UsageFilter, value: String| {
+    (!only.admits_any(projects)).then(|| json!({ "filter": name, "value": value }))
+  };
+  let texts: [(&str, &[Arc<str>], TextField); 5] = [
+    ("task", &filter.tasks, |only| &mut only.tasks),
+    ("pipeline", &filter.pipelines, |only| &mut only.pipelines),
+    ("step", &filter.steps, |only| &mut only.steps),
+    ("agent", &filter.profiles, |only| &mut only.profiles),
+    ("model", &filter.models, |only| &mut only.models),
+  ];
+  let mut found = Vec::new();
+  for (name, values, field) in texts {
+    for value in values {
+      let mut only = UsageFilter::default();
+      field(&mut only).push(value.clone());
+      found.extend(alone(name, only, value.to_string()));
+    }
+  }
+  for run in &filter.runs {
+    let only = UsageFilter {
+      runs: vec![*run],
+      ..UsageFilter::default()
+    };
+    found.extend(alone("run", only, run.to_string()));
+  }
+  for account in &filter.accounts {
+    let only = UsageFilter {
+      accounts: vec![*account],
+      ..UsageFilter::default()
+    };
+    found.extend(alone("account", only, account.to_string()));
+  }
+  found
 }
 
 /// The id `value` names, as the only one of a filter.
@@ -151,14 +227,23 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     filter: &query.filter,
     now,
   };
-  let summary = UsageReport::build(&data.projects, report_query).summary;
-  let rows: Vec<Value> = grouped(&data.projects, report_query, query.group)
+  let Grouped { summary, rows } = grouped(&data.projects, report_query, query.group);
+  // Each row's seconds are the step of the rounded running total, so they add up to the total's.
+  let mut active_ms = 0;
+  let rows: Vec<Value> = rows
     .iter()
     .map(|row| {
       let mut value = key(&row.key, data);
       let link = row_project(&row.key, project).map(|project| usage_link(project, &narrowed(query, &row.key)));
+      let seconds = seconds(active_ms + row.agent_ms) - seconds(active_ms);
+      active_ms += row.agent_ms;
       let fields = value.as_object_mut().expect("a row's key is an object");
-      fields.extend(figures(row).as_object().expect("figures are an object").clone());
+      fields.extend(
+        figures(row, seconds)
+          .as_object()
+          .expect("figures are an object")
+          .clone(),
+      );
       fields.insert("link".to_owned(), json!(link));
       value
     })
@@ -172,6 +257,7 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     "group": group_name(query.group),
     "total": total(&summary),
     "rows": rows,
+    "unmatched": unmatched(&query.filter, &data.projects),
     "link": project.map(|project| usage_link(project, query)),
   })
 }
@@ -192,19 +278,24 @@ fn tokens(usage: orchester_core::run::TokenUsage) -> Value {
 fn total(summary: &Summary) -> Value {
   json!({
     "tokens": tokens(summary.usage),
-    "active_seconds": summary.agent_ms / 1000,
+    "active_seconds": seconds(summary.agent_ms),
     "runs": summary.runs,
     "finished_runs": summary.finished,
     "failed_runs": summary.failed,
   })
 }
 
-fn figures(row: &GroupRow) -> Value {
+fn figures(row: &GroupRow, active_seconds: u64) -> Value {
   json!({
     "tokens": tokens(row.usage),
-    "active_seconds": row.agent_ms / 1000,
+    "active_seconds": active_seconds,
     "runs": row.runs,
   })
+}
+
+/// `ms` in whole seconds, rounded to the nearest.
+const fn seconds(ms: u64) -> u64 {
+  ms.saturating_add(500) / 1000
 }
 
 /// What a row stands for.
