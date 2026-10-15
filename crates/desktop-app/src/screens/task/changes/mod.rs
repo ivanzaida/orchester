@@ -15,6 +15,7 @@ mod diff;
 mod files;
 mod listed;
 mod load;
+mod open_file;
 mod states;
 mod toolbar;
 
@@ -264,6 +265,17 @@ impl ChangesTab {
         [("revision", short_revision(diff.from.as_str()))],
       ),
     };
+    let head = match shown.checkpointed {
+      Checkpointed::Read { head, .. } | Checkpointed::TooLarge { head, .. } => Some(head),
+      Checkpointed::NoCheckpoint => None,
+    };
+    let file = diff
+      .diff
+      .files()
+      .get(selected.index)
+      .expect("a listed file is in the diff it was listed from");
+    let opened = open_file::file_view(file, selected.source, (run.run.id(), &diff.from, head));
+    let open = Route::Project(props.project, ProjectPage::Files(opened));
     let view = ctx.mount_keyed::<DiffView>(
       "changes-diff-view",
       DiffViewProps {
@@ -272,6 +284,7 @@ impl ChangesTab {
         index: selected.index,
         file: format!("{}:{}", selected.source.name(), selected.path).into(),
         source,
+        open,
       },
     );
     Row::new()

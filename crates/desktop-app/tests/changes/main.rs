@@ -11,6 +11,7 @@
   reason = "the seed is shared with its own tests, which read what this binary does not"
 )]
 mod kontur;
+mod open_file;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
@@ -55,9 +56,11 @@ impl Page {
       now: Timestamp::now(),
     })
     .expect("the scenario seeds");
+    // The data folder's path has `..` in it (`support::Data`); the seed names the database canonically.
+    let canonical = |path: &std::path::Path| std::fs::canonicalize(path).expect("the database exists");
     assert_eq!(
-      seeded.app_database,
-      data.database(),
+      canonical(&seeded.app_database),
+      canonical(&data.database()),
       "the seed registers Kontur where the app reads"
     );
     let launch = data.launch();
