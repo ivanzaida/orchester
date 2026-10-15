@@ -23,7 +23,7 @@
     "inviteTarget": {
       "project": "the project {project} on {server}",
       "server": "the team server {server}",
-      "account": "your account on {server}"
+      "account": "connect your account on {server}"
     }
   }
 }
