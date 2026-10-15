@@ -56,11 +56,9 @@ impl Page {
       now: Timestamp::now(),
     })
     .expect("the scenario seeds");
-    // The data folder's path has `..` in it (`support::Data`); the seed names the database canonically.
-    let canonical = |path: &std::path::Path| std::fs::canonicalize(path).expect("the database exists");
     assert_eq!(
-      canonical(&seeded.app_database),
-      canonical(&data.database()),
+      seeded.app_database,
+      data.database(),
       "the seed registers Kontur where the app reads"
     );
     let launch = data.launch();
