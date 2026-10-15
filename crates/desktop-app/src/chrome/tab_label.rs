@@ -79,10 +79,25 @@ pub fn unsaved(projects: &Projects, route: &Route) -> bool {
     .is_some_and(|feed| feed.unsaved.get().contains(task.as_deref()))
 }
 
-/// The tab's label: its screen's name, a task by its key and its Edit task as `Edit <key>` (`Qp1B0`),
-/// after the project's name once it is known (`Kontur · KON-12`).
+/// The tab's label: its page ([`page`]) after the project's name once it is known
+/// (`Kontur · KON-12`).
 pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
-  let screen = match route {
+  let screen = page(ctx, projects, route);
+  match project_name(projects, route) {
+    Some(name) => ctx
+      .t_args(
+        "shell.tabs.inProject",
+        [("project", name.as_str()), ("label", screen.as_str())],
+      )
+      .to_string(),
+    None => screen,
+  }
+}
+
+/// The page a tab shows: its screen's name, a task by its key and its Edit task as `Edit <key>`
+/// (`Qp1B0`), a pipeline by its name.
+pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
+  match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
     Route::Project(_, ProjectPage::NewPipeline) => ctx.t("pipelines.new").to_string(),
     Route::Project(project, ProjectPage::Pipeline(id)) => projects
@@ -97,16 +112,15 @@ pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
       .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
       .to_string(),
     route => ctx.t(route.screen().title_key()).to_string(),
-  };
-  match route.project().and_then(|project| projects.name(project)) {
-    Some(name) => ctx
-      .t_args(
-        "shell.tabs.inProject",
-        [("project", name.as_str()), ("label", screen.as_str())],
-      )
-      .to_string(),
-    None => screen,
   }
+}
+
+/// The name of the project `route` is in, once it is known to be in the list.
+pub fn project_name(projects: &Projects, route: &Route) -> Option<String> {
+  route
+    .project()
+    .and_then(|project| projects.name(project))
+    .map(|name| name.as_str().to_owned())
 }
 
 /// The close button of the tab `id` (`Close` `hfcCG`), with the element id `element`.

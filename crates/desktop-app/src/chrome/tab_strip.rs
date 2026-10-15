@@ -28,7 +28,7 @@ use lurq::{
 use super::{
   tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MARK_WIDTH, MIN_DRAG_WIDTH, Slot},
   tab_label::{attention, close_button, has_attention, label, unsaved},
-  tab_list::TabList,
+  tab_list::{TabList, TabListProps},
 };
 use crate::{
   navigation::{
@@ -106,7 +106,15 @@ impl Component for TabStrip {
           .align_items(Alignment::Center),
         |strip, (_, tab)| strip.child(tab_button(ctx, (&navigation, &projects), &tabs, tab, &fit)),
       );
-    let list = fit.overflows().then(|| ctx.mount_keyed::<TabList>("tab-list", ()));
+    let hidden: Vec<_> = fit
+      .hidden()
+      .iter()
+      .filter_map(|index| tabs.tabs().get(*index))
+      .map(Tab::id)
+      .collect();
+    let list = fit
+      .overflows()
+      .then(|| ctx.mount_keyed::<TabList>("tab-list", TabListProps { hidden }));
     let closing = ctx.props::<TabStripProps>().closing;
     let tabs = Row::new()
       .flex_shrink(1.0)
@@ -220,7 +228,9 @@ fn tab_button(
       .background(PaletteColor::TextSecondary)
       .into()
   });
-  labelled_tab(button, tab, (&label, fit.label_width()), (dirty, attention, close))
+  let marks = dirty.as_ref().map_or(0.0, |_| DOT_WIDTH) + attention.as_ref().map_or(0.0, |_| MARK_WIDTH);
+  let widest = Slot::Labelled(marks).width(fit.label_width(), active);
+  labelled_tab(button, tab, (&label, widest), (dirty, attention, close))
 }
 
 /// A tab at All projects: the folders icon.
@@ -241,7 +251,7 @@ fn all_projects_tab(button: Button, active: bool) -> Element {
 fn labelled_tab(
   button: Button,
   tab: &Tab,
-  (label, label_width): (&str, f32),
+  (label, widest): (&str, f32),
   (dirty, attention, close): (Option<Element>, Option<Element>, Option<Element>),
 ) -> Element {
   let (glyph, text, style) = if close.is_some() {
@@ -263,7 +273,9 @@ fn labelled_tab(
   } else {
     padding
   };
+  // The tab is at most as wide as `tab_fit` counts it, and its label gives way.
   button
+    .max_width(Dimension::Px(widest))
     .padding(padding)
     .spacing(ExtraSpacing::Snug.role())
     .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
@@ -273,7 +285,8 @@ fn labelled_tab(
         .color(text)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
-        .max_width(Dimension::Px(label_width)),
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
     .with_children(dirty)
     .with_children(attention)

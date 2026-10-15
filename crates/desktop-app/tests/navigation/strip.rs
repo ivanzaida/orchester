@@ -1,17 +1,16 @@
-//! The tab strip when more tabs are open than fit: the tabs that do not fit leave the strip for the tab
-//! list, whose chevron, the new-tab button and the drag area stay before the window controls; the active
-//! tab always shows; the list switches to and closes tabs by pointer and by keyboard.
+//! The tab strip when more tabs are open than fit (`oHEGQ`, `YAOSy`): the tabs that do not fit leave the
+//! strip for the tab list, whose button counts them; it, the new-tab button and the drag area stay before
+//! the window controls, and the active tab always shows.
 
-use lurq::app::events::MouseButton;
 use orchester_app::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route, TaskList},
 };
 
-use super::{PROJECT, press, support::Window};
+use super::{PROJECT, support::Window};
 
 /// The bounds of the element `id`.
-fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
+pub fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
   window
     .tree
     .get_element_by_id_mut(id)
@@ -19,35 +18,44 @@ fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
     .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
-fn shown(window: &mut Window, id: &str) -> bool {
+pub fn shown(window: &mut Window, id: &str) -> bool {
   window.tree.get_element_by_id(id).is_some()
 }
 
-/// A window 960 wide with 12 labelled tabs after the first, at All projects: more than fit.
-fn crowded_window() -> (Window, Navigation) {
+/// A window `width` wide with `count` labelled tabs after the first, at All projects, the last active.
+pub fn window_with(width: u32, count: usize) -> (Window, Navigation) {
   let mut window = Window::open();
-  window.tree.resize(960, 640);
+  window.tree.resize(width, 640);
   let navigation = window.navigation();
-  for screen in [
+  let screens = [
     ProjectPage::Overview(OverviewTab::Running),
     ProjectPage::Tasks(TaskList::default()),
     ProjectPage::Pipelines,
     ProjectPage::Secrets,
-  ] {
-    for project in [
-      PROJECT,
-      "0f1e2d3c-4b5a-4968-8776-655443322110",
-      "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-    ] {
-      navigation.open_tab();
-      navigation.go(Route::Project(project.parse().expect("a project id"), screen.clone()));
-    }
+  ];
+  let projects = [
+    PROJECT,
+    "0f1e2d3c-4b5a-4968-8776-655443322110",
+    "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  ];
+  for index in 0..count {
+    let project = projects[index % projects.len()].parse().expect("a project id");
+    navigation.open_tab();
+    navigation.go(Route::Project(
+      project,
+      screens[index / projects.len() % screens.len()].clone(),
+    ));
   }
   settle(&mut window);
   (window, navigation)
 }
 
-fn settle(window: &mut Window) {
+/// A window 960 wide with 12 labelled tabs after the first, at All projects: more than fit.
+pub fn crowded_window() -> (Window, Navigation) {
+  window_with(960, 12)
+}
+
+pub fn settle(window: &mut Window) {
   window.pass();
   window.pass();
 }
@@ -63,7 +71,7 @@ fn controls_left(window: &mut Window, width: f32) -> f32 {
 }
 
 /// The ids of the open tabs, in order.
-fn tab_ids(navigation: &Navigation) -> Vec<String> {
+pub fn tab_ids(navigation: &Navigation) -> Vec<String> {
   navigation
     .tabs_now()
     .tabs()
@@ -72,17 +80,17 @@ fn tab_ids(navigation: &Navigation) -> Vec<String> {
     .collect()
 }
 
-fn active_id(navigation: &Navigation) -> String {
+pub fn active_id(navigation: &Navigation) -> String {
   format!("tab-{}", navigation.tabs_now().active().id())
 }
 
 /// The tabs that show in the strip, in order.
-fn in_strip(window: &mut Window, navigation: &Navigation) -> Vec<String> {
+pub fn in_strip(window: &mut Window, navigation: &Navigation) -> Vec<String> {
   tab_ids(navigation).into_iter().filter(|id| shown(window, id)).collect()
 }
 
 /// Whether the tab `id` shows whole inside the strip.
-fn whole(window: &mut Window, id: &str) -> bool {
+pub fn whole(window: &mut Window, id: &str) -> bool {
   let (tab, strip) = (bounds(window, id), bounds(window, "tab-strip"));
   tab.x >= strip.x - 0.5 && tab.x + tab.width <= strip.x + strip.width + 0.5
 }
@@ -96,17 +104,14 @@ fn a_few_tabs_show_without_the_tab_list() {
     navigation.go(super::project(ProjectPage::Secrets));
   }
   settle(&mut window);
-  assert!(
-    !shown(&mut window, "tab-list-button"),
-    "no chevron while every tab fits"
-  );
+  assert!(!shown(&mut window, "tab-list-button"), "no button while every tab fits");
   for id in tab_ids(&navigation) {
     assert!(whole(&mut window, &id), "{id} shows whole");
   }
 }
 
 #[test]
-fn many_tabs_leave_the_chevron_new_tab_and_drag_area_before_the_window_controls() {
+fn many_tabs_leave_the_button_new_tab_and_drag_area_before_the_window_controls() {
   let (mut window, navigation) = crowded_window();
   let strip = in_strip(&mut window, &navigation);
   assert!(
@@ -114,15 +119,15 @@ fn many_tabs_leave_the_chevron_new_tab_and_drag_area_before_the_window_controls(
     "some tabs left the strip: {strip:?}"
   );
   let last = bounds(&mut window, strip.last().expect("a tab shows"));
-  let (chevron, new_tab) = (bounds(&mut window, "tab-list-button"), bounds(&mut window, "new-tab"));
+  let (button, new_tab) = (bounds(&mut window, "tab-list-button"), bounds(&mut window, "new-tab"));
   let drag = bounds(&mut window, "title-bar-drag");
   let controls = controls_left(&mut window, 960.0);
   assert!(
-    last.x + last.width <= chevron.x + 0.5,
-    "the chevron follows the last tab: {last:?} {chevron:?}"
+    last.x + last.width <= button.x + 0.5,
+    "the button follows the last tab: {last:?} {button:?}"
   );
   assert!(
-    chevron.x + chevron.width <= new_tab.x + 0.5,
+    button.x + button.width <= new_tab.x + 0.5,
     "and comes before New tab: {new_tab:?}"
   );
   assert!(new_tab.x + new_tab.width <= drag.x + 0.5, "New tab shows: {drag:?}");
@@ -137,6 +142,50 @@ fn many_tabs_leave_the_chevron_new_tab_and_drag_area_before_the_window_controls(
 }
 
 #[test]
+fn the_button_counts_the_hidden_tabs() {
+  let (mut window, navigation) = crowded_window();
+  let hidden = tab_ids(&navigation).len() - in_strip(&mut window, &navigation).len();
+  assert_eq!(window.text("tab-list-count"), hidden.to_string());
+}
+
+#[test]
+fn inactive_tabs_stay_120_wide_and_the_active_one_keeps_its_label() {
+  let (mut window, navigation) = crowded_window();
+  // Kontur's Overview active, and the last inactive tab that shows at Kontur's Instructions, a label
+  // longer than an inactive tab's 81.
+  let kontur = navigation.tabs_now().tabs()[1].id();
+  navigation.select(kontur);
+  settle(&mut window);
+  let other = in_strip(&mut window, &navigation)
+    .into_iter()
+    .rev()
+    .find(|id| *id != format!("tab-{kontur}"))
+    .expect("another tab shows");
+  super::press(&mut window, &other, lurq::app::events::MouseButton::Left);
+  navigation.go(super::project(ProjectPage::Instructions));
+  navigation.select(kontur);
+  let active = active_id(&navigation);
+  window.until("Kontur's name", |window| window.text(&active).contains("Kontur"));
+  let inactive: Vec<f32> = in_strip(&mut window, &navigation)
+    .into_iter()
+    .filter(|id| *id != active)
+    .map(|id| bounds(&mut window, &id).width)
+    .collect();
+  assert!(
+    inactive.iter().all(|width| *width <= 120.5),
+    "no inactive tab is wider than 120: {inactive:?}"
+  );
+  assert!(
+    inactive.iter().any(|width| (width - 120.0).abs() < 0.5),
+    "a cut label leaves its tab 120 wide: {inactive:?}"
+  );
+  assert!(
+    bounds(&mut window, &active).width > 120.0,
+    "the active tab does not shrink"
+  );
+}
+
+#[test]
 fn the_active_tab_always_shows_in_the_strip() {
   let (mut window, navigation) = crowded_window();
   for _ in 0..tab_ids(&navigation).len() {
@@ -146,192 +195,6 @@ fn the_active_tab_always_shows_in_the_strip() {
     assert!(shown(&mut window, &active), "{active} is in the strip");
     assert!(whole(&mut window, &active), "{active} shows whole");
   }
-}
-
-/// Opens the tab list with the pointer.
-fn open_list(window: &mut Window) {
-  press(window, "tab-list-button", MouseButton::Left);
-  settle(window);
-  assert!(shown(window, "tab-list-menu"), "the list opened");
-}
-
-/// The rows of the open list: each row's tab id and state.
-fn rows(window: &mut Window, navigation: &Navigation) -> Vec<(String, String)> {
-  navigation
-    .tabs_now()
-    .tabs()
-    .iter()
-    .filter_map(|tab| {
-      let row = window.tree.get_element_by_id(&format!("tab-list-{}", tab.id()))?;
-      let state = if row.has_class("active") { "active" } else { "inactive" };
-      Some((format!("tab-{}", tab.id()), state.to_owned()))
-    })
-    .collect()
-}
-
-#[test]
-fn the_list_holds_every_tab_in_order_with_the_active_one_marked() {
-  let (mut window, navigation) = crowded_window();
-  open_list(&mut window);
-  let rows = rows(&mut window, &navigation);
-  assert_eq!(
-    rows.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
-    tab_ids(&navigation),
-    "a row for every tab, in order"
-  );
-  let active = active_id(&navigation);
-  for (id, state) in &rows {
-    let expected = if *id == active { "active" } else { "inactive" };
-    assert_eq!(state, expected, "{id}");
-  }
-  let row = bounds(
-    &mut window,
-    &format!("tab-list-{}", navigation.tabs_now().active().id()),
-  );
-  let menu = bounds(&mut window, "tab-list-menu");
-  assert!(
-    row.y >= menu.y && row.y + row.height <= menu.y + menu.height + 0.5,
-    "the active row is scrolled into the list's view: {row:?} {menu:?}"
-  );
-}
-
-/// The first tab that is only in the list.
-fn a_hidden_tab(window: &mut Window, navigation: &Navigation) -> orchester_app::navigation::tabs::TabId {
-  navigation
-    .tabs_now()
-    .tabs()
-    .iter()
-    .map(|tab| tab.id())
-    .find(|id| !shown(window, &format!("tab-{id}")))
-    .expect("a tab is hidden")
-}
-
-fn focused(window: &Window) -> Option<String> {
-  window
-    .tree
-    .focused_element()
-    .and_then(|element| element.id().map(str::to_owned))
-}
-
-#[test]
-fn choosing_a_hidden_tab_in_the_list_brings_it_into_the_strip() {
-  let (mut window, navigation) = crowded_window();
-  navigation.cycle(1);
-  settle(&mut window);
-  let hidden = a_hidden_tab(&mut window, &navigation);
-  open_list(&mut window);
-  press(&mut window, &format!("tab-list-{hidden}"), MouseButton::Left);
-  settle(&mut window);
-  assert_eq!(navigation.tabs_now().active().id(), hidden, "the chosen tab is active");
-  assert!(!shown(&mut window, "tab-list-menu"), "the list closed");
-  assert!(
-    whole(&mut window, &format!("tab-{hidden}")),
-    "the chosen tab shows in the strip"
-  );
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
-}
-
-#[test]
-fn closing_a_tab_in_the_list_keeps_the_list_open() {
-  let (mut window, navigation) = crowded_window();
-  navigation.cycle(1);
-  settle(&mut window);
-  let (count, active) = (tab_ids(&navigation).len(), navigation.tabs_now().active().id());
-  let hidden = a_hidden_tab(&mut window, &navigation);
-  open_list(&mut window);
-  press(&mut window, &format!("tab-list-{hidden}-close"), MouseButton::Left);
-  settle(&mut window);
-  assert_eq!(tab_ids(&navigation).len(), count - 1, "the tab closed");
-  assert_eq!(navigation.tabs_now().active().id(), active, "the active tab stays");
-  assert!(shown(&mut window, "tab-list-menu"), "the list stays open");
-  assert!(
-    !shown(&mut window, &format!("tab-list-{hidden}")),
-    "its row left the list"
-  );
-  press(&mut window, &format!("tab-list-{active}"), MouseButton::Middle);
-  settle(&mut window);
-  assert_eq!(
-    tab_ids(&navigation).len(),
-    count - 2,
-    "a middle click closes a row's tab"
-  );
-}
-
-fn key(window: &mut Window, key: &str) {
-  window
-    .tree
-    .key_down(key.to_owned(), key.to_owned(), false, false, false);
-  window.tree.key_up(key.to_owned(), key.to_owned(), false, false, false);
-  settle(window);
-}
-
-/// The tab whose row the keyboard ringed.
-fn ringed(window: &mut Window, navigation: &Navigation) -> Option<String> {
-  navigation.tabs_now().tabs().iter().find_map(|tab| {
-    let row = window.tree.get_element_by_id(&format!("tab-list-{}", tab.id()))?;
-    row.has_class("ringed").then(|| format!("tab-{}", tab.id()))
-  })
-}
-
-#[test]
-fn the_keyboard_moves_through_the_list_and_chooses() {
-  let (mut window, navigation) = crowded_window();
-  navigation.cycle(1);
-  settle(&mut window);
-  let ids = tab_ids(&navigation);
-  open_list(&mut window);
-  assert_eq!(ringed(&mut window, &navigation), None, "no ring before a key");
-  key(&mut window, "ArrowDown");
-  assert_eq!(
-    ringed(&mut window, &navigation).as_ref(),
-    Some(&ids[1]),
-    "down from the active tab"
-  );
-  key(&mut window, "ArrowUp");
-  key(&mut window, "ArrowUp");
-  assert_eq!(
-    ringed(&mut window, &navigation).as_ref(),
-    Some(&ids[0]),
-    "and up, stopping at the first"
-  );
-  key(&mut window, "End");
-  assert_eq!(
-    ringed(&mut window, &navigation).as_ref(),
-    ids.last(),
-    "End rings the last"
-  );
-  let last = ids.last().expect("tabs").replacen("tab-", "tab-list-", 1);
-  let (row, menu) = (bounds(&mut window, &last), bounds(&mut window, "tab-list-menu"));
-  assert!(
-    row.y >= menu.y && row.y + row.height <= menu.y + menu.height + 0.5,
-    "the list scrolled the ringed row into view: {row:?} {menu:?}"
-  );
-  key(&mut window, "Enter");
-  assert_eq!(
-    active_id(&navigation),
-    *ids.last().expect("tabs"),
-    "Enter switches to it"
-  );
-  assert!(!shown(&mut window, "tab-list-menu"), "and closes the list");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
-  assert!(whole(&mut window, &active_id(&navigation)), "the chosen tab shows");
-}
-
-#[test]
-fn escape_closes_the_list_and_gives_the_focus_back_to_the_chevron() {
-  let (mut window, navigation) = crowded_window();
-  let active = active_id(&navigation);
-  open_list(&mut window);
-  key(&mut window, "ArrowUp");
-  key(&mut window, "Escape");
-  assert!(!shown(&mut window, "tab-list-menu"), "Esc closed the list");
-  assert_eq!(active_id(&navigation), active, "without switching");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
-  key(&mut window, "Enter");
-  assert!(
-    shown(&mut window, "tab-list-menu"),
-    "Enter on the chevron opens it again"
-  );
 }
 
 #[test]

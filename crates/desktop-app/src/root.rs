@@ -18,7 +18,11 @@ use lurq::{
 use crate::{
   chrome, lifecycle,
   mcp::{McpLink, WindowLink},
-  navigation::{Navigation, input::window_input, tabs::TabSet},
+  navigation::{
+    Navigation,
+    input::{FirstKeys, window_input},
+    tabs::TabSet,
+  },
   project::{Landing, Projects, ProjectsHost},
   routes,
   services::Services,
@@ -112,6 +116,7 @@ struct SessionWindow {
   projects: Projects,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
+  first_keys: FirstKeys,
 }
 
 impl Component for SessionWindow {
@@ -133,6 +138,7 @@ impl Component for SessionWindow {
       navigation,
       projects,
       focus: ctx.signal(None),
+      first_keys: FirstKeys::default(),
     }
   }
 
@@ -145,6 +151,7 @@ impl Component for SessionWindow {
     ctx.provide(gate);
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
+    ctx.provide(self.first_keys.clone());
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
@@ -161,7 +168,7 @@ impl Component for SessionWindow {
       .height(Dimension::Pct(100.0))
       .child(projects)
       .child(chrome::chrome(ctx, body.into(), closing));
-    window_input(&self.navigation, window.into(), !closing)
+    window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
       .id(WINDOW_ID)
       .on_key_down(lifecycle::keys(&services.close, &self.focus))
   }
