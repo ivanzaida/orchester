@@ -166,13 +166,15 @@ impl ProjectTasks {
   }
 
   /// What every *Needs you* counts — the pill, the status bar, a tab's mark, the Overview's figure, column and
-  /// tab, the task list's tab and All projects: everything that waits for the person ([`Self::waiting`]).
-  /// Whether a dialog or the panel is open changes nothing.
+  /// tab, and All projects: everything that waits for the person ([`Self::waiting`]). The task list's tab lists
+  /// tasks, so it counts [`Self::waiting_tasks`]. Whether a dialog or the panel is open changes nothing.
   pub fn needs_you(&self) -> usize {
     self.waiting_once.0.get_or_init(|| self.work_out_waiting().into()).len()
   }
 
-  /// The tasks something of waits for the person ([`Self::waiting`]): those a *Needs you* tab lists.
+  /// The tasks something of waits for the person ([`Self::waiting`]): those the task list's *Needs you* tab lists
+  /// and counts. What waits and is no task's, the project's memory records or a tool request whose task cannot
+  /// be read, is not among them ([`super::attention::outside_tasks`]).
   pub fn waiting_tasks(&self) -> HashSet<TaskId> {
     self
       .waiting()
