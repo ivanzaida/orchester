@@ -67,8 +67,10 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
   let services = services.clone();
   let project = args.project.clone();
   let read = blocking(move || {
-    across(&services, project.as_deref(), |open| {
-      Ok(ProjectTasks::load(&open.repo_root, &services.programs)?)
+    // Git tells the runs merged outside Orchester for the project named; across projects the stored read suffices.
+    let programs = project.is_some().then_some(&services.programs);
+    across(&services, project.as_deref(), |open, db| {
+      Ok(ProjectTasks::read(db, &open.repo_root, programs)?)
     })
   })
   .await?;

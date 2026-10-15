@@ -46,12 +46,7 @@ pub struct InProfile {
 
 pub async fn list_profiles(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok(ProjectAgents::load_in(&open.repo_root)?)
-    })
-  })
-  .await?;
+  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectAgents::load(db)?))).await?;
   Ok(read.json("profiles", translate, |open, agents| {
     agents
       .profiles

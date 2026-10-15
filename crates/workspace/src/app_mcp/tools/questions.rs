@@ -82,14 +82,13 @@ pub async fn list_questions(
   }
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      let db = ProjectDb::open(&open.repo_root)?;
-      let run = args.run.as_deref().map(|named| find_run(&db, named)).transpose()?;
+    across(&services, args.project.as_deref(), |_, db| {
+      let run = args.run.as_deref().map(|named| find_run(db, named)).transpose()?;
       let waiting = db.waiting_questions()?.into_iter();
       Ok(
         waiting
           .filter(|asked| run.as_ref().is_none_or(|run| asked.request.run() == run.id()))
-          .map(|asked| with_run(&db, asked))
+          .map(|asked| with_run(db, asked))
           .collect::<Vec<_>>(),
       )
     })

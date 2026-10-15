@@ -55,11 +55,8 @@ pub(super) async fn call(
 async fn list_secrets(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok((
-        ProjectSecrets::load_in(&open.repo_root)?,
-        ProjectAgents::load_in(&open.repo_root)?,
-      ))
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok((ProjectSecrets::load(db)?, ProjectAgents::load(db)?))
     })
   })
   .await?;

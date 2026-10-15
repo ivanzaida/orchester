@@ -1,15 +1,23 @@
 //! Reads across projects (`docs/design/orchestrator-toolset.md`, "Tools"): a list tool answers for the project
 //! it names or, without one, for every project the app knows. Each item names its project. A project that
 //! cannot be read is listed apart, with the error a call naming it would get, and the others are answered for.
+//!
+//! A list tool only reads: every project's database is opened only to read it, so a read migrates and writes
+//! nothing, and a project this version has not opened yet (its data waits for a migration) stays untouched, for
+//! an older build of the app to keep opening it. It is listed as unreadable until a person opens it.
 
-use orchester_store::RegisteredProject;
+use orchester_store::{ProjectDb, RegisteredProject, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::Translate;
 use crate::{
-  app_mcp::{error::ToolError, services::Services},
+  app_mcp::{
+    error::ToolError,
+    services::{Services, registered, there},
+  },
+  messages::Message,
   workspace::OpenProject,
 };
 
@@ -31,35 +39,50 @@ pub(super) struct Across<T> {
 }
 
 /// `read` of project `named`, whose error is the call's; or, with none named, of every project the app knows,
-/// where a project's error lists it apart. Blocks on SQLite.
+/// where a project's error lists it apart. Each database is opened only to read it. Blocks on SQLite.
 pub(super) fn across<T>(
   services: &Services,
   named: Option<&str>,
-  mut read: impl FnMut(&OpenProject) -> Result<T, ToolError>,
+  mut read: impl FnMut(&OpenProject, &ProjectDb) -> Result<T, ToolError>,
 ) -> Result<Across<T>, ToolError> {
-  if let Some(named) = named {
-    let project = services.project(named)?;
-    let found = read(&project)?;
-    return Ok(Across {
-      read: vec![(project, found)],
-      unreadable: Vec::new(),
-    });
-  }
+  let projects = services.workspace.projects()?;
   let mut across = Across {
     read: Vec::new(),
     unreadable: Vec::new(),
   };
-  for registered in services.workspace.projects()? {
-    let found = services.project(&registered.id.to_string()).and_then(|project| {
-      let found = read(&project)?;
-      Ok((project, found))
-    });
-    match found {
+  if let Some(named) = named {
+    let found = read_one(registered(&projects, named)?, &mut read)?;
+    across.read.push(found);
+    return Ok(across);
+  }
+  for project in projects {
+    match read_one(&project, &mut read) {
       Ok(found) => across.read.push(found),
-      Err(error) => across.unreadable.push((registered, error)),
+      Err(error) => across.unreadable.push((project, error)),
     }
   }
   Ok(across)
+}
+
+/// `read` of `project`, its database opened only to read it.
+fn read_one<T>(
+  project: &RegisteredProject,
+  read: &mut impl FnMut(&OpenProject, &ProjectDb) -> Result<T, ToolError>,
+) -> Result<(OpenProject, T), ToolError> {
+  there(project)?;
+  let db = ProjectDb::open_read_only(&project.repo_root).map_err(|error| match error {
+    StoreError::SchemaTooOld { .. } => ToolError::refused(
+      "project_not_opened_yet",
+      vec![Message::new("appMcp.errors.projectNotOpenedYet").with("project", project.name.as_str().to_owned())],
+    ),
+    other => other.into(),
+  })?;
+  let open = OpenProject {
+    project: db.project().clone(),
+    repo_root: project.repo_root.clone(),
+  };
+  let found = read(&open, &db)?;
+  Ok((open, found))
 }
 
 impl<T> Across<T> {

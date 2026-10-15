@@ -87,8 +87,8 @@ pub async fn list_connections(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok(ProjectConnections::load_in(&open.repo_root)?)
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok(ProjectConnections::load(db)?)
     })
   })
   .await?;

@@ -123,12 +123,7 @@ pub async fn set_code_index(services: &Services, args: SetCodeIndex) -> Result<V
 
 pub async fn list_pipelines(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok(published_pipelines(&ProjectDb::open(&open.repo_root)?)?)
-    })
-  })
-  .await?;
+  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(published_pipelines(db)?))).await?;
   Ok(read.json("pipelines", translate, |open, choices| {
     choices
       .iter()

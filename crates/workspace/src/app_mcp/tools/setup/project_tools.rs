@@ -124,12 +124,7 @@ pub(super) async fn call(
 
 async fn list_tools(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok(ProjectTools::load_in(&open.repo_root)?)
-    })
-  })
-  .await?;
+  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectTools::load(db)?))).await?;
   Ok(read.json("tools", translate, |open, tools| {
     tools
       .tools

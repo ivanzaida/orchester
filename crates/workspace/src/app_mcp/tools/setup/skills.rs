@@ -78,12 +78,7 @@ pub(super) async fn call(
 
 async fn list_skills(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok(ProjectSkills::load_in(&open.repo_root)?)
-    })
-  })
-  .await?;
+  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectSkills::load(db)?))).await?;
   Ok(read.json("skills", translate, |open, skills| {
     skills
       .entries

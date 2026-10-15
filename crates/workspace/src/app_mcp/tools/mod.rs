@@ -70,7 +70,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_tasks",
-    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
+    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
     schema: schema_for_type::<tasks::ListTasks>,
     read_only: true,
   },
@@ -110,7 +110,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_runs",
-    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
+    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
     schema: schema_for_type::<run_list::ListRuns>,
     read_only: true,
   },

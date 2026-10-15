@@ -77,11 +77,10 @@ pub async fn list_approvals(
   }
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      let db = ProjectDb::open(&open.repo_root)?;
-      let run = args.run.as_deref().map(|named| find_run(&db, named)).transpose()?;
-      let waiting = pending(&db, &open.repo_root)?;
-      let plans = waiting_plans(&db, open.project.id(), run.as_ref().map(Run::id))?;
+    across(&services, args.project.as_deref(), |open, db| {
+      let run = args.run.as_deref().map(|named| find_run(db, named)).transpose()?;
+      let waiting = pending(db, &open.repo_root)?;
+      let plans = waiting_plans(db, open.project.id(), run.as_ref().map(Run::id))?;
       let shown = waiting
         .into_iter()
         .filter(|shown| run.as_ref().is_none_or(|run| shown.approval.run == run.id()))

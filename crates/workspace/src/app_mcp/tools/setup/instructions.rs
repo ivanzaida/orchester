@@ -118,8 +118,8 @@ pub async fn list_instructions(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      Ok(ProjectInstructions::load_in(&open.repo_root)?)
+    across(&services, args.project.as_deref(), |_, db| {
+      Ok(ProjectInstructions::load(db)?)
     })
   })
   .await?;

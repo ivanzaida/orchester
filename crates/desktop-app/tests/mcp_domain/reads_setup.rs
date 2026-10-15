@@ -2,6 +2,8 @@
 //! and use, whose values never reach a result; an instruction with its versions; skills as Skills lists and opens
 //! them. Each with the link the app's router opens.
 
+use std::sync::Arc;
+
 use orchester_core::{
   name::Name,
   secret::{Environment, NewSecret, SecretKind, SecretName, SecretValue},
@@ -30,8 +32,9 @@ fn named<'a>(listed: &'a Value, key: &str, name: &str) -> &'a Value {
 
 #[test]
 fn domain_reads_secrets_by_name_and_use_and_never_a_value() {
-  let (mut served, seeded) = Served::seeded("connections");
-  let vault = MemoryVault::default();
+  // The served app's tools keep and read secret values in this vault, as the session hands its own to them.
+  let vault = Arc::new(MemoryVault::default());
+  let (mut served, seeded) = Served::seeded_on_vault("connections", vault.clone());
   let sentry = ProjectDb::open(&seeded.repo)
     .and_then(|db| db.secrets())
     .expect("the project's secrets")
@@ -39,13 +42,13 @@ fn domain_reads_secrets_by_name_and_use_and_never_a_value() {
     .find(|secret| secret.name().to_string() == "SENTRY_TOKEN")
     .expect("the seeded bearer secret");
   let value = |text: &str| SecretValue::new(text.to_owned()).expect("a secret value");
-  replace_in(&seeded.repo, &vault, sentry.id(), &value(SENTRY_VALUE)).expect("a value for SENTRY_TOKEN");
+  replace_in(&seeded.repo, vault.as_ref(), sentry.id(), &value(SENTRY_VALUE)).expect("a value for SENTRY_TOKEN");
   let deploy = NewSecret {
     name: SecretName::new("DEPLOY_TOKEN").expect("a secret name"),
     kind: SecretKind::DeploymentToken,
     environment: Environment::Production,
   };
-  add_in(&seeded.repo, &vault, deploy, &value(DEPLOY_VALUE)).expect("a new secret");
+  add_in(&seeded.repo, vault.as_ref(), deploy, &value(DEPLOY_VALUE)).expect("a new secret");
   let kept: Vec<String> = vault.values().into_values().collect();
   assert!(kept.iter().any(|kept| kept == SENTRY_VALUE) && kept.iter().any(|kept| kept == DEPLOY_VALUE));
 
@@ -59,7 +62,6 @@ fn domain_reads_secrets_by_name_and_use_and_never_a_value() {
   let deploy = named(&listed, "secrets", "DEPLOY_TOKEN");
   assert_eq!(deploy["kind"], "deployment_token", "{deploy}");
   assert_eq!(deploy["environment"], "production", "{deploy}");
-
   let connections = served.ok("list_connections", &kontur);
   opens_in_the_app(&connections);
   let server = named(&connections, "mcp_servers", "sentry");
@@ -68,21 +70,65 @@ fn domain_reads_secrets_by_name_and_use_and_never_a_value() {
     server["link"],
     format!("/project/{}/connections?selected={id}", seeded.project)
   );
-  let mut results = vec![listed.clone(), connections, served.ok("list_secrets", &json!({}))];
-  for tool in ["list_connections", "list_profiles", "list_tools", "get_project"] {
-    results.push(served.ok(tool, &kontur));
-  }
-  let profiles = served.ok("list_profiles", &kontur);
-  for profile in profiles["profiles"].as_array().expect("profiles") {
-    results.push(served.ok("get_profile", &json!({ "project": "Kontur", "profile": profile["id"] })));
-  }
-  for result in results {
-    let text = result.to_string();
+
+  for (tool, arguments) in every_read(&mut served) {
+    let text = match served.call(&tool, &arguments) {
+      Ok(value) | Err(value) => value.to_string(),
+    };
     assert!(
       !text.contains(SENTRY_VALUE) && !text.contains(DEPLOY_VALUE),
-      "a secret value in {text}"
+      "{tool} gave a secret value: {text}"
     );
   }
+}
+
+/// Every read-only tool the server lists, each with arguments that name what the `connections` scenario has:
+/// with every project and with Kontur, and with each of its profiles, pipelines, tools and connections.
+fn every_read(served: &mut Served) -> Vec<(String, Value)> {
+  let kontur = json!({ "project": "Kontur" });
+  let names = |served: &mut Served, tool: &str, key: &str, field: &str| -> Vec<Value> {
+    let listed = served.ok(tool, &json!({ "project": "Kontur" }));
+    listed[key]
+      .as_array()
+      .map_or_else(Vec::new, |items| items.iter().map(|item| item[field].clone()).collect())
+  };
+  let profiles = names(served, "list_profiles", "profiles", "id");
+  let pipelines = names(served, "list_pipelines", "pipelines", "id");
+  let tools = names(served, "list_tools", "tools", "id");
+  let connections = names(served, "list_connections", "agents", "id");
+  let with = |key: &str, values: &[Value]| -> Vec<Value> {
+    values
+      .iter()
+      .map(|value| json!({ "project": "Kontur", key: value }))
+      .collect()
+  };
+  let reads = served
+    .tools()
+    .into_iter()
+    .filter(|tool| tool["annotations"]["readOnlyHint"] == true)
+    .filter_map(|tool| tool["name"].as_str().map(str::to_owned));
+  let mut calls = Vec::new();
+  for tool in reads {
+    let arguments = match tool.as_str() {
+      "list_projects" | "list_accounts" => vec![json!({})],
+      "get_profile" => with("profile", &profiles),
+      "get_pipeline" => with("pipeline", &pipelines),
+      "get_tool" => with("tool", &tools),
+      "list_models" => with("connection", &connections),
+      "get_task" => vec![json!({ "project": "Kontur", "key": "KON-1" })],
+      "get_run" | "get_plan" | "get_changes" => vec![json!({ "project": "Kontur", "run": "1" })],
+      "get_instruction" => vec![json!({ "project": "Kontur", "instruction": "any" })],
+      "get_skill" => vec![json!({ "project": "Kontur", "skill": "any" })],
+      name if name.starts_with("list_") => vec![json!({}), kontur.clone()],
+      _ => vec![kontur.clone()],
+    };
+    calls.extend(arguments.into_iter().map(|arguments| (tool.clone(), arguments)));
+  }
+  assert!(
+    calls.iter().any(|(tool, _)| tool == "list_secrets"),
+    "the domain tools are listed: {calls:?}"
+  );
+  calls
 }
 
 #[test]

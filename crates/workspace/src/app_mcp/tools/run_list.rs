@@ -4,7 +4,6 @@
 use std::cmp::Reverse;
 
 use orchester_core::{id::ProjectId, run::RunNumber, store::TaskStore, task::Task, tokens::TokenBudget};
-use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -34,24 +33,36 @@ pub struct ListRuns {
   /// Only this task's runs: its key, e.g. `KON-12`, or its id. Needs `project`.
   #[serde(default)]
   pub task: Option<String>,
+  /// How many of the newest runs to give: 1 to 200; left out, 50.
+  #[serde(default)]
+  pub limit: Option<usize>,
 }
+
+/// How many runs `list_runs` gives when the call does not say, and the most it gives.
+pub const DEFAULT_LIMIT: usize = 50;
+pub const MAX_LIMIT: usize = 200;
 
 pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translate) -> Result<Value, ToolError> {
   if args.task.is_some() && args.project.is_none() {
     return Err(needs_project("task"));
   }
+  let limit = args.limit.unwrap_or(DEFAULT_LIMIT);
+  if !(1..=MAX_LIMIT).contains(&limit) {
+    return Err(ToolError::InvalidArguments(format!(
+      "`limit` is 1 to {MAX_LIMIT}, not {limit}"
+    )));
+  }
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open| {
-      let db = ProjectDb::open(&open.repo_root)?;
+    across(&services, args.project.as_deref(), |_, db| {
       let tasks = match &args.task {
-        Some(named) => vec![find_task(&db, named)?],
+        Some(named) => vec![find_task(db, named)?],
         None => db.tasks()?,
       };
       tasks
         .into_iter()
         .map(|task| {
-          let runs = runs_of(&db, &task)?;
+          let runs = runs_of(db, &task)?;
           Ok((task, runs))
         })
         .collect::<Result<Vec<_>, ToolError>>()
@@ -66,7 +77,9 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
   });
   // Newest first across tasks and projects; a run that cannot be read has no time and comes last.
   runs.sort_by_key(|run| Reverse(run["created_at"].as_i64()));
-  Ok(json!({ "runs": runs, "unreadable_projects": read.unreadable(translate) }))
+  let more = runs.len() > limit;
+  runs.truncate(limit);
+  Ok(json!({ "runs": runs, "more": more, "unreadable_projects": read.unreadable(translate) }))
 }
 
 /// A run of `task` of `project` as the task's Summary lists it, with its state, its tokens and its link: the
