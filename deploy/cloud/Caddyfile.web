@@ -1,0 +1,11 @@
+# Orchester Cloud with its web front (compose.web.yaml). No access log is configured: confirmation and reset links
+# carry their token in the query, and nothing here should keep it.
+{$ORCHESTER_CLOUD_HOST} {
+    handle /api/* {
+        reverse_proxy cloud:8090
+    }
+    handle {
+        reverse_proxy web:3000
+    }
+    header Strict-Transport-Security "max-age=31536000"
+}
