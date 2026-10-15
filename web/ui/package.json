@@ -1,0 +1,25 @@
+{
+  "name": "@orchester/ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Orchester's web UI kit: components, design tokens from the Pencil variables, icons, fonts and i18n helpers. No words of its own.",
+  "exports": {
+    "./components/*": "./components/*.tsx",
+    "./hooks/*": "./hooks/*.ts",
+    "./i18n": "./i18n/index.ts",
+    "./testing/*": "./testing/*.ts",
+    "./theme/*": "./theme/*"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings 0 .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "tokens": "node scripts/tokens.ts",
+    "check": "npm run lint && npm run typecheck && npm run test"
+  },
+  "peerDependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

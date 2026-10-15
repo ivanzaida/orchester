@@ -991,7 +991,7 @@ only browser face; the desktop keeps using the JSON API.
 | --- | --- | --- |
 | Sign up | `/signup` | Email, display name, password; then *Check your email* |
 | Sign in | `/signin` | Email and password |
-| Email confirmed | `/confirm/{token}` | The landing of the confirmation link: a **Password** field (the one chosen at sign-up, row 65) and *Confirm my email*, sent as a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up; a failure says only *That didn't work. Check the password you chose when you signed up, or sign up again*; then *Open Orchester to continue* |
+| Email confirmed | `/confirm/{token}` | The landing of the confirmation link: a **Password** field (the one chosen at sign-up, row 65) and *Confirm email*, sent as a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up; a failure says only *This link and password don't match. Check the password, or send a new link.* (the approved design `CVRpO`), with the field emptied and not marked, and *Send a new link*; then *Your email is confirmed* and *Sign in on the web*. *Open Orchester* waits for an `orchester://` URL scheme the desktop registers; until then the page does not show it |
 | Forgot password | `/forgot` | Email; the same answer for any address |
 | Reset password | `/reset/{token}` | New password; then *Signed out of your other devices* |
 | Later: account, devices | `/account`, `/devices` | Display name and email, password change, the devices with *Sign out* |
@@ -1011,8 +1011,11 @@ address links to `/signup?invite=…`).
   short-lived pre-session cookie carries it). `SameSite=Lax` stops cross-site `POST`s too; the two checks do not rely
   on each other.
 - **Links and tokens in URLs.** Confirmation and reset tokens are one-time, short-lived and only in the email's link.
-  The pages send `Referrer-Policy: no-referrer`, load no third-party resources, and Caddy's access log drops query
-  strings and the token segment of `/confirm/` and `/reset/`; the web app logs paths without them.
+  The pages send `Referrer-Policy: strict-origin`, load no third-party resources, and Caddy's access log drops query
+  strings and the token segment of `/confirm/` and `/reset/`; the web app logs paths without them. `strict-origin`, not
+  `no-referrer` (coordinator's decision): a `Referer` never carries a path or a query, so never a link's token, while
+  forms keep sending their `Origin`; under `no-referrer` browsers send `Origin: null` with a form `POST`, which defeats
+  the `Origin` check above.
 - **Headers.** A strict Content Security Policy (self only, no inline scripts beyond Next.js' nonce), `X-Frame-Options:
   DENY`, HSTS from Caddy.
 - **Design and words.** The screens are drawn in Pencil first (`data/orchester2.pen`, a *Cloud web* layer using the
@@ -1069,7 +1072,8 @@ A project owner who is not an admin sees only Projects (their own, rename and hi
 **Sessions and CSRF**, the cloud web front's model: the admin web token (kind `admin_web`, 12 hours, revocable like a
 device) lives only in the `__Host-orchester_admin` cookie, `Secure`, `HttpOnly`, `SameSite=Lax`, no `Domain`; every
 call to the team server is made from the admin's server side; every form is a server-side `POST` checked for `Origin`
-and a signed per-session CSRF token; `Referrer-Policy: no-referrer`, a strict CSP, `X-Frame-Options: DENY`. Codes are
+and a signed per-session CSRF token; `Referrer-Policy: strict-origin` (not `no-referrer`, which makes form `POST`s send
+`Origin: null` and defeats the `Origin` check), a strict CSP, `X-Frame-Options: DENY`. Codes are
 shown once and never logged.
 
 **How it is served.** The Rust team server stays the front door, so a server has one address, one port and one
