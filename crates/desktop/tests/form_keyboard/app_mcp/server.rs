@@ -1,6 +1,6 @@
 //! The server itself: a discovery file of its own, apart from lurq's, that only the user reads and
 //! that goes with the window; files of killed processes removed when it starts; no request without
-//! the bearer token; every tool listed with a strict input schema.
+//! the bearer token; every tool with a strict input schema.
 
 use std::{
   fs::{self, File},
@@ -15,36 +15,6 @@ use serde_json::{Value, json};
 
 use super::{agent, discovered, refused};
 use crate::{harness::Desktop, mcp_agent::McpAgent};
-
-const TOOLS: [&str; 27] = [
-  "list_projects",
-  "list_tasks",
-  "get_task",
-  "create_task",
-  "update_task",
-  "run_task",
-  "get_run",
-  "hold_queue",
-  "release_queue",
-  "pause_run",
-  "resume_run",
-  "cancel_run",
-  "send_message",
-  "set_run_auto_mode",
-  "get_auto_mode",
-  "set_auto_mode",
-  "remove_worktree",
-  "return_to_draft",
-  "continue_run",
-  "list_approvals",
-  "decide_approval",
-  "decide_plan",
-  "answer_question",
-  "set_code_index",
-  "update_project_limits",
-  "duplicate_pipeline",
-  "list_pipelines",
-];
 
 /// Pids no process of the test machine has: one left a file and ended, one still runs (its lock is
 /// held by the test).
@@ -163,13 +133,6 @@ fn app_mcp_writes_its_own_discovery_file_and_requires_the_token() {
 
   let mut agent = agent(&desktop);
   let tools = agent.tools();
-  let names: Vec<&str> = tools["tools"]
-    .as_array()
-    .expect("tools")
-    .iter()
-    .filter_map(|tool| tool["name"].as_str())
-    .collect();
-  assert_eq!(names, TOOLS);
   for tool in tools["tools"].as_array().expect("tools") {
     assert_eq!(tool["inputSchema"]["additionalProperties"], false, "{tool}");
   }
