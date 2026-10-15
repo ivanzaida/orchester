@@ -38,9 +38,13 @@ pub fn conversation(
   );
   let status = format!(
     "{key} is ready for review. Its run finished, and the pull request waits for two checks.\n\n\
-     - Task: [{key} · {title}]({task}), ready for review since 14:32\n\
-     - Usage: [Usage · 1–15 Oct · {key} · by step](orchester:/project/{project}/usage?from=2026-10-01&to=2026-10-15&group=step)\n\
-     - Pull request: [#412 Local integration](https://github.com/kontur/kontur/pull/412), 2 of 5 checks running\n\n\
+     - Task: [{key} · {title}]({task}) — Ready for review since 14:32\n\
+     - Run: [Run #3 · Feature delivery](orchester:/project/{project}/tasks/{key}/conversation) — finished 14:32 · 7 \
+     steps · 2.4M tokens\n\
+     - Usage: [Usage · 1–15 Oct · {key} · by step](orchester:/project/{project}/usage?from=2026-10-01&to=2026-10-15&group=step) \
+     — 6.1M tokens over 3 runs; 05 Review used the most\n\
+     - Pull request: [#412 Local integration](https://github.com/kontur/kontur/pull/412) — 2 of 5 checks running · \
+     review requested\n\n\
      The reviewer's notes are in [{key} › Conversation](orchester:/project/{project}/tasks/{key}/conversation). \
      [See the runbook](file:///H:/projects/kontur/docs/runbook.md) or the \
      [Status page](http://status.kontur.local)."
