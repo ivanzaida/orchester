@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:pages": "next build && playwright test",
     "fake-api": "node tests/fake-api/server.ts 4210 4220",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "test:e2e": "playwright test -c playwright.e2e.config.ts"
   },
   "dependencies": {
     "@orchester/ui": "0.1.0",
