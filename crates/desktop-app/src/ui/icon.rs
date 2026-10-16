@@ -14,9 +14,9 @@ use crate::{routes::Screen, theme::IconSize};
 /// the design's `chart-column` is the font's `bar-chart-3`, `circle-alert` its `alert-circle`,
 /// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
 /// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
-/// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`, `shield-x` its
-/// `shield-close`, `square-arrow-out-up-right` its `external-link`, `square-plus` its `plus-square`, `triangle-alert`
-/// its `alert-triangle`, `user-round-check` its `user-check` and `user-round-cog` its `user-cog`.
+/// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`,
+/// `square-arrow-out-up-right` its `external-link`, `square-plus` its `plus-square`, `shield-x` its `shield-close`,
+/// `triangle-alert` its `alert-triangle`, `user-round-check` its `user-check` and `user-round-cog` its `user-cog`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,6 +84,7 @@ icons! {
   Clock => '\u{e087}',
   Clock3 => '\u{e250}',
   ClockAlert => '\u{e62a}',
+  Cloud => '\u{e088}',
   CloudCheck => '\u{e66e}',
   CloudOff => '\u{e08d}',
   CodeXml => '\u{e206}',
@@ -145,6 +146,7 @@ icons! {
   Info => '\u{e0f9}',
   Key => '\u{e0fd}',
   KeyRound => '\u{e4a3}',
+  Laptop => '\u{e1cd}',
   Layers2 => '\u{e52a}',
   LayoutDashboard => '\u{e1c1}',
   LayoutGrid => '\u{e0ff}',
@@ -162,7 +164,9 @@ icons! {
   LoaderCircle => '\u{e10a}',
   Lock => '\u{e10b}',
   LockKeyhole => '\u{e531}',
+  LogIn => '\u{e10d}',
   LogOut => '\u{e10e}',
+  Mail => '\u{e10f}',
   Map => '\u{e110}',
   MessageCircle => '\u{e116}',
   MessageCircleQuestion => '\u{e568}',
@@ -172,6 +176,7 @@ icons! {
   MessageSquareText => '\u{e575}',
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
+  Monitor => '\u{e11d}',
   MousePointerClick => '\u{e120}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',
@@ -237,8 +242,10 @@ icons! {
   User => '\u{e19f}',
   UserRoundCheck => '\u{e1a0}',
   UserRoundCog => '\u{e342}',
+  UserX => '\u{e1a3}',
   Users => '\u{e1a4}',
   Waypoints => '\u{e542}',
+  WifiOff => '\u{e1af}',
   Workflow => '\u{e425}',
   Wrench => '\u{e1b1}',
   X => '\u{e1b2}',

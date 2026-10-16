@@ -61,10 +61,12 @@ const QUESTION_REFUSAL: &str = "A person answers this in the window: while Local
   confirm what a change lets agents do (in any tab, until it is answered or the page is left), \
   window input from MCP clients (clicks, keys, values, resizing, menus) is refused.";
 const STILL_AVAILABLE: &str = "Looking at the window and the app's own tools stay available.";
-/// What a refused client reads while the access token shows in Settings › Automation.
-const TOKEN_REFUSAL: &str = "The access token of Orchester's MCP server shows in the window: while a person reads \
-  it in Settings › Automation (30 seconds at most), screenshots and the window's text are refused, so no client \
-  reads it. Try again once it is hidden; the app's own tools stay available.";
+/// What a refused client reads while a secret shows: the access token in Settings › Automation, or a pairing code in
+/// Settings › Orchester.
+const TOKEN_REFUSAL: &str = "A secret shows in the window: the access token of Orchester's MCP server in Settings › \
+  Automation (30 seconds at most), or a pairing code in Settings › Orchester. While a person reads it, screenshots and \
+  the window's text are refused, so no client reads it. Try again once it is hidden; the app's own tools stay \
+  available.";
 
 /// lurq's tools that read what the window shows, which are refused while the access token shows in it.
 pub const WINDOW_TEXT: &[&str] = &[
@@ -94,6 +96,16 @@ pub enum Guarded {
   McpServer,
   /// Settings › Accounts: adding, renaming and removing an account and signing it in are a person's.
   Accounts,
+  /// *It matches* under a team server's check code (Settings › Orchester): only a person compares a certificate's
+  /// check code with the one on the server's console. As with [`Self::StepAccept`], only its handler refuses, so the
+  /// rest of the window takes a client's input while it shows.
+  CheckCode,
+  /// Settings › Orchester and Project settings › Sharing: what changes who this computer trusts or what it sends to a
+  /// team server or Orchester Cloud. Making or copying a pairing code, the cloud's address, signing in and out,
+  /// allowing plain HTTP to another computer, joining a server, accepting or declining an invite, linking and
+  /// uploading a project, and leaving it are a person's (N1 security review 1, B2 and M1). As with [`Self::CheckCode`],
+  /// only the handler refuses: reading and moving around the window stay open to clients.
+  Sharing,
   /// A task Summary's *Accept … as it is*: it passes a step in a person's place, as approving does, so it needs the
   /// approvals opt-in. Only its handler refuses ([`input_may_decide`]); it is never protected, so the rest of the
   /// window, its close button included, takes a client's input while it shows.
@@ -206,7 +218,9 @@ impl InputGate {
       | Guarded::WideningQuestion
       | Guarded::LocalIntegrationQuestion
       | Guarded::McpServer
-      | Guarded::Accounts => false,
+      | Guarded::Accounts
+      | Guarded::CheckCode
+      | Guarded::Sharing => false,
     }
   }
 
@@ -218,8 +232,8 @@ impl InputGate {
       Guarded::PermissionWidening => &mut controls.permissions,
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
-      // Only its handler refuses: accepting locks no window input, whoever marks it.
-      Guarded::StepAccept => return,
+      // Only their handlers refuse: they lock no window input, whoever marks them.
+      Guarded::StepAccept | Guarded::CheckCode | Guarded::Sharing => return,
     };
     if add {
       *count += 1;
@@ -256,8 +270,8 @@ impl InputGate {
     }
   }
 
-  /// Marks the access token as shown in the window until the returned guard is dropped: screenshots and the
-  /// window's text are refused meanwhile. Called on the event loop before the token is drawn.
+  /// Marks a secret (the access token, a pairing code) as shown in the window until the returned guard is dropped:
+  /// screenshots and the window's text are refused meanwhile. Called on the event loop before it is drawn.
   pub fn show_token(&self) -> TokenShown {
     self.0.controls.lock().token_shown += 1;
     self.refresh_tools();

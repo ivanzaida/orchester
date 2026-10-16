@@ -25,6 +25,10 @@ pub(crate) struct TeamServer {
 }
 
 impl TeamServer {
+  pub(crate) fn id(&self) -> TeamServerId {
+    self.id
+  }
+
   /// A server as a team server makes itself: its id is its key's.
   pub(crate) fn generate() -> Self {
     let key = SigningKey::new(&PrivateKey::generate().expect("server key")).expect("signing key");
@@ -35,7 +39,7 @@ impl TeamServer {
   }
 
   /// A fresh statement of this server's, signed with its own key.
-  fn statement(&self, issued_at_ms: i64) -> String {
+  pub(crate) fn statement(&self, issued_at_ms: i64) -> String {
     self.statement_by(&self.key, issued_at_ms)
   }
 
@@ -387,7 +391,7 @@ pub async fn invites_are_declined_by_the_invitee() {
   let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
   assert!(listed.invites.is_empty());
   assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 404);
-  a_declined_invite_stays_declined(&cloud, &dana, body).await;
+  declined_stays_declined(&cloud, &dana, (&server, id)).await;
   let malformed = cloud
     .request("POST", "/invites/not-an-id/decline", Some(&dana), None)
     .await;
@@ -397,22 +401,27 @@ pub async fn invites_are_declined_by_the_invitee() {
   cloud.finish().await;
 }
 
-/// Delivering a declined invite again (from the server or the inviter's browser) is refused, lists nothing and
-/// emails nothing: decline leaves the same tombstone as a revocation.
-async fn a_declined_invite_stays_declined(cloud: &TestCloud, invitee: &str, delivery: serde_json::Value) {
-  let again = cloud.request("POST", "/invites", None, Some(delivery)).await;
-  assert_eq!(again.status, 422, "a declined invite is not delivered again");
-  let listed: CloudInvites = cloud.request("GET", "/invites", Some(invitee), None).await.json();
-  assert!(listed.invites.is_empty());
+/// N1 security review 1, minor 1: the answer stays with the invite, so delivering it again (from the server or the
+/// inviter's browser) lists nothing and emails nothing, and a declined invite issues no token.
+async fn declined_stays_declined(cloud: &TestCloud, dana: &str, (server, id): (&TeamServer, InviteId)) {
+  let again = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
+  assert_eq!(cloud.request("POST", "/invites", None, Some(again)).await.status, 202);
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(dana), None).await.json();
+  assert!(listed.invites.is_empty(), "declined stays declined");
+  let accept = json!({"audience": server.id, "invite": id});
+  let token = cloud
+    .request("POST", "/identity-tokens", Some(dana), Some(accept))
+    .await;
+  assert_eq!(token.status, 404, "a declined invite issues no token");
   cloud.mail.nth("dana@example.test", 2).await;
   assert_eq!(
     cloud.mail.count("dana@example.test"),
     2,
-    "the confirmation and one invite"
+    "the confirmation and one invite: delivering it again emails nothing"
   );
 }
 
-async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
+pub(crate) async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
   cloud
     .request_headers(
       "POST",

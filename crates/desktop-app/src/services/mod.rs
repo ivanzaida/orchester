@@ -1,8 +1,8 @@
 //! What a started session works with, shared by the window and the app's MCP tools: the workspace and
 //! its projects, the projects' runners, the session's background activity, the programs git work runs,
-//! the clock, the keychain, the shared servers, what automation changed and is merging or removing, and
-//! the window's close flow and the start-up recovery of the runs the previous session left interrupted.
-//! They come from `orchester-workspace`, which the deprecated desktop shares; this app only puts them
+//! the clock, the keychain, the shared servers and Orchester Cloud, where web pages open, what automation changed and
+//! is merging or removing, and the window's close flow and the start-up recovery of the runs the previous session left
+//! interrupted. They come from `orchester-workspace`, which the deprecated desktop shares; this app only puts them
 //! together ([`Services::start`]) and hands them to its screens ([`Services::of`]).
 //!
 //! The shared servers' connection monitor and the shared projects' sync run on the app's runtime while
@@ -22,17 +22,19 @@ use orchester_workspace::{
   runner::Runners,
   secrets::Vault,
   session::AppSession,
-  sharing::{self, Servers},
+  sharing::{self, Servers, cloud::Cloud},
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::Workspace,
 };
 use tokio::{runtime::Handle, task::JoinHandle};
 
 pub mod accounts;
+pub mod links;
 pub mod path_picker;
 pub mod plan_limits;
 pub mod reference_picker;
 
+use self::links::Links;
 use crate::{mcp::chat::ChatServers, project::hold::ReadHold};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
@@ -50,6 +52,10 @@ pub struct Services {
   /// Where secret values are kept: the OS keychain.
   pub vault: Vault,
   pub servers: Servers,
+  /// This computer's Orchester Cloud account and its invites.
+  pub cloud: Cloud,
+  /// Where web pages open: the browser, or a record in a test or a QA copy.
+  pub links: Links,
   /// What automation changed in which project, so only the screens that show it read it again.
   pub changes: OutsideChanges,
   /// The projects' merge and worktree-removal operations, shared by the task pages and the MCP tools.
@@ -81,11 +87,10 @@ impl lurq::app::component::DevtoolsInspectable for Services {}
 
 impl Services {
   /// The services of `session`, whose runners are `runner` (the program beside this one), on
-  /// `runtime`, with the keychain and real processes.
-  pub fn start(session: &AppSession, runner: PathBuf, runtime: Handle) -> Self {
+  /// `runtime`, with `vault` (the keychain, or one in memory in a test) and real processes.
+  pub fn start(session: &AppSession, runner: PathBuf, runtime: Handle, vault: Vault) -> Self {
     let activity = Activity::new();
     let workspace = session.workspace().clone();
-    let vault = Vault::keychain();
     let runners = Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end());
     let programs = Programs::processes();
     let jobs = ProjectJobs::default();
@@ -95,11 +100,14 @@ impl Services {
       session.interrupted_since(),
       &runtime,
     );
+    let servers = Servers::new(workspace.clone(), vault.clone());
     Self {
       close: CloseFlow::new(runners.clone(), jobs.clone(), runtime.clone()),
       recovery,
       runners,
-      servers: Servers::new(workspace.clone(), vault.clone()),
+      cloud: Cloud::new(workspace.clone(), vault.clone(), servers.clone()),
+      links: Links::from_env(),
+      servers,
       workspace,
       activity,
       programs,

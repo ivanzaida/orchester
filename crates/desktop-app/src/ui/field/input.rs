@@ -160,6 +160,12 @@ impl FieldInput {
     self
   }
 
+  /// No glyph at the box's end, where the design draws a masked field without its lock (`DUWM5`'s password).
+  pub fn no_trailing(mut self) -> Self {
+    self.trailing = None;
+    self
+  }
+
   pub fn placeholder(mut self, placeholder: impl Into<Arc<str>>) -> Self {
     self.placeholder = Some(placeholder.into());
     self

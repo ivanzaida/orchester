@@ -18,6 +18,7 @@ impl VaultKey {
   const SERVER_PREFIX: &str = "orchester-server:";
   const TOKEN_ACCOUNT: &str = "token";
   const APP_MCP_SERVICE: &str = "orchester-app-mcp";
+  const CLOUD_SERVICE: &str = "orchester-cloud";
 
   pub fn new(project: ProjectId, secret: SecretId) -> Self {
     Self {
@@ -32,6 +33,16 @@ impl VaultKey {
     Self {
       service: format!("{}{server}", Self::SERVER_PREFIX),
       account: Self::TOKEN_ACCOUNT.to_owned(),
+    }
+  }
+
+  /// The token one installation signed in to Orchester Cloud with: the service `orchester-cloud` and the account
+  /// `<installation id>` (`docs/architecture/server.md`, "Orchester Cloud"), so a development build or a QA copy
+  /// never signs the installed app in or out.
+  pub fn cloud_device(installation: InstallationId) -> Self {
+    Self {
+      service: Self::CLOUD_SERVICE.to_owned(),
+      account: installation.to_string(),
     }
   }
 

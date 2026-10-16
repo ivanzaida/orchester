@@ -30,6 +30,7 @@ mod accounts;
 mod connections;
 mod error;
 mod files;
+mod orchester;
 mod orchestrator;
 mod overview;
 mod page;
@@ -52,6 +53,7 @@ pub use self::{
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
+  orchester::{OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
@@ -77,6 +79,8 @@ const EDIT: &str = "edit";
 const TAB: &str = "tab";
 /// Settings' Accounts tab.
 const ACCOUNTS: &str = "accounts";
+/// Settings' Orchester tab.
+const ORCHESTER: &str = "orchester";
 /// A project's path with its identifier as the router's parameter.
 const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
@@ -121,6 +125,8 @@ pub enum Route {
   Settings,
   /// Settings › Accounts, with the account it shows and its panel.
   Accounts(AccountsView),
+  /// Settings › Orchester, with the account or server it shows, or *Connect a server*.
+  Orchester(OrchesterView),
   Project(ProjectId, ProjectPage),
 }
 
@@ -141,7 +147,7 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
-      Self::Settings | Self::Accounts(_) => Screen::Settings,
+      Self::Settings | Self::Accounts(_) | Self::Orchester(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
@@ -155,7 +161,12 @@ impl Route {
   pub const fn project(&self) -> Option<ProjectId> {
     match self {
       Self::Project(project, _) => Some(*project),
-      Self::AllProjects | Self::Usage(_) | Self::AddProject(_) | Self::Settings | Self::Accounts(_) => None,
+      Self::AllProjects
+      | Self::Usage(_)
+      | Self::AddProject(_)
+      | Self::Settings
+      | Self::Accounts(_)
+      | Self::Orchester(_) => None,
     }
   }
 
@@ -179,6 +190,7 @@ impl Route {
       ),
       Self::Settings => format!("/{SETTINGS}"),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
+      Self::Orchester(view) => view.path(format!("/{SETTINGS}"), (TAB, ORCHESTER)),
       Self::Project(project, page) => page.path(&format!("/{PROJECT}/{project}")),
     }
   }
@@ -217,11 +229,12 @@ impl Route {
 }
 
 impl Route {
-  /// Settings at the tab its query names: Automation, or Accounts with the account it shows.
+  /// Settings at the tab its query names: Automation, Accounts with the account it shows, or Orchester.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
       None => Ok(Self::Settings),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
+      Some(ORCHESTER) => OrchesterView::take(params).map(Self::Orchester),
       Some(other) => Err(RouteError::InvalidParam {
         param: TAB.to_owned(),
         value: other.to_owned(),

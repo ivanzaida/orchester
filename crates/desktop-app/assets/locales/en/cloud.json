@@ -1,0 +1,322 @@
+{
+  "cloud": {
+    "reading": "Reading Orchester Cloud and your team servers…",
+    "loadFailed": "Settings › Orchester can't be read",
+    "factSeparator": "·",
+    "day": "{{month}} {{day}}",
+    "dayTime": "{{day}}, {{time}}",
+    "state": {
+      "signedIn": "Signed in",
+      "notSignedIn": "Not signed in",
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "offline": "Offline",
+      "signedOut": "Signed out",
+      "certificateChanged": "Certificate changed"
+    },
+    "list": {
+      "cloud": "Orchester Cloud",
+      "signedIn": "signed in",
+      "notSignedIn": "not signed in",
+      "signInFor": "Sign in for invites and your servers",
+      "teamServers": "Team servers",
+      "servers": {
+        "one": "1 server",
+        "other": "{{count}} servers"
+      },
+      "invitesWaiting": {
+        "one": "1 invite waiting",
+        "other": "{{count}} invites waiting"
+      },
+      "trust": {
+        "pinned": "{{host}} · certificate checked",
+        "system": "{{host}} · trusted by your system",
+        "plain": "{{host}} · plain HTTP"
+      },
+      "line": {
+        "projects": "{{projects}} on this computer",
+        "noProjects": "No project on this computer yet",
+        "reconnecting": "Reconnecting · try {{attempt}}",
+        "offline": "Working locally since {{since}}",
+        "signedOut": "Signed out · join again",
+        "certificateChanged": "Nothing sent until you check it"
+      },
+      "none": {
+        "title": "No team servers yet",
+        "body": "Accept an invite, or connect a server by its address. Projects you share live on a server your team runs."
+      },
+      "note": "Orchester Cloud keeps your account and invites; your projects never pass through it. This computer connects to each team server once, and each project you link uses that connection.",
+      "serverNote": "Members, invites and devices of a team server are managed in its server admin, in the browser. Orchester keeps your connection and your projects' links."
+    },
+    "account": {
+      "signOut": "Sign out",
+      "tabs": {
+        "account": "Account",
+        "invites": {
+          "one": "Invites 1",
+          "other": "Invites {{count}}"
+        },
+        "invitesNone": "Invites",
+        "devices": "Devices",
+        "devicesNotBuilt": "Your Orchester Cloud devices aren't in this version of the app yet"
+      },
+      "signedInAs": "Signed in as",
+      "displayName": "Display name",
+      "nameValue": "{{name}} · shown on your invites and to teammates",
+      "thisDevice": "This device",
+      "deviceValue": "Orchester on {{device}}",
+      "signedInAt": "Signed in",
+      "signedInValue": "{{when}} on this computer",
+      "address": "Cloud address",
+      "signingOut": "Signing out",
+      "signingOutText": "Sign out ends this computer's session with Orchester Cloud: invites stop arriving here. Team servers you joined keep working, each with its own sign-in for this computer; sign out of each one on the left.",
+      "tokenNote": {
+        "windows": "The cloud token for this computer is kept in Windows Credential Manager. Orchester never shows it.",
+        "macos": "The cloud token for this computer is kept in your login Keychain. Orchester never shows it."
+      }
+    },
+    "invites": {
+      "title": "Waiting invites",
+      "waiting": {
+        "one": "1 waiting",
+        "other": "{{count}} waiting"
+      },
+      "lead": "Invites to projects and servers reach you here and by email. Accepting connects this computer to the server and opens the project's join review; nothing is uploaded before you confirm there.",
+      "none": "No invites are waiting.",
+      "toProject": "{{inviter}} invited you to {{project}} on {{server}}, as {{role}}",
+      "toServer": "{{inviter}} invited you to {{server}}",
+      "toAccount": "{{inviter}} invited you to link your Orchester account on {{server}}",
+      "role": {
+        "owner": "an owner",
+        "member": "a member"
+      },
+      "expires": "expires {{expires}}",
+      "accept": "Accept",
+      "decline": "Decline",
+      "keep": "Keep it",
+      "cancel": "Cancel",
+      "stopped": {
+        "title": "Stopped connecting",
+        "body": "If the server had already let this computer in, it shows under Team servers. Otherwise try again below."
+      },
+      "declineQuestion": "Decline the invite to {{target}}?",
+      "declineBody": "The invite ends here and can't be accepted any more. {{inviter}} isn't told; their server keeps it until it expires.",
+      "connecting": "Connecting to {{server}}… its certificate comes with the invite, so there's nothing to compare.",
+      "joined": {
+        "title": "Connected to {{server}}",
+        "project": "{{project}} is next: link its checkout from that project's Project settings › Sharing.",
+        "server": "You're on the server. When someone adds you to a project, it's offered here to link a checkout."
+      },
+      "approval": {
+        "title": "Waiting for approval",
+        "body": "{{server}} asks for approval of new computers. Approve this one in Orchester on another computer of yours, or ask an admin of {{server}}. Nothing has been uploaded.",
+        "ask": "{{server}} asks for approval of new computers. Approve this one in Orchester on another computer of yours, or ask an admin of {{server}}.",
+        "later": "Nothing has been uploaded. You can close this; Orchester finishes joining when it's approved.",
+        "cancel": "Cancel joining"
+      },
+      "approved": {
+        "title": "{{server}} approved this computer",
+        "project": "Joined {{server}}. Next: link the checkout of {{project}} from that project's Project settings › Sharing.",
+        "server": "Joined {{server}}. When someone adds you to a project, it's offered here to link a checkout.",
+        "continue": "Continue"
+      },
+      "refused": {
+        "title": "{{server}} refused this computer",
+        "body": "Nothing was uploaded. If you didn't expect this, ask an admin of {{server}}; if someone else refused it, your Orchester password may be known to them.",
+        "back": "Back to Settings › Orchester"
+      },
+      "joinStopped": {
+        "title": "Joining {{server}} didn't finish",
+        "body": "The invite stays accepted for this computer, and nothing was uploaded. Try again once {{server}} can be reached.",
+        "unanswered": "{{server}} hasn't approved this computer yet, and Orchester stopped asking on its own so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Try again once it's approved.",
+        "tooMany": "Orchester asked {{server}} for this invite {{count}} times and stops here, so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Ask an admin of {{server}} for a new invite.",
+        "tryAgain": "Try again",
+        "later": "Later"
+      },
+      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected."
+    },
+    "signIn": {
+      "title": "Sign in to Orchester Cloud",
+      "lead": "Your Orchester account brings invites to this computer and, on a new computer, finds the team servers you joined. Use the email and password of your account.",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "password": "Password",
+      "forgot": "Forgot password?",
+      "submit": "Sign in",
+      "newHere": "New to Orchester?",
+      "create": "Create an account",
+      "webHint": "Create an account and Forgot password open {{host}} in your browser. Confirm your email there, then sign in here.",
+      "wrong": "Wrong email or password.",
+      "unconfirmed": {
+        "title": "Confirm your email first",
+        "body": "Open the link Orchester Cloud sent to {{email}}, then sign in here. No email? Ask for a new one on the cloud's page.",
+        "open": "Open Orchester Cloud"
+      },
+      "paused": {
+        "title": "Too many attempts",
+        "body": "Sign-in for this email is paused. Try again in {{minutes}} min."
+      },
+      "unreachable": {
+        "title": "Orchester Cloud can't be reached",
+        "body": "Team servers you joined keep working without it. A server on a closed network takes an invite code."
+      },
+      "opened": {
+        "title": "Opened in your browser",
+        "body": "{{page}}. Confirm your email there, then sign in here."
+      },
+      "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
+      "offline": {
+        "title": "No internet where your server runs?",
+        "body": "A team server on a closed network takes its address and an 8-character invite code instead of an account. Ask whoever runs it for both.",
+        "connect": "Connect a server with a code"
+      }
+    },
+    "advanced": {
+      "title": "Advanced · cloud address",
+      "default": "default",
+      "label": "Orchester Cloud address",
+      "hint": "For a test cloud. Changing it signs you out of Orchester Cloud; team servers you joined keep working.",
+      "use": "Use this address",
+      "reset": "Back to the default",
+      "invalid": "That isn't an address.",
+      "testCloud": {
+        "title": "Using a test cloud",
+        "body": "Invites and servers from {{host}} don't show here while it's set."
+      }
+    },
+    "server": {
+      "runs": "Orchester server {{version}}, API {{api}}",
+      "api": "API {{api}}",
+      "signOut": "Sign out…",
+      "facts": {
+        "address": "Address",
+        "certificate": "Certificate",
+        "checked": "Checked · {{code}}",
+        "youThere": "You there",
+        "you": "{{name}} · {{username}} · {{role}}",
+        "admin": "admin",
+        "member": "member",
+        "nobody": "Not signed in from this computer",
+        "joined": "Joined",
+        "joinedCloud": "{{day}}, through Orchester Cloud",
+        "joinedCode": "{{day}}, with a code",
+        "joinedOn": "{{day}}",
+        "computer": "This computer",
+        "computerValue": "Orchester on {{computer}} · signed in until unused for 90 days",
+        "computerSignedOut": "Orchester on {{computer}} · not signed in",
+        "system": "Trusted by your system: a public or your team's own authority issued it",
+        "plain": "None: plain HTTP, to this computer or allowed for this server"
+      },
+      "projects": {
+        "title": "Projects on this computer",
+        "linked": {
+          "one": "1 linked",
+          "other": "{{count}} linked"
+        },
+        "reading": "Reading your projects there…",
+        "none": "You aren't a member of a project there yet.",
+        "owner": "Owner",
+        "member": "Member",
+        "notHere": "not on this computer",
+        "open": "Open",
+        "explanation": "Each project is linked to one checkout on this computer. A project of yours without a checkout here: clone it yourself, add the folder in All projects, then link it in its Project settings › Sharing.",
+        "signedOut": "Join again to read your projects there; the ones linked here are listed below.",
+        "offline": "{{server}} can't be reached, so your projects there can't be read now. The ones linked on this computer are listed below.",
+        "offlineNoneHere": "{{server}} can't be reached, so your projects there can't be read now. None of them is linked on this computer.",
+        "signedOutNoneHere": "Join again to read your projects there. None of them is linked on this computer.",
+        "link": "Link a checkout…",
+        "linkLater": "Linking from here isn't in this version of the app yet: clone the project yourself, add the folder in All projects, then link it in its Project settings › Sharing."
+      },
+      "computers": {
+        "title": "Your other computers",
+        "body": "Joining {{server}} from another computer of yours: with Orchester Cloud, signing in there is enough. Without it, make a pairing code here and enter it there with {{server}}'s address.",
+        "add": "Add a computer"
+      },
+      "admin": {
+        "title": "Server admin",
+        "bodyAdmin": "Projects, members and roles, invites, people, devices and {{server}}'s settings are managed in the browser, at {{url}}. You're an admin there; members see only the link.",
+        "bodyMember": "Members and roles, invites and devices of {{server}} are managed in the browser by its admins and owners, at {{url}}.",
+        "open": "Open server admin",
+        "signIn": "Sign in to the admin",
+        "hint": "Makes a pairing code that signs you in to the server admin once, within 10 minutes: for when your browser can't reach Orchester Cloud.",
+        "openFailed": "{{url}} couldn't be opened: Orchester opens only https pages in the browser."
+      },
+      "signOutQuestion": {
+        "title": "Sign out of {{server}} on this computer?",
+        "projects": "{{projects}} stop sending and receiving. Their tasks stay here as they are now, and the changes you make wait on this computer until you connect again.",
+        "noProjects": "No project on this computer is linked to it.",
+        "forgets": "{{server}} forgets this computer; your account and your projects there stay. Join again with Orchester Cloud or a code.",
+        "confirm": "Sign out",
+        "keep": "Stay signed in",
+        "project": "{{projects}} stops sending and receiving. Its tasks stay here as they are now, and the changes you make wait on this computer until you connect again."
+      },
+      "certificate": {
+        "title": "{{server}} presents a different certificate",
+        "body": "Its admin may have replaced it, or something is between you and the server. Until you check, {{projects}} sends and receives nothing; your changes wait here.",
+        "bodyNoProjects": "Its admin may have replaced it, or something is between you and the server. Until you check, nothing is sent to it.",
+        "reading": "Reading the certificate it presents now…",
+        "newCode": "New check code",
+        "compare": "Compare it with the code the server prints at its start, or with Server admin › Settings › Certificate, shown to you by its admin. Was {{was}}.",
+        "matches": "It matches · trust it",
+        "differs": "It doesn't match · sign out",
+        "person": "Only you can answer this; agents and Orchester's MCP tools can't."
+      },
+      "signedOut": {
+        "title": "This computer's sign-in on {{server}} ended",
+        "body": "It went unused for 90 days, or someone revoked it in the server admin. Your waiting changes are kept here.",
+        "cloud": "Join again with Orchester Cloud",
+        "code": "With a code",
+        "waiting": "Waiting for approval: approve this computer on another computer of yours, or ask an admin.",
+        "byYouTitle": "Not signed in to {{server}} on this computer",
+        "byYouBody": "You signed out of it here; your account and your projects there stay. Join again to work on them from this computer."
+      },
+      "tokenNote": {
+        "windows": "This computer's token for {{server}} is kept in Windows Credential Manager. Orchester never shows it; Sign out deletes it.",
+        "macos": "This computer's token for {{server}} is kept in your login Keychain. Orchester never shows it; Sign out deletes it.",
+        "refused": "{{server}} no longer accepts this computer's token. Joining again replaces it.",
+        "noneWindows": "This computer holds no token for {{server}}: signing out deleted it from Windows Credential Manager. Joining again stores a new one.",
+        "noneMacos": "This computer holds no token for {{server}}: signing out deleted it from your login Keychain. Joining again stores a new one."
+      }
+    },
+    "pairing": {
+      "title": "Pairing code for {{server}}",
+      "computer": "On your other computer: Connect a server, {{host}}, the check code, then this code. It works once, within 10 minutes, as {{username}}.",
+      "admin": "In your browser, at {{host}}/admin › Sign in with a code, enter it there. It works once, within 10 minutes, as {{username}}.",
+      "copy": "Copy code",
+      "done": "Done",
+      "once": "Shown once: Orchester doesn't keep it."
+    },
+    "errors": {
+      "local": "Something on this computer failed; the log says what.",
+      "address": "The Orchester Cloud address isn't an address. Fix it in Advanced · cloud address.",
+      "signedOut": "You aren't signed in to Orchester Cloud on this computer.",
+      "noServer": "Orchester Cloud doesn't know a server of yours at that address.",
+      "rateLimited": "Too many attempts. Try again in {{minutes}} min.",
+      "busy": "Orchester Cloud is busy. Try again in a moment.",
+      "keys": "Orchester Cloud can't sign right now. Try again later.",
+      "refused": "Orchester Cloud refused this.",
+      "unreachable": "Orchester Cloud can't be reached.",
+      "certificate": "Your system doesn't trust Orchester Cloud's certificate.",
+      "serverRefused": "The server refused this.",
+      "serverSignedOut": "This computer's sign-in on the server ended.",
+      "joinRefused": "The team server refused this computer. Nothing was uploaded; if you didn't expect this, ask one of its admins.",
+      "tooManyAsks": "Orchester asked for this invite as often as it does. Nothing was uploaded; ask an admin of the server for a new invite.",
+      "serverUnreachable": "The server can't be reached. Check that this computer is on its network.",
+      "certificateChanged": "The server presents a different certificate; nothing was sent to it.",
+      "tooManyCodes": "The server holds as many open codes as it allows. Try again once one is used or expires."
+    },
+    "personOnly": "Only a person does this here: input from an MCP client is refused. Clients can still read this page.",
+    "notice": {
+      "body": "{{role}} · {{address}} · expires {{expires}}",
+      "toProject": "{{inviter}} invited you to {{project}} on {{server}}",
+      "many": "{{count}} invites wait for you",
+      "manyBody": "Invites to projects and servers, through Orchester Cloud.",
+      "review": "Review",
+      "role": {
+        "owner": "As an owner",
+        "member": "As a member",
+        "server": "To the server"
+      }
+    }
+  }
+}

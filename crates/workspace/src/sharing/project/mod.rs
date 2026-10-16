@@ -9,6 +9,7 @@ mod claims;
 pub mod convert;
 pub mod discovery;
 mod join;
+pub mod link;
 pub mod lookup;
 mod make_local;
 mod members;

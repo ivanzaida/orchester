@@ -24,6 +24,7 @@ use crate::{
   db::{audit, millis, time},
   error::CloudError,
   mail::Email,
+  people::quota_key,
   servers,
 };
 
@@ -61,7 +62,7 @@ impl Cloud {
     self
       .inner
       .limits
-      .invite_per_owner(owner(&client, invite.server).await?, now)?;
+      .invite_per_owner(self.owner(&client, invite.server).await?, now)?;
     if !store(&client, &invite, &email, now).await? {
       return Ok(server);
     }
@@ -128,26 +129,18 @@ impl Cloud {
     audit(&client, None, "invite_withdrawn", &id.to_string(), None, now).await
   }
 
-  /// `POST /invites/{id}/decline`: the invitee deletes an open invite to the account's email. Like a revocation it
-  /// leaves a tombstone until the invite would have expired, so delivering it again (from the server or the
-  /// inviter's browser) neither lists it nor emails again. The team server keeps its own copy until it expires or is
-  /// revoked; nothing joins with it, since a join needs the invitee's own token.
+  /// `POST /invites/{id}/decline`: the invitee answers an open invite to the account's email with no. It leaves the
+  /// list and issues no token; the row stays until the invite expires, so delivering it again changes nothing. The
+  /// team server keeps its own copy until it expires or is revoked; nothing joins with it, since a join needs a token.
   pub(crate) async fn decline_invite(&self, auth: Authenticated, id: InviteId) -> Result<(), CloudError> {
     let client = self.client().await?;
-    let declined: i64 = client
-      .query_one(
-        "WITH declined AS (
-           DELETE FROM invites i USING accounts a WHERE i.id = $1 AND a.id = $2 AND i.email = a.email
-           RETURNING i.id, i.server, i.expires_at
-         ), kept AS (
-           INSERT INTO revoked_invites (id, server, until) SELECT id, server, expires_at FROM declined
-           ON CONFLICT (id, server) DO NOTHING
-         )
-         SELECT count(*) FROM declined",
-        &[&id.as_uuid(), &auth.account.as_uuid()],
+    let declined = client
+      .execute(
+        "UPDATE invites i SET answer = 'declined', answered_by = a.id, answered_at = $3 FROM accounts a
+         WHERE i.id = $1 AND a.id = $2 AND i.email = a.email AND i.answer IS NULL AND i.expires_at > $3",
+        &[&id.as_uuid(), &auth.account.as_uuid(), &time(self.now())],
       )
-      .await?
-      .try_get(0)?;
+      .await?;
     if declined == 0 {
       return Err(CloudErrorCode::NotFound.into());
     }
@@ -162,7 +155,8 @@ impl Cloud {
     .await
   }
 
-  /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first.
+  /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first; answered
+  /// ones are not listed.
   pub(crate) async fn invites(&self, auth: Authenticated) -> Result<Vec<CloudInvite>, CloudError> {
     let rows = self
       .client()
@@ -171,7 +165,7 @@ impl Cloud {
         "SELECT i.id, i.kind, i.role, s.id, s.name, s.address, i.project_address, i.project_name,
            i.inviter_display_name, i.expires_at
          FROM invites i JOIN servers s ON s.id = i.server JOIN accounts a ON a.email = i.email
-         WHERE a.id = $1 AND s.unlinked_at IS NULL AND i.expires_at > $2
+         WHERE a.id = $1 AND s.unlinked_at IS NULL AND i.expires_at > $2 AND i.answer IS NULL
          ORDER BY i.expires_at, i.id",
         &[&auth.account.as_uuid(), &time(self.now())],
       )
@@ -231,20 +225,6 @@ async fn known(client: &impl GenericClient, id: InviteId, server: TeamServerId) 
       )
       .await?
       .is_some(),
-  )
-}
-
-/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts; a server whose owner deleted
-/// their account counts on its own until an admin links it again.
-async fn owner(client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
-  Ok(
-    client
-      .query_one(
-        "SELECT coalesce(owner, id) FROM servers WHERE id = $1",
-        &[&server.as_uuid()],
-      )
-      .await?
-      .try_get(0)?,
   )
 }
 
@@ -323,4 +303,55 @@ fn parse_role(value: &str) -> Result<MemberRole, CloudError> {
     .into_iter()
     .find(|role| role_name(*role) == value)
     .ok_or(CloudError::StoredData)
+}
+
+/// Accepts `id` for a token that names it: an unexpired invite from `server` to the email of `auth`'s account that is
+/// open, or that this account accepted before (its join may have failed). It leaves `GET /invites`. Any other is
+/// `404`, as `decline` answers: declined, accepted by another account, revoked, expired, or another server's.
+pub(crate) async fn accept_for(
+  client: &impl GenericClient,
+  auth: Authenticated,
+  (id, server): (InviteId, uuid::Uuid),
+  now: i64,
+) -> Result<(), CloudError> {
+  let accepted = client
+    .execute(
+      "UPDATE invites i SET answer = 'accepted', answered_by = a.id, answered_at = coalesce(i.answered_at, $4)
+       FROM accounts a
+       WHERE i.id = $1 AND a.id = $2 AND a.email = i.email AND i.server = $3 AND i.expires_at > $4
+         AND (i.answer IS NULL OR (i.answer = 'accepted' AND i.answered_by = a.id))",
+      &[&id.as_uuid(), &auth.account.as_uuid(), &server, &time(now)],
+    )
+    .await?;
+  if accepted == 0 {
+    return Err(CloudErrorCode::NotFound.into());
+  }
+  audit(
+    client,
+    Some(auth.account),
+    "invite_accepted",
+    &id.to_string(),
+    None,
+    now,
+  )
+  .await
+}
+
+impl Cloud {
+  /// The person who owns `server`, whose daily invites `Limits::invite_per_owner` counts: its owner's, or the person's
+  /// who linked it before deleting their account (`crate::people`). A server without either, ownerless since before
+  /// the cloud kept the person, counts on its own until an admin links it again.
+  async fn owner(&self, client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
+    let row = client
+      .query_one(
+        "SELECT a.email, s.last_owner FROM servers s LEFT JOIN accounts a ON a.id = s.owner WHERE s.id = $1",
+        &[&server.as_uuid()],
+      )
+      .await?;
+    let person = match row.try_get::<_, Option<String>>(0)? {
+      Some(email) => Some(self.inner.people.of(&email)),
+      None => row.try_get::<_, Option<Vec<u8>>>(1)?,
+    };
+    Ok(person.as_deref().and_then(quota_key).unwrap_or(server.as_uuid()))
+  }
 }

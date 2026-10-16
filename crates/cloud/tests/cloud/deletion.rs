@@ -176,3 +176,78 @@ async fn still_there_without_an_owner(cloud: &TestCloud, server: &TeamServer, me
     .await;
   assert_eq!(ownerless.status, 202, "an ownerless server still delivers invites");
 }
+
+/// Two invites from `server` to `email`, delivered: their ids.
+async fn two_invites(cloud: &TestCloud, server: &TeamServer, email: &str) -> (InviteId, InviteId) {
+  let ids = (InviteId::generate(), InviteId::generate());
+  for id in [ids.0, ids.1] {
+    let invite = json!({"invite": server.invite(id, email, cloud.clock.now_ms())});
+    assert_eq!(cloud.request("POST", "/invites", None, Some(invite)).await.status, 202);
+  }
+  ids
+}
+
+/// An account that accepted one invite and declined another is deleted all the same, its answered invites with it;
+/// and a server whose owner deleted their account still has its invites accepted, the registry read without an owner
+/// (N1 merge with the cloud branch: answers kept on the invite, migration 6; ownerless servers, migration 5).
+pub async fn answered_invites_go_with_the_account_and_ownerless_servers_still_issue() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "owner@example.test").await;
+  let dana = signed_in(&cloud, "dana@example.test").await;
+  let server = TeamServer::generate();
+  link(&cloud, &owner, &server).await;
+  let (accepted, declined) = two_invites(&cloud, &server, "dana@example.test").await;
+  let accept = json!({"audience": server.id(), "invite": accepted});
+  let issued = cloud
+    .request("POST", "/identity-tokens", Some(&dana), Some(accept))
+    .await;
+  assert_eq!(issued.status, 201, "{}", issued.error());
+  remember(
+    issued
+      .json::<orchester_api::cloud::IdentityTokenIssued>()
+      .identity_token
+      .expose(),
+  );
+  let decline = format!("/invites/{declined}/decline");
+  assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 204);
+  let deleted = cloud
+    .request("DELETE", "/me", Some(&dana), Some(json!({"password": PASSWORD})))
+    .await;
+  assert_eq!(deleted.status, 204, "answered invites do not hold the account");
+  assert_eq!(
+    count(&cloud, "SELECT count(*) FROM invites").await,
+    0,
+    "its invites went with it"
+  );
+
+  let erin = signed_in(&cloud, "erin@example.test").await;
+  let (open, _) = two_invites(&cloud, &server, "erin@example.test").await;
+  let gone = cloud
+    .request("DELETE", "/me", Some(&owner), Some(json!({"password": PASSWORD})))
+    .await;
+  assert_eq!(gone.status, 204);
+  let path = format!("/servers/{}", server.id());
+  assert_eq!(
+    cloud.request("GET", &path, Some(&erin), None).await.status,
+    200,
+    "still registered"
+  );
+  let accept = json!({"audience": server.id(), "invite": open});
+  let issued = cloud
+    .request("POST", "/identity-tokens", Some(&erin), Some(accept))
+    .await;
+  assert_eq!(
+    issued.status,
+    201,
+    "an ownerless server's invite is accepted: {}",
+    issued.error()
+  );
+  remember(
+    issued
+      .json::<orchester_api::cloud::IdentityTokenIssued>()
+      .identity_token
+      .expose(),
+  );
+  cloud.finish().await;
+}

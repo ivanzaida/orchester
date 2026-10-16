@@ -10,6 +10,7 @@ use orchester_workspace::{
   app_paths,
   close::{CloseKind, session_end},
   runner::QUIET_STOP_TIMEOUT,
+  secrets::Vault,
   session::{AppSession, StartupError},
   workspace::Workspace,
 };
@@ -58,8 +59,18 @@ impl Launch {
   }
 
   /// Starts the session of the application database `database`, whose projects' runners are the
-  /// program `runner`.
+  /// program `runner`, with the OS keychain.
   pub fn begin_at(database: &Path, runner: PathBuf, runtime: &Handle, log: Option<PathBuf>) -> Self {
+    Self::begin_with_vault(database, runner, runtime, (log, Vault::keychain()))
+  }
+
+  /// [`Self::begin_at`] with `vault` for secrets and tokens, e.g. a keychain in memory in a test.
+  pub fn begin_with_vault(
+    database: &Path,
+    runner: PathBuf,
+    runtime: &Handle,
+    (log, vault): (Option<PathBuf>, Vault),
+  ) -> Self {
     let session = match AppSession::start_at(database) {
       Ok(session) => session,
       Err(error) => return Self::problem(&error, log),
@@ -78,7 +89,7 @@ impl Launch {
         return Self::problem(&error, log);
       }
     };
-    let services = Services::start(&session, runner, runtime.clone());
+    let services = Services::start(&session, runner, runtime.clone(), vault);
     let background = services.run_background();
     Self {
       start: Start::Ready(Box::new(Ready {

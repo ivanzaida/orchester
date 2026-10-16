@@ -28,6 +28,8 @@ pub struct BarFacts {
   pub mcp: McpStatus,
   /// How stopping runs auto-approving goes.
   pub stopping: Stopping,
+  /// The team server the item names: the project's, or those this computer is signed in to.
+  pub servers: super::server::ServerFacts,
 }
 
 /// How *Stop* of the runs that auto-approve goes.

@@ -66,6 +66,7 @@ pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>) -> Element 
     .spacing(ProjectsSpacing::Page.role())
     .child(heading(ctx, open))
     .child(tabs(ctx, false))
+    .child(ctx.mount_keyed::<crate::screens::settings::orchester::InvitesNotice>("all-projects-invites", ()))
     .with_children(failure.map(|failure| error_line(&failure)))
     .child(content);
   let scrolled = Column::new()

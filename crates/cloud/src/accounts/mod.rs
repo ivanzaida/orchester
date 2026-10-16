@@ -27,6 +27,7 @@ use crate::{
   limits::Limits,
   mail::{Email, Mailer, Messages},
   passwords::Passwords,
+  people::People,
 };
 
 /// The running cloud: what the HTTP handlers and the host commands act on.
@@ -44,6 +45,7 @@ pub(crate) struct State {
   pub passwords: Passwords,
   pub limits: Limits,
   pub sealing: KeySealing,
+  pub people: People,
 }
 
 impl Cloud {
@@ -51,6 +53,7 @@ impl Cloud {
   pub async fn open(config: Config, clock: Arc<dyn Clock>, mailer: Arc<dyn Mailer>) -> Result<Self, CloudError> {
     config.validate()?;
     let sealing = KeySealing::new(&config.key_encryption_key)?;
+    let people = People::new(&config.key_encryption_key)?;
     let db = Database::open(&config.database_url, clock.now_ms()).await?;
     let messages = Messages::new(config.public_url.clone())?;
     Ok(Self {
@@ -63,6 +66,7 @@ impl Cloud {
         passwords: Passwords::new(4, Duration::from_secs(10)),
         limits: Limits::new(),
         sealing,
+        people,
       }),
     })
   }

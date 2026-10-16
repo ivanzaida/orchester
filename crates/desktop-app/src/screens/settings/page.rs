@@ -11,7 +11,7 @@ use lurq::{
 use super::SettingsTab;
 use crate::{
   navigation::Navigation,
-  routes::{AccountsPanel, AccountsView, Route, Screen},
+  routes::{AccountsPanel, AccountsView, OrchesterView, Route, Screen},
   theme::{ExtraSpacing, ExtraTypography, SettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -50,6 +50,18 @@ pub(super) fn header(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>) -
       }));
     })
   });
+  let action = action.or_else(|| {
+    matches!(tab, SettingsTab::Orchester(_)).then(|| {
+      let navigation = navigation.clone();
+      ActionButton::new(
+        "settings-connect-server",
+        ButtonKind::Primary,
+        ctx.t("settings.connectServer"),
+      )
+      .icon(Icon::Plus)
+      .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect())))
+    })
+  });
   let head = Row::new()
     .id("settings-head")
     .width(Dimension::Pct(100.0))
@@ -74,17 +86,15 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
   };
   let to_automation = navigation.clone();
   let to_accounts = navigation.clone();
+  let to_orchester = navigation.clone();
   let on_accounts = matches!(tab, SettingsTab::Accounts(_));
+  let on_orchester = matches!(tab, SettingsTab::Orchester(_));
   let tabs = [
-    PageTab::unavailable(
-      "settings-tab-general",
-      ctx.t("settings.tabs.general"),
-      not_built.clone(),
-    ),
+    PageTab::unavailable("settings-tab-general", ctx.t("settings.tabs.general"), not_built),
     PageTab::new(
       "settings-tab-automation",
       ctx.t("settings.tabs.automation"),
-      !on_accounts,
+      tab == SettingsTab::Automation,
       move || to_automation.go(Route::Settings),
     ),
     PageTab::new("settings-tab-accounts", accounts_label, on_accounts, move || {
@@ -92,7 +102,16 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
         to_accounts.go(Route::Accounts(AccountsView::default()));
       }
     }),
-    PageTab::unavailable("settings-tab-servers", ctx.t("settings.tabs.servers"), not_built),
+    PageTab::new(
+      "settings-tab-orchester",
+      ctx.t("settings.tabs.orchester"),
+      on_orchester,
+      move || {
+        if !on_orchester {
+          to_orchester.go(Route::Orchester(OrchesterView::default()));
+        }
+      },
+    ),
   ];
   page_tabs(ctx, "settings-tabs", tabs).into()
 }

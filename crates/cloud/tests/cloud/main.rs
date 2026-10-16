@@ -7,8 +7,11 @@
 // A test runner reports on the console.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+mod accept;
 mod accounts;
+mod caps;
 mod deletion;
+mod desktop;
 mod hosting;
 mod identity;
 mod limits;
@@ -49,6 +52,8 @@ const TESTS: &[(&str, Test)] = tests![
   deletion::deleting_the_account_removes_what_the_cloud_holds,
   deletion::deleting_with_wrong_passwords_is_limited,
   deletion::a_deleted_owners_server_stays_for_its_members,
+  deletion::answered_invites_go_with_the_account_and_ownerless_servers_still_issue,
+  caps::a_person_keeps_their_caps_past_deleting_the_account,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,
@@ -61,6 +66,7 @@ const TESTS: &[(&str, Test)] = tests![
   hosting::migration_4_removes_servers_whose_id_is_not_their_keys,
   hosting::smtp_mailer_sends_through_the_relay,
   hosting::requests_follow_the_contract,
+  desktop::desktop_signs_in_and_out_with_a_confirmed_account,
   hosting::unsafe_configuration_is_refused,
   registry::servers_link_from_the_statement_they_signed,
   registry::a_server_id_is_its_own_keys,
@@ -73,6 +79,7 @@ const TESTS: &[(&str, Test)] = tests![
   registry::admin_tokens_are_issued_only_for_linked_servers,
   registry::invites_reach_the_invitee_once_and_end_when_revoked,
   registry::invites_are_declined_by_the_invitee,
+  accept::invites_are_accepted_with_a_token_that_names_them,
 ];
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.

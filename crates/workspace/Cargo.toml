@@ -66,3 +66,5 @@ tempfile.workspace = true
 tracing-subscriber.workspace = true
 # Shared-server tests talk to a real server on loopback with a temporary data directory.
 orchester-server.workspace = true
+# Set-up requests to a test server that presents its own certificate from the start (`tests/server_support/tls.rs`).
+tokio-rustls.workspace = true

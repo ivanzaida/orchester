@@ -41,6 +41,9 @@ orchester-ipc.workspace = true
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
+# The wire types Settings › Orchester shows (invites, a server's answer, the cloud's and servers' refusals), as
+# `orchester-workspace` hands them over; the client feature for the server addresses and client errors it carries.
+orchester-api = { workspace = true, features = ["client"] }
 # The application layer the deprecated desktop shares: the session, projects, runners, activity and
 # project data. Its DevTools markers, because its types are component props and signal values here.
 orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
@@ -100,6 +103,16 @@ embed-resource.workspace = true
 [dev-dependencies]
 # Counts a runner's reports in tests of what follows them, which run no runner.
 orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
+# A real team server on loopback for the tests and the QA backends of Settings › Orchester and Sharing
+# (`tests/orchester`, `examples/n1_backends`), with the cloud's identity keys their stand-in cloud signs with.
+orchester-server.workspace = true
+orchester-api = { workspace = true, features = ["client", "identity"] }
+# Set-up requests to a test server that presents its own certificate (`workspace/tests/server_support/tls.rs`).
+tokio-rustls.workspace = true
+# Creates and drops the database of N1's end-to-end tests against the `orchester-cloud` program
+# (`tests/orchester_cloud`). The cloud runs as its own process: linking it would bring actix's `tracing/log` into
+# the shared crates and change their lints.
+tokio-postgres.workspace = true
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an

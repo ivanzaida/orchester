@@ -26,6 +26,7 @@ mod local_integration;
 mod markdown;
 mod metrics;
 mod needs_you;
+mod orchester;
 mod orchestrator;
 mod overview;
 mod palette;
@@ -65,6 +66,7 @@ pub use self::{
   local_integration::LocalText,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
+  orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{OrchestratorSpacing, OrchestratorText},
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
@@ -104,6 +106,7 @@ pub fn install(app: &mut App, mode: Mode) {
   startup::install(theme);
   settings::install(theme);
   accounts::install(theme);
+  orchester::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);

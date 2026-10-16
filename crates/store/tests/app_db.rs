@@ -9,7 +9,10 @@ use orchester_core::{
   time::Timestamp,
   usage::limits::WarningThreshold,
 };
-use orchester_store::{AppDb, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredServer};
+use orchester_store::{
+  AppDb, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredCloudAccount,
+  StoredServer,
+};
 
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -294,6 +297,7 @@ fn server(url: &str, added_at: i64) -> StoredServer {
     plain_http_allowed: false,
     certificate_pin: None,
     added_at: at(added_at),
+    joined_with: None,
     account: None,
   }
 }
@@ -464,4 +468,54 @@ fn app_mcp_port_outside_1024_to_65535_is_refused() {
     assert_eq!(McpPort::parse(typed), Err(InvalidPort), "{typed:?}");
   }
   assert_eq!(McpPort::new(1024).map(McpPort::get), Ok(1024));
+}
+
+#[test]
+fn servers_keep_how_this_computer_joined_them() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  let audience = orchester_core::id::TeamServerId::generate();
+  let kontur = StoredServer {
+    joined_with: Some(JoinedWith::Cloud(audience)),
+    ..server("https://orchester.kontur.lan", 1)
+  };
+  let lab = server("http://10.0.4.20:8740", 2);
+  db.add_server(&kontur).expect("add Kontur team");
+  db.add_server(&lab).expect("add the lab");
+  db.set_server_joined_with(lab.id, JoinedWith::Code)
+    .expect("joined with a code");
+  let servers = db.servers().expect("servers");
+  assert_eq!(servers[0].joined_with, Some(JoinedWith::Cloud(audience)));
+  assert_eq!(servers[1].joined_with, Some(JoinedWith::Code));
+}
+
+#[test]
+fn the_cloud_account_is_one_row_and_the_address_a_setting() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  assert_eq!(db.cloud_account().expect("account"), None);
+  assert_eq!(db.cloud_address().expect("address"), None);
+  let account = StoredCloudAccount {
+    account: orchester_core::id::CloudAccountId::generate(),
+    email: "ivan@example.com".into(),
+    display_name: "Ivan Zaida".into(),
+    device_name: "IVAN-PC".into(),
+    signed_in_at: at(5),
+    cloud_address: "https://cloud.test.lurq.dev".into(),
+  };
+  db.set_cloud_account(Some(&account)).expect("signed in");
+  let other = StoredCloudAccount {
+    email: "maria@example.com".into(),
+    ..account.clone()
+  };
+  db.set_cloud_account(Some(&other)).expect("another account replaces it");
+  assert_eq!(db.cloud_account().expect("account"), Some(other));
+  db.set_cloud_account(None).expect("signed out");
+  assert_eq!(db.cloud_account().expect("account"), None);
+  db.set_cloud_address(Some("https://cloud.test.lurq.dev"))
+    .expect("a test cloud");
+  assert_eq!(
+    db.cloud_address().expect("address").as_deref(),
+    Some("https://cloud.test.lurq.dev")
+  );
 }

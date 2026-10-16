@@ -7,6 +7,8 @@ mod appearance;
 mod instructions;
 #[path = "theme/local_integration.rs"]
 mod local_integration;
+#[path = "theme/orchester.rs"]
+mod orchester;
 #[path = "theme/orchestrator.rs"]
 mod orchestrator;
 #[path = "theme/skills.rs"]
@@ -22,8 +24,8 @@ use lurq::{
 };
 use orchester_app::theme::{
   self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, IconSize,
-  Mode, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing, SettingsText, ShellSpacing,
-  ShellText, StartupSpacing, StartupText,
+  Mode, OrchesterSpacing, OrchesterText, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing,
+  SettingsText, ShellSpacing, ShellText, StartupSpacing, StartupText,
 };
 
 fn themed(mode: Mode) -> App {

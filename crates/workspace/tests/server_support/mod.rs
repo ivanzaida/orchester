@@ -6,10 +6,13 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+mod tls;
+
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
   CodeJoin, Credential, SharedProject, UserChanges,
+  certificate::CertificatePin,
   client::{Client, PlainHttp, ServerAddress},
 };
 use orchester_core::secret::SecretValue;
@@ -37,6 +40,8 @@ pub struct TestServer {
   runtime: Runtime,
   stop: Option<oneshot::Sender<()>>,
   tls: bool,
+  /// The certificate a server that presents its own from the start serves, which its set-up requests trust.
+  pin: Option<CertificatePin>,
   /// The first admin's username, once a code made them, and a device token of theirs for setting tests up.
   admin: Mutex<(Option<String>, Option<String>)>,
   _directory: TempDir,
@@ -53,7 +58,30 @@ impl TestServer {
     Self::with(TlsMode::SelfSigned)
   }
 
+  /// A server that presents its own generated certificate from the start, at the address it names in its link
+  /// statement (`https://localhost:<port>`), so Orchester Cloud's registry holds that address and certificate. Its
+  /// set-up requests trust exactly that certificate.
+  pub fn start_tls_linkable() -> Self {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+      .and_then(|listener| listener.local_addr())
+      .expect("a free port")
+      .port();
+    let mut server = Self::open(TlsMode::SelfSigned, Some(port));
+    let address = ServerAddress::parse(&server.url()).expect("address");
+    server.pin = Some(
+      server
+        .block_on(Client::presented_certificate(&address))
+        .expect("the server's certificate"),
+    );
+    server
+  }
+
   fn with(tls: TlsMode) -> Self {
+    Self::open(tls, None)
+  }
+
+  /// `port`: a fixed port, which the server also names as its address.
+  fn open(tls: TlsMode, port: Option<u16>) -> Self {
     let runtime = Runtime::new().expect("server runtime");
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/desktop-sharing/tests");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
@@ -61,28 +89,35 @@ impl TestServer {
       .prefix("server-")
       .tempdir_in(&scratch)
       .expect("temporary data");
-    let (server, address, stop) = serve(&runtime, &directory, tls);
+    let (server, address, stop) = serve(&runtime, &directory, (tls, port));
     Self {
       server,
       address,
       runtime,
       stop: Some(stop),
       tls: tls != TlsMode::Off,
+      pin: None,
       admin: Mutex::new((None, None)),
       _directory: directory,
     }
   }
 
   /// Starts the server again on the same data directory, at a new port, presenting its own generated certificate:
-  /// what was set up over plain HTTP (accounts, the cloud link, invites) stays. Set-up requests speak plain HTTP, so
-  /// a test sets up first.
+  /// what was set up over plain HTTP (accounts, the cloud link, invites) stays. Set-up requests from then on trust
+  /// exactly that certificate (N1 design 3: `n1_backends` sets up after the switch).
   pub fn serve_self_signed(&mut self) {
     if let Some(stop) = self.stop.take() {
       // The server may have stopped already; a new one takes its place either way.
       let _ = stop.send(());
     }
-    let (server, address, stop) = serve(&self.runtime, &self._directory, TlsMode::SelfSigned);
+    let (server, address, stop) = serve(&self.runtime, &self._directory, (TlsMode::SelfSigned, None));
     (self.server, self.address, self.stop, self.tls) = (server, address, Some(stop), true);
+    let address = ServerAddress::parse(&self.url()).expect("address");
+    self.pin = Some(
+      self
+        .block_on(Client::presented_certificate(&address))
+        .expect("the server's certificate"),
+    );
   }
 
   /// The address as a person types it.
@@ -169,6 +204,45 @@ impl TestServer {
     serde_json::from_value(created["project"].clone()).expect("project")
   }
 
+  /// The project `name` at `slug`, made empty by the first admin in the server admin, with `remote_hint` when given.
+  pub fn create_named_project(
+    &self,
+    (name, key): (&str, &str),
+    slug: &str,
+    remote_hint: Option<&str>,
+  ) -> SharedProject {
+    let body = json!({"idempotency_key": orchester_core::id::IdempotencyKey::generate(), "name": name,
+      "slug": slug, "key": key, "remote_hint": remote_hint, "tasks": []});
+    let created = self.admin_request("POST", "/projects", &body);
+    serde_json::from_value(created["project"].clone()).expect("project")
+  }
+
+  /// An invite code to `project` as a member, as an owner hands it out in the server admin.
+  pub fn project_code(&self, project: &SharedProject) -> Credential {
+    let invite = self.admin_request(
+      "POST",
+      "/invites",
+      &json!({"kind":"project","delivery":"code","project":project.id,"role":"member"}),
+    );
+    Credential::new(invite["code"].as_str().expect("invite code").into())
+  }
+
+  /// Adds `username` to `project` as a member, as an owner does in the server admin.
+  pub fn add_member(&self, project: &SharedProject, username: &str) {
+    let path = format!("/projects/{}/members", project.id);
+    self.admin_request("POST", &path, &json!({"username": username, "role": "member"}));
+  }
+
+  /// An invite to `project` as a member by email, which the cloud routes; returns its id.
+  pub fn project_email_invite(&self, email: &str, project: &SharedProject) -> String {
+    let invite = self.admin_request(
+      "POST",
+      "/invites",
+      &json!({"kind":"project","delivery":"cloud","email":email,"project":project.id,"role":"member"}),
+    );
+    invite["invite"]["id"].as_str().expect("invite id").to_owned()
+  }
+
   /// Links the server to an Orchester Cloud whose root key is `root_key`, with the key set it signed, as the first
   /// admin does at setup; returns the server's id, the audience of identity tokens for it.
   pub fn link_cloud(&self, root_key: &str, key_set: &str) -> String {
@@ -178,6 +252,65 @@ impl TestServer {
       &json!({"link": {"root_key": root_key, "key_set": key_set}}),
     );
     linked["cloud"]["server"].as_str().expect("server id").to_owned()
+  }
+
+  /// The link statement the server signs for Orchester Cloud (`link: "start"`), which the cloud registers it from.
+  pub fn cloud_statement(&self) -> String {
+    let started = self.admin_request("PATCH", "/server/cloud", &json!({"link": "start"}));
+    started["statement"].as_str().expect("statement").to_owned()
+  }
+
+  /// Finishes the link with what Orchester Cloud answered the statement: its root key and key set, and the identity
+  /// token that links the first admin's account to the cloud account that registered the server.
+  pub fn finish_cloud_link(&self, root_key: &str, key_set: &str, identity_token: &str) {
+    let link = json!({"link": {"root_key": root_key, "key_set": key_set, "identity_token": identity_token}});
+    self.admin_request("PATCH", "/server/cloud", &link);
+  }
+
+  /// An invite by email to `project` as a member, or to the server alone: its id, and the invite the server signed
+  /// for the cloud to route.
+  pub fn signed_email_invite(&self, email: &str, project: Option<&SharedProject>) -> (String, String) {
+    let body = match project {
+      Some(project) => {
+        json!({"kind":"project","delivery":"cloud","email":email,"project":project.id,"role":"member"})
+      }
+      None => json!({"kind":"server","delivery":"cloud","email":email}),
+    };
+    let invite = self.admin_request("POST", "/invites", &body);
+    (
+      invite["invite"]["id"].as_str().expect("invite id").to_owned(),
+      invite["signed"].as_str().expect("signed invite").to_owned(),
+    )
+  }
+
+  /// Turns join approval on or off: a cloud join of an account the server knows then waits for one of that account's
+  /// computers, or an admin, to approve it.
+  pub fn set_join_approval(&self, on: bool) {
+    self.admin_request("PATCH", "/server/settings", &json!({ "join_approval": on }));
+  }
+
+  /// The first admin approves every join that waits for approval; answers how many.
+  pub fn approve_waiting(&self) -> usize {
+    self.answer_waiting(true)
+  }
+
+  /// The first admin refuses every join that waits for approval; answers how many.
+  pub fn refuse_waiting(&self) -> usize {
+    self.answer_waiting(false)
+  }
+
+  fn answer_waiting(&self, approve: bool) -> usize {
+    let waiting = self.admin_request("GET", "/auth/approvals", &Value::Null);
+    let ids: Vec<String> = waiting["approvals"]
+      .as_array()
+      .expect("approvals")
+      .iter()
+      .filter_map(|approval| approval["id"].as_str().map(str::to_owned))
+      .collect();
+    for id in &ids {
+      self.admin_request("POST", &format!("/auth/approvals/{id}"), &json!({ "approve": approve }));
+    }
+    ids.len()
   }
 
   /// An invite to the server by email, which the cloud routes; returns its id.
@@ -191,6 +324,9 @@ impl TestServer {
   }
 
   fn client(&self) -> Client {
+    if let Some(pin) = self.pin {
+      return Client::pinned(ServerAddress::parse(&self.url()).expect("address"), pin).expect("client");
+    }
     Client::new(
       ServerAddress::parse(&format!("http://localhost:{}", self.address.port())).expect("address"),
       PlainHttp::NotAllowed,
@@ -252,20 +388,33 @@ impl TestServer {
 
   /// A request over plain HTTP to the server's API; panics unless it succeeds.
   fn request(&self, method: &str, path: &str, token: Option<&str>, body: &Value) -> Value {
-    assert!(!self.tls, "set-up requests speak plain HTTP");
-    let (status, answer) = self.block_on(exchange(self.address, method, path, token, body));
+    let (status, answer) = match self.pin {
+      Some(pin) => self.block_on(async {
+        let stream = tls::connect(self.address, pin).await;
+        exchange_on(stream, method, path, token, body).await
+      }),
+      None => {
+        assert!(!self.tls, "set-up requests speak plain HTTP");
+        self.block_on(exchange(self.address, method, path, token, body))
+      }
+    };
     assert!((200..300).contains(&status), "{method} {path}: {status}");
     answer
   }
 }
 
 /// The server on `directory`, serving on a free loopback port until the returned sender stops it.
-fn serve(runtime: &Runtime, directory: &TempDir, tls: TlsMode) -> (Server, SocketAddr, oneshot::Sender<()>) {
+fn serve(
+  runtime: &Runtime,
+  directory: &TempDir,
+  (tls, port): (TlsMode, Option<u16>),
+) -> (Server, SocketAddr, oneshot::Sender<()>) {
   let config = Config {
     data_dir: directory.path().into(),
-    listen: "127.0.0.1:0".parse().expect("loopback"),
+    listen: SocketAddr::from(([127, 0, 0, 1], port.unwrap_or(0))),
     name: SERVER_NAME.into(),
     tls,
+    address: port.map(|port| format!("https://localhost:{port}")),
     ..Config::default()
   };
   let (server, listener) = runtime.block_on(async {
@@ -294,6 +443,18 @@ impl Drop for TestServer {
 }
 
 async fn exchange(address: SocketAddr, method: &str, path: &str, token: Option<&str>, body: &Value) -> (u16, Value) {
+  let stream = TcpStream::connect(address).await.expect("connect");
+  exchange_on(stream, method, path, token, body).await
+}
+
+/// A request on `stream`, its status and its JSON answer.
+async fn exchange_on(
+  mut stream: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+  method: &str,
+  path: &str,
+  token: Option<&str>,
+  body: &Value,
+) -> (u16, Value) {
   let body = if body.is_null() {
     String::new()
   } else {
@@ -308,10 +469,12 @@ async fn exchange(address: SocketAddr, method: &str, path: &str, token: Option<&
   }
   request.push_str("\r\n");
   request.push_str(&body);
-  let mut stream = TcpStream::connect(address).await.expect("connect");
   stream.write_all(request.as_bytes()).await.expect("send");
   let mut response = Vec::new();
-  stream.read_to_end(&mut response).await.expect("read");
+  // A TLS server may close without a close_notify; what was read is the whole answer then.
+  if let Err(error) = stream.read_to_end(&mut response).await {
+    assert!(!response.is_empty(), "read: {error}");
+  }
   let text = String::from_utf8(response).expect("UTF-8 answer");
   let (head, answer) = text.split_once("\r\n\r\n").expect("HTTP response");
   let status = head

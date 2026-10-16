@@ -72,13 +72,20 @@ export function DeleteAccount({ csrf, email, owned }: { csrf: string; email: str
 /**
  * The team servers this account linked: deleting it leaves them registered with no owner, their members' joins and
  * invites too, until an admin of each links it again. Without the list (it did not load), the line says so generally.
+ * Either way the servers keep a keyed hash of the email for the per-person limits (`docs/cloud-api.md`, "Deleting the
+ * account"), and a second line says so.
  */
 function OwnedServers({ owned }: { owned: readonly string[] | null }) {
-  if (owned === null) {
-    return <p className={styles.confirmationText}>{t("account.settings.deleteServersUnknown")}</p>;
-  }
-  if (owned.length === 0) {
+  if (owned !== null && owned.length === 0) {
     return null;
   }
-  return <p className={styles.confirmationText}>{t("account.settings.deleteServers", { servers: owned.join(", ") })}</p>;
+  const servers = owned === null
+    ? t("account.settings.deleteServersUnknown")
+    : t("account.settings.deleteServers", { servers: owned.join(", ") });
+  return (
+    <>
+      <p className={styles.confirmationText}>{servers}</p>
+      <p className={styles.confirmationText}>{t("account.settings.deleteServersHash")}</p>
+    </>
+  );
 }

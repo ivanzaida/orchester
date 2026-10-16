@@ -968,7 +968,8 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 | `PATCH /servers/{id}`, `DELETE /servers/{id}` | owner device, or the server's key | Address or name changed; unlink |
 | `POST /invites` | the team server's key | `{ invite }`, signed by the team server (sent by the server, or carried by the inviter's browser from the server admin); `202 { server }`, the server as registered. Limited per client address, 100 new invites a day per owning account, and invite emails in buckets of their own (1 a day per server and address, 3 a day per address; security review 1, M2) |
 | `GET /invites` | device | Invites waiting for this account |
-| `POST /invites/{id}/accept` | device | `{ server: { id, name, address, fingerprint }, project: { address, name }\|null, identity_token }` |
+| `GET /servers/{id}` | device | A linked server as registered: `{ server: { id, name, address, fingerprint, check_code } }`; the app pins its fingerprint when it accepts an invite to it, with an identity token that names the invite |
+| `POST /invites/{id}/decline` | device | The invitee declines: the cloud's copy ends, and no token can accept it any more |
 | `DELETE /invites/{id}` | the team server's key | Revoked by the team server; the id stays revoked for that server (`revoked_invites`, keyed by id and server) until the invite would have expired (security review 1, minor 1). A delivery is matched to a delivered or revoked invite by id and server, never by id alone (security review 2) |
 
 **Data** (PostgreSQL, row 54; ids `uuid`, times `timestamptz` written from the cloud's clock, payloads `jsonb`):

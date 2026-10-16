@@ -1,0 +1,237 @@
+{
+  "sharing": {
+    "reading": "Reading where the task list lives…",
+    "loadFailed": "Sharing can't be read",
+    "connect": {
+      "title": "Connect a server",
+      "lead": "Your team's own Orchester server, by its address. This computer connects to it once; then each of your projects on it is linked to a checkout here.",
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "tryAgain": "Try again",
+      "change": "Change",
+      "theServer": "the server",
+      "address": {
+        "title": "Address",
+        "label": "Server address",
+        "placeholder": "orchester.example.com",
+        "hint": "Ask whoever runs the server for its address. An invite by email fills it in for you.",
+        "invalid": "That isn't a server address.",
+        "nothing": "Nothing answered at {{address}}. Check the address, and that this computer is on your team's network.",
+        "notOrchester": "{{address}} answered, but it isn't an Orchester server. The address usually starts with orchester. or has a port, like :8740.",
+        "plain": "This address isn't encrypted: allow plain HTTP for it first."
+      },
+      "found": {
+        "line": "{{address}} · {{runs}}"
+      },
+      "plain": {
+        "title": "This address isn't encrypted",
+        "body": "Anyone on the network can read what goes to it, and nothing proves it's your server. Use it only on a network that's yours.",
+        "allow": "Allow plain HTTP for {{address}}",
+        "allowed": "Plain HTTP allowed for {{address}}"
+      },
+      "setup": {
+        "title": "This server has no admin yet",
+        "body": "Whoever runs it sets it up in the browser, with the setup code from its console. Then connect again.",
+        "open": "Open {{host}}"
+      },
+      "system": {
+        "title": "Your system trusts {{server}}'s certificate",
+        "body": "It's issued by a public authority, so there's no check code to compare. Orchester uses your system's trust for this server."
+      },
+      "already": {
+        "title": "You're already connected to {{server}}",
+        "body": "To work on another of its projects, link that project's checkout from Project settings › Sharing, or accept its invite."
+      },
+      "compare": {
+        "title": "Compare the check code",
+        "done": "Check code",
+        "lead": "{{server}} made its own certificate. Before Orchester trusts it, make sure it's the one your team runs: compare this code with the one the server printed to its console, or ask its admin (Server admin › Settings).",
+        "matches": "It matches",
+        "differs": "It doesn't match",
+        "person": "Only you can confirm this. From now on Orchester accepts exactly this certificate from {{server}}, and stops if it ever changes.",
+        "matched": "{{code}} · matches",
+        "later": "For a server that made its own certificate.",
+        "notConnected": "Not connected",
+        "mismatchBody": "A different code means this isn't the server your team runs, or something sits between you and it. Nothing was sent. Tell its admin.",
+        "back": "Back to the address"
+      },
+      "join": {
+        "title": "Join",
+        "later": "With your Orchester account, or with an invite code.",
+        "account": "With my Orchester account",
+        "accountBody": "You're signed in as {{email}}. For an invite by email, or a server you're already on.",
+        "accountSignedOut": "For an invite by email, or a server you're already on.",
+        "accountUnavailable": "Sign in to Orchester Cloud first, in Settings › Orchester.",
+        "code": "With an invite code",
+        "codeBody": "8 characters from whoever invited you. Works without the internet.",
+        "submit": "Join {{server}}"
+      },
+      "code": {
+        "label": "Invite code",
+        "placeholder": "K7QM-3XRD",
+        "hint": "Read without regard to case or the hyphen.",
+        "invalid": "That code isn't right, or it was used or has expired: codes work once, for a limited time. Check it with whoever made it.",
+        "rateLimited": "Too many wrong codes from this computer. Try again in {{minutes}} min."
+      },
+      "username": {
+        "title": "Your username there",
+        "later": "Only if you're new on {{server}}.",
+        "label": "Username",
+        "hint": "Small letters, digits and hyphens.",
+        "name": "Your name",
+        "nameHint": "Teammates see it next to your work.",
+        "taken": "That username is taken there. Choose another.",
+        "needed": "This code makes a new account: choose a username and your name."
+      },
+      "joined": {
+        "title": "Connected to {{server}} as {{username}}",
+        "body": "Link your project's checkout from its Project settings › Sharing.",
+        "review": "Open the join review",
+        "reviewLater": "The join review isn't in this version of the app yet; link the checkout from Project settings › Sharing.",
+        "open": "Open its entry"
+      },
+      "notInvitedTitle": "{{server}} has no place for {{email}} yet",
+      "notInvitedBody": "Ask someone there to invite you to their project. The invite reaches you here and brings you straight in.",
+      "notInvited": "The server has no place for your Orchester account yet. Ask someone there to invite you.",
+      "notInvitedServer": "{{server}} has no place for your Orchester account. Join with a code, or ask for an invite.",
+      "cloudOff": "This server doesn't accept Orchester Cloud sign-ins now. Join with a code instead.",
+      "keySetStale": "The server's copy of Orchester Cloud's keys is out of date. Try again, or join with a code.",
+      "approvalRefused": "The server refused this computer. If you didn't expect this, ask an admin of the server.",
+      "invalidIdentity": "The server didn't accept your Orchester Cloud identity. Try again."
+    },
+    "link": {
+      "taskList": "Task list",
+      "taskListDescription": "{{project}}'s tasks are only on this computer, with the key {{key}}. Link it to a project on your team's server to work on one task list with others.",
+      "localOnly": "Local only",
+      "localTasks": "{{key}} · {{count}} tasks",
+      "section": "Link to a server project",
+      "server": "Server",
+      "serverDescription": "A team server this computer is connected to.",
+      "serverOption": "{{server}} · {{host}}",
+      "serverHint": "Connected · another server: Settings › Orchester",
+      "noServer": "This computer isn't connected to a team server yet.",
+      "project": "Project",
+      "projectDescription": "Projects on {{server}} you're a member of. An empty one takes {{project}}'s {{count}} tasks with their numbers; one with tasks opens the join review first.",
+      "projectLine": "{{tasks}} · {{hint}}",
+      "empty": "Empty",
+      "withTasks": "Has tasks",
+      "reading": "Reading your projects there…",
+      "noProjects": "You aren't a member of a project there yet.",
+      "setUpFor": "set up for {{hint}}",
+      "noHint": "no repository hint",
+      "linkedElsewhere": "linked to another checkout on this computer",
+      "address": "Or a project address",
+      "addressPlaceholder": "https://…/slug",
+      "addressInvalid": "That isn't a project address: the server's address, then the project's slug.",
+      "repository": "Repository",
+      "repositoryDescription": "Compared with the project's repository hint before anything is sent.",
+      "remote": {
+        "same": "This checkout's origin, {{origin}}, matches {{project}}'s hint.",
+        "different": "This checkout's origin is {{origin}}; {{project}} was set up for {{hint}}.",
+        "noOrigin": "This checkout has no origin remote",
+        "noOriginHint": "Orchester can't compare it with {{project}}'s hint, {{hint}}. You can still link it.",
+        "noOriginBody": "Orchester can't compare it with a project's repository hint. You can still link it.",
+        "noHint": "The project names no repository; nothing to compare.",
+        "choose": "Choose a project to compare its repository hint."
+      },
+      "link": "Link",
+      "linkTo": "Link to {{project}}…",
+      "linkAddress": "Link to this project…",
+      "chooseFirst": "Choose a project or type its address first",
+      "hint": "Shows what goes up before anything is sent.",
+      "mismatch": {
+        "title": "This checkout's origin is {{origin}}",
+        "body": "{{project}} on {{server}} was set up for {{hint}}. Link it only if this checkout really holds {{project}}'s code; nothing is checked beyond this.",
+        "another": "Choose another project",
+        "anyway": "Link anyway…"
+      },
+      "upload": {
+        "title": "Link to {{project}}?",
+        "body": "{{count}} tasks go up to {{address}} with their numbers, and {{key}} stays their key. Runs, conversations, code and secrets stay on this computer.",
+        "bodyRekeyed": "{{count}} tasks go up to {{address}} with their numbers and take its key: {{local}}-1 becomes {{key}}-1. Runs, conversations, code and secrets stay on this computer.",
+        "confirm": "Link and upload {{count}} tasks",
+        "cancel": "Cancel"
+      },
+      "taken": {
+        "title": "{{project}} has tasks already",
+        "body": "Linking this checkout to it joins it: your tasks get new numbers there, after a review of what goes up. That join review isn't in this version of the app yet; nothing was sent."
+      },
+      "notConnected": {
+        "title": "{{host}} isn't connected",
+        "body": "Connect this computer to {{host}} first; then link this project. Nothing was sent to it."
+      },
+      "noProject": "There's no project you're a member of at {{address}}. Check the address with whoever sent it, or ask one of its owners for an invite. Orchester sends nothing.",
+      "discovery": {
+        "title": "orchester.toml names a project",
+        "body": "{{address}}. Orchester hasn't contacted it. Use this address?",
+        "use": "Use this address",
+        "notNow": "Not now"
+      },
+      "noProjectYet": "No project for this yet? Projects are created in {{server}}'s server admin, by name and slug, by an admin. Open {{host}} in your browser.",
+      "noProjectYetAny": "No project for this yet? Projects are created in a team server's admin, by name and slug, by an admin.",
+      "sends": {
+        "title": "What linking sends",
+        "shared": "Shared with members",
+        "sharedValue": "Tasks (title, brief, criteria, organization, status), who holds each, short run progress, published configuration",
+        "stays": "Stays on each computer",
+        "staysValue": "Runs, worktrees, conversations, memory, secrets, connections, accounts",
+        "never": "The server never receives transcripts, prompts, diffs, file or branch names, code or secrets."
+      }
+    },
+    "linked": {
+      "sharedOn": "Shared on {{server}}",
+      "detail": "{{key}} · linked {{day}} · {{role}} · synced {{synced}}",
+      "owner": "you're an owner",
+      "member": "you're a member",
+      "noRole": "you're an admin there",
+      "taskListDescription": "{{local}}'s tasks live in {{project}} on {{server}}; every member's computer keeps a copy and keeps working offline. Runs stay on the computer that runs them.",
+      "address": "Project address",
+      "addressDescription": "The project this checkout is linked to. Its address is its identity and never changes.",
+      "noAddress": "Not read from the server yet",
+      "unknownServer": "a server no longer in Settings › Orchester",
+      "serverState": "{{server}} · {{state}} · {{certificate}}",
+      "state": {
+        "connected": "connected",
+        "connecting": "connecting",
+        "offline": "offline",
+        "signedOut": "signed out",
+        "certificateChanged": "presents a different certificate"
+      },
+      "certificate": {
+        "checked": "certificate checked",
+        "system": "certificate trusted by your system",
+        "plain": "not encrypted"
+      },
+      "repository": {
+        "description": "{{project}} on {{server}} was set up for this remote. Orchester compares it with this checkout's origin.",
+        "reading": "Reading the project's repository hint…",
+        "noHint": "No repository hint",
+        "same": "This checkout's origin matches · checked {{time}}",
+        "different": "This checkout's origin is {{origin}} · it doesn't match · checked {{time}}",
+        "noOrigin": "This checkout has no origin remote; nothing to compare.",
+        "nothingToCompare": "The project names no repository; nothing to compare.",
+        "unread": "{{server}} can't be reached now; the hint is compared once it can.",
+        "unknownServer": "The project's server is no longer in Settings › Orchester.",
+        "notListed": "The server no longer lists this project for you."
+      },
+      "notLinked": "This project isn't linked to a server project.",
+      "removed": {
+        "title": "You're no longer a member of {{project}}",
+        "body": "This computer keeps {{project}}'s tasks as they were, read-only, until you make it local or are invited again."
+      },
+      "leaveSection": "Leave or make local",
+      "makeLocal": "Make local",
+      "makeLocalDescription": "Stop using the server on this computer. Every task becomes a local task of {{project}} here; {{key}} stays the same for everyone else.",
+      "makeLocalButton": "Make local…",
+      "makeLocalNotBuilt": "Not in this version of the app yet",
+      "leave": "Leave {{project}}",
+      "leaveDescription": "Stop being a member. This computer keeps a local copy of the tasks and stays connected to {{server}} for your other projects.",
+      "leaveButton": "Leave…",
+      "leaveQuestion": "Leave {{project}}?",
+      "leaveBody": "You stop being a member of {{project}} on {{server}}. Its tasks stay here as they are, read-only; an owner can invite you again.",
+      "leaveConfirm": "Leave",
+      "leaveKeep": "Stay a member",
+      "left": "You left this project; you're no longer a member."
+    }
+  }
+}

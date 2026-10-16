@@ -38,39 +38,36 @@ pub fn header(
     .child(Text::new(&ctx.t("project_settings.title")).variant(TypographyStyle::Heading))
     .child(Spacer::new().flex(1.0))
     .child(save_status);
-  let tabs = Tab::ALL
-    .into_iter()
-    .map(|choice| {
-      let select = selected.clone();
-      if tab != choice && status.get() != Status::Saved {
-        return PageTab::unavailable(
-          format!("settings-tab-{}", choice.name()),
-          ctx.t(choice.key()),
-          ctx.t("project_settings.finishEditing"),
-        );
-      }
-      PageTab::new(
+  let tab_for = |ctx: &Ctx, choice: Tab| {
+    let select = selected.clone();
+    if tab != choice && status.get() != Status::Saved {
+      return PageTab::unavailable(
         format!("settings-tab-{}", choice.name()),
         ctx.t(choice.key()),
-        tab == choice,
-        move || {
-          if tab != choice {
-            select.set(choice);
-          }
-        },
-      )
-    })
+        ctx.t("project_settings.finishEditing"),
+      );
+    }
+    PageTab::new(
+      format!("settings-tab-{}", choice.name()),
+      ctx.t(choice.key()),
+      tab == choice,
+      move || {
+        if tab != choice {
+          select.set(choice);
+        }
+      },
+    )
+  };
+  let tabs = Tab::ALL
+    .into_iter()
+    .map(|choice| tab_for(ctx, choice))
     .chain([
       PageTab::unavailable(
         "settings-tab-memory",
         ctx.t("project_settings.memory"),
         ctx.t("project_settings.outOfScope"),
       ),
-      PageTab::unavailable(
-        "settings-tab-sharing",
-        ctx.t("project_settings.sharing"),
-        ctx.t("project_settings.outOfScope"),
-      ),
+      tab_for(ctx, Tab::Sharing),
     ])
     .collect::<Vec<_>>();
   let tabs = page_tabs(ctx, "project-settings-tabs", tabs);

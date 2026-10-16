@@ -35,6 +35,8 @@ uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
+# The desktop's client of the cloud (N1: sign-in, invites, sign-out) against this cloud (`tests/cloud/desktop.rs`).
+orchester-api = { workspace = true, features = ["client", "identity"] }
 base64.workspace = true
 parking_lot.workspace = true
 serde_json.workspace = true

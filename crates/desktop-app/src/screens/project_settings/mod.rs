@@ -1,9 +1,10 @@
-//! Project settings (RExz4): four autosaving sections, with widening questions in place.
+//! Project settings (RExz4): four autosaving sections, with widening questions in place, and Sharing (`bWD9q`).
 mod environment;
 mod general;
 mod index;
 mod limits;
 mod page;
+mod sharing;
 mod work;
 
 use lurq::{
@@ -49,9 +50,11 @@ pub(super) enum Tab {
   Limits,
   Environment,
   CodeIndex,
+  Sharing,
 }
 impl DevtoolsInspectable for Tab {}
 impl Tab {
+  /// The tabs before *Memory*, which is not built yet; *Sharing* comes after it ([`Self::SHARING`]).
   pub const ALL: [Self; 4] = [Self::General, Self::Limits, Self::Environment, Self::CodeIndex];
   pub const fn name(self) -> &'static str {
     match self {
@@ -59,6 +62,7 @@ impl Tab {
       Self::Limits => "limits",
       Self::Environment => "environment",
       Self::CodeIndex => "codeIndex",
+      Self::Sharing => "sharing",
     }
   }
   pub const fn key(self) -> &'static str {
@@ -67,6 +71,7 @@ impl Tab {
       Self::Limits => "project_settings.limits",
       Self::Environment => "project_settings.environment",
       Self::CodeIndex => "project_settings.codeIndex",
+      Self::Sharing => "project_settings.sharing",
     }
   }
   pub const fn description(self) -> &'static str {
@@ -75,6 +80,7 @@ impl Tab {
       Self::Limits => "project_settings.limitsDescription",
       Self::Environment => "project_settings.environmentDescription",
       Self::CodeIndex => "project_settings.codeIndexDescription",
+      Self::Sharing => "project_settings.sharingDescription",
     }
   }
 }
@@ -103,6 +109,7 @@ impl Component for SettingsScreen {
       Tab::Limits => ctx.mount_keyed::<limits::Limits>("project-settings-limits", props),
       Tab::Environment => ctx.mount_keyed::<environment::Environment>("project-settings-environment", props),
       Tab::CodeIndex => ctx.mount_keyed::<index::CodeIndex>("project-settings-index", props),
+      Tab::Sharing => ctx.mount_keyed::<sharing::Sharing>("project-settings-sharing", props),
     };
     page::screen(header, content)
   }

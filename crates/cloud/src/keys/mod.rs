@@ -14,7 +14,7 @@ use orchester_api::{
   identity::{KEY_LISTED_AFTER_SECS, KEY_SIGNS_SECS, PrivateKey},
 };
 use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::{clock::DAY_MS, error::CloudError, tokens::random_bytes};
 
@@ -24,25 +24,33 @@ const LISTED_AFTER_MS: i64 = KEY_LISTED_AFTER_SECS * 1000;
 /// (review 1, L4). The first key signs at once: no team server holds a key set before it.
 const OVERLAP_MS: i64 = 2 * DAY_MS;
 
+/// The key-encryption key's 32 bytes, from its 64 hex characters; wiped when dropped.
+pub(crate) fn key_encryption_key(key: &Credential) -> Result<Zeroizing<Vec<u8>>, CloudError> {
+  let text = key.expose().trim();
+  // Strict hex: `from_str_radix` alone would also take a sign (`+f`).
+  if text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    return Err(invalid_key());
+  }
+  (0..32)
+    .map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16))
+    .collect::<Result<Vec<_>, _>>()
+    .map(Zeroizing::new)
+    .map_err(|_| invalid_key())
+}
+
+const fn invalid_key() -> CloudError {
+  CloudError::Configuration("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY must be 64 hex characters")
+}
+
 /// Seals signing keys' private halves with the key-encryption key from the host's environment.
 pub(crate) struct KeySealing(LessSafeKey);
 
 impl KeySealing {
   /// The key-encryption key is 64 hex characters (32 bytes).
   pub fn new(key: &Credential) -> Result<Self, CloudError> {
-    let invalid = || CloudError::Configuration("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY must be 64 hex characters");
-    let text = key.expose().trim();
-    // Strict hex: `from_str_radix` alone would also take a sign (`+f`).
-    if text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-      return Err(invalid());
-    }
-    let mut bytes = (0..32)
-      .map(|index| u8::from_str_radix(&text[index * 2..index * 2 + 2], 16))
-      .collect::<Result<Vec<_>, _>>()
-      .map_err(|_| invalid())?;
-    let key = UnboundKey::new(&AES_256_GCM, &bytes).map_err(|_| invalid());
-    bytes.zeroize();
-    Ok(Self(LessSafeKey::new(key?)))
+    let bytes = key_encryption_key(key)?;
+    let key = UnboundKey::new(&AES_256_GCM, &bytes).map_err(|_| invalid_key())?;
+    Ok(Self(LessSafeKey::new(key)))
   }
 
   /// A fresh random nonce, then the ciphertext and tag; the kid is bound as associated data.

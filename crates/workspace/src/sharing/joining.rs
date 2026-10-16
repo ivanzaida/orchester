@@ -6,15 +6,15 @@
 
 use orchester_api::{
   Approval, CloudJoin, CloudJoinAnswer, CodeJoin, Credential, DeviceKind, Joined, PairingCode,
-  client::{ClientError, CloudClient, ServerAddress},
+  client::{Client, ClientError, CloudClient, ServerAddress},
   cloud::CloudServer,
 };
 use orchester_core::{
-  id::{ApprovalId, ServerId},
+  id::{ApprovalId, InviteId, ServerId},
   secret::SecretValue,
   time::Timestamp,
 };
-use orchester_store::StoredServer;
+use orchester_store::{JoinedWith, StoredServer};
 
 use super::{ServerEntry, Servers, SharingError, account::account, device, trust::Trust};
 use crate::background;
@@ -36,10 +36,12 @@ pub enum CloudJoined {
   Waiting(Approval),
 }
 
-/// What a cloud join needs from Orchester Cloud: its client and this computer's cloud device token.
+/// What a cloud join needs from Orchester Cloud: its client, this computer's cloud device token, and the invite the
+/// identity token accepts, when the join answers one.
 pub struct CloudIdentity<'a> {
   pub cloud: &'a CloudClient,
   pub device: &'a SecretValue,
+  pub invite: Option<InviteId>,
 }
 
 impl Servers {
@@ -63,7 +65,7 @@ impl Servers {
         kind: DeviceKind::App,
       })
       .await?;
-    self.keep_join(address, trust, name, joined).await
+    self.keep_join(address, (trust, JoinedWith::Code), name, joined).await
   }
 
   /// Joins `server`, as Orchester Cloud names it, with a cloud identity: at the address the cloud has for it and
@@ -76,13 +78,12 @@ impl Servers {
     identity: CloudIdentity<'_>,
     approval: Option<ApprovalId>,
   ) -> Result<CloudJoined, SharingError> {
-    let address = ServerAddress::parse(&server.address).map_err(ClientError::Address)?;
-    let trust = Trust::named_by_cloud(server)?;
-    let client = trust.client(address.clone())?;
-    // The certificate is checked by this first request, before anything of the cloud is sent.
-    let name = client.server_info().await.map_err(|error| trust.refusal(error))?.name;
+    let (address, trust, client, name) = Self::reach_named(server).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
-    let issued = identity.cloud.identity_token(identity.device, server.id).await?;
+    let issued = identity
+      .cloud
+      .identity_token(identity.device, server.id, identity.invite)
+      .await?;
     let request = CloudJoin {
       identity_token: issued.identity_token,
       key_set: Some(key_set),
@@ -90,9 +91,32 @@ impl Servers {
       approval,
       kind: DeviceKind::App,
     };
-    match client.join_with_cloud(&request).await? {
+    self
+      .finish_cloud_join(server, (&address, trust, &client, name), &request)
+      .await
+  }
+
+  /// The client of `server` at the address the cloud names, trusting only the certificate it names, and the name the
+  /// server gives itself: that first request checks the certificate before anything of the cloud is sent.
+  async fn reach_named(server: &CloudServer) -> Result<(ServerAddress, Trust, Client, String), SharingError> {
+    let address = ServerAddress::parse(&server.address).map_err(ClientError::Address)?;
+    let trust = Trust::named_by_cloud(server)?;
+    let client = trust.client(address.clone())?;
+    let name = client.server_info().await.map_err(|error| trust.refusal(error))?.name;
+    Ok((address, trust, client, name))
+  }
+
+  async fn finish_cloud_join(
+    &self,
+    server: &CloudServer,
+    (address, trust, client, name): (&ServerAddress, Trust, &Client, String),
+    request: &CloudJoin,
+  ) -> Result<CloudJoined, SharingError> {
+    match client.join_with_cloud(request).await? {
       CloudJoinAnswer::Joined(joined) => Ok(CloudJoined::Joined(
-        self.keep_join(&address, trust, name, joined).await?,
+        self
+          .keep_join(address, (trust, JoinedWith::Cloud(server.id)), name, joined)
+          .await?,
       )),
       CloudJoinAnswer::Waiting(approval) => Ok(CloudJoined::Waiting(approval)),
     }
@@ -110,7 +134,7 @@ impl Servers {
   async fn keep_join(
     &self,
     address: &ServerAddress,
-    trust: Trust,
+    (trust, joined_with): (Trust, JoinedWith),
     name: String,
     joined: Joined,
   ) -> Result<ServerId, SharingError> {
@@ -129,6 +153,7 @@ impl Servers {
         Some(server) => {
           workspace.set_server_trust(server.id, pin.as_deref(), plain_http)?;
           workspace.set_server_name(server.id, &name)?;
+          workspace.db.lock().set_server_joined_with(server.id, joined_with)?;
           server.id
         }
         None => {
@@ -139,6 +164,7 @@ impl Servers {
             plain_http_allowed: plain_http,
             certificate_pin: pin,
             added_at: Timestamp::now(),
+            joined_with: Some(joined_with),
             account: None,
           };
           workspace.add_server(&server)?;
