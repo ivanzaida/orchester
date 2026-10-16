@@ -7,7 +7,7 @@ use lurq::{
     theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text},
-  core::Signal,
+  core::{Ref, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
@@ -116,11 +116,13 @@ struct General {
   name: Signal<String>,
   slug: Signal<String>,
   description: Signal<String>,
+  /// Whether the fields are locked, as last shown.
+  locked: Ref<bool>,
 }
 impl Component for General {
   type Props = SummaryProps;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let general = Self {
       description: ctx.signal(ctx.props::<SummaryProps>().state.get().shown().description().to_owned()),
       name: ctx.signal({
         let editing = ctx.props::<SummaryProps>().state.get();
@@ -131,13 +133,17 @@ impl Component for General {
           .unwrap_or_else(|| editing.name.to_string())
       }),
       slug: ctx.signal(ctx.props::<SummaryProps>().state.get().opened.slug.to_string()),
-    }
+      locked: ctx.create_ref(ctx.props::<SummaryProps>().locked),
+    };
+    let state = ctx.props::<SummaryProps>().state.clone();
+    super::inspector::follow_identity(ctx, &state, (&general.name, &general.description), &general.locked);
+    general
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
     let editing = props.state.get();
     let locked = props.locked;
-    self.watch(ctx, &props);
+    self.locked.set(locked);
     let input = FieldInput::new(
       "pipeline-settings-description",
       ctx.t("pipelines.description"),
@@ -251,25 +257,6 @@ fn starts(ctx: &Ctx) -> Element {
   .into()
 }
 impl General {
-  fn watch(&self, ctx: &mut Ctx, props: &SummaryProps) {
-    let locked = props.locked;
-    let rename = props.state.clone();
-    ctx.watch(&self.name, move |text| {
-      if !locked {
-        let name = orchester_workspace::pipelines::fields::parse_name(text);
-        rename.update(|s| {
-          s.inputs.insert("pipeline-name".to_owned(), text.clone());
-          s.field("pipeline-name", name, |s, name| s.name = name);
-        });
-      }
-    });
-    let state = props.state.clone();
-    ctx.watch(&self.description, move |text| {
-      if !locked {
-        state.update(|s| s.edit.set_description(text));
-      }
-    });
-  }
   fn identity(&self, ctx: &mut Ctx) -> (Element, Element) {
     let props = ctx.props::<SummaryProps>().clone();
     let mut name =

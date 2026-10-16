@@ -1,5 +1,5 @@
 //! Loaded draft, graph and inspector, with explicit saves and an in-place publish review.
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -16,6 +16,7 @@ use orchester_workspace::pipelines::{
   widening::{draft_reasons, publish_reasons},
   write::{Allowed, next_version},
 };
+use parking_lot::Mutex;
 
 use super::{
   parts,
@@ -47,19 +48,26 @@ impl PartialEq for EditorProps {
   }
 }
 impl DevtoolsInspectable for EditorProps {}
+/// What autosave writes once the fields rest: the body and name, into the project at the path.
 #[derive(Clone, PartialEq)]
-struct Snapshot(Option<(orchester_core::resource::Pipeline, orchester_core::name::Name)>);
+struct Snapshot(Option<(orchester_core::resource::Pipeline, orchester_core::name::Name, PathBuf)>);
 impl DevtoolsInspectable for Snapshot {}
 pub struct Editor {
   state: State,
+  action: Action,
   confirm_save: Signal<bool>,
   writing: Signal<bool>,
   leave: crate::navigation::guard::LeaveGuard,
+  /// Whether autosave's rest is followed already; once per editor.
+  followed: Mutex<bool>,
 }
 impl Component for Editor {
   type Props = EditorProps;
   fn create(ctx: &mut Ctx) -> Self {
-    let state = ctx.signal(Editing::new(ctx.props::<EditorProps>().opened.clone()));
+    let props = ctx.props::<EditorProps>().clone();
+    let state = ctx.signal(Editing::new(props.opened));
+    let action = work::action(ctx, props.project.open.project.id());
+    follow_writes(ctx, &action, &state);
     let writing = ctx.signal(false);
     let (edits, pending) = (state.clone(), writing.clone());
     let leave = Navigation::of(ctx).guard(move || {
@@ -68,35 +76,23 @@ impl Component for Editor {
     });
     Self {
       state,
+      action,
       writing,
       leave,
       confirm_save: ctx.signal(false),
+      followed: Mutex::new(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<EditorProps>().clone();
-    let action = work::action(ctx, props.project.open.project.id());
+    let action = self.action.clone();
     let writing = action.state().get().is_pending();
     if self.writing.get_untracked() != writing {
       self.writing.set(writing);
     }
-    self.autosave(ctx, &props, &action);
+    self.autosave(ctx, &props);
     let opened = self.state.get().opened;
     props.project.feed.pipeline_named(opened.id, &opened.name);
-    let state = self.state.clone();
-    ctx.watch(&action.state(), move |result| {
-      if !result.is_pending()
-        && result.error.is_none()
-        && let Some(opened) = &result.data
-      {
-        state.update(|state| {
-          state.saved(opened.clone());
-          if state.panel == Panel::Publish {
-            state.panel = Panel::Pipeline;
-          }
-        });
-      }
-    });
     let editing = self.state.get();
     let busy = action.state().get().is_pending() || self.confirm_save.get() || props.loading;
     let locked = self.confirm_save.get() || props.loading;
@@ -175,15 +171,24 @@ impl Editor {
     }
     page
   }
-  fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, action: &Action) {
+  /// Saves the fields once they rest valid and unchanged for a moment. The rest is the first future each
+  /// render asks for, so lurq keeps its state across renders and following it once follows every rest.
+  fn autosave(&self, ctx: &mut Ctx, props: &EditorProps) {
     let editing = self.state.get();
+    let root = props.project.open.repo_root.clone();
     let body = (editing.dirty()
       && editing.errors.is_empty()
       && editing.viewing.is_none()
       && !editing.restore_requested
       && !props.loading
       && !self.leave.requested())
-    .then(|| editing.edit.validate().ok().map(|body| (body, editing.name.clone())))
+    .then(|| {
+      editing
+        .edit
+        .validate()
+        .ok()
+        .map(|body| (body, editing.name.clone(), root))
+    })
     .flatten();
     let ready = ctx
       .future(body, |body| async move {
@@ -191,10 +196,14 @@ impl Editor {
         Ok::<_, orchester_workspace::messages::Message>(Snapshot(body))
       })
       .state();
-    let (state, action, root) = (self.state.clone(), action.clone(), props.project.open.repo_root.clone());
-    let leave = self.leave.clone();
+    let mut followed = self.followed.lock();
+    if *followed {
+      return;
+    }
+    *followed = true;
+    let (state, action, leave) = (self.state.clone(), self.action.clone(), self.leave.clone());
     ctx.watch(&ready, move |ready| {
-      let Some(Snapshot(Some((body, name)))) = &ready.data else {
+      let Some(Snapshot(Some((body, name, root)))) = &ready.data else {
         return;
       };
       let current = state.get();
@@ -453,6 +462,24 @@ impl Editor {
       Some(self.state.clone()),
     )
   }
+}
+/// Takes in what a fulfilled write stored, once per editor: a failed write keeps the data of the one before
+/// it.
+fn follow_writes(ctx: &mut Ctx, action: &Action, state: &State) {
+  let state = state.clone();
+  ctx.watch(&action.state(), move |result| {
+    if !result.is_pending()
+      && result.error.is_none()
+      && let Some(opened) = &result.data
+    {
+      state.update(|state| {
+        state.saved(opened.clone());
+        if state.panel == Panel::Publish {
+          state.panel = Panel::Pipeline;
+        }
+      });
+    }
+  });
 }
 fn save_status(ctx: &Ctx, editing: &Editing, busy: bool) -> std::sync::Arc<str> {
   if let Some(version) = editing.viewing_version {
