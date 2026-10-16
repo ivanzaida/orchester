@@ -294,11 +294,11 @@
 
 .confirmationTitle {
   font-size: var(--text-body);
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-semibold);
   color: var(--color-text-primary);
 }
 
 .confirmationText {
-  font-size: var(--text-body);
+  font-size: var(--text-row);
   color: var(--color-text-secondary);
 }

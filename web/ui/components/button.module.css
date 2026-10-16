@@ -38,8 +38,9 @@ a.primary:hover {
 }
 
 .ghost {
-  background: transparent;
-  color: var(--color-text-secondary);
+  background: var(--button-ghost-fill, transparent);
+  box-shadow: var(--button-ghost-ring, none);
+  color: var(--button-ghost-text, var(--color-text-secondary));
 }
 
 .danger {

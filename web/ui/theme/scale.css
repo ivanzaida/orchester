@@ -138,6 +138,9 @@
   --row-side-direction: row;
   --row-glyph-align: center;
   --row-button-width: auto;
+  --row-ghost-fill: transparent;
+  --row-ghost-ring: none;
+  --row-ghost-text: var(--color-text-secondary);
   --setting-columns: var(--size-setting-label) minmax(0, 1fr);
   --setting-gap: var(--space-row);
 
@@ -180,6 +183,9 @@
     --row-side-direction: column;
     --row-glyph-align: start;
     --row-button-width: 100%;
+    --row-ghost-fill: var(--color-surface-raised); /* `Dswcx` in `F9QYD` */
+    --row-ghost-ring: inset 0 0 0 var(--border-sm) var(--color-border-strong);
+    --row-ghost-text: var(--color-text-primary);
     --setting-columns: minmax(0, 1fr);
     --setting-gap: var(--space-tight);
     --header-height: var(--size-header-compact);

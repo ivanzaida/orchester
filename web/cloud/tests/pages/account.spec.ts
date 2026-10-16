@@ -149,4 +149,35 @@ test.describe("account settings", () => {
     const name = await page.getByRole("banner").getByText("Mira Koval").boundingBox();
     expect((name?.y ?? 0) > (brand?.y ?? 0) + (brand?.height ?? 0)).toBe(true);
   });
+
+  test("Decline is a ghost button at 1440 (N5imr) and a full-width bordered secondary on a phone (F9QYD)", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, FULL);
+    const decline = section(page, "Invites").getByRole("button", { name: "Decline" }).first();
+    const look = () =>
+      decline.evaluate((button) => {
+        const style = getComputedStyle(button);
+        const box = button.getBoundingClientRect();
+        return { background: style.backgroundColor, border: style.boxShadow, height: box.height, width: box.width };
+      });
+    const wide = await look();
+    expect(wide.background).toBe("rgba(0, 0, 0, 0)");
+    expect(wide.border).toBe("none");
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phone = await look();
+    expect(phone.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(phone.border).toContain("inset");
+    expect(phone.height).toBe(32);
+    expect(phone.width).toBeGreaterThan(250);
+  });
+
+  test("the delete confirmation's question is 600 and its text 12.5 px, as QEHMk", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, NEW);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    const title = page.getByText("Delete your Orchester account?");
+    const text = page.getByText("are deleted at once", { exact: false });
+    expect(await title.evaluate((node) => getComputedStyle(node).fontWeight)).toBe("600");
+    expect(await text.evaluate((node) => getComputedStyle(node).fontSize)).toBe("12.5px");
+  });
 });
