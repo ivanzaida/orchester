@@ -111,3 +111,33 @@ async fn s1a_invalid_configuration_and_future_schema_are_refused() {
   drop(database);
   server.finish().await;
 }
+
+/// Security review 1, minor 6: the private admin API listener on an address beyond loopback and private networks is
+/// flagged, so the server warns at start.
+#[test]
+fn sa_an_admin_api_listener_beyond_private_networks_is_flagged() {
+  let at = |address: &str| Config {
+    admin_api_listen: Some(address.parse().expect("socket address")),
+    ..Default::default()
+  };
+  for private in [
+    "127.0.0.1:8741",
+    "10.0.4.20:8741",
+    "172.29.0.3:8741",
+    "192.168.1.5:8741",
+    "[::1]:8741",
+    "[fd12::3]:8741",
+    "[fe80::1]:8741",
+    "[::ffff:10.0.0.1]:8741",
+  ] {
+    assert!(!at(private).admin_api_exposed(), "{private}");
+  }
+  for exposed in ["0.0.0.0:8741", "203.0.113.7:8741", "[::]:8741", "[2001:db8::1]:8741"] {
+    assert!(at(exposed).admin_api_exposed(), "{exposed}");
+  }
+  let off = Config {
+    admin_api_listen: None,
+    ..Default::default()
+  };
+  assert!(!off.admin_api_exposed());
+}

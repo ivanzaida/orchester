@@ -1099,7 +1099,9 @@ certificate in every setup:
 - `orchester-server` answers `/api/*` itself and reverse-proxies every other path to the admin app on a private
   address (`admin_url`, default `http://127.0.0.1:3100`), with `hyper-util`'s client (already a dependency). `/`
   redirects to `/admin`; a project's own address (`/<slug>`) shows a page that names nothing and says to open it in
-  Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs. The server sets
+  Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs; a project an older server
+  let take one gets the next free slug when the server opens (`admin` → `admin-2`, the S1c rule), logged as a warning
+  (security review 1, minor 6). The server sets
   `X-Forwarded-For`, `-Proto` and `-Host` on what it forwards, replacing any the client sent; the admin listens only
   on the private address and trusts them (its own origin for the `Origin` check is their proto and host). The proto
   is `https` when the server presents its own certificate; behind a proxy that holds it (`tls = "off"`, Caddy) it is
@@ -1111,7 +1113,8 @@ certificate in every setup:
   (`admin_api_listen`, default `127.0.0.1:8741`, never published): the public port presents the server's own
   certificate, which the admin's Node would otherwise have to pin. That listener takes the browser's address and host
   from the forwarded headers the admin passes on, so the per-address limits count the browser and project addresses
-  carry the host it used.
+  carry the host it used. The server warns at start when that address is not loopback or private (minor 6); the
+  Caddy compose file binds it to the server's own address on its network.
 - **Browser sign-ins** are device tokens of the kind `admin_web`: 12 hours from sign-in, refused on what only the app
   does (tasks, claims, events, linking, pairing), not listed among the account's computers, and issued only to admins
   and project owners (`403 nothing_to_manage` otherwise). Admins see them apart, in Devices › *Signed in to this

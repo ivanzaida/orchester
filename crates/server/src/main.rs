@@ -94,6 +94,12 @@ SHA-256 fingerprint: {}",
 /// setup code: to the console only, never to the log.
 async fn serve(config: Config) -> Result<(), ServerError> {
   let listen = config.listen;
+  if config.admin_api_exposed() {
+    tracing::warn!(
+      address = ?config.admin_api_listen,
+      "ADMIN_API_LISTEN is not a loopback or private address: the admin API trusts the forwarded headers it is sent, so        nothing but the admin may reach it (keep its port unpublished)"
+    );
+  }
   let server = Server::open(config, Arc::new(SystemClock)).await?;
   if let Some(code) = server.check_code() {
     console(&format!("Certificate check code: {code}"))?;

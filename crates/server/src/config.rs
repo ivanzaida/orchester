@@ -1,5 +1,5 @@
 use std::{
-  net::SocketAddr,
+  net::{IpAddr, SocketAddr},
   path::{Path, PathBuf},
 };
 
@@ -167,6 +167,26 @@ impl Config {
       return Err(ServerError::Configuration("ADMIN_API_LISTEN must differ from LISTEN"));
     }
     Ok(())
+  }
+
+  /// Whether the private admin API listener may be reachable from beyond this host and its private networks: an
+  /// address that is not loopback, private or link-local, or every interface (security review 1, minor 6). The listener
+  /// takes the browser's address and host from forwarded headers on trust, so the host's log warns about it.
+  pub fn admin_api_exposed(&self) -> bool {
+    self
+      .admin_api_listen
+      .is_some_and(|address| !private(address.ip().to_canonical()))
+  }
+}
+
+fn private(address: IpAddr) -> bool {
+  match address {
+    IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+    IpAddr::V6(v6) => {
+      let first = v6.segments()[0];
+      // Unique local (fc00::/7) and link-local (fe80::/10).
+      v6.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
+    }
   }
 }
 

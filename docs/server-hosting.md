@@ -139,7 +139,11 @@ Behind a proxy that holds the certificate (`tls = "off"`), the scheme is the one
 answers every page with *This page needs HTTPS*.
 The admin app's server side calls the API on a second, private listener, `admin_api_listen` (default
 `127.0.0.1:8741`, plain HTTP, `off` to turn it off), which takes the browser's address and host from the headers the
-admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. Without the admin app, admin
+admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. The server warns at start when
+`admin_api_listen` is not a loopback or private address (every interface, `0.0.0.0`, included: inside the Docker
+network of `compose.yaml` that is expected, as long as the port stays unpublished). Projects whose slug is `admin`,
+`api` or `auth` (an older server allowed them) get the next free slug when the server opens (`admin` → `admin-2`),
+and the server's log names each. Without the admin app, admin
 paths answer *The admin app is not running* and the host commands remain for recovery.
 
 The admin app reads its configuration from the environment:
