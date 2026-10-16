@@ -2,25 +2,22 @@
 //! resolves to its screen; a path that names nothing reads as a typed error that says why, and falls back
 //! in the table.
 
+mod files;
+mod usage;
+
 use std::num::NonZeroU64;
 
-use chrono::NaiveDate;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OverviewTab, ProjectPage,
-  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
+  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
-  id::{ConnectionId, ProjectId, RunId},
+  id::{ConnectionId, ProjectId},
   project::TaskKey,
-  revision::Revision,
-  usage::{DayRange, GroupBy, Period},
 };
-use orchester_workspace::{
-  files::{LineRange, Version},
-  links::Link,
-  pull_requests::list::PullRequestTab,
-  usage::UsageQuery,
-};
+use orchester_workspace::pull_requests::list::PullRequestTab;
+
+use self::{files::files_routes, usage::usage_query};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -98,76 +95,6 @@ fn every_route() -> Vec<Route> {
     }
   }
   all
-}
-
-/// The code viewer at every version, with lines, and with paths it refuses but still reads back.
-fn files_routes() -> Vec<Route> {
-  let run: RunId = CONNECTION.parse().expect("a run id");
-  let revision = Revision::new("4d2b8e0c1f2a3b4c5d6e7f8091a2b3c4d5e6f708").expect("a commit");
-  let lines = LineRange::new(441, 442);
-  let mut all = vec![at(ProjectPage::Files(FilesView::default()))];
-  for version in [
-    Version::Checkout,
-    Version::Base,
-    Version::Run(run),
-    Version::Revision(revision),
-  ] {
-    for path in [
-      "crates/workspace/src/plan_limits.rs",
-      AWKWARD,
-      "../kontur/.env",
-      "/etc/passwd",
-      "a//b/",
-      "%2F",
-    ] {
-      all.push(at(ProjectPage::Files(FilesView::new(Some(path), version.clone()))));
-      all.push(at(ProjectPage::Files(
-        FilesView::new(Some(path), version.clone()).with_line(lines),
-      )));
-    }
-  }
-  all
-}
-
-#[test]
-fn files_paths_name_the_file_its_version_and_lines() {
-  let root = format!("/project/{PROJECT}/files");
-  let run: RunId = CONNECTION.parse().expect("a run id");
-  let paths = [
-    (FilesView::default(), root.clone()),
-    (
-      FilesView::new(Some("crates/workspace/src/plan_limits.rs"), Version::Checkout)
-        .with_line(LineRange::new(441, 442)),
-      format!("{root}/crates/workspace/src/plan_limits.rs?line=441-442"),
-    ),
-    (
-      FilesView::new(Some("src/a b.rs"), Version::Run(run)).with_line(LineRange::new(7, 7)),
-      format!("{root}/src/a%20b.rs?at=run%3A{CONNECTION}&line=7"),
-    ),
-    (
-      FilesView::new(Some("README.md"), Version::Base),
-      format!("{root}/README.md?at=base"),
-    ),
-    (
-      FilesView::new(Some("/etc/passwd"), Version::Checkout),
-      format!("{root}/%2Fetc/passwd"),
-    ),
-  ];
-  for (view, path) in paths {
-    assert_eq!(at(ProjectPage::Files(view)).path(), path);
-  }
-  assert!(matches!(
-    Route::parse(&format!("{root}/README.md?at=worktree")),
-    Err(RouteError::InvalidParam { .. })
-  ));
-  assert!(matches!(
-    Route::parse(&format!("{root}/README.md?line=0")),
-    Err(RouteError::InvalidParam { .. })
-  ));
-  assert!(matches!(
-    Route::parse(&format!("{root}/README.md?file=x")),
-    Err(RouteError::UnexpectedParam { .. })
-  ));
 }
 
 #[test]
@@ -530,100 +457,6 @@ fn agents_pages_have_exact_current_resource_paths_and_select_agents() {
   assert_eq!(
     Route::parse(&format!("/project/{PROJECT}/agents/not-an-id")),
     Err(RouteError::NoScreen)
-  );
-}
-
-/// The Usage page over a custom range by agent, filtered to a model with a space and an ampersand.
-fn usage_query() -> UsageQuery {
-  let range = DayRange::new(
-    NaiveDate::from_ymd_opt(2026, 10, 1).expect("a day"),
-    NaiveDate::from_ymd_opt(2026, 10, 15).expect("a day"),
-  )
-  .expect("a range");
-  let mut query = UsageQuery {
-    period: Period::Custom(range),
-    group: GroupBy::Agent,
-    ..UsageQuery::default()
-  };
-  query.filter.models.push(AWKWARD.into());
-  query.filter.tasks.push("KON-12".into());
-  query
-}
-
-#[test]
-fn usage_pages_carry_their_query_as_the_workspace_links_it() {
-  let query = usage_query();
-  let route = at(ProjectPage::Usage(Box::new(query.clone())));
-  assert_eq!(
-    route.path(),
-    Link::Usage(project(), Box::new(query)).path(),
-    "the router writes the link the tools return"
-  );
-  assert_eq!(Route::parse(&route.path()), Ok(route.clone()));
-  assert_eq!(route.nav_screen(), Screen::Usage);
-  assert_eq!(
-    at(ProjectPage::Usage(Box::default())).path(),
-    format!("/project/{PROJECT}/usage")
-  );
-  let table = routes();
-  let chain = table.resolve(&route.path());
-  assert_eq!(
-    chain.last().expect("the usage route resolves").pattern_raw(),
-    route.pattern()
-  );
-  for (query, param) in [
-    ("period=week", "period"),
-    ("group=month", "group"),
-    ("from=2026-10-01", "from"),
-    ("from=2025-01-01&to=2026-01-02", "to"),
-    ("model=", "model"),
-  ] {
-    assert!(
-      matches!(
-        Route::parse(&format!("/project/{PROJECT}/usage?{query}")),
-        Err(RouteError::InvalidParam { param: given, .. }) if given == param
-      ),
-      "{query}"
-    );
-  }
-  let Ok(Route::Project(_, ProjectPage::Usage(today))) =
-    Route::parse(&format!("/project/{PROJECT}/usage?period=today"))
-  else {
-    panic!("today's usage is a route");
-  };
-  assert_eq!(
-    today.group,
-    GroupBy::Hour,
-    "today reads by hour, as pressing Today shows it"
-  );
-  let everywhere = Route::Usage(Box::new(UsageQuery {
-    filter: orchester_core::usage::UsageFilter {
-      projects: vec![project()],
-      ..Default::default()
-    },
-    ..usage_query()
-  }));
-  assert_eq!(
-    Route::parse(&everywhere.path()),
-    Ok(everywhere.clone()),
-    "every project's usage"
-  );
-  assert!(everywhere.path().starts_with(&format!(
-    "/usage?from=2026-10-01&to=2026-10-15&group=agent&project={PROJECT}"
-  )));
-  assert_eq!(everywhere.nav_screen(), Screen::AllProjects);
-  assert!(
-    matches!(
-      Route::parse(&format!("/project/{PROJECT}/usage?project={PROJECT}")),
-      Err(RouteError::InvalidParam { param, .. }) if param == "project"
-    ),
-    "a project's page is the project's"
-  );
-  assert_eq!(
-    Route::parse(&format!("/project/{PROJECT}/usage?tab=table")),
-    Err(RouteError::UnexpectedParam {
-      param: "tab".to_owned()
-    })
   );
 }
 
