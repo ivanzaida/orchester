@@ -6,6 +6,8 @@ mod blocked;
 mod canceled;
 #[path = "task_groups/held.rs"]
 mod held;
+#[path = "task_groups/not_started.rs"]
+mod not_started;
 #[path = "task_groups/reopen.rs"]
 mod reopen;
 mod support;
