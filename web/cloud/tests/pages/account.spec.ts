@@ -179,11 +179,18 @@ test.describe("account settings", () => {
     await expect(servers).toBeVisible();
     await expect(servers).toContainText("Koval lab");
     await expect(servers).not.toContainText("Platform guild");
+    // What the cloud keeps after the deletion, said where it is decided (N1 privacy note).
+    const hash = page.getByText(
+      "A keyed hash of your email stays with the team servers you linked, for abuse limits, until they are linked again.",
+    );
+    await expect(hash).toBeVisible();
+    expect(await hash.evaluate((node) => getComputedStyle(node).fontSize)).toBe("12.5px");
     await resetFake();
     await openAccount(page, NEW);
     await page.getByRole("button", { name: "Delete account" }).click();
     await expect(page.getByText("Delete your Orchester account?")).toBeVisible();
     await expect(page.getByText("stay registered with no owner", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("A keyed hash of your email", { exact: false })).toHaveCount(0);
   });
 
   test("the delete confirmation's question is 600 and its text 12.5 px, as QEHMk", async ({ page }) => {

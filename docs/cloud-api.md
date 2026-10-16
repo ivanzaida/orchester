@@ -233,8 +233,11 @@ person who linked it as `last_owner` (migration 7, N1 security re-review 2), and
 email, which the cloud does not keep: `last_owner` is an HMAC-SHA256 of the normalized email under a key derived (HKDF,
 info `orchester-cloud people v1`) from the key-encryption key, so the database alone can neither name the email nor
 check one against it, and signing up again with the same email gives no caps back. A new link statement clears it with
-the new owner. A server ownerless since before migration 7 has no `last_owner` and counts its invites on its own. The
-audit keeps the account's id with the actions it took.
+the new owner. A server ownerless since before migration 7 has no `last_owner` and counts its invites on its own. So
+after a deletion the cloud still holds, on each server the account linked, that keyed hash of its email, until the
+server is linked again; the web's delete confirmation says so when the account linked servers ("A keyed hash of your
+email stays with the team servers you linked, for abuse limits, until they are linked again."). The audit keeps the
+account's id with the actions it took.
 
 ## Rate limits
 

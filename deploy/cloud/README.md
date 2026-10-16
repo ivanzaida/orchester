@@ -58,7 +58,7 @@ ORCHESTER_CLOUD_WEB_SECRET=<openssl rand -base64 32>
 | `POSTGRES_PASSWORD` | PostgreSQL, cloud | The database password. Compose puts it into the backend's connection URL as it is, so use only URL-safe characters (the hex above). PostgreSQL reads it only when it creates the `postgres_data` volume; changing it later needs `ALTER USER` as well |
 | `ORCHESTER_CLOUD_SMTP_URL` | cloud | The SMTP relay: `smtps://user:pass@host:465` (TLS) or `smtp://user:pass@host:587?tls=required` (STARTTLS required). URL-encode the user and password |
 | `ORCHESTER_CLOUD_SMTP_FROM` | cloud | The sender of every email |
-| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | cloud | 64 hex characters. It seals the signing keys in the database. Changing it makes the stored keys unusable |
+| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | cloud | 64 hex characters. It seals the signing keys in the database, and keys the hashes of deleted owners' emails that keep their abuse limits. Changing it makes the stored keys unusable and resets those limits |
 | `ORCHESTER_CLOUD_ROOT_PUBLIC_KEY` | cloud | The public half of the offline root key |
 | `ORCHESTER_CLOUD_WEB_SECRET` | web | 32 random bytes in standard base64. It signs the forms' CSRF tokens and seals the session cookie. Changing it signs every browser out |
 
@@ -125,6 +125,12 @@ email's purpose only, never its address.
 or on encrypted storage: they hold every account's email, password hash and display name, the devices' token
 hashes, the invites in flight and the sealed signing keys (sealed with the key-encryption key, which must not travel
 with them). Keep the key that opens them apart from the dumps.
+
+**Rotating the key-encryption key resets the limits of deleted accounts.** A deleted account's team servers keep a
+keyed hash of its email (`servers.last_owner`), so signing up again with that email gets no new server or invite
+limits (`docs/cloud-api.md`, "Deleting the account"). The hash is keyed by a key derived from
+`ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY`; after the key changes, no email matches the stored hashes any more, and those
+servers' limits start over for whoever signs up. The hashes stay until each server is linked again.
 
 **Deleted accounts live on in old dumps.** Deleting an account removes it from the database, not from the dumps
 taken before. Rotate the dumps (for example, keep 30 days) and delete older ones, so a deleted account is gone from
