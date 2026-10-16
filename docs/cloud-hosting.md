@@ -31,11 +31,12 @@ deployment sets `ORCHESTER_CLOUD_PUBLIC_URL=https://orchester-cloud.lurq.dev` in
 | `DATABASE_URL` | yes, secret | A PostgreSQL connection string that names its `sslmode`. `sslmode=require` (TLS verified against the OS trust store) for a database across a network. `sslmode=disable` is accepted only for a host on the local network: a loopback or private address, a Unix socket, or a single-label name such as the compose service `postgres`. Without `sslmode`, or with `prefer`, the cloud refuses to start |
 | `SMTP_URL` | yes, secret | The relay, as lettre reads it: `smtps://user:pass@host:465` (TLS), `smtp://user:pass@host:587?tls=required` (STARTTLS required), or plain `smtp://host:25` only for a relay on the same host or a private network. URL-encode the user and password |
 | `SMTP_FROM` | yes | The sender, e.g. `Orchester <no-reply@lurq.dev>` |
-| `KEY_ENCRYPTION_KEY` | yes, secret | 64 hex characters (32 random bytes, e.g. `openssl rand -hex 32`). It seals the root key's and the signing keys' private halves in the database. Set it once and keep it: with another key the cloud refuses to start ([Losing the key-encryption key](#losing-the-key-encryption-key)) |
+| `KEY_ENCRYPTION_KEY` | yes, secret | 64 hex characters (32 random bytes, e.g. `openssl rand -hex 32`). It seals the root key's and the signing keys' private halves and the accounts' two-factor secrets in the database, and keys the HMAC of recovery codes. Set it once and keep it: with another key the cloud refuses to start ([Losing the key-encryption key](#losing-the-key-encryption-key)) |
 | `TRUSTED_PROXIES` | no | Comma-separated IPs or CIDRs whose `X-Forwarded-For` hop is believed: Caddy, and the web front's server once it calls the API |
 
 Secrets never reach the log, `Debug` output or error answers. The log has one record per request: method, route
-template, status, account id and duration. It never has emails, passwords, tokens, link tokens or keys. The log
+template, status, account id and duration. It never has emails, passwords, tokens, link tokens, keys, two-factor
+secrets, codes or recovery codes. The log
 filter is fixed to the cloud's own records (`orchester_cloud=info`). Do not widen it with a debug build:
 `tokio-postgres` logs every statement's parameters at debug level, and those include emails and password hashes.
 
@@ -43,14 +44,38 @@ filter is fixed to the cloud's own records (`orchester_cloud=info`). Do not wide
 
 The migrations are compiled into the binary (`crates/cloud/migrations/`). They are applied at every start, each in
 its own transaction under a PostgreSQL advisory lock, so two instances starting together apply each one once. They
-are recorded in `schema_migrations`. A database at a newer version than the binary knows is refused at start; run
-the newer binary or restore a backup. Backups, replication and point-in-time recovery are the database server's
+are recorded in `schema_migrations`, and each is applied when its number is not recorded yet: migration 10 (two-factor
+authentication) was released before 9 (the desktop's sign-in gate), and a database that has 10 still gets 9. A
+database at a newer version than the binary knows is refused at start; run the newer binary or restore a backup. Backups, replication and point-in-time recovery are the database server's
 job. Back up the key-encryption key separately from the database: the database alone does not open the root key or
 the signing keys.
 
 Tables: `accounts`, `email_links`, `devices`, `root_key`, `signing_keys`, `key_sets`, `servers`, `server_accounts`,
-`invites`, `audit_events` (append-only) and `schema_migrations`. A sweep every minute deletes expired links and
-invites, and accounts that were never confirmed once their last link has expired.
+`invites`, `two_factor` (an account's authenticator: its sealed secret, the last step a code was accepted for),
+`recovery_codes` (their HMAC, each used once), `sign_in_challenges`, `audit_events` (append-only) and
+`schema_migrations`. A sweep every minute deletes expired links, invites and sign-in challenges, two-factor setups not
+confirmed within 15 minutes, and accounts that were never confirmed once their last link has expired.
+
+### Two-factor authentication for an account that lost its phone
+
+Recovery codes are the only way back into an account with two-factor authentication: it is not reset by email, and a
+password reset leaves it on ([cloud-api.md](cloud-api.md#two-factor-authentication)). When a person lost both their
+phone and their recovery codes, the operator can turn it off for them, after making sure out of band that it is them:
+anyone who can ask for this gets past the second factor. One statement deletes the account's authenticator, which
+takes its recovery codes, its open sign-in challenges and every two-factor session with it, and records it in the
+audit:
+
+```sql
+WITH removed AS (
+  DELETE FROM two_factor WHERE account = (SELECT id FROM accounts WHERE email = lower('person@example.com'))
+  RETURNING account
+)
+INSERT INTO audit_events (action, target, at) SELECT 'two_factor_removed_by_operator', account::text, now() FROM removed;
+```
+
+With `deploy/cloud`'s compose file: `docker compose exec postgres psql -U orchester_cloud orchester_cloud`. `INSERT 0 1`
+says it was on and is off now; `INSERT 0 0`, that the email has no account or it was off. The person signs in with
+their password, then turns two-factor authentication on again, on the web front's Account page under *Security*.
 
 ## Keys
 

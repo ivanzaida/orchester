@@ -64,7 +64,11 @@ redeem the setup code there. A server holds at most 50 open codes (`409 too_many
 Failed joins are counted per address and hour in `failed_joins`, kept 90 days.
 
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
-the server admin to carry to Orchester Cloud. One person sends at most 30 invites by email in 24 hours (`429` with
+the server admin to carry to Orchester Cloud. They are made only for a device token issued for a cloud identity token
+that says its device signed in with two-factor authentication (`mfa`, kept as `sessions.mfa`, schema 5); any other,
+a code's included, gets `403 mfa_required`. A join token that accepts an invite needs the claim as well. Invites made
+before are still delivered as they were (only new ones are held to it), and accepting any of them needs it; codes are
+not held to it. One person sends at most 30 invites by email in 24 hours (`429` with
 `Retry-After`). Orchester Cloud adds its own limits: 100 new invites a day for all the servers one account owns, and
 at most one email a day per server and invitee, three a day per invitee; an invite over an email limit still reaches
 the invitee's app ([cloud-api.md](cloud-api.md#rate-limits)). Invites list without their codes (`GET /invites`, `?project=<id>` for one project, `&recent=true` with

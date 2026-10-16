@@ -29,7 +29,9 @@ and ports 80 and 443 reachable from the internet:
    server has an admin. `docker compose exec server orchester-server setup-code` makes a new one while it has none.
 
 Then create a project in the admin and invite people from its *Invites*: with a code they enter in Orchester, or by
-email once the server is linked to Orchester Cloud. Their Orchester joins the server at `https://<ORCHESTER_HOST>`.
+email once the server is linked to Orchester Cloud. Invites by email go out only from an admin signed in through
+Orchester Cloud with two-factor authentication, and only a person with it accepts one; the admin says where to turn it
+on. Their Orchester joins the server at `https://<ORCHESTER_HOST>`.
 
 The commands here are for `compose.yaml`; with another file, add `-f compose.private.yaml` or `-f compose.traefik.yaml`
 to each `docker compose`.
@@ -57,7 +59,8 @@ by default; `compose.traefik.yaml` makes its network internal, so that holds the
 
 With `ORCHESTER_ADMIN_CLOUD_URL` set (the default, `https://orchester-cloud.lurq.dev`), the admin offers *Link to
 Orchester Cloud* at the end of the setup and in its *Settings*. Linking ties the server to its owner's Orchester Cloud
-account: people then join with their cloud account, and invites go out by email. The browser carries everything
+account: people then join with their cloud account, and invites go out by email (sent from an admin sign-in through
+the cloud with two-factor authentication, accepted by a person with it). The browser carries everything
 between the admin and the cloud; the server itself never connects to the cloud and verifies cloud identities offline.
 The owner controls the link on the host at any time:
 

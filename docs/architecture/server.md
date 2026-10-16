@@ -926,6 +926,7 @@ server and never sees project data.
 | It holds | It never holds |
 | --- | --- |
 | Accounts: email (confirmed), display name, password hash; later, linked providers | Tasks, runs, code, diffs, configuration, project names beyond an invite in flight |
+| Two-factor authentication: each account's TOTP secret, sealed with the key-encryption key, and the HMAC of its recovery codes | A two-factor secret or recovery code in the clear, after the answer that showed it |
 | Devices: name, platform, token hash, last use | Device tokens of team servers |
 | Team servers: id, owner account, name, address, certificate fingerprint, public key, linked / unlinked at | Members' roles, projects' contents |
 | Which accounts joined which team server (to list them on a new computer) | Which projects they joined: the team server answers that |
@@ -941,6 +942,16 @@ dummy hash so it answers like a wrong password). The app keeps its **cloud devic
 front ([The cloud's web front](#the-clouds-web-front)), where the confirmation and reset links also land. Magic link,
 Google and GitHub are a later phase.
 
+**Two-factor authentication** (2026-10-16; [cloud-api.md](../cloud-api.md#two-factor-authentication)). An account
+can turn on a TOTP authenticator app (RFC 6238: SHA-1, 6 digits, 30 seconds, ±1 step, each code once) with ten one-time
+recovery codes. With it on, every sign-in (the desktop's and the web front's) answers the right password with a
+challenge that a code finishes; a device that signed in, stepped up or turned it on with a code is a *two-factor
+session*, and identity tokens say so (`mfa`). An invite to a team server is sent and accepted only with it: the cloud
+issues a token that accepts an invite only to a two-factor session (`403 mfa_required`, `403 session_without_mfa`), and
+a team server sends an invite by email only for an admin signed in through the cloud with it ([Invites](#invites)). The
+recovery codes are the only way back; nothing resets it by email, and the operator of a cloud can turn it off for an
+account with one documented statement ([cloud-hosting.md](../cloud-hosting.md)).
+
 **Address and configuration** (row 59). The cloud runs at `https://orchester-cloud.lurq.dev` for now. Nothing about
 where it runs is in the code: the backend and the web front read `ORCHESTER_CLOUD_PUBLIC_URL` (the base of every link
 in an email and of the desktop's default), `ORCHESTER_CLOUD_DATABASE_URL`, `ORCHESTER_CLOUD_SMTP_URL` and
@@ -954,20 +965,22 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 | --- | --- | --- |
 | `POST /auth/signup` | none | `{ email, password, display_name }`: records a pending sign-up on a new confirmation link (its own password hash and display name; earlier unconfirmed links of the email stay valid) and sends it; the same answer whether or not the email is registered (a registered one gets a *you already have an account* email) |
 | `POST /auth/confirm` | none | `{ link_token, password }` (row 65): checks the password against the hash stored on that link; on success creates the account with that link's password and display name and ends every other link of the email. Always one argon2 verification (against a fixed dummy hash when the link is unknown, used or expired), so the work is the same either way; one answer for any failure, `401 confirm_failed`, saying neither which part was wrong; rate-limited |
-| `POST /auth/sessions` | none | `{ email, password, device }`: `201 { token, account }`; `401 invalid_credentials`, `403 email_unconfirmed` |
+| `POST /auth/sessions` | none | `{ email, password, device }`: `201 { token, account }`; with two-factor authentication on, `202 { challenge }`, which `POST /auth/sessions/two-factor { challenge, code }` finishes; `401 invalid_credentials`, `403 email_unconfirmed` |
+| `POST /auth/sessions/current/two-factor` | device | `{ code }`: this device becomes a two-factor session (step-up) |
+| `POST /me/two-factor`, `…/confirm`, `…/recovery-codes`, `DELETE /me/two-factor` | device | Two-factor authentication: on with the password and a code (the recovery codes once), new recovery codes with a code, off with the password and a code |
 | `POST /auth/reset` | none | `{ email }`: sends a reset link; the same answer for any email |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }`: `204` |
 | `POST /auth/password` | device | `{ current_password, new_password }`: `204`; other devices signed out |
 | `DELETE /auth/sessions/current` | device | Sign this device out |
-| `GET /me`, `PATCH /me`, `DELETE /me` | device | The account (display name; a new email is confirmed first); deleting removes everything the cloud holds about it |
+| `GET /me`, `PATCH /me`, `DELETE /me` | device | The account (display name; a new email is confirmed first) and its two-factor authentication as this device sees it; deleting removes everything the cloud holds about it |
 | `GET /devices`, `DELETE /devices/{id}` | device | The account's cloud devices |
 | `GET /keys` | none | The current key set, signed by the root key |
-| `POST /identity-tokens` | device | `{ audience: server id, invite?: id }`: a token for one team server ([Identity tokens and keys](#identity-tokens-and-keys)) |
+| `POST /identity-tokens` | device | `{ audience: server id, invite?: id }`: a token for one team server ([Identity tokens and keys](#identity-tokens-and-keys)); one that accepts an invite only for a two-factor session |
 | `GET /servers` | device | The team servers the account owns or joined, with address and fingerprint |
 | `POST /servers` | device | Links a team server: `{ link }`, the statement the team server signed at setup; `201 { server }` |
 | `PATCH /servers/{id}`, `DELETE /servers/{id}` | owner device, or the server's key | Address or name changed; unlink |
 | `POST /invites` | the team server's key | `{ invite }`, signed by the team server (sent by the server, or carried by the inviter's browser from the server admin); `202 { server }`, the server as registered. Limited per client address, 100 new invites a day per owning account, and invite emails in buckets of their own (1 a day per server and address, 3 a day per address; security review 1, M2) |
-| `GET /invites` | device | Invites waiting for this account |
+| `GET /invites` | device | Invites waiting for this account, each saying whether this device needs two-factor authentication to accept it |
 | `GET /servers/{id}` | device | A linked server as registered: `{ server: { id, name, address, fingerprint, check_code } }`; the app pins its fingerprint when it accepts an invite to it, with an identity token that names the invite |
 | `POST /invites/{id}/decline` | device | The invitee declines: the cloud's copy ends, and no token can accept it any more |
 | `DELETE /invites/{id}` | the team server's key | Revoked by the team server; the id stays revoked for that server (`revoked_invites`, keyed by id and server) until the invite would have expired (security review 1, minor 1). A delivery is matched to a delivered or revoked invite by id and server, never by id alone (security review 2) |
@@ -978,6 +991,9 @@ row exists only once an email is confirmed), `email_links` (hash, email, purpose
 reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
 name, address, fingerprint, public key, linked / unlinked), `server_accounts` (server, account, first joined),
 `invites` (id, server, project address, kind, email, inviter display name, project name, role, expires),
+`two_factor` (account, sealed TOTP secret, last step accepted, confirmed at), `recovery_codes` (HMAC, used at),
+`sign_in_challenges` (hash, account, device, a digest of the password hash checked, tries, expires, used),
+`devices.two_factor` (the authenticator a two-factor session used),
 `revoked_invites` (id, server, until the invite would have expired), `used_link_statements` (a link statement's nonce
 until it is too old to be taken), `used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
 from the host's environment, not before / not after), `audit_events`, `schema_migrations`. Later: `providers`
@@ -998,10 +1014,11 @@ only browser face; the desktop keeps using the JSON API.
 | --- | --- | --- |
 | Sign up | `/signup` | Email, display name, password; then *Check your email* |
 | Sign in | `/signin` | Email and password |
+| Two-factor code | `/signin/code` | The code from the authenticator app, or a recovery code, for an account with two-factor authentication; the challenge waits in a sealed cookie for its 5 minutes |
 | Email confirmed | `/confirm/{token}` | The landing of the confirmation link: a **Password** field (the one chosen at sign-up, row 65) and *Confirm email*, sent as a `POST` from the page's server side, never on a bare `GET`, so mail scanners that fetch links do not use it up; a failure says only *This link and password don't match. Check the password, or send a new link.* (the approved design `CVRpO`), with the field emptied and not marked, and *Send a new link*; then *Your email is confirmed* and *Sign in on the web*. *Open Orchester* waits for an `orchester://` URL scheme the desktop registers; until then the page does not show it |
 | Forgot password | `/forgot` | Email; the same answer for any address |
 | Reset password | `/reset/{token}` | New password; then *Signed out of your other devices* |
-| Later: account, devices | `/account`, `/devices` | Display name and email, password change, the devices with *Sign out* |
+| Account | `/account` | Get started, invites (saying when accepting needs two-factor authentication), servers, devices, *Security* (two-factor authentication on with a QR code, the recovery codes shown once with copy and download, new codes, off, and *Verify* for a browser that signed in without a code), display name, password change |
 
 The desktop opens these pages in the system browser for *Create an account* and *Forgot password*; it signs in with
 `POST /api/v1/auth/sessions` itself. Emails link to them (`/confirm/…`, `/reset/…`; an invite to an unregistered
@@ -1124,6 +1141,13 @@ certificate in every setup:
   and project owners (`403 nothing_to_manage` otherwise). Admins see them apart, in Devices › *Signed in to this
   admin* (`GET /admin/browsers`), and sign any one out (security review 1, minor 5). Identity tokens carry a `purpose` (`admin`, `link`, or none
   to join), and a team server takes each only for its own use.
+- **Invites by email are sent only with two-factor authentication.** The team server makes one only for a device
+  token issued for a cloud identity token with the `mfa` claim: a browser signed in to the admin through Orchester
+  Cloud with two-factor authentication (or an app that joined that way). Any other device token, a code's included,
+  gets `403 mfa_required`, which the admin shows as *Turn on two-factor authentication in your Orchester Cloud account
+  to send invites* with a link to the cloud's `/account#security`. Invites by code need no cloud and are not held to
+  it. Invites made before by an admin without it are still delivered (only new ones are held to it); accepting any of
+  them needs it.
 - **Invites by email** are delivered to the cloud by the admin's own server side when the host has the internet, or
   posted from the inviter's browser to the cloud's web front (`/invites/deliver`) when it has not; the team server
   itself never reaches the cloud. The browser's form carries only the signed invite: the cloud's page leads back to
@@ -1198,6 +1222,10 @@ Row 42; the rules here are the architect's.
   It accepts a token only while its cached key set is unexpired and lists the token's `kid` as valid at the token's
   time. Without the internet and without joining apps for 30 days, cloud sign-ins stop with *the server's copy of
   Orchester Cloud's keys is out of date*; devices already joined are unaffected, and codes still work.
+- **Two-factor claim.** An identity token carries `mfa: true` when the cloud device it was issued to is a two-factor
+  session. The team server keeps it on the device token it issues (`sessions.mfa`, schema 5): only such a token sends
+  invites by email. A join token that accepts an invite without it is refused (`403 mfa_required`) before anything is
+  used: the cloud issues none.
 - **Identity token.** Compact JWS (`EdDSA`): `iss` the cloud, `aud` one team server id, `sub` the cloud account,
   `email` (verified), `name`, `device` (name and platform), `invite` (optional), `jti`, `iat`, `exp` = `iat` + 5
   minutes. Accepted once (`jti` remembered until `exp`), with 2 minutes of clock skew.
@@ -1229,6 +1257,10 @@ with an invite or pairing code.
 
 Row 43.
 
+- **Two-factor authentication.** An invite by email is sent and accepted only by a person with two-factor authentication
+  on at Orchester Cloud, signed in with it: the sender's admin sign-in, and the invitee's device that asks for the token
+  that accepts it ([Identity tokens and keys](#identity-tokens-and-keys)). The cloud still lists an invite to a device
+  without it, saying so (`needs_two_factor`).
 - **Who invites.** A project's owner or an admin invites to a project with a role; an admin invites to the server
   (an account with no project yet, optionally admin). Both in the server admin (row 62); the desktop's *Manage
   members and invites* opens it.
