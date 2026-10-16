@@ -259,3 +259,6 @@ mod profile_navigation;
 
 #[path = "pipelines/publication_notice.rs"]
 mod publication_notice;
+
+#[path = "pipelines/watch_pileup.rs"]
+mod watch_pileup;

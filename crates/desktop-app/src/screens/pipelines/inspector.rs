@@ -6,7 +6,7 @@ use lurq::{
     theme::SpacingSize,
   },
   components::{Column, Row},
-  core::Signal,
+  core::{Ref, Signal},
   node::{Element, dimension::Dimension},
 };
 
@@ -58,12 +58,15 @@ impl DevtoolsInspectable for SummaryProps {}
 pub struct Summary {
   name: Signal<String>,
   description: Signal<String>,
+  /// Whether the fields are locked, as last shown.
+  locked: Ref<bool>,
 }
 impl Component for Summary {
   type Props = SummaryProps;
   fn create(ctx: &mut Ctx) -> Self {
-    let editing = ctx.props::<SummaryProps>().state.get();
-    Self {
+    let props = ctx.props::<SummaryProps>().clone();
+    let editing = props.state.get();
+    let summary = Self {
       name: ctx.signal(
         editing
           .inputs
@@ -72,30 +75,20 @@ impl Component for Summary {
           .unwrap_or_else(|| editing.name.to_string()),
       ),
       description: ctx.signal(editing.shown().description().to_owned()),
-    }
+      locked: ctx.create_ref(props.locked),
+    };
+    follow_identity(
+      ctx,
+      &props.state,
+      (&summary.name, &summary.description),
+      &summary.locked,
+    );
+    summary
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<SummaryProps>().clone();
+    self.locked.set(props.locked);
     let editing = props.state.get();
-    let (state, locked) = (props.state.clone(), props.locked);
-    ctx.watch(&self.description, move |text| {
-      if !locked {
-        state.update(|s| s.edit.set_description(text));
-      }
-    });
-    let (state, locked) = (props.state.clone(), props.locked);
-    ctx.watch(&self.name, move |text| {
-      if !locked {
-        state.update(|s| {
-          s.inputs.insert("pipeline-name".to_owned(), text.clone());
-          s.field(
-            "pipeline-name",
-            orchester_workspace::pipelines::fields::parse_name(text),
-            |s, name| s.name = name,
-          );
-        });
-      }
-    });
     let mut name = FieldInput::new("pipeline-summary-name", ctx.t("pipelines.name"), self.name.clone());
     if let Some(error) = editing.errors.get("pipeline-name") {
       name = name.error(parts::pipeline_name_error(ctx, error));
@@ -152,9 +145,39 @@ impl Component for Summary {
     )
   }
 }
+/// Takes what is typed into the pipeline's `name` and `description` into the draft, once per form, unless
+/// the form is `locked` now. Shared by the summary and the settings page.
+pub(super) fn follow_identity(
+  ctx: &mut Ctx,
+  state: &State,
+  (name, description): (&Signal<String>, &Signal<String>),
+  locked: &Ref<bool>,
+) {
+  let (rename, unlocked) = (state.clone(), locked.clone());
+  ctx.watch(name, move |text| {
+    if !unlocked.get() {
+      rename.update(|s| {
+        s.inputs.insert("pipeline-name".to_owned(), text.clone());
+        s.field(
+          "pipeline-name",
+          orchester_workspace::pipelines::fields::parse_name(text),
+          |s, name| s.name = name,
+        );
+      });
+    }
+  });
+  let (state, locked) = (state.clone(), locked.clone());
+  ctx.watch(description, move |text| {
+    if !locked.get() {
+      state.update(|s| s.edit.set_description(text));
+    }
+  });
+}
 pub struct StepInspector {
   name: Signal<String>,
   removing: Signal<bool>,
+  /// Whether the step is locked, as last shown.
+  locked: Ref<bool>,
 }
 impl Component for StepInspector {
   type Props = Props;
@@ -167,28 +190,18 @@ impl Component for StepInspector {
       .filter(|_| editing.viewing.is_none())
       .cloned()
       .unwrap_or_else(|| props.step.name.as_str().to_owned());
-    Self {
+    let inspector = Self {
       name: ctx.signal(name),
       removing: ctx.signal(false),
-    }
+      locked: ctx.create_ref(props.locked),
+    };
+    inspector.follow_name(ctx, &props);
+    inspector
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    self.locked.set(props.locked);
     let editing = props.state.get();
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
-    ctx.watch(&self.name, move |text| {
-      if !locked {
-        state.update(|s| {
-          let id = format!("{key}:step-name");
-          s.inputs.insert(id.clone(), text.clone());
-          s.field(
-            &id,
-            orchester_workspace::pipelines::fields::parse_name(text),
-            |s, value| s.change(&key, |step| step.name = value),
-          );
-        });
-      }
-    });
     let title = FieldInput::new("step-name", ctx.t("pipelines.stepName"), self.name.clone());
     let title = if props.locked {
       lurq::components::Text::new(props.step.name.as_str())
@@ -232,6 +245,24 @@ impl Component for StepInspector {
   }
 }
 impl StepInspector {
+  /// Takes what is typed into the step's name into the draft, once per inspector, unless it is locked now.
+  /// The step's key is part of the inspector's mount key, so it holds for the inspector's life.
+  fn follow_name(&self, ctx: &mut Ctx, props: &Props) {
+    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), self.locked.clone());
+    ctx.watch(&self.name, move |text| {
+      if !locked.get() {
+        state.update(|s| {
+          let id = format!("{key}:step-name");
+          s.inputs.insert(id.clone(), text.clone());
+          s.field(
+            &id,
+            orchester_workspace::pipelines::fields::parse_name(text),
+            |s, value| s.change(&key, |step| step.name = value),
+          );
+        });
+      }
+    });
+  }
   fn actions(&self, ctx: &Ctx, props: &Props) -> Element {
     let (state, key) = (props.state.clone(), props.step.key.clone());
     if self.removing.get() {

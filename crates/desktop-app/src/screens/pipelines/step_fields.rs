@@ -6,10 +6,10 @@ use lurq::{
     theme::SpacingSize,
   },
   components::{Column, SelectOption},
-  core::Signal,
+  core::{Ref, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::Step;
+use orchester_core::resource::{Step, StepKey};
 use orchester_workspace::pipelines::fields::{self, Executor, ModelChoice, RouteChoice};
 
 use super::{parts, state::State};
@@ -39,11 +39,13 @@ pub struct Fields {
   executor: Signal<Executor>,
   model: Signal<ModelChoice>,
   route: Signal<RouteChoice>,
+  /// Whether the step is locked, as last shown.
+  locked: Ref<bool>,
 }
 impl Component for Fields {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    let props = ctx.props::<Props>();
+    let props = ctx.props::<Props>().clone();
     let step = props.step.clone();
     let editing = props.state.get();
     let inputs = if editing.viewing.is_some() {
@@ -52,7 +54,7 @@ impl Component for Fields {
       editing.inputs
     };
     let text = |id: &str, fallback: String| inputs.get(&format!("{}:{id}", step.key)).cloned().unwrap_or(fallback);
-    Self {
+    let fields = Self {
       instructions: ctx.signal(text("step-instructions", step.instructions.as_str().to_owned())),
       retries: ctx.signal(text(
         "step-retries",
@@ -66,11 +68,14 @@ impl Component for Fields {
       executor: ctx.signal(Executor::of(&step)),
       model: ctx.signal(ModelChoice::of(&step)),
       route: ctx.signal(RouteChoice::of(&step)),
-    }
+      locked: ctx.create_ref(props.locked),
+    };
+    fields.watch(ctx, &props.state, &step.key);
+    fields
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    self.watch(ctx, &props);
+    self.locked.set(props.locked);
     let mut body = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
@@ -168,10 +173,12 @@ impl Fields {
     }
     body.into()
   }
-  fn watch(&self, ctx: &mut Ctx, props: &Props) {
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+  /// Takes what is typed and chosen into the draft, once per step's fields, unless they are locked now. The
+  /// step's key is part of the inspector's mount key, so it holds for the fields' life.
+  fn watch(&self, ctx: &mut Ctx, draft: &State, step_key: &StepKey) {
+    let (state, key, locked) = (draft.clone(), step_key.clone(), self.locked.clone());
     ctx.watch(&self.instructions, move |text| {
-      if !locked {
+      if !locked.get() {
         state.update(|s| {
           let id = format!("{key}:step-instructions");
           s.inputs.insert(id.clone(), text.clone());
@@ -181,9 +188,9 @@ impl Fields {
         });
       }
     });
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    let (state, key, locked) = (draft.clone(), step_key.clone(), self.locked.clone());
     ctx.watch(&self.budget, move |text| {
-      if !locked {
+      if !locked.get() {
         state.update(|s| {
           let id = format!("{key}:step-budget");
           s.inputs.insert(id.clone(), text.clone());
@@ -193,9 +200,9 @@ impl Fields {
         });
       }
     });
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    let (state, key, locked) = (draft.clone(), step_key.clone(), self.locked.clone());
     ctx.watch(&self.retries, move |text| {
-      if !locked {
+      if !locked.get() {
         state.update(|s| {
           let id = format!("{key}:step-retries");
           s.inputs.insert(id.clone(), text.clone());
@@ -209,13 +216,13 @@ impl Fields {
         });
       }
     });
-    self.watch_choices(ctx, props);
+    self.watch_choices(ctx, draft, step_key);
   }
-  fn watch_choices(&self, ctx: &mut Ctx, props: &Props) {
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+  fn watch_choices(&self, ctx: &mut Ctx, draft: &State, step_key: &StepKey) {
+    let (state, key, locked) = (draft.clone(), step_key.clone(), self.locked.clone());
     let model = self.model.clone();
     ctx.watch(&self.executor, move |value| {
-      if !locked {
+      if !locked.get() {
         let mut selected = None;
         state.update(|s| {
           s.change(&key, |step| {
@@ -230,16 +237,16 @@ impl Fields {
         }
       }
     });
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    let (state, key, locked) = (draft.clone(), step_key.clone(), self.locked.clone());
     ctx.watch(&self.model, move |value| {
-      if !locked {
+      if !locked.get() {
         state.update(|s| s.change(&key, |step| value.clone().apply(step)));
       }
     });
-    let (state, key, locked) = (props.state.clone(), props.step.key.clone(), props.locked);
+    let (state, key, locked) = (draft.clone(), step_key.clone(), self.locked.clone());
     let retries = self.retries.clone();
     ctx.watch(&self.route, move |value| {
-      if !locked {
+      if !locked.get() {
         let mut restored = None;
         state.update(|s| {
           s.change(&key, |step| {

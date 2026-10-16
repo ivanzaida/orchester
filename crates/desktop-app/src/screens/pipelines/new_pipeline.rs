@@ -11,7 +11,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  id::ResourceId,
+  id::{ProjectId, ResourceId},
   name::Name,
   resource::{PromptText, Slug, StarterStep, StarterStepText},
 };
@@ -24,6 +24,7 @@ use orchester_workspace::{
     library::{StarterText, VersionState, library_in},
   },
 };
+use parking_lot::Mutex;
 
 use super::parts;
 use crate::{
@@ -43,14 +44,17 @@ use crate::{
 const START_WIDTH: f32 = 560.0;
 const NAME_WIDTH: f32 = 280.0;
 
+/// The pipeline made in the project.
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct Created(ResourceId);
+struct Created(ProjectId, ResourceId);
 impl DevtoolsInspectable for Created {}
 pub struct NewPipeline {
   name: Signal<String>,
   description: Signal<String>,
   start: Signal<u8>,
   copy: Signal<String>,
+  /// Whether the creation's end is followed already; once per page.
+  followed: Mutex<bool>,
 }
 impl Component for NewPipeline {
   type Props = ShownProject;
@@ -64,21 +68,15 @@ impl Component for NewPipeline {
       description: ctx.signal(String::new()),
       start: ctx.signal(if empty { 2 } else { 0 }),
       copy: ctx.signal(String::new()),
+      followed: Mutex::new(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let project = ctx.props::<ShownProject>().clone();
+    // First: lurq keeps a component's futures by the order it asks for them.
     let save = create_action(ctx, &project);
-    let nav = Navigation::of(ctx);
+    self.follow(ctx, &save);
     let id = project.open.project.id();
-    ctx.watch(&save.state(), move |state| {
-      if !state.is_pending()
-        && state.error.is_none()
-        && let Some(Created(created)) = state.data
-      {
-        nav.replace(Route::Project(id, ProjectPage::Pipeline(created)));
-      }
-    });
     let listed = ctx
       .future(project.open.repo_root, |root| async move {
         background::run(move || library_in(&root).map_err(|e| messages::store_error(&e))).await?
@@ -146,6 +144,23 @@ impl Component for NewPipeline {
   }
 }
 impl NewPipeline {
+  /// Opens the pipeline a creation made, in place of this page; once per page.
+  fn follow(&self, ctx: &mut Ctx, save: &CreateAction) {
+    let mut followed = self.followed.lock();
+    if *followed {
+      return;
+    }
+    *followed = true;
+    let nav = Navigation::of(ctx);
+    ctx.watch(&save.state(), move |state| {
+      if !state.is_pending()
+        && state.error.is_none()
+        && let Some(Created(project, created)) = state.data
+      {
+        nav.replace(Route::Project(project, ProjectPage::Pipeline(created)));
+      }
+    });
+  }
   fn header(&self, ctx: &mut Ctx, id: orchester_core::id::ProjectId, button: ActionButton, collision: bool) -> Row {
     let nav = Navigation::of(ctx);
     let mut name = FieldInput::new("pipeline-name", ctx.t("pipelines.name"), self.name.clone())
@@ -357,10 +372,8 @@ pub(super) fn starter(ctx: &Ctx) -> StarterText {
     )
   })
 }
-fn create_action(
-  ctx: &mut Ctx,
-  project: &ShownProject,
-) -> lurq::app::ctx::FutureAction<(String, String, Start), Created, messages::Message> {
+type CreateAction = lurq::app::ctx::FutureAction<(String, String, Start), Created, messages::Message>;
+fn create_action(ctx: &mut Ctx, project: &ShownProject) -> CreateAction {
   let root = project.open.repo_root.clone();
   let project_id = project.open.project.id();
   let changes = crate::services::Services::of(ctx).changes;
@@ -371,7 +384,7 @@ fn create_action(
       background::run(move || {
         let id = create::create_in(&root, &name, &description, start, &starter)?;
         changes.record(project_id, orchester_workspace::tasks::outside::Outside::Pipelines);
-        Ok(Created(id))
+        Ok(Created(project_id, id))
       })
       .await?
     }

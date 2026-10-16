@@ -268,8 +268,9 @@ impl Component for TaskFrame {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FrameProps>().clone();
-    // First: the composer's sends are kept by the order the page asks for its futures.
-    self.composer.keep(ctx);
+    // First: lurq keeps a component's futures by the order it asks for them, and a page asks for this one
+    // only when it was made while a send ran, which holds for the page's life.
+    self.composer.await_flight(ctx);
     ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
     ctx.provide(self.changes.clone());
