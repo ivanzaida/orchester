@@ -8,7 +8,10 @@
 //!
 //! The deprecated desktop's `tabs/feed.rs` is the model.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -32,6 +35,8 @@ use orchester_workspace::{
   },
   workspace::OpenProject,
 };
+
+use parking_lot::Mutex;
 
 use super::{Projects, hold::ReadHold};
 use crate::services::Services;
@@ -64,6 +69,16 @@ pub struct ProjectFeed {
   pub unsaved: Signal<UnsavedForms>,
   /// Saved pipeline names read by editor tabs, shared with their chrome labels.
   pub pipeline_names: Signal<PipelineNames>,
+  /// The tasks last read while no runner served the project, as they stand without one.
+  offline: Arc<Mutex<Option<Offline>>>,
+}
+
+/// A reading of the tasks and the same tasks without a runner, made from it once: every caller then shares
+/// what waits in it, worked out once (`WaitingOnce`).
+struct Offline {
+  /// Kept so no later reading can take its place in memory and pass for it.
+  read: ProjectTasks,
+  without: ProjectTasks,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -132,6 +147,7 @@ impl ProjectFeed {
       job_state: Signal::new(jobs.state()),
       unsaved: Signal::new(UnsavedForms::default()),
       pipeline_names: Signal::new(PipelineNames::default()),
+      offline: Arc::default(),
       jobs,
     }
   }
@@ -155,9 +171,27 @@ impl ProjectFeed {
   pub fn tasks_with_runner(&self, repo_root: &Path) -> TasksState {
     let online = self.runner_online(repo_root);
     match self.tasks.get() {
-      TasksState::Ready(tasks) if !online => TasksState::Ready(tasks.without_runner()),
+      TasksState::Ready(tasks) if !online => TasksState::Ready(self.without_runner(tasks)),
       state => state,
     }
+  }
+
+  /// `tasks` without a runner, made once per reading.
+  fn without_runner(&self, tasks: ProjectTasks) -> ProjectTasks {
+    let mut offline = self.offline.lock();
+    // Every clone of a reading shares its fields; another reading has its own.
+    if let Some(made) = offline
+      .as_ref()
+      .filter(|made| Arc::ptr_eq(&made.read.phases, &tasks.phases))
+    {
+      return made.without.clone();
+    }
+    let without = tasks.without_runner();
+    *offline = Some(Offline {
+      read: tasks,
+      without: without.clone(),
+    });
+    without
   }
 }
 

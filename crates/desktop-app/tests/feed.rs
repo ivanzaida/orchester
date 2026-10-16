@@ -7,6 +7,7 @@ mod support;
 use std::{
   fs,
   path::Path,
+  sync::Arc,
   thread,
   time::{Duration, Instant},
 };
@@ -173,4 +174,38 @@ fn feed_follows_the_operations_the_session_shares() {
   window.until("the feed to hear of the removal", |_| {
     feed.job_state.get_untracked().removed_outside() == 1
   });
+}
+
+/// The feed's tasks as they stand with the runner, which these tests never have.
+fn offline(feed: &ProjectFeed, repo: &Path) -> orchester_workspace::tasks::data::ProjectTasks {
+  match feed.tasks_with_runner(repo) {
+    TasksState::Ready(tasks) => tasks,
+    state => panic!("the tasks are read: {state:?}"),
+  }
+}
+
+#[test]
+fn feed_without_a_runner_makes_each_reading_offline_once() {
+  let (mut window, feed) = kontur_tasks();
+  let repo = window.data.repo("repo-kontur");
+  draft(&repo, "Read once");
+  feed.saved();
+  wait_for_titles(&mut window, &feed, &["Read once"]);
+  let (first, again) = (offline(&feed, &repo), offline(&feed, &repo));
+  assert!(
+    Arc::ptr_eq(&first.phases, &again.phases),
+    "one reading is made offline once"
+  );
+  assert!(
+    Arc::ptr_eq(&first.waiting(), &again.waiting()),
+    "what waits in it is worked out once"
+  );
+  draft(&repo, "Read again");
+  feed.saved();
+  wait_for_titles(&mut window, &feed, &["Read again", "Read once"]);
+  let next = offline(&feed, &repo);
+  assert!(
+    !Arc::ptr_eq(&first.phases, &next.phases),
+    "a new reading is made offline anew"
+  );
 }
