@@ -8,10 +8,7 @@
 
 use std::sync::Arc;
 
-use lurq::{
-  app::{ctx::Ctx, events::is_synthetic_input},
-  markdown::strip_bidi_controls,
-};
+use lurq::app::{ctx::Ctx, events::is_synthetic_input};
 use orchester_exec::external;
 use url::Url;
 
@@ -25,7 +22,8 @@ const APP_SCHEME: &str = "orchester:";
 pub enum ChatLink {
   /// A place in a project of the app: every link the tools return is one.
   App(Route),
-  /// A page on the web, opened in the default browser, and its host as shown: without bidirectional controls.
+  /// A page on the web, opened in the default browser, and the host it shows (lurq draws it without bidirectional
+  /// controls, as every trailing run).
   Web { url: Url, host: String },
   /// Nothing the chat follows: another scheme, a route the app does not know, or one outside a project, such as
   /// Add project with a folder, which would read that folder.
@@ -45,7 +43,7 @@ impl ChatLink {
     };
     match url.host_str() {
       Some(host) if url.scheme() == "https" => Self::Web {
-        host: strip_bidi_controls(host).into_owned(),
+        host: host.to_owned(),
         url,
       },
       _ => Self::Text,

@@ -2,15 +2,16 @@
 //! presentation, which runs on the exact destination a press opens. A place in a project: a link in the chat's link
 //! looks, with the tooltip its caller words, if any. A page on the web: the same, followed by its host and an arrow,
 //! its tooltip the address it opens in the browser; with no words, its address as text, so no host can be placed
-//! without the link it belongs to. Anything else: its words as text, followed by its address in mono, or the address
-//! alone when the words are empty or the address itself.
+//! without the link it belongs to. lurq 0.46 already shows a link whose words draw nothing as those words, without
+//! asking: the check here is defence in depth, should a caller present such a link. lurq also draws every word and
+//! run without bidirectional controls, so nothing here strips them. Anything else: its words as text, followed by its
+//! address in mono, or the address alone when the words are empty or the address itself.
 
 use std::sync::Arc;
 
 use lurq::{
   app::i18n::I18n,
   components::{MarkdownLinkPresentation, MarkdownRun},
-  markdown::strip_bidi_controls,
 };
 
 use super::links::ChatLink;
@@ -55,14 +56,13 @@ pub fn presentation(
 
 /// A link the chat does not follow, or one to the web with no words: its words as text, then its address.
 fn as_text(destination: &str, said: &str, looks: &ChatLinkLooks, words: &LinkWords<'_>) -> MarkdownLinkPresentation {
-  let address = strip_bidi_controls(destination);
   let said = said.trim();
-  if said == address {
+  if said == destination {
     return MarkdownLinkPresentation::text();
   }
   if said.is_empty() {
-    return MarkdownLinkPresentation::text().trailing([MarkdownRun::new(address.into_owned(), looks.address.clone())]);
+    return MarkdownLinkPresentation::text().trailing([MarkdownRun::new(destination, looks.address.clone())]);
   }
-  let note = words.i18n.t_args("ui.link.addressNote", [("address", &*address)]);
+  let note = words.i18n.t_args("ui.link.addressNote", [("address", destination)]);
   MarkdownLinkPresentation::text().trailing([MarkdownRun::plain(" "), MarkdownRun::new(note, looks.address.clone())])
 }

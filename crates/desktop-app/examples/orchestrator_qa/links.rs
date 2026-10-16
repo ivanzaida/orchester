@@ -1,6 +1,7 @@
 //! The `links` state (`Orchestrator · reply with links` `w262B`, `Orchestrator · links · states` `agv8r`): a
 //! conversation whose replies link to places in Kontur and in Atlas, a second project registered beside it (its
-//! folder is empty: only its name is read), to a pull request on the web, and to addresses the chat does not follow.
+//! folder is empty: only its name is read), to a pull request on the web, and to addresses the chat does not follow;
+//! and a table of the runs, with links in its cells.
 
 use std::{error::Error, fs, path::Path};
 
@@ -49,6 +50,14 @@ pub fn conversation(
      [See the runbook](file:///H:/projects/kontur/docs/runbook.md) or the \
      [Status page](http://status.kontur.local)."
   );
+  let table = format!(
+    "Both runs, side by side:
+
+     | Task | Step | Tokens |
+     | --- | --- | --- |
+     | [{key} · {title}]({task}) | 05 Review | 2.4M |
+     | [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/summary) | 03 Implement | 0.8M |"
+  );
   keep(
     db,
     ChatId::generate(),
@@ -64,6 +73,12 @@ pub fn conversation(
         text: &format!("Where is {key}, what has it cost so far, and is its pull request through?"),
         at: ago(2),
         parts: vec![Part::Reply(&status)],
+        end: TurnState::Answered,
+      },
+      Turn {
+        text: "Compare the two runs.",
+        at: ago(1),
+        parts: vec![Part::Reply(&table)],
         end: TurnState::Answered,
       },
     ],

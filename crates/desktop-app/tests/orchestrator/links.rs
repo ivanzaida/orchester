@@ -38,6 +38,8 @@ const FOCUS: &str = "#A3A3AB";
 /// `hover` and `accent_hover` in the dark mode.
 const HOVER: &str = "#FFFFFF0F";
 const ACCENT_HOVER: &str = "#FFFFFF";
+/// `text_primary`: a tooltip's box.
+const TOOLTIP: &str = "#EDEDF0";
 
 /// The middle of the first line of the element whose text is `label`: a link's words.
 fn center_of(screen: &mut Orchestrator, label: &str) -> (f32, f32) {
@@ -80,13 +82,42 @@ fn tooltip_shows(screen: &mut Orchestrator, label: &str, words: &str) -> bool {
     .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
   screen.window.pass();
   let shown = is_shown_on_its_own(screen, words);
+  if shown {
+    assert_tooltip_box(screen, words);
+  }
   screen.window.tree.mouse_move(0.0, 0.0);
   screen.window.pass();
   shown
 }
 
-/// Every run of text the window draws, a plain text as one span, without the invisible isolate marks around a
-/// link's words and runs.
+/// The tooltip saying `words` is the kit's (`b6q3OZ`): a `text_primary` box 22 high, its words 8 in from its left.
+fn assert_tooltip_box(screen: &mut Orchestrator, words: &str) {
+  let tree = &screen.window.tree;
+  let quads = tree.resolve_quads(tree.last_layout().expect("a layout"));
+  let text = quads
+    .iter()
+    .find(|quad| matches!(&quad.content, QuadContent::Text { text, .. } if text == words))
+    .expect("the tooltip's words");
+  let panel = quads
+    .iter()
+    .find(|quad| {
+      matches!(quad.content, QuadContent::Rect { color, .. } if color == Color::from_hex(TOOLTIP))
+        && quad.x <= text.x
+        && text.x <= quad.x + quad.width
+        && quad.y <= text.y
+        && text.y <= quad.y + quad.height
+    })
+    .expect("the tooltip's box");
+  assert!(
+    (panel.height - 22.0).abs() < 0.51 && (text.x - panel.x - 8.0).abs() < 0.51,
+    "a 22 high box with its words 8 in: box {:?}, words at {:?}",
+    (panel.x, panel.y, panel.width, panel.height),
+    (text.x, text.y)
+  );
+}
+
+/// Every run of text the window draws, a plain text as one span. lurq draws a link word by word between invisible
+/// direction marks and word joiners: without them, the neighbouring pieces of one text in one style are one span.
 fn spans(screen: &mut Orchestrator) -> Vec<RichTextSpan> {
   screen.window.pass();
   let tree = &screen.window.tree;
@@ -94,13 +125,32 @@ fn spans(screen: &mut Orchestrator) -> Vec<RichTextSpan> {
   quads
     .into_iter()
     .filter_map(|quad| match quad.content {
-      QuadContent::RichText { spans, .. } => Some(spans),
+      QuadContent::RichText { spans, .. } => Some(joined(spans)),
       QuadContent::Text { text, style, .. } => Some(vec![RichTextSpan { text, style }]),
       _ => None,
     })
     .flatten()
-    .filter(|span| !matches!(span.text.as_str(), "\u{2068}" | "\u{2069}"))
     .collect()
+}
+
+/// `spans` without the invisible marks, each run of pieces in one style as one span.
+fn joined(spans: Vec<RichTextSpan>) -> Vec<RichTextSpan> {
+  let invisible = |ch: char| matches!(ch, '\u{200E}' | '\u{2060}' | '\u{2066}'..='\u{2069}');
+  let mut joined: Vec<RichTextSpan> = Vec::new();
+  for span in spans {
+    let text: String = span.text.chars().filter(|ch| !invisible(*ch)).collect();
+    if text.is_empty() {
+      continue;
+    }
+    match joined.last_mut() {
+      Some(last) if last.style == span.style => last.text.push_str(&text),
+      _ => joined.push(RichTextSpan {
+        text,
+        style: span.style,
+      }),
+    }
+  }
+  joined
 }
 
 fn span<'a>(spans: &'a [RichTextSpan], text: &str) -> &'a RichTextSpan {
@@ -262,9 +312,8 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
     assert!(!is_shown_on_its_own(&mut screen, text), "{text} is no link");
   }
   assert!(
-    !drawn.iter().any(|span| span.text == "evil.example")
-      && drawn.iter().any(|span| span.text == "https://evil.example/empty"),
-    "a link to the web with no words is its address as text, with no host of its own"
+    !drawn.iter().any(|span| span.text == "evil.example"),
+    "a link to the web with no words shows no host of its own"
   );
 
   press_text(&mut screen, "the tasks");
