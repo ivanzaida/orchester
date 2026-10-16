@@ -92,21 +92,24 @@ pub enum State {
   /// Linked as an owner, then signed out of the server: the members as last read, Manage unavailable.
   MembersSignedOut,
   /// Linked from another computer's list of servers, so this one doesn't have the project's server: the members as
-  /// last read, and *Write orchester.toml* pressed, with why it isn't written.
+  /// last read, and *Write orchester.toml* and *Leave* unavailable, with why.
   NoServer,
   /// Removed from the project, then signed out: the removed notice and the members' note without a username.
   RemovedSignedOut,
   /// *Make local*'s question once this computer signed out: the claims unknown.
   MakeLocalSignedOut,
-  /// *Make local* confirmed as the server went away: the success callout names the claims not released.
+  /// *Make local* confirmed as the server went away: the success notice names the claims not released.
   MadeLocalStale,
-  /// Linked as an owner with a project address on another server (a link from before the check): Manage
-  /// unavailable, and *Write orchester.toml* pressed, with why it isn't written.
+  /// Linked as an owner with a project address on another server (a link from before the check): Manage and *Write
+  /// orchester.toml* unavailable, with why.
   DiscoveryForeign,
+  /// *Link to a server project* while the server can't be reached: under the server, *Reconnecting · try N*, and
+  /// *Offline since …* once the retries reach their longest wait, about a minute later.
+  LinkOffline,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 26] = [
+  const ALL: [(&'static str, Self); 27] = [
     ("upload", Self::Upload),
     ("download", Self::Download),
     ("review", Self::Review),
@@ -133,6 +136,7 @@ impl State {
     ("make-local-signed-out", Self::MakeLocalSignedOut),
     ("made-local-stale", Self::MadeLocalStale),
     ("discovery-foreign", Self::DiscoveryForeign),
+    ("link-offline", Self::LinkOffline),
   ];
 
   fn named(name: &str) -> Option<Self> {

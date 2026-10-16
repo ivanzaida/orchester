@@ -142,7 +142,9 @@ pub fn sharing_error(error: &SharingError) -> Said {
     SharingError::SignedOut => Said::new("cloud.errors.serverSignedOut"),
     SharingError::CertificateChanged => Said::new("cloud.errors.certificateChanged"),
     SharingError::Offline => Said::new("cloud.errors.serverUnreachable"),
-    SharingError::ForeignAddress => Said::new("sharing.upload.foreignAddress"),
+    SharingError::ForeignAddress { own } => {
+      Said::new("sharing.upload.foreignAddress").with("own", shown_address(own.as_str()))
+    }
     _ => Said::new("cloud.errors.local"),
   }
 }

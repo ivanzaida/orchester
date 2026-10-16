@@ -167,11 +167,14 @@ pub(super) fn discovery(ctx: &mut Ctx, upload: &Upload, (write, person): (&Signa
       Column::new()
         .width(Dimension::Px(CONTROL_WIDTH))
         .child(
-          Toggle::new(DISCOVERY, ToggleKind::Switch, on, words).on_change(move |on| {
-            if allows.allows(DISCOVERY) {
-              set.set(on);
-            }
-          }),
+          // Room after *On*, so the focus ring, drawn inside the control's edge, keeps clear of it.
+          Toggle::new(DISCOVERY, ToggleKind::Switch, on, words)
+            .ring_room()
+            .on_change(move |on| {
+              if allows.allows(DISCOVERY) {
+                set.set(on);
+              }
+            }),
         )
         .with_children(person.reason(ctx, DISCOVERY))
         .into()

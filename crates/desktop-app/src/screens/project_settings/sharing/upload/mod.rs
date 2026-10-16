@@ -4,7 +4,7 @@
 //! person presses. A checkout without tasks takes the project's tasks as they are, on the same page. Nothing is sent
 //! before; *Cancel* returns to Sharing with the project still local, and a link that failed says why and offers *Try
 //! again*. When the project's tasks changed after the page read them (one was added in another tab or over MCP), the
-//! link sends nothing and the page offers *Review again*, which reads what linking does now.
+//! link sends nothing and the page offers *Review again*, which reads what linking does now; a person presses it too.
 
 mod parts;
 
@@ -71,6 +71,8 @@ impl DevtoolsInspectable for LinkPage {}
 
 /// *Link and upload*, which only a person presses.
 const CONFIRM: &str = "sharing-link-confirm";
+/// *Review again*, which only a person presses: it opens the link's page again for a person to confirm.
+const REVIEW: &str = "sharing-upload-review-again";
 /// *Write orchester.toml into the repository*, which only a person turns on or off.
 const DISCOVERY: &str = "sharing-upload-discovery-switch";
 
@@ -182,21 +184,21 @@ impl Component for UploadPage {
     if let Some(failure) = state.error.clone().filter(|_| !state.is_pending()) {
       content = content.child(self.failed(ctx, &props, &failure));
     }
+    let local = ("local", props.project.open.project.name().as_str().to_owned());
+    // Once the tasks changed, the button reads what linking does now instead of linking.
+    let nothing_yet = if state.error == Some(Failure::Changed) && !state.is_pending() {
+      ctx.t_args("sharing.upload.nothingYetChanged", [local])
+    } else {
+      ctx.t_args(
+        "sharing.upload.nothingYet",
+        [("action", action_label(ctx, &props.upload.plan).to_string()), local],
+      )
+    };
     content = content
       .child(parts::what_goes(ctx, &props.project, &props.upload))
       .child(parts::discovery(ctx, &props.upload, (&self.write, &self.person)))
       .child(super::link::sends(ctx))
-      .child(page::icon_note(
-        "sharing-upload-nothing-yet",
-        Icon::Info,
-        &ctx.t_args(
-          "sharing.upload.nothingYet",
-          [
-            ("action", action_label(ctx, &props.upload.plan).to_string()),
-            ("local", props.project.open.project.name().as_str().to_owned()),
-          ],
-        ),
-      ));
+      .child(page::icon_note("sharing-upload-nothing-yet", Icon::Info, &nothing_yet));
     page::screen(header, page::scroll(content))
   }
 }
@@ -260,7 +262,8 @@ impl UploadPage {
           .child(Spacer::new().width(Dimension::Px(0.0)))
           .child(actions),
       )
-      .with_children(self.person.reason(ctx, CONFIRM));
+      .with_children(self.person.reason(ctx, CONFIRM))
+      .with_children(self.person.reason(ctx, REVIEW));
     Column::new()
       .id("sharing-upload-head")
       .width(Dimension::Pct(100.0))
@@ -304,19 +307,20 @@ impl UploadPage {
     })
   }
 
-  /// *Review again*, which reads what linking does now and opens the page for it.
+  /// *Review again*, which reads what linking does now and opens the page for it; only a person presses it, as
+  /// *Link and upload*.
   fn review_again(&self, ctx: &Ctx) -> ActionButton {
-    let button = ActionButton::new(
-      "sharing-upload-review-again",
-      ButtonKind::Primary,
-      ctx.t("sharing.upload.reviewAgain"),
-    )
-    .icon(Icon::RefreshCw);
+    let button =
+      ActionButton::new(REVIEW, ButtonKind::Primary, ctx.t("sharing.upload.reviewAgain")).icon(Icon::RefreshCw);
     if self.review.state().get().is_pending() {
       return button.loading();
     }
-    let review = self.review.clone();
-    button.on_click(move || review.run(()))
+    let (review, person) = (self.review.clone(), self.person.clone());
+    button.on_click(move || {
+      if person.allows(REVIEW) {
+        review.run(());
+      }
+    })
   }
 
   /// Why the link did not go ahead: the tasks changed since the page read them, or what failed.

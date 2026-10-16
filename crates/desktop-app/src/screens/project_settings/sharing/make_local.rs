@@ -31,10 +31,10 @@ use crate::{
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
-    callout::{Callout, CalloutTone},
     field::field_error,
     form_section::{Label, Place, side_row},
     icon::Icon,
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -315,7 +315,7 @@ fn keys(ctx: &Ctx, keys: &[TaskKey]) -> String {
 }
 
 /// *Kontur is local on this computer*, with the tasks it kept, the claims it could not release after all and the tasks
-/// that returned from *Not shared*, and *Dismiss*.
+/// that returned from *Not shared*, and *Dismiss* at its end: a success notice, as the one after joining (`YdKuq`).
 pub(super) fn made(ctx: &Ctx, made: &Signal<Made>, local: &str) -> Option<Element> {
   let done = made.get().0?;
   let mut body = ctx
@@ -352,9 +352,9 @@ pub(super) fn made(ctx: &Ctx, made: &Signal<Made>, local: &str) -> Option<Elemen
   }
   let dismiss = made.clone();
   Some(
-    Callout::new(
+    Notice::new(
       "sharing-made-local",
-      CalloutTone::Success,
+      NoticeTone::Success,
       ctx.t_args("sharing.makeLocal.made.title", [("local", local)]),
     )
     .body(body)
