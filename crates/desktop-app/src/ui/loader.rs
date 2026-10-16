@@ -36,6 +36,9 @@ pub fn install(tree: &mut Tree) {
 /// The loader `glyph`, turning about its centre in even steps for as long as it is shown. `JumpEnd`
 /// starts on the still pose and stops one step short of the full turn, so no pose is drawn twice.
 pub(crate) fn turning(glyph: Text) -> Text {
-  let steps = Easing::Steps { count: LOADER_STEPS, position: StepPosition::JumpEnd };
+  let steps = Easing::Steps {
+    count: LOADER_STEPS,
+    position: StepPosition::JumpEnd,
+  };
   glyph.animation(Animation::new(TURN).duration(LOADER_TURN).easing(steps).infinite())
 }
