@@ -165,6 +165,7 @@ icons! {
   MessageSquareText => '\u{e575}',
   MessagesSquare => '\u{e40d}',
   Minus => '\u{e11c}',
+  Monitor => '\u{e11d}',
   MousePointerClick => '\u{e120}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',

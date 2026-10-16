@@ -32,10 +32,12 @@ pub enum OrchesterText {
   InviteTitle,
   /// Geist Mono 11.5 `text_secondary`: a project's address in an invite or a project row (`kPNV8` in `Cu20b`).
   Address,
+  /// 12.5/600 `text_primary`: a card's title, *What linking sends* (`CxQE4` in `bWD9q`).
+  CardTitle,
 }
 
 impl OrchesterText {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::FormTitle,
     Self::PageTitle,
     Self::StepTitle,
@@ -43,6 +45,7 @@ impl OrchesterText {
     Self::Code,
     Self::InviteTitle,
     Self::Address,
+    Self::CardTitle,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -58,6 +61,7 @@ impl OrchesterText {
       Self::Code => "orchester_code",
       Self::InviteTitle => "orchester_invite_title",
       Self::Address => "orchester_address",
+      Self::CardTitle => "orchester_card_title",
     }
   }
 
@@ -70,6 +74,7 @@ impl OrchesterText {
       Self::Code => mono(style(24.0, FontWeight::Medium, 1.3, 3.0, palette.text_primary)),
       Self::InviteTitle => style(13.0, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
       Self::Address => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::CardTitle => style(12.5, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
     }
   }
 }

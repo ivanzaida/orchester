@@ -7,6 +7,7 @@ pub mod add_slot;
 pub mod avatar;
 pub mod breadcrumb;
 pub mod button;
+pub mod callout;
 pub mod card;
 pub mod chat;
 pub mod chip;

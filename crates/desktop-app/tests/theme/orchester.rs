@@ -13,6 +13,7 @@ fn orchester_roles_follow_the_design() {
     (OrchesterText::Code, 24.0, FontWeight::Medium, "Geist Mono"),
     (OrchesterText::InviteTitle, 13.0, FontWeight::Medium, "Geist"),
     (OrchesterText::Address, 11.5, FontWeight::Normal, "Geist Mono"),
+    (OrchesterText::CardTitle, 12.5, FontWeight::SemiBold, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
