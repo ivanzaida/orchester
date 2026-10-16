@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::plan::ReviewNote;
+use super::{not_started::WorktreeFailure, plan::ReviewNote};
 use crate::{id::StepExecutionId, resource::StepKey};
 
 /// Why a running run stopped without a checkpoint-safe pause.
@@ -35,6 +35,8 @@ pub enum RunFailure {
   StepFailed(StepKey),
   /// The step failed after its failure route was taken `max_retries` times.
   RetriesExhausted(StepKey),
+  /// The run never started: its worktree could not be created, for this reason.
+  WorktreeNotCreated(WorktreeFailure),
 }
 
 /// A limit of a run: its token budget, its time limit on active agent time, the project's daily

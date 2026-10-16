@@ -19,14 +19,15 @@ pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element 
   let mut rows = vec![
     row(ctx, "summary.runDetails.project", &project, DetailValue::Text),
     row(ctx, "summary.runDetails.base", &base_value(ctx, run), DetailValue::Mono),
-    row(
-      ctx,
-      "summary.runDetails.branch",
-      run.run.branch().as_str(),
-      DetailValue::Mono,
-    ),
-    checkpoint_row(ctx, run),
   ];
+  // A run that never started has no branch of its own.
+  rows.extend(
+    run
+      .run
+      .own_branch()
+      .map(|branch| row(ctx, "summary.runDetails.branch", branch.as_str(), DetailValue::Mono)),
+  );
+  rows.push(checkpoint_row(ctx, run));
   rows.extend(duration(ctx, run).map(|value| row(ctx, "summary.runDetails.duration", &value, DetailValue::Text)));
   rows.push(row(
     ctx,

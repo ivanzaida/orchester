@@ -221,9 +221,9 @@ impl TaskForm {
         }
         return;
       }
-      if let Some(Started(key)) = state.data.clone().filter(|_| state.is_fulfilled()) {
+      if let Some(Started(key, began)) = state.data.clone().filter(|_| state.is_fulfilled()) {
         Self::forget_kept(&kept, &written);
-        nav.started(&key);
+        nav.started(&key, began);
       }
     });
   }

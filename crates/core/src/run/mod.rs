@@ -15,6 +15,7 @@ mod event;
 mod first_edit;
 mod follow_up;
 mod invocation;
+mod not_started;
 mod number;
 mod permissions;
 mod phase;
@@ -55,6 +56,7 @@ pub use self::{
   invocation::{
     ActivityEntry, Invocation, InvocationEngine, InvocationKind, InvocationTiming, active_time, execution_tokens,
   },
+  not_started::{GitMessage, WorktreeFailure},
   number::RunNumber,
   permissions::{AppliedPermissions, PermissionsApply, PermissionsChangedBy, RunPermissions},
   phase::TaskPhase,

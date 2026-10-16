@@ -11,6 +11,7 @@ mod lifecycle;
 mod limits;
 mod memory_prompt;
 mod native_prompt;
+mod not_started;
 mod outcome_prompt;
 mod permissions;
 mod plans;

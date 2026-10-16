@@ -14,7 +14,8 @@ use orchester_core::{
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool, Version},
   revision::Revision,
   run::{
-    BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunSnapshot, RunStatus, preflight,
+    BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunFailure, RunSnapshot, RunStatus,
+    WorktreeFailure, preflight,
   },
   sharing::TaskRevision,
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
@@ -184,6 +185,12 @@ pub(super) fn resume_recorded(
 fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) -> Result<Prepared, Rejection> {
   let worktrees = Worktrees::new(root).map_err(|error| failed("cannot find the worktrees", &error))?;
   let worktree = worktrees.path(run.id());
+  if let RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) = run.status() {
+    return Err(Rejection::RunNotStarted {
+      run: run.id(),
+      why: reason.clone(),
+    });
+  }
   if run.status() != &RunStatus::Pending {
     return Ok(Prepared {
       run,
@@ -194,10 +201,9 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     });
   }
   check_readiness(db, run.task())?;
-  if !worktree.is_dir() {
-    worktrees
-      .create(run.id(), run.branch().as_str(), run.base().as_str())
-      .map_err(|error| failed("cannot create the run's worktree", &error))?;
+  match worktree_branch(&worktrees, &run, worktree.is_dir()) {
+    Ok(branch) => record_branch(db, &mut run, branch)?,
+    Err(reason) => return Err(fail_to_start(db, run, reason)),
   }
   db.record_run_origin(run.id(), origin_push_url(root).as_deref())
     .map_err(|error| failed("cannot record the run's origin", &error))?;
@@ -213,6 +219,60 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
     execute: true,
     try_at_plan_limit: None,
   })
+}
+
+/// The branch of the pending run's worktree, which is created now unless an earlier request did
+/// (`exists`); why there is none, when it cannot be. Only the runner's log has git's full answer.
+fn worktree_branch(worktrees: &Worktrees, run: &Run, exists: bool) -> Result<BranchName, WorktreeFailure> {
+  let branch = if exists {
+    worktrees.branch_of(run.id())
+  } else {
+    worktrees
+      .create(run.id(), run.branch().as_str(), run.base().as_str())
+      .map(|created| created.branch().to_owned())
+  }
+  .map_err(|error| {
+    tracing::error!(run = %run.id(), %error, "cannot create the run's worktree");
+    error.failure()
+  })?;
+  BranchName::new(&branch).map_err(|error| {
+    tracing::error!(run = %run.id(), %branch, %error, "the run's worktree is on a branch a run cannot have");
+    WorktreeFailure::InvalidBranch
+  })
+}
+
+/// Fails the pending run whose worktree could not be created for `reason`: it would otherwise wait
+/// for a start that cannot come. The answer says why; the run goes on only as a new one.
+fn fail_to_start(db: &mut ProjectDb, mut run: Run, reason: WorktreeFailure) -> Rejection {
+  tracing::error!(run = %run.id(), ?reason, "the run failed before it started");
+  let recorded = run
+    .fail_to_start(reason.clone(), Timestamp::now())
+    .map_err(|error| failed("cannot fail the run that could not start", &error))
+    .and_then(|events| {
+      db.append_events(&run, &events)
+        .map_err(|error| failed("cannot record that the run could not start", &error))
+    });
+  match recorded {
+    Ok(()) => Rejection::RunNotStarted {
+      run: run.id(),
+      why: reason,
+    },
+    Err(rejection) => rejection,
+  }
+}
+
+/// Records `branch`, where the run's worktree is, as the run's branch: a free name the worktree took
+/// because a branch of the run's own existed, which merging, pull requests and the screens read.
+fn record_branch(db: &mut ProjectDb, run: &mut Run, branch: BranchName) -> Result<(), Rejection> {
+  let events = run
+    .choose_branch(branch, Timestamp::now())
+    .map_err(|error| failed("cannot move the run to its branch", &error))?;
+  if events.is_empty() {
+    return Ok(());
+  }
+  tracing::info!(run = %run.id(), branch = %run.branch(), "a branch of the run's name existed; the run works on a free one");
+  db.append_events(run, &events)
+    .map_err(|error| failed("cannot record the run's branch", &error))
 }
 
 fn check_readiness(db: &ProjectDb, task: TaskId) -> Result<(), Rejection> {

@@ -108,6 +108,7 @@ fn record(db: &ProjectDb, task: &Task, run: &Run, removed_at: Option<Timestamp>)
     (RunStatus::Failed(RunFailure::StepFailed(step) | RunFailure::RetriesExhausted(step)), _) => {
       Message::new("runs.history.failedAt").with("step", step_name(run, step))
     }
+    (RunStatus::Failed(RunFailure::WorktreeNotCreated(_)), _) => Message::new("runs.history.worktreeNotCreated"),
     (RunStatus::Cancelled, _) if run.current_attempt().is_none() => Message::new("runs.history.cancelledBeforeStart"),
     (RunStatus::Cancelled, _) => match step()? {
       Some(step) => Message::new("runs.history.cancelledAt").with("step", step),

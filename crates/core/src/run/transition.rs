@@ -6,10 +6,12 @@ use std::time::Duration;
 
 use super::{
   attempt::Checkpoint,
+  branch::BranchName,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
+  not_started::WorktreeFailure,
   state::Run,
-  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunLimit, RunStatus},
+  status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus},
 };
 use crate::{
   id::{AttemptId, CheckpointId, StepExecutionId},
@@ -45,6 +47,27 @@ impl Run {
         number: transition.run.next_attempt_number(),
         reason: AttemptReason::Initial,
         executions,
+      })
+    })
+  }
+
+  /// Records that the pending run works on `branch`, where its worktree was made because a branch
+  /// of the run's own name existed already. Its own name changes nothing.
+  pub fn choose_branch(&mut self, branch: BranchName, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    if branch == *self.branch() {
+      return Ok(Vec::new());
+    }
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::BranchChosen { branch })
+    })
+  }
+
+  /// Fails the pending run, whose worktree could not be created for `reason`: it never started, and
+  /// works again only as a new run.
+  pub fn fail_to_start(&mut self, reason: WorktreeFailure, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    self.transition(now, |transition| {
+      transition.record(RunEventKind::Failed {
+        reason: RunFailure::WorktreeNotCreated(reason),
       })
     })
   }

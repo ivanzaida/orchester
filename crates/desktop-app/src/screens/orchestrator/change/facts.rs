@@ -319,14 +319,18 @@ fn run_rows(ctx: &Ctx, view: &View, run: &RunFacts, project: ProjectId) -> Vec<(
 }
 
 fn merge_rows(ctx: &Ctx, run: &RunFacts, project: ProjectId) -> Vec<(Arc<str>, Vec<Part>)> {
-  let branch: Arc<str> = match &run.into {
-    Some(into) => ctx.t_args(
-      "orchestrator.change.facts.branchInto",
-      [("branch", run.branch.as_str()), ("into", into.as_str())],
-    ),
-    None => run.branch.as_str().into(),
-  };
-  let mut rows = vec![(ctx.t("orchestrator.change.facts.branch"), vec![Part::Mono(branch)])];
+  let mut rows = Vec::new();
+  // A run that never started made no branch.
+  if let Some(branch) = &run.branch {
+    let branch: Arc<str> = match &run.into {
+      Some(into) => ctx.t_args(
+        "orchestrator.change.facts.branchInto",
+        [("branch", branch.as_str()), ("into", into.as_str())],
+      ),
+      None => branch.as_str().into(),
+    };
+    rows.push((ctx.t("orchestrator.change.facts.branch"), vec![Part::Mono(branch)]));
+  }
   if let Some((files, added, removed)) = run.changes {
     let words = if files == 1 {
       ctx.t_args(

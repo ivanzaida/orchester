@@ -15,7 +15,7 @@ use orchester_core::{
   resource::StepKey,
   run::{
     AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion,
-    PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision,
+    PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
   },
   tokens::TokenBudget,
 };
@@ -522,6 +522,12 @@ pub enum Rejection {
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.
   Busy,
+  /// The run was recorded, but its worktree could not be created, `why`: it failed before it started
+  /// ([`orchester_core::run::RunFailure::WorktreeNotCreated`]) and runs again only as a new run.
+  RunNotStarted {
+    run: RunId,
+    why: WorktreeFailure,
+  },
   /// Starting failed in the runner (database, git worktree); its log has the details.
   Failed {
     detail: String,

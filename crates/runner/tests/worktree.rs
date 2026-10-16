@@ -1,6 +1,9 @@
 use std::{fs, path::Path, process::Command};
 
-use orchester_core::id::RunId;
+use orchester_core::{
+  id::{RunId, StepExecutionId},
+  run::WorktreeFailure,
+};
 use orchester_runner::worktree::{RemoveMode, WorktreeError, Worktrees};
 use tempfile::TempDir;
 
@@ -65,7 +68,7 @@ fn worktree_creation_rejects_bad_input() {
   let worktrees = Worktrees::new(repo.path()).expect("worktrees");
 
   assert!(matches!(
-    worktrees.create(RunId::generate(), "main", "main"),
+    worktrees.create_step(StepExecutionId::generate(), "main", "main"),
     Err(WorktreeError::BranchExists(_))
   ));
   assert!(matches!(
@@ -83,6 +86,44 @@ fn worktree_creation_rejects_bad_input() {
     worktrees.create(run, "orchester/run-4", "main"),
     Err(WorktreeError::AlreadyExists(_))
   ));
+}
+
+#[test]
+fn a_run_worktree_takes_the_next_free_branch_name_and_leaves_taken_ones() {
+  let repo = repository();
+  let root = repo.path();
+  let main = git(root, &["rev-parse", "main"]);
+  git(root, &["branch", "main-2"]);
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  let run = RunId::generate();
+
+  let worktree = worktrees.create(run, "main", "main").expect("create");
+
+  assert_eq!(worktree.branch(), "main-3");
+  assert_eq!(git(worktree.path(), &["branch", "--show-current"]), "main-3");
+  assert_eq!(worktrees.branch_of(run).expect("branch of the worktree"), "main-3");
+  assert_eq!(git(root, &["rev-parse", "main"]), main);
+  assert_eq!(git(root, &["rev-parse", "main-2"]), main);
+  assert_eq!(git(root, &["branch", "--show-current"]), "main");
+}
+
+#[test]
+fn a_worktree_that_cannot_be_added_leaves_no_branch_behind() {
+  let repo = repository();
+  let root = repo.path();
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  // A file where git keeps its worktree records makes `git worktree add` fail after `git branch`.
+  fs::write(root.join(".git/worktrees"), "not a folder").expect("block git's worktree records");
+
+  assert!(matches!(
+    worktrees.create(RunId::generate(), "orchester/run-1", "main"),
+    Err(WorktreeError::Git { .. })
+  ));
+  assert_eq!(
+    git(root, &["branch", "--list", "orchester/run-1"]),
+    "",
+    "the new branch is gone"
+  );
 }
 
 #[test]
@@ -142,4 +183,149 @@ fn clean_worktree_is_removed_and_its_commits_stay_on_the_branch() {
     worktrees.remove(run, RemoveMode::RefuseIfDirty),
     Err(WorktreeError::NotFound(_))
   ));
+}
+
+/// A `post-checkout` hook that prints a URL with credentials and fails. Git for Windows runs it with its own `sh`,
+/// as Unix does.
+fn failing_post_checkout_hook(root: &Path) {
+  let hook = root.join(".git/hooks/post-checkout");
+  fs::create_dir_all(hook.parent().expect("hooks folder")).expect("hooks folder");
+  fs::write(
+    &hook,
+    "#!/bin/sh\necho 'fatal: cannot fetch https://someone:hunter2@example.com/lfs' >&2\nexit 1\n",
+  )
+  .expect("write hook");
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).expect("make the hook executable");
+  }
+}
+
+#[test]
+fn a_worktree_whose_post_checkout_hook_fails_is_removed_before_its_branch() {
+  let repo = repository();
+  let root = repo.path();
+  failing_post_checkout_hook(root);
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  let run = RunId::generate();
+
+  let error = worktrees
+    .create(run, "orchester/run-1", "main")
+    .expect_err("git reports the hook's failure");
+
+  let WorktreeFailure::Git(said) = error.failure() else {
+    panic!("git's refusal is the reason, got {error:?}");
+  };
+  assert!(said.as_str().contains("https://***@example.com/lfs"), "{said:?}");
+  assert!(!said.as_str().contains("hunter2"), "no credentials: {said:?}");
+  assert!(!worktrees.path(run).exists(), "the worktree git kept is gone");
+  assert!(
+    !git(root, &["worktree", "list", "--porcelain"]).contains("orchester/run-1"),
+    "no worktree has the branch"
+  );
+  assert_eq!(
+    git(root, &["branch", "--list", "orchester/run-1"]),
+    "",
+    "the new branch is gone once no worktree has it"
+  );
+}
+
+#[test]
+fn a_name_whose_step_branches_or_ref_lock_exist_is_taken() {
+  let repo = repository();
+  let root = repo.path();
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  // An earlier run's leftover step branch: steps of a run on that name would need it.
+  git(root, &["branch", "orchester/run-1--review-1"]);
+
+  let worktree = worktrees
+    .create(RunId::generate(), "orchester/run-1", "main")
+    .expect("create");
+
+  assert_eq!(worktree.branch(), "orchester/run-1-2");
+  // Another creator holds the lock of the next name while it makes or deletes that branch.
+  let lock = root.join(".git/refs/heads/orchester/run-1-3.lock");
+  fs::write(&lock, "").expect("hold the ref's lock");
+  git(root, &["branch", "orchester/run-1-2--work-1", "orchester/run-1-2"]);
+
+  let worktree = worktrees
+    .create(RunId::generate(), "orchester/run-1", "main")
+    .expect("create");
+
+  assert_eq!(
+    worktree.branch(),
+    "orchester/run-1-4",
+    "a held lock is a name taken meanwhile"
+  );
+  assert!(lock.exists(), "the other creator's lock is left alone");
+}
+
+#[test]
+fn a_run_worktree_fails_when_every_numbered_name_is_taken() {
+  let repo = repository();
+  let root = repo.path();
+  let main = git(root, &["rev-parse", "main"]);
+  let created: String = std::iter::once("orchester/run-1".to_owned())
+    .chain((2..=100).map(|suffix| format!("orchester/run-1-{suffix}")))
+    .map(|branch| format!("create refs/heads/{branch} {main}\n"))
+    .collect();
+  let mut update = Command::new("git")
+    .arg("-C")
+    .arg(root)
+    .args(["update-ref", "--stdin"])
+    .stdin(std::process::Stdio::piped())
+    .spawn()
+    .expect("run git");
+  std::io::Write::write_all(&mut update.stdin.take().expect("stdin"), created.as_bytes()).expect("send refs");
+  assert!(update.wait().expect("git ends").success(), "every name taken");
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  let run = RunId::generate();
+
+  let error = worktrees
+    .create(run, "orchester/run-1", "main")
+    .expect_err("no free name");
+
+  assert!(matches!(error, WorktreeError::NoFreeBranch(_)), "{error:?}");
+  assert_eq!(error.failure(), WorktreeFailure::NoFreeBranch);
+  assert!(!worktrees.path(run).exists());
+}
+
+#[test]
+fn a_folder_git_does_not_list_is_not_the_runs_worktree() {
+  let repo = repository();
+  let worktrees = Worktrees::new(repo.path()).expect("worktrees");
+  let run = RunId::generate();
+  // Left by a removal that failed part way: git would answer for the checkout around it, on `main`.
+  fs::create_dir_all(worktrees.path(run)).expect("stray folder");
+
+  let error = worktrees.branch_of(run).expect_err("not a worktree");
+
+  assert!(matches!(error, WorktreeError::NotAWorktree(_)), "{error:?}");
+  assert_eq!(error.failure(), WorktreeFailure::FolderInTheWay);
+}
+
+#[test]
+fn a_name_git_cannot_make_for_a_lasting_reason_fails_at_once() {
+  let repo = repository();
+  let root = repo.path();
+  // A branch where the name's folder would be: git says "cannot lock ref" for every name in that folder.
+  git(root, &["branch", "orchester"]);
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  let run = RunId::generate();
+
+  let error = worktrees
+    .create(run, "orchester/run-1", "main")
+    .expect_err("no branch can be made there");
+
+  let WorktreeError::Git { stderr, .. } = &error else {
+    panic!("git's refusal, not a name taken meanwhile: {error:?}");
+  };
+  assert!(stderr.contains("'refs/heads/orchester' exists"), "{stderr}");
+  assert!(!worktrees.path(run).exists());
+  assert_eq!(
+    git(root, &["for-each-ref", "refs/heads/orchester/"]),
+    "",
+    "no name was made"
+  );
 }

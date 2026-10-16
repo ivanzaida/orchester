@@ -37,7 +37,7 @@ use crate::{
 const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_revision, initial_budget_tokens, \
                            initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
                            status, status_reason, failed_step, limit_execution, last_sequence, created_at, \
-                           base_branch FROM runs";
+                           base_branch, failure_reason FROM runs";
 
 /// The runs `clause` selects, each read on its own. Only a run whose id or task cannot be read
 /// fails the listing: it cannot be told which run it is.
@@ -306,6 +306,7 @@ struct RunRow {
   last_sequence: i64,
   created_at: i64,
   base_branch: Option<String>,
+  failure_reason: Option<String>,
 }
 
 impl RunRow {
@@ -324,6 +325,7 @@ impl RunRow {
       last_sequence: row.get(16)?,
       created_at: row.get(17)?,
       base_branch: row.get(18)?,
+      failure_reason: row.get(19)?,
     })
   }
 
@@ -353,8 +355,8 @@ impl RunRow {
       status: parse_run_status(
         &self.status,
         self.status_reason.as_deref(),
-        self.failed_step.as_deref(),
-        self.limit_execution.as_deref(),
+        (self.failed_step.as_deref(), self.limit_execution.as_deref()),
+        self.failure_reason.as_deref(),
       )?,
       budget: optional_budget_value("run budget", budget)?,
       max_duration: optional_duration_value("run time limit", duration)?,
