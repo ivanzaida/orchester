@@ -13,7 +13,7 @@ use super::{
   number::RunNumber,
   permissions::RunPermissions,
   snapshot::RunSnapshot,
-  status::{AttemptReason, PauseReason, RunLimit, RunStatus, StepStatus},
+  status::{AttemptReason, PauseReason, RunFailure, RunLimit, RunStatus, StepStatus},
 };
 use crate::{
   id::{ResourceId, RunId, StepExecutionId, TaskId},
@@ -149,10 +149,17 @@ impl Run {
     if self.status == RunStatus::Pending && !self.attempts.is_empty() {
       return Err(RunError::Inconsistent("a pending run has no attempts"));
     }
-    // Cancelling a pending run records no attempt: it ends before it started.
-    if self.attempts.is_empty() && !matches!(self.status, RunStatus::Pending | RunStatus::Cancelled) {
+    // Cancelling a pending run records no attempt, nor does failing one whose worktree could not be
+    // created: each ends before it started.
+    let started = !self.attempts.is_empty();
+    let consistent = match &self.status {
+      RunStatus::Pending | RunStatus::Failed(RunFailure::WorktreeNotCreated(_)) => !started,
+      RunStatus::Cancelled => true,
+      _ => started,
+    };
+    if !consistent {
       return Err(RunError::Inconsistent(
-        "only a pending run, or one cancelled before it started, has no attempts",
+        "only a pending run, or one cancelled or failed before it started, has no attempts",
       ));
     }
     let numbered = (1..)
@@ -214,8 +221,17 @@ impl Run {
     &self.created.snapshot
   }
 
+  /// The branch the run works on: the one it was created with, or the free one it was moved to
+  /// ([`Run::choose_branch`]).
   pub fn branch(&self) -> &BranchName {
     &self.created.branch
+  }
+
+  /// The branch that is the run's own, which its leftovers, cleanup, pull requests and screens name: `None` for a
+  /// run that never started as its worktree could not be created. It made no branch, and a branch of the name it was
+  /// created with is someone else's.
+  pub fn own_branch(&self) -> Option<&BranchName> {
+    (!matches!(self.status, RunStatus::Failed(RunFailure::WorktreeNotCreated(_)))).then_some(&self.created.branch)
   }
 
   /// Revision the run's branch was created from.

@@ -17,16 +17,24 @@ use crate::{
 pub(super) const INTERRUPTED: &str = "interrupted";
 pub(super) const RUNNING: &str = "running";
 
-/// `status`, `status_reason`, `failed_step` and `limit_execution` of a run row.
+/// `status`, `status_reason`, `failed_step`, `limit_execution` and `failure_reason` of a run row.
 pub(super) struct StatusColumns<'a> {
   pub(super) status: &'static str,
   pub(super) reason: Option<&'static str>,
   pub(super) failed_step: Option<&'a str>,
   pub(super) limit_execution: Option<String>,
+  /// The reason of a run that failed before it started, as JSON.
+  pub(super) failure_reason: Option<String>,
 }
 
-pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
-  let (status, reason, failed_step, limit_execution) = match status {
+pub(super) fn run_status_columns(run_status: &RunStatus) -> StatusColumns<'_> {
+  let failure_reason = match run_status {
+    RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) => {
+      Some(serde_json::to_string(reason).expect("a worktree failure is plain data with string keys"))
+    }
+    _ => None,
+  };
+  let (status, reason, failed_step, limit_execution) = match run_status {
     RunStatus::Pending => ("pending", None, None, None),
     RunStatus::Running => (RUNNING, None, None, None),
     RunStatus::Paused(PauseReason::LimitReached(RunLimit::StepBudget { execution })) => {
@@ -48,6 +56,7 @@ pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
     RunStatus::Failed(RunFailure::RetriesExhausted(step)) => {
       ("failed", Some(RETRIES_EXHAUSTED), Some(step.as_str()), None)
     }
+    RunStatus::Failed(RunFailure::WorktreeNotCreated(_)) => ("failed", Some(WORKTREE_NOT_CREATED), None, None),
     RunStatus::Cancelled => ("cancelled", None, None, None),
   };
   StatusColumns {
@@ -55,16 +64,25 @@ pub(super) fn run_status_columns(status: &RunStatus) -> StatusColumns<'_> {
     reason,
     failed_step,
     limit_execution,
+    failure_reason,
   }
 }
 
 pub(super) fn parse_run_status(
   status: &str,
   reason: Option<&str>,
-  failed_step: Option<&str>,
-  limit_execution: Option<&str>,
+  (failed_step, limit_execution): (Option<&str>, Option<&str>),
+  failure_reason: Option<&str>,
 ) -> Result<RunStatus, StoreError> {
   const WHAT: &str = "run status";
+  match (status, reason, failure_reason) {
+    ("failed", Some(WORKTREE_NOT_CREATED), Some(failure)) if failed_step.is_none() && limit_execution.is_none() => {
+      let failure = serde_json::from_str(failure).map_err(|error| corrupt("run failure reason", error))?;
+      return Ok(RunStatus::Failed(RunFailure::WorktreeNotCreated(failure)));
+    }
+    (_, _, Some(failure)) => return Err(corrupt(WHAT, format!("{status} / {reason:?} with reason {failure:?}"))),
+    _ => {}
+  }
   Ok(match (status, reason, failed_step, limit_execution) {
     ("pending", None, None, None) => RunStatus::Pending,
     (RUNNING, None, None, None) => RunStatus::Running,
@@ -110,6 +128,8 @@ const PLAN_LIMIT: &str = "plan_limit";
 /// that failed for used-up retries has the same reason.
 const WAITING: &str = "waiting";
 const RETRIES_EXHAUSTED: &str = "retries_exhausted";
+/// A run that failed before it started, whose worktree could not be created; git's reason has a column of its own.
+const WORKTREE_NOT_CREATED: &str = "worktree_not_created";
 const BROKE_AGAIN: &str = "broke_again";
 const UNVERIFIED: &str = "unverified";
 const UNCHANGED: &str = "unchanged";

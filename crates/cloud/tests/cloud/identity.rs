@@ -4,7 +4,7 @@ use orchester_api::{
 };
 use serde_json::json;
 
-use crate::support::{DAY, PASSWORD, TestCloud, postgres, remember};
+use crate::support::{DAY, HOUR, PASSWORD, TestCloud, postgres, remember};
 
 const SERVER: &str = "0199f0a0-0000-7000-8000-00000000c10d";
 
@@ -17,8 +17,7 @@ async fn key_set(cloud: &TestCloud) -> VerifiedKeySet {
   let response = cloud.request("GET", "/keys", None, None).await;
   assert_eq!(response.status, 200);
   let compact = response.json::<KeySetResponse>().key_set;
-  VerifiedKeySet::verify(&compact, &cloud.root.public_key(), seconds(cloud))
-    .expect("the key set verifies with the root")
+  VerifiedKeySet::verify(&compact, &cloud.root().await, seconds(cloud)).expect("the key set verifies with the root")
 }
 
 async fn identity_token(cloud: &TestCloud, device: &str) -> String {
@@ -42,7 +41,6 @@ pub async fn identity_token_verifies_with_the_published_key_set() {
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
   let device = signed.token.expose();
-  publish_for_the_first_time(&cloud, device).await;
   let set = key_set(&cloud).await;
   let token = identity_token(&cloud, device).await;
   let now = seconds(&cloud);
@@ -87,20 +85,55 @@ pub async fn identity_token_verifies_with_the_published_key_set() {
   cloud.finish().await;
 }
 
+pub async fn identity_key_sets_are_signed_weekly_and_renewed_after_a_stop() {
+  let cloud = TestCloud::start().await;
+  let email = "weekly@example.test";
+  cloud.register(email).await;
+  let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
+  let device = signed.token.expose();
+  let issued_at = key_set(&cloud).await.statement().issued_at;
+
+  // Within the first key's first three weeks nothing rotates; the weekly key set lists it alone.
+  cloud.clock.advance(8 * DAY);
+  cloud.cloud.keep_keys().await.expect("keep the keys");
+  let weekly = key_set(&cloud).await;
+  assert!(
+    weekly.statement().issued_at > issued_at,
+    "a week on, a new key set is signed"
+  );
+  assert_eq!(weekly.statement().keys.len(), 1);
+
+  // A key set the cloud did not renew (it was stopped for a month) expires, and the cloud stops issuing tokens
+  // rather than sign unverifiable ones, until it keeps its keys again.
+  cloud.clock.advance(31 * DAY);
+  let stale = cloud
+    .request(
+      "POST",
+      "/identity-tokens",
+      Some(device),
+      Some(json!({"audience": SERVER})),
+    )
+    .await;
+  assert_eq!((stale.status, stale.error()), (503, "keys_unavailable".into()));
+  cloud.cloud.keep_keys().await.expect("keep the keys");
+  key_set(&cloud).await;
+  identity_token(&cloud, device).await;
+  cloud.finish().await;
+}
+
 pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
   let cloud = TestCloud::start().await;
   let email = "rotation@example.test";
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
   let device = signed.token.expose();
-  cloud.publish_keys().await;
   let first = identity_token(&cloud, device).await;
   let issued_at = seconds(&cloud);
 
-  // A rotation lists the new key beside the previous one; the new key signs only two days later, once team servers
-  // have it (review 1, L4), and the previous one signs until then.
-  cloud.clock.advance(27 * DAY);
-  cloud.publish_keys().await;
+  // A week before the first key stops signing, a rotation lists the new key beside it; the new key signs only two
+  // days later, once team servers have it (review 1, L4), and the previous one signs until then.
+  cloud.clock.advance(24 * DAY);
+  cloud.cloud.keep_keys().await.expect("keep the keys");
   let both = key_set(&cloud).await;
   assert_eq!(both.statement().keys.len(), 2);
   assert!(
@@ -114,8 +147,8 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
   assert_ne!(kid(&first), kid(&second));
 
   // Once the first key's 90 days are over, a new key set no longer lists it.
-  cloud.clock.advance(62 * DAY);
-  cloud.publish_keys().await;
+  cloud.clock.advance(65 * DAY);
+  cloud.cloud.keep_keys().await.expect("keep the keys");
   let later = key_set(&cloud).await;
   assert!(later.statement().keys.iter().all(|key| key.kid != kid(&first)));
   assert_eq!(
@@ -123,30 +156,39 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
     Err(IdentityError::UnknownKey)
   );
   identity_token(&cloud, device).await;
-
-  // A key set nobody renewed expires, and the cloud stops issuing tokens rather than sign unverifiable ones.
-  cloud.clock.advance(31 * DAY);
-  let stale = cloud
-    .request(
-      "POST",
-      "/identity-tokens",
-      Some(device),
-      Some(json!({"audience": SERVER})),
-    )
-    .await;
-  assert_eq!(stale.status, 503);
   cloud.finish().await;
 }
 
-/// Before the first ceremony nothing is signed; publishing one key set twice is refused (review 1, L5).
-async fn publish_for_the_first_time(cloud: &TestCloud, device: &str) {
-  let body = Some(json!({"audience": SERVER}));
-  let early = cloud.request("POST", "/identity-tokens", Some(device), body).await;
-  assert_eq!((early.status, early.error()), (503, "keys_unavailable".into()));
-  assert_eq!(cloud.request("GET", "/keys", None, None).await.status, 503);
-  let published = cloud.publish_keys().await;
-  let again = cloud.cloud.host_publish_key_set(&published).await;
-  assert!(again.is_err(), "publishing one key set twice is not reported as done");
+/// A cloud stopped from day 22 to day 29.5 finds a key that stops signing in half a day and none to follow: the new
+/// key starts when that one stops, not two days later, so some key signs all the way through.
+pub async fn identity_keys_leave_no_gap_after_a_stop() {
+  let cloud = TestCloud::start().await;
+  let email = "stopped@example.test";
+  cloud.register(email).await;
+  let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
+  let device = signed.token.expose();
+  let first = identity_token(&cloud, device).await;
+  cloud.clock.advance(22 * DAY);
+  cloud.cloud.keep_keys().await.expect("keep the keys");
+  assert_eq!(key_set(&cloud).await.statement().keys.len(), 1, "no rotation yet");
+
+  cloud.clock.advance(7 * DAY + 12 * HOUR);
+  cloud.cloud.keep_keys().await.expect("keep the keys after the stop");
+  let set = key_set(&cloud).await;
+  let keys = &set.statement().keys;
+  assert_eq!(keys.len(), 2);
+  let (old, new) = (&keys[0], &keys[1]);
+  assert_eq!(old.kid, kid(&first));
+  assert_eq!(
+    new.not_before, old.signs_until,
+    "the new key starts when the old one stops"
+  );
+  assert_eq!(kid(&identity_token(&cloud, device).await), old.kid);
+  cloud.clock.advance(12 * HOUR);
+  assert_eq!(kid(&identity_token(&cloud, device).await), new.kid);
+  cloud.clock.advance(DAY);
+  assert_eq!(kid(&identity_token(&cloud, device).await), new.kid);
+  cloud.finish().await;
 }
 
 fn kid(token: &str) -> String {
@@ -168,7 +210,6 @@ pub async fn many_concurrent_identity_tokens_do_not_starve_the_pool() {
   let email = "busy@example.test";
   cloud.register(email).await;
   let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
-  cloud.publish_keys().await;
   let bearer = format!("Bearer {}", signed.token.expose());
   let body = serde_json::to_vec(&json!({"audience": SERVER})).expect("JSON");
   let mut admin = postgres().database(&cloud.database).await;

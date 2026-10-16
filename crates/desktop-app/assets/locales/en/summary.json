@@ -64,6 +64,8 @@
       "cancelledBody": "Nothing runs any more; its committed work stays on {{branch}}.",
       "cancelledBeforeStartTitle": "Canceled before it started",
       "cancelledBeforeStartBody": "No step ran.",
+      "notStartedTitle": "Failed before it started",
+      "notStartedBody": "Its worktree could not be created, so no step ran. Fix the cause, then run the task again. Reason: {{reason}}",
       "readyTitle": "Draft · ready to run",
       "readyBody": "Run queues it and starts its first run.",
       "tokenLimitCheckpointTitle": "Stopped at the token limit · checkpoint {{checkpoint}}",

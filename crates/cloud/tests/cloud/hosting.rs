@@ -2,19 +2,21 @@ use std::sync::Arc;
 
 use orchester_api::{
   Credential,
-  identity::{PrivateKey, RootKey, SigningKey},
+  identity::{PrivateKey, SigningKey},
 };
 use orchester_cloud::{Cloud, LATEST_SCHEMA, error::CloudError, mail::SmtpMailer};
 use serde_json::json;
 
-use crate::support::{PASSWORD, RecordingMailer, TestClock, TestCloud, config, postgres, relay::Relay, remember};
+use crate::support::{
+  PASSWORD, RecordingMailer, TestClock, TestCloud, config, key_encryption_key, postgres, relay::Relay, remember,
+};
 
 pub async fn migrations_apply_once_and_a_newer_database_is_refused() {
   let database = postgres().create_database().await;
-  let root = RootKey::new(&PrivateKey::generate().expect("key")).expect("root");
+  let key = key_encryption_key();
   let open = || {
     Cloud::open(
-      config(&database, &root, Vec::new()),
+      config(&database, &key, Vec::new()),
       Arc::new(TestClock::at(1_791_000_000_000)),
       Arc::new(RecordingMailer::default()),
     )
@@ -80,9 +82,8 @@ pub async fn migration_4_removes_servers_whose_id_is_not_their_keys() {
       .await
       .expect("a migration 3 server");
   }
-  let root = RootKey::new(&PrivateKey::generate().expect("key")).expect("root");
   Cloud::open(
-    config(&database, &root, Vec::new()),
+    config(&database, &key_encryption_key(), Vec::new()),
     Arc::new(TestClock::at(1_791_000_000_000)),
     Arc::new(RecordingMailer::default()),
   )
@@ -168,10 +169,10 @@ pub async fn requests_follow_the_contract() {
 /// local network, and a key-encryption key that is not strict hex are refused at start.
 pub async fn unsafe_configuration_is_refused() {
   let database = postgres().create_database().await;
-  let root = RootKey::new(&PrivateKey::generate().expect("key")).expect("root");
+  let key = key_encryption_key();
   let url = postgres().url(&database);
   let open = |change: &dyn Fn(&mut orchester_cloud::config::Config)| {
-    let mut config = config(&database, &root, Vec::new());
+    let mut config = config(&database, &key, Vec::new());
     change(&mut config);
     Cloud::open(
       config,

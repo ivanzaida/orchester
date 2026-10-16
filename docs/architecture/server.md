@@ -930,7 +930,7 @@ server and never sees project data.
 | Team servers: id, owner account, name, address, certificate fingerprint, public key, linked / unlinked at | Members' roles, projects' contents |
 | Which accounts joined which team server (to list them on a new computer) | Which projects they joined: the team server answers that |
 | Invites in flight: server, project address, kind, invitee email, inviter's display name, project name and role, expiry | Anything about an invite after it ended (accepted, expired, revoked): deleted |
-| Signing keys and the key set; the root key only offline | |
+| Its root key, the signing keys and the key set, private halves sealed with a key from its host's environment | |
 
 **Sign-up and sign-in (v1, row 48).** A simple form: email and password. The cloud sends a confirmation link (valid
 24 hours); the account can sign in once the email is confirmed. *Forgot password* sends a reset link (valid 1 hour,
@@ -1181,11 +1181,16 @@ web/
 
 Row 42; the rules here are the architect's.
 
-- **Keys.** A **root key** (Ed25519) that never leaves the person's offline machine signs **key sets**. A key set
-  lists the current **signing keys** (Ed25519, `kid`, valid from / until) and expires 30 days after it was issued; the
-  cloud publishes a new one at least weekly. A signing key signs identity tokens for 30 days and stays listed 60 more,
-  so a token signed just before a rotation still verifies. A new root is announced in a key set signed by the old
-  root; a team server follows it only then.
+- **Keys.** A **root key** (Ed25519) signs **key sets**. The cloud makes it at its first start and keeps it in its
+  database, sealed with the key-encryption key from its host's environment as the signing keys are; nobody runs a
+  key ceremony (changed 2026-10-16: the root was first kept on the person's offline machine, and deploying needed
+  manual signing steps the person rejected). A key set lists the current **signing keys** (Ed25519, `kid`, valid
+  from / until) and expires 30 days after it was issued; the cloud signs and publishes a new one itself at least
+  weekly and after every rotation, and rotates a signing key a week before it stops signing
+  ([cloud-hosting.md](../cloud-hosting.md), "Keys"). A key-encryption key that does not open the stored root stops
+  the cloud's start; it never makes a new root silently. A signing key signs identity tokens for 30 days and stays
+  listed 60 more, so a token signed just before a rotation still verifies. The root does not roll over: a new root
+  (after a lost key-encryption key or a compromise) is pinned again on each team server by its owner.
 - **At link** (team server setup, below), the team server pins the root key's fingerprint; the owner sees it in
   Sharing and on the console (`orchester-server cloud show`).
 - **Caching.** The team server keeps the newest key set it verified with the pinned root. It replaces it from `GET
@@ -1346,7 +1351,7 @@ Row 46. One forward migration of `orchester-server.db`:
 | Membership | A project is visible only to its members: everything else answers `404`. Members read and change tasks, organization, tags and shared configuration, claim, and report progress for tasks they hold. Owners also manage members, roles, project invites and the project's name and key. Admins manage accounts, server invites, members and the cloud link, but see a project's data only as members |
 | Discovery file | `orchester.toml` is untrusted. The desktop never contacts its address until the person confirms it |
 | Published configuration | A version from another member can reach this computer's agents. MCP server and secret references are bound only after the person confirms them; a version that widens what agents may do waits for the person's *Use v<N> here* (row 35); neither can be done by a tool |
-| At rest | The team servers' SQLite files are not encrypted; securing the hosts and backing up their data belong to whoever runs them. The cloud's PostgreSQL is reached over TLS with its own credentials from the host's environment; the person secures and backs up its database server. The cloud's signing keys are encrypted with a key from its host's environment; its root key is kept offline. The outbox is in the project database, beside the cache |
+| At rest | The team servers' SQLite files are not encrypted; securing the hosts and backing up their data belong to whoever runs them. The cloud's PostgreSQL is reached over TLS with its own credentials from the host's environment; the person secures and backs up its database server. The cloud's root key and signing keys are encrypted with a key from its host's environment. The outbox is in the project database, beside the cache |
 
 ### The cloud's trust boundary
 
@@ -1617,8 +1622,8 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   PostgreSQL; the migrations apply once with two instances starting together, and a newer database is refused.
 - [ ] Sign-up with email and password, confirmation and reset by email (SMTP to a test relay in the tests), sign-in
   with S1a's moved limiters, devices, account deletion. Magic link, Google and GitHub are later.
-- [ ] The root key (a host command makes it offline and prints its public half), signing keys, signed key sets,
-  rotation with the settable clock; identity tokens with audience, `jti` and 5-minute expiry; `api` `identity` tests
+- [ ] The root key (made by the cloud at its first start, sealed in its database), signing keys, signed key sets,
+  rotation with the settable clock, all kept by the cloud itself; identity tokens with audience, `jti` and 5-minute expiry; `api` `identity` tests
   over explicit keys and times.
 - [ ] Team server registry from a server-signed link statement; invites in flight, routed and emailed, deleted when
   they end; the rate limits; a log test finds no email, link, code or token. Every address and credential from the

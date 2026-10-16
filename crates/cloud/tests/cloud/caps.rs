@@ -13,7 +13,6 @@ use crate::{
 
 pub async fn a_person_keeps_their_caps_past_deleting_the_account() {
   let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
-  cloud.publish_keys().await;
   let email = "ivan@example.test";
   let first = signed_in(&cloud, email).await;
   let servers: Vec<TeamServer> = (0..6).map(|_| TeamServer::generate()).collect();

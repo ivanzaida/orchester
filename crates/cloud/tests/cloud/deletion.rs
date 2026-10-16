@@ -17,7 +17,6 @@ async fn count(cloud: &TestCloud, sql: &str) -> i64 {
 /// gone, the server it linked stays registered with no owner, and the email can sign up again.
 pub async fn deleting_the_account_removes_what_the_cloud_holds() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let email = "leaving@example.test";
   let (browser, desktop) = an_account_with_everything(&cloud, email).await;
   remember("not my password at all");
@@ -126,7 +125,6 @@ pub async fn deleting_with_wrong_passwords_is_limited() {
 /// with its members' joins and its invites; the next statement the server signs links it to whoever carries it.
 pub async fn a_deleted_owners_server_stays_for_its_members() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "owner@example.test").await;
   let member = signed_in(&cloud, "member@example.test").await;
   let invitee = signed_in(&cloud, "invitee@example.test").await;
@@ -192,7 +190,6 @@ async fn two_invites(cloud: &TestCloud, server: &TeamServer, email: &str) -> (In
 /// (N1 merge with the cloud branch: answers kept on the invite, migration 6; ownerless servers, migration 5).
 pub async fn answered_invites_go_with_the_account_and_ownerless_servers_still_issue() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "owner@example.test").await;
   let dana = signed_in(&cloud, "dana@example.test").await;
   let server = TeamServer::generate();

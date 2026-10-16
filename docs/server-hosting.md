@@ -135,14 +135,14 @@ at `https://<server>/admin`: first setup, projects, members and roles, invites, 
 server stays the front door: it answers `/api/*` itself, sends `/` to `/admin`, and forwards every other path to the
 admin app at `admin_url` (default `http://127.0.0.1:3100`), setting `X-Forwarded-For`, `-Proto` and `-Host` itself.
 Behind a proxy that holds the certificate (`tls = "off"`), the scheme is the one a proxy in `trusted_proxies` says in
-`X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `compose.caddy.yaml` does, or the admin
+`X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `deploy/server/compose.yaml` does, or the admin
 answers every page with *This page needs HTTPS*. Without `address`, project addresses take that same scheme and the
 host the request named.
 The admin app's server side calls the API on a second, private listener, `admin_api_listen` (default
 `127.0.0.1:8741`, plain HTTP, `off` to turn it off), which takes the browser's address and host from the headers the
 admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. The server warns at start when
 `admin_api_listen` is not a loopback or private address (every interface, `0.0.0.0`, included: inside the Docker
-network of `compose.yaml` that is expected, as long as the port stays unpublished). Projects whose slug is `admin`,
+network of `compose.private.yaml` that is expected, as long as the port stays unpublished). Projects whose slug is `admin`,
 `api` or `auth` (an older server allowed them) get the next free slug when the server opens (`admin` → `admin-2`),
 and the server's log names each. Without the admin app, admin
 paths answer *The admin app is not running* and the host commands remain for recovery.
@@ -167,19 +167,24 @@ pairing code from their Orchester or an account code from the host (`orchester-s
 
 ## Docker
 
-`deploy/server` has two complete examples, each with the `server` (Rust) and the `admin` (the Next.js standalone build
-on Node 24, `web/Dockerfile.server`) on a private network; only the front door is published. Both need
-`ORCHESTER_ADMIN_SECRET` (32 random bytes in base64).
+[deploy/server/README.md](../deploy/server/README.md) is the self-hoster's quick start. The images are published on
+Docker Hub for linux/amd64 and linux/arm64 (`ivanzaida/orchester-server` and `ivanzaida/orchester-server-admin`, the
+Next.js standalone build on Node 24 from `web/Dockerfile.server`) by `.github/workflows/server-release.yml`. Each
+compose file in `deploy/server` runs the `server` and the `admin` on a private network, takes every value from `.env`
+(`.env.example` lists them) and needs `ORCHESTER_ADMIN_SECRET` (32 random bytes in base64); only the front door is
+published.
 
-- **`compose.yaml`, no public domain**: the server presents its own certificate on port 8740. Run
-  `docker compose up -d --build` with `ORCHESTER_ADMIN_SECRET` set, then open `https://<host>:8740/admin`. Set
-  `ORCHESTER_SERVER_TLS_NAMES` to the names and addresses people use for this host before the first start (they are
-  read only when the certificate is generated).
-- **`compose.caddy.yaml`, a public DNS name**: set `ORCHESTER_HOST` to a DNS name pointing to this host and run
-  `docker compose -f compose.caddy.yaml up -d --build`. Caddy obtains and renews HTTPS certificates; ports 80 and 443
-  must be reachable. The server serves plain HTTP on the compose network only (`ORCHESTER_SERVER_TLS=off`) and knows
-  its public address from `ORCHESTER_SERVER_ADDRESS`. The example reserves subnet `172.29.0.0/24`; if it overlaps your
-  network, change the subnet, the service addresses and `ORCHESTER_SERVER_TRUSTED_PROXIES` together.
+- **`compose.yaml`, a public DNS name**: set `ORCHESTER_HOST` to a DNS name pointing to this host. Caddy obtains and
+  renews HTTPS certificates; ports 80 and 443 must be reachable. The server serves plain HTTP on the compose network
+  only (`ORCHESTER_SERVER_TLS=off`) and knows its public address from `ORCHESTER_SERVER_ADDRESS`. The network has the
+  subnet `172.29.0.0/24` (Caddy `.2`, the server `.3`, the admin `.4`); if it overlaps your network, set
+  `ORCHESTER_SUBNET_PREFIX`.
+- **`compose.private.yaml`, no public domain or air-gapped**: the server presents its own certificate on port 8740.
+  Open `https://<host>:8740/admin`. Set `ORCHESTER_SERVER_TLS_NAMES` to the names and addresses people use for this
+  host before the first start (they are read only when the certificate is generated).
+- **`compose.traefik.yaml`, behind the host's Traefik**: labels instead of published ports; the server believes
+  forwarded addresses only from `TRAEFIK_ADDRESS`, and its own network is internal.
+- **`compose.build.yaml`** builds both images from this repository instead of pulling them, added to any of the above.
 
 The setup code is in the server's console output: `docker compose logs server` shows it (it is the container's
 stdout, not a log record), or run `docker compose exec server orchester-server setup-code`.
