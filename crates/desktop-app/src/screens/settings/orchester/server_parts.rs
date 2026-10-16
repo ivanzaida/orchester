@@ -115,57 +115,64 @@ fn certificate_changed(
     }
     Some(Err(reason)) => column = column.child(field_error("orchester-server-certificate-unread", &reason.text(ctx))),
     Some(Ok(presented)) => {
-      let was = entry
-        .stored
-        .certificate_pin
-        .as_deref()
-        .and_then(check_code)
-        .unwrap_or_default();
-      let (trust, chosen, person) = (panel.trust.clone(), presented.clone(), panel.person.clone());
-      let matches = ActionButton::new(
-        CERTIFICATE_MATCHES,
-        ButtonKind::Primary,
-        ctx.t("cloud.server.certificate.matches"),
-      )
-      .icon(Icon::Check)
-      .on_click(move || {
-        // A person compares the code with the server's console; synthetic input never confirms it.
-        if person.confirms_code(CERTIFICATE_MATCHES) {
-          trust.run(chosen.clone());
-        }
-      });
-      let confirming = panel.confirming.clone();
-      let differs = ActionButton::new(
-        "orchester-server-certificate-differs",
-        ButtonKind::Secondary,
-        ctx.t("cloud.server.certificate.differs"),
-      )
-      .on_click(move || confirming.set(true));
       column = column
         .child(Text::new(&ctx.t("cloud.server.certificate.newCode")).variant(ExtraTypography::Property.role()))
-        .child(compared(
-          "orchester-server-certificate-new",
-          &presented.0.check_code(),
-          vec![
-            paragraph(
-              "orchester-server-certificate-compare",
-              &ctx.t_args("cloud.server.certificate.compare", [("was", was.as_str())]),
-            )
-            .into(),
-            Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into(),
-          ]
-          .into_iter()
-          .chain(panel.person.reason(ctx, CERTIFICATE_MATCHES))
-          .chain([hint(
-            "orchester-server-certificate-person",
-            &ctx.t("cloud.server.certificate.person"),
-          )
-          .into()])
-          .collect(),
-        ));
+        .child(new_code(ctx, panel, (entry, presented)));
     }
   }
   column.into()
+}
+
+/// The new check code under *… presents a different certificate*, with *It matches* (a person only) and *It doesn't
+/// match*.
+fn new_code(ctx: &mut Ctx, panel: &ServerPanel, (entry, presented): (&ServerEntry, &Presented)) -> Element {
+  let was = entry
+    .stored
+    .certificate_pin
+    .as_deref()
+    .and_then(check_code)
+    .unwrap_or_default();
+  let (trust, chosen, person) = (panel.trust.clone(), presented.clone(), panel.person.clone());
+  let matches = ActionButton::new(
+    CERTIFICATE_MATCHES,
+    ButtonKind::Primary,
+    ctx.t("cloud.server.certificate.matches"),
+  )
+  .icon(Icon::Check)
+  .on_click(move || {
+    // A person compares the code with the server's console; synthetic input never confirms it.
+    if person.confirms_code(CERTIFICATE_MATCHES) {
+      trust.run(chosen.clone());
+    }
+  });
+  let confirming = panel.confirming.clone();
+  let differs = ActionButton::new(
+    "orchester-server-certificate-differs",
+    ButtonKind::Secondary,
+    ctx.t("cloud.server.certificate.differs"),
+  )
+  .on_click(move || confirming.set(true));
+  compared(
+    "orchester-server-certificate-new",
+    &presented.0.check_code(),
+    vec![
+      paragraph(
+        "orchester-server-certificate-compare",
+        &ctx.t_args("cloud.server.certificate.compare", [("was", was.as_str())]),
+      )
+      .into(),
+      Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into(),
+    ]
+    .into_iter()
+    .chain(panel.person.reason(ctx, CERTIFICATE_MATCHES))
+    .chain([hint(
+      "orchester-server-certificate-person",
+      &ctx.t("cloud.server.certificate.person"),
+    )
+    .into()])
+    .collect(),
+  )
+  .into()
 }
 
 /// *This computer's sign-in on Atlas research ended*, with *Join again with Orchester Cloud* and *With a code*.
