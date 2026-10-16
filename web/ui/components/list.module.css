@@ -124,7 +124,16 @@
   gap: var(--space-sm);
 }
 
-/* Actions that fill the row's width on a phone, like an invite's buttons (`v0PUn` in `F9QYD`). */
+/*
+ * Actions that fill the row's width on a phone, like an invite's buttons (`v0PUn` in `F9QYD`). There a ghost button
+ * (an invite's *Decline*, ghost at full width in `N5imr`) becomes the bordered secondary `Dswcx`, as `F9QYD` draws it.
+ */
+.fill {
+  --button-ghost-fill: var(--row-ghost-fill);
+  --button-ghost-ring: var(--row-ghost-ring);
+  --button-ghost-text: var(--row-ghost-text);
+}
+
 .fill button {
   width: var(--row-button-width);
 }

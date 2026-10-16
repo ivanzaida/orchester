@@ -128,6 +128,40 @@ impl Cloud {
     audit(&client, None, "invite_withdrawn", &id.to_string(), None, now).await
   }
 
+  /// `POST /invites/{id}/decline`: the invitee deletes an open invite to the account's email. Like a revocation it
+  /// leaves a tombstone until the invite would have expired, so delivering it again (from the server or the
+  /// inviter's browser) neither lists it nor emails again. The team server keeps its own copy until it expires or is
+  /// revoked; nothing joins with it, since a join needs the invitee's own token.
+  pub(crate) async fn decline_invite(&self, auth: Authenticated, id: InviteId) -> Result<(), CloudError> {
+    let client = self.client().await?;
+    let declined: i64 = client
+      .query_one(
+        "WITH declined AS (
+           DELETE FROM invites i USING accounts a WHERE i.id = $1 AND a.id = $2 AND i.email = a.email
+           RETURNING i.id, i.server, i.expires_at
+         ), kept AS (
+           INSERT INTO revoked_invites (id, server, until) SELECT id, server, expires_at FROM declined
+           ON CONFLICT (id, server) DO NOTHING
+         )
+         SELECT count(*) FROM declined",
+        &[&id.as_uuid(), &auth.account.as_uuid()],
+      )
+      .await?
+      .try_get(0)?;
+    if declined == 0 {
+      return Err(CloudErrorCode::NotFound.into());
+    }
+    audit(
+      &client,
+      Some(auth.account),
+      "invite_declined",
+      &id.to_string(),
+      None,
+      self.now(),
+    )
+    .await
+  }
+
   /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first.
   pub(crate) async fn invites(&self, auth: Authenticated) -> Result<Vec<CloudInvite>, CloudError> {
     let rows = self
@@ -200,11 +234,15 @@ async fn known(client: &impl GenericClient, id: InviteId, server: TeamServerId) 
   )
 }
 
-/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts.
+/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts; a server whose owner deleted
+/// their account counts on its own until an admin links it again.
 async fn owner(client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
   Ok(
     client
-      .query_one("SELECT owner FROM servers WHERE id = $1", &[&server.as_uuid()])
+      .query_one(
+        "SELECT coalesce(owner, id) FROM servers WHERE id = $1",
+        &[&server.as_uuid()],
+      )
       .await?
       .try_get(0)?,
   )

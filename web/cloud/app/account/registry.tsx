@@ -16,8 +16,8 @@ import { declineAction, type FormState } from "./actions";
 import styles from "./account.module.css";
 
 /**
- * *Invites* and *Your servers* (`usaZQ`, `YNIjc`): what the cloud's registry holds. While the cloud answers `404` for
- * them (C1a has no invites or registry), each section says so instead of showing rows it does not have.
+ * *Invites* and *Your servers* (`usaZQ`, `YNIjc`): the cloud's invites in flight and its server registry. Each row has
+ * *Decline*; *Accept in Orchester* waits for the `orchester://` scheme the desktop does not register yet.
  */
 function Decline({ csrf, id }: { csrf: string; id: string }) {
   const [state, action] = useActionState<FormState, FormData>(declineAction, {});
@@ -32,7 +32,10 @@ function Decline({ csrf, id }: { csrf: string; id: string }) {
 }
 
 function InviteRow({ invite, csrf, now }: { invite: Invite; csrf: string; now: number }) {
-  const chip = invite.kind === "project" ? "account.invites.kindProject" : "account.invites.kindServer";
+  const chip =
+    invite.role === null
+      ? t("account.invites.kindServer")
+      : t("account.invites.kindProject", { role: t(`account.invites.roles.${invite.role}`) });
   const from =
     invite.project === null
       ? t("account.invites.fromServer", { inviter: invite.inviterName })
@@ -40,7 +43,7 @@ function InviteRow({ invite, csrf, now }: { invite: Invite; csrf: string; now: n
   return (
     <Row glyph={invite.project === null ? "server" : "folder-git-2"} align="start" fill side={<Decline csrf={csrf} id={invite.id} />}>
       <TopLine name={invite.project?.name ?? invite.serverName} weight="semibold">
-        <Chip>{t(chip, { role: invite.role })}</Chip>
+        <Chip>{chip}</Chip>
       </TopLine>
       <RowLine tone="secondary" wide>
         {from}
@@ -75,9 +78,6 @@ export function Invites(props: { listing: Listing<Invite>; email: string; csrf: 
 }
 
 function emptyWords(area: "invites" | "servers", kind: Listing<unknown>["kind"], email: string) {
-  if (kind === "notYet") {
-    return { title: t(`account.${area}.notYetTitle`), text: t(`account.${area}.notYetText`, { email }) };
-  }
   if (kind === "failed") {
     return { title: t(`account.${area}.failedTitle`), text: t(`account.${area}.failedText`) };
   }

@@ -23,6 +23,42 @@ pub struct ConfirmEmail {
   pub password: Credential,
 }
 
+/// `POST /auth/confirm/resend`: one more confirmation link for an unconfirmed account, carrying its newest sign-up's
+/// password and display name, so confirming it still asks for the password chosen at sign-up.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResendConfirmation {
+  pub email: String,
+}
+
+/// What an emailed link is for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LinkPurpose {
+  Confirm,
+  Reset,
+}
+
+/// `POST /auth/links/inspect`: the address a live link is for, without using it, so its page can show it.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LinkInspect {
+  pub link_token: Credential,
+  pub purpose: LinkPurpose,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LinkInspected {
+  pub email: String,
+}
+
+/// `DELETE /me`: the account's password, asked again before everything the cloud holds about it is deleted.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccountDeletion {
+  pub password: Credential,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CloudPlatform {

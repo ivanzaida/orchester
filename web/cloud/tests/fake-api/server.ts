@@ -4,7 +4,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { FULL, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
+import { FULL, resetAccounts, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
 import { routeRegistry } from "./registry.ts";
 
 import { RIGHT_PASSWORD } from "./accounts.ts";
@@ -70,10 +70,6 @@ function inspect(body: Record<string, unknown>): Answer {
   if (body.link_token === "inspect-down") {
     return refuse(500, "internal");
   }
-  // `*-unlisted` links behave like C1a's cloud, which has no inspect endpoint yet; the press still works.
-  if (typeof body.link_token === "string" && body.link_token.endsWith("-unlisted")) {
-    return refuse(404, "not_found");
-  }
   return purpose === body.purpose ? { status: 200, body: { email: ACCOUNT.email } } : refuse(422, "invalid_link");
 }
 
@@ -86,12 +82,12 @@ function confirm(body: Record<string, unknown>): Answer {
   if (body.link_token === "confirm-merged" && body.password !== RIGHT_PASSWORD) {
     return refuse(422, "invalid_link");
   }
-  const live = ["confirm-ok", "confirm-unlisted", "confirm-merged"].includes(String(body.link_token));
+  const live = ["confirm-ok", "confirm-merged"].includes(String(body.link_token));
   return live && body.password === RIGHT_PASSWORD ? { status: 204 } : refuse(401, "confirm_failed");
 }
 
 function finish(body: Record<string, unknown>, purpose: string): Answer {
-  if (body.link_token === `${purpose}-ok` || body.link_token === `${purpose}-unlisted`) {
+  if (body.link_token === `${purpose}-ok`) {
     return { status: 204 };
   }
   return refuse(422, "invalid_link");
@@ -169,6 +165,11 @@ export function startFakeApi(port: number) {
     const path = new URL(request.url ?? "/", "http://fake").pathname;
     if (path === "/__fake/requests") {
       send(response, { status: 200, body: requests });
+      return;
+    }
+    if (path === "/__fake/reset") {
+      resetAccounts();
+      send(response, { status: 204 });
       return;
     }
     void readBody(request).then((body) => {

@@ -2,10 +2,13 @@
 //! reset (`docs/architecture/server.md`, "Orchester Cloud"; the endpoints in `docs/cloud-api.md`).
 
 mod confirm;
+mod delete;
 mod devices;
 mod input;
+mod inspect;
 mod links;
 mod password;
+mod resend;
 mod reset;
 mod rows;
 mod sign_in;

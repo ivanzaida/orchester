@@ -1,12 +1,13 @@
+use std::str::FromStr;
+
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use orchester_api::{
   PasswordChange,
   cloud::{
-    AccountChanges, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse, IdentityTokenRequest,
-    KeySetResponse, ResetFinish, ResetRequest, SignUp,
+    AccountChanges, AccountDeletion, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse,
+    IdentityTokenRequest, KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest, SignUp,
   },
 };
-use orchester_core::id::CloudDeviceId;
 
 use super::extract::{ClientAddress, Device, SafeJson};
 use crate::{Cloud, error::CloudError};
@@ -21,6 +22,24 @@ pub(super) async fn sign_up(cloud: web::Data<Cloud>, address: ClientAddress, inp
 pub(super) async fn confirm(cloud: web::Data<Cloud>, address: ClientAddress, input: SafeJson<ConfirmEmail>) -> Answer {
   cloud.confirm(input.0, address.0).await?;
   Ok(HttpResponse::NoContent().finish())
+}
+
+pub(super) async fn resend_confirmation(
+  cloud: web::Data<Cloud>,
+  address: ClientAddress,
+  input: SafeJson<ResendConfirmation>,
+) -> Answer {
+  cloud.resend_confirmation(input.0, address.0).await?;
+  Ok(HttpResponse::Accepted().finish())
+}
+
+pub(super) async fn inspect_link(
+  cloud: web::Data<Cloud>,
+  address: ClientAddress,
+  input: SafeJson<LinkInspect>,
+) -> Answer {
+  let inspected = cloud.inspect_link(input.0, address.0).await?;
+  Ok(HttpResponse::Ok().json(inspected))
 }
 
 pub(super) async fn sign_in(
@@ -82,14 +101,28 @@ pub(super) async fn devices(cloud: web::Data<Cloud>, device: Device) -> Answer {
   Ok(HttpResponse::Ok().json(DevicesResponse { devices }))
 }
 
+pub(super) async fn delete_me(
+  cloud: web::Data<Cloud>,
+  device: Device,
+  address: ClientAddress,
+  input: SafeJson<AccountDeletion>,
+) -> Answer {
+  cloud.delete_account(device.0, input.0, address.0).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
 pub(super) async fn revoke_device(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
-  let id = request
+  cloud.revoke_device(device.0, Some(path_id(&request)?)).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
+/// The path's `{id}`; one that cannot be an id names nothing there (`404`).
+fn path_id<T: FromStr>(request: &HttpRequest) -> Result<T, CloudError> {
+  request
     .match_info()
     .get("id")
-    .and_then(|id| id.parse::<CloudDeviceId>().ok())
-    .ok_or(CloudErrorCode::NotFound)?;
-  cloud.revoke_device(device.0, Some(id)).await?;
-  Ok(HttpResponse::NoContent().finish())
+    .and_then(|id| id.parse().ok())
+    .ok_or_else(|| CloudErrorCode::NotFound.into())
 }
 
 pub(super) async fn keys(cloud: web::Data<Cloud>) -> Answer {

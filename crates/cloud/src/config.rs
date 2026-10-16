@@ -62,11 +62,11 @@ impl Config {
     let scheme = url.starts_with("https://") || url.starts_with("http://");
     if !scheme || url.ends_with('/') || url.contains(['?', '#', ' ']) {
       return Err(CloudError::Configuration(
-        "PUBLIC_URL must be an http(s) address without a trailing slash, query or fragment",
+        "ORCHESTER_CLOUD_PUBLIC_URL must be an http(s) address without a trailing slash, query or fragment",
       ));
     }
     if self.smtp_from.trim().is_empty() {
-      return Err(CloudError::Configuration("SMTP_FROM must not be empty"));
+      return Err(CloudError::Configuration("ORCHESTER_CLOUD_SMTP_FROM must not be empty"));
     }
     Ok(())
   }
@@ -75,7 +75,11 @@ impl Config {
 impl File {
   fn apply_environment(&mut self) -> Result<(), CloudError> {
     if let Some(value) = environment("LISTEN")? {
-      self.listen = Some(value.parse().map_err(|_| CloudError::Configuration("invalid LISTEN"))?);
+      self.listen = Some(
+        value
+          .parse()
+          .map_err(|_| CloudError::Configuration("ORCHESTER_CLOUD_LISTEN is not an address and port"))?,
+      );
     }
     set(&mut self.public_url, "PUBLIC_URL")?;
     set_secret(&mut self.database_url, "DATABASE_URL")?;
@@ -98,17 +102,24 @@ impl File {
 
   fn into_config(self) -> Result<Config, CloudError> {
     let missing = CloudError::Configuration;
-    let root = self.root_public_key.ok_or(missing("ROOT_PUBLIC_KEY is required"))?;
+    let root = self
+      .root_public_key
+      .ok_or(missing("ORCHESTER_CLOUD_ROOT_PUBLIC_KEY is required"))?;
     let config = Config {
       listen: self.listen.unwrap_or(SocketAddr::from(([127, 0, 0, 1], 8090))),
-      public_url: self.public_url.ok_or(missing("PUBLIC_URL is required"))?,
-      database_url: self.database_url.ok_or(missing("DATABASE_URL is required"))?,
-      smtp_url: self.smtp_url.ok_or(missing("SMTP_URL is required"))?,
-      smtp_from: self.smtp_from.ok_or(missing("SMTP_FROM is required"))?,
+      public_url: self
+        .public_url
+        .ok_or(missing("ORCHESTER_CLOUD_PUBLIC_URL is required"))?,
+      database_url: self
+        .database_url
+        .ok_or(missing("ORCHESTER_CLOUD_DATABASE_URL is required"))?,
+      smtp_url: self.smtp_url.ok_or(missing("ORCHESTER_CLOUD_SMTP_URL is required"))?,
+      smtp_from: self.smtp_from.ok_or(missing("ORCHESTER_CLOUD_SMTP_FROM is required"))?,
       key_encryption_key: self
         .key_encryption_key
-        .ok_or(missing("KEY_ENCRYPTION_KEY is required"))?,
-      root_public_key: PublicKey::parse(&root).map_err(|_| missing("ROOT_PUBLIC_KEY is not an Ed25519 public key"))?,
+        .ok_or(missing("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY is required"))?,
+      root_public_key: PublicKey::parse(&root)
+        .map_err(|_| missing("ORCHESTER_CLOUD_ROOT_PUBLIC_KEY is not an Ed25519 public key"))?,
       trusted_proxies: self.trusted_proxies.unwrap_or_default(),
     };
     config.validate()?;

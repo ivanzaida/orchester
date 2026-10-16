@@ -26,6 +26,8 @@ export default async function AccountPage() {
   const now = Date.now();
   const { account } = data;
   const invites = data.invites.kind === "list" ? data.invites.items.length : 0;
+  // The servers this account linked, which deleting it leaves with no owner; `null` when the list did not load.
+  const owned = data.servers.kind === "list" ? data.servers.items.filter((s) => s.owner).map((s) => s.name) : null;
   return (
     <>
       <AccountHeader brand={<CloudBrand />} name={account.displayName} email={account.email} csrf={csrf} />
@@ -37,7 +39,7 @@ export default async function AccountPage() {
             <Invites listing={data.invites} email={account.email} csrf={csrf} now={now} />
             <Servers listing={data.servers} email={account.email} />
             <Devices devices={data.devices} csrf={csrf} now={now} />
-            <Settings name={account.displayName} email={account.email} csrf={csrf} />
+            <Settings name={account.displayName} email={account.email} csrf={csrf} owned={owned} />
           </main>
         </div>
       </div>

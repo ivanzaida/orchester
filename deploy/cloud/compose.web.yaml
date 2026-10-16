@@ -16,6 +16,15 @@ services:
       ORCHESTER_CLOUD_API_URL: http://cloud:8090
       # Signs the CSRF tokens and seals the session cookie: 32 random bytes in base64, e.g. `openssl rand -base64 32`.
       ORCHESTER_CLOUD_WEB_SECRET: ${ORCHESTER_CLOUD_WEB_SECRET:?Set ORCHESTER_CLOUD_WEB_SECRET}
+    # For monitoring: the server stops on a bad configuration (and restarts in a loop, visible in `docker compose ps`);
+    # a server that runs but cannot answer its sign-in page is marked unhealthy. Caddy does not wait for it, so the API
+    # stays up while the web front is down.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/signin').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       backend:
         ipv4_address: 172.30.0.5
@@ -27,5 +36,7 @@ services:
     volumes:
       - ./Caddyfile.web:/etc/caddy/Caddyfile:ro
     depends_on:
-      - cloud
-      - web
+      cloud:
+        condition: service_started
+      web:
+        condition: service_started

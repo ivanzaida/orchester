@@ -2,11 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { MBP } from "../fake-api/accounts";
 
-import { apiRequests, PASSWORD, signInAs } from "./support";
+import { apiRequests, PASSWORD, resetFake, signInAs } from "./support";
 
 const FULL = "mira.koval@example.com";
 const NEW = "new.account@example.com";
-const EARLY = "early.cloud@example.com";
 
 async function openAccount(page: Page, email: string): Promise<void> {
   await signInAs(page, email, PASSWORD);
@@ -48,13 +47,6 @@ test.describe("account", () => {
     await expect(page.getByText("No servers yet")).toBeVisible();
     await expect(section(page, "Devices").getByText("1 signed in")).toBeVisible();
   });
-
-  test("a cloud without invites and a server registry says so instead of showing rows", async ({ page }) => {
-    await openAccount(page, EARLY);
-    await expect(page.getByText("Invites are not available yet")).toBeVisible();
-    await expect(page.getByText("Servers are not available yet")).toBeVisible();
-  });
-
 });
 
 test.describe("account actions", () => {
@@ -92,6 +84,43 @@ test.describe("account actions", () => {
     await expect(section(page, "Devices").getByText("1 signed in")).toBeVisible();
   });
 
+
+  test("the count stays right when the list reloads after a device was signed out", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, FULL);
+    const devices = section(page, "Devices");
+    await devices.locator("form", { has: page.locator(`input[value="${MBP}"]`) }).getByRole("button").click();
+    await expect(devices.getByText("2 signed in")).toBeVisible();
+    await page.getByRole("button", { name: "Change password" }).click();
+    await page.getByLabel("Current password").fill(PASSWORD);
+    await page.getByLabel("New password", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Repeat new password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Change password" }).click();
+    await expect(page.getByText("Your password is changed.", { exact: false })).toBeVisible();
+    await expect(devices.getByText("1 signed in")).toBeVisible();
+  });
+
+  test("deleting the account asks for its password in place, then leaves for sign-in", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, NEW);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page.getByText("Delete your Orchester account?")).toBeVisible();
+    await expect(page.getByText(`the invites to ${NEW} are deleted at once`, { exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "Keep" }).click();
+    await expect(page.getByText("Delete your Orchester account?")).toHaveCount(0);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await page.getByLabel("Password", { exact: true }).fill("not the password");
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page.getByText("The password is not right.")).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
+    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page).toHaveURL(/\/signin$/);
+    expect((await apiRequests()).at(-1)).toMatchObject({ method: "DELETE", path: "/api/v1/me", body: { password: "<redacted>" } });
+    await signInAs(page, NEW, PASSWORD);
+    await expect(page.getByText("The email or password is not right.", { exact: false })).toBeVisible();
+    await resetFake();
+  });
 });
 
 test.describe("account settings", () => {
@@ -119,5 +148,51 @@ test.describe("account settings", () => {
     const brand = await page.getByRole("banner").getByText("Orchester", { exact: true }).boundingBox();
     const name = await page.getByRole("banner").getByText("Mira Koval").boundingBox();
     expect((name?.y ?? 0) > (brand?.y ?? 0) + (brand?.height ?? 0)).toBe(true);
+  });
+
+  test("Decline is a ghost button at 1440 (N5imr) and a full-width bordered secondary on a phone (F9QYD)", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, FULL);
+    const decline = section(page, "Invites").getByRole("button", { name: "Decline" }).first();
+    const look = () =>
+      decline.evaluate((button) => {
+        const style = getComputedStyle(button);
+        const box = button.getBoundingClientRect();
+        return { background: style.backgroundColor, border: style.boxShadow, height: box.height, width: box.width };
+      });
+    const wide = await look();
+    expect(wide.background).toBe("rgba(0, 0, 0, 0)");
+    expect(wide.border).toBe("none");
+    await page.setViewportSize({ width: 390, height: 844 });
+    const phone = await look();
+    expect(phone.background).not.toBe("rgba(0, 0, 0, 0)");
+    expect(phone.border).toContain("inset");
+    expect(phone.height).toBe(32);
+    expect(phone.width).toBeGreaterThan(250);
+  });
+
+  test("the delete confirmation names the servers this account linked, which stay registered with no owner", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, FULL);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    const servers = page.getByText("stay registered with no owner", { exact: false });
+    await expect(servers).toBeVisible();
+    await expect(servers).toContainText("Koval lab");
+    await expect(servers).not.toContainText("Platform guild");
+    await resetFake();
+    await openAccount(page, NEW);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page.getByText("Delete your Orchester account?")).toBeVisible();
+    await expect(page.getByText("stay registered with no owner", { exact: false })).toHaveCount(0);
+  });
+
+  test("the delete confirmation's question is 600 and its text 12.5 px, as QEHMk", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, NEW);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    const title = page.getByText("Delete your Orchester account?");
+    const text = page.getByText("are deleted at once", { exact: false });
+    expect(await title.evaluate((node) => getComputedStyle(node).fontWeight)).toBe("600");
+    expect(await text.evaluate((node) => getComputedStyle(node).fontSize)).toBe("12.5px");
   });
 });

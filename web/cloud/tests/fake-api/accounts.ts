@@ -1,13 +1,11 @@
 /**
  * The fake cloud's signed-in side: accounts with devices, invites and servers, and the sessions that read them.
- * Three accounts (`web/cloud/README.md`): Mira with everything (`H47EAc`), a new account (`Z4Q3F`), and one on a
- * cloud like C1a's, which has no invites or server registry yet and answers `404` for them.
+ * Two accounts (`web/cloud/README.md`): Mira with everything (`H47EAc`) and a new account (`Z4Q3F`).
  */
 
 export const RIGHT_PASSWORD = "correct horse battery";
 export const FULL = "mira.koval@example.com";
 export const NEW = "new.account@example.com";
-export const EARLY = "early.cloud@example.com";
 
 export interface Answer {
   status: number;
@@ -20,6 +18,7 @@ const DESKTOP = "0199f0a0-0000-7000-8000-000000000001";
 export const MBP = "0199f0a0-0000-7000-8000-000000000002";
 const INVITE_PROJECT = "0199f0a0-0000-7000-8000-000000000011";
 const INVITE_SERVER = "0199f0a0-0000-7000-8000-000000000012";
+const INVITE_ACCOUNT = "0199f0a0-0000-7000-8000-000000000013";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -37,8 +36,8 @@ interface FakeAccount {
   display_name: string;
   password: string;
   devices: FakeDevice[];
-  invites: unknown[] | null;
-  servers: unknown[] | null;
+  invites: unknown[];
+  servers: unknown[];
 }
 
 function fullAccount(now: number): FakeAccount {
@@ -55,7 +54,7 @@ function fullAccount(now: number): FakeAccount {
       {
         id: INVITE_PROJECT,
         kind: "project",
-        role: "Member",
+        role: "member",
         server: { id: "server-northwind", name: "Northwind studio", address: "orchester.northwind.example" },
         project: { name: "mobile-app", address: "orchester.northwind.example/mobile-app" },
         inviter_display_name: "Tomas Berg",
@@ -64,35 +63,53 @@ function fullAccount(now: number): FakeAccount {
       {
         id: INVITE_SERVER,
         kind: "server",
-        role: "Admin",
+        role: null,
         server: { id: "server-atlas", name: "Atlas research", address: "orchester.atlas.example" },
         project: null,
         inviter_display_name: "Lena Ortiz",
         expires_at: now + 7 * DAY - HOUR,
       },
+      // An account invite has no row in the Cloud frames; the page leaves it out.
+      {
+        id: INVITE_ACCOUNT,
+        kind: "account",
+        role: null,
+        server: { id: "server-atlas", name: "Atlas research", address: "orchester.atlas.example" },
+        project: null,
+        inviter_display_name: "Lena Ortiz",
+        expires_at: now + 6 * DAY,
+      },
     ],
     servers: [
-      { id: "server-guild", name: "Platform guild", address: "orchester.guild.example", owner: false, joined_at: now - 13 * DAY },
-      { id: "server-lab", name: "Koval lab", address: "lab.koval.example", owner: true, joined_at: now - 17 * DAY },
+      { id: "server-guild", name: "Platform guild", address: "orchester.guild.example", fingerprint: null, owner: false, joined_at: now - 13 * DAY },
+      { id: "server-lab", name: "Koval lab", address: "lab.koval.example", fingerprint: null, owner: true, joined_at: now - 17 * DAY },
     ],
   };
 }
 
-function plainAccount(id: string, email: string, name: string, registry: unknown[] | null): FakeAccount {
-  return { id, email, display_name: name, password: RIGHT_PASSWORD, devices: [], invites: registry, servers: registry };
+function plainAccount(id: string, email: string, name: string): FakeAccount {
+  return { id, email, display_name: name, password: RIGHT_PASSWORD, devices: [], invites: [], servers: [] };
 }
 
 const accounts = new Map<string, FakeAccount>();
 const sessions = new Map<string, { email: string; device: string }>();
+/** Accounts deleted since the last reset: they no longer sign in. */
+const deleted = new Set<string>();
 let issued = 0;
 
+/** Forgets every change and session, for a test that needs the accounts as drawn. */
+export function resetAccounts(): void {
+  accounts.clear();
+  sessions.clear();
+  deleted.clear();
+}
+
 function account(email: string): FakeAccount | undefined {
-  if (!accounts.has(email)) {
+  if (!accounts.has(email) && !deleted.has(email)) {
     const now = Date.now();
     const made: Record<string, () => FakeAccount> = {
       [FULL]: () => fullAccount(now),
-      [NEW]: () => plainAccount("account-new", NEW, "Nova Lind", []),
-      [EARLY]: () => plainAccount("account-early", EARLY, "Erik Hale", null),
+      [NEW]: () => plainAccount("account-new", NEW, "Nova Lind"),
     };
     const make = made[email];
     if (make !== undefined) {
@@ -160,15 +177,28 @@ function rename(a: FakeAccount, body: Record<string, unknown>): Answer {
   return { status: 200, body: { account: wire(a) } };
 }
 
-function registry(list: unknown[] | null, field: string): Answer {
-  return list === null ? refuse(404, "not_found") : { status: 200, body: { [field]: list } };
+function registry(list: unknown[], field: string): Answer {
+  return { status: 200, body: { [field]: list } };
 }
 
 function decline(a: FakeAccount, id: string): Answer {
-  if (a.invites === null) {
-    return refuse(404, "not_found");
-  }
+  const before = a.invites.length;
   a.invites = a.invites.filter((invite) => (invite as { id: string }).id !== id);
+  return a.invites.length < before ? { status: 204 } : refuse(404, "not_found");
+}
+
+/** `DELETE /me`: with the right password the account and its sessions are gone; it comes back as drawn on reset. */
+function deleteAccount(a: FakeAccount, body: Record<string, unknown>): Answer {
+  if (body.password !== a.password) {
+    return refuse(401, "invalid_credentials");
+  }
+  accounts.delete(a.email);
+  deleted.add(a.email);
+  for (const [token, session] of sessions) {
+    if (session.email === a.email) {
+      sessions.delete(token);
+    }
+  }
   return { status: 204 };
 }
 
@@ -181,6 +211,7 @@ export function routeSignedIn(method: string, path: string, body: Record<string,
   const handlers: Record<string, (a: FakeAccount, current: string) => Answer> = {
     "GET /api/v1/me": (x) => ({ status: 200, body: { account: wire(x) } }),
     "PATCH /api/v1/me": (x) => rename(x, body),
+    "DELETE /api/v1/me": (x) => deleteAccount(x, body),
     "GET /api/v1/devices": devices,
     "DELETE /api/v1/devices/{id}": (x) => revoke(x, id),
     "DELETE /api/v1/auth/sessions/current": (x, current) => revoke(x, current),

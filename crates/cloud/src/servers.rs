@@ -84,7 +84,7 @@ impl Cloud {
       .client()
       .await?
       .query(
-        "SELECT s.id, s.name, s.address, s.fingerprint, s.owner = $1,
+        "SELECT s.id, s.name, s.address, s.fingerprint, coalesce(s.owner = $1, false),
            least(coalesce(j.first_joined, s.linked_at), s.linked_at)
          FROM servers s LEFT JOIN server_accounts j ON j.server = s.id AND j.account = $1
          WHERE s.unlinked_at IS NULL AND (s.owner = $1 OR j.account IS NOT NULL)

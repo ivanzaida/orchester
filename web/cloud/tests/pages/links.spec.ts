@@ -57,18 +57,6 @@ test.describe("confirmation link failures", () => {
     await expect(page.getByRole("button", { name: "Send a new link" })).toBeVisible();
   });
 
-  test("works on a cloud that cannot say a link's address yet: no address, the password decides", async ({ page }) => {
-    await page.goto("/confirm/confirm-unlisted");
-    await expect(page.getByText("Confirm the email of your Orchester account.")).toBeVisible();
-    await expect(page.getByText(EMAIL)).toHaveCount(0);
-    await page.getByLabel("Password", { exact: true }).fill("wrong one, twelve");
-    await page.getByRole("button", { name: "Confirm email" }).click();
-    await expect(page.getByRole("link", { name: "Send a new link" })).toHaveAttribute("href", "/signup");
-    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
-    await page.getByRole("button", { name: "Confirm email" }).click();
-    await expect(page.getByText("Your Orchester account is ready. Sign in with its email and password.")).toBeVisible();
-  });
-
   test("an expired or used link offers a new one", async ({ page }) => {
     await page.goto("/confirm/used");
     await expect(page.getByRole("heading", { name: "This link no longer works" })).toBeVisible();
@@ -117,15 +105,6 @@ test.describe("forgot and reset", () => {
     expect(finish[0]?.body).toEqual({ link_token: "reset-ok", new_password: "<redacted>" });
     // Nothing looked at the link again after it was used.
     expect((await apiRequests()).at(-1)?.path).toBe("/api/v1/auth/reset/finish");
-  });
-
-  test("a reset link on a cloud that cannot say its address still sets the password", async ({ page }) => {
-    await page.goto("/reset/reset-unlisted");
-    await expect(page.getByText("For your Orchester account.")).toBeVisible();
-    await page.getByLabel("New password", { exact: true }).fill("a long enough phrase");
-    await page.getByLabel("Repeat new password").fill("a long enough phrase");
-    await page.getByRole("button", { name: "Set password" }).click();
-    await expect(page.getByRole("heading", { name: "Your password is changed" })).toBeVisible();
   });
 
   test("an expired reset link sends a new one through Forgot password", async ({ page }) => {

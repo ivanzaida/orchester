@@ -52,6 +52,13 @@ pub(super) async fn invites(cloud: web::Data<Cloud>, device: Device) -> Answer {
   Ok(HttpResponse::Ok().json(CloudInvites { invites }))
 }
 
+/// The invitee declines an open invite to the account's email.
+pub(super) async fn decline_invite(cloud: web::Data<Cloud>, device: Device, request: HttpRequest) -> Answer {
+  let id: InviteId = path_id(&request)?;
+  cloud.decline_invite(device.0, id).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
 fn path_id<T: std::str::FromStr>(request: &HttpRequest) -> Result<T, CloudError> {
   request
     .match_info()

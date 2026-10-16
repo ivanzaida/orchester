@@ -22,7 +22,7 @@ impl FromStr for TrustedProxy {
   type Err = CloudError;
 
   fn from_str(value: &str) -> Result<Self, Self::Err> {
-    let invalid = || CloudError::Configuration("invalid trusted proxy address or CIDR");
+    let invalid = || CloudError::Configuration("ORCHESTER_CLOUD_TRUSTED_PROXIES holds an invalid address or CIDR");
     let (address, prefix) = value
       .split_once('/')
       .map_or((value, None), |(ip, bits)| (ip, Some(bits)));

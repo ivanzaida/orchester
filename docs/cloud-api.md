@@ -1,6 +1,7 @@
 # Orchester Cloud API
 
-The JSON API of `orchester-cloud` (`crates/cloud`), as built in C1's first part (accounts, devices, identity tokens).
+The JSON API of `orchester-cloud` (`crates/cloud`): accounts, devices, identity tokens, the team server registry and
+invites in flight (C1a, with SA's linking and admin sign-in).
 The design is in [architecture/server.md](architecture/server.md), "Orchester Cloud" and "Identity tokens and keys";
 running it is in [cloud-hosting.md](cloud-hosting.md). The wire types are in `orchester-api`'s `cloud` module, and
 the token and key set checks team servers use are in its `identity` feature.
@@ -9,7 +10,7 @@ Two kinds of client call it:
 
 - **The desktop app.** It signs in with the person's email and password and keeps the device token it gets back in
   the OS keychain (`orchester-cloud` / `device`).
-- **The web front** (Next.js, built later). It shows sign-up, sign-in, the confirmation landing and forgot/reset
+- **The web front** (Next.js, `web/cloud`). It shows sign-up, sign-in, the confirmation landing and forgot/reset
   password pages. Its **server** calls this API; browsers never call it directly, so the API sends no CORS headers.
   It signs in with platform `web` and keeps the token in the `__Host-orchester_session` cookie (`HttpOnly`, `Secure`,
   `SameSite=Lax`), never in script-readable storage. The web front's server must forward the browser's address in `X-Forwarded-For` and be
@@ -66,6 +67,8 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | --- | --- | --- | --- | --- |
 | `POST /auth/signup` | none | `{ email, password, display_name }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/confirm` | none | `{ link_token, password }` | `204` | `422 invalid_link`, `429` |
+| `POST /auth/confirm/resend` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
+| `POST /auth/links/inspect` | none | `{ link_token, purpose: "confirm"\|"reset" }` | `200 { email }` | `422 invalid_link`, `429` |
 | `POST /auth/sessions` | none | `{ email, password, device: DeviceInfo }` | `201 { token, device: Device, account: Account }` | `401 invalid_credentials`, `403 email_unconfirmed`, `422 invalid` (device), `429` |
 | `POST /auth/reset` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }` | `204` | `422 invalid`, `422 invalid_link`, `429` |
@@ -73,6 +76,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `DELETE /auth/sessions/current` | device | | `204` | |
 | `GET /me` | device | | `{ account: Account }` | |
 | `PATCH /me` | device | `{ display_name? }` | `{ account: Account }` | `422 invalid` |
+| `DELETE /me` | device | `{ password }` | `204` | `401 invalid_credentials`, `429` |
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
@@ -83,6 +87,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
 | `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at }] }` | |
 | `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
+| `POST /invites/{id}/decline` | device | | `204`; the id stays refused, as a revoked one | `404` |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
@@ -104,6 +109,17 @@ side, so mail scanners that fetch the link do not use it up. The server side sen
 `422 invalid_link`, after the same password check. On `204` the page says the email is confirmed and offers
 sign-in. On `invalid_link` it offers to try the password again or to sign up again. After 5 wrong passwords a link
 answers `429` for an hour; signing up again sends a new one. Confirming does not sign anyone in.
+
+**Resend.** `POST /auth/confirm/resend { email }` answers `202` for any email, before it touches the database, and
+counts against the email limits like a sign-up. In the background an unconfirmed account gets one more confirmation
+link. It carries the password and display name of the account's newest open link, so it is confirmed with that
+sign-up's password, like any link. A confirmed account gets the *you already have an account* note. An unknown email,
+or an account whose links have all expired, gets nothing.
+
+**Inspecting a link.** `POST /auth/links/inspect { link_token, purpose }` gives the email a live link was sent to,
+without using the link, so the confirmation and reset pages can show the address before anything is pressed. An
+unknown, used or expired link, or one for the other purpose, answers `422 invalid_link` after the same one query, and
+counts as a failed link finish against the client's address.
 
 **Sign-in.** A wrong password and an unknown email answer alike (`401 invalid_credentials`). `403 email_unconfirmed`
 comes only after the right password. The token in `201` is shown once; the cloud keeps only its SHA-256. `device`
@@ -183,14 +199,26 @@ answer in a signed cookie for `/invites/delivered`, which leads back only to the
 registered for that server (`<address>/admin`): nothing in the post or the page's address names where to go
 (security review 1, minor 2).
 
+**Declining an invite.** `POST /invites/{id}/decline` deletes an open invite to the account's email (`404` for any
+other) and, like a revocation, keeps its id refused until it would have expired: delivering it again answers
+`422 invalid` and sends no email. The team server keeps its own copy until it expires or is revoked; nothing joins
+with it, since a join needs the invitee's own identity token.
+
+**Deleting the account.** `DELETE /me { password }` asks for the password again (failures count as a password
+change's do). It deletes the account, its devices, links and joins, and the open invites to its email. The team
+servers it linked stay registered with no owner, with their members' joins and invites (migration 5), until an admin of
+the server links it again: the newest statement the server's key signs owns it. Meanwhile the server's daily invites
+count on the server itself. The audit keeps the account's id with the actions it took.
+
 ## Rate limits
 
 | What | Limit |
 | --- | --- |
 | Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
 | Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
-| Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
-| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link, each try counted before its password check |
+| Emails (sign-up, resend, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
+| Failed `confirm`, `reset/finish` and `links/inspect` | 20 per client address and 100 per IPv6 /48 in 15 minutes; for `confirm` and `reset/finish`, 5 an hour per link, each try counted before its password check |
+| Wrong passwords for `DELETE /me` | Counted with the failed current passwords of `/auth/password` |
 | Identity tokens | 60 an hour per device |
 | Invite deliveries (`POST /invites`) | 60 an hour per client address and 300 per IPv6 /48, counted before the signature is checked |
 | New invites | 100 a day for all the servers one account owns |
@@ -205,7 +233,11 @@ early. The address and network limits bound how fast a flood can add counts.
 
 ## Not built yet
 
-Accepting and declining invites (`POST /invites/{id}/accept`, `/decline`), unlinking from the cloud's side, and
-account deletion (`DELETE /me`, `405`) are not built; a new email in `PATCH /me` is refused as an unknown field
-(`400`). Magic link, Google and GitHub sign-in come later. `audience` is not checked against registered team servers
-for joins; a server not linked here may still be joined with a token.
+- Accepting an invite at the cloud (`POST /invites/{id}/accept`, a token bound to the invite) comes with the app's
+  invite flow (N1); today a join token for a linked server records the join.
+- Unlinking a server from the cloud's side.
+- A new email in `PATCH /me` is refused as an unknown field (`400`); the Account page shows *Changing your email is
+  not available yet*, as designed.
+- Magic link, Google and GitHub sign-in come later.
+- `audience` is not checked against registered team servers for joins; a server not linked here may still be joined
+  with a token.

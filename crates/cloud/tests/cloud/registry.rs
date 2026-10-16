@@ -19,14 +19,14 @@ use serde_json::json;
 use crate::support::{DAY, MINUTE, PASSWORD, TestCloud, remember};
 
 /// A team server's own key and id, as it signs for the cloud.
-struct TeamServer {
+pub(crate) struct TeamServer {
   id: TeamServerId,
   key: SigningKey,
 }
 
 impl TeamServer {
   /// A server as a team server makes itself: its id is its key's.
-  fn generate() -> Self {
+  pub(crate) fn generate() -> Self {
     let key = SigningKey::new(&PrivateKey::generate().expect("server key")).expect("signing key");
     Self {
       id: key.public_key().server_id(),
@@ -56,7 +56,7 @@ impl TeamServer {
       .expect("statement")
   }
 
-  fn invite(&self, id: InviteId, email: &str, now: i64) -> String {
+  pub(crate) fn invite(&self, id: InviteId, email: &str, now: i64) -> String {
     let invite = SignedInvite {
       id,
       server: self.id,
@@ -86,12 +86,12 @@ impl TeamServer {
   }
 }
 
-async fn signed_in(cloud: &TestCloud, email: &str) -> String {
+pub(crate) async fn signed_in(cloud: &TestCloud, email: &str) -> String {
   cloud.register(email).await;
   cloud.sign_in(email, PASSWORD, "Edge").await.token.expose().to_owned()
 }
 
-async fn link(cloud: &TestCloud, device: &str, server: &TeamServer) -> ServerLinked {
+pub(crate) async fn link(cloud: &TestCloud, device: &str, server: &TeamServer) -> ServerLinked {
   link_with(cloud, device, &server.statement(cloud.clock.now_ms())).await
 }
 
@@ -364,6 +364,52 @@ async fn revoke(cloud: &TestCloud, server: &TeamServer, id: InviteId, now: i64) 
   assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
   let revoked = json!({"revocation": server.revocation(&server.key, id, now)});
   assert_eq!(cloud.request("DELETE", &path, None, Some(revoked)).await.status, 204);
+}
+
+/// The invitee declines an invite: it is gone from their list, declining it again or someone else's is `404`.
+pub async fn invites_are_declined_by_the_invitee() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let dana = signed_in(&cloud, "dana@example.test").await;
+  let server = TeamServer::generate();
+  link(&cloud, &owner, &server).await;
+  let id = InviteId::generate();
+  let body = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
+  assert_eq!(
+    cloud.request("POST", "/invites", None, Some(body.clone())).await.status,
+    202
+  );
+  let decline = format!("/invites/{id}/decline");
+  let stranger = cloud.request("POST", &decline, Some(&owner), None).await;
+  assert_eq!(stranger.status, 404, "only the invitee declines");
+  assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 204);
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
+  assert!(listed.invites.is_empty());
+  assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 404);
+  a_declined_invite_stays_declined(&cloud, &dana, body).await;
+  let malformed = cloud
+    .request("POST", "/invites/not-an-id/decline", Some(&dana), None)
+    .await;
+  assert_eq!(malformed.status, 404);
+  let anonymous = cloud.request("POST", &decline, None, None).await;
+  assert_eq!(anonymous.status, 401);
+  cloud.finish().await;
+}
+
+/// Delivering a declined invite again (from the server or the inviter's browser) is refused, lists nothing and
+/// emails nothing: decline leaves the same tombstone as a revocation.
+async fn a_declined_invite_stays_declined(cloud: &TestCloud, invitee: &str, delivery: serde_json::Value) {
+  let again = cloud.request("POST", "/invites", None, Some(delivery)).await;
+  assert_eq!(again.status, 422, "a declined invite is not delivered again");
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(invitee), None).await.json();
+  assert!(listed.invites.is_empty());
+  cloud.mail.nth("dana@example.test", 2).await;
+  assert_eq!(
+    cloud.mail.count("dana@example.test"),
+    2,
+    "the confirmation and one invite"
+  );
 }
 
 async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {

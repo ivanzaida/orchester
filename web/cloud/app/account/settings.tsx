@@ -16,6 +16,7 @@ import { t } from "@/lib/i18n";
 import { displayNameError } from "@/lib/validation";
 
 import { passwordAction, renameAction, type FormState, type PasswordState } from "./actions";
+import { DeleteAccount } from "./delete";
 import { SignOutForm } from "./header";
 import { markSection } from "./nav";
 import styles from "./account.module.css";
@@ -119,7 +120,8 @@ function Password({ csrf }: { csrf: string }) {
   );
 }
 
-export function Settings({ name, email, csrf }: { name: string; email: string; csrf: string }) {
+export function Settings(props: { name: string; email: string; csrf: string; owned: readonly string[] | null }) {
+  const { name, email, csrf } = props;
   return (
     <Section id="account" title={t("account.settings.title")}>
       <Panel>
@@ -136,6 +138,7 @@ export function Settings({ name, email, csrf }: { name: string; email: string; c
           <SignOutForm csrf={csrf} kind="secondary" label={t("account.settings.signOutBrowser")} />
           <RowLine>{t("account.settings.signOutHint")}</RowLine>
         </SettingRow>
+        <DeleteAccount csrf={csrf} email={email} owned={props.owned} />
       </Panel>
     </Section>
   );

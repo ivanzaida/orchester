@@ -89,16 +89,20 @@ describe("account api", () => {
     const list = await devices(options);
     expect(list.ok && list.value.map((d) => [d.platform, d.current])).toEqual([["web", true], ["windows", false], ["macos", false]]);
     const open = await invites(options);
+    expect(open.kind === "list" && open.items.map((invite) => [invite.kind, invite.role])).toEqual([
+      ["project", "member"],
+      ["server", null],
+    ]);
     expect(open.kind === "list" && open.items[1]?.project).toBeNull();
     expect(open.kind === "list" && open.items[0]?.project?.name).toBe("mobile-app");
     const joined = await servers(options);
     expect(joined.kind === "list" && joined.items.map((s) => s.owner)).toEqual([false, true]);
   });
 
-  it("names a section the cloud does not serve yet as not yet, not as empty", async () => {
-    const options = { token: await token("early.cloud@example.com") };
-    expect(await invites(options)).toEqual({ kind: "notYet" });
-    expect(await servers(options)).toEqual({ kind: "notYet" });
+  it("names a section the cloud could not answer as failed, not as empty", async () => {
+    const options = { token: "not a session" };
+    expect(await invites(options)).toEqual({ kind: "failed" });
+    expect(await servers(options)).toEqual({ kind: "failed" });
   });
 });
 
