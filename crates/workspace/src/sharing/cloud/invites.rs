@@ -10,7 +10,7 @@ use orchester_api::{
 use orchester_core::id::{InviteId, TeamServerId};
 
 use super::{Cloud, CloudError};
-use crate::sharing::{CloudIdentity, CloudJoined, SharingError};
+use crate::sharing::{CloudIdentity, CloudJoined, CodeRequest, SharingError, Trust};
 
 /// How joining a team server with the account ended.
 #[derive(Debug)]
@@ -84,6 +84,29 @@ impl Cloud {
       Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::NotInvited) => Ok(ServerJoin::NotInvited),
       Err(error) => Err(error.into()),
     }
+  }
+}
+
+impl Cloud {
+  /// Joins the team server at `address`, trusted as `trust`, with a code (*Connect a server › With a code*). A code
+  /// needs this computer's cloud identity with two-factor authentication, asked for before the code is sent
+  /// ([`crate::sharing::Servers::code_proof`]); a server that cannot check one is sent the code alone, and takes only
+  /// its setup code then.
+  pub async fn join_with_code(
+    &self,
+    address: &ServerAddress,
+    trust: Trust,
+    request: CodeRequest,
+  ) -> Result<orchester_core::id::ServerId, CloudError> {
+    let (client, token) = self.signed_in().await?;
+    let identity = CloudIdentity {
+      cloud: &client,
+      device: &token,
+      invite: None,
+    };
+    let proof = self.servers().code_proof(address, trust, identity).await?;
+    let request = CodeRequest { proof, ..request };
+    Ok(self.servers().join_with_code(address, trust, request).await?)
   }
 }
 

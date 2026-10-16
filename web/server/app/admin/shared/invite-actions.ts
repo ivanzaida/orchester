@@ -43,6 +43,9 @@ function refusal(failure: ApiFailure): Message | null {
       return message("invites.tooManyCodes");
     case "cloud_off":
       return message("invites.unlinkedText");
+    // Invites with a code too are made only from a two-factor sign-in (`docs/architecture/server.md`, "Codes").
+    case "mfa_required":
+      return message("invites.mfaCodeText");
     default:
       return null;
   }

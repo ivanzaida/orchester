@@ -144,6 +144,8 @@ pub fn sharing_error(error: &SharingError) -> Said {
     SharingError::CertificateChanged => Said::new("cloud.errors.certificateChanged"),
     SharingError::Offline => Said::new("cloud.errors.serverUnreachable"),
     SharingError::ForeignAddress => Said::new("sharing.upload.foreignAddress"),
+    SharingError::TwoFactorOff => Said::new("sharing.connect.twoFactorOff"),
+    SharingError::TwoFactorSession => Said::new("sharing.connect.twoFactorSession"),
     _ => Said::new("cloud.errors.local"),
   }
 }
@@ -162,6 +164,8 @@ pub fn server_client(error: &ClientError) -> Said {
       ErrorCode::KeySetStale => Said::new("sharing.connect.keySetStale"),
       ErrorCode::ApprovalRefused => Said::new("sharing.connect.approvalRefused"),
       ErrorCode::InvalidIdentity => Said::new("sharing.connect.invalidIdentity"),
+      ErrorCode::MfaRequired => Said::new("sharing.connect.twoFactorSession"),
+      ErrorCode::MfaUnverifiable => Said::new("sharing.connect.twoFactorUnverifiable"),
       _ => Said::new("cloud.errors.serverRefused"),
     },
     ClientError::Cloud { .. } | ClientError::TwoFactorRequired => cloud_client(error),

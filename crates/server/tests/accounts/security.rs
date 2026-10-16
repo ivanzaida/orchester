@@ -8,11 +8,7 @@ use parking_lot::Mutex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::support::{
-  TestServer,
-  cloud::{Identity, TestCloud},
-  credential,
-};
+use crate::support::{TestServer, cloud::Identity, credential};
 
 #[tokio::test]
 async fn s1c_device_tokens_are_stored_as_hashes_and_no_password_remains() {
@@ -83,7 +79,7 @@ async fn joins(server: &TestServer) -> Vec<String> {
     .await
     .json();
   let paired = server.join(&pairing.code, None, "phone").await;
-  let cloud = TestCloud::generate();
+  let cloud = server.cloud();
   let now = server.seconds();
   let key_set = cloud.key_set(now);
   let linked = server

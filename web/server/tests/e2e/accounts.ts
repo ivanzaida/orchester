@@ -59,11 +59,18 @@ function appCode(secret: string): string {
   return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
 }
 
+/** A cloud device of `email` that turned two-factor authentication on, and the account's recovery codes. */
+export interface TwoFactorDevice {
+  readonly device: string;
+  readonly recovery: string[];
+}
+
 /**
- * Two-factor authentication for `email`, turned on through the API with the code an app would show: its recovery
- * codes, each of which finishes one sign-in in the browser (two sign-ins in one 30 seconds could not share a code).
+ * Two-factor authentication for `email`, turned on through the API with the code an app would show: the device that
+ * turned it on, a two-factor session, and the recovery codes, each of which finishes one sign-in in the browser (two
+ * sign-ins in one 30 seconds could not share a code).
  */
-export async function cloudTwoFactor(email: string): Promise<string[]> {
+export async function cloudTwoFactor(email: string): Promise<TwoFactorDevice> {
   const device = await cloudDevice(email);
   const started = await json(await post(`${CLOUD_API}/me/two-factor`, { password: PASSWORD }, device));
   if (typeof started.secret !== "string") {
@@ -74,7 +81,19 @@ export async function cloudTwoFactor(email: string): Promise<string[]> {
   if (!Array.isArray(codes) || !codes.every((code) => typeof code === "string")) {
     throw new Error("confirming two-factor authentication answered no recovery codes");
   }
-  return codes;
+  return { device, recovery: codes };
+}
+
+/** What an app sends with a code: its identity token for the team server, from a two-factor `device`, and the key set. */
+export async function codeProof(device: string): Promise<{ identity_token: string; key_set: string }> {
+  const info = await json(await fetch(`${SERVER_API}/server`));
+  const audience = (info.cloud as { server?: unknown } | null)?.server;
+  const keys = await json(await fetch(`${CLOUD_API}/keys`));
+  const issued = await json(await post(`${CLOUD_API}/identity-tokens`, { audience }, device));
+  if (typeof issued.identity_token !== "string" || typeof keys.key_set !== "string") {
+    throw new Error("the cloud gave no identity token for the server");
+  }
+  return { identity_token: issued.identity_token, key_set: keys.key_set };
 }
 
 /** The invites the cloud lists to the account of `device`. */
@@ -84,9 +103,12 @@ export async function cloudInvites(device: string): Promise<Record<string, unkno
   return Array.isArray(body.invites) ? (body.invites as Record<string, unknown>[]) : [];
 }
 
-/** A computer joining the team server with an invite code, as Orchester does: its device token. */
-export async function joinWithCode(code: string, username: string, device: string): Promise<string> {
-  const response = await post(`${SERVER_API}/auth/code`, { code, device, username, display_name: username });
+/**
+ * A computer joining the team server with an invite code, as Orchester does, with its two-factor cloud identity
+ * (`codeProof`): its device token.
+ */
+export async function joinWithCode(code: string, username: string, device: string, proof: object): Promise<string> {
+  const response = await post(`${SERVER_API}/auth/code`, { code, device, username, display_name: username, ...proof });
   const body = await json(response);
   if (typeof body.token !== "string") {
     throw new Error(`joining with a code answered ${String(response.status)}`);

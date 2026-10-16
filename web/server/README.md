@@ -68,6 +68,7 @@ state while it runs; `POST /__fake/reset {"scenario": "…"}` starts over, signe
 | Cloud sign-in as ivan@ / maria@ / dana@ / stranger@ / stale@example.com | Ivan; Maria; nothing to manage (named Dana Ruiz); `not_invited`; `key_set_stale` |
 | Email invites to addresses starting `limit` | `429` (the daily limit) |
 | Email invites to addresses starting `no-mfa` | `403 mfa_required`: this admin did not sign in through Orchester Cloud with two-factor authentication |
+| Scenario `no-mfa` | Every new invite, codes too, is `403 mfa_required` |
 | … starting `offline` | The admin's host cannot reach the cloud: *Send through this browser* |
 | … starting `refused` | The cloud refuses the invite (`422`) |
 | Scenarios | `full` (default), `setup`, `empty`, `unlinked`, `cloud-off`, `stale`, `no-approval`, `plain` |

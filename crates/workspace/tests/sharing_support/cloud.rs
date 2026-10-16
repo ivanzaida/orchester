@@ -15,12 +15,17 @@ use std::{
 
 use orchester_api::{
   cloud::{CloudPlatform, DeviceInfo},
-  identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey},
+  identity::{IdentityClaims, SigningKey},
 };
 use orchester_core::id::IdempotencyKey;
-use serde_json::json;
 
-const DAY: i64 = 24 * 60 * 60;
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the tests' one cloud key, loaded by every support module that signs for it, whichever of them a test binary includes"
+)]
+#[path = "../server_support/test_cloud.rs"]
+mod test_cloud;
+use serde_json::json;
 
 /// Who the cloud says the person is, and the invite their token accepts.
 pub struct Person {
@@ -44,22 +49,10 @@ pub struct FakeCloud {
 impl FakeCloud {
   /// A cloud that issues tokens for `person`, to the team server named by [`Self::serve_for`].
   pub fn start(person: Person) -> Self {
-    let (root, signing) = (
-      PrivateKey::generate().expect("root"),
-      PrivateKey::generate().expect("key"),
-    );
-    let root = RootKey::new(&root).expect("root key");
-    let signing = SigningKey::new(&signing).expect("signing key");
-    let now = now();
-    let listed = ListedKey {
-      kid: signing.kid().to_owned(),
-      public_key: signing.public_key().encoded(),
-      not_before: now - DAY,
-      signs_until: now + 29 * DAY,
-      listed_until: now + 89 * DAY,
-    };
-    let statement = KeySetStatement::new("https://cloud.test".into(), vec![listed], now);
-    let key_set = root.sign_key_set(&statement, now).expect("key set");
+    // The tests' one cloud key (`server_support::test_cloud`), so a server that pinned it for codes takes these tokens.
+    let root = test_cloud::root();
+    let signing = test_cloud::signing();
+    let key_set = test_cloud::key_set(now());
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
     let address = listener.local_addr().expect("address");
     let served = key_set.clone();

@@ -6,12 +6,18 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+mod joins;
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the tests' one cloud key, loaded by every support module that signs for it, whichever of them a test binary includes"
+)]
+pub mod test_cloud;
 mod tls;
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
-  CodeJoin, Credential, SharedProject, UserChanges,
+  Credential, SharedProject, UserChanges,
   certificate::CertificatePin,
   client::{Client, PlainHttp, ServerAddress},
 };
@@ -159,58 +165,6 @@ impl TestServer {
       &json!({"kind":"server","delivery":"code","admin":admin}),
     );
     Credential::new(invite["code"].as_str().expect("invite code").into())
-  }
-
-  /// The account `username` joined on a test computer; returns that device's token. API 3 has no passwords: the
-  /// frozen `crates/desktop`'s tests use this name for what a first password was.
-  pub fn create_user(&self, username: &str, display_name: &str, admin: bool) -> Credential {
-    let code = self.code_for(username, admin);
-    let client = self.client();
-    let joined = self
-      .block_on(client.join_with_code(&CodeJoin {
-        code,
-        device: "test computer".into(),
-        username: Some(username.into()),
-        display_name: Some(display_name.into()),
-        kind: orchester_api::DeviceKind::App,
-      }))
-      .expect("join with a code");
-    joined.token
-  }
-
-  /// Another device of `username`, joined with an account code from the host: that device's token.
-  pub fn device_of(&self, username: &str) -> SecretValue {
-    let joined = self.join_device_of(username);
-    SecretValue::new(joined.token.expose().to_owned()).expect("a token")
-  }
-
-  fn join_device_of(&self, username: &str) -> orchester_api::Joined {
-    let code = self
-      .block_on(self.server.host_account_code(username.into()))
-      .expect("account code");
-    let client = self.client();
-    self
-      .block_on(client.join_with_code(&CodeJoin {
-        code,
-        device: "BUILD-02 · Windows".into(),
-        username: None,
-        display_name: None,
-        kind: orchester_api::DeviceKind::App,
-      }))
-      .expect("join with an account code")
-  }
-
-  /// The first admin's set-up device. It stands for one that joined through Orchester Cloud with two-factor
-  /// authentication, which the server admin needs to send invites by email: its session is marked so in the server's
-  /// database, as such a join would have recorded it (`crates/server/tests/accounts/two_factor.rs` joins that way).
-  fn two_factor_admin_device(&self, username: &str) -> SecretValue {
-    let joined = self.join_device_of(username);
-    let database = rusqlite::Connection::open(self._directory.path().join("orchester-server.db")).expect("database");
-    let marked = database
-      .execute("UPDATE sessions SET mfa=1 WHERE id=?1", [joined.session.id.to_string()])
-      .expect("mark the session");
-    assert_eq!(marked, 1, "the set-up device's session");
-    SecretValue::new(joined.token.expose().to_owned()).expect("a token")
   }
 
   /// Another computer of `username` (the passwords stand for nothing since API 3); returns its device token.
@@ -484,7 +438,8 @@ impl TestServer {
       match token {
         Some(token) => token,
         None => {
-          let token = self.two_factor_admin_device(&username.expect("the first admin joined"));
+          // Joined with an account code and a two-factor identity ([`Self::code_proof`]), as inviting needs.
+          let token = self.device_of(&username.expect("the first admin joined"));
           self.admin.lock().1 = Some(token.expose().to_owned());
           token.expose().to_owned()
         }

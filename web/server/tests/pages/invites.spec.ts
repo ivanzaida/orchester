@@ -48,6 +48,14 @@ test.describe("invites", () => {
     expect((await deliveries()).some((delivery) => delivery.email === "no-mfa.person@example.com")).toBe(false);
   });
 
+  test("making a code without a two-factor sign-in says how to get one", async ({ page }) => {
+    await reset("no-mfa");
+    await signIn(page);
+    await page.goto("/admin/projects/kontur/invites");
+    await page.getByRole("button", { name: "Make a code" }).click();
+    await expect(page.getByText("Making invites, codes too, needs two-factor authentication", { exact: false })).toBeVisible();
+  });
+
   test("the daily limit stops the button and says until when", async ({ page }) => {
     await signIn(page);
     await page.goto("/admin/projects/kontur/invites");

@@ -15,6 +15,14 @@ pub struct Key {
   private: PrivateKey,
 }
 
+impl Clone for Key {
+  fn clone(&self) -> Self {
+    Self {
+      private: PrivateKey::from_pkcs8(self.private.pkcs8().to_vec()),
+    }
+  }
+}
+
 impl Key {
   pub fn generate() -> Self {
     Self {
@@ -48,6 +56,7 @@ pub struct Identity<'a> {
   pub invite: Option<&'a str>,
 }
 
+#[derive(Clone)]
 pub struct TestCloud {
   pub root: Key,
   pub signing: Key,

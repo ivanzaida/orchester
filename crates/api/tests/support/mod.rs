@@ -14,10 +14,14 @@ use orchester_server::{
   clock::SystemClock,
   config::{Config, TlsMode},
   error::ServerError,
+  host::CloudCommand,
 };
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
+
+#[path = "../../../workspace/tests/server_support/test_cloud.rs"]
+mod test_cloud;
 
 pub struct TestServer {
   pub server: Server,
@@ -76,8 +80,21 @@ impl TestServer {
     .expect("client")
   }
 
-  /// Joins with `code` from this computer; `username` when the code makes an account.
+  /// Joins with `code` from this computer; `username` when the code makes an account. Every code but the setup code
+  /// carries an identity token with the two-factor claim ([`Self::code_proof`]).
   pub async fn join(&self, code: &Credential, username: Option<&str>) -> Joined {
+    let (identity_token, key_set) = self.code_proof().await;
+    self
+      .join_with(code, username, (Some(identity_token), Some(key_set)))
+      .await
+  }
+
+  async fn join_with(
+    &self,
+    code: &Credential,
+    username: Option<&str>,
+    (identity_token, key_set): (Option<Credential>, Option<String>),
+  ) -> Joined {
     self
       .client()
       .join_with_code(&CodeJoin {
@@ -86,12 +103,41 @@ impl TestServer {
         username: username.map(Into::into),
         display_name: username.map(Into::into),
         kind: DeviceKind::App,
+        identity_token,
+        key_set,
       })
       .await
       .expect("join with a code")
   }
 
-  /// The first admin, `alice`, from the setup code; returns the device token.
+  /// What an app signed in to Orchester Cloud with two-factor authentication sends with a code: an identity token for
+  /// this server from the tests' cloud, and its key set. The server pins that cloud's root first, as its admin does on
+  /// the host.
+  pub async fn code_proof(&self) -> (Credential, String) {
+    let shown = self
+      .server
+      .host_cloud(CloudCommand::Show)
+      .await
+      .expect("the cloud link");
+    let link = match shown.root_fingerprint {
+      Some(_) => shown,
+      None => self
+        .server
+        .host_cloud(CloudCommand::Pin(test_cloud::root_key()))
+        .await
+        .expect("pin the tests' cloud"),
+    };
+    let person = test_cloud::Person {
+      account: "0191c7c0-0000-7000-8000-00000000c0de",
+      email: "code@example.com",
+      name: "Code Person",
+    };
+    let token = test_cloud::token(&link.server, &person, (None, true));
+    (Credential::new(token), test_cloud::key_set(test_cloud::now()))
+  }
+
+  /// The first admin, `alice`, from the setup code, on a second computer joined with an account code and a two-factor
+  /// identity, as making invites needs; returns that device token.
   pub async fn admin(&self) -> SecretValue {
     let code = self
       .server
@@ -99,7 +145,13 @@ impl TestServer {
       .await
       .expect("setup code")
       .expect("no admin yet");
-    token(&self.join(&code, Some("alice")).await.token)
+    self.join_with(&code, Some("alice"), (None, None)).await;
+    let account = self
+      .server
+      .host_account_code("alice".into())
+      .await
+      .expect("account code");
+    token(&self.join(&account, None).await.token)
   }
 
   /// `username`, invited to the server by `admin` with a code and joined: their id and token.

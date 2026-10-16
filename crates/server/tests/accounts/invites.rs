@@ -86,8 +86,6 @@ async fn s1c_a_project_invite_code_makes_an_account_with_that_project_only() {
 async fn s1c_invites_are_listed_without_codes_and_a_revoked_invite_stops_working() {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
-  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
-  server.two_factor(&admin.token);
   let a = project(&server, &admin.token, "project-a").await;
   let by_code: InviteCreated = invite(
     &server,

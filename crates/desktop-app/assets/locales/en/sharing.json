@@ -97,7 +97,10 @@
       "cloudOff": "This server doesn't accept Orchester Cloud sign-ins now. Join with a code instead.",
       "keySetStale": "The server's copy of Orchester Cloud's keys is out of date. Try again, or join with a code.",
       "approvalRefused": "The server refused this computer. If you didn't expect this, ask an admin of the server.",
-      "invalidIdentity": "The server didn't accept your Orchester Cloud identity. Try again."
+      "invalidIdentity": "The server didn't accept your Orchester Cloud identity. Try again.",
+      "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account. Turn it on under Security on the cloud's Account page; signing in here with its code is coming to Orchester.",
+      "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication. Signing in here with a code is coming to Orchester; until then a code can't be entered on this computer.",
+      "twoFactorUnverifiable": "This server can't check two-factor authentication: its admin pins Orchester Cloud's root key on the server (orchester-server cloud pin) or links it to Orchester Cloud."
     },
     "link": {
       "taskList": "Task list",

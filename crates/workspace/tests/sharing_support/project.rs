@@ -149,6 +149,7 @@ impl Person {
       code: Credential::new(code.expose().into()),
       username: Some(username.into()),
       display_name: Some(display_name.into()),
+      proof: Some(server.code_proof()),
     };
     self
       .block_on(

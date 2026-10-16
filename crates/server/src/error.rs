@@ -200,6 +200,10 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
       StatusCode::FORBIDDEN,
       "Turn on two-factor authentication in Orchester Cloud and sign in with it to send invites",
     ),
+    ErrorCode::MfaUnverifiable => (
+      StatusCode::FORBIDDEN,
+      "This server cannot check two-factor authentication: its admin pins Orchester Cloud's root key or links it",
+    ),
     ErrorCode::NothingToManage => (StatusCode::FORBIDDEN, "The account is not an admin and owns no project"),
     ErrorCode::KeySetStale => (
       StatusCode::CONFLICT,

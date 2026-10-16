@@ -52,6 +52,12 @@ pub enum SharingError {
   /// A server whose own certificate this computer pinned presents another one; nothing was sent to it.
   #[error("the server presents a different certificate")]
   CertificateChanged,
+  /// A code needs two-factor authentication on the person's Orchester Cloud account, which is off; nothing was sent.
+  #[error("the cloud account has two-factor authentication off")]
+  TwoFactorOff,
+  /// A code needs this computer to have signed in to Orchester Cloud with two-factor authentication; nothing was sent.
+  #[error("this computer signed in to Orchester Cloud without two-factor authentication")]
+  TwoFactorSession,
   /// The server has no project at the address, or the person is not a member of it; it answers both alike.
   #[error("no project the person is a member of at this address")]
   NoProject,
@@ -102,6 +108,8 @@ impl SharingError {
       Self::NoProject => Message::new("sharing.errors.noProject"),
       Self::ProjectChanged => Message::new("sharing.errors.projectChanged"),
       Self::ForeignAddress => Message::new("sharing.errors.foreignAddress").with("server", address.as_str().to_owned()),
+      Self::TwoFactorOff => Message::new("sharing.errors.twoFactorOff"),
+      Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
     }
   }
 }

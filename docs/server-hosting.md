@@ -63,12 +63,17 @@ their own. Redemptions from the host itself (loopback) are exempt from the serve
 redeem the setup code there. A server holds at most 50 open codes (`409 too_many_codes`, also for a pairing code).
 Failed joins are counted per address and hour in `failed_joins`, kept 90 days.
 
+**Two-factor authentication** (2026-10-16). Every invite, by email or with a code, is made only for a device token that
+came with a cloud identity's two-factor claim (`mfa`, kept as `sessions.mfa`, schema 5): a sign-in to the admin through
+Orchester Cloud with two-factor authentication, an app that joined with it, or a browser signed in with a pairing code
+such an app made. Any other gets `403 mfa_required`. Every code but the setup code, entered in an app, needs the app's
+identity token for this server with the claim (`identity_token` and `key_set` beside the code), verified against the
+pinned root: `403 mfa_required` without it, `403 mfa_unverifiable` while no root is pinned. A join token that accepts an
+invite by email needs the claim as well. Invites made before are still delivered as they were (only new ones are held
+to it), and accepting any of them needs it.
+
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
-the server admin to carry to Orchester Cloud. They are made only for a device token issued for a cloud identity token
-that says its device signed in with two-factor authentication (`mfa`, kept as `sessions.mfa`, schema 5); any other,
-a code's included, gets `403 mfa_required`. A join token that accepts an invite needs the claim as well. Invites made
-before are still delivered as they were (only new ones are held to it), and accepting any of them needs it; codes are
-not held to it. One person sends at most 30 invites by email in 24 hours (`429` with
+the server admin to carry to Orchester Cloud. One person sends at most 30 invites by email in 24 hours (`429` with
 `Retry-After`). Orchester Cloud adds its own limits: 100 new invites a day for all the servers one account owns, and
 at most one email a day per server and invitee, three a day per invitee; an invite over an email limit still reaches
 the invitee's app ([cloud-api.md](cloud-api.md#rate-limits)). Invites list without their codes (`GET /invites`, `?project=<id>` for one project, `&recent=true` with
@@ -167,7 +172,14 @@ certificate with `orchester-server tls show` before trusting it (the sign-in and
 **Air-gapped.** Build the images (or the binary and the admin's standalone folder) elsewhere and copy them in; nothing
 is fetched at run time (the admin bundles its fonts and loads nothing from the internet). Leave
 `ORCHESTER_ADMIN_CLOUD_URL` out: setup stops after the first admin, people join with codes and admins sign in with a
-pairing code from their Orchester or an account code from the host (`orchester-server account-code <username>`).
+pairing code from their Orchester or an account code from the host (`orchester-server account-code <username>`). Codes
+need two-factor authentication the server can check: pin Orchester Cloud's root on the host without linking
+(`orchester-server cloud pin <root public key>`, the public key the cloud names in its log and in `docs/cloud-hosting.md`,
+"Keys"). Pinning also lets people join with their cloud identity; `orchester-server cloud off` stops that and still
+checks the tokens codes carry. Each person's Orchester then reaches the cloud once per code, signed in with two-factor
+authentication, and carries its token and key set to the server. An admin makes invites from a browser signed in with a pairing code their
+Orchester made after it joined that way. Without a pinned root the server makes no invites and takes no code but the
+setup code (`403 mfa_unverifiable`); a team with no internet anywhere cannot add people.
 
 ## Docker
 

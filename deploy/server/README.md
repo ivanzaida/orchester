@@ -29,9 +29,9 @@ and ports 80 and 443 reachable from the internet:
    server has an admin. `docker compose exec server orchester-server setup-code` makes a new one while it has none.
 
 Then create a project in the admin and invite people from its *Invites*: with a code they enter in Orchester, or by
-email once the server is linked to Orchester Cloud. Invites by email go out only from an admin signed in through
-Orchester Cloud with two-factor authentication, and only a person with it accepts one; the admin says where to turn it
-on. Their Orchester joins the server at `https://<ORCHESTER_HOST>`.
+email once the server is linked to Orchester Cloud. Invites, codes too, are made only from an admin signed in with
+two-factor authentication at Orchester Cloud, and only a person signed in with it accepts one or enters a code; the
+admin says where to turn it on. Their Orchester joins the server at `https://<ORCHESTER_HOST>`.
 
 The commands here are for `compose.yaml`; with another file, add `-f compose.private.yaml` or `-f compose.traefik.yaml`
 to each `docker compose`.
@@ -100,6 +100,11 @@ Use `compose.private.yaml`; Caddy's public certificate needs the internet.
 
 Nothing is fetched at run time. People's Orchester pins the server's certificate when they join with a code; they
 compare its check code once.
+
+Codes and invites need two-factor authentication the server can check: pin Orchester Cloud's root once,
+`docker compose -f compose.private.yaml exec server orchester-server cloud pin <root public key>`, without linking.
+People's Orchester then reaches the cloud once per code; the server never does. Without a pinned root the server takes
+only its setup code ([docs/server-hosting.md](../../docs/server-hosting.md), "Air-gapped").
 
 ## Upgrades
 

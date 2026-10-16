@@ -331,10 +331,12 @@ codes are audited (`two_factor_failed`).
 **What a two-factor session may do.** Only a two-factor session accepts an invite (`POST /identity-tokens` with
 `invite`: `403 mfa_required` or `403 session_without_mfa` otherwise, and the invite stays open), and `GET /invites`
 says for each whether this device would be refused (`needs_two_factor`). Every identity token says whether its device
-is a two-factor session (claim `mfa`). Team servers take an invite's join token only with `mfa`, and send invites by email
-only from a device token issued for an identity token with it ([architecture/server.md](architecture/server.md),
-"Invites"). Invites made before and delivered later are not held to it: delivering (`POST /invites`) checks the
-server's signature only.
+is a two-factor session (claim `mfa`). Team servers take an invite's join token only with `mfa`, make invites (by email
+or with a code) only from a device token issued for an identity token with it, and take every code but the setup code
+from an app only with a join token (no purpose, the server's id as `aud`) that says `mfa`
+([architecture/server.md](architecture/server.md), "Invites", "Codes"). So the desktop asks for a token for the server it
+enters a code for, from a two-factor session, and carries the key set with it. Invites made before and delivered later
+are not held to it: delivering (`POST /invites`) checks the server's signature only.
 
 **A lost phone.** The recovery codes are the only way back; two-factor authentication is not reset by email, and a
 password reset leaves it on. On a cloud the person runs, an operator can turn it off for an account with one

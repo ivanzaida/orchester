@@ -1141,13 +1141,15 @@ certificate in every setup:
   and project owners (`403 nothing_to_manage` otherwise). Admins see them apart, in Devices › *Signed in to this
   admin* (`GET /admin/browsers`), and sign any one out (security review 1, minor 5). Identity tokens carry a `purpose` (`admin`, `link`, or none
   to join), and a team server takes each only for its own use.
-- **Invites by email are sent only with two-factor authentication.** The team server makes one only for a device
-  token issued for a cloud identity token with the `mfa` claim: a browser signed in to the admin through Orchester
-  Cloud with two-factor authentication (or an app that joined that way). Any other device token, a code's included,
-  gets `403 mfa_required`, which the admin shows as *Turn on two-factor authentication in your Orchester Cloud account
-  to send invites* with a link to the cloud's `/account#security`. Invites by code need no cloud and are not held to
-  it. Invites made before by an admin without it are still delivered (only new ones are held to it); accepting any of
-  them needs it.
+- **Invites are made only with two-factor authentication** (2026-10-16, the person's decision: sending or accepting an
+  invite, or entering a code, needs it). The team server makes one, by email or with a code, only for a device token
+  that came with the `mfa` claim: a browser signed in to the admin through Orchester Cloud with two-factor
+  authentication, an app that joined with a code or a cloud identity with it, or a browser signed in with a pairing code
+  such an app made (the code keeps `codes.mfa`). Any other device token (a setup or account code's sign-in, or a cloud
+  sign-in without it) gets `403 mfa_required`, which the admin shows as *Turn on two-factor authentication in your
+  Orchester Cloud account to send invites* with a link to the cloud's `/account#security`, and for a code as *Making
+  invites, codes too, needs two-factor authentication*. Invites made before by an admin without it are still delivered
+  (only new ones are held to it); accepting any of them needs it.
 - **Invites by email** are delivered to the cloud by the admin's own server side when the host has the internet, or
   posted from the inviter's browser to the cloud's web front (`/invites/deliver`) when it has not; the team server
   itself never reaches the cloud. The browser's form carries only the signed invite: the cloud's page leads back to
@@ -1257,10 +1259,10 @@ with an invite or pairing code.
 
 Row 43.
 
-- **Two-factor authentication.** An invite by email is sent and accepted only by a person with two-factor authentication
-  on at Orchester Cloud, signed in with it: the sender's admin sign-in, and the invitee's device that asks for the token
-  that accepts it ([Identity tokens and keys](#identity-tokens-and-keys)). The cloud still lists an invite to a device
-  without it, saying so (`needs_two_factor`).
+- **Two-factor authentication.** An invite is made, and accepted, only by a person with two-factor authentication on at
+  Orchester Cloud, signed in with it: the sender's admin sign-in (by email or with a code), the invitee's device that
+  asks for the token that accepts an invite by email, and the app that enters a code ([Codes](#codes)). The cloud still
+  lists an invite to a device without it, saying so (`needs_two_factor`).
 - **Who invites.** A project's owner or an admin invites to a project with a role; an admin invites to the server
   (an account with no project yet, optionally admin). Both in the server admin (row 62); the desktop's *Manage
   members and invites* opens it.
@@ -1306,8 +1308,21 @@ Row 45: address plus an 8-character code, for networks without the internet.
 - **Storage and comparison.** Only an HMAC-SHA-256 of the code, keyed by a random key in the server's data directory,
   is stored; a redemption computes it and compares with `ring::hmac::verify` (constant time). Codes are shown once,
   to the person who made them, and never logged, returned again or put in a URL.
-- **Redeeming.** `POST /auth/code { code, device, username?, display_name? }` (username and display name only when
-  the code creates an account). After the TLS check-code confirmation described above.
+- **Redeeming.** `POST /auth/code { code, device, username?, display_name?, identity_token?, key_set? }` (username and
+  display name only when the code creates an account). After the TLS check-code confirmation described above.
+- **Two-factor authentication** (2026-10-16). Every code but the setup code, entered in an app, needs the app's
+  Orchester Cloud identity token for this server (no purpose) whose `mfa` claim says its device signed in with two-factor
+  authentication, with the key set the app carries. The server verifies it offline against the root it pinned, whether
+  or not it takes cloud identities to join with (*cloud off*), uses its `jti` once, and the device token keeps the
+  claim. No token, or one without the claim: `403 mfa_required`; a token the root does not vouch for: `401
+  invalid_identity` (counted as a failed redemption); nothing is used up. A server with no root pinned cannot check it
+  and refuses those codes with `403 mfa_unverifiable`: it says so rather than let a code in without it. An air-gapped
+  server pins the cloud's root on the host without linking (`orchester-server cloud pin <root public key>`, the key the
+  cloud's log names); its people's apps then need the internet once per code, for the token and the key set, and the
+  server none. A team with no internet anywhere cannot add people. The setup code needs no token (the server has no root
+  yet, and the person at the host holds it); a browser's admin sign-in with a code carries none either, and its session
+  has the claim only from a pairing code an app with it made. The desktop asks the cloud before it sends a code: with
+  two-factor authentication off, or this computer signed in without it, it says so and sends nothing.
 - **Rate limits.** 10 failed redemptions or cloud joins per client network (an IPv4 address, an IPv6 /48) in 15
   minutes block that network for 15 minutes. 200 failed redemptions on the whole server in any hour (a sliding hour)
   pause redemption until fewer than 200 remain in the last hour, at least 15 minutes; failed cloud joins have a

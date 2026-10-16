@@ -216,6 +216,7 @@ fn cloud_account_a_pinned_server_with_another_certificate_reads_changed() {
     code,
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
+    proof: Some(server.code_proof()),
   };
   let id = desktop
     .block_on(desktop.servers.join_with_code(&address, presented.confirm(), request))

@@ -129,19 +129,29 @@ async fn s1c_failed_redemptions_block_an_address_after_ten() {
   // A valid code from the blocked address waits too; another address is not affected.
   let invite = invite_code(&server, &admin.token, json!({"kind":"server","delivery":"code"})).await;
   let headers = [("X-Forwarded-For", "198.51.100.1")];
-  let body =
-    json!({"code": invite.code.as_ref().expect("code").expose(), "device":"x", "username":"bob", "display_name":"Bob"});
+  let body = |(identity_token, key_set): (String, String)| {
+    json!({"code": invite.code.as_ref().expect("code").expose(), "device":"x", "username":"bob",
+      "display_name":"Bob", "identity_token": identity_token, "key_set": key_set})
+  };
   assert_eq!(
     server
-      .request_headers("POST", "/auth/code", None, Some(body.clone()), &headers)
+      .request_headers(
+        "POST",
+        "/auth/code",
+        None,
+        Some(body(server.two_factor_proof().await)),
+        &headers
+      )
       .await
       .status,
     429
   );
   server.clock.advance(15 * 60 * 1000);
+  // A fresh identity token: the one before is past its five minutes.
+  let fresh = body(server.two_factor_proof().await);
   assert_eq!(
     server
-      .request_headers("POST", "/auth/code", None, Some(body), &headers)
+      .request_headers("POST", "/auth/code", None, Some(fresh), &headers)
       .await
       .status,
     201

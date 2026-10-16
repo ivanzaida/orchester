@@ -132,6 +132,19 @@ impl Link {
     if !self.accepting {
       return Err(ErrorCode::CloudOff.into());
     }
+    self.check(db, keys, token, offered, now_ms)
+  }
+
+  /// Verifies an identity token as [`Self::verify`] does, whether or not the server accepts cloud identities to join
+  /// with: what a code join in the app shows with it is only that its person signed in with two-factor authentication.
+  pub fn check(
+    &mut self,
+    db: &Connection,
+    keys: &ServerKeys,
+    token: &str,
+    offered: Option<&str>,
+    now_ms: i64,
+  ) -> Result<Claims, ServerError> {
     let now = now_ms.div_euclid(1000);
     if let Some(offered) = offered {
       self.offer(db, offered, now)?;

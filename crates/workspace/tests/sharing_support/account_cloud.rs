@@ -20,8 +20,15 @@ use std::{
   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use orchester_api::identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey};
+use orchester_api::identity::{IdentityClaims, SigningKey};
 use orchester_core::id::IdempotencyKey;
+
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the tests' one cloud key, loaded by every support module that signs for it, whichever of them a test binary includes"
+)]
+#[path = "../server_support/test_cloud.rs"]
+mod test_cloud;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -97,6 +104,8 @@ struct State {
   /// The invites that the tokens issued so far accept, one entry per token.
   accepting: Vec<String>,
   signed_out: bool,
+  /// `GET /me` says every account has two-factor authentication off.
+  two_factor_off: bool,
   /// The tokens that ended: the reason each one's `401` names, if any, and when (milliseconds).
   ended: HashMap<&'static str, (Option<String>, i64)>,
   /// Connections are closed without an answer, as when the cloud cannot be reached.
@@ -128,18 +137,10 @@ impl AccountCloud {
   /// [`Self::start`] on loopback port `port`, `0` for one the system picks: a QA build that names the stand-in as its
   /// own cloud (`ORCHESTER_CLOUD_URL`) finds it there.
   pub fn start_on(port: u16) -> Self {
-    let root = RootKey::new(&PrivateKey::generate().expect("root")).expect("root key");
-    let signing = Arc::new(SigningKey::new(&PrivateKey::generate().expect("key")).expect("signing key"));
-    let now = now();
-    let listed = ListedKey {
-      kid: signing.kid().to_owned(),
-      public_key: signing.public_key().encoded(),
-      not_before: now - DAY,
-      signs_until: now + 29 * DAY,
-      listed_until: now + 89 * DAY,
-    };
-    let statement = KeySetStatement::new("https://cloud.test".into(), vec![listed], now);
-    let key_set = root.sign_key_set(&statement, now).expect("key set");
+    // The tests' one cloud key (`server_support::test_cloud`), so a server that pinned it for codes takes these tokens.
+    let root = test_cloud::root();
+    let signing = Arc::new(test_cloud::signing());
+    let key_set = test_cloud::key_set(now());
     let listener = TcpListener::bind(("127.0.0.1", port)).expect("listen");
     let address = listener.local_addr().expect("address");
     let state = Arc::new(Mutex::new(State::default()));
@@ -193,6 +194,11 @@ impl AccountCloud {
   /// How many tokens accepting `invite` were issued.
   pub fn tokens_for(&self, invite: &str) -> usize {
     self.state.lock().accepting.iter().filter(|id| *id == invite).count()
+  }
+
+  /// From now on the accounts have two-factor authentication off, as `GET /me` says.
+  pub fn two_factor_off(&self) {
+    self.state.lock().two_factor_off = true;
   }
 
   pub fn signed_out(&self) -> bool {
@@ -314,9 +320,14 @@ fn route(
     "POST /api/v1/auth/sessions" => sign_in(body),
     _ if holder.is_none() => unauthorized,
     "GET /api/v1/me" => {
-      state.lock().checks += 1;
+      let off = {
+        let mut state = state.lock();
+        state.checks += 1;
+        state.two_factor_off
+      };
       let account = holder.map_or(Value::Null, Account::json);
-      ("200 OK", Some(json!({ "account": account })))
+      let two_factor = holder.map_or(Value::Null, |holder| holder.two_factor(off));
+      ("200 OK", Some(json!({ "account": account, "two_factor": two_factor })))
     }
     "POST /api/v1/identity-tokens" => issue(body, state, signing).unwrap_or(not_found),
     "DELETE /api/v1/auth/sessions/current" => {
@@ -403,6 +414,13 @@ struct Account {
 impl Account {
   fn json(&self) -> Value {
     json!({"id": self.id, "email": self.email, "display_name": self.display_name, "created_at": 1})
+  }
+
+  /// Bohdan's computer signed in with two-factor authentication, unless the test turned it `off`; Olena has it off.
+  fn two_factor(&self, off: bool) -> Value {
+    let on = self.email == EMAIL && !off;
+    json!({"enabled": on, "enabled_at": on.then_some(1), "recovery_codes_left": if on { 10 } else { 0 },
+      "this_session": on})
   }
 }
 

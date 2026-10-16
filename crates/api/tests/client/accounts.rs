@@ -27,6 +27,8 @@ async fn client_joins_with_a_code_and_a_wrong_code_answers_invalid_code() {
       username: Some("bohdan".into()),
       display_name: Some("Bohdan".into()),
       kind: DeviceKind::App,
+      identity_token: None,
+      key_set: None,
     })
     .await
     .expect_err("no such code");
@@ -64,7 +66,8 @@ async fn client_signs_out_and_revokes_another_device() {
     )
     .await;
   let laptop_token = token(&laptop.token);
-  assert_eq!(client.sessions(&here).await.expect("sessions").len(), 2);
+  // The setup computer, this one ([`TestServer::admin`]) and the laptop.
+  assert_eq!(client.sessions(&here).await.expect("sessions").len(), 3);
   client.revoke_session(&here, laptop.session.id).await.expect("revoke");
   assert_eq!(
     client.me(&laptop_token).await.expect_err("revoked").code(),

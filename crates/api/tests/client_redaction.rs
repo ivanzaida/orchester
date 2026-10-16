@@ -58,12 +58,15 @@ async fn client_never_shows_a_token_or_code_in_debug_output_or_logs() {
     .await;
   let code = invite["code"].as_str().expect("invite code").to_owned();
   let client = server.client();
+  let (identity_token, key_set) = server.code_proof().await;
   let request = CodeJoin {
     code: Credential::new(code.clone()),
     device: "Bohdan's laptop".into(),
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
     kind: DeviceKind::App,
+    identity_token: Some(identity_token),
+    key_set: Some(key_set),
   };
   let request_debug = format!("{request:?}");
   let signed = client.join_with_code(&request).await.expect("join");

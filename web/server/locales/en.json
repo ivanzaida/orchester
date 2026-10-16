@@ -175,6 +175,7 @@
     "mfaTitle": "Two-factor authentication needed",
     "mfaText": "Turn on two-factor authentication in your Orchester Cloud account to send invites. Then sign out here and sign in again with Orchester Cloud.",
     "mfaOpen": "Open Orchester Cloud security",
+    "mfaCodeText": "Making invites, codes too, needs two-factor authentication: sign in to this admin through Orchester Cloud with it, or with a pairing code made in Orchester on a computer that joined with it.",
     "listTitle": "Open and recent invites",
     "open": "{{count}} open",
     "listText": "An invite ends when it's accepted, expires or is revoked. Revoking stops it at once, in Orchester Cloud too.",

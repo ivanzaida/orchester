@@ -57,6 +57,9 @@ pub enum ErrorCode {
   /// API 3: sending an invite by email needs a browser that signed in to the admin through Orchester Cloud with
   /// two-factor authentication; an invite's join token must say so too.
   MfaRequired,
+  /// API 3: entering a code in the app needs a cloud identity with two-factor authentication, which this server cannot
+  /// check: it has no Orchester Cloud root key pinned (`orchester-server cloud pin`, or linking it).
+  MfaUnverifiable,
   RateLimited,
   Internal,
 }

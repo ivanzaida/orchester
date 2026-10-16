@@ -35,9 +35,9 @@ pub(crate) struct Listing {
   pub recent: bool,
 }
 
-/// A new invite by `actor`'s device token. One by email needs a token issued for a cloud identity that signed in with
-/// two-factor authentication (`403 mfa_required`), checked after who may make it; invites already made are delivered
-/// as before. A code needs no cloud and is not held to it.
+/// A new invite by `actor`'s device token, by email or with a code: it needs a token issued for a cloud identity that
+/// signed in with two-factor authentication, or a browser signed in with a pairing code such a token made
+/// (`403 mfa_required`), checked after who may make it. Invites already made are delivered as before.
 pub(crate) fn create(
   db: &Connection,
   keys: &ServerKeys,
@@ -48,10 +48,10 @@ pub(crate) fn create(
 ) -> Result<InviteCreated, ServerError> {
   let (session, actor) = (actor, &actor.user);
   check(db, actor, input)?;
+  if !session.mfa {
+    return Err(ErrorCode::MfaRequired.into());
+  }
   if input.delivery == InviteDelivery::Cloud {
-    if !session.mfa {
-      return Err(ErrorCode::MfaRequired.into());
-    }
     daily_limit(db, actor.id, now)?;
   }
   let id = InviteId::generate();
@@ -91,6 +91,7 @@ pub(crate) fn create(
         invite: Some(id),
         user: input.user,
         made_by: Some(actor.id),
+        mfa: false,
       };
       (Some(codes::create(db, keys, &new, now)?.0), None)
     }

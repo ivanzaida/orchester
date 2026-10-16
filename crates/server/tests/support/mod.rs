@@ -49,6 +49,9 @@ pub struct TestServer {
   pub clock: Arc<TestClock>,
   /// The first admin's device token, once `bootstrap` made them; `user` invites people with it.
   admin: Mutex<Option<String>>,
+  /// The cloud whose root the server pins once a code is entered in an app: every code but the setup code needs the
+  /// app's identity token with the two-factor claim, which this cloud signs.
+  cloud: cloud::TestCloud,
   address: SocketAddr,
   stop: Option<oneshot::Sender<()>>,
   task: Option<JoinHandle<Result<(), orchester_server::error::ServerError>>>,
@@ -86,6 +89,7 @@ impl TestServer {
       directory,
       clock,
       admin: Mutex::new(None),
+      cloud: cloud::TestCloud::generate(),
       address,
       stop: Some(stop),
       task: Some(task),
@@ -220,7 +224,13 @@ impl TestServer {
       .expect("TLS handshake")
   }
 
-  /// The first admin, `alice`, from the setup code the server prints while it has no admin.
+  /// The cloud the server pins for two-factor identities; tests that link the server link it to this one.
+  pub fn cloud(&self) -> cloud::TestCloud {
+    self.cloud.clone()
+  }
+
+  /// The first admin, `alice`, from the setup code the server prints while it has no admin, on a computer marked as
+  /// signed in with two-factor authentication. The setup code needs no cloud identity.
   pub async fn bootstrap(&self) -> Joined {
     let code = self
       .server
@@ -228,7 +238,12 @@ impl TestServer {
       .await
       .expect("setup code")
       .expect("no admin yet");
-    let joined = self.join(&code, Some("alice"), "test computer").await;
+    let response = self.redeem_with(&code, Some("alice"), "test computer", None).await;
+    assert_eq!(response.status, 201);
+    let joined: Joined = response.json();
+    // Making invites needs a two-factor sign-in; the first admin's computer stands for one (`accounts/two_factor.rs`
+    // goes through the real ones).
+    self.two_factor(&joined.token);
     *self.admin.lock() = Some(joined.token.expose().to_owned());
     joined
   }
@@ -240,8 +255,55 @@ impl TestServer {
     response.json()
   }
 
+  /// Redeems `code` as an app does, with an identity token whose device signed in with two-factor authentication.
   pub async fn redeem(&self, code: &Credential, username: Option<&str>, device: &str) -> Response {
+    let proof = self.two_factor_proof().await;
+    self.redeem_with(code, username, device, Some(proof)).await
+  }
+
+  /// An identity token for this server with the two-factor claim, and the key set that vouches for it, from
+  /// [`Self::cloud`]: what an app signed in with two-factor authentication sends with a code. The server pins that
+  /// cloud's root first when nothing is pinned.
+  pub async fn two_factor_proof(&self) -> (String, String) {
+    let pinned: Option<String> = self
+      .database()
+      .query_row("SELECT root_key FROM cloud_link WHERE id=1", [], |row| row.get(0))
+      .ok();
+    let link = match pinned {
+      Some(_) => self
+        .server
+        .host_cloud(orchester_server::host::CloudCommand::Show)
+        .await
+        .expect("the cloud link"),
+      None => self
+        .server
+        .host_cloud(orchester_server::host::CloudCommand::Pin(self.cloud.root.public()))
+        .await
+        .expect("pin the test cloud"),
+    };
+    let identity = cloud::Identity {
+      audience: &link.server,
+      subject: "0191c7c0-0000-7000-8000-00000000c0de",
+      email: "code@example.com",
+      name: "Code Person",
+      invite: None,
+    };
+    let now = self.seconds();
+    (self.cloud.token_mfa(&identity, true, now), self.cloud.key_set(now))
+  }
+
+  pub async fn redeem_with(
+    &self,
+    code: &Credential,
+    username: Option<&str>,
+    device: &str,
+    proof: Option<(String, String)>,
+  ) -> Response {
     let mut body = json!({"code": code.expose(), "device": device});
+    if let Some((token, key_set)) = proof {
+      body["identity_token"] = json!(token);
+      body["key_set"] = json!(key_set);
+    }
     if let Some(username) = username {
       body["username"] = json!(username);
       let mut display = username.to_owned();

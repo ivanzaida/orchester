@@ -44,6 +44,7 @@ impl Server {
           invite: None,
           user: None,
           made_by: None,
+          mfa: false,
         };
         let (code, _) = codes::create(db, &state.keys, &new, now)?;
         db::audit(db, None, "code_made", "setup", None, now)?;
@@ -65,6 +66,7 @@ impl Server {
           invite: None,
           user: Some(user.id),
           made_by: None,
+          mfa: false,
         };
         let (code, _) = codes::create(db, &state.keys, &new, now)?;
         db::audit(db, None, "code_made", &format!("account:{}", user.id), None, now)?;

@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
-import { cloudAccount, cloudDevice, cloudInvites, cloudTwoFactor, joinWithCode, tokenWorks } from "./accounts";
+import { cloudAccount, cloudDevice, cloudInvites, cloudTwoFactor, codeProof, joinWithCode, tokenWorks } from "./accounts";
 import { SERVER, startStack, type Stack } from "./stack";
 import { accountCode, createProject, expectNoSecretIn, inviteWithCode, logs, setUp, signInAtCloud, signInWithCode } from "./steps";
 
@@ -19,6 +19,8 @@ let admin: Page;
 let cloudAdmin: Page | undefined;
 /** Ivan's recovery codes: each finishes one of his cloud sign-ins in the browser. */
 const recovery: string[] = [];
+/** Oleh's cloud device, a two-factor session: what a code entered in his Orchester sends along. */
+let olehDevice = "";
 const codes: string[] = [];
 let olehToken = "";
 
@@ -33,7 +35,9 @@ test.beforeAll(async ({ browser }) => {
   codes.push(stack.setupCode);
   await cloudAccount(stack, "ivan@example.test", "Ivan Zaida");
   await cloudAccount(stack, "dana@example.test", "Dana Ruiz");
-  recovery.push(...(await cloudTwoFactor("ivan@example.test")));
+  await cloudAccount(stack, "oleh@example.test", "Oleh Bondar");
+  recovery.push(...(await cloudTwoFactor("ivan@example.test")).recovery);
+  olehDevice = (await cloudTwoFactor("oleh@example.test")).device;
   codes.push(...recovery);
   admin = await freshPage(browser);
 });
@@ -93,9 +97,10 @@ test("creating a project and inviting by email: the invite reaches the cloud", a
 });
 
 test("inviting by code, and changing the new member's role", async () => {
-  const code = await inviteWithCode(admin);
+  // A code is made from the two-factor sign-in, and entered with a two-factor cloud identity.
+  const code = await inviteWithCode(cloudAdmin ?? admin);
   codes.push(code);
-  olehToken = await joinWithCode(code, "oleh", "oleh-pc");
+  olehToken = await joinWithCode(code, "oleh", "oleh-pc", await codeProof(olehDevice));
   await admin.goto(`${SERVER}/admin/projects/kontur`);
   await admin.getByLabel("Role of oleh").selectOption("owner");
   await expect(admin.getByLabel("Role of oleh")).toHaveValue("owner");

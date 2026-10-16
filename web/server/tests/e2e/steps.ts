@@ -22,6 +22,16 @@ export async function signInAtCloud(page: Page, email: string, code?: string): P
   }
 }
 
+/** The admin's *Sign in with Orchester Cloud*, finished at the cloud with `code` for two-factor authentication. */
+export async function signInThroughCloud(page: Page, email: string, code: string): Promise<void> {
+  await page.goto(`${SERVER}/admin`);
+  await expect(page).toHaveURL(/\/admin\/signin$/);
+  await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
+  await signInAtCloud(page, email, code);
+  await page.getByRole("button", { name: "Sign in to the admin" }).click();
+  await expect(page).toHaveURL(`${SERVER}/admin`);
+}
+
 export async function setUp(page: Page, setupCode: string): Promise<void> {
   await page.goto(`${SERVER}/admin`);
   await expect(page).toHaveURL(/\/admin\/setup$/);

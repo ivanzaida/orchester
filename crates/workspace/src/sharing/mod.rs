@@ -45,7 +45,7 @@ pub use self::{
   connect::{Reached, Reaching},
   connection::{Connection, Schedule},
   error::{SharingError, client_message},
-  joining::{CloudIdentity, CloudJoined, CodeRequest},
+  joining::{CloudIdentity, CloudJoined, CodeProof, CodeRequest},
   linked::{LinkedProject, ServerProject},
   monitor::run as monitor,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
