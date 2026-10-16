@@ -47,7 +47,7 @@ Two kinds of client call it:
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
 | `conflict` | 409 | The team server is linked by a statement as new as this one, or this statement was used |
-| `too_many_servers` | 409 | The account owns 5 linked team servers |
+| `too_many_servers` | 409 | The person owns 5 linked team servers, ownerless ones they linked included |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
 | `busy` | 503 | No password hashing slot freed within 10 seconds |
@@ -177,7 +177,8 @@ statement is a compact JWS of type `orchester-link+jws` that the server signed w
   uses each `nonce` once: a replay is `409 conflict`.
 - **The newest statement owns the server.** A statement newer than the one that linked it takes the server over for
   the signed-in account (its admins moved it); an older or equally old one is `409 conflict`.
-- One account owns at most 5 linked servers (`409 too_many_servers`); linking one it owns already does not count.
+- One person owns at most 5 linked servers (`409 too_many_servers`): the account's, and those the same person linked
+  from an account they deleted (see *Deleting the account*). Linking one it owns already does not count.
 
 The answer carries what the server pins: the cloud's root key (`root_key`, base64url) and the newest key set it
 signed, and an identity token with purpose `link` that links the admin's account on the server. A token with purpose
@@ -206,7 +207,8 @@ with no account `/signup?invite=<id>`). The answer names the inviting server as 
 and ended tombstones are deleted by the minute's sweep.
 
 **Invite limits** (security review 1, M2): deliveries are counted per client address before the signature is
-checked; the servers one account owns keep at most 100 new invites a day between them, and revoking gives none back;
+checked; the servers one person owns keep at most 100 new invites a day between them, those linked from an account the
+person deleted included, and revoking gives none back;
 an invite's email has buckets of its own, apart from confirmation and reset emails: one a day per server and address
 and three a day per address. An invite over an email limit is still kept and listed in the invitee's app, without an
 email. Numbers in [Rate limits](#rate-limits).
@@ -225,8 +227,14 @@ expires or is revoked; nothing joins with it, since a join needs an identity tok
 **Deleting the account.** `DELETE /me { password }` asks for the password again (failures count as a password
 change's do). It deletes the account, its devices, links and joins, and the invites to its email, answered or not. The team
 servers it linked stay registered with no owner, with their members' joins and invites (migration 5), until an admin of
-the server links it again: the newest statement the server's key signs owns it. Meanwhile the server's daily invites
-count on the server itself. The audit keeps the account's id with the actions it took.
+the server links it again: the newest statement the server's key signs owns it. Meanwhile the server keeps the
+person who linked it as `last_owner` (migration 7, N1 security re-review 2), and counts toward that person's caps: the
+5 linked servers and the 100 invites a day. A re-signup gets a new account id, so the person is keyed by the account's
+email, which the cloud does not keep: `last_owner` is an HMAC-SHA256 of the normalized email under a key derived (HKDF,
+info `orchester-cloud people v1`) from the key-encryption key, so the database alone can neither name the email nor
+check one against it, and signing up again with the same email gives no caps back. A new link statement clears it with
+the new owner. A server ownerless since before migration 7 has no `last_owner` and counts its invites on its own. The
+audit keeps the account's id with the actions it took.
 
 ## Rate limits
 
@@ -239,9 +247,9 @@ count on the server itself. The audit keeps the account's id with the actions it
 | Wrong passwords for `DELETE /me` | Counted with the failed current passwords of `/auth/password` |
 | Identity tokens | 60 an hour per device |
 | Invite deliveries (`POST /invites`) | 60 an hour per client address and 300 per IPv6 /48, counted before the signature is checked |
-| New invites | 100 a day for all the servers one account owns |
+| New invites | 100 a day for all the servers one person owns, ownerless ones they linked included |
 | Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
-| Linked servers | 5 per account (`409 too_many_servers`), not a rate |
+| Linked servers | 5 per person (`409 too_many_servers`), ownerless ones they linked included; not a rate |
 
 The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
 IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest key that holds no count, block or

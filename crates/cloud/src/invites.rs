@@ -24,6 +24,7 @@ use crate::{
   db::{audit, millis, time},
   error::CloudError,
   mail::Email,
+  people::quota_key,
   servers,
 };
 
@@ -61,7 +62,7 @@ impl Cloud {
     self
       .inner
       .limits
-      .invite_per_owner(owner(&client, invite.server).await?, now)?;
+      .invite_per_owner(self.owner(&client, invite.server).await?, now)?;
     if !store(&client, &invite, &email, now).await? {
       return Ok(server);
     }
@@ -227,20 +228,6 @@ async fn known(client: &impl GenericClient, id: InviteId, server: TeamServerId) 
   )
 }
 
-/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts; a server whose owner deleted
-/// their account counts on its own until an admin links it again.
-async fn owner(client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
-  Ok(
-    client
-      .query_one(
-        "SELECT coalesce(owner, id) FROM servers WHERE id = $1",
-        &[&server.as_uuid()],
-      )
-      .await?
-      .try_get(0)?,
-  )
-}
-
 /// Keeps the invite; `false` when it was here already.
 async fn store(client: &impl GenericClient, invite: &SignedInvite, email: &str, now: i64) -> Result<bool, CloudError> {
   let project = invite.project.as_ref();
@@ -348,4 +335,23 @@ pub(crate) async fn accept_for(
     now,
   )
   .await
+}
+
+impl Cloud {
+  /// The person who owns `server`, whose daily invites `Limits::invite_per_owner` counts: its owner's, or the person's
+  /// who linked it before deleting their account (`crate::people`). A server without either, ownerless since before
+  /// the cloud kept the person, counts on its own until an admin links it again.
+  async fn owner(&self, client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
+    let row = client
+      .query_one(
+        "SELECT a.email, s.last_owner FROM servers s LEFT JOIN accounts a ON a.id = s.owner WHERE s.id = $1",
+        &[&server.as_uuid()],
+      )
+      .await?;
+    let person = match row.try_get::<_, Option<String>>(0)? {
+      Some(email) => Some(self.inner.people.of(&email)),
+      None => row.try_get::<_, Option<Vec<u8>>>(1)?,
+    };
+    Ok(person.as_deref().and_then(quota_key).unwrap_or(server.as_uuid()))
+  }
 }

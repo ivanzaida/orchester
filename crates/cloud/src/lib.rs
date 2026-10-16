@@ -14,6 +14,7 @@ mod keys;
 mod limits;
 pub mod mail;
 mod passwords;
+mod people;
 mod servers;
 mod sweep;
 mod tokens;

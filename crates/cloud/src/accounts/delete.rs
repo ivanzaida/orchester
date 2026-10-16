@@ -8,7 +8,8 @@ use crate::{db::audit, error::CloudError};
 impl Cloud {
   /// Deletes the account with its password: its devices, links and joins go with it, and the open invites to its
   /// email. The servers it linked stay registered with no owner (their members' joins and invites too) until an admin
-  /// of the server links it again. Failed passwords count against the account as a password change's do. The audit
+  /// of the server links it again, and keep the person who linked them as `last_owner` (`crate::people`), so their
+  /// caps stay that person's. Failed passwords count against the account as a password change's do. The audit
   /// keeps the account's id, as for every other action.
   pub(crate) async fn delete_account(
     &self,
@@ -46,6 +47,12 @@ impl Cloud {
     }
     transaction
       .execute("DELETE FROM invites WHERE email = $1", &[&row.account.email])
+      .await?;
+    transaction
+      .execute(
+        "UPDATE servers SET last_owner = $2 WHERE owner = $1",
+        &[&auth.account.as_uuid(), &self.inner.people.of(&row.account.email)],
+      )
       .await?;
     transaction
       .execute("DELETE FROM accounts WHERE id = $1", &[&auth.account.as_uuid()])

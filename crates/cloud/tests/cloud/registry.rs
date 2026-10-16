@@ -39,7 +39,7 @@ impl TeamServer {
   }
 
   /// A fresh statement of this server's, signed with its own key.
-  fn statement(&self, issued_at_ms: i64) -> String {
+  pub(crate) fn statement(&self, issued_at_ms: i64) -> String {
     self.statement_by(&self.key, issued_at_ms)
   }
 
@@ -421,7 +421,7 @@ async fn declined_stays_declined(cloud: &TestCloud, dana: &str, (server, id): (&
   );
 }
 
-async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
+pub(crate) async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
   cloud
     .request_headers(
       "POST",

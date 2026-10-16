@@ -43,7 +43,8 @@ impl Cloud {
     let transaction = client.transaction().await?;
     let id = statement.server.as_uuid();
     use_statement(&transaction, &statement, now).await?;
-    owned_below_cap(&transaction, auth, id).await?;
+    let person = self.inner.people.owning(&transaction, auth.account.as_uuid()).await?;
+    owned_below_cap(&transaction, (auth, &person), id).await?;
     if !upsert(&transaction, &statement, auth, now).await? {
       return Err(CloudErrorCode::Conflict.into());
     }
@@ -122,12 +123,18 @@ async fn use_statement(client: &impl GenericClient, statement: &LinkStatement, n
   Ok(())
 }
 
-/// One account owns at most [`MAX_OWNED`] linked servers; linking one it owns already does not count.
-async fn owned_below_cap(client: &impl GenericClient, auth: Authenticated, id: Uuid) -> Result<(), CloudError> {
+/// One person owns at most [`MAX_OWNED`] linked servers: the account's, and those the person linked from an account
+/// they deleted (`crate::people`). Linking one it owns already does not count.
+async fn owned_below_cap(
+  client: &impl GenericClient,
+  (auth, person): (Authenticated, &[u8]),
+  id: Uuid,
+) -> Result<(), CloudError> {
   let owned: i64 = client
     .query_one(
-      "SELECT count(*) FROM servers WHERE owner = $1 AND unlinked_at IS NULL AND id <> $2",
-      &[&auth.account.as_uuid(), &id],
+      "SELECT count(*) FROM servers
+       WHERE (owner = $1 OR (owner IS NULL AND last_owner = $3)) AND unlinked_at IS NULL AND id <> $2",
+      &[&auth.account.as_uuid(), &id, &person],
     )
     .await?
     .try_get(0)?;
@@ -151,8 +158,8 @@ async fn upsert(
     .execute(
       "INSERT INTO servers (id, owner, name, address, fingerprint, public_key, linked_at, statement_issued_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (id) DO UPDATE SET owner = $2, name = $3, address = $4, fingerprint = $5, public_key = $6,
-         linked_at = $7, statement_issued_at = $8, unlinked_at = NULL
+       ON CONFLICT (id) DO UPDATE SET owner = $2, last_owner = NULL, name = $3, address = $4, fingerprint = $5,
+         public_key = $6, linked_at = $7, statement_issued_at = $8, unlinked_at = NULL
        WHERE servers.public_key = $6 AND (servers.unlinked_at IS NOT NULL OR servers.statement_issued_at IS NULL
          OR servers.statement_issued_at < $8)",
       &[

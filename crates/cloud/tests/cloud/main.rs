@@ -9,6 +9,7 @@
 
 mod accept;
 mod accounts;
+mod caps;
 mod deletion;
 mod desktop;
 mod hosting;
@@ -52,6 +53,7 @@ const TESTS: &[(&str, Test)] = tests![
   deletion::deleting_with_wrong_passwords_is_limited,
   deletion::a_deleted_owners_server_stays_for_its_members,
   deletion::answered_invites_go_with_the_account_and_ownerless_servers_still_issue,
+  caps::a_person_keeps_their_caps_past_deleting_the_account,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,
