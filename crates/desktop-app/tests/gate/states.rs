@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use super::{has, shows, sign_in, signed_out, support::signed_in::account_cloud, use_stand_in};
+use super::{has, shows, sign_in, signed_out, support::signed_in::account_cloud, use_stand_in, value};
 
 #[test]
 fn gate_says_a_wrong_email_or_password_in_place() {
@@ -15,6 +15,12 @@ fn gate_says_a_wrong_email_or_password_in_place() {
     window.text("gate-wrong"),
     "The email or password is not right. Check both, or reset your password."
   );
+  assert_eq!(
+    value(&mut window, "gate-email"),
+    account_cloud::EMAIL,
+    "the email stays"
+  );
+  assert_eq!(value(&mut window, "gate-password"), "", "the password is typed again");
   assert!(has(&mut window, "screen-sign-in-gate"));
 }
 

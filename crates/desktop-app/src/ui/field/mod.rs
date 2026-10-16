@@ -42,13 +42,13 @@ pub fn field(id: &str, label: Option<&str>, control: impl Into<Element>, hint: O
 }
 
 /// Why a value is not accepted (`Field error` `d5xipm`), under the field or action it is about. It is as
-/// wide as its parent and its words wrap there, the mark staying with the first line.
+/// wide as its parent and its words wrap there, the mark centred on them.
 pub fn field_error(id: &str, text: &str) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
+    .align_items(Alignment::Center)
     .describe("role", "field-error")
     .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger).flex_shrink(0.0))
     .child(

@@ -27,11 +27,11 @@ use orchester_workspace::{
 use crate::{
   screens::settings::orchester::{PersonOnly, Said, cloud_said},
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing},
+  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography, GateText, IconSize, OrchesterSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
-    field::{FieldInput, field, field_error},
+    field::{FieldInput, field_error},
     icon::{Icon, icon},
     pressable::pressable,
   },
@@ -39,6 +39,10 @@ use crate::{
 
 /// A divider's thickness (`Divider` `I2ZKts`).
 const DIVIDER: f32 = 1.0;
+/// The email's label line (`Label` `lSC1y` in `Field · Email` `JPVVZ`): the field block is 48 high.
+const LABEL_HEIGHT: f32 = 14.0;
+/// The password's label line with *Forgot password?* (`Password label` `N1TYBK`): the field block is 49 high.
+const PASSWORD_LABEL_HEIGHT: f32 = 15.0;
 /// How often a paused sign-in looks whether its time has come.
 const PAUSE_LOOK: Duration = Duration::from_secs(15);
 /// How long a pause lasts when the cloud does not say: its sign-in limit's 15 minutes (`docs/cloud-api.md`).
@@ -115,14 +119,16 @@ impl Form {
         async move {
           let email = email.trim().to_owned();
           let signed_in = cloud.sign_in(email.clone(), Credential::new(password)).await;
-          // A refused password stays in its field, masked, to be corrected.
-          if signed_in.is_ok() {
-            clear.set(String::new());
-          }
-          signed_in.map(drop).map_err(|error| {
+          let signed_in = signed_in.map(drop).map_err(|error| {
             tracing::info!(%error, "Orchester Cloud did not sign this computer in");
             Refusal::of(&error, &email)
-          })
+          });
+          // A wrong email or password leaves the email to correct and the password to type again (`Atym1`); any
+          // other refusal keeps the password, masked, for the next try.
+          if matches!(signed_in, Ok(()) | Err(Refusal::Wrong)) {
+            clear.set(String::new());
+          }
+          signed_in
         }
       }),
       unopened: ctx.signal(None),
@@ -204,7 +210,7 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
     .child(
       Text::new(&ctx.t("gate.browserNote"))
         .id("gate-browser-note")
-        .variant(ExtraTypography::Note.role())
+        .variant(GateText::Note.role())
         .width(Dimension::Pct(100.0)),
     )
     .into()
@@ -253,6 +259,7 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
   let forgot = page_link(ctx, "gate-forgot", &ctx.t("gate.forgot"), (form, WebPage::Forgot));
   let label = Row::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(PASSWORD_LABEL_HEIGHT))
     .align_items(Alignment::Center)
     .child(Text::new(&ctx.t("gate.password")).variant(TypographyStyle::FieldLabel))
     .child(Spacer::new().flex(1.0))
@@ -263,7 +270,17 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
     .spacing(ExtraSpacing::Snug.role())
     .child(label)
     .child(password.render(ctx));
-  let email = field("gate-email-field", Some(&ctx.t("gate.email")), email.render(ctx), None);
+  let email = Column::new()
+    .id("gate-email-field")
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .child(
+      Text::new(&ctx.t("gate.email"))
+        .id("gate-email-field-label")
+        .variant(TypographyStyle::FieldLabel)
+        .height(Dimension::Px(LABEL_HEIGHT)),
+    )
+    .child(email.render(ctx));
   (email.into(), password.into())
 }
 

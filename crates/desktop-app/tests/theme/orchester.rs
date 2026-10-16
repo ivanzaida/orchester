@@ -46,6 +46,7 @@ fn gate_roles_follow_the_design() {
     (GateText::Eyebrow, 11.0, FontWeight::Normal, "Geist Mono", 0.6),
     (GateText::Title, 26.0, FontWeight::SemiBold, "Geist", -0.5),
     (GateText::Lead, 13.5, FontWeight::Normal, "Geist", 0.0),
+    (GateText::Note, 11.5, FontWeight::Normal, "Geist", 0.0),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -55,6 +56,7 @@ fn gate_roles_follow_the_design() {
     );
   }
   assert_eq!(theme.typography_style(GateText::Lead.role()).line_height, 1.55);
+  assert_eq!(theme.typography_style(GateText::Note.role()).line_height, 1.45);
   for (spacing, value) in [(GateSpacing::Column, 20.0), (GateSpacing::Side, 56.0)] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
