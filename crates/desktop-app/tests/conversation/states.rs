@@ -115,11 +115,11 @@ fn timeline_a_transcript_that_cannot_be_read_again_shows_as_last_read() {
   damaged
     .execute("UPDATE agent_events SET payload = '{'", [])
     .expect("the events are damaged");
-  // A change of the run reads the transcript again.
+  // A change of the run's state reads the transcript again; it does not run, so another run's lines would not.
   window
     .projects()
     .feed(seeded.project)
-    .changes
+    .states
     .update(|count| *count += 1);
   window.until("the notice", |window| {
     window.tree.get_element_by_id("conversation-stale").is_some()

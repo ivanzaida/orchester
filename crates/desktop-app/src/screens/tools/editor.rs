@@ -28,7 +28,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
+  project::{ShownProject, own::OwnChanges},
   routes::{ProjectPage, Route, ToolTab},
   screens::connections::widen::{WidenConfirm, WidenProps},
   theme::{ConnectionsSpacing, ExtraSpacing},
@@ -47,6 +47,8 @@ pub struct EditorProps {
   pub data: EditorData,
   pub entry: Option<ToolEntry>,
   pub revision: Signal<u64>,
+  /// Where a save records its change of the tools.
+  pub tools: OwnChanges,
   pub read_revision: u64,
   pub page: ProjectPage,
 }
@@ -91,6 +93,7 @@ impl Component for ToolEditor {
     };
     let action = editor.action.clone();
     let (revision, busy) = (props.revision.clone(), editor.busy.clone());
+    let tools = props.tools.clone();
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
     ctx.watch(&action.state(), move |state| {
@@ -99,6 +102,8 @@ impl Component for ToolEditor {
       }
       busy.set(false);
       if let Some(saved) = state.data.filter(|_| state.is_fulfilled()) {
+        // The save recorded its change; this screen reads the tools again once, on its revision.
+        tools.saw(saved.1);
         revision.update(|r| *r += 1);
         let tab = match navigation.route_now() {
           Route::Project(_, ProjectPage::Tool(_, tab)) => tab,

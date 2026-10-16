@@ -14,7 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::resource::{InstructionScope, Skill, SkillFile};
-use orchester_workspace::{messages::Message, skills::data::SkillEntry};
+use orchester_workspace::{messages::Message, skills::data::SkillEntry, tasks::outside::Outside};
 
 use super::{
   PageProps, inspector, words,
@@ -93,7 +93,8 @@ impl Component for Editor {
       submitted: ctx.signal(false),
     };
     let baseline = editor.baseline.clone();
-    let revision = p.page.view.revision.clone();
+    let (revision, skills) = (p.page.view.revision.clone(), p.page.view.skills.clone());
+    let changes = crate::services::Services::of(ctx).changes;
     let submitted = editor.submitted.clone();
     let dirty_state = editor.dirty.clone();
     let navigation = p.page.view.panel.navigation.clone();
@@ -109,6 +110,8 @@ impl Component for Editor {
         && let Some(Saved(entry)) = state.data.as_ref()
       {
         baseline.set(Baseline(Some(entry.clone())));
+        // Every other screen that shows the skills reads them again; this one reads them again once.
+        skills.record(&changes, project, Outside::Skills);
         revision.update(|r| *r += 1);
         if creating {
           dirty_state.set(false);

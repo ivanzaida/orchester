@@ -29,6 +29,8 @@ pub struct Props {
   pub settings: Settings,
   pub parent_read: Signal<Option<work::Read>>,
   pub refresh: Signal<u64>,
+  /// General's own saves, which a reviewer saved here is one of.
+  pub own: work::OwnSaves,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -61,7 +63,7 @@ impl Component for AutoMode {
     let settings = ctx.props::<Props>().settings.clone();
     let (connection, model, effort) = values(&settings);
     let tab = Self {
-      save: work::action(ctx),
+      save: work::action(ctx, ctx.props::<Props>().tab.project.open.project.id()),
       connection: ctx.signal(connection),
       model: ctx.signal(model),
       effort: ctx.signal(effort),
@@ -168,7 +170,9 @@ impl AutoMode {
       ctx.props::<Props>().tab.project.feed.clone(),
     );
     let props = ctx.props::<Props>().clone();
+    let begun = std::sync::atomic::AtomicBool::new(false);
     ctx.watch(&save.state(), move |state| {
+      props.own.saving(state.is_pending(), &begun);
       if state.is_pending() {
         status.set(Status::Saving);
       } else if state.error.is_some() {
@@ -179,6 +183,7 @@ impl AutoMode {
         tab.fill(saved.0.clone());
         // Invalidate older parent reads before they can replace this saved reviewer or a new edit.
         props.parent_read.set(Some(work::Read(saved.0.clone(), u64::MAX)));
+        props.own.took(saved);
         props.refresh.update(|revision| *revision += 1);
         tab.asking.set(Asked(None));
         tab.failed.set(false);

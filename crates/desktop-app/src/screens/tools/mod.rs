@@ -23,11 +23,12 @@ use orchester_core::id::ResourceId;
 use orchester_workspace::{
   background,
   messages::{self, Message},
+  tasks::outside::Outside,
   tools::editor::EditorData,
 };
 
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, own::OwnChanges},
   routes::ProjectPage,
   ui::{
     message::message_text,
@@ -45,6 +46,8 @@ struct ToolsScreen {
   // Save and explicit Reload reset fields; read retries keep the editor's mount key.
   revision: Signal<u64>,
   retry: Signal<u64>,
+  /// The tool changes, the screen's own too.
+  tools: OwnChanges,
 }
 impl Component for ToolsScreen {
   type Props = Props;
@@ -52,6 +55,7 @@ impl Component for ToolsScreen {
     Self {
       revision: ctx.signal(0),
       retry: ctx.signal(0),
+      tools: OwnChanges::new(ctx, &[Outside::Tools]),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -63,15 +67,18 @@ impl Component for ToolsScreen {
     let root = props.project.open.repo_root.clone();
     let revision = self.revision.get();
     let outside = props.project.feed.outside.get();
-    let outside = (outside.pipelines, outside.tools);
+    let outside = (outside.pipelines, self.tools.count(&props.project.feed));
     let reading = ctx
       .future(
         (root, id, revision, outside, self.retry.get()),
-        |(root, id, revision, ..)| async move {
-          background::run(move || EditorData::load_in(&root, id))
-            .await?
-            .map(|data| (id, revision, data))
-            .map_err(|error| messages::store_error(&error))
+        |(root, id, revision, ..)| {
+          tracing::trace!(target: crate::app_log::READ_LOG, read = "tools");
+          async move {
+            background::run(move || EditorData::load_in(&root, id))
+              .await?
+              .map(|data| (id, revision, data))
+              .map_err(|error| messages::store_error(&error))
+          }
         },
       )
       .state()
@@ -131,6 +138,7 @@ impl ToolsScreen {
             data,
             entry,
             revision: self.revision.clone(),
+            tools: self.tools.clone(),
             read_revision: self.retry.get(),
             page: props.page,
           },

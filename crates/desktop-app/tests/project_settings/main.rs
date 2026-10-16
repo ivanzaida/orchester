@@ -9,6 +9,7 @@ mod harness;
 mod index;
 mod limits;
 mod navigation_status;
+mod reads;
 mod review_regressions;
 mod reviewer_authority;
 mod reviewer_refresh;

@@ -13,6 +13,8 @@ mod remove;
 mod row;
 mod welcome;
 
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -25,7 +27,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background, messages,
   project_list::{self, Listing},
-  runner::Runners,
+  runner::{RunnerStatus, Runners},
   workspace::{ListedData, ProjectEntry},
 };
 use parking_lot::Mutex;
@@ -60,6 +62,10 @@ struct AllProjects {
   ask: Ask,
   /// Whether *Open project folder…*'s end is followed already; once per screen.
   followed: Mutex<bool>,
+  /// The projects' data as last read, and the runners' reports it was read at.
+  read: Arc<Mutex<(Reported, ListedData)>>,
+  /// What the runners reported of the listed projects so far, kept across the list's changes.
+  seen: Arc<Mutex<Seen>>,
 }
 
 impl Component for AllProjects {
@@ -72,6 +78,8 @@ impl Component for AllProjects {
         removing: ctx.signal(Removing::default()),
       },
       followed: Mutex::new(false),
+      read: Arc::default(),
+      seen: Arc::default(),
     }
   }
 
@@ -79,7 +87,6 @@ impl Component for AllProjects {
     // First in every render: lurq keeps a component's futures by the order it asks for them.
     let services = Services::of(ctx);
     let open = folder::open_action(ctx, &services);
-    let work = work_changes(ctx, &services.runners);
     let workspace = services.workspace.clone();
     let listing = ctx
       .future((workspace, self.ask.revision.get()), |(workspace, _)| async move {
@@ -94,7 +101,8 @@ impl Component for AllProjects {
       Some(Listing::Projects(entries)) => entries.clone(),
       Some(Listing::Welcome) | None => Vec::new(),
     };
-    let data = read_data(ctx, &services, Entries(entries.clone(), work));
+    let reports = reports(ctx, (&services.runners, &self.seen), &entries);
+    let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
     match (listing.data, failed) {
@@ -118,17 +126,34 @@ impl Component for AllProjects {
   }
 }
 
-/// What each listed project's database says, read after the list is shown and again whenever a runner
+/// What each listed project's database says, read after the list is shown and again whenever its runner
 /// reports; the previous data stays on screen while it is read again. Held while QA holds reads
 /// (`hold_reads`).
-fn read_data(ctx: &mut Ctx, services: &Services, entries: Entries) -> ListedData {
-  let (hold, programs) = (services.hold.clone(), services.programs.clone());
+fn read_data(
+  ctx: &mut Ctx,
+  (services, read): (&Services, &Arc<Mutex<(Reported, ListedData)>>),
+  entries: Entries,
+) -> ListedData {
+  let (hold, programs, read) = (services.hold.clone(), services.programs.clone(), Arc::clone(read));
   ctx
-    .future(entries, move |Entries(entries, _)| {
-      let (hold, programs) = (hold.clone(), programs.clone());
+    .future(entries, move |Entries(entries, reported)| {
+      let (read_at, before) = read.lock().clone();
+      // A project whose runner reported since, or that was not read yet.
+      let again: Vec<ProjectId> = entries
+        .iter()
+        .filter(|entry| !entry.folder_missing)
+        .filter(|entry| before.of(entry.project.id).is_none() || read_at.of(entry) != reported.of(entry))
+        .map(|entry| entry.project.id)
+        .collect();
+      for _ in &again {
+        tracing::trace!(target: crate::app_log::READ_LOG, read = "listed project");
+      }
+      let (hold, programs, read) = (hold.clone(), programs.clone(), Arc::clone(&read));
       async move {
         hold.released().await;
-        background::run(move || ListedData::read(&entries, &programs)).await
+        let data = background::run(move || before.read_again(&entries, &again, &programs)).await?;
+        *read.lock() = (reported, data.clone());
+        Ok::<_, messages::Message>(data)
       }
     })
     .state()
@@ -137,22 +162,79 @@ fn read_data(ctx: &mut Ctx, services: &Services, entries: Entries) -> ListedData
     .unwrap_or_default()
 }
 
-/// The entries a reading of their data is for, and the runners' work revision it follows.
+/// The entries a reading of their data is for, and the runners' reports it follows.
 #[derive(Clone, PartialEq)]
-struct Entries(Vec<ProjectEntry>, u64);
+struct Entries(Vec<ProjectEntry>, Reported);
 
 impl DevtoolsInspectable for Entries {}
 
-/// The runners' work revision; reading it renders the screen again whenever a runner reports.
-fn work_changes(ctx: &mut Ctx, runners: &Runners) -> u64 {
-  let changes = ctx.stream(runners.clone(), |runners, emitter: StreamEmitter<u64, ()>| async move {
-    let mut updates = runners.work_changes();
-    loop {
-      let revision = *updates.borrow_and_update();
-      if !emitter.emit(revision) || updates.changed().await.is_err() {
-        return;
+/// How often each listed project's runner reported a change of its status, by the project's folder.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Reported(Arc<HashMap<PathBuf, u64>>);
+
+impl DevtoolsInspectable for Reported {}
+
+impl Reported {
+  fn of(&self, entry: &ProjectEntry) -> u64 {
+    self.0.get(&entry.project.repo_root).copied().unwrap_or(0)
+  }
+}
+
+/// The runner status last seen of each listed project, and how often it changed since the screen showed.
+#[derive(Default)]
+struct Seen {
+  statuses: HashMap<PathBuf, Option<RunnerStatus>>,
+  counts: HashMap<PathBuf, u64>,
+}
+
+impl Seen {
+  /// Takes the statuses of `roots` now; whether one changed since it was last seen. The first status seen of a
+  /// project is no report about it.
+  fn look(&mut self, runners: &Runners, roots: &[PathBuf]) -> bool {
+    let mut reported = false;
+    for root in roots {
+      let status = runners.status_of(root);
+      if self.statuses.get(root) != Some(&status) && self.statuses.insert(root.clone(), status).is_some() {
+        *self.counts.entry(root.clone()).or_insert(0) += 1;
+        reported = true;
       }
     }
-  });
-  changes.state().get().data.unwrap_or(0)
+    reported
+  }
+}
+
+/// The runners' reports about the projects of `entries`: renders the screen again whenever a listed project's
+/// runner status changed, for its row and to read its data again. What was seen outlives the stream, which starts
+/// again when the list changes: a report that came meanwhile still counts, and no count goes back.
+fn reports(ctx: &mut Ctx, (runners, seen): (&Runners, &Arc<Mutex<Seen>>), entries: &[ProjectEntry]) -> Reported {
+  let roots: Vec<PathBuf> = entries.iter().map(|entry| entry.project.repo_root.clone()).collect();
+  let seen = Arc::clone(seen);
+  let reports = ctx.stream(
+    (runners.clone(), roots),
+    move |(runners, roots), emitter: StreamEmitter<Reported, ()>| {
+      let seen = Arc::clone(&seen);
+      async move {
+        let mut updates = runners.work_changes();
+        let mut first = true;
+        loop {
+          updates.borrow_and_update();
+          let counts = {
+            let mut seen = seen.lock();
+            (seen.look(&runners, &roots) || first).then(|| seen.counts.clone())
+          };
+          first = false;
+          // Another project's report wakes the stream without a render.
+          if let Some(counts) = counts
+            && !emitter.emit(Reported(Arc::new(counts)))
+          {
+            return;
+          }
+          if updates.changed().await.is_err() {
+            return;
+          }
+        }
+      }
+    },
+  );
+  reports.state().get().data.unwrap_or_default()
 }

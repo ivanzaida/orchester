@@ -51,7 +51,8 @@ pub struct Props {
   pub entry: Option<InstructionEntry>,
   pub tab: Tab,
   pub selection: Selection,
-  pub revision: Signal<u64>,
+  /// Counts the reloads, each of which reads the list again.
+  pub reloads: Signal<u64>,
   pub reading: bool,
 }
 impl PartialEq for Props {
@@ -96,8 +97,7 @@ impl Component for Editor {
       }),
       published: published.clone(),
     };
-    let selection = props.selection.clone();
-    let revision = props.revision.clone();
+    let (selection, reloads) = (props.selection.clone(), props.reloads.clone());
     let fields = editor.fields.clone();
     ctx.watch(&editor.work.action.state(), move |result| {
       selection.busy.set(result.is_pending());
@@ -108,11 +108,11 @@ impl Component for Editor {
         saved.set(Saved(Some(done.entry.clone())));
         if let Some(requested) = &done.reload {
           fields.reload(&done.entry, requested);
+          reloads.update(|count| *count += 1);
         }
         if done.published {
           published.set(done.entry.state.published().map(|v| v.get()));
         }
-        revision.update(|v| *v += 1);
         autosave.again();
         // Opening the newly created resource preserves the complete body just saved.
         if matches!(selection.view.get_untracked(), View::New(_)) {

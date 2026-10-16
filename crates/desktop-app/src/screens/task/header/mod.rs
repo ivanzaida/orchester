@@ -82,7 +82,9 @@ impl Component for TaskHeader {
     let action = control_action(ctx, (open.clone(), detail.task.id()), runners.clone());
     let again = (
       feed.revision.get() + feed.outside.get().tasks,
-      feed.changes.get(),
+      // It checks only after a run that ended; what the project's other runs used today grows with their
+      // agents' turns, reported as transcript activity, while one of them runs.
+      feed.run_changes(feed.running.get()),
       feed.outside.get().limits,
     );
     let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, again);

@@ -56,6 +56,16 @@ pub struct NewAccount {
 }
 
 impl Workspace {
+  /// Changes whenever an account was added, renamed, checked, moved to another folder or removed through this
+  /// workspace or a clone of it: the screens and the status bar that name accounts read them again.
+  pub fn account_changes(&self) -> tokio::sync::watch::Receiver<u64> {
+    self.account_changes.subscribe()
+  }
+
+  fn accounts_changed(&self) {
+    self.account_changes.send_modify(|count| *count += 1);
+  }
+
   /// The accounts, by CLI, Default first.
   pub fn agent_accounts(&self) -> Result<Vec<AgentAccount>, StoreError> {
     self.db.lock().agent_accounts()
@@ -137,6 +147,7 @@ impl Workspace {
       }
       return Err(error.into());
     }
+    self.accounts_changed();
     Ok(account)
   }
 
@@ -146,6 +157,8 @@ impl Workspace {
     let mut account = db.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     account.rename(name);
     db.save_agent_account(&account)?;
+    drop(db);
+    self.accounts_changed();
     Ok(account)
   }
 
@@ -159,6 +172,8 @@ impl Workspace {
     let mut account = db.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     account.record_check(check);
     db.save_agent_account(&account)?;
+    drop(db);
+    self.accounts_changed();
     Ok(account)
   }
 
@@ -196,12 +211,19 @@ impl Workspace {
       MoveTo::NoAccount => None,
     }
     .unwrap_or(ConnectionAccount::Unassigned);
-    uses::move_connections(&account, &target, &projects)?;
+    if let Err(error) = uses::move_connections(&account, &target, &projects) {
+      // Some connections may have moved before one could not: what shows them reads them again.
+      self.accounts_changed();
+      return Err(error);
+    }
     let moved_to = match removal.move_to() {
       MoveTo::Account(target) => Some(target),
       MoveTo::NoAccount => None,
     };
-    self.db.lock().remove_agent_account(id, moved_to, Timestamp::now())?;
+    let removed = self.db.lock().remove_agent_account(id, moved_to, Timestamp::now());
+    // Its connections moved, whether or not it left the list.
+    self.accounts_changed();
+    removed?;
     // The account is removed by now: a refusal says so and where its folder stays.
     if let Some(folder) = trash
       && let Err(error) = self.trash.take(folder)
@@ -257,7 +279,10 @@ impl Workspace {
       .move_to_folder(folders::found(folder))
       .map_err(AccountsError::Account)?;
     self.db.lock().save_agent_account_folder(&account)?;
-    uses::move_connections(&account, &ConnectionAccount::of(&account), &projects)?;
+    let moved = uses::move_connections(&account, &ConnectionAccount::of(&account), &projects);
+    // After its connections followed, or some did before one could not.
+    self.accounts_changed();
+    moved?;
     self.check_agent_account(id)
   }
 

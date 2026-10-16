@@ -47,8 +47,10 @@ pub struct Props(pub ShownProject);
 impl DevtoolsInspectable for Props {}
 pub struct InstructionsScreen {
   selection: Selection,
-  revision: Signal<u64>,
   retry: Signal<u64>,
+  /// Counts the person's reloads of an instruction: each reads the list again too, for a change nothing
+  /// recorded.
+  reloads: Signal<u64>,
   leave: crate::navigation::guard::LeaveGuard,
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
@@ -73,8 +75,8 @@ impl Component for InstructionsScreen {
         busy,
         full: ctx.signal(false),
       },
-      revision: ctx.signal(0),
       retry: ctx.signal(0),
+      reloads: ctx.signal(0),
       leave,
     }
   }
@@ -83,8 +85,7 @@ impl Component for InstructionsScreen {
     let outside = project.feed.outside.get();
     let deps = (
       project.open.repo_root.clone(),
-      self.revision.get(),
-      self.retry.get(),
+      self.retry.get() + self.reloads.get(),
       outside.of(Outside::Instructions),
       outside.of(Outside::Profiles),
       outside.of(Outside::Pipelines),
@@ -92,6 +93,7 @@ impl Component for InstructionsScreen {
     let hold = crate::services::Services::of(ctx).hold;
     let read = ctx
       .future(deps, move |(root, ..)| {
+        tracing::trace!(target: crate::app_log::READ_LOG, read = "instructions");
         let hold = hold.clone();
         async move {
           hold.released().await;
@@ -143,7 +145,6 @@ impl InstructionsScreen {
         import::Props {
           project,
           selection: self.selection.clone(),
-          revision: self.revision.clone(),
         },
       ),
       Some(tab) => {
@@ -174,7 +175,7 @@ impl InstructionsScreen {
             entry,
             tab,
             selection: self.selection.clone(),
-            revision: self.revision.clone(),
+            reloads: self.reloads.clone(),
             reading,
           },
         )

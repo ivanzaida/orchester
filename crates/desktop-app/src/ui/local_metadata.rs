@@ -48,8 +48,13 @@ pub(crate) fn allowed(ctx: &mut Ctx, root: Option<PathBuf>, values: Vec<String>,
           orchester_workspace::tasks::local_integration::metadata_allowed(&root, &request.values, vault.get())
         })
         .await
+        // `background::run` logged why the check did not finish; failing it keeps the metadata hidden.
         .map_err(|_| ())?
-        .map_err(|_| ())
+        .map_err(|_| {
+          // The error may name the folder checked, which may hold a known secret: only that it failed is
+          // logged. Failing it keeps the metadata hidden.
+          tracing::warn!("the shell's project metadata could not be checked against the known secrets");
+        })
       }
     })
     .state()

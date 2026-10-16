@@ -42,7 +42,6 @@ use crate::{
 pub struct Props {
   pub project: ShownProject,
   pub selection: Selection,
-  pub revision: Signal<u64>,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -90,7 +89,7 @@ impl Component for Import {
     ctx.watch(&action.state(), move |result| {
       props.selection.busy.set(result.is_pending());
       if let Some(Imported(created)) = result.data.as_ref().filter(|_| result.is_fulfilled()) {
-        props.revision.update(|v| *v += 1);
+        // Every screen that shows the instructions reads them again, this one too.
         changes.record(id, Outside::Instructions);
         // The Skills screen reads its library again when the import made skill drafts too.
         if created.iter().any(|draft| draft.resource.kind() == ResourceKind::Skill) {

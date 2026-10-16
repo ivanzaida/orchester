@@ -24,13 +24,16 @@ pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureSt
 
 /// [`load`]'s reading itself, for a page that follows its outcome.
 pub(super) fn reading(ctx: &mut Ctx, repo_root: PathBuf, revision: u64) -> FutureHandle<ProjectConnections, Message> {
-  ctx.future((repo_root, revision), |(repo_root, _)| async move {
-    background::run(move || ProjectConnections::load_in(&repo_root))
-      .await?
-      .map_err(|error| {
-        tracing::error!(%error, "the project's connections cannot be read");
-        messages::store_error(&error)
-      })
+  ctx.future((repo_root, revision), |(repo_root, _)| {
+    tracing::trace!(target: crate::app_log::READ_LOG, read = "connections");
+    async move {
+      background::run(move || ProjectConnections::load_in(&repo_root))
+        .await?
+        .map_err(|error| {
+          tracing::error!(%error, "the project's connections cannot be read");
+          messages::store_error(&error)
+        })
+    }
   })
 }
 

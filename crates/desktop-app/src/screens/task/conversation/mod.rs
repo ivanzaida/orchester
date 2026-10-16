@@ -194,8 +194,10 @@ impl ConversationTab {
     let repo_root: PathBuf = task.project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
     let retry = self.retry.get();
-    // The run's events and the runner's transcript changes both move the transcript on.
-    let revision = feed.changes.get() + run.run.last_sequence().get();
+    // The run's events and, while it runs, the runner's transcript changes move the transcript on; another
+    // run's lines do not.
+    let running = run.run.status() == &RunStatus::Running;
+    let revision = feed.run_changes(running) + run.run.last_sequence().get();
     let read = self
       .transcript
       .read(ctx, (repo_root.clone(), run.id(), hold.clone()), (revision, retry));

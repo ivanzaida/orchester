@@ -55,6 +55,7 @@ pub(super) struct CodeIndex {
   rebuild: Rebuild,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
+  own: work::OwnSaves,
   list_revision: Signal<u64>,
   check_revision: Signal<u64>,
   tick: Signal<u64>,
@@ -65,10 +66,11 @@ impl Component for CodeIndex {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
-      save: work::action(ctx),
+      save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       rebuild: rebuild_action(ctx),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
+      own: work::OwnSaves::new(ctx, &[Outside::CodeIndex]),
       list_revision: ctx.signal(0),
       check_revision: ctx.signal(0),
       tick: ctx.signal(0),
@@ -81,8 +83,7 @@ impl Component for CodeIndex {
       ctx,
       &save,
       ctx.props::<TabProps>().status.clone(),
-      tab.revision.clone(),
-      tab.stored.clone(),
+      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
     );
     let revision = tab.list_revision.clone();
     ctx.watch(&rebuild.state(), move |_| revision.update(|r| *r += 1));
@@ -97,7 +98,8 @@ impl Component for CodeIndex {
     let state = work::load(
       ctx,
       props.project.open.repo_root.clone(),
-      self.revision.get() + props.project.feed.outside.get().of(Outside::CodeIndex),
+      self.revision.get() + self.own.count(&props.project.feed),
+      &self.own,
     );
     let list = self.list(ctx, &props);
     let check = self.check(ctx, &props);
@@ -195,11 +197,19 @@ impl CodeIndex {
         (
           props.project.open.repo_root.clone(),
           self.list_revision.get(),
-          props.project.feed.changes.get(),
+          // The runs an index is used by start and end. A build the tab knows of is followed by its poll; while a
+          // run runs and none is, a transcript line may be the runner starting one.
+          props
+            .project
+            .feed
+            .run_changes(props.project.feed.running.get() && !self.watching.load(Ordering::Relaxed)),
           props.project.feed.revision.get(),
           props.project.feed.outside.get().of(Outside::CodeIndex),
         ),
-        |(root, ..)| async move { background::run(move || code_index::list_in(&root).map(Listed)).await? },
+        |(root, ..)| {
+          tracing::trace!(target: crate::app_log::READ_LOG, read = "code index");
+          async move { background::run(move || code_index::list_in(&root).map(Listed)).await? }
+        },
       )
       .state()
       .get()

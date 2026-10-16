@@ -108,11 +108,21 @@ impl PartialEq for OutsideChanges {
 }
 
 impl OutsideChanges {
-  /// `change` was made to `project` outside the screens.
-  pub fn record(&self, project: ProjectId, change: Outside) {
-    self
-      .0
-      .send_modify(|counts| counts.entry(project).or_default().count(change));
+  /// `change` was made to `project` outside the screens. Returns how often each kind of `project`'s data changed
+  /// with this change, before any later one: a screen that made the change takes it as seen.
+  pub fn record(&self, project: ProjectId, change: Outside) -> OutsideCounts {
+    let mut recorded = OutsideCounts::default();
+    self.0.send_modify(|counts| {
+      let counts = counts.entry(project).or_default();
+      counts.count(change);
+      recorded = *counts;
+    });
+    recorded
+  }
+
+  /// How often each kind of `project`'s data changed so far.
+  pub fn counts(&self, project: ProjectId) -> OutsideCounts {
+    self.0.borrow().get(&project).copied().unwrap_or_default()
   }
 
   pub fn subscribe(&self) -> watch::Receiver<HashMap<ProjectId, OutsideCounts>> {

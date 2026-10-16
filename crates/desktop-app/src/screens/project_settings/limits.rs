@@ -37,6 +37,7 @@ pub(super) struct Limits {
   slots: Signal<String>,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
+  own: work::OwnSaves,
   separator: Arc<str>,
   submitted: Signal<Submitted>,
   queued: Signal<bool>,
@@ -89,13 +90,14 @@ impl Component for Limits {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
-      save: work::action(ctx),
+      save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
       minutes: ctx.signal(String::new()),
       slots: ctx.signal(String::new()),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
+      own: work::OwnSaves::new(ctx, &[Outside::Limits]),
       separator: ctx.t("project_settings.groupSeparator"),
       submitted: ctx.signal(Submitted(None)),
       queued: ctx.signal(false),
@@ -105,8 +107,7 @@ impl Component for Limits {
       ctx,
       &save,
       ctx.props::<TabProps>().status.clone(),
-      tab.revision.clone(),
-      tab.stored.clone(),
+      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
     );
     let (after, next, root) = (
       tab.clone(),
@@ -129,8 +130,8 @@ impl Component for Limits {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
-    let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::Limits);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision);
+    let revision = self.revision.get() + self.own.count(&props.project.feed);
+    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(data) = state.data.clone().or_else(|| self.stored.get()) else {
       return page::scroll(work::pending(ctx, &state, &self.revision));
     };

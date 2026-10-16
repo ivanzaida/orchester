@@ -152,7 +152,11 @@ impl ConnectionsScreen {
         return;
       }
       running.set(Running(None));
-      revision.update(|revision| *revision += 1);
+      // Work that was done is read again as the change it recorded (`work::action`); work that failed
+      // changed nothing it says, and is read again in case it did.
+      if !state.is_fulfilled() {
+        revision.update(|revision| *revision += 1);
+      }
       if let Some(done) = state.data.filter(|_| state.is_fulfilled())
         && done.work == Work::Remove
       {
@@ -298,6 +302,7 @@ impl ConnectionsScreen {
       running.set(Running(Some((id, piece))));
       last.set(LastOn(Some(id)));
       work.run(Start {
+        project: open.project.id(),
         repo_root: open.repo_root.clone(),
         id,
         work: piece,

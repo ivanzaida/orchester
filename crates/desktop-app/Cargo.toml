@@ -93,6 +93,8 @@ windows-sys = { workspace = true, features = [
 embed-resource.workspace = true
 
 [dev-dependencies]
+# Counts a runner's reports in tests of what follows them, which run no runner.
+orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an

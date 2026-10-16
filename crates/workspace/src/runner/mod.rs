@@ -334,6 +334,30 @@ impl Runners {
     self.inner.shared.counters(root).changes.subscribe()
   }
 
+  /// Counts a change as project `root`'s runner reports it: a run's state (`true`), which moves its transcript
+  /// on too, or its transcript alone. For tests of what follows the counts, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn count_change_for_test(&self, root: &Path, state: bool) {
+    let counters = self.inner.shared.counters(root);
+    if state {
+      self.inner.shared.runs.send_modify(|revision| *revision += 1);
+      counters.states.send_modify(|revision| *revision += 1);
+    }
+    counters.changes.send_modify(|revision| *revision += 1);
+  }
+
+  /// Hands `reading` on as a project's runner would. For tests of what shows plan limits, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn observe_plan_limits_for_test(&self, reading: orchester_core::connection::plan_limits::LimitReading) {
+    self
+      .inner
+      .shared
+      .limits
+      .send_if_modified(|readings| readings.observe(reading));
+  }
+
   /// Changes whenever any runner reports that a run changed.
   pub fn run_changes(&self) -> watch::Receiver<u64> {
     self.inner.shared.runs.subscribe()

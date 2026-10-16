@@ -37,6 +37,7 @@ use orchester_workspace::{
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
+pub mod reads;
 pub mod stand_ins;
 
 /// Kontur's id, as the routes of the tests name it.

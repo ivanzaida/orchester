@@ -61,6 +61,7 @@ impl TranscriptRead {
       *at
     };
     let load = ctx.future((repo_root, run, at, retry), move |(repo_root, run, ..)| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "transcript");
       let hold = hold.clone();
       async move {
         hold.released().await;
@@ -128,6 +129,9 @@ pub(super) fn with_requests(
 ) -> FutureState<Option<Loaded>, Message> {
   let deps = (repo_root, run, waiting, Read(transcript), retry);
   let load = ctx.future(deps, move |(repo_root, run, _, Read(transcript), _)| {
+    if transcript.is_some() {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "requests");
+    }
     let hold = hold.clone();
     async move {
       let Some(entries) = transcript else {

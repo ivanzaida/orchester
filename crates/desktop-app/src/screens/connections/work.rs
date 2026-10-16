@@ -10,7 +10,7 @@ use lurq::app::{
   component::DevtoolsInspectable,
   ctx::{Ctx, FutureAction},
 };
-use orchester_core::id::{AgentAccountId, ConnectionId};
+use orchester_core::id::{AgentAccountId, ConnectionId, ProjectId};
 use orchester_workspace::{
   activity::OperationSpec,
   background,
@@ -20,6 +20,7 @@ use orchester_workspace::{
     mcp::{remove_in, set_enabled_in},
   },
   messages::{self, Message},
+  tasks::outside::Outside,
   workspace::Workspace,
 };
 
@@ -40,6 +41,7 @@ pub(super) enum Work {
 /// One piece of work as started.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Start {
+  pub project: ProjectId,
   pub repo_root: PathBuf,
   pub id: ConnectionId,
   pub work: Work,
@@ -60,19 +62,26 @@ pub(super) type WorkAction = FutureAction<Start, Done, Message>;
 /// The connection work of the screen; created at the same place in every render.
 pub(super) fn action(ctx: &mut Ctx) -> WorkAction {
   let Services {
-    activity, workspace, ..
+    activity,
+    workspace,
+    changes,
+    ..
   } = Services::of(ctx);
   ctx.future_action(move |start: Start| {
-    let (activity, workspace) = (activity.clone(), workspace.clone());
+    let (activity, workspace, changes) = (activity.clone(), workspace.clone(), changes.clone());
     async move {
       let Start {
+        project,
         repo_root,
         id,
         work,
         spec,
       } = start;
       let run = async move { background::run(move || run(&workspace, &repo_root, (id, work))).await? };
-      activity.track(spec, run).await.map(|()| Done { id, work })
+      activity.track(spec, run).await?;
+      // Every screen that shows the project's connections reads them again, the status bar's accounts too.
+      changes.record(project, Outside::Connections);
+      Ok(Done { id, work })
     }
   })
 }

@@ -17,6 +17,7 @@ use orchester_workspace::{
     data::{ProjectSecrets, ReplacementPermission},
     form::{NameCheck, check_name},
   },
+  tasks::outside::Outside,
 };
 use zeroize::Zeroize;
 
@@ -74,6 +75,8 @@ impl Component for SecretForm {
     let value = form.value.clone();
     let environment = form.environment.clone();
     let asking = form.asking.clone();
+    let changes = Services::of(ctx).changes;
+    let project = props.project.open.project.id();
     ctx.watch(&action.state(), move |state| {
       match state.data.filter(|_| state.is_fulfilled()) {
         Some(work::Outcome::Saved(id)) => {
@@ -81,7 +84,8 @@ impl Component for SecretForm {
           props
             .view
             .reveal(id, environment.get().0.expect("the form selects an environment"));
-          props.view.revision.update(|revision| *revision += 1);
+          // Every screen that shows the project's secrets and connections reads them again, this one too.
+          changes.record(project, Outside::Connections);
         }
         Some(work::Outcome::NeedsPerson) => {
           asking.set(true);

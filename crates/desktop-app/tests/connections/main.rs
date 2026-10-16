@@ -17,3 +17,4 @@ mod add_cli;
 mod harness;
 mod list;
 mod mcp;
+mod reads;

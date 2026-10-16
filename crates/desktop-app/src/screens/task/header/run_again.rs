@@ -88,6 +88,9 @@ pub fn check(
     .map(RunView::id);
   let deps = (root, detail.task.id(), after, again);
   let load = ctx.future(deps, move |(root, task, after, _)| {
+    if after.is_some() {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "run again check");
+    }
     let programs = programs.clone();
     async move {
       let Some(after) = after else {
