@@ -35,6 +35,8 @@ pub enum RunFailure {
   StepFailed(StepKey),
   /// The step failed after its failure route was taken `max_retries` times.
   RetriesExhausted(StepKey),
+  /// The run never started: its worktree could not be created, for this reason (git's message).
+  WorktreeNotCreated(String),
 }
 
 /// A limit of a run: its token budget, its time limit on active agent time, the project's daily

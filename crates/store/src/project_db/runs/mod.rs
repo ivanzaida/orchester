@@ -325,8 +325,8 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
   transaction.execute(
     "INSERT INTO runs (id, number, idempotency_key, task_id, pipeline_version_id, snapshot, branch, base_revision, \
      initial_budget_tokens, initial_max_duration_ms, budget_tokens, max_duration_ms, used_tokens, pause_requested, \
-     status, status_reason, failed_step, limit_execution, last_sequence, created_at, base_branch) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+     status, status_reason, failed_step, limit_execution, last_sequence, created_at, base_branch, failure_reason) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
     params![
       run.id().to_string(),
       run.number().get(),
@@ -349,6 +349,7 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
       sequence_column(run.last_sequence().get())?,
       run.created_at().unix_millis(),
       run.base_branch().map(BranchName::as_str),
+      columns.failure_reason,
     ],
   )?;
   // A new run uses auto mode as the project's setting for new runs says now.
@@ -363,7 +364,8 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
   let columns = run_status_columns(run.status());
   transaction.execute(
     "UPDATE runs SET status = ?2, status_reason = ?3, failed_step = ?4, limit_execution = ?5, budget_tokens = ?6, \
-     max_duration_ms = ?7, used_tokens = ?8, pause_requested = ?9, last_sequence = ?10 WHERE id = ?1",
+     max_duration_ms = ?7, used_tokens = ?8, pause_requested = ?9, last_sequence = ?10, branch = ?11, \
+     failure_reason = ?12 WHERE id = ?1",
     params![
       run.id().to_string(),
       columns.status,
@@ -375,6 +377,8 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
       tokens_column("run usage", run.used().get())?,
       run.pause_requested(),
       sequence_column(run.last_sequence().get())?,
+      run.branch().as_str(),
+      columns.failure_reason,
     ],
   )?;
   let mut step_budget = transaction.prepare_cached(
@@ -496,8 +500,8 @@ fn run_number(number: i64) -> Result<RunNumber, StoreError> {
     .ok_or_else(|| corrupt("run number", number))
 }
 
-/// `status`, `status_reason`, `failed_step` and `limit_execution` as stored.
-type StatusRow = (String, Option<String>, Option<String>, Option<String>);
+/// `status`, `status_reason`, `failed_step`, `limit_execution` and `failure_reason` as stored.
+type StatusRow = (String, Option<String>, Option<String>, Option<String>, Option<String>);
 
 /// The status of run `run` as `connection` reads it; `None` when there is no such run.
 pub(super) fn stored_status(
@@ -506,14 +510,19 @@ pub(super) fn stored_status(
 ) -> Result<Option<orchester_core::run::RunStatus>, StoreError> {
   let columns: Option<StatusRow> = connection
     .query_row(
-      "SELECT status, status_reason, failed_step, limit_execution FROM runs WHERE id = ?1",
+      "SELECT status, status_reason, failed_step, limit_execution, failure_reason FROM runs WHERE id = ?1",
       [run.to_string()],
-      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
     )
     .optional()?;
   columns
-    .map(|(status, reason, failed_step, limit)| {
-      columns::parse_run_status(&status, reason.as_deref(), failed_step.as_deref(), limit.as_deref())
+    .map(|(status, reason, failed_step, limit, failure)| {
+      columns::parse_run_status(
+        &status,
+        reason.as_deref(),
+        (failed_step.as_deref(), limit.as_deref()),
+        failure.as_deref(),
+      )
     })
     .transpose()
 }

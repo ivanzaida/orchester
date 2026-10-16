@@ -19,11 +19,12 @@ use orchester_core::{
   task::{Task, TaskDetails, TaskStatus, TaskUpdate, organization::TaskOrganization},
   time::Timestamp,
 };
+use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  runner::Runners,
+  runner::{RunRequestError, Runners},
   sharing::{Servers, project::WorkClaim},
   tasks::{
     conflict::{Edit, EditConflict, EditSaved, save_edit},
@@ -274,6 +275,11 @@ async fn start(services: &RunServices, queued: QueuedTask, claim: WorkClaim) -> 
     .await
   {
     Ok(_) => Ok(Started(queued.key)),
+    // The run failed before it started: the task's page says why and runs it again, which retrying here cannot.
+    Err(RunRequestError::Rejected(Rejection::RunNotStarted { .. })) => {
+      claim.release(&services.servers).await;
+      Ok(Started(queued.key))
+    }
     Err(error) => {
       tracing::warn!(%error, "the start request failed");
       claim.release(&services.servers).await;

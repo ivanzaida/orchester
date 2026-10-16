@@ -381,6 +381,7 @@
       "cancelledAt": "Canceled at {{step}}",
       "cancelled": "Canceled",
       "cancelledBeforeStart": "Canceled before it started",
+      "worktreeNotCreated": "Failed before it started · no worktree",
       "atWork": "{{step}} · {{agent}} at work",
       "stepAtWork": "{{step}} at work",
       "notMerged": "Every step passed · not merged",
@@ -523,7 +524,8 @@
       "lost": "The runner stopped answering. The run may have started. Retry uses the same request, so it will not create a second run.",
       "taskMissing": "The task no longer exists.",
       "notQueued": "The task is not queued for a run.",
-      "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying."
+      "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying.",
+      "worktreeNotCreated": "The run failed before it started: its worktree could not be created. {{reason}} Fix the cause, then run the task again."
     },
     "limit": {
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",

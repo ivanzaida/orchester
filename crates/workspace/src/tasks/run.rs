@@ -341,6 +341,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     }) => vec![Message::new("tasks.blocked.runUnavailable")],
     RunRequestError::Request(RequestError::NotConnected) => vec![Message::new("runs.start.runnerUnavailable")],
     RunRequestError::Request(RequestError::Lost) => vec![Message::new("runs.start.lost")],
+    RunRequestError::Rejected(Rejection::RunNotStarted { why, .. }) => vec![not_started(why)],
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
@@ -388,6 +389,11 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
   }
 }
 
+/// The run failed before it started: its worktree could not be created, `why` (git's message).
+fn not_started(why: &str) -> Message {
+  Message::new("runs.start.worktreeNotCreated").with("reason", why.to_owned())
+}
+
 /// Whether a failed start request definitely stopped before a run was created. Once a reply is
 /// lost or the runner reports a failure, a later preflight rejection cannot prove that an
 /// earlier request did not already create the run.
@@ -432,6 +438,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
   match error {
     RunRequestError::Request(RequestError::NotConnected) => Message::new("runs.control.runnerUnavailable"),
     RunRequestError::Request(RequestError::Lost) => Message::new("runs.control.lost"),
+    RunRequestError::Rejected(Rejection::RunNotStarted { why, .. }) => not_started(why),
     RunRequestError::Rejected(Rejection::RunNotRunning) => Message::new("runs.control.notRunning"),
     RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
     RunRequestError::Rejected(Rejection::NotAnotherAccount) => Message::new("runs.control.notAnotherAccount"),

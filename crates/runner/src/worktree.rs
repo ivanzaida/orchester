@@ -5,7 +5,7 @@
 //! `<repo>/.orchester/worktrees/<step-execution-id>/`, on a branch off the run's branch.
 
 use std::{
-  io,
+  io, iter,
   path::{Path, PathBuf},
 };
 
@@ -18,6 +18,9 @@ use thiserror::Error;
 use crate::git::Git;
 
 const WORKTREES_DIR: &str = ".orchester/worktrees";
+/// The last numbered name a run's branch may take when its own is taken. Leftovers never take that
+/// many, so past it the run fails ([`WorktreeError::NoFreeBranch`]) instead of calling git on.
+const MAX_SUFFIX: u32 = 100;
 
 #[derive(Debug, Error)]
 pub enum WorktreeError {
@@ -35,6 +38,8 @@ pub enum WorktreeError {
   InvalidBranch(String),
   #[error("branch {0} already exists")]
   BranchExists(String),
+  #[error("branch {0} and each of its numbered names up to -{MAX_SUFFIX} exist already")]
+  NoFreeBranch(String),
   #[error("{0:?} does not name a commit")]
   UnknownBase(String),
   #[error("git reported {0:?} where a commit id was expected")]
@@ -103,14 +108,32 @@ impl Worktrees {
     self.at(&execution.to_string())
   }
 
-  /// Creates the run's worktree on a new `branch` starting at `base` (any commit-ish).
+  /// Creates the run's worktree on a new branch starting at `base` (any commit-ish): `branch`, or
+  /// the first free one of `branch-2`, `branch-3`, … when a branch of that name exists already (an
+  /// earlier task with the same key, a removed worktree's, one a person made). An existing branch
+  /// may hold someone's work, so it is never reused; [`Worktree::branch`] is the one it is on.
   pub fn create(&self, run: RunId, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
-    self.create_at(&run.to_string(), branch, base)
+    let candidates = (2..=MAX_SUFFIX).map(|suffix| format!("{branch}-{suffix}"));
+    self
+      .create_at(&run.to_string(), iter::once(branch.to_owned()).chain(candidates), base)?
+      .ok_or_else(|| WorktreeError::NoFreeBranch(branch.to_owned()))
   }
 
-  /// Creates the worktree of step execution `execution` on a new `branch` starting at `base`.
+  /// Creates the worktree of step execution `execution` on a new `branch` starting at `base`. Its
+  /// name follows from the run's branch, so it is that one or none.
   pub fn create_step(&self, execution: StepExecutionId, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
-    self.create_at(&execution.to_string(), branch, base)
+    self
+      .create_at(&execution.to_string(), iter::once(branch.to_owned()), base)?
+      .ok_or_else(|| WorktreeError::BranchExists(branch.to_owned()))
+  }
+
+  /// The branch the run's worktree has checked out.
+  pub fn branch_of(&self, run: RunId) -> Result<String, WorktreeError> {
+    let path = self.path(run);
+    if !path.is_dir() {
+      return Err(WorktreeError::NotFound(path));
+    }
+    Git::new(&path).stdout(&["symbolic-ref", "--quiet", "--short", "HEAD"])
   }
 
   /// The worktree folder `name`.
@@ -124,18 +147,38 @@ impl Worktrees {
     format!("{WORKTREES_DIR}/{name}")
   }
 
-  fn create_at(&self, name: &str, branch: &str, base: &str) -> Result<Worktree, WorktreeError> {
+  /// Creates the worktree folder `name` on the first of `branches` that no branch has yet; `None`
+  /// when every one is taken.
+  fn create_at(
+    &self,
+    name: &str,
+    branches: impl Iterator<Item = String>,
+    base: &str,
+  ) -> Result<Option<Worktree>, WorktreeError> {
     let path = self.at(name);
     if path.exists() {
       return Err(WorktreeError::AlreadyExists(path));
     }
     let git = Git::new(&self.repo_root);
-    if !git.succeeds(&["check-ref-format", "--branch", branch])? {
-      return Err(WorktreeError::InvalidBranch(branch.to_owned()));
+    let base_revision = self.base_revision(&git, base)?;
+    for branch in branches {
+      if !git.succeeds(&["check-ref-format", "--branch", &branch])? {
+        return Err(WorktreeError::InvalidBranch(branch));
+      }
+      if Self::branch_exists(&git, &branch)? || !Self::add(&git, name, &branch, &base_revision)? {
+        continue;
+      }
+      return Ok(Some(Worktree {
+        path,
+        branch,
+        base_revision,
+      }));
     }
-    if git.answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])? {
-      return Err(WorktreeError::BranchExists(branch.to_owned()));
-    }
+    Ok(None)
+  }
+
+  /// `base` as a full commit SHA, in a repository that ignores the worktrees.
+  fn base_revision(&self, git: &Git<'_>, base: &str) -> Result<String, WorktreeError> {
     let base_revision = git
       .stdout(&[
         "rev-parse",
@@ -151,12 +194,33 @@ impl Worktrees {
     if !git.answer(&["check-ignore", "--quiet", WORKTREES_DIR])? {
       return Err(WorktreeError::NotExcluded(self.repo_root.clone()));
     }
-    git.stdout(&["worktree", "add", "-b", branch, &Self::relative(name), &base_revision])?;
-    Ok(Worktree {
-      path,
-      branch: branch.to_owned(),
-      base_revision,
-    })
+    Ok(base_revision)
+  }
+
+  fn branch_exists(git: &Git<'_>, branch: &str) -> Result<bool, WorktreeError> {
+    git.answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+  }
+
+  /// Creates `branch` at `base_revision` and checks it out in the worktree folder `name`; `false`
+  /// when someone made a branch of that name meanwhile. `git branch` creates it or fails as one
+  /// step, so such a branch is never taken over.
+  fn add(git: &Git<'_>, name: &str, branch: &str, base_revision: &str) -> Result<bool, WorktreeError> {
+    if let Err(error) = git.stdout(&["branch", "--no-track", branch, base_revision]) {
+      return if Self::branch_exists(git, branch)? {
+        Ok(false)
+      } else {
+        Err(error)
+      };
+    }
+    if let Err(error) = git.stdout(&["worktree", "add", &Self::relative(name), branch]) {
+      // The branch is new and holds nothing yet: deleting it only while it is still at
+      // `base_revision` loses no work, and keeps it from taking the name of the next try.
+      if let Err(cleanup) = git.stdout(&["update-ref", "-d", &format!("refs/heads/{branch}"), base_revision]) {
+        tracing::warn!(%branch, %cleanup, "the new branch of a worktree that could not be added is left");
+      }
+      return Err(error);
+    }
+    Ok(true)
   }
 
   /// Removes the run's worktree directory. The branch and its commits are kept.

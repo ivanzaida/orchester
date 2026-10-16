@@ -522,6 +522,13 @@ pub enum Rejection {
   ShuttingDown,
   /// [`Command::StopIfIdle`] while the runner has work.
   Busy,
+  /// The run was recorded, but its worktree could not be created, `why` (git's message): it
+  /// failed before it started ([`orchester_core::run::RunFailure::WorktreeNotCreated`]) and runs
+  /// again only as a new run.
+  RunNotStarted {
+    run: RunId,
+    why: String,
+  },
   /// Starting failed in the runner (database, git worktree); its log has the details.
   Failed {
     detail: String,

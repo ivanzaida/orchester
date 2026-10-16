@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use orchester_core::id::RunId;
+use orchester_core::id::{RunId, StepExecutionId};
 use orchester_runner::worktree::{RemoveMode, WorktreeError, Worktrees};
 use tempfile::TempDir;
 
@@ -65,7 +65,7 @@ fn worktree_creation_rejects_bad_input() {
   let worktrees = Worktrees::new(repo.path()).expect("worktrees");
 
   assert!(matches!(
-    worktrees.create(RunId::generate(), "main", "main"),
+    worktrees.create_step(StepExecutionId::generate(), "main", "main"),
     Err(WorktreeError::BranchExists(_))
   ));
   assert!(matches!(
@@ -83,6 +83,44 @@ fn worktree_creation_rejects_bad_input() {
     worktrees.create(run, "orchester/run-4", "main"),
     Err(WorktreeError::AlreadyExists(_))
   ));
+}
+
+#[test]
+fn a_run_worktree_takes_the_next_free_branch_name_and_leaves_taken_ones() {
+  let repo = repository();
+  let root = repo.path();
+  let main = git(root, &["rev-parse", "main"]);
+  git(root, &["branch", "main-2"]);
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  let run = RunId::generate();
+
+  let worktree = worktrees.create(run, "main", "main").expect("create");
+
+  assert_eq!(worktree.branch(), "main-3");
+  assert_eq!(git(worktree.path(), &["branch", "--show-current"]), "main-3");
+  assert_eq!(worktrees.branch_of(run).expect("branch of the worktree"), "main-3");
+  assert_eq!(git(root, &["rev-parse", "main"]), main);
+  assert_eq!(git(root, &["rev-parse", "main-2"]), main);
+  assert_eq!(git(root, &["branch", "--show-current"]), "main");
+}
+
+#[test]
+fn a_worktree_that_cannot_be_added_leaves_no_branch_behind() {
+  let repo = repository();
+  let root = repo.path();
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  // A file where git keeps its worktree records makes `git worktree add` fail after `git branch`.
+  fs::write(root.join(".git/worktrees"), "not a folder").expect("block git's worktree records");
+
+  assert!(matches!(
+    worktrees.create(RunId::generate(), "orchester/run-1", "main"),
+    Err(WorktreeError::Git { .. })
+  ));
+  assert_eq!(
+    git(root, &["branch", "--list", "orchester/run-1"]),
+    "",
+    "the new branch is gone"
+  );
 }
 
 #[test]

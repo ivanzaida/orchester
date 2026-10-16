@@ -1,11 +1,14 @@
 use std::num::NonZeroU32;
 
-use orchester_core::run::{AcceptRefusal, PreflightProblem};
+use orchester_core::{
+  id::RunId,
+  run::{AcceptRefusal, PreflightProblem},
+};
 use orchester_ipc::Rejection;
 use orchester_workspace::{
   i18n::{FALLBACK_LOCALE, LOCALES},
   runner::{RequestError, RunRequestError},
-  tasks::run::{StartOutcome, control_message, preflight_message},
+  tasks::run::{StartOutcome, control_message, preflight_message, start_messages},
 };
 use serde_json::Value;
 
@@ -92,5 +95,21 @@ fn preflight_a_refused_acceptance_says_why_in_the_persons_words() {
         .is_some_and(Value::is_string),
       "{key} has words"
     );
+  }
+}
+
+#[test]
+fn a_run_that_could_not_start_says_why_wherever_it_was_started() {
+  let why = "`git worktree add` failed (Some(128)): fatal: disk full".to_owned();
+  let error = RunRequestError::Rejected(Rejection::RunNotStarted {
+    run: RunId::generate(),
+    why: why.clone(),
+  });
+  // The new-task form, Run again and `run_task` read the start messages; the task's Start run reads the control one.
+  let mut said = start_messages(&error);
+  said.push(control_message(&error));
+  for message in said {
+    assert_eq!(message.key, "runs.start.worktreeNotCreated");
+    assert_eq!(message.args, vec![("reason", why.clone())]);
   }
 }
