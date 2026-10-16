@@ -1,6 +1,7 @@
 //! The top of the Tasks list: its title, what it shows and its actions (`Header` `ogbVF`), and the workflow
 //! tabs with their counts (`Workflow tabs` `bxhee`). Create multiple is not built yet: it stays in place,
-//! locked, and says why under the actions (`Q9aeZ`, `Nt3Qi`).
+//! locked, and says why under the actions (`Q9aeZ`, `Nt3Qi`). A linked project's list says where it lives under its
+//! description (`Shared line` in `Xr4Wb`); once the person is no longer a member, New task is locked too (`sErKV`).
 
 use lurq::{
   app::{
@@ -16,6 +17,7 @@ use orchester_workspace::tasks::list;
 
 use super::{
   queue::{QueueControls, QueueProps},
+  shared::{self, Shared},
   view::TabCounts,
 };
 use crate::{
@@ -32,10 +34,17 @@ use crate::{
 
 /// The title and what the list shows, with the holds on new starts once the tasks are read (`queue`), and New task
 /// and Create multiple at the end.
-pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps>) -> Row {
+pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps>, shared: Option<&Shared>) -> Row {
   let queue = queue.map(|queue| ctx.mount_keyed::<QueueControls>(&format!("tasks-queue-{project}"), queue));
   let navigation = Navigation::of(ctx);
-  let reason = ctx.t("tasks.createMultipleReason");
+  let read_only = shared.and_then(|shared| shared.read_only(ctx));
+  let reason = read_only.clone().unwrap_or_else(|| ctx.t("tasks.createMultipleReason"));
+  let new = new_task(ctx, "tasks-new-task", project, navigation);
+  let new = match read_only {
+    Some(reason) => new.unavailable(reason),
+    None => new,
+  };
+  let line = shared.map(|shared| shared::line(ctx, project, shared));
   let create_multiple = ActionButton::new(
     "tasks-create-multiple",
     ButtonKind::Secondary,
@@ -48,7 +57,7 @@ pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps
     .align_items(Alignment::Center)
     .with_children(queue)
     .child(create_multiple)
-    .child(new_task(ctx, "tasks-new-task", project, navigation));
+    .child(new);
   Row::new()
     .id("tasks-header")
     .width(Dimension::Pct(100.0))
@@ -68,7 +77,8 @@ pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps
           Text::new(&ctx.t("tasks.description"))
             .variant(TypographyStyle::Body)
             .color(PaletteColor::TextSecondary),
-        ),
+        )
+        .with_children(line),
     )
     .child(with_reason(actions, "tasks-create-multiple-reason", &reason))
 }

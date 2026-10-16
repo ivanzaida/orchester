@@ -17,6 +17,7 @@ mod queue;
 pub(crate) use self::queue::actor_now;
 mod readiness;
 mod row;
+mod shared;
 mod states;
 mod table;
 mod view;
@@ -110,6 +111,10 @@ impl Component for TasksScreen {
       self.choices.search.set(routed.to_owned());
     }
     let id = project.open.project.id();
+    let shared = shared::read(ctx, &project);
+    let not_member = shared
+      .as_ref()
+      .and_then(|shared| shared::not_member(ctx, &project, shared));
     let page = Column::new()
       .id("screen-tasks")
       .width(Dimension::Pct(100.0))
@@ -121,7 +126,8 @@ impl Component for TasksScreen {
           .right(TasksSpacing::Page.role()),
       )
       .spacing(SpacingSize::Md)
-      .child(header::header(ctx, id, queue(&project)));
+      .child(header::header(ctx, id, queue(&project), shared.as_ref()))
+      .with_children(not_member);
     match project.feed.tasks.get() {
       TasksState::Ready(tasks) if tasks.tasks.is_empty() => page.child(states::empty_project(ctx, id)),
       TasksState::Ready(tasks) => {
