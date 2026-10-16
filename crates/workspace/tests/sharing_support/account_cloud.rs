@@ -119,6 +119,10 @@ struct State {
   checks_held: bool,
   /// How many checks arrived, answered or not.
   checks_arrived: usize,
+  /// Lookups of a server in the registry (`GET /servers/{id}`) wait to be answered until they are let go.
+  registry_held: bool,
+  /// How many lookups in the registry arrived, answered or not.
+  registry_arrived: usize,
   /// How many times `GET /me` was asked.
   checks: usize,
   /// How `GET /me` is answered instead of the account.
@@ -242,6 +246,20 @@ impl AccountCloud {
     self.state.lock().checks_held = false;
   }
 
+  /// Holds the answers to lookups in the registry (`GET /servers/{id}`) until [`Self::let_registry_go`].
+  pub fn hold_registry(&self) {
+    self.state.lock().registry_held = true;
+  }
+
+  pub fn let_registry_go(&self) {
+    self.state.lock().registry_held = false;
+  }
+
+  /// How many lookups in the registry arrived, held or answered.
+  pub fn registry_arrived(&self) -> usize {
+    self.state.lock().registry_arrived
+  }
+
   /// How many checks of a sign-in arrived, held or answered.
   pub fn checks_arrived(&self) -> usize {
     self.state.lock().checks_arrived
@@ -269,6 +287,12 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &S
   if path == "GET /api/v1/me" {
     state.lock().checks_arrived += 1;
     while state.lock().checks_held {
+      thread::sleep(Duration::from_millis(10));
+    }
+  }
+  if path.starts_with("GET /api/v1/servers/") {
+    state.lock().registry_arrived += 1;
+    while state.lock().registry_held {
       thread::sleep(Duration::from_millis(10));
     }
   }

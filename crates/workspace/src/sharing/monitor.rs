@@ -2,13 +2,14 @@
 //! token (`GET /auth/me`) when signed in, every minute while connected, and on the backoff while it
 //! cannot be reached. Until the live event streams of shared projects (S2d) this question is what
 //! tells a server is there. A server that refuses the token is signed out and not asked again until
-//! the person signs in.
+//! the person signs in. Every account's servers are kept current, also while another account is signed in: their
+//! shared projects keep in step in the background ([`super::owners`]).
 
 use std::time::Instant;
 
 use tokio::time::sleep_until;
 
-use super::{IDLE, ServerEntry, Servers, SharingError};
+use super::{Behalf, IDLE, ServerEntry, Servers, SharingError};
 use crate::background;
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
@@ -18,7 +19,7 @@ pub async fn run(servers: Servers) {
     changes.borrow_and_update();
     let entries = {
       let servers = servers.clone();
-      background::run(move || servers.entries()).await
+      background::run(move || servers.every_entry()).await
     };
     let next = match entries {
       Ok(Ok(entries)) => servers.check_due(&entries).await,
@@ -42,7 +43,7 @@ impl Servers {
   async fn check_due(&self, entries: &[ServerEntry]) -> Option<Instant> {
     let (due, mut next) = self.due(entries, Instant::now());
     for entry in due {
-      self.ask(&entry).await;
+      self.ask(&entry, Behalf::Background).await;
       // After the check the server has a new time; read it again.
       let (_, after) = self.due(std::slice::from_ref(&entry), Instant::now());
       next = match (next, after) {
@@ -53,17 +54,21 @@ impl Servers {
     next
   }
 
-  /// Asks `entry` who is signed in now, as a screen that gates on the person's admin flag opens:
-  /// the stored account follows what the server answers, not only the minute's check.
+  /// Asks `entry`, one of the signed-in account's servers, who is signed in now, as a screen that gates on the
+  /// person's admin flag opens: the stored account follows what the server answers, not only the minute's check.
   pub async fn refresh_account(&self, entry: &ServerEntry) {
     if entry.stored.account.is_some() {
-      self.ask(entry).await;
+      self.ask(entry, Behalf::Account).await;
     }
   }
 
-  /// Asks `entry` who is signed in, and keeps the account's name and admin flag current.
-  async fn ask(&self, entry: &ServerEntry) {
-    match self.me(entry).await {
+  /// Asks `entry` on `behalf` of the account or the background who is signed in, and keeps the account's name and
+  /// admin flag current.
+  async fn ask(&self, entry: &ServerEntry, behalf: Behalf) {
+    let asked = self
+      .with_token_for(behalf, entry, |client, token| async move { client.me(&token).await })
+      .await;
+    match asked {
       Ok(user) => {
         let Some(account) = entry.stored.account.as_ref() else {
           return;
@@ -82,8 +87,9 @@ impl Servers {
           Err(_) => {}
         }
       }
-      // `me` recorded how the server answered; the connection shows it.
-      Err(SharingError::Client(_) | SharingError::SignedOut) => {}
+      // The request recorded how the server answered; the connection shows it. Another account's server is asked
+      // only in the background.
+      Err(SharingError::Client(_) | SharingError::SignedOut | SharingError::ServerMissing) => {}
       Err(error) => {
         tracing::error!(%error, server = %entry.stored.id, "cannot ask the server who is signed in");
         self.failed(entry.stored.id);

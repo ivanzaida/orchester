@@ -2,8 +2,9 @@
 //! confirms it (an upload that keeps numbers, the server's tasks coming down to a checkout without tasks, or a join
 //! to review), the link itself, the members kept as last read for when the server cannot be reached, what Make local
 //! would do, and Make local once this computer signed out of the server. A link whose tasks changed after its plan
-//! sends nothing, the members show as last read once the person is not a member or without the server, Make local says
-//! which claims it could not release, and an address is used only on the server that reported it.
+//! sends nothing, nor does a task added through a writer opened before the link, the members show as last read once the
+//! person is not a member or without the server, Make local says which claims it could not release, and an address is
+//! used only on the server that reported it; another one names the address the server gave itself.
 //!
 //! `cargo test -p orchester-workspace --test shared_links links_`
 
@@ -27,6 +28,7 @@ use orchester_workspace::{
       first_link::{LinkKind, LinkRequest},
     },
   },
+  tasks::writer::{TaskWriter, WriteError},
   workspace::Workspace,
 };
 use server_support::TestServer;
@@ -150,6 +152,7 @@ fn links_make_a_project_local_once_this_computer_signed_out_of_its_server() {
     .block_on(alice.server().current_members())
     .expect("members read once");
   let entry = alice.entry();
+  let me = entry.stored.account.as_ref().map(|account| account.user);
   alice
     .block_on(alice.servers.sign_out(&entry))
     .expect("signed out of the server");
@@ -157,6 +160,8 @@ fn links_make_a_project_local_once_this_computer_signed_out_of_its_server() {
     .block_on(alice.servers.project_members(alice.root()))
     .expect("as last read");
   assert_eq!(members.read, MembersRead::NoServer);
+  assert!(me.is_some());
+  assert_eq!(members.me, me, "the list still knows which member the person is");
   let plan = alice.servers.make_local_plan(alice.root()).expect("plan");
   assert!(!plan.releases, "nothing can be released without a sign-in");
   assert_eq!(plan.claims, None, "this computer no longer knows whose claims they are");
@@ -221,6 +226,40 @@ fn links_refuse_an_upload_when_a_task_was_added_after_the_plan() {
         .link_checkout(&alice.entry(), alice.root(), &plan, request()),
     )
     .expect("linked as reviewed again");
+  assert_eq!(server.task_keys(&project), ["ORC-1", "ORC-2", "ORC-3"]);
+}
+
+#[test]
+fn links_refuse_a_task_from_a_writer_opened_before_the_link() {
+  let server = TestServer::start();
+  let code = server.code_for("alice", true);
+  let alice = Person::signed_in(&server, ("alice", "Alice Moreau", &code), &["One", "Two"]);
+  let project = server.create_project("kontur", None);
+  let plan = alice
+    .block_on(alice.servers.link_plan(&alice.entry(), alice.root(), kontur(&alice)))
+    .expect("plan");
+  // Opened while the project is local, as a screen or an MCP tool would just before the person confirms the link.
+  let mut writer = TaskWriter::open(alice.root(), &alice.servers).expect("a local writer");
+  alice
+    .block_on(
+      alice
+        .servers
+        .link_checkout(&alice.entry(), alice.root(), &plan, request()),
+    )
+    .expect("linked");
+
+  let refused = writer.create_tasks(IdempotencyKey::generate(), vec![details("Three")], Timestamp::now());
+  assert!(
+    matches!(&refused, Err(WriteError::Sharing(failure)) if matches!(failure.source, SharingError::ShareInProgress)),
+    "{refused:?}"
+  );
+  assert_eq!(alice.tasks().len(), 2, "nothing was added on this computer only");
+  assert_eq!(server.task_keys(&project), ["ORC-1", "ORC-2"]);
+  let _context = alice.runtime.enter();
+  let mut writer = TaskWriter::open(alice.root(), &alice.servers).expect("the shared project's writer");
+  writer
+    .create_tasks(IdempotencyKey::generate(), vec![details("Three")], Timestamp::now())
+    .expect("a new writer sends it to the server");
   assert_eq!(server.task_keys(&project), ["ORC-1", "ORC-2", "ORC-3"]);
 }
 
@@ -325,19 +364,33 @@ fn links_use_a_project_address_only_on_the_server_that_reported_it() {
   let server = ServerAddress::parse("https://orchester.kontur.dev").expect("server");
   let kept = ProjectAddress::reported("https://orchester.kontur.dev/kontur", &server).expect("on its server");
   assert_eq!(kept.to_text(), "https://orchester.kontur.dev/kontur");
-  for elsewhere in [
-    "https://evil.example/kontur",
-    "http://orchester.kontur.dev/kontur",
-    "https://orchester.kontur.dev:8443/kontur",
-    "https://orchester.kontur.dev/team/kontur",
+  for (elsewhere, own) in [
+    ("https://evil.example/kontur", "https://evil.example"),
+    ("http://orchester.kontur.dev/kontur", "http://orchester.kontur.dev"),
+    (
+      "https://orchester.kontur.dev:8443/kontur",
+      "https://orchester.kontur.dev:8443",
+    ),
+    (
+      "https://orchester.kontur.dev/team/kontur",
+      "https://orchester.kontur.dev/team",
+    ),
   ] {
-    assert!(
-      matches!(
-        ProjectAddress::reported(elsewhere, &server),
-        Err(SharingError::ForeignAddress)
-      ),
-      "{elsewhere} is not on {server}"
-    );
+    match ProjectAddress::reported(elsewhere, &server) {
+      Err(SharingError::ForeignAddress { own: named }) => {
+        assert_eq!(
+          named.as_str(),
+          own,
+          "the error names the address the server names itself by"
+        );
+        let message = SharingError::ForeignAddress { own: named }.message(&server);
+        assert!(
+          message.args.contains(&("own", own.to_owned())),
+          "the person is told which address to connect by: {message:?}"
+        );
+      }
+      other => panic!("{elsewhere} is not on {server}: {other:?}"),
+    }
   }
   assert!(matches!(
     ProjectAddress::reported("not an address", &server),

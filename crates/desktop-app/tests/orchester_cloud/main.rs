@@ -69,6 +69,9 @@ fn signed_in(cloud: &RealCloud) -> support::Window {
   window.set("gate-email", BOHDAN);
   window.set("gate-password", PASSWORD);
   press(&mut window, "gate-sign-in");
+  // Another account signing in gets tabs of its own: going anywhere before its sign-in finished would go in the last
+  // account's tabs, which then wait for it.
+  shows(&mut window, "content");
   go(
     &mut window,
     Route::Orchester(OrchesterView::default()),

@@ -214,6 +214,7 @@ fn proof_claims(
   let identity = CloudIdentity {
     cloud: &client,
     device: &device,
+    account: account_cloud::ACCOUNT.parse().expect("Bohdan's account"),
     invite: None,
   };
   let trust = if address.is_https() {
@@ -319,10 +320,7 @@ fn cloud_account_a_pinned_server_with_another_certificate_reads_changed() {
     .block_on(desktop.servers.join_with_code(&address, presented.confirm(), request))
     .expect("join with a code");
   // As if the server had made a new certificate: this computer's pin no longer matches it.
-  desktop
-    .workspace
-    .set_server_trust(id, Some(&"ab".repeat(32)), false)
-    .expect("another pin");
+  desktop.pin_server(id, &"ab".repeat(32));
   let entry = || desktop.servers.entries().expect("entries").remove(0);
   let answer = desktop.block_on(desktop.servers.me(&entry()));
   assert!(matches!(answer, Err(SharingError::CertificateChanged)), "{answer:?}");

@@ -5,6 +5,9 @@
 //! own, never the user's.
 
 mod http;
+#[path = "../../../workspace/tests/server_support/mod.rs"]
+mod server_support;
+mod servers_per_account;
 mod signed_out;
 #[path = "../support/mod.rs"]
 mod support;

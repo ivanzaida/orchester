@@ -132,8 +132,9 @@ impl Component for Members {
           .t_args("sharing.members.count", [("count", count.to_string())])
           .to_string(),
       };
+      // A list that is not the server's answer now says when it was read, whatever kept the server from answering.
       match &state.data {
-        Some(Read(members)) if not_member(&props, members) => ctx
+        Some(Read(members)) if !members.live() || not_member(&props, members) => ctx
           .t_args(
             "sharing.members.countAsOf",
             [("count", counted), ("time", moment(ctx, members.read_at))],
@@ -167,8 +168,11 @@ impl Members {
     let manages = (props.owner || props.admin) && !removed;
     let mut rows = vec![self.intro(ctx, props, members, manages), header(ctx).into()];
     let until = removed.then(|| moment(ctx, members.read_at));
+    // Once this computer signed out of the server it no longer knows the person's account there; the list knows who
+    // read it.
+    let mine = props.me.or(members.me);
     rows.extend(members.members.iter().map(|member| {
-      let me = (props.me == Some(member.user)).then_some(until.as_deref());
+      let me = (mine == Some(member.user)).then_some(until.as_deref());
       member_row(ctx, member, me).into()
     }));
     if removed {
@@ -282,9 +286,13 @@ fn admin_page(ctx: &Ctx, props: &Props) -> Result<(ServerEntry, String), std::sy
     .ok_or_else(|| ctx.t_args("sharing.members.manageNoAddress", [server]))?;
   match ProjectAddress::reported(text, &entry.address) {
     Ok(address) => Ok((entry, address.admin_url())),
-    Err(SharingError::ForeignAddress) => Err(ctx.t_args(
+    Err(SharingError::ForeignAddress { own }) => Err(ctx.t_args(
       "sharing.members.manageForeign",
-      [("address", shown_address(text)), server],
+      [
+        ("address", shown_address(text)),
+        ("own", shown_address(own.as_str())),
+        server,
+      ],
     )),
     Err(error) => {
       tracing::warn!(%error, "the project's address cannot be read");

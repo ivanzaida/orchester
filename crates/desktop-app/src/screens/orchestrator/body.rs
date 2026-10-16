@@ -213,7 +213,7 @@ fn conversation(
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .min_height(Dimension::Px(0.0))
-        .child(list(ctx, rows, &view.scrolled)),
+        .child(list(ctx, rows)),
     )
     .child(
       Row::new()

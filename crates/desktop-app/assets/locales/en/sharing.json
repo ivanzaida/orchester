@@ -113,7 +113,15 @@
       "server": "Server",
       "serverDescription": "A team server this computer is connected to.",
       "serverOption": "{{server}} · {{host}}",
-      "serverHint": "Connected · another server: Settings › Orchester",
+      "serverHint": "{{state}} · another server: Settings › Orchester",
+      "serverState": {
+        "connected": "Connected",
+        "checking": "Connecting",
+        "reconnecting": "Reconnecting · try {{attempt}}",
+        "offline": "Offline since {{time}}",
+        "signedOut": "Signed out",
+        "certificateChanged": "Certificate changed · nothing sent"
+      },
       "noServer": "This computer isn't connected to a team server yet.",
       "project": "Project",
       "projectDescription": "Projects on {{server}} you're a member of. An empty one takes {{project}}'s {{count}} tasks with their numbers; one with tasks opens the join review first.",
@@ -195,7 +203,8 @@
       "address": "Project address",
       "addressDescription": "The project this checkout is linked to. Its address is its identity and never changes.",
       "noAddress": "Not read from the server yet",
-      "unknownServer": "a server no longer in Settings › Orchester",
+      "unknownServer": "the project's server",
+      "missingServer": "{{server}} · no longer in Settings › Orchester",
       "serverState": "{{server}} · {{state}} · {{certificate}}",
       "state": {
         "connected": "connected",
@@ -236,6 +245,9 @@
       "makeLocalButton": "Make local…",
       "leave": "Leave {{project}}",
       "leaveDescription": "Stop being a member. This computer keeps a local copy of the tasks and stays connected to {{server}} for your other projects.",
+      "leaveDescriptionNoServer": "Stop being a member. Leaving is done on {{server}}, which this computer isn't connected to now; Make local works without it.",
+      "leaveNoServer": "Leave works once this computer is signed in to {{server}} again.",
+      "leaveOffline": "{{server}} can't be reached now; Leave works when it's back.",
       "leaveButton": "Leave…",
       "leaveQuestion": "Leave {{project}}?",
       "leaveBody": "You stop being a member of {{project}} on {{server}}. Its tasks stay here as they are, read-only; an owner can invite you again.",
@@ -258,7 +270,7 @@
       "changed": "{{local}}'s tasks changed since this page opened",
       "changedBody": "A task was added or removed meanwhile, so nothing was sent and {{local}} is still local. Review again reads what linking it to {{project}} does now.",
       "reviewAgain": "Review again",
-      "foreignAddress": "The server named an address on another server for this project, so Orchester didn't use it and nothing was sent.",
+      "foreignAddress": "The server names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was sent. If {{own}} is how your team reaches the server, connect to it by that address.",
       "taken": "The project got tasks of its own meanwhile, so linking this checkout is a join, with a review of what goes up. That review isn't in this version of the app yet; nothing was sent.",
       "whatGoesUp": "What is uploaded",
       "whatComesDown": "What comes down",
@@ -289,7 +301,8 @@
         "names": "orchester.toml names this project already.",
         "other": "orchester.toml names something else; Orchester leaves it as it is."
       },
-      "nothingYet": "Nothing is sent until you choose {{action}}. Cancel returns to Sharing with {{local}} still local."
+      "nothingYet": "Nothing is sent until you choose {{action}}. Cancel returns to Sharing with {{local}} still local.",
+      "nothingYetChanged": "Nothing is sent: Review again reads what linking does now, on a page you confirm again. Cancel returns to Sharing with {{local}} still local."
     },
     "members": {
       "section": "Members",
@@ -307,7 +320,7 @@
       "manageOffline": "{{server}} can't be reached now; the server admin opens when it's back.",
       "manageNoServer": "This computer isn't signed in to {{server}} now; the server admin opens once it joins again.",
       "manageNoAddress": "Opens once the project's address has been read from {{server}}.",
-      "manageForeign": "The project's address {{address}} isn't on {{server}}, so Orchester doesn't open it.",
+      "manageForeign": "{{server}} names this project at {{address}}, on {{own}} rather than the address this computer connected to, so Orchester doesn't open it. If {{own}} is how your team reaches {{server}}, connect to it by that address.",
       "manageNote": "Manage members and invites opens {{url}} in your browser, where owners and admins sign in with their Orchester account.",
       "openFailed": "The browser didn't open {{url}}. Open it yourself.",
       "name": "NAME",
@@ -371,9 +384,10 @@
       "write": "Write orchester.toml",
       "writeFailed": "orchester.toml couldn't be written; nothing was changed in the repository.",
       "other": "orchester.toml names another project or server; Orchester leaves it as it is.",
-      "noAddress": "Written once the project's address has been read from its server.",
-      "noServer": "Written once this computer is signed in to the project's server again: Orchester checks the address against it first.",
-      "foreignAddress": "The project's address isn't on {{server}}, so orchester.toml wasn't written."
+      "noAddress": "The project's address hasn't been read from its server yet, so there's nothing to write.",
+      "noServer": "Unavailable while the project's server isn't in Settings › Orchester: Orchester checks the address against that server before writing it.",
+      "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester doesn't write it. If {{own}} is how your team reaches {{server}}, connect to it by that address.",
+      "invalidAddress": "{{server}} answered with a project address Orchester can't read, so Orchester doesn't write it."
     }
   }
 }

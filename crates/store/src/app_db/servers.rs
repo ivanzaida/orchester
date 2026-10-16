@@ -1,6 +1,7 @@
 //! The shared servers the person added (`docs/architecture/server.md`, "Desktop data"): each one's
 //! address, name, whether plain HTTP is allowed for it, and the account signed in there. The token
-//! of that account is in the OS keychain, never here.
+//! of that account is in the OS keychain, never here. Whose each server is, and adding and listing them by that, is in
+//! [`super::server_owners`].
 
 use orchester_core::{
   id::{ServerId, TeamServerId, UserId},
@@ -64,7 +65,7 @@ pub enum JoinedWith {
 }
 
 impl JoinedWith {
-  fn columns(self) -> (&'static str, Option<String>) {
+  pub(super) fn columns(self) -> (&'static str, Option<String>) {
     match self {
       Self::Code => ("code", None),
       Self::Cloud(server) => ("cloud", Some(server.to_string())),
@@ -83,42 +84,6 @@ pub struct ServerAccount {
 }
 
 impl AppDb {
-  /// The servers, in the order they were added.
-  pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
-    let mut statement = self.connection.prepare(
-      "SELECT id, url, name, plain_http_allowed, added_at, user_id, username, display_name, admin, signed_in_at, \
-       certificate_pin, joined_with, team_server FROM servers ORDER BY added_at, id",
-    )?;
-    let rows = statement
-      .query_map([], ServerRow::read)?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows.into_iter().map(ServerRow::into_server).collect()
-  }
-
-  /// Adds `server`, with its account if it has one. An address already in the list is refused by
-  /// the table.
-  pub fn add_server(&mut self, server: &StoredServer) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
-    let (joined_with, team_server) = server.joined_with.map(JoinedWith::columns).unzip();
-    transaction.execute(
-      "INSERT INTO servers (id, url, name, plain_http_allowed, added_at, certificate_pin, joined_with, team_server) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-      params![
-        server.id.to_string(),
-        server.url,
-        server.name,
-        server.plain_http_allowed,
-        server.added_at.unix_millis(),
-        server.certificate_pin,
-        joined_with,
-        team_server.flatten(),
-      ],
-    )?;
-    update_account(&transaction, server.id, server.account.as_ref())?;
-    transaction.commit()?;
-    Ok(())
-  }
-
   /// Records who is signed in to `server` from this computer; `None` after signing out.
   pub fn set_server_account(&mut self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
     update_account(&self.connection, server, account)
@@ -163,7 +128,7 @@ impl AppDb {
   }
 }
 
-fn update_account(
+pub(super) fn update_account(
   connection: &rusqlite::Connection,
   server: ServerId,
   account: Option<&ServerAccount>,
@@ -188,8 +153,11 @@ fn update_account(
 /// The columns of a signed-in account, before its values are checked.
 type AccountColumns = (String, String, String, bool, i64);
 
+/// The columns [`ServerRow::read`] reads, in its order.
+pub(super) const COLUMNS: &str = "SELECT id, url, name, plain_http_allowed, added_at, user_id, username, display_name,   admin, signed_in_at, certificate_pin, joined_with, team_server FROM servers";
+
 /// A `servers` row as stored, before its values are checked.
-struct ServerRow {
+pub(super) struct ServerRow {
   id: String,
   url: String,
   name: String,
@@ -202,7 +170,7 @@ struct ServerRow {
 }
 
 impl ServerRow {
-  fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
+  pub(super) fn read(row: &Row<'_>) -> rusqlite::Result<Self> {
     let user: Option<String> = row.get(5)?;
     let account = match user {
       Some(user) => Some((user, row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?)),
@@ -221,7 +189,7 @@ impl ServerRow {
     })
   }
 
-  fn into_server(self) -> Result<StoredServer, StoreError> {
+  pub(super) fn into_server(self) -> Result<StoredServer, StoreError> {
     let account = match self.account {
       Some((user, username, display_name, admin, signed_in_at)) => Some(ServerAccount {
         user: parse("server user id", &user)?,

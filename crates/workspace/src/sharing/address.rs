@@ -47,7 +47,7 @@ impl ProjectAddress {
   pub fn reported(text: &str, server: &ServerAddress) -> Result<Self, SharingError> {
     let address = Self::parse(text).map_err(|_| SharingError::InvalidAnswer("project address"))?;
     if address.server() != server {
-      return Err(SharingError::ForeignAddress);
+      return Err(SharingError::ForeignAddress { own: address.server });
     }
     Ok(address)
   }

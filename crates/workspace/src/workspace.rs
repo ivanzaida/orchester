@@ -5,7 +5,10 @@
 //! 2026-10-16): the list, every lookup and every opening of a project are that account's alone, keyed by the cloud's
 //! account id. Another account signed in on the same computer sees only its own; while none is, only the projects
 //! added meanwhile, which the next account to sign in takes (`sharing::cloud`). Only the work that follows every
-//! project on this computer, and shows none of them, reads them all ([`Workspace::every_project`]).
+//! project on this computer, and shows none of them, reads them all ([`Workspace::every_project`]). The team servers
+//! are the account's in the same way ([`servers`]).
+
+mod servers;
 
 use std::{
   collections::{HashMap, HashSet},
@@ -16,15 +19,13 @@ use std::{
 use orchester_core::{
   app_mcp::McpPort,
   appearance::ThemeSetting,
-  id::{CloudAccountId, InstallationId, ProjectId, ServerId},
+  id::{CloudAccountId, InstallationId, ProjectId},
   project::Project,
   time::Timestamp,
   usage::limits::WarningThreshold,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{
-  AppDb, PreviousSession, ProjectDb, RegisteredProject, ServerAccount, SessionEnd, SessionId, StoreError, StoredServer,
-};
+use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
 use parking_lot::Mutex;
 
 use crate::{
@@ -202,7 +203,7 @@ impl Workspace {
   }
 
   /// Every project known on this computer, whichever account's: for the work that follows them all in the background
-  /// (an agent account's folders and uses, a shared project's sync), never to show or to act on for the person.
+  /// (an agent account's folders and uses), never to show or to act on for the person.
   pub(crate) fn every_project(&self) -> Result<Vec<RegisteredProject>, StoreError> {
     self.db.lock().every_project()
   }
@@ -462,31 +463,6 @@ impl Workspace {
   /// This installation's id, which names its secrets of its own in the keychain (the app's MCP token).
   pub fn installation_id(&self) -> Result<InstallationId, StoreError> {
     self.db.lock().installation_id()
-  }
-
-  /// The shared servers, in the order they were added.
-  pub fn servers(&self) -> Result<Vec<StoredServer>, StoreError> {
-    self.db.lock().servers()
-  }
-
-  pub fn add_server(&self, server: &StoredServer) -> Result<(), StoreError> {
-    self.db.lock().add_server(server)
-  }
-
-  /// Records how this computer trusts `server`: its pinned certificate, or the system's trust store and whether plain
-  /// HTTP is allowed there.
-  pub fn set_server_trust(&self, server: ServerId, pin: Option<&str>, plain_http: bool) -> Result<(), StoreError> {
-    self.db.lock().set_server_trust(server, pin, plain_http)
-  }
-
-  /// Records the name the server gives itself now.
-  pub fn set_server_name(&self, server: ServerId, name: &str) -> Result<(), StoreError> {
-    self.db.lock().set_server_name(server, name)
-  }
-
-  /// Records who is signed in to `server` from this computer; `None` after signing out.
-  pub fn set_server_account(&self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
-    self.db.lock().set_server_account(server, account)
   }
 
   pub(crate) fn start_session(&self, now: Timestamp) -> Result<(SessionId, PreviousSession), StoreError> {

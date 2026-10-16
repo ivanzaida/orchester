@@ -114,10 +114,11 @@ impl Cloud {
       .with_token(|client, token| async move { ended(client.server(&token, audience).await) })
       .await?
       .server;
-    let (client, token) = self.signed_in().await?;
+    let (client, token, account) = self.signed_in().await?;
     let identity = CloudIdentity {
       cloud: &client,
       device: &token,
+      account,
       invite: Some(kept.invite),
     };
     let approval = kept.approval.filter(|_| approval_open(kept, now));

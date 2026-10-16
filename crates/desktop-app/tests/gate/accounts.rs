@@ -1,14 +1,18 @@
-//! Another Orchester Cloud account on the same computer (the person's decision, 2026-10-16: projects per account): it
-//! gets tabs of its own and sees none of the first account's projects; the first account finds its tabs and its
-//! projects again when it signs back in.
+//! Another Orchester Cloud account on the same computer (the person's decision, 2026-10-16: projects and team servers
+//! per account): it gets tabs of its own and sees none of the first account's projects or servers, in Settings ›
+//! Orchester or the status bar; the first account finds its tabs, projects and servers again when it signs back in.
 
-use orchester_api::Credential;
+use orchester_api::{
+  Credential,
+  client::{PlainHttp, ServerAddress},
+};
 use orchester_app::{
   project::ProjectState,
-  routes::{OverviewTab, ProjectPage, Route},
+  routes::{OrchesterView, OverviewTab, ProjectPage, Route},
 };
+use orchester_workspace::sharing::{CodeRequest, Trust};
 
-use super::{has, signed_in, support::Window};
+use super::{gone, has, server_support::TestServer, shows, signed_in, support::Window};
 use crate::support::{
   project_id,
   signed_in::account_cloud::{EMAIL, OTHER_EMAIL, PASSWORD},
@@ -62,4 +66,45 @@ fn gate_another_account_gets_its_own_tabs_and_none_of_the_projects() {
   window.until("Kontur open again", |window| {
     matches!(window.projects().state(kontur), Some(ProjectState::Open(_)))
   });
+}
+
+#[test]
+fn gate_another_account_sees_none_of_the_first_accounts_servers() {
+  let mut window = signed_in();
+  let server = TestServer::start();
+  let services = window.launch.services().expect("services").clone();
+  let request = CodeRequest {
+    code: server.code_for("bohdan", true),
+    username: Some("bohdan".into()),
+    display_name: Some("Bohdan Koval".into()),
+    // The setup code, which needs no two-factor identity.
+    proof: None,
+  };
+  let kontur = window
+    .data
+    .runtime
+    .block_on(services.servers.join_with_code(
+      &ServerAddress::parse(&server.url()).expect("address"),
+      Trust::System(PlainHttp::NotAllowed),
+      request,
+    ))
+    .expect("Bohdan joins the team server");
+  window.navigation().go(Route::Orchester(OrchesterView::default()));
+  let row = format!("orchester-row-{kontur}");
+  shows(&mut window, &row);
+  shows(&mut window, "status-server");
+
+  switch_to(&mut window, OTHER_EMAIL);
+  window.navigation().go(Route::Orchester(OrchesterView::default()));
+  shows(&mut window, "orchester-no-servers");
+  assert!(
+    !has(&mut window, &row),
+    "Settings › Orchester lists none of the first account's"
+  );
+  gone(&mut window, "status-server");
+
+  switch_to(&mut window, EMAIL);
+  window.navigation().go(Route::Orchester(OrchesterView::default()));
+  shows(&mut window, &row);
+  shows(&mut window, "status-server");
 }

@@ -17,8 +17,8 @@ use orchester_api::{
   client::{Client, CloudClient, ServerAddress},
   cloud::CloudServer,
 };
-use orchester_core::secret::SecretValue;
-use orchester_store::AppDb;
+use orchester_core::{secret::SecretValue, time::Timestamp};
+use orchester_store::{AppDb, StoredCloudAccount};
 use orchester_workspace::{
   secrets::Vault,
   sharing::{CloudIdentity, CloudJoined, Servers, SharingError},
@@ -34,7 +34,7 @@ fn linked() -> (TestServer, cloud::FakeCloud, String) {
   server.create_user("alice", "Alice Moreau", true);
   let invite = server.email_invite("bohdan@example.com");
   let fake = cloud::FakeCloud::start(cloud::Person {
-    account: "0191c7c0-0000-7000-8000-000000000b0b".into(),
+    account: BOHDAN.into(),
     email: "bohdan@example.com".into(),
     name: "Bohdan Koval".into(),
     invite: Some(invite),
@@ -44,10 +44,22 @@ fn linked() -> (TestServer, cloud::FakeCloud, String) {
   (server, fake, audience)
 }
 
-/// The desktop's servers on a temporary application database and a keychain in memory.
+/// Bohdan's Orchester Cloud account, whose identity the fake cloud issues.
+const BOHDAN: &str = "0191c7c0-0000-7000-8000-000000000b0b";
+
+/// The desktop's servers on a temporary application database signed in as Bohdan, and a keychain in memory.
 fn desktop(dir: &TempDir) -> Servers {
-  let workspace = Workspace::new(AppDb::open(&dir.path().join("orchester.db")).expect("database"));
-  Servers::new(workspace, Vault::with(Arc::new(MemoryVault::default())))
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("database");
+  db.set_cloud_account(Some(&StoredCloudAccount {
+    account: BOHDAN.parse().expect("an account id"),
+    email: "bohdan@example.com".into(),
+    display_name: "Bohdan Koval".into(),
+    device_name: "Laptop".into(),
+    signed_in_at: Timestamp::from_unix_millis(1),
+    cloud_address: "https://cloud.test".into(),
+  }))
+  .expect("signed in");
+  Servers::new(Workspace::new(db), Vault::with(Arc::new(MemoryVault::default())))
 }
 
 #[test]
@@ -62,6 +74,7 @@ fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_name
   let identity = || CloudIdentity {
     cloud: &client,
     device: &device,
+    account: BOHDAN.parse().expect("an account id"),
     invite: None,
   };
   let stale = CloudServer {
@@ -110,6 +123,7 @@ fn cloud_join_reaches_a_self_signed_server_by_the_fingerprint_the_cloud_has() {
   let identity = CloudIdentity {
     cloud: &client,
     device: &device,
+    account: BOHDAN.parse().expect("an account id"),
     invite: None,
   };
   let joined = server

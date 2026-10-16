@@ -146,6 +146,10 @@ fn linked(
       return Ok(seeded);
     }
     State::LinkForeign | State::NoServer => return Ok(seeded),
+    State::LinkOffline => {
+      seeded.port.down();
+      return Ok(seeded);
+    }
     State::Discovery => {
       std::fs::write(
         repo.join("orchester.toml"),

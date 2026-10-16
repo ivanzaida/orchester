@@ -37,10 +37,10 @@ impl ProjectServer {
       .await?;
     let server = self.clone();
     // A link made before API 3 learns the project's address, its identity since, from the server; one on another
-    // server is not kept, and the tasks are synced all the same.
+    // server is not kept, and the tasks are synced all the same. This repeats every minute, so it is not a warning.
     let address = match self.link.address {
       None => ProjectAddress::reported(&project.address, &self.entry.address)
-        .inspect_err(|error| tracing::warn!(%error, "the project's address was not recorded"))
+        .inspect_err(|error| tracing::debug!(%error, "the project's address was not recorded"))
         .ok()
         .map(|address| address.to_text()),
       Some(_) => None,

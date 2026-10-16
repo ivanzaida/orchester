@@ -917,6 +917,16 @@ team's network, `https://10.0.4.20:8740`). It holds several projects, each at it
 - **Leave** a project is in that project's Sharing and keeps the device connected.
 - **Discovery.** `orchester.toml` names the project's address (`project = "https://…/kontur"`, no secrets); the app
   prefills it when the person links the checkout, and contacts it only after the person confirms (row 11).
+- **An address only on the server that reported it.** The app keeps, writes into `orchester.toml` or opens in the
+  browser a project address the server reported only when it is on the address this computer connected to
+  (`ProjectAddress::reported`); anything else is `SharingError::ForeignAddress`, which names the address the server
+  gave itself. **Limitation:** a server configured with its own `address` names its projects there whatever address
+  a device reached it by, so a device connected by another one (a LAN address or a port forward while `address` is
+  the public name) cannot link, write the file or open the admin for its projects, and *Write orchester.toml* and
+  *Manage members and invites* say so with that address in advance: the person connects to the server by the address
+  it names itself by. A server without `address` names its projects at the host each request used, so this does not
+  arise. A link made before the check keeps syncing and leaves its address unrecorded; the sync notes that at debug
+  level, since it runs every minute.
 
 ### Orchester Cloud
 
@@ -1519,7 +1529,7 @@ checkout is linked; it no longer identifies the project and is not unique.
 
 | Table | Purpose |
 | --- | --- |
-| `servers` (S2a; changed by rows 40 and 50) | This device's connected team servers, listed in Settings › Orchester: id, base URL, the server's name, how it is trusted (`pinned` with the certificate's SHA-256, `system`, or `plain` with the opt-in), the account there (user id, username, display name, admin, cloud-linked), joined at. One device token per server, in the keychain (`orchester-server:<server id>` / `token`), used by every project linked to a project on it. A row is removed when the device signs out of that server |
+| `servers` (S2a; changed by rows 40 and 50) | This device's connected team servers, listed in Settings › Orchester: id, base URL, the server's name, how it is trusted (`pinned` with the certificate's SHA-256, `system`, or `plain` with the opt-in), the account there (user id, username, display name, admin, cloud-linked), joined at. One device token per server, in the keychain (`orchester-server:<server id>` / `token`), used by every project linked to a project on it. A row is removed when the device signs out of that server. Each row is owned by the Orchester Cloud account signed in when it was joined (`owner`, 2026-10-16): the signed-in account sees and uses only its own, an address is listed once per account, and a second account joining the same server gets its own row, device session and token there (the server issues one session per join and keys nothing on the device's name). A row without an owner (from before, or joined while signed out) goes, when an account signs in, to the account whose projects link to it; one no project links to goes to the account signing in, or is removed with its token if that account has the address already; one that projects of several accounts link to stays hidden; signing out of the cloud keeps the rows and tokens. Background sync goes on for every account's projects through that account's own servers |
 | `cloud_account` (new, row 41) | At most one row: the cloud account id, email, display name, signed in at, the cloud's address. The cloud device token is in the keychain (`orchester-cloud` / `device`) |
 
 A project reaches its server through its `sharing` row's `server`, as in S2b.

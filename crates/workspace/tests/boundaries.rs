@@ -15,15 +15,27 @@ fn rust_sources(dir: &Path, out: &mut Vec<(String, String)>) {
   }
 }
 
+/// The public Orchester Cloud lives in the `lurq.dev` domain. The build's default cloud address names that host, not
+/// the UI toolkit (`docs/architecture/server.md`, row 59), so it is allowed once, in the one file that holds it.
+const PUBLIC_CLOUD: &str = "\"https://orchester-cloud.lurq.dev\"";
+
 #[test]
 fn only_the_markers_name_lurq() {
   let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
   let mut sources = Vec::new();
   rust_sources(&src, &mut sources);
   let inspect = src.join("inspect.rs").display().to_string();
+  let cloud = src.join("sharing").join("cloud").join("mod.rs").display().to_string();
   let naming: Vec<&String> = sources
     .iter()
-    .filter(|(path, text)| *path != inspect && text.contains("lurq"))
+    .filter(|(path, text)| {
+      let text = if *path == cloud {
+        text.replacen(PUBLIC_CLOUD, "", 1)
+      } else {
+        text.clone()
+      };
+      *path != inspect && text.contains("lurq")
+    })
     .map(|(path, _)| path)
     .collect();
   assert!(naming.is_empty(), "sources that name lurq: {naming:?}");
