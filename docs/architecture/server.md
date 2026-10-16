@@ -1123,6 +1123,9 @@ certificate in every setup:
 - **The HTTPS page** (*This page needs HTTPS*) names the address the browser used, which `proxy.ts` passes to the page
   in a request header it signs with the admin's secret (Next reaches itself again for the rewrite, so the forwarded
   headers are its own by then); no `?origin=` or unsigned header puts words on it (security review 1, minor 2).
+- **The cloud sign-in's state** cookie (`__Host-orchester_admin_state`) ends only with the answer that carries its
+  `state`: a post to the callback with another state, which any site can send, leaves the trip as it was (security
+  review 1, minor 3).
 - **Docker:** two containers in `deploy/server/compose.yaml`, `server` (Rust) and `admin` (the Next.js standalone
   build on Node 22), on a private network; only `server` is published, or Caddy in front of it for a public domain
   (`tls = "off"`, as before). Caddy routes everything to `server`.

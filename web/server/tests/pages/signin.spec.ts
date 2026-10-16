@@ -115,6 +115,21 @@ test.describe("sign in with Orchester Cloud", () => {
     await expect(page.getByText("You're signed in as Dana Ruiz (dana@example.com).", { exact: false })).toBeVisible();
   });
 
+});
+
+test.describe("the cloud sign-in's state", () => {
+  test("a post with another state does not cancel this browser's trip", async ({ page, context }) => {
+    // Security review 1, minor 3: a cross-site post to the callback leaves the trip as it was.
+    await page.goto("/admin/signin");
+    await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
+    await expect(page).toHaveURL("http://127.0.0.1:4220/authorize/start");
+    const forged = await page.request.post("/admin/auth/callback", { form: { state: "forged" }, maxRedirects: 0 });
+    expect(forged.status()).toBe(303);
+    expect((await context.cookies()).some((cookie) => cookie.name === "__Host-orchester_admin_state")).toBe(true);
+    await page.getByRole("button", { name: "Continue as ivan@example.com" }).click();
+    await expect(page).toHaveURL(`${ADMIN}/admin`);
+  });
+
   test("a callback whose state is not this browser's is refused", async ({ page, request }) => {
     const answer = await request.post("/admin/auth/callback", { form: { state: "forged", identity_token: "x.y.z" }, maxRedirects: 0 });
     expect(answer.status()).toBe(303);
@@ -123,6 +138,9 @@ test.describe("sign in with Orchester Cloud", () => {
     await page.goto("/admin/signin?failed=trip");
     await expect(page.getByText("That sign-in took too long or came back to another browser.", { exact: false })).toBeVisible();
   });
+});
+
+test.describe("the sign-in page", () => {
 
   test("cloud sign-ins turned off are said, and the code is offered", async ({ page }) => {
     await reset("cloud-off");

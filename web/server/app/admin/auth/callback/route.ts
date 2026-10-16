@@ -81,13 +81,15 @@ async function finishLink(request: Request, form: FormData, started: Trip): Prom
 export async function POST(request: Request): Promise<NextResponse> {
   const form = await request.formData();
   const started = await trip();
-  await endTrip();
   if (started === null) {
     return to(request, withOutcome("/admin/signin", "failed", "trip"));
   }
+  // The trip ends only with its own answer: a post with another state (any site can send one) leaves it as it was
+  // (security review 1, minor 3).
   if (!tripMatches(started, form.get("state"))) {
     return to(request, withOutcome(backPath(started.purpose, started.back), started.purpose === "link" ? "link" : "failed", "trip"));
   }
+  await endTrip();
   return started.purpose === "admin" ? finishSignIn(request, form) : finishLink(request, form, started);
 }
 
