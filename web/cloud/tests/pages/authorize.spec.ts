@@ -113,6 +113,11 @@ test("a request posted from anywhere but the admin it answers is not kept", asyn
     expect(answer.status()).toBe(303);
     expect(answer.headers().location).toBe("http://localhost:4100/authorize");
   }
+  // An https admin's page posting to this plain-HTTP test cloud sends `Origin: null`: taken only here, on loopback.
+  const https = { ...form, return: "https://kontur.test/admin/auth/callback" };
+  const downgraded = await page.request.post("/authorize/start", { form: https, headers: { origin: "null" }, maxRedirects: 0 });
+  expect(downgraded.headers().location).toContain("/authorize?return=");
+  await start(page, { purpose: "link", statement: statement(API), state: STATE, return: CALLBACK });
   // This browser's own request is still the one the page shows and confirms.
   await page.reload();
   const before = (await callbacks()).length;
