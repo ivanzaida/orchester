@@ -7,7 +7,10 @@ use std::{
   net::{Shutdown, SocketAddr, TcpListener, TcpStream},
   path::Path,
   process::Command,
-  sync::Arc,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
   thread,
 };
 
@@ -102,6 +105,8 @@ pub fn block_on<T>(window: &Window, work: impl Future<Output = T>) -> T {
 pub struct Recorder {
   pub port: u16,
   lines: Arc<Mutex<Vec<String>>>,
+  /// The server looks down: new connections are closed, and open ones end at their next request.
+  down: Arc<AtomicBool>,
 }
 
 impl Recorder {
@@ -109,18 +114,28 @@ impl Recorder {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
     let port = listener.local_addr().expect("address").port();
     let lines = Arc::new(Mutex::new(Vec::new()));
-    let recording = lines.clone();
+    let down = Arc::new(AtomicBool::new(false));
+    let (recording, cut) = (lines.clone(), down.clone());
     thread::spawn(move || {
       for client in listener.incoming().flatten() {
+        if cut.load(Ordering::SeqCst) {
+          let _ = client.shutdown(Shutdown::Both);
+          continue;
+        }
         let Ok(server) = TcpStream::connect(target) else {
           // The connection ends as if the server were down; the test sees it fail where it expects an answer.
           let _ = client.shutdown(Shutdown::Both);
           continue;
         };
-        relay(client, server, &recording);
+        relay(client, server, (&recording, &cut));
       }
     });
-    Self { port, lines }
+    Self { port, lines, down }
+  }
+
+  /// From now on the server can't be reached through the port.
+  pub fn go_down(&self) {
+    self.down.store(true, Ordering::SeqCst);
   }
 
   pub fn url(&self) -> String {
@@ -134,12 +149,16 @@ impl Recorder {
 }
 
 /// Copies both ways, recording the request lines the client sends.
-fn relay(client: TcpStream, server: TcpStream, lines: &Arc<Mutex<Vec<String>>>) {
+fn relay(client: TcpStream, server: TcpStream, (lines, down): (&Arc<Mutex<Vec<String>>>, &Arc<AtomicBool>)) {
   let (mut client_read, mut server_write) = (client.try_clone().expect("client"), server.try_clone().expect("server"));
-  let lines = lines.clone();
+  let (lines, down) = (lines.clone(), down.clone());
   thread::spawn(move || {
     let mut buffer = [0_u8; 16 * 1024];
     while let Ok(read) = client_read.read(&mut buffer) {
+      if down.load(Ordering::SeqCst) {
+        let _ = client_read.shutdown(Shutdown::Both);
+        break;
+      }
       if read == 0 || server_write.write_all(&buffer[..read]).is_err() {
         break;
       }

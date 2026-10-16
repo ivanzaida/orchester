@@ -9,6 +9,7 @@
 
 #[path = "../../../workspace/tests/sharing_support/account_cloud.rs"]
 mod account_cloud;
+mod design;
 mod harness;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
@@ -81,8 +82,11 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
   let accept = format!("orchester-invite-{invite}-accept");
   shows(&mut window, &accept);
   assert!(window.text("orchester-row-cloud").contains("1 invite waiting"));
+  invite_notice(&mut window, &invite);
+  go(&mut window, Route::Orchester(OrchesterView::default()), &accept);
   press(&mut window, &accept);
   shows(&mut window, "orchester-invite-joined");
+  username_suggested(&mut window);
 
   let entry = services.servers.entries().expect("entries").remove(0);
   assert_eq!(
@@ -94,6 +98,37 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
     entry.stored.joined_with,
     Some(JoinedWith::Cloud(audience.parse().expect("server id")))
   );
+}
+
+/// All projects' notice names the invite without its role, which its second line says, and asks *Decline* in place
+/// with the notice's buttons put away.
+fn invite_notice(window: &mut support::Window, invite: &str) {
+  let notice = format!("all-projects-invite-{invite}");
+  go(window, Route::AllProjects, &notice);
+  let title = window.text(&format!("{notice}-title"));
+  assert!(!title.contains("as a member"), "the title leaves the role out: {title}");
+  assert!(window.text(&format!("{notice}-body")).starts_with("As a member"));
+  press(window, &format!("{notice}-decline"));
+  shows(window, &format!("{notice}-decline-question"));
+  assert!(window.tree.get_element_by_id(&format!("{notice}-accept")).is_none());
+  press(window, &format!("{notice}-keep"));
+  shows(window, &format!("{notice}-accept"));
+}
+
+/// Joining another server by code starts from the signed-in account's username and name.
+fn username_suggested(window: &mut support::Window) {
+  let other = TestServer::start();
+  other.create_user("alice", "Alice Moreau", true);
+  go(
+    window,
+    Route::Orchester(OrchesterView::connect()),
+    "orchester-connect-address",
+  );
+  window.set("orchester-connect-address", &other.url());
+  press(window, "orchester-connect-continue");
+  shows(window, "orchester-connect-username");
+  assert_eq!(window.text("orchester-connect-username"), "bohdan");
+  assert_eq!(window.text("orchester-connect-name"), "Bohdan Koval");
 }
 
 #[test]
@@ -129,12 +164,30 @@ fn orchester_connects_with_an_invite_code_after_the_check_code() {
   window.set("orchester-connect-name", "Ivan Zaida");
   press(&mut window, "orchester-connect-join");
   shows(&mut window, "orchester-connect-joined");
+  // The join review the design opens next is N3's: in place, unavailable, beside the server's entry.
+  shows(&mut window, "orchester-connect-join-review");
+  shows(&mut window, "orchester-connect-open-joined");
 
   let services = window.launch.services().expect("services");
   let entry = services.servers.entries().expect("entries").remove(0);
   assert_eq!(entry.stored.certificate_pin, Some(pin.to_hex()));
   assert_eq!(entry.stored.joined_with, Some(JoinedWith::Code));
   assert_eq!(entry.stored.account.expect("account").username, "ivan");
+}
+
+/// Links the window's Kontur to Kontur on the one server it joined, and gives that server's entry.
+fn link_kontur(window: &support::Window) -> orchester_workspace::sharing::ServerEntry {
+  let services = window.launch.services().expect("services").clone();
+  let entry = services.servers.entries().expect("entries").remove(0);
+  let request = orchester_workspace::sharing::project::LinkFirst {
+    slug: "kontur".into(),
+    remote: None,
+    key: orchester_core::id::IdempotencyKey::generate(),
+    write_discovery: false,
+  };
+  let root = window.data.repo("repo-kontur");
+  block_on(window, services.servers.link_first(&entry, &root, request)).expect("linked");
+  entry
 }
 
 /// A plain server behind a recording port, with Kontur and Billing; Ivan joined from the window's computer through
@@ -201,15 +254,7 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
   let mut window = window(Some(KONTUR_REMOTE));
   let (server, recorder) = joined_through_recorder(&window);
   let services = window.launch.services().expect("services").clone();
-  let entry = services.servers.entries().expect("entries").remove(0);
-  let request = orchester_workspace::sharing::project::LinkFirst {
-    slug: "kontur".into(),
-    remote: None,
-    key: orchester_core::id::IdempotencyKey::generate(),
-    write_discovery: false,
-  };
-  let root = window.data.repo("repo-kontur");
-  block_on(&window, services.servers.link_first(&entry, &root, request)).expect("linked");
+  let entry = link_kontur(&window);
 
   go(
     &mut window,
@@ -244,6 +289,11 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
       .servers
       .entries()
       .is_ok_and(|entries| entries[0].stored.account.is_none())
+  });
+  window.until("the token note of a server signed out", |window| {
+    window
+      .texts("orchester-server-token-note")
+      .is_some_and(|texts| texts.join(" ").contains("holds no token"))
   });
   assert!(
     !recorder.lines().iter().any(|line| administrative(line)),
