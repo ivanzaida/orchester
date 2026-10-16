@@ -2,8 +2,9 @@
 //! it): the crumbs (the project, *Files*, the file's folders in Geist Mono), the title row (an 18 icon, the
 //! file's name in 20/600, then *Go to file…*, the version switch, *Copy lines* or *Copy file* and *Open in
 //! editor*) and a line saying where the file was read and what it is ("Run #12 worktree · ORC-24 · Rust ·
-//! 612 lines · 21.4 KB"), with why *Open in editor* is unavailable at its end, under the button (`Actions`
-//! `mQeh3`). A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
+//! 612 lines · 21.4 KB"). Why *Open in editor* is unavailable is a line of its own under the buttons, at their
+//! end (`Actions` `mQeh3`), so a long meta line never covers it. Every crumb is an ancestor of the file, all in
+//! `text_muted`. A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
 //! with no file the title is *Files* (`o3iVXj`); a version that no longer exists says so in `warning`
 //! (`SyXwU`).
 
@@ -22,7 +23,7 @@ use orchester_workspace::{
   highlight::language,
 };
 
-use super::{Page, actions, goto, reads::Shown, version};
+use super::{Page, actions, goto, reads::Shown, states, version};
 use crate::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route},
@@ -34,26 +35,42 @@ use crate::{
     code_box::Copier,
     icon::{Icon, file_icon, icon},
     message::message_text,
+    unavailable::with_reason,
   },
 };
 
-/// The title row's height (`a5LZb`).
+/// The heights of the crumbs (`gxF9b`), the title row (`a5LZb`) and the meta line (`F0BHDL`).
+const CRUMBS_HEIGHT: f32 = 16.0;
 const TITLE_HEIGHT: f32 = 28.0;
+const META_HEIGHT: f32 = 15.0;
 
 pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
   let (switch, menu) = version::switch(ctx, page);
-  let title = Row::new()
-    .id("files-title-row")
-    .width(Dimension::Pct(100.0))
+  let buttons = Row::new()
+    .id("files-actions")
     .height(Dimension::Px(TITLE_HEIGHT))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(title(ctx, page))
-    .child(Row::new().flex(1.0))
     .child(goto::trigger(ctx, page))
     .child(switch)
     .with_children(copy(ctx, page, gone))
     .with_children(open(ctx, page, gone));
+  let reason = page
+    .file()
+    .filter(|_| shows_open(page, gone))
+    .and_then(|file| open_unavailable(page, file));
+  let actions: Element = match reason {
+    Some(key) => with_reason(buttons, "files-open-reason", &ctx.t(key)).into(),
+    None => buttons.into(),
+  };
+  let title = Row::new()
+    .id("files-title-row")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
+    .child(title(ctx, page).height(Dimension::Px(TITLE_HEIGHT)))
+    .child(Row::new().flex(1.0))
+    .child(actions);
   Column::new()
     .id("files-header")
     .width(Dimension::Pct(100.0))
@@ -79,15 +96,15 @@ fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
   let navigation = Navigation::of(ctx);
   let project = page.project.open.project.id();
   let overview = navigation.clone();
-  let mut crumbs = vec![Crumb::link(
-    page.project.open.project.name().as_str().to_owned(),
-    move || {
+  let mut crumbs = vec![
+    Crumb::link(page.project.open.project.name().as_str().to_owned(), move || {
       overview.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default())));
-    },
-  )];
+    })
+    .ancestor(),
+  ];
   if page.route.file().is_some() {
     let root = page.route_to(None, page.at().clone());
-    crumbs.push(Crumb::link(ctx.t("files.title"), move || navigation.go(root.clone())));
+    crumbs.push(Crumb::link(ctx.t("files.title"), move || navigation.go(root.clone())).ancestor());
   }
   if let Some(file) = page.file() {
     for folder in file.folders() {
@@ -101,11 +118,12 @@ fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
             .chain([folder.as_str()]);
           open.set(open.get_untracked().with(folders));
         })
-        .mono(),
+        .mono()
+        .ancestor(),
       );
     }
   }
-  breadcrumb(ctx, "files-crumbs", CrumbSeparator::Slash, crumbs)
+  breadcrumb(ctx, "files-crumbs", CrumbSeparator::Slash, crumbs).height(Dimension::Px(CRUMBS_HEIGHT))
 }
 
 /// The icon and the name: the file's, the path refused, or *Files*.
@@ -135,11 +153,7 @@ fn title(ctx: &Ctx, page: &Page<'_>) -> Row {
 /// page refused was.
 fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
   let (glyph, color, text) = if gone {
-    (
-      Icon::TriangleAlert,
-      PaletteColor::Warning,
-      ctx.t("files.gone.meta").to_string(),
-    )
+    (Icon::TriangleAlert, PaletteColor::Warning, states::gone_meta(ctx, page))
   } else {
     (version::glyph(page.at()), PaletteColor::TextMuted, meta_text(ctx, page))
   };
@@ -158,20 +172,10 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
       .color(PaletteColor::Warning)
       .nowrap()
   });
-  let unavailable = page
-    .file()
-    .filter(|_| shows_open(page, gone))
-    .and_then(|file| open_unavailable(page, file))
-    .map(|key| {
-      Text::new(&ctx.t(key))
-        .id("files-open-reason")
-        .variant(TypographyStyle::Caption)
-        .describe("role", "unavailable-reason")
-        .nowrap()
-    });
   Row::new()
     .id("files-meta")
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(META_HEIGHT))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Sm, color.clone()))
@@ -184,11 +188,9 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
     )
     .with_children(refusal)
     .with_children(stale)
-    .child(Row::new().flex(1.0))
-    .with_children(unavailable)
 }
 
-/// "Run #12 worktree · ORC-24 · Rust · 612 lines · 21.4 KB".
+/// "Run #12 worktree · ORC-24 · Implement · Rust · 612 lines · 21.4 KB".
 fn meta_text(ctx: &Ctx, page: &Page<'_>) -> String {
   let mut parts = vec![version::label(ctx, page)];
   let choice = page.shown_choice();
@@ -201,7 +203,7 @@ fn meta_text(ctx: &Ctx, page: &Page<'_>) -> String {
           .map(ToString::to_string),
       );
     }
-    Version::Run(_) => parts.extend(page.run_facts().map(|run| run.task.to_string())),
+    Version::Run(_) => parts.extend(page.run_facts().into_iter().flat_map(version::run_parts)),
     Version::Base | Version::Revision(_) => {
       parts.extend(
         choice

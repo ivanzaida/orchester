@@ -96,6 +96,16 @@ impl Files {
     });
   }
 
+  /// The bounds of the element `id`.
+  pub fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
   pub fn exists(&mut self, id: &str) -> bool {
     self.window.tree.get_element_by_id(id).is_some()
   }

@@ -116,7 +116,7 @@ fn option(ctx: &mut Ctx, page: &Page<'_>, choice: &VersionChoice) -> MenuItem {
       parts.push(shorten_path(&page.project.open.repo_root, FOLDER_CHARS));
       parts.extend(choice.branch.as_ref().map(ToString::to_string));
     }
-    Version::Run(_) => parts.extend(page.run_facts().map(|run| run.task.to_string())),
+    Version::Run(_) => parts.extend(page.run_facts().into_iter().flat_map(run_parts)),
     Version::Base | Version::Revision(_) => parts.extend(commit_line(ctx, choice)),
   }
   parts.extend(choice.file.map(|file| facts(ctx, file)));
@@ -125,6 +125,14 @@ fn option(ctx: &mut Ctx, page: &Page<'_>, choice: &VersionChoice) -> MenuItem {
     .icon(glyph(&choice.version))
     .detail(parts.join(&ctx.t("files.meta.separator")))
     .chosen(choice.version == *page.at())
+}
+
+/// What names a run beside its number: its task and its step ("ORC-24 · Implement", `qsFI3`).
+pub fn run_parts(run: &RunFacts) -> Vec<String> {
+  [Some(run.task.to_string()), run.step.clone()]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// "main at 4d2b8e0", or the commit alone.

@@ -207,6 +207,8 @@ impl DevtoolsInspectable for Props {}
 struct FilesScreen {
   view: View,
   following: follow::Following,
+  /// The file and version the page showed last: moving to others closes the version menu and *Go to file*.
+  shown: parking_lot::Mutex<Option<(Option<String>, Version)>>,
 }
 
 impl Component for FilesScreen {
@@ -227,6 +229,7 @@ impl Component for FilesScreen {
         highlighting: Arc::default(),
       },
       following: follow::Following::default(),
+      shown: parking_lot::Mutex::new(None),
     }
   }
 
@@ -242,6 +245,7 @@ impl Component for FilesScreen {
       view.run.set(OpenedFrom(run));
     }
     self.open_folders_of(path.as_ref().and_then(|path| path.as_ref().ok()));
+    self.close_menus_on_move(&props.route);
     let root = props.project.open.repo_root.clone();
     let wake = self
       .following
@@ -290,6 +294,20 @@ impl Component for FilesScreen {
 }
 
 impl FilesScreen {
+  /// Closes the version menu and *Go to file* once the page shows another file or version, however it got
+  /// there (a link, automation's `navigate`, the tree).
+  fn close_menus_on_move(&self, route: &FilesView) {
+    let now = (route.file().map(str::to_owned), route.at().clone());
+    let mut shown = self.shown.lock();
+    if shown.as_ref().is_some_and(|before| *before != now) {
+      if self.view.version_open.get_untracked() {
+        self.view.version_open.set(false);
+      }
+      self.view.goto.close();
+    }
+    *shown = Some(now);
+  }
+
   /// Opens the folders down to `file` the first time the page shows it.
   fn open_folders_of(&self, file: Option<&FilePath>) {
     let Some(file) = file else {

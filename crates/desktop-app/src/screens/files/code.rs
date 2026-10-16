@@ -52,6 +52,8 @@ use crate::{
 
 /// The head's height (`eBH0g`); width changes below the epsilon are layout noise, not a resize.
 const HEAD_HEIGHT: f32 = 40.0;
+/// The lines a link's range keeps above it in view, as `o1Uea4` shows 428 for 441.
+const CONTEXT_LINES: usize = 13;
 const WIDTH_EPSILON: f32 = 0.5;
 
 /// The file's pane, or what stands for it.
@@ -231,7 +233,11 @@ impl Component for CodePane {
     let reveal = current
       .and_then(|at| found.get(at))
       .map(|place| place.line)
-      .or_else(|| props.lines.map(LineRange::first_index));
+      .or_else(|| {
+        props
+          .lines
+          .map(|range| range.first_index().saturating_sub(CONTEXT_LINES))
+      });
     let width = self.shown.plain(&props.text).width.max(self.width.get());
     let select = props.select.clone();
     let list: Element = VirtualizedList::new_shared(ctx, lines)

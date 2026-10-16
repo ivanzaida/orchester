@@ -9,7 +9,6 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::{KeyboardEvent, is_synthetic_input},
-    theme::SpacingSize,
   },
   components::Row,
   core::{ElementRef, Signal},
@@ -18,7 +17,10 @@ use lurq::{
 };
 use orchester_workspace::files::MAX_MATCHES;
 
-use crate::ui::{field::FieldInput, icon::Icon, icon_button::IconButton};
+use crate::{
+  theme::ExtraSpacing,
+  ui::{field::FieldInput, icon::Icon, icon_button::IconButton},
+};
 
 /// The width of the find field (`kWlG3`).
 const FIELD_WIDTH: f32 = 260.0;
@@ -43,7 +45,8 @@ impl FindState {
     Self {
       open: ctx.signal(false),
       query: ctx.signal(String::new()),
-      match_case: ctx.signal(false),
+      // *Match case* is on until a person turns it off, as `b7RGL` draws the search.
+      match_case: ctx.signal(true),
       at: ctx.signal(0),
       typed: ctx.signal(String::new()),
       focus: ctx.signal(false),
@@ -114,7 +117,7 @@ impl FindState {
     let (at, at_next, state) = (self.at.clone(), self.at.clone(), self.clone());
     let match_case = self.match_case.clone();
     let mut case = IconButton::new("files-find-case", Icon::CaseSensitive, ctx.t("files.find.matchCase"))
-      .small()
+      .toggle()
       .on_click(move || match_case.update(|on| *on = !*on));
     if self.match_case.get() {
       case = case.active();
@@ -135,7 +138,7 @@ impl FindState {
     };
     Row::new()
       .id("files-find")
-      .spacing(SpacingSize::Xs)
+      .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .on_key_down(keys)
       .child(field.render(ctx))

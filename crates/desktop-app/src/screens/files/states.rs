@@ -11,8 +11,8 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
-  display::{byte_size, short_revision},
-  files::{FilePath, FilesError, MAX_VIEW_BYTES, PathError, Version},
+  display::{byte_size, clock, short_revision},
+  files::{FilePath, FilesError, MAX_VIEW_BYTES, PathError, Removal, RunFacts, Version},
 };
 
 use super::{Page, reads::Failure};
@@ -140,6 +140,57 @@ pub fn size_note(ctx: &Ctx, kind: &str, size: u64) -> String {
   [ctx.t(kind).to_string(), message_text(ctx, &byte_size(size)).to_string()].join(&ctx.t("files.meta.separator"))
 }
 
+/// The header's line for a version that no longer exists: for a run's worktree, when and why it was removed.
+pub fn gone_meta(ctx: &Ctx, page: &Page<'_>) -> String {
+  match (page.at(), page.run_facts()) {
+    (Version::Run(_), Some(run)) => worktree_gone(ctx, run).0,
+    _ => ctx.t("files.gone.meta").to_string(),
+  }
+}
+
+/// Why the run's worktree is gone, as the header's line and the card's words (`e9djUP`, `GGAAQ` in `SyXwU`):
+/// the merge that removed it and when, or when it was removed, or that it no longer exists.
+fn worktree_gone(ctx: &Ctx, run: &RunFacts) -> (String, String) {
+  let (number, task) = (run.number.to_string(), run.task.to_string());
+  match &run.removal {
+    Some(Removal {
+      at,
+      merged_into: Some(branch),
+    }) => {
+      let time = clock(*at);
+      (
+        ctx
+          .t_args(
+            "files.gone.metaMerged",
+            [("number", number), ("task", task.clone()), ("time", time.clone())],
+          )
+          .to_string(),
+        ctx
+          .t_args(
+            "files.gone.worktreeMergedDetail",
+            [("task", task), ("branch", branch.to_string()), ("time", time)],
+          )
+          .to_string(),
+      )
+    }
+    Some(Removal { at, merged_into: None }) => {
+      let time = clock(*at);
+      (
+        ctx
+          .t_args("files.gone.metaRemoved", [("number", number), ("time", time.clone())])
+          .to_string(),
+        ctx
+          .t_args("files.gone.worktreeRemovedDetail", [("time", time)])
+          .to_string(),
+      )
+    }
+    None => (
+      ctx.t("files.gone.meta").to_string(),
+      ctx.t("files.gone.worktreeDetail").to_string(),
+    ),
+  }
+}
+
 /// The version shown no longer exists: in place of the tree and the file, why, with the checkout's version
 /// and the base branch to show instead.
 pub fn version_gone(ctx: &mut Ctx, page: &Page<'_>) -> Element {
@@ -149,7 +200,7 @@ pub fn version_gone(ctx: &mut Ctx, page: &Page<'_>) -> Element {
         ctx
           .t_args("files.gone.worktree", [("number", run.number.to_string())])
           .to_string(),
-        ctx.t("files.gone.worktreeDetail"),
+        worktree_gone(ctx, run).1.into(),
       ),
       None => (
         ctx.t("files.gone.worktreeUnnamed").to_string(),

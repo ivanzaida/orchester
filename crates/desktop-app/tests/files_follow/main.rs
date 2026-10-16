@@ -29,7 +29,7 @@ use orchester_app::routes::{FilesView, ProjectPage, Route};
 use orchester_core::{
   id::{ProjectId, RunId},
   integration::WORKTREES_DIR,
-  store::{RunStore, TaskStore},
+  store::{RunStore, TaskStore, WorktreeStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -71,21 +71,7 @@ impl Page {
 
   /// The latest run of the task `key`, with a worktree.
   fn run_with_worktree(&self, key: &str) -> RunId {
-    let db = ProjectDb::open(&self.repo).expect("the project database opens");
-    let task = db
-      .tasks()
-      .expect("tasks")
-      .into_iter()
-      .find(|task| task.key().to_string() == key)
-      .expect("the task");
-    let run = db
-      .runs_of_task(task.id())
-      .expect("runs")
-      .into_iter()
-      .last()
-      .expect("a run")
-      .expect("a readable run")
-      .id();
+    let run = self.latest_run(key);
     let worktree = self.repo.join(WORKTREES_DIR).join(run.to_string());
     if !worktree.is_dir() {
       let worktree = worktree.to_string_lossy().into_owned();
@@ -95,6 +81,24 @@ impl Page {
       );
     }
     run
+  }
+
+  /// The latest run of the task `key`, as the seed left it.
+  fn latest_run(&self, key: &str) -> RunId {
+    let db = ProjectDb::open(&self.repo).expect("the project database opens");
+    let task = db
+      .tasks()
+      .expect("tasks")
+      .into_iter()
+      .find(|task| task.key().to_string() == key)
+      .expect("the task");
+    db.runs_of_task(task.id())
+      .expect("runs")
+      .into_iter()
+      .last()
+      .expect("a run")
+      .expect("a readable run")
+      .id()
   }
 
   /// Opens `file` at `at` once the feed has read the project's tasks, which say whether an agent works.
@@ -481,4 +485,70 @@ fn files_read_a_working_runs_file_once_when_the_page_switches_to_it_and_once_per
   });
   let screen = reads(&mut page);
   assert!(screen.contains("{reads=3}"), "one more on a change: {screen}");
+}
+
+#[test]
+fn files_name_the_merge_and_the_time_that_removed_a_runs_worktree() {
+  let mut page = Page::open();
+  // The seed merged KON-1 and removed its run's worktree.
+  let run = page.latest_run("KON-1");
+  let removed = ProjectDb::open(&page.repo)
+    .expect("the project database opens")
+    .worktree_removal(run)
+    .expect("the removal reads")
+    .expect("a removal");
+  let time = orchester_workspace::display::clock(removed);
+  let view = FilesView::new(Some("README.md"), Version::Run(run));
+  page
+    .window
+    .navigation()
+    .go(Route::Project(page.project, ProjectPage::Files(view)));
+  page.window.until("the removed worktree", |window| {
+    window.tree.get_element_by_id("files-gone").is_some()
+  });
+  page.window.until("its removal named", |window| {
+    window.text("files-meta-text").contains("merged")
+  });
+  let meta = page.meta();
+  assert!(
+    meta.ends_with(&format!("’s worktree was removed when KON-1 was merged · {time}")),
+    "{meta}"
+  );
+  let card = page.window.text("files-gone");
+  assert!(
+    card.contains(&format!(
+      "It was removed when KON-1 was merged into main at {time}, so this file can’t be shown"
+    )),
+    "{card}"
+  );
+}
+
+#[test]
+fn files_name_the_runs_step_beside_its_task() {
+  let mut page = Page::open();
+  let run = page.working_run();
+  let worktree = page.repo.join(WORKTREES_DIR).join(run.to_string());
+  fs::write(worktree.join("follow.md"), lines(3)).expect("a file in the worktree");
+  page.open_file("follow.md", Version::Run(run), None);
+  page.window.until("the run's facts", |window| {
+    window.text("files-meta-text").contains("KON-21 · ")
+  });
+  let meta = page.meta();
+  let parts: Vec<&str> = meta.split(" · ").collect();
+  assert_eq!(parts.get(1), Some(&"KON-21"), "{meta}");
+  let step = parts.get(2).copied().unwrap_or_default();
+  assert!(
+    !step.is_empty() && step != "Markdown" && !step.contains("lines"),
+    "the step after the task: {meta}"
+  );
+  let item = format!("files-version:{}", Version::Run(run));
+  page.window.press("files-version");
+  page.window.until("the version menu", |window| {
+    window.tree.get_element_by_id(&item).is_some()
+  });
+  assert!(
+    page.window.text(&item).contains(&format!("KON-21 · {step}")),
+    "the menu names it too: {}",
+    page.window.text(&item)
+  );
 }

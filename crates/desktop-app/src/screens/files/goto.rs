@@ -51,6 +51,17 @@ pub struct GotoState {
 }
 
 impl GotoState {
+  /// Closes the search and forgets what it looked for.
+  pub fn close(&self) {
+    if self.open.get_untracked() {
+      self.open.set(false);
+    }
+    if !self.query.get_untracked().is_empty() {
+      self.query.set(String::new());
+    }
+    self.at.set(0);
+  }
+
   pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
@@ -149,7 +160,7 @@ pub fn search(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Option
         .padding(Padding::vertical(SpacingSize::Xs))
         .with_children(rows),
     )
-    .child(footer(ctx, &found));
+    .child(footer(ctx, &found, !query.trim().is_empty()));
   Some(
     Popup::new(state.anchor.clone(), panel)
       .open(state.open.clone())
@@ -198,6 +209,7 @@ fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: impl Fn
     .describe("path", path.to_owned())
     .describe("state", if current { "current" } else { "enabled" })
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(RESULT_HEIGHT))
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
@@ -261,9 +273,19 @@ fn name_parts(name: &str, query: &str) -> Row {
   }
 }
 
-/// How many files match, and the keys (`Footer` `OyqYi`).
-fn footer(ctx: &Ctx, found: &NameMatches) -> Element {
-  let count = if found.total == 0 {
+/// A result's height (`MfxMF`).
+const RESULT_HEIGHT: f32 = 44.0;
+
+/// How many files match, or with nothing typed how many the version has, and the keys (`Footer` `OyqYi`).
+fn footer(ctx: &Ctx, found: &NameMatches, typed: bool) -> Element {
+  let count = if !typed {
+    let key = if found.total == 1 {
+      "files.goTo.all.one"
+    } else {
+      "files.goTo.all.other"
+    };
+    ctx.t_args(key, [("count", found.total.to_string())]).to_string()
+  } else if found.total == 0 {
     ctx.t("files.goTo.none").to_string()
   } else {
     let key = if found.total == 1 {

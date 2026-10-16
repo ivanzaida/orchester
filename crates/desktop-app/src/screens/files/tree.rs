@@ -69,21 +69,33 @@ pub fn panel(ctx: &mut Ctx, page: &Page<'_>, list: &Shown<FileList>) -> Element 
         Icon::ChevronsDownUp,
         ctx.t("files.tree.collapse"),
       )
-      .small()
+      .compact()
       .on_click(move || open.set(OpenFolders::default()))
       .render(ctx),
     );
-  let content: Element = match list {
-    Shown::Reading => loading("files-tree-loading", &ctx.t("files.reading")).into(),
-    Shown::Failed(failure) => Text::new(&message_text(ctx, &failure.message()))
-      .id("files-tree-error")
-      .variant(TypographyStyle::Caption)
+  // The rows reach the panel's right edge, where the list draws its scrollbar, and leave it a gutter.
+  let gutter = |element: Element| -> Element {
+    Row::new()
       .width(Dimension::Pct(100.0))
-      .into(),
-    Shown::Read(list) if list.is_empty() => Text::new(&ctx.t("files.tree.empty"))
-      .id("files-tree-empty")
-      .variant(TypographyStyle::Caption)
-      .into(),
+      .padding(Padding::new().right(SpacingSize::Sm))
+      .child(element)
+      .into()
+  };
+  let content: Element = match list {
+    Shown::Reading => gutter(loading("files-tree-loading", &ctx.t("files.reading")).into()),
+    Shown::Failed(failure) => gutter(
+      Text::new(&message_text(ctx, &failure.message()))
+        .id("files-tree-error")
+        .variant(TypographyStyle::Caption)
+        .width(Dimension::Pct(100.0))
+        .into(),
+    ),
+    Shown::Read(list) if list.is_empty() => gutter(
+      Text::new(&ctx.t("files.tree.empty"))
+        .id("files-tree-empty")
+        .variant(TypographyStyle::Caption)
+        .into(),
+    ),
     Shown::Read(list) => {
       let choose = chooser(ctx, page);
       ctx.mount_keyed::<Tree>(
@@ -101,9 +113,14 @@ pub fn panel(ctx: &mut Ctx, page: &Page<'_>, list: &Shown<FileList>) -> Element 
     .id("files-tree-panel")
     .width(Dimension::Px(TREE_WIDTH))
     .height(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
+    .padding(
+      Padding::new()
+        .top(SpacingSize::Xs)
+        .bottom(SpacingSize::Xs)
+        .left(SpacingSize::Sm),
+    )
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(head)
+    .child(gutter(head.into()))
     .child(content)
     .into()
 }
@@ -173,6 +190,7 @@ impl Component for Tree {
       .list_key("files-tree-rows")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
+      .reveal_key(props.shown.as_deref().map(str::to_owned))
       .mount_keyed::<RowView, _, _, _>(
         |item: &Item| item.row.path.clone(),
         move |item| RowProps {
@@ -295,10 +313,16 @@ impl Component for RowView {
       .child(chevron)
       .child(icon(glyph, IconSize::Md, glyph_color))
       .child(name.nowrap());
-    if shown {
+    let line = if shown {
       line.background(ExtraColor::Hover.role())
     } else {
       line.hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    }
+    };
+    // The scrollbar's gutter: the list draws its bar beside the rows, never over the chosen one.
+    Row::new()
+      .id(format!("files-tree-gutter:{}", row.path))
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::new().right(SpacingSize::Sm))
+      .child(line)
   }
 }

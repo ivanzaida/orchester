@@ -111,7 +111,7 @@ fn files_switches_between_the_checkout_and_the_base_branch() {
     files
       .window
       .text("files-open-reason")
-      .starts_with("A commit's file is not on disk"),
+      .starts_with("A commit’s file is not on disk"),
     "why it is unavailable is on screen"
   );
 }
@@ -203,15 +203,17 @@ fn files_find_counts_the_places_in_the_file() {
   files.window.press("files-find-open");
   assert!(files.exists("files-find"));
   files.type_keys("LIMIT");
-  files.window.until("the places found", |w| {
+  files
+    .window
+    .until("no places in its case: Match case is on, as `b7RGL` draws it", |w| {
+      w.text("files-find-field-box").contains("No results")
+    });
+  files.window.press("files-find-case");
+  files.window.until("the places found without regard to case", |w| {
     w.text("files-find-field-box").contains("1 of 117")
   });
   files.window.press("files-find-next");
   assert!(files.window.text("files-find-field-box").contains("2 of 117"));
-  files.window.press("files-find-case");
-  files.window.until("no places in its case", |w| {
-    w.text("files-find-field-box").contains("No results")
-  });
   files.window.press("files-find-close");
   assert!(!files.exists("files-find"));
 }
@@ -265,7 +267,7 @@ fn files_find_says_it_is_searching_until_a_new_query_is_searched() {
   let mut files = Files::new();
   files.open(Some("src/main.rs"), Version::Checkout);
   files.window.press("files-find-open");
-  files.type_keys("LIMIT");
+  files.type_keys("limit");
   assert!(
     files.window.text("files-find-field-box").contains("Searching…"),
     "not \"No results\" before the search ran: {}",
