@@ -198,7 +198,9 @@ zstd = { version = "0.13", default-features = false }
 [profile.dev.package."*"]
 opt-level = 2
 
-# TEMP: lurq 0.46.0 (Markdown link presentation and list views, dropdowns that switch in one press) from its git
-# repository until it is published; replace with the published version then.
+# TEMP: lurq 0.46.0 (Markdown link presentation and list views, dropdowns that switch in one press, padded link
+# tooltips and table cells, links in their bidi paragraph) from a local preview of its release (lurq e90fa1f, PRs
+# #53 to #55 merged) until it is published; replace with the published version, and the requirement above with
+# 0.46.0, then.
 [patch.crates-io]
-lurq = { git = "https://github.com/ivanzaida/lurq", rev = "cceb53f46c0df97f563e7c56f5c18af7a74a56ec" }
+lurq = { path = "H:/projects/lurq/.tmp/worktrees/claude-046-preview/crates/lurq" }
