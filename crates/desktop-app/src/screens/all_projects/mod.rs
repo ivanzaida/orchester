@@ -27,7 +27,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::{
   background, messages,
   project_list::{self, Listing},
-  runner::Runners,
+  runner::{RunnerStatus, Runners},
   workspace::{ListedData, ProjectEntry},
 };
 use parking_lot::Mutex;
@@ -64,6 +64,8 @@ struct AllProjects {
   followed: Mutex<bool>,
   /// The projects' data as last read, and the runners' reports it was read at.
   read: Arc<Mutex<(Reported, ListedData)>>,
+  /// What the runners reported of the listed projects so far, kept across the list's changes.
+  seen: Arc<Mutex<Seen>>,
 }
 
 impl Component for AllProjects {
@@ -77,6 +79,7 @@ impl Component for AllProjects {
       },
       followed: Mutex::new(false),
       read: Arc::default(),
+      seen: Arc::default(),
     }
   }
 
@@ -98,7 +101,7 @@ impl Component for AllProjects {
       Some(Listing::Projects(entries)) => entries.clone(),
       Some(Listing::Welcome) | None => Vec::new(),
     };
-    let reports = reports(ctx, &services.runners, &entries);
+    let reports = reports(ctx, (&services.runners, &self.seen), &entries);
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
@@ -177,35 +180,58 @@ impl Reported {
   }
 }
 
+/// The runner status last seen of each listed project, and how often it changed since the screen showed.
+#[derive(Default)]
+struct Seen {
+  statuses: HashMap<PathBuf, Option<RunnerStatus>>,
+  counts: HashMap<PathBuf, u64>,
+}
+
+impl Seen {
+  /// Takes the statuses of `roots` now; whether one changed since it was last seen. The first status seen of a
+  /// project is no report about it.
+  fn look(&mut self, runners: &Runners, roots: &[PathBuf]) -> bool {
+    let mut reported = false;
+    for root in roots {
+      let status = runners.status_of(root);
+      if self.statuses.get(root) != Some(&status) && self.statuses.insert(root.clone(), status).is_some() {
+        *self.counts.entry(root.clone()).or_insert(0) += 1;
+        reported = true;
+      }
+    }
+    reported
+  }
+}
+
 /// The runners' reports about the projects of `entries`: renders the screen again whenever a listed project's
-/// runner status changed, for its row and to read its data again.
-fn reports(ctx: &mut Ctx, runners: &Runners, entries: &[ProjectEntry]) -> Reported {
+/// runner status changed, for its row and to read its data again. What was seen outlives the stream, which starts
+/// again when the list changes: a report that came meanwhile still counts, and no count goes back.
+fn reports(ctx: &mut Ctx, (runners, seen): (&Runners, &Arc<Mutex<Seen>>), entries: &[ProjectEntry]) -> Reported {
   let roots: Vec<PathBuf> = entries.iter().map(|entry| entry.project.repo_root.clone()).collect();
+  let seen = Arc::clone(seen);
   let reports = ctx.stream(
     (runners.clone(), roots),
-    |(runners, roots), emitter: StreamEmitter<Reported, ()>| async move {
-      let mut updates = runners.work_changes();
-      let mut statuses = HashMap::new();
-      let mut counts = HashMap::new();
-      let mut first = true;
-      loop {
-        updates.borrow_and_update();
-        let mut reported = first;
-        for root in &roots {
-          let status = runners.status_of(root);
-          // The first status seen of a project is no report about it.
-          if statuses.get(root) != Some(&status) && statuses.insert(root.clone(), status).is_some() {
-            *counts.entry(root.clone()).or_insert(0) += 1;
-            reported = true;
+    move |(runners, roots), emitter: StreamEmitter<Reported, ()>| {
+      let seen = Arc::clone(&seen);
+      async move {
+        let mut updates = runners.work_changes();
+        let mut first = true;
+        loop {
+          updates.borrow_and_update();
+          let counts = {
+            let mut seen = seen.lock();
+            (seen.look(&runners, &roots) || first).then(|| seen.counts.clone())
+          };
+          first = false;
+          // Another project's report wakes the stream without a render.
+          if let Some(counts) = counts
+            && !emitter.emit(Reported(Arc::new(counts)))
+          {
+            return;
           }
-        }
-        first = false;
-        // Another project's report wakes the stream without a render.
-        if reported && !emitter.emit(Reported(Arc::new(counts.clone()))) {
-          return;
-        }
-        if updates.changed().await.is_err() {
-          return;
+          if updates.changed().await.is_err() {
+            return;
+          }
         }
       }
     },

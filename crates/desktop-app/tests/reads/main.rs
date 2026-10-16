@@ -33,6 +33,11 @@ use orchester_workspace::tasks::data::{SaveTarget, save_draft_in};
 use support::{Data, Window, reads::Reads};
 
 /// A read that starts later than this after the last one belongs to no change of the test.
+///
+/// The harness cannot wait until no future of the window is pending: lurq's `Tree` does not say, and the window's
+/// streams never end. So `settle` waits until no read *started* for this long. On a loaded machine a read may still
+/// run after that; a test that needs a reading to have *ended* waits for what it shows (`read_rows`), and a test
+/// that counts no read can then pass with a late one uncounted, never fail for it.
 const QUIET: Duration = Duration::from_millis(400);
 
 /// A window on `scenario`, seeded in its own data folder, its reads counted from the start.
