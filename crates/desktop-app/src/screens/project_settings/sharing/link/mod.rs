@@ -34,7 +34,7 @@ use orchester_workspace::sharing::{
 use super::Facts;
 use crate::{
   project::ShownProject,
-  screens::settings::orchester::{Said, sharing_said},
+  screens::settings::orchester::{PersonOnly, Said, sharing_said},
   services::Services,
   theme::ExtraSpacing,
 };
@@ -144,6 +144,8 @@ pub(super) struct Link {
   key: Signal<UploadKey>,
   resolve: FutureAction<Choice, Target, Problem>,
   link: FutureAction<(Target, UploadKey), (), Problem>,
+  /// Linking (which contacts the server) and the upload are a person's (review 1, M1).
+  person: PersonOnly,
 }
 
 impl Component for Link {
@@ -187,6 +189,7 @@ impl Component for Link {
       key,
       resolve,
       link,
+      person: PersonOnly::new(ctx),
     }
   }
 

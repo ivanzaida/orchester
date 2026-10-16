@@ -1,30 +1,27 @@
-//! *Waiting invites* (`Invites` `s25gc8` in `Cu20b`; accepting and declining in `jUMAF`): who invited the person to
-//! what, with *Decline* and *Accept*. Accepting connects this computer to the invite's server, trusting exactly the
-//! certificate the invite names, so there is no check code to compare; *Decline* asks in place first. A cloud that does
-//! not deliver invites yet says so instead of showing an empty list.
+//! *Waiting invites* (`Invites` `s25gc8` in `Cu20b`; accepting and declining in `jUMAF`): the invites accepted here
+//! whose join did not finish ([`super::accepted`]), then who invited the person to what, with *Decline* and *Accept*.
+//! Accepting connects this computer to the invite's server, trusting exactly the certificate the cloud's registry
+//! names, so there is no check code to compare; *Decline* asks in place first.
 
 use lurq::{
   app::{
-    component::DevtoolsInspectable,
-    ctx::{Ctx, FutureAction},
+    ctx::{Ctx, FutureState},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::{InviteKind, MemberRole, cloud::CloudInvite};
-use orchester_core::{id::InviteId, time::Timestamp};
-use orchester_workspace::sharing::{CloudJoined, cloud::Accepted};
+use orchester_core::time::Timestamp;
 
+pub(super) use super::answers::{Answers, Asked, Outcome};
 use super::{
-  Invites, Said,
+  Invites, Kept, Said, accepted,
   parts::{paragraph, section as part, section_title},
-  words::{cloud_error, counted, day, shown_address},
+  words::{counted, day, shown_address},
 };
 use crate::{
-  services::Services,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     avatar::{initials, person_avatar},
@@ -36,104 +33,8 @@ use crate::{
   },
 };
 
-/// What accepting an invite came to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Outcome {
-  /// Joined the server; the project the invite was to, if any.
-  Joined { server: String, project: Option<String> },
-  /// The server holds the join until another computer of the person's, or an admin, approves it.
-  Waiting { server: String },
-}
-
-impl DevtoolsInspectable for Outcome {}
-
-impl Outcome {
-  fn of(accepted: Accepted) -> Self {
-    let server = accepted.server.name;
-    match accepted.joined {
-      CloudJoined::Joined(_) => Self::Joined {
-        server,
-        project: accepted.project.map(|project| project.name),
-      },
-      CloudJoined::Waiting(_) => Self::Waiting { server },
-    }
-  }
-}
-
-/// The invite a question or an accept is about.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct Asked(pub Option<InviteId>);
-
-impl DevtoolsInspectable for Asked {}
-
-/// The person's answers to invites: the one being declined in place, and the accept and decline under way.
-pub(super) struct Answers {
-  pub(super) declining: Signal<Asked>,
-  pub(super) accept: FutureAction<InviteId, Outcome, Said>,
-  decline: FutureAction<InviteId, (), Said>,
-  /// The invite the last accept was for.
-  pub(super) accepting: Signal<Asked>,
-  /// The person pressed *Cancel* while the last accept was connecting.
-  stopped: Signal<bool>,
-}
-
-impl Answers {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
-    let cloud = Services::of(ctx).cloud;
-    let declining_cloud = cloud.clone();
-    Self {
-      declining: ctx.signal(Asked(None)),
-      accept: ctx.future_action(move |invite: InviteId| {
-        let cloud = cloud.clone();
-        async move {
-          cloud
-            .accept(invite)
-            .await
-            .map(Outcome::of)
-            .map_err(|error| cloud_error(&error))
-        }
-      }),
-      decline: ctx.future_action(move |invite: InviteId| {
-        let cloud = declining_cloud.clone();
-        async move { cloud.decline(invite).await.map_err(|error| cloud_error(&error)) }
-      }),
-      accepting: ctx.signal(Asked(None)),
-      stopped: ctx.signal(false),
-    }
-  }
-
-  /// Whether an accept is connecting and nobody stopped it.
-  pub(super) fn connecting(&self) -> bool {
-    self.accept.state().get().is_pending() && !self.stopped.get()
-  }
-
-  /// Accepts `invite`, connecting to its server.
-  pub(super) fn accept(&self, invite: InviteId) {
-    self.accepting.set(Asked(Some(invite)));
-    self.stopped.set(false);
-    self.accept.run(invite);
-  }
-
-  /// Stops waiting for the accept under way: its connection is dropped where it stands.
-  fn stop(&self) {
-    self.accept.cancel();
-    self.stopped.set(true);
-  }
-
-  /// A handle that answers from a button's handler.
-  pub(super) fn handle(&self) -> Self {
-    Self {
-      declining: self.declining.clone(),
-      accept: self.accept.clone(),
-      decline: self.decline.clone(),
-      accepting: self.accepting.clone(),
-      stopped: self.stopped.clone(),
-    }
-  }
-}
-
 /// The section, as `invites` stand.
-pub(super) fn waiting(ctx: &mut Ctx, invites: &Invites, answers: &Answers) -> Element {
+pub(super) fn waiting(ctx: &mut Ctx, (invites, kept): (&Invites, &Kept), answers: &Answers) -> Element {
   let meta = (invites.waiting() > 0).then(|| {
     counted(
       ctx,
@@ -142,7 +43,8 @@ pub(super) fn waiting(ctx: &mut Ctx, invites: &Invites, answers: &Answers) -> El
     )
   });
   let mut parts: Vec<Element> = vec![paragraph("orchester-invites-lead", &ctx.t("cloud.invites.lead")).into()];
-  parts.extend(outcome(ctx, answers));
+  parts.extend(outcome(ctx, answers, false));
+  parts.extend(accepted::kept(ctx, kept, answers));
   match invites {
     Invites::SignedOut => {}
     Invites::Failed(reason) => parts.push(field_error("orchester-invites-failed", &reason.text(ctx)).into()),
@@ -167,10 +69,10 @@ pub(super) fn waiting(ctx: &mut Ctx, invites: &Invites, answers: &Answers) -> El
   .into()
 }
 
-/// What the last accept or decline came to.
-pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
+/// What the last accept, ask again or decline came to. `waiting`: whether to say that a join waits for approval,
+/// where the invite accepted here does not say so itself (the All projects notice).
+pub(super) fn outcome(ctx: &Ctx, answers: &Answers, waiting: bool) -> Vec<Element> {
   let mut parts = Vec::new();
-  let accepted = answers.accept.state().get();
   if answers.stopped.get() {
     parts.push(
       Callout::new(
@@ -182,10 +84,34 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
       .into(),
     );
   }
-  if let Some(reason) = accepted.error.clone().filter(|_| !accepted.is_pending()) {
-    parts.push(field_error("orchester-invite-accept-failed", &reason.text(ctx)).into());
+  parts.extend(answered(
+    ctx,
+    ("orchester-invite", &answers.accept.state().get()),
+    waiting,
+  ));
+  parts.extend(answered(
+    ctx,
+    ("orchester-invite-finish", &answers.finish.state().get()),
+    waiting,
+  ));
+  for (id, state) in [
+    ("orchester-invite-decline-failed", answers.decline.state().get()),
+    ("orchester-invite-set-aside-failed", answers.set_aside.state().get()),
+  ] {
+    if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
+      parts.push(field_error(id, &reason.text(ctx)).into());
+    }
   }
-  match accepted.data.clone().filter(|_| accepted.is_fulfilled()) {
+  parts
+}
+
+/// What one accept or ask again came to, its parts' ids starting with `id`.
+fn answered(ctx: &Ctx, (id, state): (&str, &FutureState<Outcome, Said>), waiting: bool) -> Vec<Element> {
+  let mut parts = Vec::new();
+  if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
+    parts.push(field_error(&format!("{id}-accept-failed"), &reason.text(ctx)).into());
+  }
+  match state.data.clone().filter(|_| state.is_fulfilled()) {
     Some(Outcome::Joined { server, project }) => {
       let body = match project {
         Some(project) => ctx.t_args("cloud.invites.joined.project", [("project", project)]),
@@ -193,7 +119,7 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
       };
       parts.push(
         Callout::new(
-          "orchester-invite-joined",
+          format!("{id}-joined"),
           CalloutTone::Success,
           ctx.t_args("cloud.invites.joined.title", [("server", server.as_str())]),
         )
@@ -201,9 +127,9 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
         .into(),
       );
     }
-    Some(Outcome::Waiting { server }) => parts.push(
+    Some(Outcome::Waiting { server }) if waiting => parts.push(
       Callout::new(
-        "orchester-invite-waiting",
+        format!("{id}-waiting"),
         CalloutTone::Warning,
         ctx.t("cloud.invites.approval.title"),
       )
@@ -211,11 +137,7 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
       .body(ctx.t_args("cloud.invites.approval.body", [("server", server.as_str())]))
       .into(),
     ),
-    None => {}
-  }
-  let declined = answers.decline.state().get();
-  if let Some(reason) = declined.error.clone().filter(|_| !declined.is_pending()) {
-    parts.push(field_error("orchester-invite-decline-failed", &reason.text(ctx)).into());
+    Some(Outcome::Waiting { .. }) | None => {}
   }
   parts
 }
@@ -314,7 +236,7 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
       &initials(&invite.inviter_display_name),
     ))
     .child(text)
-    .with_children((!accepting && !declining).then(|| buttons(ctx, &id, invite.id, answers)));
+    .with_children((!accepting && !declining).then(|| buttons(ctx, &id, invite, answers)));
   let mut card = Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
@@ -330,6 +252,7 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
   if accepting {
     card = card.child(connecting(ctx, &id, invite, answers));
   }
+  card = card.with_children(answers.person.reason(ctx, &format!("{id}-accept")));
   if !declining {
     return card.into();
   }
@@ -343,7 +266,7 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
 
 /// *Connecting to Kontur team…* with *Cancel* under it (`Accepting` in `jUMAF`).
 fn connecting(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Column {
-  let answers = answers.handle();
+  let answers = answers.clone();
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -367,14 +290,14 @@ fn connecting(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> C
     )
 }
 
-fn buttons(ctx: &Ctx, id: &str, invite: InviteId, answers: &Answers) -> Row {
-  let declining = answers.declining.clone();
+fn buttons(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Row {
+  let (declining, invite_id) = (answers.declining.clone(), invite.id);
   let decline = ActionButton::new(
     format!("{id}-decline"),
     ButtonKind::Ghost,
     ctx.t("cloud.invites.decline"),
   )
-  .on_click(move || declining.set(Asked(Some(invite))));
+  .on_click(move || declining.set(Asked(Some(invite_id))));
   let busy = answers.connecting();
   let accept_button = ActionButton::new(
     format!("{id}-accept"),
@@ -385,8 +308,8 @@ fn buttons(ctx: &Ctx, id: &str, invite: InviteId, answers: &Answers) -> Row {
   let accept_button = if busy {
     accept_button.disabled()
   } else {
-    let answers = answers.handle();
-    accept_button.on_click(move || answers.accept(invite))
+    let (answers, invite, button) = (answers.clone(), invite.clone(), format!("{id}-accept"));
+    accept_button.on_click(move || answers.accept(&button, &invite))
   };
   Row::new()
     .flex_shrink(0.0)
@@ -401,21 +324,15 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
     .project
     .as_ref()
     .map_or(invite.server.name.as_str(), |project| project.name.as_str());
-  let (decline, declining, invite_id) = (answers.decline.clone(), answers.declining.clone(), invite.id);
+  let (answers_now, invite_id) = (answers.clone(), invite.id);
   let pending = answers.decline.state().get().is_pending();
-  let confirm = ActionButton::new(
-    format!("{id}-decline-confirm"),
-    ButtonKind::Danger,
-    ctx.t("cloud.invites.decline"),
-  )
-  .icon(Icon::X);
+  let button = format!("{id}-decline-confirm");
+  let confirm = ActionButton::new(button.clone(), ButtonKind::Danger, ctx.t("cloud.invites.decline")).icon(Icon::X);
   let confirm = if pending {
     confirm.loading()
   } else {
-    confirm.on_click(move || {
-      declining.set(Asked(None));
-      decline.run(invite_id);
-    })
+    let button = button.clone();
+    confirm.on_click(move || answers_now.decline(&button, invite_id))
   };
   let keep = answers.declining.clone();
   Column::new()
@@ -445,5 +362,6 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
           .on_click(move || keep.set(Asked(None))),
       ),
     )
+    .with_children(answers.person.reason(ctx, &button))
     .into()
 }

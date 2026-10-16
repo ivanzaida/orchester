@@ -23,7 +23,7 @@ use crate::{
   project::ShownProject,
   screens::{
     project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::{Said, sharing_said},
+    settings::orchester::{PersonOnly, Said, sharing_said},
   },
   services::Services,
   ui::{
@@ -53,7 +53,12 @@ impl DevtoolsInspectable for Props {}
 pub(super) struct Linked {
   asking: Signal<bool>,
   leave: FutureAction<(), (), Said>,
+  /// Leaving is a person's (review 1, M1).
+  person: PersonOnly,
 }
+
+/// *Leave*, which only a person presses.
+const LEAVE: &str = "sharing-leave-confirm";
 
 impl Component for Linked {
   type Props = Props;
@@ -82,6 +87,7 @@ impl Component for Linked {
           Ok(())
         }
       }),
+      person: PersonOnly::new(ctx),
     }
   }
 
@@ -194,6 +200,7 @@ impl Linked {
         ),
       );
     }
+    control = control.with_children(self.person.reason(ctx, LEAVE));
     if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
       control = control.child(field_error("sharing-leave-error", &reason.text(ctx)));
     }
@@ -218,19 +225,16 @@ impl Linked {
 
   /// *Leave Kontur?* in place.
   fn question(&self, ctx: &Ctx, (name, server): (&str, &str), pending: bool) -> Element {
-    let (leave, asking) = (self.leave.clone(), self.asking.clone());
-    let confirm = ActionButton::new(
-      "sharing-leave-confirm",
-      ButtonKind::Danger,
-      ctx.t("sharing.linked.leaveConfirm"),
-    )
-    .icon(Icon::LogOut);
+    let (leave, asking, person) = (self.leave.clone(), self.asking.clone(), self.person.clone());
+    let confirm = ActionButton::new(LEAVE, ButtonKind::Danger, ctx.t("sharing.linked.leaveConfirm")).icon(Icon::LogOut);
     let confirm = if pending {
       confirm.loading()
     } else {
       confirm.on_click(move || {
-        asking.set(false);
-        leave.run(());
+        if person.allows(LEAVE) {
+          asking.set(false);
+          leave.run(());
+        }
       })
     };
     let keep = self.asking.clone();

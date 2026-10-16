@@ -5,9 +5,10 @@
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::{Ctx, FutureAction, Interval},
   },
   components::Column,
+  core::Signal,
   node::{Element, dimension::Dimension},
 };
 use orchester_store::StoredCloudAccount;
@@ -36,6 +37,8 @@ pub(super) struct Props {
   pub account: Option<StoredCloudAccount>,
   pub address: CloudAddress,
   pub invites: Invites,
+  /// The invites accepted here whose join did not finish.
+  pub accepted: super::Kept,
   pub panel: OrchesterPanel,
 }
 
@@ -46,13 +49,23 @@ pub(super) struct CloudPanel {
   advanced: advanced::Advanced,
   invites: invites::Answers,
   sign_out: FutureAction<(), (), Said>,
+  /// Signing this computer out of the cloud is a person's (review 1, M1).
+  person: super::PersonOnly,
+  /// Counts the checks of joins that wait for approval ([`super::accepted::check`]).
+  tick: Signal<u64>,
+  checks: Interval,
 }
+
+const SIGN_OUT: &str = "orchester-cloud-sign-out";
 
 impl Component for CloudPanel {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
     let cloud = Services::of(ctx).cloud;
+    let tick = ctx.signal(0_u64);
+    let next = tick.clone();
+    let checks = ctx.create_interval(super::accepted::CHECK_EVERY, move || next.update(|tick| *tick += 1));
     Self {
       form: sign_in::Form::new(ctx),
       advanced: advanced::Advanced::new(ctx),
@@ -61,11 +74,19 @@ impl Component for CloudPanel {
         let cloud = cloud.clone();
         async move { cloud.sign_out().await.map_err(|error| cloud_error(&error)) }
       }),
+      person: super::PersonOnly::new(ctx),
+      tick,
+      checks,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
+    self.checks.start();
+    if props.account.is_some() {
+      let cloud = Services::of(ctx).cloud;
+      super::accepted::check(ctx, self.tick.get(), &cloud);
+    }
     let Some(account) = &props.account else {
       return sign_in::panel(ctx, &props.address, &self.form, &self.advanced);
     };
@@ -81,17 +102,17 @@ impl Component for CloudPanel {
       Fact::Mono(account.email.clone()),
     ];
     let sign_out = {
-      let action = self.sign_out.clone();
-      let button = ActionButton::new(
-        "orchester-cloud-sign-out",
-        ButtonKind::Secondary,
-        ctx.t("cloud.account.signOut"),
-      )
-      .icon(Icon::LogOut);
+      let (action, person) = (self.sign_out.clone(), self.person.clone());
+      let button =
+        ActionButton::new(SIGN_OUT, ButtonKind::Secondary, ctx.t("cloud.account.signOut")).icon(Icon::LogOut);
       if self.sign_out.state().get().is_pending() {
         button.loading()
       } else {
-        button.on_click(move || action.run(()))
+        button.on_click(move || {
+          if person.allows(SIGN_OUT) {
+            action.run(());
+          }
+        })
       }
     };
     let head = header(
@@ -101,10 +122,11 @@ impl Component for CloudPanel {
       &facts,
     )
     .child(sign_out);
-    let parts = match props.panel {
-      OrchesterPanel::Invites => vec![invites::waiting(ctx, &props.invites, &self.invites)],
+    let mut parts: Vec<Element> = self.person.reason(ctx, SIGN_OUT).into_iter().collect();
+    parts.extend(match props.panel {
+      OrchesterPanel::Invites => vec![invites::waiting(ctx, (&props.invites, &props.accepted), &self.invites)],
       _ => self.account_parts(ctx, account, &props),
-    };
+    });
     frame("orchester-cloud-details")
       .child(head)
       .child(detail_tabs(ctx, &props))
@@ -179,7 +201,7 @@ impl CloudPanel {
     );
     let mut parts: Vec<Element> = failed.into_iter().collect();
     parts.push(facts.into());
-    parts.push(invites::waiting(ctx, &props.invites, &self.invites));
+    parts.push(invites::waiting(ctx, (&props.invites, &props.accepted), &self.invites));
     parts.push(signing_out.into());
     parts.push(advanced::section(ctx, &props.address, &self.advanced));
     parts.push(inspector::note("orchester-cloud-token-note", Icon::KeyRound, &ctx.t(token_note())).into());

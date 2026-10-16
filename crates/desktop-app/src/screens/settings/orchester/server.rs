@@ -74,6 +74,8 @@ pub(super) struct ServerPanel {
   pub(super) trust: FutureAction<Presented, (), Said>,
   pub(super) join_again: FutureAction<(), JoinedAgain, Said>,
   pub(super) opened: Signal<Option<Said>>,
+  /// Making a pairing code, signing out and joining again are a person's.
+  pub(super) person: super::PersonOnly,
 }
 
 /// How joining again with the cloud account ended.
@@ -159,6 +161,7 @@ impl Component for ServerPanel {
       trust,
       join_again,
       opened: ctx.signal(None),
+      person: super::PersonOnly::new(ctx),
     }
   }
 

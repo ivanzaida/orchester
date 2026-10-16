@@ -15,12 +15,13 @@ use crate::{
 };
 
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
-  (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects and \
-  settings take no other argument; every other screen takes `project`, the project's id (a UUID, as app_state \
+  (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
+  other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
   reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
   Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
-  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \n  conversation's id, or new; left out, the latest). A tab or kind left out is the one \
+  (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
+  conversation's id, or new; left out, the latest). A tab or kind left out is the one \
   the screen opens on. Answers the route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -36,7 +37,7 @@ pub fn tool(link: WindowLink) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, accounts, orchester, connect;      overview {}; tasks {}; task {}; connections {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, accounts, orchester, connect; overview {}; tasks {}; task {}; connections {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),

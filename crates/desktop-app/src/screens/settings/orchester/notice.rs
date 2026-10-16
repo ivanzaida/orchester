@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_api::cloud::CloudInvite;
-use orchester_core::{id::InviteId, time::Timestamp};
+use orchester_core::time::Timestamp;
 
 use super::{Invites, follow, invites, words::day};
 use crate::{
@@ -50,7 +50,7 @@ impl Component for InvitesNotice {
       .id("all-projects-invites")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm);
-    column = column.with_children(invites::outcome(ctx, &self.answers));
+    column = column.with_children(invites::outcome(ctx, &self.answers, true));
     let Invites::Listed(waiting) = listed else {
       return column;
     };
@@ -114,11 +114,12 @@ impl InvitesNotice {
       .rounded(RadiusSize::Lg)
       .child(icon(Icon::Mail, IconSize::Lg, PaletteColor::Info).id(format!("{id}-icon")))
       .child(text)
-      .with_children((!declining).then(|| self.buttons(ctx, &id, invite.id)));
+      .with_children((!declining).then(|| self.buttons(ctx, &id, invite)));
     let mut column = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Section.role())
-      .child(notice);
+      .child(notice)
+      .with_children(self.answers.person.reason(ctx, &format!("{id}-accept")));
     if declining {
       column = column.child(invites::decline_question(ctx, &id, invite, &self.answers));
     }
@@ -126,14 +127,14 @@ impl InvitesNotice {
   }
 
   /// *Decline*, asked in place, and *Accept*.
-  fn buttons(&self, ctx: &Ctx, id: &str, invite: InviteId) -> Row {
-    let declining = self.answers.declining.clone();
+  fn buttons(&self, ctx: &Ctx, id: &str, invite: &CloudInvite) -> Row {
+    let (declining, invite_id) = (self.answers.declining.clone(), invite.id);
     let decline = ActionButton::new(
       format!("{id}-decline"),
       ButtonKind::Ghost,
       ctx.t("cloud.invites.decline"),
     )
-    .on_click(move || declining.set(invites::Asked(Some(invite))));
+    .on_click(move || declining.set(invites::Asked(Some(invite_id))));
     let accept = ActionButton::new(
       format!("{id}-accept"),
       ButtonKind::Primary,
@@ -143,8 +144,8 @@ impl InvitesNotice {
     let accept = if self.answers.connecting() {
       accept.loading()
     } else {
-      let answers = self.answers.handle();
-      accept.on_click(move || answers.accept(invite))
+      let (answers, invite, button) = (self.answers.clone(), invite.clone(), format!("{id}-accept"));
+      accept.on_click(move || answers.accept(&button, &invite))
     };
     Row::new()
       .flex_shrink(0.0)

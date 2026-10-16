@@ -305,10 +305,12 @@ fn address(ctx: &mut Ctx, page: &ConnectPage, (found, entries): (Option<&Found>,
   column.into()
 }
 
+const ALLOW_PLAIN: &str = "orchester-connect-allow-plain";
+
 /// *This address isn't encrypted* with the explicit allow (`Plain HTTP · allowed only on purpose` in `ZJytn`).
 fn plain_http(ctx: &Ctx, page: &ConnectPage, address: Option<&ServerAddress>) -> Element {
   let authority = address.map(ServerAddress::authority).unwrap_or_default();
-  let allow = page.allow_plain.clone();
+  let (allow, person) = (page.allow_plain.clone(), page.person.clone());
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -323,13 +325,19 @@ fn plain_http(ctx: &Ctx, page: &ConnectPage, address: Option<&ServerAddress>) ->
     )
     .child(
       Toggle::new(
-        "orchester-connect-allow-plain",
+        ALLOW_PLAIN,
         ToggleKind::Checkbox,
         page.allow_plain.get(),
         ctx.t_args("sharing.connect.plain.allow", [("address", authority)]),
       )
-      .on_change(move |on| allow.set(on)),
+      .on_change(move |on| {
+        // Sending to another computer in the clear is a person's choice.
+        if person.allows(ALLOW_PLAIN) {
+          allow.set(on);
+        }
+      }),
     )
+    .with_children(page.person.reason(ctx, ALLOW_PLAIN))
     .into()
 }
 

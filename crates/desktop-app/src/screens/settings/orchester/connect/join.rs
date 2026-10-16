@@ -42,6 +42,9 @@ use crate::{
   },
 };
 
+/// *Join Kontur team*, which only a person presses (review 1, M1).
+const JOIN: &str = "orchester-connect-join";
+
 /// The fields' width in the username step (`bIwte`).
 const NAME_FIELD_WIDTH: f32 = 336.0;
 
@@ -329,7 +332,7 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
     name: join.name.get(),
   });
   let mut go = ActionButton::new(
-    "orchester-connect-join",
+    JOIN,
     ButtonKind::Primary,
     ctx.t_args("sharing.connect.join.submit", [("server", server)]),
   )
@@ -337,12 +340,19 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
   go = match request {
     _ if state.is_pending() => go.loading(),
     Some(request) => {
-      let run = join.run.clone();
-      go.on_click(move || run.run(request.clone()))
+      let (run, person) = (join.run.clone(), page.person.clone());
+      go.on_click(move || {
+        if person.allows(JOIN) {
+          run.run(request.clone());
+        }
+      })
     }
     None => go.disabled(),
   };
-  column.child(Row::new().child(go)).into()
+  column
+    .child(Row::new().child(go))
+    .with_children(page.person.reason(ctx, JOIN))
+    .into()
 }
 
 fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {

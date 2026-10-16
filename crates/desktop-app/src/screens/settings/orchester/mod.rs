@@ -6,7 +6,9 @@
 //! What the tab shows is read again whenever a server's connection or the cloud account changes; the invites are read
 //! with it while an account is signed in.
 
+mod accepted;
 mod advanced;
+mod answers;
 mod cloud;
 mod code;
 pub mod connect;
@@ -14,6 +16,7 @@ mod invites;
 mod list;
 mod notice;
 mod parts;
+mod person;
 mod server;
 mod server_parts;
 mod server_projects;
@@ -45,6 +48,7 @@ use orchester_workspace::{
 
 pub use self::{
   notice::InvitesNotice,
+  person::PersonOnly,
   words::{Said, day as day_of, moment, runs, sharing_error as sharing_said, shown_address},
 };
 
@@ -148,6 +152,7 @@ impl Component for OrchesterTab {
       }
     };
     let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let details = match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => ctx.mount_keyed::<server::ServerPanel>(
         &format!("orchester-server-{}", entry.stored.id),
@@ -163,6 +168,7 @@ impl Component for OrchesterTab {
           account: snapshot.account.clone(),
           address: snapshot.address.clone(),
           invites: invites.clone(),
+          accepted,
           panel: view.panel,
         },
       ),
@@ -262,4 +268,33 @@ pub fn invites(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&Sto
     .state()
     .get();
   state.data.unwrap_or(Invites::SignedOut)
+}
+
+/// The invites accepted here whose join did not finish (N1 security review 1, M2).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Kept(pub Arc<Vec<orchester_store::AcceptedInvite>>);
+
+impl DevtoolsInspectable for Kept {}
+
+/// The invites accepted here by `account`, read at `revision`.
+fn kept(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&StoredCloudAccount>) -> Kept {
+  let signed_in = account.map(|account| account.account);
+  ctx
+    .future(
+      (revision, signed_in, cloud.clone()),
+      |(_, signed_in, cloud)| async move {
+        if signed_in.is_none() {
+          return Ok::<_, ()>(Kept::default());
+        }
+        let kept = cloud
+          .accepted_invites()
+          .await
+          .map_err(|error| tracing::warn!(%error, "the invites accepted here could not be read"))?;
+        Ok(Kept(Arc::new(kept)))
+      },
+    )
+    .state()
+    .get()
+    .data
+    .unwrap_or_default()
 }

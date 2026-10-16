@@ -100,6 +100,12 @@ pub enum Guarded {
   /// check code with the one on the server's console. As with [`Self::StepAccept`], only its handler refuses, so the
   /// rest of the window takes a client's input while it shows.
   CheckCode,
+  /// Settings › Orchester and Project settings › Sharing: what changes who this computer trusts or what it sends to a
+  /// team server or Orchester Cloud. Making or copying a pairing code, the cloud's address, signing in and out,
+  /// allowing plain HTTP to another computer, joining a server, accepting or declining an invite, linking and
+  /// uploading a project, and leaving it are a person's (N1 security review 1, B2 and M1). As with [`Self::CheckCode`],
+  /// only the handler refuses: reading and moving around the window stay open to clients.
+  Sharing,
   /// A task Summary's *Accept … as it is*: it passes a step in a person's place, as approving does, so it needs the
   /// approvals opt-in. Only its handler refuses ([`input_may_decide`]); it is never protected, so the rest of the
   /// window, its close button included, takes a client's input while it shows.
@@ -213,7 +219,8 @@ impl InputGate {
       | Guarded::LocalIntegrationQuestion
       | Guarded::McpServer
       | Guarded::Accounts
-      | Guarded::CheckCode => false,
+      | Guarded::CheckCode
+      | Guarded::Sharing => false,
     }
   }
 
@@ -226,7 +233,7 @@ impl InputGate {
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
       // Only their handlers refuse: they lock no window input, whoever marks them.
-      Guarded::StepAccept | Guarded::CheckCode => return,
+      Guarded::StepAccept | Guarded::CheckCode | Guarded::Sharing => return,
     };
     if add {
       *count += 1;

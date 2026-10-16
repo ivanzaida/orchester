@@ -22,6 +22,7 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
+    clipboard::Clipboard,
     icon::Icon,
   },
 };
@@ -113,9 +114,13 @@ impl PartialEq for Props {
 
 impl DevtoolsInspectable for Props {}
 
+/// *Copy*, which only a person presses (review 1, B2): a client that copied the code could read the clipboard.
+const COPY: &str = "orchester-pairing-copy";
+
 /// The pairing code's card, which hides the window from MCP clients while it is mounted.
 pub(super) struct ShownCode {
   _shown: TokenShown,
+  person: super::PersonOnly,
 }
 
 impl Component for ShownCode {
@@ -127,6 +132,7 @@ impl Component for ShownCode {
       .expect("the session's window provides the MCP input gate");
     Self {
       _shown: gate.show_token(),
+      person: super::PersonOnly::new(ctx),
     }
   }
 
@@ -144,17 +150,23 @@ impl Component for ShownCode {
       ),
     };
     let code = shown.code.expose().to_owned();
-    let copy = ActionButton::new(
-      "orchester-pairing-copy",
-      ButtonKind::Secondary,
-      ctx.t("cloud.pairing.copy"),
-    )
-    .icon(Icon::Copy)
-    .on_click(move || {
-      if !copy_for_a_minute(&runtime, code.clone()) {
-        tracing::warn!("the pairing code could not be copied");
-      }
-    });
+    // A window that owns its clipboard (a headless one) copies there; the app's copies to the system's for a minute.
+    let clipboard = ctx.use_context::<Clipboard>();
+    let person = self.person.clone();
+    let copy = ActionButton::new(COPY, ButtonKind::Secondary, ctx.t("cloud.pairing.copy"))
+      .icon(Icon::Copy)
+      .on_click(move || {
+        if !person.allows(COPY) {
+          return;
+        }
+        let copied = match &clipboard {
+          Some(clipboard) => clipboard.copy(&code),
+          None => copy_for_a_minute(&runtime, code.clone()),
+        };
+        if !copied {
+          tracing::warn!("the pairing code could not be copied");
+        }
+      });
     let done = ActionButton::new("orchester-pairing-done", ButtonKind::Ghost, ctx.t("cloud.pairing.done"))
       .on_click(move || done());
     card("orchester-pairing", CardSurface::Outline)
@@ -168,6 +180,7 @@ impl Component for ShownCode {
       .child(code_box("orchester-pairing-code", shown.code.expose()))
       .child(paragraph("orchester-pairing-explanation", &explanation))
       .child(Row::new().spacing(SpacingSize::Sm).child(copy).child(done))
+      .with_children(self.person.reason(ctx, COPY))
       .child(hint("orchester-pairing-once", &ctx.t("cloud.pairing.once")))
   }
 }

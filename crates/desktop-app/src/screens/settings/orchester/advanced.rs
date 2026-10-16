@@ -34,7 +34,12 @@ pub(super) struct Advanced {
   address: Signal<String>,
   /// `Some(address)` sets another cloud, `None` goes back to the build's.
   set: FutureAction<Option<String>, (), Said>,
+  /// Which cloud this computer signs in to is a person's choice (review 1, M1).
+  person: super::PersonOnly,
 }
+
+const USE: &str = "orchester-advanced-use";
+const RESET: &str = "orchester-advanced-reset";
 
 impl Advanced {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
@@ -53,6 +58,7 @@ impl Advanced {
           cloud.set_address(address).await.map_err(|error| cloud_error(&error))
         }
       }),
+      person: super::PersonOnly::new(ctx),
     };
     ctx.watch(&advanced.set.state(), move |state| {
       if state.is_fulfilled() {
@@ -141,29 +147,29 @@ fn form(ctx: &mut Ctx, advanced: &Advanced) -> Element {
   .mono()
   .render(ctx);
   let use_it = {
-    let (set, address) = (advanced.set.clone(), advanced.address.clone());
-    let button = ActionButton::new(
-      "orchester-advanced-use",
-      ButtonKind::Secondary,
-      ctx.t("cloud.advanced.use"),
-    );
+    let (set, address, person) = (advanced.set.clone(), advanced.address.clone(), advanced.person.clone());
+    let button = ActionButton::new(USE, ButtonKind::Secondary, ctx.t("cloud.advanced.use"));
     if pending {
       button.loading()
     } else {
-      button.on_click(move || set.run(Some(address.get())))
+      button.on_click(move || {
+        if person.allows(USE) {
+          set.run(Some(address.get()));
+        }
+      })
     }
   };
   let reset = {
-    let set = advanced.set.clone();
-    let button = ActionButton::new(
-      "orchester-advanced-reset",
-      ButtonKind::Ghost,
-      ctx.t("cloud.advanced.reset"),
-    );
+    let (set, person) = (advanced.set.clone(), advanced.person.clone());
+    let button = ActionButton::new(RESET, ButtonKind::Ghost, ctx.t("cloud.advanced.reset"));
     if pending {
       button.disabled()
     } else {
-      button.on_click(move || set.run(None))
+      button.on_click(move || {
+        if person.allows(RESET) {
+          set.run(None);
+        }
+      })
     }
   };
   Column::new()
@@ -182,5 +188,7 @@ fn form(ctx: &mut Ctx, advanced: &Advanced) -> Element {
         .map(|reason| field_error("orchester-advanced-error", &reason.text(ctx))),
     )
     .child(Row::new().spacing(SpacingSize::Sm).child(use_it).child(reset))
+    .with_children(advanced.person.reason(ctx, USE))
+    .with_children(advanced.person.reason(ctx, RESET))
     .into()
 }

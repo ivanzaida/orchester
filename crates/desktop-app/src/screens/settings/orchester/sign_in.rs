@@ -89,7 +89,11 @@ pub(super) struct Form {
   password: Signal<String>,
   sign_in: FutureAction<(String, String), (), Refusal>,
   opened: Signal<Opened>,
+  /// Signing this computer in to the cloud is a person's (review 1, M1).
+  person: super::PersonOnly,
 }
+
+const SUBMIT: &str = "orchester-sign-in";
 
 impl Form {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
@@ -114,6 +118,7 @@ impl Form {
         }
       }),
       opened: ctx.signal(Opened::None),
+      person: super::PersonOnly::new(ctx),
     }
   }
 }
@@ -165,13 +170,18 @@ fn sign_in_form(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
   let (email, password) = fields(ctx, form, refusal == Some(Refusal::Wrong));
   let submit = {
     let (action, email, password) = (form.sign_in.clone(), form.email.clone(), form.password.clone());
-    let button = ActionButton::new("orchester-sign-in", ButtonKind::Primary, ctx.t("cloud.signIn.submit"))
+    let person = form.person.clone();
+    let button = ActionButton::new(SUBMIT, ButtonKind::Primary, ctx.t("cloud.signIn.submit"))
       .icon(Icon::LogIn)
       .fill_width();
     if state.is_pending() {
       button.loading()
     } else {
-      button.on_click(move || action.run((email.get(), password.get())))
+      button.on_click(move || {
+        if person.allows(SUBMIT) {
+          action.run((email.get(), password.get()));
+        }
+      })
     }
   };
   let opened = form.opened.get();
@@ -191,6 +201,7 @@ fn sign_in_form(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
     .child(password)
     .with_children(refusal.as_ref().map(|refusal| refusal_part(ctx, form, refusal)))
     .child(submit)
+    .with_children(form.person.reason(ctx, SUBMIT))
     .with_children(opened_part(ctx, &opened))
     .child(divider())
     .child(create_row(ctx, form))

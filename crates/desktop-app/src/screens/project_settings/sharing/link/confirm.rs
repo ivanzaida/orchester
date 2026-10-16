@@ -25,6 +25,10 @@ use crate::{
   },
 };
 
+/// *Link to Kontur…* and *Link and upload*, which only a person presses.
+const LINK: &str = "sharing-link-button";
+const CONFIRM: &str = "sharing-link-confirm";
+
 impl Link {
   /// *Link to Kontur…* and, once pressed, the questions in place and what came of them.
   pub(super) fn link_row(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
@@ -42,6 +46,9 @@ impl Link {
       (Asking::Upload, Some(target)) => control.child(self.upload(ctx, target, props, linking.is_pending())),
       _ => control.child(self.link_button(ctx, self.choice(props, listed), resolving.is_pending())),
     };
+    control = control
+      .with_children(self.person.reason(ctx, LINK))
+      .with_children(self.person.reason(ctx, CONFIRM));
     let problem = resolving
       .error
       .clone()
@@ -78,12 +85,16 @@ impl Link {
       Some(Choice::Listed(listed)) => ctx.t_args("sharing.link.linkTo", [("project", listed.1.name.as_str())]),
       _ => ctx.t("sharing.link.linkAddress"),
     };
-    let button = ActionButton::new("sharing-link-button", ButtonKind::Secondary, label).icon(Icon::Link);
+    let button = ActionButton::new(LINK, ButtonKind::Secondary, label).icon(Icon::Link);
     let button = match choice {
       _ if pending => button.loading(),
       Some(choice) => {
-        let resolve = self.resolve.clone();
-        button.on_click(move || resolve.run(choice.clone()))
+        let (resolve, person) = (self.resolve.clone(), self.person.clone());
+        button.on_click(move || {
+          if person.allows(LINK) {
+            resolve.run(choice.clone());
+          }
+        })
       }
       None => button.unavailable(ctx.t("sharing.link.chooseFirst")),
     };
@@ -151,8 +162,9 @@ impl Link {
       ],
     );
     let (link, chosen, key) = (self.link.clone(), target.clone(), self.key.get());
+    let person = self.person.clone();
     let confirm = ActionButton::new(
-      "sharing-link-confirm",
+      CONFIRM,
       ButtonKind::Primary,
       ctx.t_args("sharing.link.upload.confirm", [("count", count)]),
     )
@@ -160,7 +172,11 @@ impl Link {
     let confirm = if pending {
       confirm.loading()
     } else {
-      confirm.on_click(move || link.run((chosen.clone(), key.clone())))
+      confirm.on_click(move || {
+        if person.allows(CONFIRM) {
+          link.run((chosen.clone(), key.clone()));
+        }
+      })
     };
     let asking = self.asking.clone();
     let cancel = ActionButton::new(

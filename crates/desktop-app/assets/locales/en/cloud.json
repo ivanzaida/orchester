@@ -97,7 +97,7 @@
       "cancel": "Cancel",
       "stopped": {
         "title": "Stopped connecting",
-        "body": "If the server had already let this computer in, it shows under Team servers. Otherwise accept the invite again."
+        "body": "If the server had already let this computer in, it shows under Team servers. Otherwise try again below."
       },
       "declineQuestion": "Decline the invite to {{target}}?",
       "declineBody": "The invite ends here and can't be accepted any more. {{inviter}} isn't told; their server keeps it until it expires.",
@@ -109,7 +109,16 @@
       },
       "approval": {
         "title": "Waiting for approval",
-        "body": "{{server}} asks for approval of new computers. Approve this one in Orchester on another computer of yours, or ask an admin of {{server}}. Nothing has been uploaded."
+        "body": "{{server}} asks for approval of new computers. Approve this one in Orchester on another computer of yours, or ask an admin of {{server}}. Nothing has been uploaded.",
+        "ask": "{{server}} asks for approval of new computers. Approve this one in Orchester on another computer of yours, or ask an admin of {{server}}.",
+        "later": "Nothing has been uploaded. You can close this; Orchester finishes joining when it's approved.",
+        "cancel": "Cancel joining"
+      },
+      "joinStopped": {
+        "title": "Joining {{server}} didn't finish",
+        "body": "The invite stays accepted for this computer, and nothing was uploaded. Try again once {{server}} can be reached.",
+        "tryAgain": "Try again",
+        "later": "Later"
       },
       "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected."
     },
@@ -277,10 +286,12 @@
       "certificate": "Your system doesn't trust Orchester Cloud's certificate.",
       "serverRefused": "The server refused this.",
       "serverSignedOut": "This computer's sign-in on the server ended.",
+      "joinRefused": "The team server refused this computer. Nothing was uploaded; if you didn't expect this, ask one of its admins.",
       "serverUnreachable": "The server can't be reached. Check that this computer is on its network.",
       "certificateChanged": "The server presents a different certificate; nothing was sent to it.",
       "tooManyCodes": "The server holds as many open codes as it allows. Try again once one is used or expires."
     },
+    "personOnly": "Only a person does this here: input from an MCP client is refused. Clients can still read this page.",
     "notice": {
       "body": "{{role}} · {{address}} · expires {{expires}}",
       "toProject": "{{inviter}} invited you to {{project}} on {{server}}",

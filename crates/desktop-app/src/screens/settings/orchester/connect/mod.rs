@@ -79,6 +79,8 @@ pub struct ConnectPage {
   reach: FutureAction<(String, bool), Found, Said>,
   join: join::Join,
   seeded: Signal<bool>,
+  /// Allowing plain HTTP to another computer and joining are a person's (review 1, M1).
+  person: super::PersonOnly,
 }
 
 impl Component for ConnectPage {
@@ -122,6 +124,7 @@ impl Component for ConnectPage {
       reach,
       join: join::Join::new(ctx),
       seeded: ctx.signal(false),
+      person: super::PersonOnly::new(ctx),
     }
   }
 

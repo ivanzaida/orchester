@@ -35,6 +35,12 @@ use crate::{
   },
 };
 
+/// The buttons only a person presses ([`super::PersonOnly`]).
+const ADD_COMPUTER: &str = "orchester-server-add-computer";
+const ADMIN_SIGN_IN: &str = "orchester-server-admin-sign-in";
+const JOIN_AGAIN: &str = "orchester-server-join-again";
+const SIGN_OUT: &str = "orchester-server-sign-out-confirm";
+
 /// What is wrong with the server, first in the panel, and what came of an answer to it.
 pub(super) fn problems(
   ctx: &mut Ctx,
@@ -163,18 +169,18 @@ fn certificate_changed(
 /// *This computer's sign-in on Atlas research ended*, with *Join again with Orchester Cloud* and *With a code*.
 fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Element {
   let navigation = Navigation::of(ctx);
-  let join = panel.join_again.clone();
+  let (join, person) = (panel.join_again.clone(), panel.person.clone());
   let state = panel.join_again.state().get();
-  let mut again = ActionButton::new(
-    "orchester-server-join-again",
-    ButtonKind::Primary,
-    ctx.t("cloud.server.signedOut.cloud"),
-  )
-  .icon(Icon::Cloud);
+  let mut again =
+    ActionButton::new(JOIN_AGAIN, ButtonKind::Primary, ctx.t("cloud.server.signedOut.cloud")).icon(Icon::Cloud);
   again = if state.is_pending() {
     again.loading()
   } else {
-    again.on_click(move || join.run(()))
+    again.on_click(move || {
+      if person.allows(JOIN_AGAIN) {
+        join.run(());
+      }
+    })
   };
   let id = entry.stored.id;
   let with_code = ActionButton::new(
@@ -213,7 +219,8 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
         "cloud.server.signedOut.byYouBody"
       })),
     )
-    .child(Row::new().spacing(SpacingSize::Sm).child(again).child(with_code));
+    .child(Row::new().spacing(SpacingSize::Sm).child(again).child(with_code))
+    .with_children(panel.person.reason(ctx, JOIN_AGAIN));
   match state.data.clone().filter(|_| state.is_fulfilled()) {
     Some(JoinedAgain::Waiting) => {
       column = column.child(hint(
@@ -249,10 +256,10 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
     };
     ctx.t_args(key, [("projects", projects.as_str())])
   };
-  let (sign_out, confirming) = (panel.sign_out.clone(), panel.confirming.clone());
+  let (sign_out, confirming, person) = (panel.sign_out.clone(), panel.confirming.clone(), panel.person.clone());
   let pending = panel.sign_out.state().get().is_pending();
   let confirm = ActionButton::new(
-    "orchester-server-sign-out-confirm",
+    SIGN_OUT,
     ButtonKind::Danger,
     ctx.t("cloud.server.signOutQuestion.confirm"),
   )
@@ -261,8 +268,10 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
     confirm.loading()
   } else {
     confirm.on_click(move || {
-      confirming.set(false);
-      sign_out.run(());
+      if person.allows(SIGN_OUT) {
+        confirming.set(false);
+        sign_out.run(());
+      }
     })
   };
   let keep = panel.confirming.clone();
@@ -293,6 +302,7 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
         .on_click(move || keep.set(false)),
       ),
     )
+    .with_children(panel.person.reason(ctx, SIGN_OUT))
     .into()
 }
 
@@ -392,7 +402,7 @@ pub(super) fn facts(ctx: &Ctx, entry: &ServerEntry) -> Element {
 /// *Your other computers* with *Add a computer*.
 pub(super) fn computers(ctx: &Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Element {
   let text = ctx.t_args("cloud.server.computers.body", [("server", entry.stored.name.as_str())]);
-  let add = pairing_button(ctx, panel, ("orchester-server-add-computer", Purpose::Computer));
+  let add = pairing_button(ctx, panel, (ADD_COMPUTER, Purpose::Computer));
   section(
     "orchester-server-computers",
     section_title(
@@ -400,27 +410,30 @@ pub(super) fn computers(ctx: &Ctx, panel: &ServerPanel, entry: &ServerEntry) -> 
       &ctx.t("cloud.server.computers.title"),
       None,
     ),
-    vec![
-      paragraph("orchester-server-computers-text", &text).into(),
-      lurq::components::Row::new().child(add).into(),
-    ],
+    std::iter::once(paragraph("orchester-server-computers-text", &text).into())
+      .chain(std::iter::once(lurq::components::Row::new().child(add).into()))
+      .chain(panel.person.reason(ctx, ADD_COMPUTER))
+      .collect(),
   )
   .into()
 }
 
-fn pairing_button(ctx: &Ctx, panel: &ServerPanel, (id, purpose): (&str, Purpose)) -> ActionButton {
+fn pairing_button(ctx: &Ctx, panel: &ServerPanel, (id, purpose): (&'static str, Purpose)) -> ActionButton {
   let (label, glyph, kind) = match purpose {
     Purpose::Computer => (ctx.t("cloud.server.computers.add"), Icon::Laptop, ButtonKind::Secondary),
     Purpose::Admin => (ctx.t("cloud.server.admin.signIn"), Icon::KeyRound, ButtonKind::Ghost),
   };
-  let (pairing, showing) = (panel.pairing.clone(), panel.showing.clone());
+  let (pairing, showing, person) = (panel.pairing.clone(), panel.showing.clone(), panel.person.clone());
   let button = ActionButton::new(id.to_owned(), kind, label).icon(glyph);
   if panel.pairing.state().get().is_pending() {
     button.disabled()
   } else {
+    // A pairing code signs a computer or a browser in as this person: only a person asks for one (review 1, B2).
     button.on_click(move || {
-      showing.set(true);
-      pairing.run(purpose);
+      if person.allows(id) {
+        showing.set(true);
+        pairing.run(purpose);
+      }
     })
   }
 }
@@ -458,19 +471,23 @@ pub(super) fn admin(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> 
       ));
     }
   });
-  let sign_in = pairing_button(ctx, panel, ("orchester-server-admin-sign-in", Purpose::Admin));
+  let sign_in = pairing_button(ctx, panel, (ADMIN_SIGN_IN, Purpose::Admin));
   section(
     "orchester-server-admin",
     section_title("orchester-server-admin-title", &ctx.t("cloud.server.admin.title"), None),
-    vec![
-      paragraph("orchester-server-admin-text", &text).into(),
-      lurq::components::Row::new()
-        .spacing(SpacingSize::Sm)
-        .child(open)
-        .child(sign_in)
-        .into(),
-      hint("orchester-server-admin-hint", &ctx.t("cloud.server.admin.hint")).into(),
-    ],
+    std::iter::once(paragraph("orchester-server-admin-text", &text).into())
+      .chain(std::iter::once(
+        lurq::components::Row::new()
+          .spacing(SpacingSize::Sm)
+          .child(open)
+          .child(sign_in)
+          .into(),
+      ))
+      .chain(panel.person.reason(ctx, ADMIN_SIGN_IN))
+      .chain(std::iter::once(
+        hint("orchester-server-admin-hint", &ctx.t("cloud.server.admin.hint")).into(),
+      ))
+      .collect(),
   )
   .into()
 }
