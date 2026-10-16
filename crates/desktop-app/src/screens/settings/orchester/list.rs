@@ -160,7 +160,7 @@ fn cloud_row(ctx: &Ctx, snapshot: &Snapshot, invites: &Invites, selected: bool, 
     ("orchester-row-cloud", glyph, selected),
     (&name, &second, &third),
     &state,
-    move || navigation.replace(Route::Orchester(OrchesterView::default())),
+    move || navigation.go(Route::Orchester(OrchesterView::default())),
   )
 }
 
@@ -178,7 +178,7 @@ fn server_row(
     (&format!("orchester-row-{id}"), Icon::Server, selected),
     (&entry.stored.name, &second, &third_line(ctx, entry, linked)),
     &server_look(entry),
-    move || navigation.replace(Route::Orchester(OrchesterView::server(id))),
+    move || navigation.go(Route::Orchester(OrchesterView::server(id))),
   )
 }
 

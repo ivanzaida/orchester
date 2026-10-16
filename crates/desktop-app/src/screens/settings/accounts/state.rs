@@ -220,7 +220,7 @@ fn folder_missing(ctx: &mut Ctx, work: &Work, account: &AgentAccount, sentence: 
   )
   .icon(Icon::Trash2)
   .on_click(move || {
-    navigation.replace(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
+    navigation.go(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
       id,
       crate::routes::AccountsPanel::Remove,
     )));

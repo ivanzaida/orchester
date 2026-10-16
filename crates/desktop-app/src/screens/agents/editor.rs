@@ -16,13 +16,14 @@ use orchester_workspace::agents::{
 };
 
 use super::{
-  View,
+  AgentsNav, Shown,
   actions::{self, Pending},
   fields::Fields,
   words,
 };
 use crate::{
   project::{ShownProject, own::OwnChanges},
+  routes::AgentTab,
   theme::{ExtraSpacing, IconSize, agents::page_spacing},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
@@ -39,7 +40,9 @@ pub struct Props {
   pub project: ShownProject,
   pub listed: ProjectAgents,
   pub entry: Option<ProfileEntry>,
-  pub view: Signal<View>,
+  /// The tab the route names.
+  pub tab: AgentTab,
+  pub(super) nav: AgentsNav,
   pub revision: Signal<u64>,
   pub retry: Signal<u64>,
   /// Where a save records its change of the profiles.
@@ -47,11 +50,21 @@ pub struct Props {
   pub load_error: Option<orchester_workspace::messages::Message>,
   pub reading: bool,
 }
+impl Props {
+  /// The editor on `tab`: a new profile's, or the saved profile's.
+  pub(super) fn shown(&self, tab: AgentTab) -> Shown {
+    self
+      .entry
+      .as_ref()
+      .map_or(Shown::New(tab), |entry| Shown::Edit(entry.id, tab))
+  }
+}
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
     self.project == other.project
       && self.listed == other.listed
       && self.entry == other.entry
+      && self.tab == other.tab
       && self.load_error == other.load_error
       && self.reading == other.reading
   }
@@ -61,7 +74,6 @@ pub struct Editor {
   work: actions::Work,
   fields: Fields,
   original: Option<ProfileEntry>,
-  tab: Signal<usize>,
   pending: Signal<Pending>,
   busy: Signal<bool>,
   tried: Signal<bool>,
@@ -74,7 +86,6 @@ impl Component for Editor {
       work: actions::work(ctx),
       fields: Fields::new(ctx, &props.listed, props.entry.as_ref()),
       original: props.entry.clone(),
-      tab: ctx.signal(0),
       pending: ctx.signal(Pending(None)),
       busy: ctx.signal(false),
       tried: ctx.signal(false),
@@ -228,9 +239,14 @@ impl Editor {
   }
   fn tabs(&self, ctx: &Ctx, props: &Props) -> Vec<PageTab> {
     [
-      ("agent-tab-profile", ctx.t("agents.profileTab")),
-      ("agent-tab-permissions", ctx.t("agents.permissionsTab")),
+      (AgentTab::Profile, "agent-tab-profile", ctx.t("agents.profileTab")),
       (
+        AgentTab::Permissions,
+        "agent-tab-permissions",
+        ctx.t("agents.permissionsTab"),
+      ),
+      (
+        AgentTab::UsedBy,
         "agent-tab-used",
         ctx.t_args(
           "agents.usedTab",
@@ -246,10 +262,9 @@ impl Editor {
       ),
     ]
     .into_iter()
-    .enumerate()
-    .map(|(index, (id, text))| {
-      let tab = self.tab.clone();
-      PageTab::new(id, text, self.tab.get() == index, move || tab.set(index))
+    .map(|(tab, id, text)| {
+      let (nav, shown) = (props.nav.clone(), props.shown(tab));
+      PageTab::new(id, text, props.tab == tab, move || nav.show(shown))
     })
     .collect::<Vec<_>>()
   }
@@ -357,8 +372,8 @@ impl Editor {
     }
   }
   fn body(&self, ctx: &mut Ctx, props: &Props, pipeline_blocked: Option<&str>) -> Element {
-    let body = match self.tab.get() {
-      1 => {
+    let body = match props.tab {
+      AgentTab::Permissions => {
         let form = ctx.mount_keyed::<super::permissions::PermissionsForm>(
           "agent-permissions",
           super::permissions::Props {
@@ -374,8 +389,8 @@ impl Editor {
           .child(super::policy_panel::enforcement(ctx, &self.fields, &props.listed))
           .into()
       }
-      2 => super::uses::render(ctx, props, pipeline_blocked),
-      _ => Row::new()
+      AgentTab::UsedBy => super::uses::render(ctx, props, pipeline_blocked),
+      AgentTab::Profile => Row::new()
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Section)
         .child(
@@ -401,22 +416,8 @@ impl Editor {
   }
 }
 fn agents_crumb(ctx: &mut Ctx, props: &Props) -> Crumb {
-  let view = props.view.clone();
-  let navigation = crate::navigation::Navigation::of(ctx);
-  let project = props.project.open.project.id();
-  Crumb::link(ctx.t("agents.title"), move || {
-    if matches!(
-      navigation.route_now(),
-      crate::routes::Route::Project(_, crate::routes::ProjectPage::Agent(_))
-    ) {
-      navigation.go(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::Agents,
-      ));
-    } else {
-      view.set(View::List);
-    }
-  })
+  let nav = props.nav.clone();
+  Crumb::link(ctx.t("agents.title"), move || nav.show(Shown::List))
 }
 
 fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {

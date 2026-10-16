@@ -68,7 +68,7 @@ pub fn seed(
   }
   Ok(match state {
     State::Project => Route::AllProjects,
-    _ => Route::Project(project.id(), ProjectPage::Settings),
+    _ => Route::Project(project.id(), ProjectPage::Settings(Default::default())),
   })
 }
 

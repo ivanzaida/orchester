@@ -166,7 +166,7 @@ fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) ->
     .on_click(move || {
       navigation.go(crate::routes::Route::Project(
         project,
-        crate::routes::ProjectPage::Agent(id),
+        crate::routes::ProjectPage::Agent(id, crate::routes::AgentTab::default()),
       ))
     })
     .into()

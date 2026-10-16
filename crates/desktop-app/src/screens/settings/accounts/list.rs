@@ -153,7 +153,7 @@ fn row(ctx: &Ctx, parts: &Parts, account: &AgentAccount, navigation: &Navigation
   };
   let navigation = navigation.clone();
   let account_id = account.id();
-  pressable(move || navigation.replace(Route::Accounts(AccountsView::of(account_id, AccountsPanel::Account))))
+  pressable(move || navigation.go(Route::Accounts(AccountsView::of(account_id, AccountsPanel::Account))))
     .id(id)
     .width(Dimension::Pct(100.0))
     .describe("selected", if selected { "true" } else { "false" })

@@ -122,14 +122,20 @@ fn every_link() -> Vec<(Link, Route)> {
       at(ProjectPage::Task(key(), TaskView::Changes(None))),
     ),
     (Link::Pipeline(project, id()), at(ProjectPage::Pipeline(id()))),
-    (Link::Profile(project, id()), at(ProjectPage::Agent(id()))),
-    (Link::Instructions(project), at(ProjectPage::Instructions)),
+    (
+      Link::Profile(project, id()),
+      at(ProjectPage::Agent(id(), Default::default())),
+    ),
+    (
+      Link::Instructions(project),
+      at(ProjectPage::Instructions(Default::default())),
+    ),
     (Link::Skill(project, id()), at(ProjectPage::Skill(id()))),
     (
       Link::Tool(project, id()),
       at(ProjectPage::Tool(id(), ToolTab::Configuration)),
     ),
-    (Link::Secrets(project), at(ProjectPage::Secrets)),
+    (Link::Secrets(project), at(ProjectPage::Secrets(Default::default()))),
     (
       Link::Connection(project, id()),
       at(ProjectPage::Connections(ConnectionsView::default().with_selected(id()))),
@@ -140,7 +146,7 @@ fn every_link() -> Vec<(Link, Route)> {
     ),
     (
       Link::PullRequest(project, number(42)),
-      at(ProjectPage::PullRequest(number(42))),
+      at(ProjectPage::PullRequest(number(42), None)),
     ),
     (
       Link::PullRequests(project, PullRequestTab::Open),

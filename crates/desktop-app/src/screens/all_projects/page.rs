@@ -154,13 +154,13 @@ fn tabs(ctx: &mut Ctx, usage: bool) -> Element {
     "all-projects-tab-projects",
     ctx.t("projects.tabs.projects"),
     !usage,
-    move || navigation.replace(Route::AllProjects),
+    move || navigation.go(Route::AllProjects),
   );
   let usage = PageTab::new(
     "all-projects-tab-usage",
     ctx.t("projects.tabs.usage"),
     usage,
-    move || to_usage.replace(Route::Usage(Box::default())),
+    move || to_usage.go(Route::Usage(Box::default())),
   );
   page_tabs(ctx, "all-projects-tabs", [projects, usage]).into()
 }

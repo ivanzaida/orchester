@@ -115,12 +115,10 @@ impl Component for Editor {
         }
         autosave.again();
         // Opening the newly created resource preserves the complete body just saved.
-        if matches!(selection.view.get_untracked(), View::New(_)) {
+        if matches!(selection.now(), View::New(_)) {
           selection.created.set(Saved(Some(done.entry.clone())));
           selection.dirty.set(false);
-          selection
-            .view
-            .set(View::Rule(Tab::of(done.entry.body.scope()), Some(done.entry.id)));
+          selection.saved(View::Rule(Tab::of(done.entry.body.scope()), Some(done.entry.id)));
         }
       }
     });

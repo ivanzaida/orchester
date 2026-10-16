@@ -37,7 +37,7 @@ impl Editor {
       "skill-crumb",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::Library)),
+        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::LIBRARY)),
         Crumb::here(title).mono(),
       ],
     );

@@ -396,7 +396,7 @@ fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
       .on_click(move || {
         nav.go(crate::routes::Route::Project(
           project,
-          crate::routes::ProjectPage::Secrets,
+          crate::routes::ProjectPage::Secrets(crate::routes::SecretsView::default()),
         ))
       }),
     )

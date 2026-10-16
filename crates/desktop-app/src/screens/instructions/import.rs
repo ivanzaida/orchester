@@ -234,7 +234,7 @@ impl Import {
       ButtonKind::Secondary,
       ctx.t("instructions.cancel"),
     )
-    .on_click(move || cancel.open(View::Rule(Tab::Project, None)));
+    .on_click(move || cancel.close(View::Rule(Tab::Project, None)));
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(IMPORT_FOOTER_HEIGHT))

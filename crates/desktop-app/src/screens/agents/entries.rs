@@ -6,7 +6,6 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::Signal,
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -15,8 +14,9 @@ use orchester_workspace::agents::{
   form::stored_effort,
 };
 
-use super::{View, words};
+use super::{AgentsNav, Shown, words};
 use crate::{
+  routes::AgentTab,
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     avatar::profile_avatar,
@@ -38,7 +38,7 @@ const USED: f32 = 120.0;
 pub struct RowProps {
   pub entry: ProfileEntry,
   pub listed: ProjectAgents,
-  pub view: Signal<View>,
+  pub(super) nav: AgentsNav,
 }
 impl PartialEq for RowProps {
   fn eq(&self, other: &Self) -> bool {
@@ -72,7 +72,7 @@ impl Component for AgentRow {
       ctx.t_args("agents.pipelineCount", [("count", count.to_string())])
     };
     let id = entry.id;
-    let view = props.view;
+    let nav = props.nav;
     let title = Truncated::new(
       format!("agent-name-{id}"),
       profile.role().as_str(),
@@ -120,7 +120,7 @@ impl Component for AgentRow {
       .child(version_marker(ctx, entry))
       .child(words::note(&used).width(Dimension::Px(USED)))
       .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
-    pressable(move || view.set(View::Edit(id)))
+    pressable(move || nav.show(Shown::Edit(id, AgentTab::default())))
       .id(format!("agent-{id}"))
       .width(Dimension::Pct(100.0))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))

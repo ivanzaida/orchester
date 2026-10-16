@@ -62,7 +62,10 @@ const READING_TILE: f32 = 36.0;
 
 /// What the body is shown with.
 pub(super) struct Shown {
-  pub selected: Signal<Option<Arc<str>>>,
+  /// The path of the file whose diff shows, as the route names it; the first while it names none.
+  pub selected: Option<Arc<str>>,
+  /// Shows another file, as a new entry of the tab's history.
+  pub select: Arc<dyn Fn(&Listed) + Send + Sync>,
   pub find: Signal<String>,
   /// Open in GitHub, once the pull request's address is known.
   pub open: Option<Handler>,
@@ -242,14 +245,12 @@ fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
         .collect(),
     ),
   };
-  let selected = shown.selected.get();
-  let position = selected
+  let position = shown
+    .selected
     .as_ref()
     .and_then(|path| listing.files.iter().position(|listed| listed.path == *path))
     .unwrap_or_default();
-  let chosen = shown.selected.clone();
-  let select: Arc<dyn Fn(&Listed) + Send + Sync> =
-    Arc::new(move |listed: &Listed| chosen.set(Some(listed.path.clone())));
+  let select = shown.select.clone();
   let diff_files = read.diff.files();
   let items: Vec<FileItem> = listing
     .files

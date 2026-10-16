@@ -9,9 +9,10 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use super::state::{Panel, View};
+use super::state::View;
 use crate::{
   project::ShownProject,
+  routes::{SecretsPanel, SecretsTab},
   theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsSpacing, SecretsText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -37,7 +38,7 @@ pub(super) fn frame() -> Column {
     .spacing(SpacingSize::Lg)
 }
 pub(super) fn header(ctx: &Ctx, project: &ShownProject, view: &View) -> Row {
-  let panel = view.panel.clone();
+  let add = view.clone();
   let title = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Snug.role())
@@ -65,13 +66,13 @@ pub(super) fn header(ctx: &Ctx, project: &ShownProject, view: &View) -> Row {
         .child(
           ActionButton::new("secrets-add", ButtonKind::Primary, ctx.t("secrets.add"))
             .icon(Icon::Plus)
-            .on_click(move || panel.set(Panel::Add)),
+            .on_click(move || add.open(SecretsPanel::Add, None)),
         ),
     )
 }
-pub(super) fn tabs(ctx: &mut Ctx, view: &View, count: Option<usize>) -> Element {
-  let usage = view.panel.get() == Panel::Usage;
-  let (list, log) = (view.panel.clone(), view.panel.clone());
+pub(super) fn tabs(ctx: &mut Ctx, view: &View, tab: SecretsTab, count: Option<usize>) -> Element {
+  let usage = tab == SecretsTab::Usage;
+  let (list, log) = (view.clone(), view.clone());
   page_tabs(
     ctx,
     "secrets-tabs",
@@ -84,10 +85,10 @@ pub(super) fn tabs(ctx: &mut Ctx, view: &View, count: Option<usize>) -> Element 
           Some(count) => counted(ctx, &ctx.t("secrets.list"), count),
         },
         !usage,
-        move || list.set(Panel::Inspect),
+        move || list.tab(SecretsTab::List),
       ),
       PageTab::new("secrets-tab-usage", ctx.t("secrets.usage"), usage, move || {
-        log.set(Panel::Usage)
+        log.tab(SecretsTab::Usage)
       }),
     ],
   )

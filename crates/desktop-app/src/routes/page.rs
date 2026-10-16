@@ -7,12 +7,16 @@ use orchester_core::{
 use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
-  PULL_REQUESTS, RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, NEW, NewConnection, ORCHESTRATOR,
+  OrchestratorChat, OverviewTab, PULL_REQUESTS, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView,
+  SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
   query::{Params, with_query},
 };
+
+/// The query parameter of the file a pull request's page shows.
+const FILE: &str = "file";
 
 /// A screen of one project, with what its path names besides the project.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -27,8 +31,9 @@ pub enum ProjectPage {
   MergeQueue,
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
-  /// A pull request of the project's repository, by its number.
-  PullRequest(NonZeroU64),
+  /// A pull request of the project's repository, by its number, with the path of the file whose diff it
+  /// shows (`None`: the first).
+  PullRequest(NonZeroU64, Option<String>),
   /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
   Usage(Box<UsageQuery>),
   Pipelines,
@@ -36,22 +41,24 @@ pub enum ProjectPage {
   NewEmptyPipeline,
   Pipeline(ResourceId),
   Agents,
-  Agent(ResourceId),
-  Instructions,
+  NewAgent(AgentTab),
+  Agent(ResourceId, AgentTab),
+  Instructions(InstructionsView),
   Memory,
-  Skills,
+  /// The Skills library with its filter.
+  Skills(SkillsFilter),
   NewSkill,
   Skill(ResourceId),
   ImportSkills,
   Tools,
   NewTool,
   Tool(ResourceId, ToolTab),
-  Secrets,
+  Secrets(SecretsView),
   Connections(ConnectionsView),
   NewConnection(NewConnection),
   /// Edit MCP server, the server's id.
   EditConnection(ConnectionId),
-  Settings,
+  Settings(ProjectSettingsTab),
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
 }
@@ -79,14 +86,14 @@ impl ProjectPage {
       Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
-      Screen::Instructions => Self::Instructions,
+      Screen::Instructions => Self::Instructions(InstructionsView::default()),
       Screen::Memory => Self::Memory,
-      Screen::Skills => Self::Skills,
+      Screen::Skills => Self::Skills(SkillsFilter::default()),
       Screen::Tools => Self::Tools,
-      Screen::Secrets => Self::Secrets,
+      Screen::Secrets => Self::Secrets(SecretsView::default()),
       Screen::Connections => Self::Connections(ConnectionsView::default()),
       Screen::NewConnection => Self::NewConnection(NewConnection::default()),
-      Screen::ProjectSettings => Self::Settings,
+      Screen::ProjectSettings => Self::Settings(ProjectSettingsTab::default()),
       Screen::Files => Self::Files(FilesView::default()),
     })
   }
@@ -101,19 +108,19 @@ impl ProjectPage {
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
-      Self::PullRequests(_) | Self::PullRequest(_) => Screen::PullRequests,
+      Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
       Self::Usage(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
-      Self::Agents | Self::Agent(_) => Screen::Agents,
-      Self::Instructions => Screen::Instructions,
+      Self::Agents | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
+      Self::Instructions(_) => Screen::Instructions,
       Self::Memory => Screen::Memory,
-      Self::Skills | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
+      Self::Skills(_) | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
       Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
-      Self::Secrets => Screen::Secrets,
+      Self::Secrets(_) => Screen::Secrets,
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings => Screen::ProjectSettings,
+      Self::Settings(_) => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
     }
   }
@@ -121,6 +128,7 @@ impl ProjectPage {
   pub(super) fn path(&self, project_root: &str) -> String {
     let tasks = format!("{project_root}/{TASKS}");
     let connections = format!("{project_root}/{CONNECTIONS}");
+    let segment = |screen: Screen| project_screen_path(project_root, screen);
     match self {
       Self::Overview(tab) => {
         let tab = (*tab != OverviewTab::default()).then(|| tab.name());
@@ -132,6 +140,7 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
       Self::ImportSkills => with_query(format!("{project_root}/skills"), &[("skill", Some("import"))]),
@@ -143,18 +152,25 @@ impl ProjectPage {
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
-      Self::Agent(id) => format!("{project_root}/agents/{id}"),
+      Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
+      Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
+      Self::Instructions(view) => view.path(segment(Screen::Instructions)),
+      Self::Secrets(view) => view.path(segment(Screen::Secrets)),
+      Self::Settings(tab) => with_query(segment(Screen::ProjectSettings), &[tab.param()]),
       Self::PullRequests(tab) => {
         let tab = (*tab != PullRequestTab::default()).then(|| tab.name());
         with_query(format!("{project_root}/{PULL_REQUESTS}"), &[(TAB, tab)])
       }
-      Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
+      Self::PullRequest(number, file) => with_query(
+        format!("{project_root}/{PULL_REQUESTS}/{number}"),
+        &[(FILE, file.as_deref())],
+      ),
       Self::Usage(query) => super::usage::path(project_root, query),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
-      page => project_screen_path(project_root, page.screen()),
+      page => segment(page.screen()),
     }
   }
 
@@ -174,7 +190,7 @@ impl ProjectPage {
         }
       }
       ["skills"] => match params.take("skill")?.as_deref() {
-        None => Ok(Self::Skills),
+        None => SkillsFilter::take(params).map(Self::Skills),
         Some("new") => Ok(Self::NewSkill),
         Some("import") => Ok(Self::ImportSkills),
         Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
@@ -197,15 +213,22 @@ impl ProjectPage {
         }),
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
-      ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
+      ["agents", NEW] => AgentTab::take(params).map(Self::NewAgent),
+      ["agents", id] => {
+        let id = id.parse().map_err(|_| RouteError::NoScreen)?;
+        AgentTab::take(params).map(|tab| Self::Agent(id, tab))
+      }
+      ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
+      ["secrets"] => SecretsView::take(params).map(Self::Secrets),
+      [SETTINGS] => ProjectSettingsTab::take(params).map(Self::Settings),
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
       )),
       [USAGE] => super::usage::take(params).map(|query| Self::Usage(Box::new(query))),
-      [PULL_REQUESTS, number] => number
-        .parse::<NonZeroU64>()
-        .map(Self::PullRequest)
-        .map_err(|_| RouteError::NoScreen),
+      [PULL_REQUESTS, number] => {
+        let number = number.parse::<NonZeroU64>().map_err(|_| RouteError::NoScreen)?;
+        Ok(Self::PullRequest(number, params.take(FILE)?))
+      }
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),

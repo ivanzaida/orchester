@@ -1,19 +1,17 @@
-//! Presentation state for Instructions fePhH; instruction validation stays in workspace.
+//! Presentation state for Instructions fePhH; instruction validation stays in workspace. The scope tab and
+//! the rule shown are the route's ([`View`]), so Back and Forward step through them.
 use lurq::{app::component::DevtoolsInspectable, core::Signal};
-use orchester_core::{id::ResourceId, resource::InstructionScope};
+use orchester_core::{id::ProjectId, resource::InstructionScope};
 use orchester_workspace::instructions::data::InstructionEntry;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tab {
-  #[default]
-  Project,
-  Roles,
-  Pipelines,
-  Steps,
-}
-impl DevtoolsInspectable for Tab {}
+pub use crate::routes::{InstructionsTab as Tab, InstructionsView as View};
+use crate::{
+  navigation::Navigation,
+  routes::{ProjectPage, Route},
+};
+
+/// What the screen says about a scope tab.
 impl Tab {
-  pub const ALL: [Self; 4] = [Self::Project, Self::Roles, Self::Pipelines, Self::Steps];
   pub const fn of(scope: &InstructionScope) -> Self {
     match scope {
       InstructionScope::Project => Self::Project,
@@ -31,28 +29,14 @@ impl Tab {
     }
   }
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum View {
-  Rule(Tab, Option<ResourceId>),
-  New(Tab),
-  Import,
-}
-impl DevtoolsInspectable for View {}
-impl View {
-  /// The scope tab a rule or a new rule is in; the import page has none.
-  pub const fn tab(self) -> Option<Tab> {
-    match self {
-      Self::Rule(tab, _) | Self::New(tab) => Some(tab),
-      Self::Import => None,
-    }
-  }
-}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Saved(pub Option<InstructionEntry>);
 impl DevtoolsInspectable for Saved {}
 #[derive(Clone)]
 pub struct Selection {
-  pub view: Signal<View>,
+  pub project: ProjectId,
+  pub navigation: Navigation,
+  /// A view chosen while the rule shown has edits it must not lose, until the person answers.
   pub pending: Signal<Option<View>>,
   pub created: Signal<Saved>,
   pub dirty: Signal<bool>,
@@ -60,12 +44,36 @@ pub struct Selection {
   pub full: Signal<bool>,
 }
 impl Selection {
+  /// The view the route shows now.
+  pub fn now(&self) -> View {
+    match self.navigation.route_now() {
+      Route::Project(_, ProjectPage::Instructions(view)) => view,
+      _ => View::default(),
+    }
+  }
+  /// A view the person chose; held for the leave question while the rule shown has unsaved edits.
   pub fn open(&self, view: View) {
     if self.dirty.get_untracked() || self.busy.get_untracked() {
       self.pending.set(Some(view));
     } else {
-      self.full.set(false);
-      self.view.set(view);
+      self.show(view);
     }
+  }
+  /// Goes to `view`, as a new entry of the tab's history.
+  pub fn show(&self, view: View) {
+    self.full.set(false);
+    self.navigation.go(self.route(view));
+  }
+  /// *Cancel*: shows `view`, leaving no entry for the page it closes.
+  pub fn close(&self, view: View) {
+    self.full.set(false);
+    self.navigation.close_panel(self.route(view));
+  }
+  /// The rule a new rule became once saved, in the new rule's place.
+  pub fn saved(&self, view: View) {
+    self.navigation.replace(self.route(view));
+  }
+  fn route(&self, view: View) -> Route {
+    Route::Project(self.project, ProjectPage::Instructions(view))
   }
 }

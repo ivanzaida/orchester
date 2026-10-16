@@ -1,6 +1,7 @@
 //! Where the Usage page is: a project's page (`/project/<id>/usage`, `CFRdj`) or every project's, the
 //! *Usage* tab of All projects (`/usage`, `rHA8G`), which reads every listed project without starting a
-//! runner. A change of the query takes the tab's current entry's place.
+//! runner. A query a person chooses (period, grouping, filter, breakdown) is a new entry of the tab's
+//! history.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -60,7 +61,7 @@ impl Place {
   }
 }
 
-/// Goes to the page showing another query, in the tab's current entry.
+/// Goes to the page showing another query, as a new entry of the tab's history.
 #[derive(Clone)]
 pub struct Requery {
   navigation: Navigation,
@@ -70,7 +71,7 @@ pub struct Requery {
 impl Requery {
   pub fn show(&self, query: UsageQuery) {
     let query = Box::new(query);
-    self.navigation.replace(match self.project {
+    self.navigation.go(match self.project {
       Some(project) => Route::Project(project, ProjectPage::Usage(query)),
       None => Route::Usage(query),
     });

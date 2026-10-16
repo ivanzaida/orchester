@@ -14,12 +14,16 @@
 //! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
-//! `/project/<id>/pull-requests/<number>`. A tab, source or kind left out of the query is the one the screen opens on.
+//! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Secrets, the Skills
+//! library, an agent profile, Instructions and Project settings keep their tab, filter, item and panel in
+//! the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`], [`InstructionsView`],
+//! [`ProjectSettingsTab`]). A tab, source or kind left out of the query is the one the screen opens on.
 //!
-//! Another screen or another tab (`tab`, a task's `<tab>`) is a new entry of the tab's history
-//! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
-//! current entry's place (`Navigation::replace`), so Back leaves the screen instead of replaying it; so does
-//! the connection Connections shows in its inspector (`selected`).
+//! Every place a person chooses — another screen, tab, filter, item or panel — is a new entry of the tab's
+//! history (`Navigation::go`), so Back returns to it as in a browser. Only what chooses no place takes the
+//! current entry's place (`Navigation::replace`): a route the app corrects (`highlight` after a Create, a
+//! saved draft's id, a removed item) and the Tasks list's search `q` as it is typed; a closed panel leaves
+//! no entry behind (`Navigation::close_panel`).
 //!
 //! A project is named by its id (`orchester_core::id::ProjectId`), not its key or name: the id never
 //! changes, so a path a tab keeps still finds its project after a rename or a new key. A task is named
@@ -27,15 +31,20 @@
 //! as a [`RouteError`] that says why.
 
 mod accounts;
+mod agents;
 mod connections;
 mod error;
 mod files;
+mod instructions;
 mod orchester;
 mod orchestrator;
 mod overview;
 mod page;
+mod project_settings;
 mod query;
 mod screen;
+mod secrets;
+mod skills;
 mod table;
 mod task;
 mod tasks;
@@ -50,14 +59,19 @@ use orchester_workspace::usage::UsageQuery;
 use self::query::{Params, with_query};
 pub use self::{
   accounts::{AccountsPanel, AccountsView},
+  agents::AgentTab,
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
+  instructions::{InstructionsTab, InstructionsView},
   orchester::{OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
+  project_settings::ProjectSettingsTab,
   screen::Screen,
+  secrets::{SecretsPanel, SecretsTab, SecretsView},
+  skills::SkillsFilter,
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},
   tasks::{TaskList, TaskListTab},
@@ -136,9 +150,9 @@ impl Route {
     match self {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::PullRequest(..)) => PULL_REQUEST_PATTERN.to_owned(),
       Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }

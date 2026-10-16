@@ -18,14 +18,11 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::{
-  state::{Panel, View},
-  words, work,
-};
+use super::{state::View, words, work};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route},
+  routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, SecretsPanel},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsSpacing, SecretsText},
   ui::{
@@ -72,7 +69,7 @@ impl Component for Inspector {
     let project = ctx.props::<Props>().project.open.project.id();
     ctx.watch(&action.state(), move |state| {
       if state.is_fulfilled() {
-        view.panel.set(Panel::Inspect);
+        view.settled();
         if matches!(state.data, Some(work::Outcome::Saved(_))) {
           // Every screen that shows the project's secrets and connections reads them again, this one too.
           changes.record(project, Outside::Connections);
@@ -162,14 +159,14 @@ impl Inspector {
       .into()
   }
   fn buttons(&self, ctx: &mut Ctx, props: &Props, action: &work::Action, pending: bool) -> Row {
-    let panel = props.view.panel.clone();
+    let (view, id) = (props.view.clone(), props.secret.id());
     let left = if props.archive {
       ActionButton::new("secret-archive-cancel", ButtonKind::Secondary, ctx.t("secrets.cancel"))
-        .on_click(move || panel.set(Panel::Inspect))
+        .on_click(move || view.close_panel())
     } else {
       ActionButton::new("secret-replace", ButtonKind::Secondary, ctx.t("secrets.replace"))
         .icon(Icon::RefreshCw)
-        .on_click(move || panel.set(Panel::Replace))
+        .on_click(move || view.open(SecretsPanel::Replace, Some(id)))
     };
     let right = ActionButton::new(
       "secret-archive",
@@ -206,11 +203,8 @@ impl Inspector {
         })
       })
     } else {
-      let (panel, selected, id) = (props.view.panel.clone(), props.view.selected.clone(), props.secret.id());
-      right.on_click(move || {
-        selected.set(super::state::Selected(Some(id)));
-        panel.set(Panel::Archive);
-      })
+      let (view, id) = (props.view.clone(), props.secret.id());
+      right.on_click(move || view.open(SecretsPanel::Archive, Some(id)))
     };
     let row = Row::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Sm);
     let row = if props.archive {

@@ -235,7 +235,7 @@ impl ConnectionsScreen {
     Arc::new(move |connection| {
       asking.set(Asking(None));
       let view = ConnectionsView::new(view.tab()).with_selected(connection);
-      navigation.replace(Route::Project(id, ProjectPage::Connections(view)));
+      navigation.go(Route::Project(id, ProjectPage::Connections(view)));
     })
   }
 

@@ -32,7 +32,7 @@ use orchester_workspace::{
 use super::{widens, words::View};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView, ToolTab},
+  routes::{AgentTab, InstructionsView, ProjectPage, Route, TaskTab, TaskView, ToolTab},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
   ui::pressable::pressable,
 };
@@ -123,8 +123,8 @@ pub(super) fn draft_route(project: ProjectId, publication: (Publishing, orcheste
     project,
     match of {
       Publishing::Pipeline => ProjectPage::Pipeline(resource),
-      Publishing::Profile => ProjectPage::Agent(resource),
-      Publishing::Instruction => ProjectPage::Instructions,
+      Publishing::Profile => ProjectPage::Agent(resource, AgentTab::default()),
+      Publishing::Instruction => ProjectPage::Instructions(InstructionsView::default()),
       Publishing::Skill => ProjectPage::Skill(resource),
       Publishing::Tool => ProjectPage::Tool(resource, ToolTab::default()),
     },

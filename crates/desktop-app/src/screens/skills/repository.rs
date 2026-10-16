@@ -357,7 +357,7 @@ impl Import {
     .variant(TypographyStyle::Caption);
     let back = p.view.panel.clone();
     let cancel = ActionButton::new("skills-back", ButtonKind::Secondary, ctx.t("skills.cancel"))
-      .on_click(move || back.set(Panel::Library));
+      .on_click(move || back.close(Panel::LIBRARY));
     let cancel = if pending { cancel.disabled() } else { cancel };
     Row::new()
       .id("skill-import-footer")
@@ -379,7 +379,7 @@ impl Import {
       "skill-import-crumb",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::Library)),
+        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::LIBRARY)),
         Crumb::here(ctx.t("skills.import")),
       ],
     );

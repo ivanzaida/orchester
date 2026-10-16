@@ -213,7 +213,7 @@ fn detail_tabs(ctx: &mut Ctx, props: &Props) -> Element {
   let navigation = Navigation::of(ctx);
   let to = |panel: OrchesterPanel| {
     let navigation = navigation.clone();
-    move || navigation.replace(Route::Orchester(OrchesterView { server: None, panel }))
+    move || navigation.go(Route::Orchester(OrchesterView { server: None, panel }))
   };
   let waiting = props.invites.waiting();
   let invites_label = if waiting > 0 {

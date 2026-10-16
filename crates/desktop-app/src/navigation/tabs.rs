@@ -4,7 +4,9 @@
 
 use std::fmt;
 
-use crate::routes::Route;
+use orchester_core::id::ProjectId;
+
+use crate::routes::{Route, Screen};
 
 /// The places a tab remembers; going somewhere past it forgets the oldest.
 pub const HISTORY_LIMIT: usize = 50;
@@ -28,18 +30,21 @@ impl fmt::Display for TabId {
   }
 }
 
-/// One tab: the places it has been, and where in them it is.
+/// One tab: the places it has been, where in them it is, and the project it was in last.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tab {
   id: TabId,
   history: Vec<Route>,
   at: usize,
+  /// The project of the last place the tab showed in one, kept while it shows places outside projects.
+  last_project: Option<ProjectId>,
 }
 
 impl Tab {
   fn new(id: TabId, route: Route) -> Self {
     Self {
       id,
+      last_project: route.project(),
       history: vec![route],
       at: 0,
     }
@@ -51,6 +56,17 @@ impl Tab {
 
   pub fn route(&self) -> &Route {
     &self.history[self.at]
+  }
+
+  /// The project the sidebar shows: the route's, and on the app's Settings, which belong to no project,
+  /// the one the tab was in last; `None` when the tab has not been in a project.
+  pub fn sidebar_project(&self) -> Option<ProjectId> {
+    let route = self.route();
+    match route.project() {
+      Some(project) => Some(project),
+      None if route.screen() == Screen::Settings => self.last_project,
+      None => None,
+    }
   }
 
   pub fn can_back(&self) -> bool {
@@ -73,7 +89,7 @@ impl Tab {
       self.history.remove(0);
     }
     self.at = self.history.len() - 1;
-    true
+    self.arrived()
   }
 
   /// Puts `route` in place of the current entry, keeping the entries behind and ahead of it; `false`
@@ -83,7 +99,22 @@ impl Tab {
       return false;
     }
     self.history[self.at] = route;
-    true
+    self.arrived()
+  }
+
+  /// Leaves the current entry for `route`: drops the entry when the one behind it is `route`, so neither
+  /// Back nor Forward comes to it again, and puts `route` in its place otherwise; `false` when the tab is
+  /// there already.
+  fn close_panel(&mut self, route: Route) -> bool {
+    if *self.route() == route {
+      return false;
+    }
+    if self.at > 0 && self.history[self.at - 1] == route {
+      self.history.remove(self.at);
+      self.at -= 1;
+      return self.arrived();
+    }
+    self.replace(route)
   }
 
   fn back(&mut self) -> bool {
@@ -91,7 +122,7 @@ impl Tab {
       return false;
     }
     self.at -= 1;
-    true
+    self.arrived()
   }
 
   fn forward(&mut self) -> bool {
@@ -99,6 +130,14 @@ impl Tab {
       return false;
     }
     self.at += 1;
+    self.arrived()
+  }
+
+  /// Remembers the project of the place the tab shows now, if it is in one; `true`, as the tab moved.
+  fn arrived(&mut self) -> bool {
+    if let Some(project) = self.route().project() {
+      self.last_project = Some(project);
+    }
     true
   }
 }
@@ -148,6 +187,12 @@ impl TabSet {
   /// the places ahead; `false` when the tab is there already.
   pub fn replace(&mut self, route: Route) -> bool {
     self.tabs[self.active].replace(route)
+  }
+
+  /// Leaves the active tab's current place, a panel, for `route`: back to it when the tab came from there,
+  /// dropping the panel's entry, and in its place otherwise; `false` when the tab is there already.
+  pub fn close_panel(&mut self, route: Route) -> bool {
+    self.tabs[self.active].close_panel(route)
   }
 
   pub fn back(&mut self) -> bool {

@@ -30,7 +30,10 @@ use super::{
   operations::{Operations, OperationsProps},
 };
 use crate::{
-  routes::{ConnectionsView, OverviewTab, ProjectPage, Route, TaskList, TaskView},
+  routes::{
+    ConnectionsView, InstructionsView, OverviewTab, ProjectPage, ProjectSettingsTab, Route, SecretsView, SkillsFilter,
+    TaskList, TaskView,
+  },
   shell::clock::{Clock, clock},
   theme::ExtraSpacing,
   ui::{icon::Icon, message::message_text},
@@ -256,15 +259,15 @@ fn page(place: Place, project: &ProjectFacts) -> Option<ProjectPage> {
     Place::Tasks => ProjectPage::Tasks(TaskList::default()),
     Place::PullRequests => ProjectPage::PullRequests(PullRequestTab::default()),
     Place::Pipeline(_) => ProjectPage::Pipelines,
-    Place::Instruction(_) => ProjectPage::Instructions,
-    Place::Skill(_) => ProjectPage::Skills,
+    Place::Instruction(_) => ProjectPage::Instructions(InstructionsView::default()),
+    Place::Skill(_) => ProjectPage::Skills(SkillsFilter::default()),
     Place::Task(task) => ProjectPage::Task(task_key(project, task)?, TaskView::Summary),
     Place::TaskConversation(task) => ProjectPage::Task(task_key(project, task)?, TaskView::Conversation),
     Place::AgentProfile(_) => ProjectPage::Agents,
     Place::Tool(_) => ProjectPage::Tools,
-    Place::Secrets => ProjectPage::Secrets,
+    Place::Secrets => ProjectPage::Secrets(SecretsView::default()),
     Place::Connections => ProjectPage::Connections(ConnectionsView::default()),
-    Place::Settings => ProjectPage::Settings,
+    Place::Settings => ProjectPage::Settings(ProjectSettingsTab::default()),
   })
 }
 

@@ -75,18 +75,25 @@ impl Navigation {
     self.tabs.with_untracked(|tabs| tabs.active().route().clone())
   }
 
-  /// Goes to `route` in the active tab, as a new history entry: another screen, or another tab of one
-  /// (the Tasks list's or the Overview's workflow tab, a task's Summary, Conversation or Changes).
+  /// Goes to `route` in the active tab, as a new history entry, as a browser does: for every place a
+  /// person chooses — another screen, another tab of one (`PageTab`), a filter, an item of a list or a
+  /// panel — so Back returns to the one before and Forward comes back.
   pub fn go(&self, route: Route) {
     self.change(|tabs| tabs.go(route));
   }
 
   /// Shows `route` in place of the active tab's current place, without a history entry and keeping the
-  /// places ahead: for what a screen refines while it stays on its tab, so Back leaves the screen rather
-  /// than stepping through it (the Tasks list's search `q` as it is typed and its `highlight`, the file
-  /// the Changes tab shows).
+  /// places ahead: only where no new place is chosen — a route the app corrects (a removed item, a saved
+  /// draft that got its id, a new tab's first place) and a search refined as it is typed, which would
+  /// otherwise add an entry per keystroke.
   pub fn replace(&self, route: Route) {
     self.change(|tabs| tabs.replace(route));
+  }
+
+  /// Closes a panel (*Cancel*, *Finish later*) for `route` without leaving a dead entry: back to `route`
+  /// when the panel was opened from it, dropping the panel's entry, and in the panel's place otherwise.
+  pub fn close_panel(&self, route: Route) {
+    self.change(|tabs| tabs.close_panel(route));
   }
 
   pub fn back(&self) {

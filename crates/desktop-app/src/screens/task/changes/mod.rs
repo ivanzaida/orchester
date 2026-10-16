@@ -2,8 +2,8 @@
 //! toolbar names the run's base and its latest checkpoint; the file list (`qT0kd`) holds the files of the
 //! run's diff from its base to that checkpoint, then what its worktree holds beyond it, listed apart as
 //! not checkpointed; beside it, the selected file's unified diff with line numbers and syntax colors
-//! (`RsPIH`). The file shown is part of the path (`?file=`, `&from=worktree`), and choosing another takes
-//! the current entry's place in the tab's history.
+//! (`RsPIH`). The file shown is part of the path (`?file=`, `&from=worktree`), and choosing another is a
+//! new entry of the tab's history.
 //!
 //! The task page's frame owns the reads ([`ChangesReads::new`] in its `create`, provided to its parts
 //! with `ctx.provide`) and reads with them on every render ([`ChangesReads::read`] with [`Follow::of`]);
@@ -348,7 +348,7 @@ impl ChangesTab {
     items
   }
 
-  /// Choosing a file shows it in place of the current one in the tab's history.
+  /// Choosing a file shows it as a new entry of the tab's history.
   fn select(&self, props: &ChangesProps) -> files::SelectFile {
     let navigation = self.navigation.clone();
     let (project, key) = (props.project, props.detail.task.key().clone());
@@ -356,7 +356,7 @@ impl ChangesTab {
       move |listed: &Listed| match ChangedFile::new(listed.path.to_string(), listed.source) {
         Ok(file) => {
           let page = ProjectPage::Task(key.clone(), TaskView::Changes(Some(file)));
-          navigation.replace(Route::Project(project, page));
+          navigation.go(Route::Project(project, page));
         }
         Err(error) => tracing::error!(%error, "a listed file has no path"),
       },

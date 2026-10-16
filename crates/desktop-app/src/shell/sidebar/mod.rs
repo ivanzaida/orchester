@@ -1,8 +1,9 @@
 //! The sidebar (`Sidebar` `ev8rR`): the project switcher, the project's screens with the Configure
 //! section, the runs under way (`running`), and All projects, Settings and Project settings at the
 //! bottom. Tasks shows how many tasks the project has, a dash while they are read, and Memory how many
-//! records wait for approval. Outside a project (Settings) only the switcher and the bottom group show;
-//! All projects and Add project have no sidebar.
+//! records wait for approval. The project is the tab's (`Tab::sidebar_project`): on the app's Settings the
+//! one the tab was in last, with Settings selected; a tab that has been in no project shows only the
+//! switcher and the bottom group. All projects and Add project have no sidebar.
 
 pub mod running;
 pub mod switcher;
@@ -48,7 +49,7 @@ impl Component for Sidebar {
     let route = Route::parse(&ctx.route_path()).ok();
     let navigation = Navigation::of(ctx);
     let selected = route.as_ref().map(Route::nav_screen);
-    let project = route.as_ref().and_then(Route::project);
+    let project = navigation.tabs().active().sidebar_project();
     let switcher = ctx.mount_keyed::<Switcher>("project-switcher", SwitcherProps { project });
     let mut sidebar = Column::new()
       .id("sidebar")

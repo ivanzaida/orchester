@@ -18,10 +18,11 @@ use orchester_core::{
 use orchester_workspace::secrets::data::ProjectSecrets;
 
 use super::{
-  state::{EnvironmentChoice, Panel, View},
+  state::{EnvironmentChoice, View},
   words,
 };
 use crate::{
+  routes::SecretsPanel,
   theme::{ExtraSpacing, IconSize, SecretsSpacing, SecretsText},
   ui::{
     avatar::credential_avatar,
@@ -102,7 +103,7 @@ pub(super) fn column(ctx: &mut Ctx, listed: &ProjectSecrets, view: &View, select
 }
 
 fn project_empty(ctx: &Ctx, view: &View) -> Element {
-  let panel = view.panel.clone();
+  let add = view.clone();
   EmptyState::new(
     "secrets-empty",
     Icon::KeyRound,
@@ -113,7 +114,7 @@ fn project_empty(ctx: &Ctx, view: &View) -> Element {
   .action(
     ActionButton::new("secrets-empty-add", ButtonKind::Primary, ctx.t("secrets.add"))
       .icon(Icon::Plus)
-      .on_click(move || panel.set(Panel::Add)),
+      .on_click(move || add.open(SecretsPanel::Add, None)),
   )
   .action(
     ActionButton::new("secrets-empty-import", ButtonKind::Secondary, ctx.t("secrets.import"))
@@ -285,8 +286,8 @@ impl Component for SecretRow {
             PaletteColor::TextSecondary
           })),
       );
-    let id = secret.id();
-    row = row.on_open(move || props.view.inspect(id));
+    let (id, environment) = (secret.id(), secret.environment());
+    row = row.on_open(move || props.view.reveal(id, environment));
     if props.selected == Some(id) {
       row = row.selected();
     }

@@ -101,13 +101,19 @@ pub fn header(
     .into()
 }
 
-pub fn empty(ctx: &mut Ctx, project: &ShownProject, data: &ProjectInstructions, selection: &Selection) -> Element {
+pub fn empty(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  (data, tab): (&ProjectInstructions, Tab),
+  selection: &Selection,
+) -> Element {
   ctx.mount_keyed::<super::empty::Empty>(
     "instructions-empty",
     super::empty::Props {
       project: project.clone(),
       selection: selection.clone(),
       all_empty: data.entries.is_empty(),
+      tab,
     },
   )
 }

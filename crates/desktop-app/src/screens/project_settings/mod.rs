@@ -16,11 +16,13 @@ use lurq::{
   node::Element,
 };
 
-use crate::project::ShownProject;
+use crate::{project::ShownProject, routes::ProjectSettingsTab as Tab};
 
 #[derive(Clone, PartialEq)]
 pub struct Props {
   pub project: ShownProject,
+  /// The tab the route names.
+  pub tab: Tab,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -44,19 +46,12 @@ pub(super) enum Status {
   Failed,
 }
 impl DevtoolsInspectable for Status {}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Tab {
-  General,
-  Limits,
-  Environment,
-  CodeIndex,
-  Sharing,
-}
-impl DevtoolsInspectable for Tab {}
+/// What the screen says about a tab; the tabs themselves are the route's ([`Tab`]).
 impl Tab {
-  /// The tabs before *Memory*, which is not built yet; *Sharing* comes after it ([`Self::SHARING`]).
-  pub const ALL: [Self; 4] = [Self::General, Self::Limits, Self::Environment, Self::CodeIndex];
-  pub const fn name(self) -> &'static str {
+  /// The tabs before *Memory*, which is not built yet; *Sharing* comes after it.
+  pub(super) const BEFORE_MEMORY: [Self; 4] = [Self::General, Self::Limits, Self::Environment, Self::CodeIndex];
+  /// The tab's part of its element id (`settings-tab-codeIndex`).
+  pub(super) const fn element(self) -> &'static str {
     match self {
       Self::General => "general",
       Self::Limits => "limits",
@@ -65,7 +60,7 @@ impl Tab {
       Self::Sharing => "sharing",
     }
   }
-  pub const fn key(self) -> &'static str {
+  pub(super) const fn key(self) -> &'static str {
     match self {
       Self::General => "project_settings.general",
       Self::Limits => "project_settings.limits",
@@ -74,7 +69,7 @@ impl Tab {
       Self::Sharing => "project_settings.sharing",
     }
   }
-  pub const fn description(self) -> &'static str {
+  pub(super) const fn description(self) -> &'static str {
     match self {
       Self::General => "project_settings.generalDescription",
       Self::Limits => "project_settings.limitsDescription",
@@ -85,25 +80,22 @@ impl Tab {
   }
 }
 struct SettingsScreen {
-  tab: Signal<Tab>,
   status: Signal<Status>,
 }
 impl Component for SettingsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      tab: ctx.signal(Tab::General),
       status: ctx.signal(Status::Saved),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let project = ctx.props::<Props>().project.clone();
+    let Props { project, tab } = ctx.props::<Props>().clone();
     let props = TabProps {
       project: project.clone(),
       status: self.status.clone(),
     };
-    let tab = self.tab.get();
-    let header = page::header(ctx, (&project, tab), &self.tab, &self.status);
+    let header = page::header(ctx, (&project, tab), &self.status);
     let content = match tab {
       Tab::General => ctx.mount_keyed::<general::General>("project-settings-general", props),
       Tab::Limits => ctx.mount_keyed::<limits::Limits>("project-settings-limits", props),
@@ -114,11 +106,12 @@ impl Component for SettingsScreen {
     page::screen(header, content)
   }
 }
-pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: Tab) -> Element {
   ctx.mount_keyed::<SettingsScreen>(
     &format!("project-settings-{}", project.open.project.id()),
     Props {
       project: project.clone(),
+      tab,
     },
   )
 }

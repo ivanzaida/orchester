@@ -12,7 +12,9 @@ use lurq::{
 
 use super::{Status, Tab};
 use crate::{
+  navigation::Navigation,
   project::ShownProject,
+  routes::{ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, TaskFormSpacing},
   ui::{
     form_section::{Label, Place, side_row},
@@ -24,12 +26,7 @@ use crate::{
 pub const WIDTH: f32 = 720.0;
 pub const CONTROL_WIDTH: f32 = 300.0;
 
-pub fn header(
-  ctx: &mut Ctx,
-  (project, tab): (&ShownProject, Tab),
-  selected: &Signal<Tab>,
-  status: &Signal<Status>,
-) -> Element {
+pub fn header(ctx: &mut Ctx, (project, tab): (&ShownProject, Tab), status: &Signal<Status>) -> Element {
   let save_status = save_status(ctx, status);
   let title = Row::new()
     .width(Dimension::Pct(100.0))
@@ -38,27 +35,25 @@ pub fn header(
     .child(Text::new(&ctx.t("project_settings.title")).variant(TypographyStyle::Heading))
     .child(Spacer::new().flex(1.0))
     .child(save_status);
+  let navigation = Navigation::of(ctx);
+  let id = project.open.project.id();
   let tab_for = |ctx: &Ctx, choice: Tab| {
-    let select = selected.clone();
     if tab != choice && status.get() != Status::Saved {
       return PageTab::unavailable(
-        format!("settings-tab-{}", choice.name()),
+        format!("settings-tab-{}", choice.element()),
         ctx.t(choice.key()),
         ctx.t("project_settings.finishEditing"),
       );
     }
+    let navigation = navigation.clone();
     PageTab::new(
-      format!("settings-tab-{}", choice.name()),
+      format!("settings-tab-{}", choice.element()),
       ctx.t(choice.key()),
       tab == choice,
-      move || {
-        if tab != choice {
-          select.set(choice);
-        }
-      },
+      move || navigation.go(Route::Project(id, ProjectPage::Settings(choice))),
     )
   };
-  let tabs = Tab::ALL
+  let tabs = Tab::BEFORE_MEMORY
     .into_iter()
     .map(|choice| tab_for(ctx, choice))
     .chain([
