@@ -16,7 +16,7 @@ use tokio::runtime::Runtime;
 
 use super::{
   State,
-  account_cloud::{EMAIL, PASSWORD},
+  account_cloud::{EMAIL, OTHER_EMAIL, PASSWORD},
   backends::Backends,
   project,
 };
@@ -38,6 +38,17 @@ pub fn seed(
   let settings = |panel| Route::Orchester(OrchesterView { server: None, panel });
   if matches!(state, State::Project | State::LinkConfirm | State::Linked) {
     return project::seed(state, (backends, services, workspace), (runtime, folder));
+  }
+  if state == State::OtherAccount {
+    project::seed(State::Linked, (backends, services, workspace), (runtime, folder))?;
+    runtime.block_on(async {
+      cloud.sign_out().await?;
+      cloud
+        .sign_in(OTHER_EMAIL.into(), Credential::new(PASSWORD.into()))
+        .await?;
+      Ok::<_, Box<dyn Error>>(())
+    })?;
+    return Ok(settings(OrchesterPanel::Account));
   }
   if state == State::SignedIn {
     backends.invite_to_billing();

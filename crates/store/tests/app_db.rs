@@ -255,7 +255,7 @@ fn ui_state_and_servers_are_added_to_a_database_of_schema_1() {
 
   let mut db = AppDb::open(&path).expect("migrate");
   db.set_ui_state("tabs", "saved").expect("store");
-  db.add_server(&server("https://orchester.kontur.lan", 2))
+  db.add_server(&server("https://orchester.kontur.lan", 2), None)
     .expect("add a server");
   assert_eq!(db.projects_of(None).expect("list").len(), 1, "the projects are kept");
   drop(db);
@@ -288,10 +288,10 @@ fn servers_are_added_to_a_database_of_schema_2_and_its_rows_are_kept() {
   assert_eq!(db.ui_state("tabs").expect("read").as_deref(), Some("kontur"));
   let (_, previous) = db.start_session(8, at(3)).expect("start");
   assert_eq!(previous, PreviousSession::Ended(SessionEnd::RunsPaused));
-  assert_eq!(db.servers().expect("list"), []);
+  assert_eq!(db.servers_of(None).expect("list"), []);
   let kontur = server("https://orchester.kontur.lan", 4);
-  db.add_server(&kontur).expect("add a server");
-  assert_eq!(db.servers().expect("list"), [kontur]);
+  db.add_server(&kontur, None).expect("add a server");
+  assert_eq!(db.servers_of(None).expect("list"), [kontur]);
   drop(db);
   assert_eq!(schema_version(&path), current_schema_version());
 }
@@ -322,8 +322,8 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
     plain_http_allowed: true,
     ..server("http://10.0.4.20:8740", 2)
   };
-  db.add_server(&kontur).expect("add Kontur team");
-  db.add_server(&lab).expect("add the lab");
+  db.add_server(&kontur, None).expect("add Kontur team");
+  db.add_server(&lab, None).expect("add the lab");
   let account = ServerAccount {
     user: UserId::generate(),
     username: "bohdan".to_owned(),
@@ -336,7 +336,7 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
   drop(db);
 
   let mut db = AppDb::open(&path).expect("reopen");
-  let servers = db.servers().expect("list");
+  let servers = db.servers_of(None).expect("list");
   assert_eq!(servers.len(), 2);
   assert_eq!(servers[0].url, "https://orchester.kontur.lan");
   assert_eq!(servers[0].name, "Kontur");
@@ -347,11 +347,11 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
   assert_eq!(servers[1].account, None);
 
   db.set_server_account(kontur.id, None).expect("sign out");
-  assert_eq!(db.servers().expect("list")[0].account, None);
+  assert_eq!(db.servers_of(None).expect("list")[0].account, None);
   // A server that presents a certificate the person confirmed again is trusted by its new pin.
   db.set_server_trust(lab.id, Some(&"c0".repeat(32)), false)
     .expect("pin the lab");
-  let lab = db.servers().expect("list").remove(1);
+  let lab = db.servers_of(None).expect("list").remove(1);
   assert_eq!(
     (lab.certificate_pin, lab.plain_http_allowed),
     (Some("c0".repeat(32)), false)
@@ -362,14 +362,15 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
 fn servers_refuse_an_address_twice_and_an_unknown_server() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  db.add_server(&server("https://orchester.kontur.lan", 1)).expect("add");
-  assert!(db.add_server(&server("https://orchester.kontur.lan", 2)).is_err());
+  db.add_server(&server("https://orchester.kontur.lan", 1), None)
+    .expect("add");
+  assert!(db.add_server(&server("https://orchester.kontur.lan", 2), None).is_err());
   let unknown = ServerId::generate();
   assert!(matches!(
     db.set_server_name(unknown, "Lab"),
     Err(StoreError::ServerNotFound(id)) if id == unknown
   ));
-  assert_eq!(db.servers().expect("list").len(), 1);
+  assert_eq!(db.servers_of(None).expect("list").len(), 1);
 }
 
 #[test]
@@ -487,11 +488,11 @@ fn servers_keep_how_this_computer_joined_them() {
     ..server("https://orchester.kontur.lan", 1)
   };
   let lab = server("http://10.0.4.20:8740", 2);
-  db.add_server(&kontur).expect("add Kontur team");
-  db.add_server(&lab).expect("add the lab");
+  db.add_server(&kontur, None).expect("add Kontur team");
+  db.add_server(&lab, None).expect("add the lab");
   db.set_server_joined_with(lab.id, JoinedWith::Code)
     .expect("joined with a code");
-  let servers = db.servers().expect("servers");
+  let servers = db.servers_of(None).expect("servers");
   assert_eq!(servers[0].joined_with, Some(JoinedWith::Cloud(audience)));
   assert_eq!(servers[1].joined_with, Some(JoinedWith::Code));
 }

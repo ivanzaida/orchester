@@ -55,7 +55,7 @@ impl Cloud {
     address: &ServerAddress,
     linked: Option<TeamServerId>,
   ) -> Result<ServerJoin, CloudError> {
-    let (client, token) = self.signed_in().await?;
+    let (client, token, account) = self.signed_in().await?;
     let server = match linked {
       Some(id) => {
         self
@@ -77,6 +77,7 @@ impl Cloud {
     let identity = CloudIdentity {
       cloud: &client,
       device: &token,
+      account,
       invite: None,
     };
     match self.servers().join_with_cloud(&server, identity, None).await {

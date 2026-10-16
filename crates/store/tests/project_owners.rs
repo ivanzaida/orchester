@@ -22,6 +22,9 @@ fn project(name: &str) -> Project {
   )
 }
 
+/// The schema version before projects had owners: the migrations up to `owners`.
+const BEFORE_OWNERS: u32 = 15;
+
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
 }
@@ -50,6 +53,20 @@ fn owners_list_and_change_only_their_own_projects() {
   assert_eq!(names(&db, Some(&olena)), ["Ledger"]);
   assert_eq!(names(&db, None), ["Notes"]);
   assert_eq!(db.every_project().expect("all").len(), 3);
+  let owned: Vec<_> = db
+    .owned_projects()
+    .expect("all, with whose")
+    .into_iter()
+    .map(|(owner, project)| (owner, project.name.as_str().to_owned()))
+    .collect();
+  assert_eq!(
+    owned,
+    [
+      (None, "Notes".to_owned()),
+      (Some(olena), "Ledger".to_owned()),
+      (Some(bohdan), "Kontur".to_owned())
+    ]
+  );
 
   let refused = db.register_project(&kontur, Path::new("H:/projects/kontur"), at(9), Some(&olena));
   assert!(
@@ -78,15 +95,7 @@ fn owners_list_and_change_only_their_own_projects() {
 fn owners_of_projects_known_before_are_the_account_signed_in_then() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
-  let current = {
-    let other = dir.path().join("current.db");
-    drop(AppDb::open(&other).expect("create"));
-    rusqlite::Connection::open(&other)
-      .expect("raw connection")
-      .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
-      .expect("schema version")
-  };
-  let raw = AppDb::create_at_version(&path, current - 1).expect("the schema before owners");
+  let raw = AppDb::create_at_version(&path, BEFORE_OWNERS).expect("the schema before owners");
   raw
     .execute(
       "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES (?1, 'Kontur', 'H:/k', 1, 1)",
@@ -115,8 +124,7 @@ fn owners_of_projects_known_before_are_the_account_signed_in_then() {
   let raw = rusqlite::Connection::open(&signed_in).expect("raw connection");
   raw
     .execute_batch(&format!(
-      "ALTER TABLE projects DROP COLUMN owner; PRAGMA user_version = {};",
-      current - 1
+      "ALTER TABLE projects DROP COLUMN owner; PRAGMA user_version = {BEFORE_OWNERS};"
     ))
     .expect("the schema before owners");
   raw
