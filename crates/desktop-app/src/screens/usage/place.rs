@@ -17,8 +17,9 @@ use crate::{
 /// The page's place and what it reads again on.
 #[derive(Clone, PartialEq)]
 pub enum Place {
-  Project(ShownProject),
-  /// Every project's, read again whenever a runner reports (the runners' work revision).
+  /// A project's (boxed: a shown project is far larger than a count).
+  Project(Box<ShownProject>),
+  /// Every project's, read again whenever a listed project's runner reports (how often they reported).
   Everywhere(u64),
 }
 

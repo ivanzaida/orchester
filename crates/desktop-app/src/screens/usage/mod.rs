@@ -63,7 +63,7 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, query: &UsageQuery) -> Elem
   ctx.mount_keyed::<UsageScreen>(
     &key,
     UsageProps {
-      place: Place::Project(project.clone()),
+      place: Place::Project(Box::new(project.clone())),
       query: query.clone(),
     },
   )
