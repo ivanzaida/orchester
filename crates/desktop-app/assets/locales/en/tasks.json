@@ -92,10 +92,10 @@
       "certificateChanged": "Certificate changed · nothing sent",
       "checkCode": "Check the new code",
       "notMember": "Not a member since {{time}} · read-only",
-      "member": "You're a member · {{username}}",
-      "owner": "You're an owner · {{username}}",
-      "admin": "You're an admin there · {{username}}",
-      "wasMember": "You were a member · {{username}}",
+      "member": "You're a member",
+      "owner": "You're an owner",
+      "admin": "You're an admin there",
+      "wasMember": "You were a member",
       "settings": "Sharing settings",
       "readOnly": "Read-only: you're not a member.",
       "removedTitle": "You're no longer a member of {{project}} on {{server}}",
@@ -104,7 +104,8 @@
       "anOwner": "one of its owners",
       "checkAgain": "Check again",
       "makeLocal": "Make local…",
-      "separator": "·"
+      "separator": "·",
+      "withName": "{{role}} · {{username}}"
     }
   }
 }

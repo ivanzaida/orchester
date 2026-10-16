@@ -121,7 +121,7 @@ impl Component for MakeLocal {
             ButtonKind::Secondary,
             ctx.t("sharing.linked.makeLocalButton"),
           )
-          .icon(Icon::Unlink)
+          .icon(Icon::Unplug)
           .on_click(move || open.set(true)),
         ),
       );
@@ -201,7 +201,7 @@ impl MakeLocal {
     } else {
       "sharing.makeLocal.confirm"
     });
-    let confirm = ActionButton::new(CONFIRM, ButtonKind::Danger, label).icon(Icon::Unlink);
+    let confirm = ActionButton::new(CONFIRM, ButtonKind::Danger, label).icon(Icon::Unplug);
     let confirm = if pending {
       confirm.loading()
     } else {

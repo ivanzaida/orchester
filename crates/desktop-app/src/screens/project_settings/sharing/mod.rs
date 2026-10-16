@@ -57,6 +57,8 @@ pub(super) struct Facts {
   pub tasks: usize,
   /// A linked project's `orchester.toml` against its address.
   pub linked_discovery: Option<LinkedDiscovery>,
+  /// A linked project's repository hint as last read, and when, for while the server doesn't say.
+  pub cached_hint: Option<(Option<RepositoryIdentity>, orchester_core::time::Timestamp)>,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -159,6 +161,11 @@ fn read(
   let db = ProjectDb::open(root).map_err(local)?;
   let link = db.sharing().map_err(local)?;
   let tasks = db.tasks().map_err(local)?.len();
+  // A hint that no longer parses is left out; the row then waits for the server's.
+  let cached_hint = db
+    .remote_hint()
+    .map_err(local)?
+    .map(|(hint, checked)| (hint.and_then(|hint| RepositoryIdentity::parse(&hint).ok()), checked));
   let linked_discovery = link
     .as_ref()
     .and_then(|link| link.address.as_deref())
@@ -176,5 +183,6 @@ fn read(
     discovery: discovery::project(root),
     tasks,
     linked_discovery,
+    cached_hint,
   })
 }

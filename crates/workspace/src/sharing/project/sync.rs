@@ -43,6 +43,8 @@ impl ProjectServer {
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
+      let hint = project.remote_hint.as_ref().map(|hint| hint.as_str());
+      store.db.record_remote_hint(hint, Timestamp::now())?;
       if let Some(address) = address {
         store.db.record_project_address(&address)?;
       }

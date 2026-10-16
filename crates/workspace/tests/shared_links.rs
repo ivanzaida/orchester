@@ -103,11 +103,18 @@ fn links_bring_a_project_down_to_a_checkout_without_tasks_and_review_one_with_ta
 }
 
 #[test]
-fn links_keep_the_members_as_last_read_and_plan_make_local() {
+fn links_keep_the_members_and_hint_as_last_read_and_plan_make_local() {
   let server = TestServer::start();
   let alice = shared(&server);
   let members = alice.block_on(alice.server().current_members()).expect("members");
   assert!(members.live);
+  alice.block_on(alice.server().sync()).expect("synced");
+  let (hint, _) = alice.db().remote_hint().expect("hint").expect("read once");
+  assert_eq!(
+    hint.as_deref(),
+    Some("github.com/ivanzaida/kontur"),
+    "the hint is kept as last read"
+  );
   assert_eq!(members.owners().count(), 1);
   let plan = alice.servers.make_local_plan(alice.root()).expect("plan");
   assert_eq!((plan.tasks, plan.not_shared), (3, 0));

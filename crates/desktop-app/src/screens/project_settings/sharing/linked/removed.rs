@@ -69,7 +69,7 @@ pub(super) fn notice(
     ButtonKind::Primary,
     ctx.t("sharing.linked.makeLocalButton"),
   )
-  .icon(Icon::Unlink)
+  .icon(Icon::Unplug)
   .on_click(move || open.set(true));
   Notice::new(
     "sharing-removed",

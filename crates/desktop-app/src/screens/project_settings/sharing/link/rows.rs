@@ -74,7 +74,7 @@ impl Link {
     let (field_value, answered) = (self.address.clone(), self.discovery_answered.clone());
     let use_it = ActionButton::new(
       "sharing-discovery-use",
-      ButtonKind::Secondary,
+      ButtonKind::Primary,
       ctx.t("sharing.link.discovery.use"),
     )
     .on_click(move || {
@@ -88,17 +88,28 @@ impl Link {
       ctx.t("sharing.link.discovery.notNow"),
     )
     .on_click(move || answered.set(true));
+    // The answers stand under the notice, *Use this address* first (`Discovery file · offered` in `N9NFio`).
     Some(
-      Callout::new(
-        "sharing-discovery",
-        CalloutTone::Info,
-        ctx.t("sharing.link.discovery.title"),
-      )
-      .icon(Icon::FileText)
-      .body(ctx.t_args("sharing.link.discovery.body", [("address", address.to_text())]))
-      .action(use_it)
-      .action(not_now)
-      .into(),
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(
+          Callout::new(
+            "sharing-discovery",
+            CalloutTone::Info,
+            ctx.t("sharing.link.discovery.title"),
+          )
+          .icon(Icon::FileText)
+          .body(ctx.t_args("sharing.link.discovery.body", [("address", address.to_text())])),
+        )
+        .child(
+          Row::new()
+            .id("sharing-discovery-answers")
+            .spacing(SpacingSize::Sm)
+            .child(use_it)
+            .child(not_now),
+        )
+        .into(),
     )
   }
 

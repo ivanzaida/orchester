@@ -42,6 +42,11 @@ pub(super) struct Hint {
 impl DevtoolsInspectable for Hint {}
 
 impl Hint {
+  /// The hint as last read at `checked`, for while the server doesn't say; `name` is this project's.
+  pub(super) const fn cached(name: String, hint: Option<RepositoryIdentity>, checked: Timestamp) -> Self {
+    Self { name, hint, checked }
+  }
+
   /// The server project's name.
   pub(super) fn name(&self) -> &str {
     &self.name

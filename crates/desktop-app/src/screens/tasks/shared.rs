@@ -236,9 +236,9 @@ fn dot(color: PaletteColor) -> Row {
     .background(color)
 }
 
-/// *You're a member · oleh*, as the server gives the role.
+/// *You're a member · oleh*, as the server gives the role; without the username once this computer signed out of the
+/// server, which forgets the account.
 fn role(ctx: &Ctx, sharing: &ProjectSharing) -> Row {
-  let username = sharing.username.clone().unwrap_or_default();
   let key = match (sharing.link.removed_at, sharing.link.role) {
     (Some(_), _) => "tasks.shared.wasMember",
     (None, Some(MemberRole::Owner)) => "tasks.shared.owner",
@@ -251,7 +251,13 @@ fn role(ctx: &Ctx, sharing: &ProjectSharing) -> Row {
     .align_items(Alignment::Center)
     .child(icon(Icon::User, IconSize::Base, PaletteColor::TextMuted))
     .child(label(
-      &ctx.t_args(key, [("username", username)]),
+      &match sharing.username.as_deref() {
+        Some(username) => ctx.t_args(
+          "tasks.shared.withName",
+          [("role", ctx.t(key).to_string()), ("username", username.to_owned())],
+        ),
+        None => ctx.t(key),
+      },
       PaletteColor::TextSecondary,
     ))
 }
@@ -308,7 +314,7 @@ pub(super) fn not_member(ctx: &mut Ctx, project: &ShownProject, shared: &Shared)
         ButtonKind::Primary,
         ctx.t("tasks.shared.makeLocal"),
       )
-      .icon(Icon::Unlink)
+      .icon(Icon::Unplug)
       .on_click(move || navigation.go(Route::Project(id, ProjectPage::Sharing { make_local: true }))),
     )
     .into(),

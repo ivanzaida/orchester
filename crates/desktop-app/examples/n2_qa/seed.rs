@@ -152,6 +152,8 @@ fn linked(
   // The members as read once, which Sharing shows as last read while the server is away, and once removed.
   let open = orchester_workspace::sharing::project::ProjectServer::open(&services.servers, repo)?.ok_or("linked")?;
   runtime.block_on(open.current_members())?;
+  // The app's first sync, which keeps the repository hint as last read.
+  runtime.block_on(open.sync())?;
   seeded.route = match state {
     State::Offline | State::MakeLocalOffline | State::TasksOffline => {
       seeded.port.down();

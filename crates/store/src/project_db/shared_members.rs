@@ -21,7 +21,32 @@ pub struct SharedMember {
 }
 
 impl ProjectDb {
-  /// The members as last read, by when they were added, and when that was; `None` until they have been read.
+  /// The repository the server project was set up for as last read (`None` inside: it names none), and when; `None`
+  /// until it has been read.
+  pub fn remote_hint(&self) -> Result<Option<(Option<String>, Timestamp)>, StoreError> {
+    let read: Option<(Option<String>, Option<i64>)> = self
+      .connection
+      .query_row("SELECT remote_hint, remote_hint_read_at FROM sharing", [], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+      })
+      .optional()?;
+    Ok(read.and_then(|(hint, at)| at.map(|at| (hint, Timestamp::from_unix_millis(at)))))
+  }
+
+  /// Records the repository the server project was set up for, as the server answered at `read_at`.
+  pub fn record_remote_hint(&mut self, hint: Option<&str>, read_at: Timestamp) -> Result<(), StoreError> {
+    let updated = self.connection.execute(
+      "UPDATE sharing SET remote_hint = ?1, remote_hint_read_at = ?2",
+      params![hint, read_at.unix_millis()],
+    )?;
+    if updated == 0 {
+      return Err(StoreError::NotShared);
+    }
+    Ok(())
+  }
+
+  /// The members as last read, owners first and then by when they were added, and when that was; `None` until they have
+  /// been read.
   pub fn shared_members(&self) -> Result<Option<(Timestamp, Vec<SharedMember>)>, StoreError> {
     let read_at: Option<i64> = self
       .connection
@@ -32,7 +57,7 @@ impl ProjectDb {
       return Ok(None);
     };
     let mut statement = self.connection.prepare(
-      "SELECT user_id, display_name, username, role, added_at FROM shared_members ORDER BY added_at, display_name",
+      "SELECT user_id, display_name, username, role, added_at FROM shared_members ORDER BY role <> 'owner', added_at, display_name",
     )?;
     let rows = statement.query_map([], |row| {
       Ok((

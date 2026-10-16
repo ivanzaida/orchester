@@ -47,7 +47,9 @@ impl ProjectServer {
     };
     match read {
       Ok(members) => {
-        let members: Vec<SharedMember> = members.into_iter().map(shared_member).collect();
+        let mut members: Vec<SharedMember> = members.into_iter().map(shared_member).collect();
+        // Owners first, then by when they were added, as the cache keeps them.
+        members.sort_by_key(|member| (member.role != MemberRole::Owner, member.added_at));
         let (kept, read_at) = (members.clone(), Timestamp::now());
         background::run(move || ProjectDb::open(&root)?.record_shared_members(&kept, read_at)).await??;
         Ok(ProjectMembers {

@@ -1,5 +1,6 @@
 //! The members of a shared project as the server last listed them (`docs/architecture/server.md`, row 63: members
-//! are read-only in the app), so Sharing shows them while the server cannot be reached, as of when they were read.
+//! are read-only in the app), and the repository it was set up for, so Sharing shows them while the server cannot be
+//! reached, as of when they were read.
 
 pub(super) const MIGRATION: &str = r"
 CREATE TABLE shared_members (
@@ -12,4 +13,8 @@ CREATE TABLE shared_members (
 
 -- When the members were last read from the server; NULL until they have been.
 ALTER TABLE sharing ADD COLUMN members_read_at INTEGER;
+
+-- The repository the server project was set up for (NULL: it names none), as last read, and when; NULL until read.
+ALTER TABLE sharing ADD COLUMN remote_hint TEXT;
+ALTER TABLE sharing ADD COLUMN remote_hint_read_at INTEGER;
 ";

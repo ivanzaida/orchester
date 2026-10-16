@@ -155,7 +155,11 @@ fn step(id: &str, (number, next): (u8, bool), words: &str) -> Row {
     .child(
       Text::new(words)
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextPrimary)
+        .color(if next {
+          PaletteColor::TextPrimary
+        } else {
+          PaletteColor::TextSecondary
+        })
         .flex(1.0),
     )
 }

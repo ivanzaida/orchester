@@ -117,7 +117,7 @@ impl Component for Linked {
     }
     .to_string();
     let entry = props.facts.linked_server();
-    let hint = rows::hint(ctx, link, entry);
+    let hint = shown_hint(ctx, (&props, link, entry), &name);
     // The server project's name as the server answered; this project's own until it has (`Kontur` in both, in the
     // design).
     let shared = match &hint {
@@ -332,4 +332,21 @@ fn members_section(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> 
       username: account.map(|account| account.username.clone()),
     },
   )
+}
+
+/// The repository hint as the server says it; while it doesn't (offline, or no longer listing the project for a
+/// removed member), the hint as last read stands, with when it was checked.
+fn shown_hint(
+  ctx: &mut Ctx,
+  (props, link, entry): (
+    &Props,
+    &orchester_store::SharingLink,
+    Option<&orchester_workspace::sharing::ServerEntry>,
+  ),
+  name: &str,
+) -> Option<Result<rows::Hint, Said>> {
+  match (rows::hint(ctx, link, entry), props.facts.cached_hint.as_ref()) {
+    (Some(Err(_)), Some((cached, checked))) => Some(Ok(rows::Hint::cached(name.to_owned(), cached.clone(), *checked))),
+    (live, _) => live,
+  }
 }

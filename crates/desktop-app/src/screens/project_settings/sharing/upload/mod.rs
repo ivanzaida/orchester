@@ -259,7 +259,7 @@ impl UploadPage {
     } else if failed {
       (ctx.t("sharing.upload.tryAgain"), Icon::RefreshCw)
     } else {
-      (action_label(ctx, plan), Icon::Upload)
+      (action_label(ctx, plan), action_icon(plan))
     };
     let button = ActionButton::new(CONFIRM, ButtonKind::Primary, label).icon(glyph);
     if pending {
@@ -283,6 +283,14 @@ fn crumbs(ctx: &mut Ctx, (local, server): (&str, &str), close: impl Fn() + Clone
     Crumb::here(ctx.t_args("sharing.upload.crumb", [("server", server)])),
   ];
   breadcrumb(ctx, "sharing-upload-crumbs", CrumbSeparator::Chevron, crumbs)
+}
+
+/// *Link and upload* shows what goes up; a link that uploads nothing is a plain link.
+fn action_icon(plan: &LinkPlan) -> Icon {
+  match &plan.kind {
+    LinkKind::Upload { tasks, .. } if !tasks.is_empty() => Icon::Upload,
+    _ => Icon::Link,
+  }
 }
 
 /// What the confirming button says.
