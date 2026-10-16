@@ -16,7 +16,8 @@ services:
       ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
       ORCHESTER_SERVER_TRUSTED_PROXIES: 172.29.0.2
       ORCHESTER_SERVER_ADMIN_URL: http://172.29.0.4:3100
-      ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741
+      # The admin calls the API on the server's own address on this network; the port is never published.
+      ORCHESTER_SERVER_ADMIN_API_LISTEN: 172.29.0.3:8741
     volumes:
       - server_data:/data
     networks:

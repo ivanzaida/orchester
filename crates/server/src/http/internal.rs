@@ -1,20 +1,21 @@
 //! The private listener only the server admin's own server side reaches (`admin_api_listen`): it calls the API for a
 //! browser, and says which client and which host that browser used with the headers the server's proxy gave it
-//! (`admin_proxy`). Here they stand in for the connection's peer and `Host`, so the per-address limits count the
-//! browser and project addresses carry the host it used.
+//! (`admin_proxy`). Here they stand in for the connection's peer, `Host` and [`Scheme`], so the per-address limits
+//! count the browser and project addresses carry the host and scheme it used.
 
 use std::net::{IpAddr, SocketAddr};
 
 use axum::{
-  extract::{ConnectInfo, Request},
+  extract::{ConnectInfo, Request, State},
   http::{HeaderValue, header::HOST},
   middleware::Next,
   response::Response,
 };
 
-use crate::tls::PeerAddr;
+use super::scheme::{self, Scheme};
+use crate::{Server, tls::PeerAddr};
 
-pub(super) async fn forwarded(mut request: Request, next: Next) -> Response {
+pub(super) async fn forwarded(State(server): State<Server>, mut request: Request, next: Next) -> Response {
   let client = request
     .headers()
     .get("x-forwarded-for")
@@ -31,6 +32,16 @@ pub(super) async fn forwarded(mut request: Request, next: Next) -> Response {
     .get("x-forwarded-host")
     .filter(|value| value.to_str().is_ok_and(valid_host))
     .cloned();
+  let said = request
+    .headers()
+    .get("x-forwarded-proto")
+    .and_then(|value| value.to_str().ok());
+  let proto = match said {
+    Some("https") => "https",
+    Some("http") => "http",
+    _ => scheme::configured(&server),
+  };
+  request.extensions_mut().insert(Scheme(proto));
   let headers = request.headers_mut();
   // Taken in above; the API's own reading of these (trusted proxies) must not see them a second time.
   headers.remove("x-forwarded-for");

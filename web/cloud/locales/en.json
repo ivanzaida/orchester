@@ -279,6 +279,7 @@
     "continue": "Continue",
     "refusedTitle": "This request can't be answered",
     "invalid": "The link that brought you here is incomplete or changed. Go back to the server's admin page and start again.",
+    "outOfDate": "This page is out of date, open the link again.",
     "notLinked": "This team server isn't linked to Orchester Cloud. Its admins can link it in its Settings, or sign in there with a code.",
     "wrongReturn": "The page that sent you here isn't this team server's own admin, so Orchester Cloud doesn't answer it.",
     "linkedElsewhere": "This server is already linked to another Orchester account. Its owner can unlink it first.",

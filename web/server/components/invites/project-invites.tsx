@@ -26,7 +26,6 @@ export function ProjectInvites(props: {
   server: string;
   project: { id: string; name: string; address: string };
   reach: EmailReach;
-  back: string;
   checkCode: string | null;
 }) {
   const scope = { kind: "project", project: props.project.id };
@@ -34,7 +33,7 @@ export function ProjectInvites(props: {
   return (
     <>
       <InviteCard id="invite-email" icon="mail" title={t("invites.emailTitle")} text={t("invites.emailText")}>
-        <EmailInvite csrf={props.csrf} server={props.server} reach={props.reach} back={props.back} scope={scope}
+        <EmailInvite csrf={props.csrf} server={props.server} reach={props.reach} scope={scope}
           extra={<RoleSelect id="email-role" />} sentTitle={(email) => t("invites.sentTitle", { email })} sentText="invites.sentText" />
       </InviteCard>
       <InviteCard id="invite-code" icon="key-round" title={t("invites.codeTitle")} text={t("invites.codeText", words)}>

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, apiRequests, reset } from "./support";
+import { ADMIN, authorizePosts, apiRequests, reset } from "./support";
 
 test.beforeEach(async () => {
   await reset("setup");
@@ -60,7 +60,9 @@ test.describe("first setup", () => {
     await page.getByLabel("Display name").fill("Ivan Zaida");
     await page.getByRole("button", { name: "Continue" }).click();
     await page.getByRole("button", { name: "Link to Orchester Cloud" }).click();
-    await expect(page).toHaveURL(/127\.0\.0\.1:4220\/authorize\?purpose=link&statement=fake-statement/);
+    // Security review 1, B1: the statement goes in the form's body, never in a URL.
+    await expect(page).toHaveURL("http://127.0.0.1:4220/authorize/start");
+    expect((await authorizePosts()).at(-1)).toMatchObject({ purpose: "link", statement: "fake-statement" });
     await page.getByRole("button", { name: "Continue as ivan@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin/setup/done`);
     await expect(page.getByText("Linked by Ivan Zaida")).toBeVisible();

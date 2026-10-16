@@ -27,9 +27,11 @@
   --leading-error: 1.4; /* Field error `d5xipm` */
   --leading-small: 1.45; /* hints, small print */
   --leading-body: 1.5; /* descriptions */
+  --leading-auto: 1.32; /* a text the design gives no line height: Geist's own ascent and descent, as Pencil sets it */
   --tracking-title: -0.2px; /* `cApGk`, `MGrMj` */
   --tracking-tag: 0.6px; /* `YOV1U` */
   --tracking-secret: 1px; /* password value `C6NsE2` */
+  --tracking-code-field: 2px; /* a code typed in a field, `H8RW-2NCF` in `j8WujU` */
 
   /* Spacing between the variables' steps. */
   --space-hairline: 2px; /* notice title and body `wDfBm`; chip padding `r1RbhI` */
@@ -98,6 +100,13 @@
   --size-tab: 34px; /* page tabs `loUWZ` */
   --size-step-dot: 18px; /* `IQf9Z` */
   --size-step-line: 28px; /* `slBd7` */
+  /* A list row's lines (`tIvsQ`); an app's own rows may space them as its frames do. */
+  --row-line-gap: var(--space-line);
+  --row-text-leading: normal;
+  --row-line-leading: var(--leading-small);
+  --row-wide-leading: var(--leading-body);
+  --field-label-leading: normal;
+  --steps-gap: var(--space-tight);
   --size-step-icon: 11px; /* `PKRRn` */
   --size-switch-w: 28px; /* `XC5zU` */
   --size-switch-h: 16px;
@@ -171,6 +180,9 @@
     --footer-spacer: none;
     --footer-links-gap: var(--space-lg);
     --footer-leading: var(--leading-small);
+    /* The three setup steps stay on one line at 390 (no phone frame draws them). */
+    --size-step-line: 12px;
+    --steps-gap: var(--space-sm);
   }
 }
 

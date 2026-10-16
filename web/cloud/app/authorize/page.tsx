@@ -3,22 +3,18 @@ import { redirect } from "next/navigation";
 
 import { Card, Head } from "@orchester/ui/components/card";
 import { Shell } from "@/components/page";
-import { host, readRequest, readStatement, requestQuery, returnsToServer, type AuthorizeRequest, type ServerView } from "@/lib/authorize";
+import { host, pageFor, readStatement, returnsToServer, type AuthorizeRequest, type ServerView } from "@/lib/authorize";
 import { t, type MessageKey } from "@/lib/i18n";
 import { me } from "@/lib/server/cloud";
 import { CloudUnavailableError } from "@/lib/server/failures";
 import { linkedServer } from "@/lib/server/registry";
-import { formToken, sessionEnded, signedIn } from "@/lib/server/visitor";
+import { authorizeDigest, authorizeRequest, formToken, sessionEnded, signedIn } from "@/lib/server/visitor";
 
 import { AuthorizeCard } from "./card";
 
 export const metadata: Metadata = { title: t("authorize.pageTitle") };
 
 type Search = Promise<Record<string, string | string[] | undefined>>;
-
-function single(params: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
-  return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, Array.isArray(value) ? undefined : value]));
-}
 
 /** An honest page for a request this site does not answer. */
 function Refused({ reason }: { reason: MessageKey }) {
@@ -56,11 +52,14 @@ async function serverOf(request: AuthorizeRequest, session: { token?: string | u
  * person signs in first if needed, and comes back here.
  */
 export default async function AuthorizePage({ searchParams }: { searchParams: Search }) {
-  const request = readRequest(single(await searchParams));
-  if (request === null) {
+  // The request came in a form's body to `/authorize/start` and waits in this browser's sealed cookie; the address
+  // names only its callback, which must be the same.
+  const request = await authorizeRequest();
+  const named = (await searchParams).return;
+  if (request === null || named !== request.returnTo.href) {
     return <Refused reason="authorize.invalid" />;
   }
-  const back = `/authorize?${requestQuery(request)}`;
+  const back = pageFor(request);
   const signIn = `/signin?next=${encodeURIComponent(back)}`;
   const session = await signedIn();
   if (session === null) {
@@ -80,12 +79,10 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Se
   if (!returnsToServer(request.returnTo, server.address)) {
     return <Refused reason="authorize.wrongReturn" />;
   }
-  const own: [string, string] = request.purpose === "admin" ? ["server", request.server] : ["statement", request.statement];
-  const fields: [string, string][] = [["purpose", request.purpose], ["state", request.state], ["return", request.returnTo.href], own];
   const { displayName: name, email } = account.value;
   return (
     <Shell>
-      <AuthorizeCard csrf={await formToken()} purpose={request.purpose} request={fields}
+      <AuthorizeCard csrf={await formToken()} request={authorizeDigest(request)} purpose={request.purpose}
         person={{ name, email, initials: initials(name) }} server={server} host={host(server.address)}
         notYou={signIn} cancel={`${request.returnTo.origin}/admin`} />
     </Shell>

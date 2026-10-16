@@ -36,6 +36,12 @@ impl Cloud {
     client
       .execute("DELETE FROM invites WHERE expires_at <= $1", &[&time(now)])
       .await?;
+    client
+      .execute("DELETE FROM revoked_invites WHERE until <= $1", &[&time(now)])
+      .await?;
+    client
+      .execute("DELETE FROM used_link_statements WHERE expires_at <= $1", &[&time(now)])
+      .await?;
     Ok(())
   }
 }

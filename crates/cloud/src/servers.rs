@@ -26,35 +26,25 @@ use crate::{
 const STATEMENT_FRESH_MS: i64 = 10 * MINUTE_MS;
 const MAX_NAME_CHARS: usize = 128;
 const COLUMNS: &str = "id, name, address, fingerprint";
+/// Linked servers one account may own.
+const MAX_OWNED: i64 = 5;
+/// A statement's nonce: 16 to 64 base64url or hex characters.
+const NONCE: std::ops::RangeInclusive<usize> = 16..=64;
 
 impl Cloud {
   /// `POST /servers`: links the server that signed `link` to the signed-in account, and answers with what the server
-  /// pins (the root key and the newest key set) and a token that links the admin's account there.
+  /// pins (the root key and the newest key set) and a token that links the admin's account there. The server's id is
+  /// its key's, so only that key's holder links it; each statement works once, and a newer one takes the server over
+  /// from whoever linked it before (its admins moved it to another account).
   pub(crate) async fn link_server(&self, auth: Authenticated, input: ServerLink) -> Result<ServerLinked, CloudError> {
     let statement = verified_statement(&input.link, self.now())?;
     let now = self.now();
     let mut client = self.client().await?;
     let transaction = client.transaction().await?;
     let id = statement.server.as_uuid();
-    let linked = transaction
-      .execute(
-        "INSERT INTO servers (id, owner, name, address, fingerprint, public_key, linked_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (id) DO UPDATE SET owner = $2, name = $3, address = $4, fingerprint = $5, public_key = $6,
-           linked_at = $7, unlinked_at = NULL
-         WHERE servers.unlinked_at IS NOT NULL OR (servers.owner = $2 AND servers.public_key = $6)",
-        &[
-          &id,
-          &auth.account.as_uuid(),
-          &statement.name.trim(),
-          &statement.address,
-          &statement.fingerprint,
-          &statement.public_key,
-          &time(now),
-        ],
-      )
-      .await?;
-    if linked == 0 {
+    use_statement(&transaction, &statement, now).await?;
+    owned_below_cap(&transaction, auth, id).await?;
+    if !upsert(&transaction, &statement, auth, now).await? {
       return Err(CloudErrorCode::Conflict.into());
     }
     joined(&transaction, id, auth, now).await?;
@@ -115,6 +105,71 @@ impl Cloud {
   }
 }
 
+/// Uses the statement up: a second use (a replay, from a history or a log) is a `409 conflict`.
+async fn use_statement(client: &impl GenericClient, statement: &LinkStatement, now: i64) -> Result<(), CloudError> {
+  let used = client
+    .execute(
+      "INSERT INTO used_link_statements (nonce, expires_at) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+      &[
+        &statement.nonce,
+        &time(now + STATEMENT_FRESH_MS + CLOCK_SKEW_SECS * 1000),
+      ],
+    )
+    .await?;
+  if used == 0 {
+    return Err(CloudErrorCode::Conflict.into());
+  }
+  Ok(())
+}
+
+/// One account owns at most [`MAX_OWNED`] linked servers; linking one it owns already does not count.
+async fn owned_below_cap(client: &impl GenericClient, auth: Authenticated, id: Uuid) -> Result<(), CloudError> {
+  let owned: i64 = client
+    .query_one(
+      "SELECT count(*) FROM servers WHERE owner = $1 AND unlinked_at IS NULL AND id <> $2",
+      &[&auth.account.as_uuid(), &id],
+    )
+    .await?
+    .try_get(0)?;
+  if owned >= MAX_OWNED {
+    return Err(CloudErrorCode::TooManyServers.into());
+  }
+  Ok(())
+}
+
+/// Links the server to the account: a new server, one unlinked, or one whose stored statement is older than this
+/// one. `false` when a statement at least as new linked it already. The key is the stored one by construction: the
+/// id is the key's.
+async fn upsert(
+  client: &impl GenericClient,
+  statement: &LinkStatement,
+  auth: Authenticated,
+  now: i64,
+) -> Result<bool, CloudError> {
+  let issued = time(statement.issued_at * 1000);
+  let changed = client
+    .execute(
+      "INSERT INTO servers (id, owner, name, address, fingerprint, public_key, linked_at, statement_issued_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (id) DO UPDATE SET owner = $2, name = $3, address = $4, fingerprint = $5, public_key = $6,
+         linked_at = $7, statement_issued_at = $8, unlinked_at = NULL
+       WHERE servers.public_key = $6 AND (servers.unlinked_at IS NOT NULL OR servers.statement_issued_at IS NULL
+         OR servers.statement_issued_at < $8)",
+      &[
+        &statement.server.as_uuid(),
+        &auth.account.as_uuid(),
+        &statement.name.trim(),
+        &statement.address,
+        &statement.fingerprint,
+        &statement.public_key,
+        &time(now),
+        &issued,
+      ],
+    )
+    .await?;
+  Ok(changed == 1)
+}
+
 /// The linked server `id`, if any.
 pub(crate) async fn linked(client: &impl GenericClient, id: Uuid) -> Result<Option<Row>, CloudError> {
   Ok(
@@ -149,6 +204,15 @@ fn verified_statement(link: &str, now: i64) -> Result<LinkStatement, CloudError>
   let unverified: LinkStatement = read_statement(link, LINK_STATEMENT_TYPE).map_err(|_| invalid())?;
   let key = PublicKey::parse(&unverified.public_key).map_err(|_| invalid())?;
   let statement: LinkStatement = verify_statement(link, LINK_STATEMENT_TYPE, &key).map_err(|_| invalid())?;
+  // The id is the key's: a statement for another server's id with a key of one's own is refused here.
+  if statement.server != key.server_id() {
+    return Err(invalid());
+  }
+  let nonce_ok = NONCE.contains(&statement.nonce.len())
+    && statement
+      .nonce
+      .bytes()
+      .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
   let issued = statement.issued_at;
   let fresh = seconds(now - STATEMENT_FRESH_MS)..=seconds(now) + CLOCK_SKEW_SECS;
   let name = statement.name.trim();
@@ -156,6 +220,7 @@ fn verified_statement(link: &str, now: i64) -> Result<LinkStatement, CloudError>
     CertificatePin::parse(fingerprint).is_some() && fingerprint == fingerprint.to_lowercase()
   });
   if !fresh.contains(&issued)
+    || !nonce_ok
     || name.is_empty()
     || name.chars().count() > MAX_NAME_CHARS
     || !valid_address(&statement.address)

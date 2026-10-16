@@ -44,5 +44,7 @@ mod proxy_connections;
 mod requests;
 #[path = "accounts/security.rs"]
 mod security;
+#[path = "accounts/server_identity.rs"]
+mod server_identity;
 #[path = "accounts/transport.rs"]
 mod transport;

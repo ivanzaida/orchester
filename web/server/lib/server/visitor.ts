@@ -4,6 +4,8 @@ import { CSRF_FIELD } from "@/lib/form";
 import type { CallOptions } from "@/lib/server/api";
 import { config } from "@/lib/server/config";
 import {
+  HANDOFF_COOKIE,
+  HANDOFF_SECONDS,
   NOTHING_COOKIE,
   NOTHING_SECONDS,
   PRESESSION_COOKIE,
@@ -20,15 +22,18 @@ import { csrfToken, originMatches, tokenMatches, type CsrfCookies } from "@/lib/
 import { clientOf, originOf, placeOf, type Place } from "@/lib/server/place";
 import { deriveKey, type KeyPurpose } from "@/lib/server/seal";
 import {
+  openHandoff,
   openSession,
   openSetup,
   openTrip,
   readNothing,
+  sealHandoff,
   sealSession,
   sealSetup,
   sealTrip,
   signNothing,
   type AdminSession,
+  type Handoff,
   type NothingFlow,
   type Trip,
 } from "@/lib/server/session";
@@ -120,6 +125,14 @@ export async function startTrip(value: Trip): Promise<void> {
 
 export async function endTrip(): Promise<void> {
   await forget(STATE_COOKIE, "none");
+}
+
+export async function handoff(): Promise<Handoff | null> {
+  return openHandoff(key("handoff"), (await cookies()).get(HANDOFF_COOKIE)?.value, Date.now());
+}
+
+export async function keepHandoff(value: Handoff): Promise<void> {
+  (await cookies()).set(HANDOFF_COOKIE, sealHandoff(key("handoff"), value, Date.now()), cookieOptions(HANDOFF_SECONDS));
 }
 
 export async function nothingFlow(): Promise<NothingFlow | null> {

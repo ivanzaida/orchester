@@ -1,7 +1,7 @@
 use axum::{
   Json, Router,
   extract::{Query, State},
-  http::{HeaderMap, StatusCode},
+  http::StatusCode,
   response::{IntoResponse, Response},
   routing::get,
 };
@@ -9,10 +9,7 @@ use orchester_api::*;
 use orchester_core::id::{ProjectId, TagId, UserId};
 use serde::Deserialize;
 
-use super::{
-  base_address,
-  extract::{Auth, Id, SafeJson},
-};
+use super::extract::{Auth, Base, Id, SafeJson};
 use crate::{
   Server, db,
   error::ServerError,
@@ -53,11 +50,10 @@ pub struct Lookup {
 async fn list(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   query: Result<Query<Lookup>, axum::extract::rejection::QueryRejection>,
 ) -> Result<Response, ServerError> {
   let Query(query) = query.map_err(|_| ErrorCode::BadRequest)?;
-  let base = base_address(&server, &headers);
   let response = match query.slug {
     Some(slug) => {
       let project = server
@@ -85,10 +81,9 @@ async fn list(
 async fn create(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   SafeJson(input): SafeJson<NewProject>,
 ) -> Result<(StatusCode, Json<ProjectCreated>), ServerError> {
-  let base = base_address(&server, &headers);
   let response = server
     .write(move |db, now| {
       let current = db::checked(db, &auth, now, true)?;
@@ -116,10 +111,9 @@ async fn link(
 async fn show(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   Id(project): Id<ProjectId>,
 ) -> Result<Json<ProjectResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let project = server
     .snapshot(move |db, now| {
       let current = access::member(db, &auth, project, now)?;
@@ -132,11 +126,10 @@ async fn show(
 async fn patch(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   Id(project): Id<ProjectId>,
   SafeJson(input): SafeJson<ProjectChanges>,
 ) -> Result<Json<ProjectResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let project = server
     .write(move |db, now| {
       let current = access::owner(db, &auth, project, now)?;

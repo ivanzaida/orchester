@@ -20,7 +20,11 @@ const IDENTITIES: readonly [email: string, name: string][] = [
   ["dana@example.com", "Dana Ruiz"],
   ["stranger@example.com", "Sam Stranger"],
   ["stale@example.com", "Stale Keys"],
+  ["approval@example.com", "Approval Needed"],
 ];
+
+/** The address the cloud registered for the fake team server: the admin the page tests run. */
+const REGISTERED_ADMIN = "http://localhost:4200/admin";
 
 function escape(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -36,10 +40,13 @@ function hidden(name: string, value: string): string {
   return `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`;
 }
 
-function authorize(url: URL): string {
-  const purpose = url.searchParams.get("purpose") ?? "";
-  const back = url.searchParams.get("return") ?? "";
-  const state = url.searchParams.get("state") ?? "";
+/** What the trip posted: the fake shows it, so a test can see the statement came in the body. */
+export const posted: Record<string, string>[] = [];
+
+function authorize(fields: Record<string, string>): string {
+  const purpose = fields.purpose ?? "";
+  const back = fields.return ?? "";
+  const state = fields.state ?? "";
   const forms = IDENTITIES.map(([email, name]) => {
     const fields = [hidden("state", state), hidden("identity_token", identityToken(email, name)), hidden("key_set", "fake-key-set")];
     if (purpose === "link") {
@@ -80,14 +87,19 @@ export function cloudRoute(request: IncomingMessage, response: ServerResponse, t
     response.writeHead(status, { "content-type": "text/html; charset=utf-8" });
     response.end(body);
   };
-  if (url.pathname === "/authorize") {
-    html(200, authorize(url));
+  if (url.pathname === "/authorize/start" && request.method === "POST") {
+    const fields = form(text);
+    posted.push(fields);
+    html(200, authorize(fields));
     return true;
   }
   if (url.pathname === "/invites/deliver" && request.method === "POST") {
     const fields = form(text);
     deliveries.push({ how: "browser", email: email(fields.invite) });
-    html(200, `<!doctype html><title>Delivered</title><p>Invite delivered.</p><a href="${escape(fields.return ?? "")}">Back</a>`);
+    // As the cloud does: back to the server it registered, never to an address the post named.
+    const fieldNames = escape(Object.keys(fields).sort().join(","));
+    html(200, `<!doctype html><title>Delivered</title><p>Invite delivered.</p><p data-fields="${fieldNames}"></p>`
+      + `<a href="${REGISTERED_ADMIN}">Back</a>`);
     return true;
   }
   if (/^\/api\/v1\/invites(\/[^/]+)?$/.test(url.pathname)) {
@@ -103,6 +115,11 @@ export function cloudRoute(request: IncomingMessage, response: ServerResponse, t
   if (url.pathname === "/__fake/deliveries") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify(deliveries));
+    return true;
+  }
+  if (url.pathname === "/__fake/authorize") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(posted));
     return true;
   }
   return false;

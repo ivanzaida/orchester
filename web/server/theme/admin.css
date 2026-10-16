@@ -18,8 +18,15 @@
   --admin-head-direction: row; /* `T7GSXZ` */
   --admin-head-align: flex-end;
   --admin-head-action-grow: none;
+  --admin-head-action-height: var(--size-row-control);
 
-  /* Rows and tables. */
+  /* Rows and tables: the admin's rows space their lines 4 apart at the texts' own height (`Gk7u7`, `IF2QM`, `U7KMnL`). */
+  --row-line-gap: var(--space-xs);
+  --row-text-leading: var(--leading-auto);
+  --row-line-leading: var(--leading-auto);
+  --row-wide-leading: var(--leading-auto);
+  --field-label-leading: var(--leading-auto); /* `JFXZg`'s label */
+  --admin-form-gap: 18px; /* between a form's fields `ZYEZu` */
   --admin-setting-columns: 170px minmax(0, 1fr); /* `YLPMo` */
   --admin-member-columns: minmax(0, 1fr) 150px 130px 110px; /* `mnZHf` */
   --admin-member-areas: "person role joined actions";
@@ -36,14 +43,13 @@
   --admin-button-drop: 22px; /* a button beside a labelled field lines up with its box `nkvu5` */
   --admin-search: 260px; /* `N8wkG` */
   --admin-facts-align: flex-end; /* a project row's facts `CpmlY` */
-  --admin-created: block;
-  /* The waiting computer's callout: a panel on a wide page (`YMZ6N`), a warning on a phone (`A7hWOC`). */
-  --admin-waiting-fill: var(--color-surface-panel);
-  --admin-waiting-stroke: var(--color-border-strong);
-  --admin-waiting-icon: var(--color-text-secondary);
-  --admin-waiting-columns: auto minmax(0, 1fr) auto;
-  --admin-waiting-areas: "glyph text action";
-  --admin-waiting-glyph-align: center;
+  --admin-created: flex;
+  /* What a page shows only on a wide window or only on a phone, where the frames differ (`FCQCr`, `mYBka`). */
+  --admin-wide-only: contents;
+  --admin-phone-only: none;
+  /* The page tabs as the main's first part; on a phone they sit right under the header (`SJsI0`). */
+  --admin-tabs-lift: 0px;
+  --admin-tabs-after: 0px;
   --admin-field: 360px; /* a setting's field `h8OLW5` */
   --admin-menu: 280px; /* the phone header's menu */
 
@@ -74,6 +80,7 @@
     --admin-head-direction: column;
     --admin-head-align: stretch;
     --admin-head-action-grow: 1;
+    --admin-head-action-height: var(--control-lg);
     --footer-promise: none;
     --admin-setting-columns: minmax(0, 1fr);
     --admin-member-columns: minmax(0, 1fr) auto;
@@ -91,12 +98,11 @@
     --admin-field: 100%;
     --admin-facts-align: flex-start;
     --admin-created: none;
-    --admin-waiting-fill: var(--color-warning-muted);
-    --admin-waiting-stroke: transparent;
-    --admin-waiting-icon: var(--color-warning);
-    --admin-waiting-columns: auto minmax(0, 1fr);
-    --admin-waiting-areas: "glyph text" "glyph action";
-    --admin-waiting-glyph-align: start;
+    --admin-wide-only: none;
+    --admin-phone-only: contents;
+    /* The tabs under the header with no space, and the main 24 below them (`SJsI0`, `oZHnD`). */
+    --admin-tabs-lift: calc(-1 * var(--space-xl));
+    --admin-tabs-after: calc(var(--space-xl) - var(--admin-main-gap));
     --admin-entry-card-padding: var(--space-xl);
     --admin-pair-direction: column;
   }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import { actor, failed, isMessage } from "@/lib/server/act";
+import { loadServer } from "@/lib/server/admin";
 import { createProject } from "@/lib/server/team/projects";
 import { hintError, projectNameError, slugError } from "@/lib/validation";
 
@@ -56,7 +57,8 @@ export async function newProjectAction(previous: NewProjectState, form: FormData
   const result = await createProject(input, options);
   if (!result.ok) {
     if (result.error.kind === "refused" && result.error.code === "slug_taken") {
-      return { view: "form", answer, values, errors: { slug: message("newProject.slugTaken") } };
+      const server = (await loadServer()).name;
+      return { view: "form", answer, values, errors: { slug: message("newProject.slugTaken", { server }) } };
     }
     return { view: "form", answer, values, errors: {}, error: await failed(result.error) };
   }

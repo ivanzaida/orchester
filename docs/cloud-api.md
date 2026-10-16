@@ -46,7 +46,8 @@ Two kinds of client call it:
 | `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
-| `conflict` | 409 | The team server is linked to another account |
+| `conflict` | 409 | The team server is linked by a statement as new as this one, or this statement was used |
+| `too_many_servers` | 409 | The account owns 5 linked team servers |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
 | `busy` | 503 | No password hashing slot freed within 10 seconds |
@@ -80,12 +81,12 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
 | `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin; `invite`: an open invite from that server to the account's email, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is not open, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
-| `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict`, `422 invalid`, `429`, `503 keys_unavailable` |
+| `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
-| `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202`, empty | `422 invalid`, `429` |
+| `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
 | `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at }] }` | |
-| `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204` | `422 invalid` |
+| `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
 | `POST /invites/{id}/decline` | device | | `204` | `404` |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
@@ -154,21 +155,57 @@ that is never used leaves the server's copy open until it expires or is revoked.
 
 **Linking a team server** (`POST /servers { link }`, from the cloud's `/authorize` page, purpose `link`). The link
 statement is a compact JWS of type `orchester-link+jws` that the server signed with its own Ed25519 key:
-`{ server, name, address, public_key, fingerprint, issued_at }` (`orchester_api::statements::LinkStatement`). The cloud
-verifies it with the `public_key` inside, refuses one issued more than 10 minutes ago, and links the server to the
-signed-in account; a server linked to another account answers `409 conflict`, and its own owner may link it again
-(a new name or address) as long as the key is the same. The answer carries what the server pins: the cloud's root key
-(`root_key`, base64url) and the newest key set it signed, and an identity token with purpose `link` that links the
-admin's account on the server. A token with purpose `admin` is issued only for a linked server.
+`{ server, nonce, name, address, public_key, fingerprint, issued_at }` (`orchester_api::statements::LinkStatement`).
+
+- **A server's id is its key's** (security review 1, B1): `server` must be
+  `orchester_api::identity::PublicKey::server_id(public_key)`, a version-8 UUID of the first 16 bytes of
+  SHA-256(`"orchester-team-server-id\0"` ‖ the 32 key bytes). A team server makes its id that way and, at every
+  start, replaces a stored id that is not its key's with its key's, so nobody can register another server's id with a
+  key of their own, and every identity token the cloud issues for an id (the token's `aud`) is for the holder of that
+  key. Migration 4 deletes the servers linked under migration 3 whose id is not their key's (with their accounts and
+  invites, logged); such a server links again under its own id (security review 2).
+- The cloud verifies the statement with the `public_key` inside, refuses one issued more than 10 minutes ago, and
+  uses each `nonce` once: a replay is `409 conflict`.
+- **The newest statement owns the server.** A statement newer than the one that linked it takes the server over for
+  the signed-in account (its admins moved it); an older or equally old one is `409 conflict`.
+- One account owns at most 5 linked servers (`409 too_many_servers`); linking one it owns already does not count.
+
+The answer carries what the server pins: the cloud's root key (`root_key`, base64url) and the newest key set it
+signed, and an identity token with purpose `link` that links the admin's account on the server. A token with purpose
+`admin` is issued only for a linked server.
+
+**The web front's `/authorize`** takes a team server admin's request only in a form's body, `POST /authorize/start`
+(`purpose`, `server` or `statement`, `state`, `return`), keeps it sealed in this browser's `__Host-orchester_authorize`
+cookie for 10 minutes and shows `/authorize?return=<callback>`, whose address names only the callback: the statement
+never travels in a URL, a history or a log. Confirming uses the request up and binds it to the account signed in then.
+`/authorize/start` keeps a request only when the post's `Origin` is the callback's origin (the admin that asked);
+anything else leaves this browser's request as it was. A browser sends `Origin: null` when an https page posts to plain
+http; a cloud on plain http (loopback only, a local or test setup) therefore takes a null origin with an https
+callback, and an https cloud never does. The confirm form carries a digest of the request the page
+showed, and confirming refuses with *This page is out of date, open the link again* when the cookie holds another
+one by then, so a request another site posts after the page loaded is never the one confirmed (security review 2).
 
 **Invites in flight.** A team server signs each invite by email (`orchester-invite+jws`:
 `{ id, server, kind, email, project?, role?, inviter, expires_at, issued_at }`, times in milliseconds) and its server
 admin delivers it, from the host or from the inviter's browser through the web front's `/invites/deliver`. The cloud
 checks the signature with the key the server linked with, keeps the invite once (a second delivery changes nothing),
 and emails the invitee in its own words only (nothing the server chose: an account gets *open Orchester*, an address
-with no account `/signup?invite=<id>`). At most 200 invites a day per server and 5 emails an hour per address.
+with no account `/signup?invite=<id>`). The answer names the inviting server as registered (`202 { server }`).
 `GET /invites` lists them to the account with that email; a revocation (`orchester-invite-revocation+jws`,
-`{ id, server, issued_at }`) deletes one; expired invites are deleted by the minute's sweep.
+`{ id, server, issued_at }`) deletes one and keeps its id and server in `revoked_invites` until the invite would have expired
+(at most 8 days), so the same signed invite cannot be delivered again (security review 1, minor 1); expired invites
+and ended tombstones are deleted by the minute's sweep.
+
+**Invite limits** (security review 1, M2): deliveries are counted per client address before the signature is
+checked; the servers one account owns keep at most 100 new invites a day between them, and revoking gives none back;
+an invite's email has buckets of its own, apart from confirmation and reset emails: one a day per server and address
+and three a day per address. An invite over an email limit is still kept and listed in the invitee's app, without an
+email. Numbers in [Rate limits](#rate-limits).
+
+**The web front's `/invites/deliver`** takes the signed invite in a form's body only, delivers it, and keeps the
+answer in a signed cookie for `/invites/delivered`, which leads back only to the admin at the address the cloud
+registered for that server (`<address>/admin`): nothing in the post or the page's address names where to go
+(security review 1, minor 2).
 
 **Declining an invite.** `POST /invites/{id}/decline` deletes an open invite to the account's email (`404` for any
 other). The team server keeps its own copy until it expires or is revoked; nothing joins with it, since a join needs
@@ -186,10 +223,13 @@ took.
 | Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
 | Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
 | Emails (sign-up, resend, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
-| Invite emails | 5 an hour per email (the same count); 200 invites a day per server |
 | Failed `confirm`, `reset/finish` and `links/inspect` | 20 per client address and 100 per IPv6 /48 in 15 minutes; for `confirm` and `reset/finish`, 5 an hour per link, each try counted before its password check |
 | Wrong passwords for `DELETE /me` | Counted with the failed current passwords of `/auth/password` |
 | Identity tokens | 60 an hour per device |
+| Invite deliveries (`POST /invites`) | 60 an hour per client address and 300 per IPv6 /48, counted before the signature is checked |
+| New invites | 100 a day for all the servers one account owns |
+| Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
+| Linked servers | 5 per account (`409 too_many_servers`), not a rate |
 
 The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
 IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest key that holds no count, block or

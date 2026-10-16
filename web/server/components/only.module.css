@@ -1,0 +1,7 @@
+.wide {
+  display: var(--admin-wide-only);
+}
+
+.phone {
+  display: var(--admin-phone-only);
+}

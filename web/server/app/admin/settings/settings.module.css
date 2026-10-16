@@ -12,12 +12,6 @@
   max-width: 100%;
 }
 
-.confirm {
-  width: 100%;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-}
-
 .linkLine {
   display: flex;
   flex-wrap: wrap;

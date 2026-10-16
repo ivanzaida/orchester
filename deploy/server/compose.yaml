@@ -14,7 +14,9 @@ services:
       # Names and addresses people reach this host by, for the generated certificate (comma-separated).
       ORCHESTER_SERVER_TLS_NAMES: ${ORCHESTER_SERVER_TLS_NAMES:-}
       ORCHESTER_SERVER_ADMIN_URL: http://admin:3100
-      # The admin calls the API here, on the private network only; this port is never published.
+      # The admin calls the API here, on the private network only; this port is never published. The server warns at
+      # start that it listens on every interface of its container: that is this network, as long as 8741 stays
+      # unpublished.
       ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741
     ports:
       - "8740:8080"

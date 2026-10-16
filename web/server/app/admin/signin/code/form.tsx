@@ -38,7 +38,7 @@ export function CodeForm({ csrf }: { csrf: string }) {
       <CsrfField token={csrf} />
       <Fields>
         <TextField name="code" type="text" size="row" label={t("code.field")} value={code} onChange={setCode} hint={t("code.hint")}
-          error={outcome.kind === "wrong" ? outcome.error : undefined} autoComplete="one-time-code" mono />
+          error={outcome.kind === "wrong" ? outcome.error : undefined} autoComplete="one-time-code" code />
         {limited && (
           <Callout tone="danger" icon="circle-alert" title={t("code.tooManyTitle")} role="alert"
             body={<Say message={message("code.tooManyText", {}, outcome.until)} />} />

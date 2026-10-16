@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 
 import { ActionButton } from "@orchester/ui/components/button";
 import { InPlaceConfirm } from "@orchester/ui/components/confirm";
@@ -10,6 +10,7 @@ import { SwitchButton } from "@orchester/ui/components/switch";
 
 import { ErrorLine, TextField } from "@/components/fields";
 import { CsrfField, Hidden } from "@/components/hidden";
+import { SettingRow } from "@/components/settings-panel";
 import { t } from "@/lib/i18n";
 
 import { settingAction, type SettingState } from "./actions";
@@ -51,8 +52,26 @@ function PinForm({ csrf, action, close, state }: { csrf: string; action: (form: 
   );
 }
 
-/** *Pin another key…* (a field in place) and *Unlink…* (a question in place) under the cloud key (`WV4AT`). */
-export function CloudKeyActions({ csrf, server }: { csrf: string; server: string }) {
+function Unlink({ csrf, server, action, close }: { csrf: string; server: string; action: (form: FormData) => void; close: () => void }) {
+  return (
+    <InPlaceConfirm title={t("settings.unlinkTitle", { server })} text={t("settings.unlinkText")}>
+      <ActionButton kind="secondary" row autoFocus onClick={close}>
+        {t("settings.keepLink")}
+      </ActionButton>
+      <form action={action}>
+        <CsrfField token={csrf} />
+        <Hidden name="op" value="unlink" />
+        <Submit kind="danger" row icon="unlink" label={t("settings.unlinkSubmit")} busyLabel={t("settings.unlinking")} />
+      </form>
+    </InPlaceConfirm>
+  );
+}
+
+/**
+ * The cloud key's row (`WV4AT`): its fingerprint and hint (`children`), then *Pin another key…* (a field in place, in
+ * the row) and *Unlink…* (a question in place across the card, under the row).
+ */
+export function CloudKeyRow({ csrf, server, label, children }: { csrf: string; server: string; label: string; children: ReactNode }) {
   const [state, action] = useActionState<SettingState, FormData>(settingAction, START);
   const [open, setOpen] = useState<Open>("none");
   const [seen, setSeen] = useState(state.answer);
@@ -62,35 +81,27 @@ export function CloudKeyActions({ csrf, server }: { csrf: string; server: string
       setOpen("none");
     }
   }
-  if (open === "pin") {
-    return <PinForm csrf={csrf} action={action} close={() => { setOpen("none"); }} state={state} />;
-  }
+  const close = () => { setOpen("none"); };
   return (
     <>
-      <div className={styles.buttons}>
-        <ActionButton kind="secondary" row onClick={() => { setOpen("pin"); }}>
-          {t("settings.pin")}
-        </ActionButton>
-        <ActionButton kind="ghost" row icon="unlink" onClick={() => { setOpen("unlink"); }}>
-          {t("settings.unlink")}
-        </ActionButton>
-      </div>
-      {state.done === "pinned" && <DoneLine>{t("settings.pinned")}</DoneLine>}
-      {open === "unlink" && (
-        <div className={styles.confirm}>
-          <InPlaceConfirm title={t("settings.unlinkTitle", { server })} text={t("settings.unlinkText")}>
-            <ActionButton kind="secondary" row onClick={() => { setOpen("none"); }}>
-              {t("settings.keepLink")}
+      <SettingRow label={label}>
+        {children}
+        {open === "pin" ? (
+          <PinForm csrf={csrf} action={action} close={close} state={state} />
+        ) : (
+          <div className={styles.buttons}>
+            <ActionButton kind="secondary" row onClick={() => { setOpen("pin"); }}>
+              {t("settings.pin")}
             </ActionButton>
-            <form action={action}>
-              <CsrfField token={csrf} />
-              <Hidden name="op" value="unlink" />
-              <Submit kind="danger" row icon="unlink" label={t("settings.unlinkSubmit")} busyLabel={t("settings.unlinking")} />
-            </form>
-          </InPlaceConfirm>
-        </div>
-      )}
-      {state.error !== undefined && <ErrorLine message={state.error} />}
+            <ActionButton kind="ghost" row icon="unlink" expanded={open === "unlink"} onClick={() => { setOpen("unlink"); }}>
+              {t("settings.unlink")}
+            </ActionButton>
+          </div>
+        )}
+        {state.done === "pinned" && <DoneLine>{t("settings.pinned")}</DoneLine>}
+        {open !== "pin" && state.error !== undefined && <ErrorLine message={state.error} />}
+      </SettingRow>
+      {open === "unlink" && <Unlink csrf={csrf} server={server} action={action} close={close} />}
     </>
   );
 }

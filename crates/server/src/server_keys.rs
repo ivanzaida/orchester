@@ -19,18 +19,42 @@ pub(crate) struct ServerKeys {
 }
 
 impl ServerKeys {
-  /// Makes the server's id and keys; run once, by the migration that adds the table.
+  /// Makes the server's keys and its id, which is its signing key's (`PublicKey::server_id`); run once, by the
+  /// migration that adds the table.
   pub fn create(db: &Connection) -> Result<(), ServerError> {
     let signing = PrivateKey::generate().map_err(|_| ServerError::Random)?;
     let code_key = random::<32>()?;
+    let id = SigningKey::new(&signing)
+      .map_err(|_| ServerError::Random)?
+      .public_key()
+      .server_id();
     db.execute(
       "INSERT INTO server_keys(id,server_id,signing_key,code_key) VALUES (1,?1,?2,?3)",
-      params![
-        TeamServerId::generate().to_string(),
-        signing.pkcs8(),
-        code_key.as_slice()
-      ],
+      params![id.to_string(), signing.pkcs8(), code_key.as_slice()],
     )?;
+    Ok(())
+  }
+
+  /// Gives a server whose stored id is not its key's its key's id, and says so in the log: S1c's random ids, and
+  /// schema 4 databases of earlier server admin builds (security review 2, 3). Safe under security review 1's B1:
+  /// the key is this server's own, so the id derived from it can be no other server's. Run at every open.
+  pub fn own_id(db: &Connection) -> Result<(), ServerError> {
+    let (stored, signing): (String, Vec<u8>) =
+      db.query_row("SELECT server_id,signing_key FROM server_keys WHERE id=1", [], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+      })?;
+    let id = SigningKey::new(&PrivateKey::from_pkcs8(signing))
+      .map_err(|_| ServerError::StoredData)?
+      .public_key()
+      .server_id();
+    if stored != id.to_string() {
+      db.execute("UPDATE server_keys SET server_id=?1 WHERE id=1", [id.to_string()])?;
+      tracing::warn!(
+        from = %stored,
+        to = %id,
+        "the server's id is now its key's; if it was linked to Orchester Cloud, link it again in the admin's Settings"
+      );
+    }
     Ok(())
   }
 
@@ -40,9 +64,15 @@ impl ServerKeys {
       [],
       |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )?;
+    let signing = SigningKey::new(&PrivateKey::from_pkcs8(signing)).map_err(|_| ServerError::StoredData)?;
+    let id: TeamServerId = id.parse().map_err(|_| ServerError::StoredData)?;
+    // The id is the key's: a stored id that is not would let tokens for another server's id in.
+    if id != signing.public_key().server_id() {
+      return Err(ServerError::StoredData);
+    }
     Ok(Self {
-      id: id.parse().map_err(|_| ServerError::StoredData)?,
-      signing: SigningKey::new(&PrivateKey::from_pkcs8(signing)).map_err(|_| ServerError::StoredData)?,
+      id,
+      signing,
       code_key: hmac::Key::new(hmac::HMAC_SHA256, &code_key),
     })
   }

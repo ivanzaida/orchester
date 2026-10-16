@@ -1,9 +1,15 @@
 .line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-inline);
   font-size: var(--text-small);
   line-height: var(--leading-error);
+}
+
+/* The icon beside the first line when the message wraps (`d5xipm` in `j8WujU`). */
+.line > svg {
+  flex: none;
+  margin-top: var(--space-hairline);
 }
 
 .error {

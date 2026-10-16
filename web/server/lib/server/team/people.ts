@@ -1,4 +1,4 @@
-import type { Device, JoinedVia, Person } from "@/lib/model";
+import type { AdminBrowser, Device, JoinedVia, Person } from "@/lib/model";
 import { call, isId, NOT_AN_ID, nothing, type ApiResult, type CallOptions } from "@/lib/server/api";
 import { field, list, number, readUser, record, text } from "@/lib/server/team/read";
 
@@ -47,4 +47,29 @@ export function revokeDevice(id: string, options: CallOptions): Promise<ApiResul
     return Promise.resolve(NOT_AN_ID);
   }
   return call("DELETE", `/admin/sessions/${encodeURIComponent(id)}`, { expected: 204, read: nothing }, options);
+}
+
+function readBrowser(json: unknown): AdminBrowser | null {
+  const body = record(json) ?? {};
+  const { id, created_at: createdAt, expires_at: expiresAt, current } = body;
+  const { id: userId, username, display_name: displayName } = record(body.user) ?? {};
+  if (!text(id) || !number(createdAt) || !number(expiresAt) || typeof current !== "boolean") {
+    return null;
+  }
+  if (!text(userId) || !text(username) || !text(displayName)) {
+    return null;
+  }
+  return { id, user: { id: userId, username, displayName }, createdAt, expiresAt, current };
+}
+
+/** Browsers signed in to the admin, newest sign-in first (security review 1, minor 5). */
+export function browsers(options: CallOptions): Promise<ApiResult<AdminBrowser[]>> {
+  return call("GET", "/admin/browsers", { expected: 200, read: (json) => list(json, "browsers", readBrowser) }, options);
+}
+
+export function revokeBrowser(id: string, options: CallOptions): Promise<ApiResult<true>> {
+  if (!isId(id)) {
+    return Promise.resolve(NOT_AN_ID);
+  }
+  return call("DELETE", `/admin/browsers/${encodeURIComponent(id)}`, { expected: 204, read: nothing }, options);
 }

@@ -48,3 +48,9 @@ export function watchBrowserRequests(page: Page): string[] {
 export function expectNoApiAddress(urls: string[]): void {
   expect(urls.filter((url) => url.startsWith(API))).toEqual([]);
 }
+
+/** What trips posted to the fake cloud's `/authorize/start`, oldest first. */
+export async function authorizePosts(): Promise<Record<string, string>[]> {
+  const response = await fetch("http://127.0.0.1:4220/__fake/authorize");
+  return (await response.json()) as Record<string, string>[];
+}

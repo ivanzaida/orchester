@@ -69,7 +69,7 @@ export function DeviceRow({ device, me, server, csrf, now }: { device: Device; m
         <LastUsed device={device} now={now} />
       </span>
       <span className={styles.actions}>
-        <ActionButton kind="secondary" row onClick={() => { setAsking(true); }}>
+        <ActionButton kind="secondary" row expanded={asking} onClick={() => { setAsking(true); }}>
           {t("devices.revoke")}
         </ActionButton>
       </span>
@@ -83,7 +83,7 @@ export function DeviceRow({ device, me, server, csrf, now }: { device: Device; m
       </Row>
       {asking && (
         <InPlaceConfirm title={t("devices.revokeTitle", { device: device.device })} text={t("devices.revokeText", { server })}>
-          <ActionButton kind="secondary" row onClick={() => { setAsking(false); }}>
+          <ActionButton kind="secondary" row autoFocus onClick={() => { setAsking(false); }}>
             {t("common.keep")}
           </ActionButton>
           <form action={action}>
@@ -101,32 +101,60 @@ export function DeviceRow({ device, me, server, csrf, now }: { device: Device; m
   );
 }
 
-function Decided({ approval, decided }: { approval: Approval; decided: "approved" | "refused" }) {
+interface ApprovalProps {
+  readonly approval: Approval;
+  /** The person's username, from the admin's list of people; `null` when it is not there. */
+  readonly username: string | null;
+  readonly csrf: string;
+  readonly now: number;
+}
+
+/** Who and from where (`JzUh8`): *Oleh Petrenko · oleh · joined through Orchester Cloud from 10.0.4.31, today 14:02*. */
+function WaitingLine({ approval, username, now }: Omit<ApprovalProps, "csrf">) {
+  const name = approval.user.displayName;
+  const who = username === null ? name : t("devices.who", { name, username });
+  const words = { name: who, address: approval.address ?? "" };
+  const when = { when: { at: approval.requestedAt, format: "near" as const } };
+  return (
+    <RowLine>
+      <Phrase k={approval.address === null ? "devices.waitingLineNoAddress" : "devices.waitingLine"} params={words} dates={when} now={now} />
+    </RowLine>
+  );
+}
+
+/** An answered computer (`WV4AT`): the row keeps its line with the badge of the answer, and what it means is under it. */
+function Decided({ props, decided }: { props: ApprovalProps; decided: "approved" | "refused" }) {
+  const { approval } = props;
   const approved = decided === "approved";
   return (
-    <div className={styles.decided}>
+    <div className={styles.decided} role="status">
       <Row glyph="monitor-smartphone" align="center" compact>
         <TopLine name={t("devices.deviceName", { device: approval.device })} weight="semibold">
           <Badge tone={approved ? "success" : "danger"}>{approved ? t("devices.approvedBadge") : t("devices.refusedBadge")}</Badge>
         </TopLine>
-        <RowLine>{approved ? t("devices.approvedText", { name: approval.user.displayName }) : t("devices.refusedText")}</RowLine>
+        <WaitingLine approval={approval} username={props.username} now={props.now} />
       </Row>
+      <p className={styles.decidedText}>
+        {approved ? t("devices.approvedText", { name: approval.user.displayName }) : t("devices.refusedText")}
+      </p>
     </div>
   );
 }
 
-/** A computer waiting for join approval (`JzUh8`): *Approve* at once, *Refuse* after a question in place. */
-export function ApprovalRow({ approval, csrf, now }: { approval: Approval; csrf: string; now: number }) {
+/**
+ * A computer waiting for join approval (`JzUh8`): *Approve* at once, *Refuse* after a question in place, while which
+ * the row shows only its badge (`WV4AT`).
+ */
+export function ApprovalRow(props: ApprovalProps) {
+  const { approval, csrf } = props;
   const [state, action] = useActionState<ApprovalState, FormData>(approvalAction, {});
   const [asking, setAsking] = useState(false);
   if (state.decided !== undefined) {
-    return <Decided approval={approval} decided={state.decided} />;
+    return <Decided props={props} decided={state.decided} />;
   }
-  const words = { name: approval.user.displayName, address: approval.address ?? "" };
-  const when = { when: { at: approval.requestedAt, format: "near" as const } };
-  const side = (
+  const side = asking ? undefined : (
     <span className={styles.side}>
-      <ActionButton kind="ghost" row onClick={() => { setAsking(true); }}>
+      <ActionButton kind="ghost" row expanded={asking} onClick={() => { setAsking(true); }}>
         {t("devices.refuse")}
       </ActionButton>
       <form action={action}>
@@ -141,13 +169,11 @@ export function ApprovalRow({ approval, csrf, now }: { approval: Approval; csrf:
         <TopLine name={t("devices.deviceName", { device: approval.device })} weight="semibold">
           <Badge tone="warning">{t("devices.waitingBadge")}</Badge>
         </TopLine>
-        <RowLine>
-          <Phrase k={approval.address === null ? "devices.waitingLineNoAddress" : "devices.waitingLine"} params={words} dates={when} now={now} />
-        </RowLine>
+        <WaitingLine approval={approval} username={props.username} now={props.now} />
       </Row>
       {asking && (
         <InPlaceConfirm title={t("devices.refuseTitle", { device: approval.device })} text={t("devices.refuseText", { name: approval.user.displayName })}>
-          <ActionButton kind="secondary" row onClick={() => { setAsking(false); }}>
+          <ActionButton kind="secondary" row autoFocus onClick={() => { setAsking(false); }}>
             {t("devices.keepWaiting")}
           </ActionButton>
           <form action={action}>

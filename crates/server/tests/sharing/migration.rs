@@ -217,3 +217,45 @@ async fn s1c_projects_made_under_row_10_take_slugs_from_their_repository_names()
   assert_eq!(projects.projects.len(), 1);
   server.finish().await;
 }
+
+/// Security review 1, minor 6: a project an older server let take `admin`, `api` or `auth` gets the next free slug
+/// when the server opens, by the same rule as the S1c migration, and keeps everything else.
+#[tokio::test]
+async fn sa_a_project_on_a_reserved_slug_is_renamed_when_the_server_opens() {
+  let server = TestServer::start(|_| {}).await;
+  let owner = server.bootstrap().await;
+  let on_admin = project(&server, &owner.token, vec![]).await.project.id;
+  let next = project(&server, &owner.token, vec![]).await.project.id;
+  let on_auth = project(&server, &owner.token, vec![]).await.project.id;
+  let database = server.database();
+  for (id, slug) in [(on_admin, "admin"), (next, "admin-2"), (on_auth, "auth")] {
+    database
+      .execute("UPDATE projects SET slug=?2 WHERE id=?1", params![id.to_string(), slug])
+      .expect("an older server's slug");
+  }
+  let config = orchester_server::config::Config {
+    data_dir: server.directory.path().into(),
+    tls: orchester_server::config::TlsMode::Off,
+    ..Default::default()
+  };
+  orchester_server::Server::open(config, server.clock.clone())
+    .await
+    .expect("open with reserved slugs");
+  let slug = |id: orchester_core::id::ProjectId| -> String {
+    database
+      .query_row("SELECT slug FROM projects WHERE id=?1", [id.to_string()], |row| {
+        row.get(0)
+      })
+      .expect("slug")
+  };
+  assert_eq!(
+    [slug(on_admin), slug(next), slug(on_auth)],
+    ["admin-3", "admin-2", "auth-2"]
+  );
+  let found: ProjectResponse = server
+    .request("GET", "/projects?slug=admin-3", Some(&owner.token), None)
+    .await
+    .json();
+  assert_eq!(found.project.id, on_admin);
+  server.finish().await;
+}

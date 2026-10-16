@@ -33,9 +33,23 @@ test.describe("headers", () => {
       const text = await answer.text();
       expect(text).toContain("This page needs HTTPS");
       expect(text).toContain("https://10.0.4.20:8740/admin");
+      // Design 1, m20: the server itself as drawn, on the port the browser used.
+      expect(text).toContain("on the server itself, http://127.0.0.1:8740/admin.");
     }
     const post = await request.post("/admin/trip", { headers, form: { purpose: "admin" }, maxRedirects: 0 });
     expect(post.headers().location ?? "").not.toContain(CLOUD);
+  });
+
+  test("the HTTPS page names only the address the browser used, never one a link or a header put on it", async ({ page }) => {
+    // Security review 1, minor 2: `?origin=` and a client's own header of the proxy's are ignored.
+    await page.setExtraHTTPHeaders({ "x-forwarded-host": "10.0.4.20:8740", "x-forwarded-proto": "http",
+      "x-orchester-https-origin": "http://evil.example" });
+    for (const path of ["/admin/https?origin=http://evil.example", "/admin?origin=http://evil.example"]) {
+      await page.goto(path);
+      const text = await page.locator("body").innerText();
+      expect(text, path).toContain("https://10.0.4.20:8740/admin");
+      expect(text, path).not.toContain("evil.example");
+    }
   });
 
   test("the page loads nothing from another site and runs under its CSP", async ({ page }) => {

@@ -6,11 +6,13 @@ import { EmptyState, Panel, Section } from "@orchester/ui/components/list";
 import { Note, PageHead } from "@/components/page-head";
 import { AdminShell } from "@/components/shell";
 import { t } from "@/lib/i18n";
-import type { Approval, Device } from "@/lib/model";
+import type { AdminBrowser, Approval, Device } from "@/lib/model";
 import { loadAdmin, value } from "@/lib/server/admin";
 import { approvals } from "@/lib/server/team/auth";
+import { browsers } from "@/lib/server/team/people";
 import { formToken } from "@/lib/server/visitor";
 
+import { BrowserRow } from "./browsers";
 import { ApprovalRow, DeviceRow } from "./rows";
 import styles from "./devices.module.css";
 
@@ -37,14 +39,21 @@ function Search({ query }: { query: string }) {
   );
 }
 
-function Waiting({ list, csrf, now }: { list: readonly Approval[]; csrf: string; now: number }) {
+function Waiting({ list, usernames, csrf, now }: {
+  list: readonly Approval[];
+  usernames: ReadonlyMap<string, string>;
+  csrf: string;
+  now: number;
+}) {
   if (list.length === 0) {
     return null;
   }
   return (
     <Section id="waiting" title={t("devices.waitingTitle")} meta={computers(list.length)} description={t("devices.waitingText")}>
       <div className={styles.waiting}>
-        {list.map((approval) => <ApprovalRow key={approval.id} approval={approval} csrf={csrf} now={now} />)}
+        {list.map((approval) => (
+          <ApprovalRow key={approval.id} approval={approval} username={usernames.get(approval.user.id) ?? null} csrf={csrf} now={now} />
+        ))}
       </div>
     </Section>
   );
@@ -72,7 +81,28 @@ function Joined(props: { list: readonly Device[]; query: string; me: string; ser
   );
 }
 
-/** Devices (`YY8pR`; approve, refuse and revoke in `WV4AT`): computers waiting for approval, and every joined one. */
+/**
+ * Browsers signed in to the admin, under the computers. Not drawn: the Joined section's frame (security review 1,
+ * minor 5); none when a search leaves none.
+ */
+function Browsers({ list, server, csrf, now }: { list: readonly AdminBrowser[]; server: string; csrf: string; now: number }) {
+  if (list.length === 0) {
+    return null;
+  }
+  const meta = list.length === 1 ? t("devices.browsersOne") : t("devices.browsers", { count: list.length });
+  return (
+    <Section id="browsers" title={t("devices.browsersTitle")} meta={meta} description={t("devices.browsersText", { server })}>
+      <Panel>
+        {list.map((browser) => <BrowserRow key={browser.id} browser={browser} csrf={csrf} now={now} />)}
+      </Panel>
+    </Section>
+  );
+}
+
+/**
+ * Devices (`YY8pR`; approve, refuse and revoke in `WV4AT`): computers waiting for approval, every joined one, and the
+ * browsers signed in to the admin.
+ */
 export default async function DevicesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const context = await loadAdmin();
   const { server, devices } = context;
@@ -88,13 +118,16 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   const query = ((await searchParams).q ?? "").trim().toLowerCase();
   const waiting = value(await approvals(context.options)).filter((a) => matches(query, a.device, a.user.displayName));
   const joined = devices.filter((d) => matches(query, d.device, d.user.displayName, d.user.username));
+  const signedIn = value(await browsers(context.options)).filter((b) => matches(query, b.user.displayName, b.user.username));
   const csrf = await formToken();
   const now = Date.now();
   return (
     <AdminShell context={context} area="devices">
       <PageHead title={t("devices.title")} description={t("devices.description", { server: server.name })} actions={<Search query={query} />} />
-      <Waiting list={waiting} csrf={csrf} now={now} />
+      <Waiting list={waiting} usernames={new Map((context.people ?? []).map((person) => [person.id, person.username]))} csrf={csrf}
+        now={now} />
       <Joined list={joined} query={query} me={context.me.id} server={server.name} csrf={csrf} now={now} />
+      <Browsers list={signedIn} server={server.name} csrf={csrf} now={now} />
     </AdminShell>
   );
 }

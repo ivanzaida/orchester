@@ -1,5 +1,5 @@
 use axum::{Json, extract::State, http::StatusCode};
-use orchester_api::{AdminSessions, AdminUsers, UserChanges, UserResponse};
+use orchester_api::{AdminBrowsers, AdminSessions, AdminUsers, UserChanges, UserResponse};
 use orchester_core::id::{SessionId, UserId};
 
 use super::extract::{Auth, Id, SafeJson};
@@ -46,5 +46,23 @@ pub(super) async fn revoke_session(
   Id(id): Id<SessionId>,
 ) -> Result<StatusCode, ServerError> {
   server.revoke_admin_session(auth, id).await?;
+  Ok(StatusCode::NO_CONTENT)
+}
+
+pub(super) async fn browsers(
+  State(server): State<Server>,
+  Auth(auth): Auth,
+) -> Result<Json<AdminBrowsers>, ServerError> {
+  Ok(Json(AdminBrowsers {
+    browsers: server.admin_browsers(auth).await?,
+  }))
+}
+
+pub(super) async fn revoke_browser(
+  State(server): State<Server>,
+  Auth(auth): Auth,
+  Id(id): Id<SessionId>,
+) -> Result<StatusCode, ServerError> {
+  server.revoke_admin_browser(auth, id).await?;
   Ok(StatusCode::NO_CONTENT)
 }

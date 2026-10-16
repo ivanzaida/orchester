@@ -110,6 +110,9 @@ function cloudSignIn(world: World, body: Record<string, unknown>): Answer {
     return refuse(403, "cloud_off");
   }
   const email = tokenEmail(body.identity_token);
+  if (email === "approval@example.com") {
+    return refuse(403, "approval_required");
+  }
   if (email === "stale@example.com") {
     return refuse(409, "key_set_stale");
   }

@@ -1,5 +1,5 @@
 import type { ServerView } from "@/lib/authorize";
-import { call, nothing, type ApiResult, type CallOptions } from "@/lib/server/api";
+import { call, type ApiResult, type CallOptions } from "@/lib/server/api";
 import { record } from "@/lib/server/cloud";
 
 /**
@@ -61,7 +61,21 @@ export function keySet(options: CallOptions): Promise<ApiResult<string>> {
   return call("GET", "/keys", { expected: 200, read }, options);
 }
 
-/** `POST /invites`: an invite a team server signed, carried here by its inviter's browser. */
-export function deliverInvite(invite: string, options: CallOptions): Promise<ApiResult<true>> {
-  return call("POST", "/invites", { body: { invite }, expected: 202, read: nothing }, options);
+/** The team server an invite is from, as the cloud registered it. */
+export interface InvitingServer {
+  readonly name: string;
+  readonly address: string;
+}
+
+function readInviting(json: unknown): InvitingServer | null {
+  const { name, address } = record(record(json)?.server) ?? {};
+  return text(name) && text(address) ? { name, address } : null;
+}
+
+/**
+ * `POST /invites`: an invite a team server signed, carried here by its inviter's browser. The answer names the
+ * server as the cloud registered it: the only place the page leads back to.
+ */
+export function deliverInvite(invite: string, options: CallOptions): Promise<ApiResult<InvitingServer>> {
+  return call("POST", "/invites", { body: { invite }, expected: 202, read: readInviting }, options);
 }

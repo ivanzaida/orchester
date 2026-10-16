@@ -51,6 +51,9 @@ pub enum ErrorCode {
   ApprovalRefused,
   /// API 3: a sign-in to the server admin by an account that is not an admin and owns no project.
   NothingToManage,
+  /// API 3: join approval is on, so a sign-in to the server admin through Orchester Cloud is refused: sign in with a
+  /// code made on one of the account's own computers (a pairing code), or an account code from the host.
+  ApprovalRequired,
   RateLimited,
   Internal,
 }

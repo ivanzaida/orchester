@@ -1,9 +1,10 @@
 //! Signing in to the server admin in a browser: setup, pairing, account and cloud sign-ins as `admin_web` device
 //! tokens that live 12 hours, reach only what the admin pages call, and exist only for accounts with something to
-//! manage. `GET /admin/sessions` lists the computers, `DELETE` signs one out.
+//! manage. `GET /admin/sessions` lists the computers and `GET /admin/browsers` the browsers; `DELETE` signs one out.
 
 use orchester_api::{
-  AdminSessions, Credential, ErrorCode, Joined, JoinedVia, PairingCode, ProjectCreated, cloud::TokenPurpose,
+  AdminBrowsers, AdminSessions, Credential, ErrorCode, Joined, JoinedVia, PairingCode, ProjectCreated,
+  cloud::TokenPurpose,
 };
 use serde_json::{Value, json};
 
@@ -298,6 +299,198 @@ async fn sa_admins_list_every_computer_and_sign_any_one_out() {
       .await,
     404,
     ErrorCode::NotFound,
+  );
+  server.finish().await;
+}
+
+/// Security review 1, minor 5: browsers signed in to the admin are listed apart from the computers, and an admin signs
+/// any one of them out.
+#[tokio::test]
+async fn sa_admins_list_the_browsers_signed_in_to_the_admin_and_sign_one_out() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let bob = server.invited("bob", false).await;
+  let first = browser_with_pairing(&server, &admin.token).await;
+  server.clock.advance(5 * 60 * 1000);
+  let second = browser_with_pairing(&server, &admin.token).await;
+  let listed: AdminBrowsers = server
+    .request("GET", "/admin/browsers", Some(&first.token), None)
+    .await
+    .json();
+  let ids: Vec<_> = listed
+    .browsers
+    .iter()
+    .map(|browser| (browser.id, browser.current))
+    .collect();
+  assert_eq!(
+    ids,
+    [(second.session.id, false), (first.session.id, true)],
+    "newest sign-in first"
+  );
+  let newest = &listed.browsers[0];
+  assert_eq!((newest.user.username.as_str(), newest.via), ("alice", JoinedVia::Code));
+  assert_eq!(newest.expires_at, newest.created_at + 12 * HOUR_MS);
+  refused(
+    &server.request("GET", "/admin/browsers", Some(&bob.token), None).await,
+    403,
+    ErrorCode::Forbidden,
+  );
+  let computer = format!("/admin/browsers/{}", admin.session.id);
+  refused(
+    &server.request("DELETE", &computer, Some(&first.token), None).await,
+    404,
+    ErrorCode::NotFound,
+  );
+  let path = format!("/admin/browsers/{}", second.session.id);
+  assert_eq!(
+    server.request("DELETE", &path, Some(&first.token), None).await.status,
+    204
+  );
+  refused(
+    &server.request("GET", "/auth/me", Some(&second.token), None).await,
+    401,
+    ErrorCode::Unauthorized,
+  );
+  refused(
+    &server.request("DELETE", &path, Some(&first.token), None).await,
+    404,
+    ErrorCode::NotFound,
+  );
+  let left: AdminBrowsers = server
+    .request("GET", "/admin/browsers", Some(&first.token), None)
+    .await
+    .json();
+  assert_eq!(left.browsers.len(), 1);
+  server.finish().await;
+}
+
+/// Links the first admin's account to `bob`'s cloud identity, as linking the server through `/authorize` does.
+async fn link_admin_to_bob(
+  server: &TestServer,
+  admin: &Joined,
+  cloud: &crate::support::cloud::TestCloud,
+  audience: &str,
+) {
+  let started = server
+    .request(
+      "PATCH",
+      "/server/cloud",
+      Some(&admin.token),
+      Some(json!({"link":"start"})),
+    )
+    .await;
+  assert_eq!(started.status, 200);
+  let token = cloud.purposed_token(&bob(audience, None), TokenPurpose::Link, server.seconds());
+  let finish = json!({"link": {"root_key": cloud.root.public(), "key_set": cloud.key_set(server.seconds()),
+    "identity_token": token}});
+  let finished = server
+    .request("PATCH", "/server/cloud", Some(&admin.token), Some(finish))
+    .await;
+  assert_eq!(finished.status, 200);
+}
+
+async fn browser_with_pairing(server: &TestServer, token: &Credential) -> Joined {
+  let pairing: PairingCode = server.request("POST", "/auth/pairings", Some(token), None).await.json();
+  let joined = admin_code(server, &pairing.code, None).await;
+  assert_eq!(joined.status, 201);
+  joined.json()
+}
+
+/// Security review 1, B2: while join approval is on, a cloud identity alone does not open the admin; a code from one
+/// of the account's own computers does.
+#[tokio::test]
+async fn sa_with_join_approval_on_a_cloud_sign_in_to_the_admin_is_refused() {
+  let (server, admin, cloud, audience) = linked().await;
+  link_admin_to_bob(&server, &admin, &cloud, &audience).await;
+  let approval = json!({"join_approval": true});
+  assert_eq!(
+    server
+      .request("PATCH", "/server/settings", Some(&admin.token), Some(approval))
+      .await
+      .status,
+    200
+  );
+  let token = cloud.purposed_token(&bob(&audience, None), TokenPurpose::Admin, server.seconds());
+  let body = json!({"identity_token": token, "device": "Edge on Windows", "kind": "admin_web"});
+  let response = server.request("POST", "/auth/cloud", None, Some(body.clone())).await;
+  refused(&response, 403, ErrorCode::ApprovalRequired);
+  let approvals: Value = server
+    .request("GET", "/auth/approvals", Some(&admin.token), None)
+    .await
+    .json();
+  assert_eq!(
+    approvals["approvals"].as_array().map(Vec::len),
+    Some(0),
+    "nothing waits: the sign-in is refused"
+  );
+  browser_with_pairing(&server, &admin.token).await;
+  let off = json!({"join_approval": false});
+  assert_eq!(
+    server
+      .request("PATCH", "/server/settings", Some(&admin.token), Some(off))
+      .await
+      .status,
+    200
+  );
+  assert_eq!(
+    server.request("POST", "/auth/cloud", None, Some(body)).await.status,
+    201,
+    "the refused token was not used up"
+  );
+  server.finish().await;
+}
+
+/// Security review 1, B2: a browser signed in to the admin never answers its own account's waiting joins.
+#[tokio::test]
+async fn sa_an_admin_browser_never_answers_its_own_accounts_approvals() {
+  let (server, admin, cloud, audience) = linked().await;
+  link_admin_to_bob(&server, &admin, &cloud, &audience).await;
+  let approval = json!({"join_approval": true});
+  assert_eq!(
+    server
+      .request("PATCH", "/server/settings", Some(&admin.token), Some(approval))
+      .await
+      .status,
+    200
+  );
+  let waiting = cloud_join(&server, &cloud.token(&bob(&audience, None), server.seconds()), None).await;
+  assert_eq!(waiting.status, 202);
+  let id = waiting.json::<Value>()["approval"]["id"]
+    .as_str()
+    .expect("an approval")
+    .to_owned();
+  let browser = browser_with_pairing(&server, &admin.token).await;
+  let listed: Value = server
+    .request("GET", "/auth/approvals", Some(&browser.token), None)
+    .await
+    .json();
+  assert_eq!(
+    listed["approvals"].as_array().map(Vec::len),
+    Some(0),
+    "not even listed to its own browser"
+  );
+  let path = format!("/auth/approvals/{id}");
+  let answered = server
+    .request("POST", &path, Some(&browser.token), Some(json!({"approve": true})))
+    .await;
+  refused(&answered, 404, ErrorCode::NotFound);
+  let other = server.invited("carol", true).await;
+  let other_browser = browser_with_pairing(&server, &other.token).await;
+  let listed: Value = server
+    .request("GET", "/auth/approvals", Some(&other_browser.token), None)
+    .await
+    .json();
+  assert_eq!(
+    listed["approvals"].as_array().map(Vec::len),
+    Some(1),
+    "another admin's browser sees it"
+  );
+  let own_computer = server
+    .request("POST", &path, Some(&admin.token), Some(json!({"approve": true})))
+    .await;
+  assert_eq!(
+    own_computer.status, 200,
+    "one of the account's own computers answers it"
   );
   server.finish().await;
 }
