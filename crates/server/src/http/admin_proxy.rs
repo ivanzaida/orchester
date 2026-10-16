@@ -35,8 +35,21 @@ const HOP_BY_HOP: [&str; 8] = [
   "upgrade",
 ];
 
-/// What the client may not tell the admin itself: the server sets the forwarded headers.
-const FORWARDED: [&str; 4] = ["forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto"];
+/// What the client may not tell the admin itself: the server sets the forwarded headers, and the rest describe a
+/// proxy's view the admin must not take from a browser. `x-middleware-subrequest` would let a request skip Next.js'
+/// own middleware (`proxy.ts`, with its CSP and HTTPS rule).
+const FORWARDED: [&str; 10] = [
+  "forwarded",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-forwarded-port",
+  "x-forwarded-prefix",
+  "x-forwarded-ssl",
+  "x-forwarded-scheme",
+  "x-real-ip",
+  "x-middleware-subrequest",
+];
 
 pub(super) async fn forward(State(server): State<Server>, peer: ConnectInfo<PeerAddr>, request: Request) -> Response {
   let path = request.uri().path();
@@ -105,7 +118,7 @@ async fn send(admin_url: &str, request: Request, client: &str, scheme: &str) -> 
   let (mut parts, body) = request.into_parts();
   let host = parts.headers.get(header::HOST).cloned();
   strip(&mut parts.headers, &FORWARDED);
-  strip(&mut parts.headers, &HOP_BY_HOP);
+  strip_hop_by_hop(&mut parts.headers);
   set(&mut parts.headers, "x-forwarded-for", client);
   set(&mut parts.headers, "x-forwarded-proto", scheme);
   if let Some(host) = host {
@@ -120,8 +133,23 @@ async fn send(admin_url: &str, request: Request, client: &str, scheme: &str) -> 
     .map_err(|_| Unreachable)?
     .map_err(|_| Unreachable)?;
   let (mut parts, body) = answer.into_parts();
-  strip(&mut parts.headers, &HOP_BY_HOP);
+  strip_hop_by_hop(&mut parts.headers);
   Ok(Response::from_parts(parts, Body::new(body)))
+}
+
+/// Removes the hop-by-hop headers, and the ones `Connection` names as this connection's own (RFC 9110 §7.6.1).
+fn strip_hop_by_hop(headers: &mut HeaderMap) {
+  let named: Vec<HeaderName> = headers
+    .get_all(header::CONNECTION)
+    .iter()
+    .filter_map(|value| value.to_str().ok())
+    .flat_map(|value| value.split(','))
+    .filter_map(|name| HeaderName::from_bytes(name.trim().as_bytes()).ok())
+    .collect();
+  for name in named {
+    headers.remove(name);
+  }
+  strip(headers, &HOP_BY_HOP);
 }
 
 fn strip(headers: &mut HeaderMap, names: &[&str]) {

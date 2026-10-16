@@ -201,3 +201,40 @@ async fn sa_behind_a_trusted_proxy_the_admin_is_told_the_browsers_scheme() {
     "the configured address's scheme"
   );
 }
+
+/// Security review 1, minor 4: what `Connection` names stays on its connection, and a client's proxy headers (one of
+/// them would let a request skip Next.js' middleware) never reach the admin.
+#[tokio::test]
+async fn sa_connection_named_and_proxy_headers_from_the_client_are_dropped() {
+  let admin = AdminApp::start().await;
+  let url = admin.url.clone();
+  let server = TestServer::start(move |config| config.admin_url = url).await;
+  let page = server
+    .page(
+      "GET",
+      "/admin",
+      &[
+        ("Connection", "close, X-Secret-Hop"),
+        ("X-Secret-Hop", "hop-value"),
+        ("X-Forwarded-Port", "8443"),
+        ("X-Forwarded-Prefix", "/elsewhere"),
+        ("X-Real-IP", "198.51.100.77"),
+        ("X-Middleware-Subrequest", "middleware:middleware:middleware"),
+        ("X-Kept", "kept-value"),
+      ],
+    )
+    .await;
+  assert_eq!(page.status, 200);
+  let head = admin.heads().pop().expect("a forwarded request").to_ascii_lowercase();
+  for gone in [
+    "hop-value",
+    "8443",
+    "/elsewhere",
+    "198.51.100.77",
+    "x-middleware-subrequest",
+  ] {
+    assert!(!head.contains(gone), "{gone} reached the admin: {head}");
+  }
+  assert!(head.contains("x-kept: kept-value"), "{head}");
+  server.finish().await;
+}

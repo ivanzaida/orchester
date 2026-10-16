@@ -1102,7 +1102,9 @@ certificate in every setup:
   on the private address and trusts them (its own origin for the `Origin` check is their proto and host). The proto
   is `https` when the server presents its own certificate; behind a proxy that holds it (`tls = "off"`, Caddy) it is
   what a trusted proxy said in `X-Forwarded-Proto` (one value, `http` or `https`), else the scheme of `address`, else
-  `http` (security review 1, M1).
+  `http` (security review 1, M1). Hop-by-hop headers and every header `Connection` names stay on their connection,
+  both ways, and a client's `Forwarded`, `X-Forwarded-*`, `X-Real-IP` and `X-Middleware-Subrequest` (which would let
+  a request skip the admin's own Next.js middleware) never reach the admin (minor 4).
 - **The admin's server side calls the API** on a second, private plain-HTTP listener of the server
   (`admin_api_listen`, default `127.0.0.1:8741`, never published): the public port presents the server's own
   certificate, which the admin's Node would otherwise have to pin. That listener takes the browser's address and host
