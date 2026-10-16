@@ -33,8 +33,8 @@ use crate::{
 };
 
 /// The title and what the list shows, with the holds on new starts once the tasks are read (`queue`), and New task
-/// and Create multiple at the end.
-pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps>, shared: Option<&Shared>) -> Row {
+/// and Create multiple at the end; a linked project's line under them.
+pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps>, shared: Option<&Shared>) -> Column {
   let queue = queue.map(|queue| ctx.mount_keyed::<QueueControls>(&format!("tasks-queue-{project}"), queue));
   let navigation = Navigation::of(ctx);
   let read_only = shared.and_then(|shared| shared.read_only(ctx));
@@ -58,7 +58,7 @@ pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps
     .with_children(queue)
     .child(create_multiple)
     .child(new);
-  Row::new()
+  let row = Row::new()
     .id("tasks-header")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().bottom(SpacingSize::Xs))
@@ -77,10 +77,15 @@ pub(super) fn header(ctx: &mut Ctx, project: ProjectId, queue: Option<QueueProps
           Text::new(&ctx.t("tasks.description"))
             .variant(TypographyStyle::Body)
             .color(PaletteColor::TextSecondary),
-        )
-        .with_children(line),
+        ),
     )
-    .child(with_reason(actions, "tasks-create-multiple-reason", &reason))
+    .child(with_reason(actions, "tasks-create-multiple-reason", &reason));
+  // The line takes the page's width under the title and the actions, which the holds on new starts widen beyond
+  // `Xr4Wb`'s.
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(row)
+    .with_children(line)
 }
 
 /// New task, which opens the New task form.

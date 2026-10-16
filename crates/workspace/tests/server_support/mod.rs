@@ -283,8 +283,21 @@ impl TestServer {
     keys.into_iter().map(|(_, key)| key).collect()
   }
 
+  /// Adds tasks of `contents` (the API's `TaskContent`) to `project`, as the first admin creates them from their
+  /// computer.
+  pub fn add_tasks(&self, project: &SharedProject, contents: &[Value]) {
+    let body = json!({ "idempotency_key": orchester_core::id::IdempotencyKey::generate(), "tasks": contents });
+    self.admin_request("POST", &format!("/projects/{}/tasks", project.id), &body);
+  }
+
   /// Gives the task `key` of `project` the title `title`, as the first admin saves it from their computer.
   pub fn retitle(&self, project: &SharedProject, key: &str, title: &str) {
+    self.change_task(project, key, &json!({ "title": title }));
+  }
+
+  /// Changes the task `key` of `project` by `changes` (the API's `Changes`), as the first admin saves it from their
+  /// computer.
+  pub fn change_task(&self, project: &SharedProject, key: &str, changes: &Value) {
     let path = format!("/projects/{}/tasks", project.id);
     let tasks = self.admin_request("GET", &path, &Value::Null);
     let task = tasks["tasks"]
@@ -294,10 +307,7 @@ impl TestServer {
       .find(|task| task["key"] == key)
       .expect("the task")
       .clone();
-    let body = json!({
-      "revision": task["revision"],
-      "changes": { "title": title },
-    });
+    let body = json!({ "revision": task["revision"], "changes": changes });
     let id = task["id"].as_str().expect("task id");
     self.admin_request("PATCH", &format!("{path}/{id}"), &body);
   }

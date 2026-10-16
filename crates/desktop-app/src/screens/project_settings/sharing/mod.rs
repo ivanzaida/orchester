@@ -20,6 +20,7 @@ use lurq::{
   },
   components::Column,
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{repository::RepositoryIdentity, store::TaskStore};
@@ -73,6 +74,9 @@ pub(super) struct Sharing {
   revision: Signal<u64>,
   /// What *Make local* did, said over the local page until the person dismisses it.
   made_local: Signal<make_local::Made>,
+  /// Opened for *Make local*'s question, the page scrolls to it once it shows.
+  scroll: ScrollState,
+  scrolled: Signal<bool>,
 }
 
 impl Component for Sharing {
@@ -82,6 +86,8 @@ impl Component for Sharing {
     Self {
       revision: ctx.signal(0),
       made_local: ctx.signal(make_local::Made::default()),
+      scroll: ScrollState::new(),
+      scrolled: ctx.signal(false),
     }
   }
 
@@ -103,16 +109,23 @@ impl Component for Sharing {
       .state()
       .get();
     let content = match (state.data, state.error) {
-      (Some(facts), _) if facts.link.is_some() => ctx.mount_keyed::<linked::Linked>(
-        "project-settings-sharing-linked",
-        linked::Props {
-          project: props.project,
-          facts,
-          revision: self.revision.clone(),
-          made_local: self.made_local.clone(),
-          ask_make_local: props.make_local,
-        },
-      ),
+      (Some(facts), _) if facts.link.is_some() => {
+        if props.make_local && !self.scrolled.get() {
+          // Make local is the page's last part: its question is at the bottom.
+          self.scrolled.set(true);
+          self.scroll.scroll_to_bottom_pending();
+        }
+        ctx.mount_keyed::<linked::Linked>(
+          "project-settings-sharing-linked",
+          linked::Props {
+            project: props.project,
+            facts,
+            revision: self.revision.clone(),
+            made_local: self.made_local.clone(),
+            ask_make_local: props.make_local,
+          },
+        )
+      }
       (Some(facts), _) => ctx.mount_keyed::<link::Link>(
         "project-settings-sharing-link",
         link::Props {
@@ -133,7 +146,7 @@ impl Component for Sharing {
       }
       (None, None) => loading("project-settings-sharing-loading", &ctx.t("sharing.reading")).into(),
     };
-    page::scroll(Column::new().width(Dimension::Pct(100.0)).child(content))
+    page::scroll_with(Column::new().width(Dimension::Pct(100.0)).child(content), &self.scroll)
   }
 }
 

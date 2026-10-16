@@ -47,6 +47,9 @@ use crate::{
 /// have their own.
 const ROLE_COLUMN: f32 = 90.0;
 const ADDED_COLUMN: f32 = 80.0;
+/// Where the member controls stood (`Actions` `s8ykaN`): the server admin has them now, and the column stays empty so
+/// the table keeps the design's columns.
+const ACTIONS_COLUMN: f32 = 220.0;
 /// A member's row and the header (`Member row` `f2kjDI`).
 const ROW_HEIGHT: f32 = 44.0;
 const HEADER_HEIGHT: f32 = 30.0;
@@ -182,8 +185,9 @@ impl Members {
     if manages && let Some(url) = admin_url(props) {
       rows.push(
         Row::new()
+          .width(Dimension::Pct(100.0))
           .padding(Padding::new().top(SpacingSize::Md))
-          .child(page::icon_note(
+          .child(page::wide_note(
             "sharing-members-manage-note",
             Icon::ExternalLink,
             &ctx.t_args("sharing.members.manageNote", [("url", strip(&url))]),
@@ -288,6 +292,7 @@ fn header(ctx: &Ctx) -> Row {
         .width(Dimension::Px(ADDED_COLUMN))
         .child(heading("sharing.members.added")),
     )
+    .child(Row::new().width(Dimension::Px(ACTIONS_COLUMN)))
 }
 
 /// How to come back once the person is no longer a member: ask an owner (`Note` in `xLeTJ`).
@@ -295,8 +300,9 @@ fn removed_note(ctx: &Ctx, props: &Props, members: &ProjectMembers) -> Element {
   let separator = ctx.t("sharing.members.or");
   let owners: Vec<&str> = members.owners().map(|owner| owner.display_name.as_str()).collect();
   Row::new()
+    .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(SpacingSize::Md))
-    .child(page::icon_note(
+    .child(page::wide_note(
       "sharing-members-come-back",
       Icon::Info,
       &ctx.t_args(
@@ -367,6 +373,7 @@ fn member_row(ctx: &Ctx, member: &SharedMember, me: Option<Option<&str>>) -> Row
           .color(PaletteColor::TextMuted),
       ),
     )
+    .child(Row::new().width(Dimension::Px(ACTIONS_COLUMN)))
 }
 
 /// A row of the table: its cells 12 apart, on a 1 `border` line.
