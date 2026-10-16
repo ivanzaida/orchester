@@ -163,7 +163,7 @@ async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError>
 /// The project's tools and tool `id`'s revision ([`crate::drafts::draft_revision`]), read before them: a save made
 /// meanwhile shows in the tools, so a save on that revision is refused rather than going over what was not shown.
 pub(super) fn tools_with_revision(root: &Path, id: ResourceId) -> Result<(ProjectTools, String), ToolError> {
-  let revision = revision_of::<Tool, _>(&ProjectDb::open(root)?, id)?;
+  let revision = revision_of::<Tool>(&ProjectDb::open(root)?, id)?;
   Ok((ProjectTools::load_in(root)?, revision))
 }
 

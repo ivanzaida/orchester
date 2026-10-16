@@ -83,7 +83,7 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
 /// before the profile: a save made meanwhile shows in the profile, so a save on that revision is refused rather
 /// than going over what was not shown.
 pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Result<Value, ToolError> {
-  let revision = revision_of::<AgentProfile, _>(&ProjectDb::open(&open.repo_root)?, id)?;
+  let revision = revision_of::<AgentProfile>(&ProjectDb::open(&open.repo_root)?, id)?;
   let agents = ProjectAgents::load_in(&open.repo_root)?;
   let entry = agents
     .profile(id)
