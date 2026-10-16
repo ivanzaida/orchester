@@ -50,11 +50,23 @@ impl Link {
     .into()
   }
 
-  /// *orchester.toml names a project* with *Use this address* and *Not now*; nothing is contacted before.
-  fn discovery_offer(&self, ctx: &Ctx, props: &Props) -> Option<Element> {
+  /// *orchester.toml names a project* on a connected server, with *Use this address* and *Not now*; nothing is
+  /// contacted before. A file that names a server this computer isn't connected to asks step by step instead.
+  fn discovery_offer(&self, ctx: &mut Ctx, props: &Props) -> Option<Element> {
+    if let Some(offer) = self.unconnected_offer(ctx, props) {
+      return Some(offer);
+    }
     let ProjectDiscovery::Project(address) = &props.facts.discovery else {
       return None;
     };
+    if !props
+      .facts
+      .servers
+      .iter()
+      .any(|entry| entry.address == *address.server())
+    {
+      return None;
+    }
     if self.discovery_answered.get() {
       return None;
     }

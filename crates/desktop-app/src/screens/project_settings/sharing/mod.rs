@@ -2,11 +2,16 @@
 //! project's task list lives. A local project links to a project on a connected team server, chosen from the
 //! person's projects there or by its address, typed or prefilled from `orchester.toml` and contacted only after the
 //! person confirms; its checkout's `origin` is compared with the project's repository hint, and a mismatch warns and
-//! lets the person go on ([`link`]). A linked project shows where it lives and offers *Leave* ([`linked`]); its
-//! members, *Make local* and the discovery file are N2's.
+//! lets the person go on ([`link`]). What the link uploads is confirmed on a page of its own (`KSnOW`, [`upload`]). A
+//! linked project shows where it lives, its discovery file, its members read-only with *Manage members and invites*
+//! (the server admin, in the browser), *Make local* and *Leave* ([`linked`]).
 
+mod confirm;
 mod link;
 mod linked;
+mod make_local;
+mod members;
+mod upload;
 
 use lurq::{
   app::{
@@ -24,15 +29,16 @@ use orchester_workspace::{
   sharing::{
     ServerEntry, Servers,
     project::{
-      discovery::{self, ProjectDiscovery},
+      discovery::{self, LinkedDiscovery, ProjectDiscovery},
       link::checkout_origin,
     },
   },
 };
 
+pub(super) use self::upload::{LinkPage, link_page};
 use super::{TabProps, page};
 use crate::{
-  screens::settings::orchester::{Said, follow},
+  screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
   ui::state::{load_error, loading},
 };
@@ -48,6 +54,8 @@ pub(super) struct Facts {
   pub discovery: ProjectDiscovery,
   /// The local tasks, which a link to an empty project uploads with their numbers.
   pub tasks: usize,
+  /// A linked project's `orchester.toml` against its address.
+  pub linked_discovery: Option<LinkedDiscovery>,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -63,6 +71,8 @@ impl Facts {
 pub(super) struct Sharing {
   /// Counts *Try again*, a link and a leave, each of which reads the tab again.
   revision: Signal<u64>,
+  /// What *Make local* did, said over the local page until the person dismisses it.
+  made_local: Signal<make_local::Made>,
 }
 
 impl Component for Sharing {
@@ -71,13 +81,15 @@ impl Component for Sharing {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       revision: ctx.signal(0),
+      made_local: ctx.signal(make_local::Made::default()),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let services = Services::of(ctx);
-    let revision = follow(ctx, (&services.servers, &services.cloud)) + self.revision.get();
+    let revision =
+      follow(ctx, (&services.servers, &services.cloud)) + follow_shared(ctx, &services.servers) + self.revision.get();
     let root = props.project.open.repo_root.clone();
     let state = ctx
       .future(
@@ -97,6 +109,8 @@ impl Component for Sharing {
           project: props.project,
           facts,
           revision: self.revision.clone(),
+          made_local: self.made_local.clone(),
+          ask_make_local: props.make_local,
         },
       ),
       (Some(facts), _) => ctx.mount_keyed::<link::Link>(
@@ -104,7 +118,8 @@ impl Component for Sharing {
         link::Props {
           project: props.project,
           facts,
-          revision: self.revision.clone(),
+          page: props.link_page,
+          made_local: self.made_local.clone(),
         },
       ),
       (None, Some(reason)) => {
@@ -131,6 +146,10 @@ fn read(
   let db = ProjectDb::open(root).map_err(local)?;
   let link = db.sharing().map_err(local)?;
   let tasks = db.tasks().map_err(local)?.len();
+  let linked_discovery = link
+    .as_ref()
+    .and_then(|link| link.address.as_deref())
+    .map(|address| discovery::inspect_linked(programs, root, address));
   let servers = servers
     .entries()
     .map_err(|_| Said::new("cloud.errors.local"))?
@@ -143,5 +162,6 @@ fn read(
     origin: checkout_origin(programs, root),
     discovery: discovery::project(root),
     tasks,
+    linked_discovery,
   })
 }

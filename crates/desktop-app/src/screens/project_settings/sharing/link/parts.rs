@@ -73,7 +73,7 @@ pub(super) fn admin_note(ctx: &Ctx, entry: Option<&ServerEntry>) -> Element {
 }
 
 /// *What linking sends* (`What linking sends` in `bWD9q`).
-pub(super) fn sends(ctx: &Ctx) -> Element {
+pub fn sends(ctx: &Ctx) -> Element {
   Column::new()
     .id("sharing-sends")
     .width(Dimension::Pct(100.0))

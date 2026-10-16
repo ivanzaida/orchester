@@ -1,7 +1,8 @@
 //! A linked project's Sharing (`L5o9Xy`, *Removed from the project* in `N9NFio`): where its task list lives, its
-//! address with the server's state, and *Leave or make local*. *Leave* asks in place and keeps a local copy of the
-//! tasks and this computer's connection to the server; *Make local* is N2's and says so. Once the person is no longer a
-//! member, the page says so instead of offering *Leave*.
+//! address with the server's state, its repository and discovery file ([`discovery`]), its members read-only
+//! ([`super::members`]), and *Leave or make local*. *Make local* asks in place ([`super::make_local`]); *Leave* asks
+//! in place and keeps a local copy of the tasks and this computer's connection to the server. Once the person is no
+//! longer a member, the page says so instead of offering *Leave* and the members, and *Make local* stays.
 
 use lurq::{
   app::{
@@ -16,9 +17,11 @@ use lurq::{
 use orchester_api::MemberRole;
 use orchester_workspace::sharing::project::{MemberChange, ProjectServer};
 
+mod discovery;
+mod removed;
 mod rows;
 
-use super::Facts;
+use super::{Facts, make_local, members};
 use crate::{
   project::ShownProject,
   screens::{
@@ -40,6 +43,9 @@ pub(super) struct Props {
   pub project: ShownProject,
   pub facts: Facts,
   pub revision: Signal<u64>,
+  pub made_local: Signal<make_local::Made>,
+  /// Opens with *Make local*'s question.
+  pub ask_make_local: bool,
 }
 
 impl PartialEq for Props {
@@ -52,6 +58,8 @@ impl DevtoolsInspectable for Props {}
 
 pub(super) struct Linked {
   asking: Signal<bool>,
+  /// *Make local*'s question is open.
+  making_local: Signal<bool>,
   leave: FutureAction<(), (), Said>,
   /// Leaving is a person's (review 1, M1).
   person: PersonOnly,
@@ -72,6 +80,7 @@ impl Component for Linked {
     );
     Self {
       asking: ctx.signal(false),
+      making_local: ctx.signal(props.ask_make_local),
       leave: ctx.future_action(move |(): ()| {
         let (servers, root, revision) = (servers.clone(), root.clone(), revision.clone());
         async move {
@@ -115,7 +124,10 @@ impl Component for Linked {
       Some(Ok(hint)) => hint.name().to_owned(),
       _ => name.clone(),
     };
-    let state = shared_state(ctx, link, (&server, &role));
+    let state = match link.removed_at {
+      Some(_) => removed::state(ctx, link, &shared),
+      None => shared_state(ctx, link, (&server, &role)),
+    };
     let task_list = side_row(
       Label::new("sharing-task-list", ctx.t("sharing.link.taskList")).description(ctx.t_args(
         "sharing.linked.taskListDescription",
@@ -131,64 +143,78 @@ impl Component for Linked {
     );
     let address_row = rows::address_row(ctx, link, entry);
     let repository_row = rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server));
-    let mut column = Column::new()
+    let discovery_row = ctx.mount_keyed::<discovery::DiscoveryRow>(
+      "sharing-discovery-row",
+      discovery::Props {
+        project: props.project.clone(),
+        address: link.address.clone(),
+        discovery: props.facts.linked_discovery.clone(),
+        revision: props.revision.clone(),
+      },
+    );
+    let servers = Services::of(ctx).servers;
+    let notice = link.removed_at.map(|_| {
+      let username = props
+        .facts
+        .linked_server()
+        .and_then(|entry| entry.stored.account.as_ref())
+        .map(|account| account.username.clone())
+        .unwrap_or_default();
+      let names = removed::Names {
+        local: &name,
+        shared: &shared,
+        server: &server,
+        tasks: props.facts.tasks,
+        username: &username,
+      };
+      removed::notice(ctx, (link, &names), (&servers, &self.making_local))
+    });
+    Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
+      .with_children(notice)
       .child(section(
         "project-settings-sharing-task-list",
         &ctx.t("sharing.link.taskList"),
         None,
-        vec![task_list, address_row, repository_row],
-      ));
-    if link.removed_at.is_some() {
-      column = column.child(
-        Callout::new(
-          "sharing-removed",
-          CalloutTone::Warning,
-          ctx.t_args("sharing.linked.removed.title", [("project", shared.as_str())]),
-        )
-        .icon(Icon::UserX)
-        .body(ctx.t_args("sharing.linked.removed.body", [("project", shared.as_str())])),
-      );
-    }
-    column.child(self.leave_section(ctx, &props, (&name, &shared, &server), link.key.as_str()))
+        vec![task_list, address_row, repository_row, discovery_row],
+      ))
+      .child(members_section(ctx, &props, &shared, &server))
+      .child(self.leave_section(ctx, &props, (&shared, &server), link.key.as_str()))
   }
 }
 
 impl Linked {
-  /// *Leave or make local*: *Make local* (N2, not in this version) and *Leave Kontur*, asked in place.
-  /// `name` is this project's, `shared` the server project's.
-  fn leave_section(
-    &self,
-    ctx: &mut Ctx,
-    props: &Props,
-    (name, shared, server): (&str, &str, &str),
-    key: &str,
-  ) -> Element {
-    let make_local = side_row(
-      Label::new("sharing-make-local", ctx.t("sharing.linked.makeLocal"))
-        .description(ctx.t_args("sharing.linked.makeLocalDescription", [("project", name), ("key", key)])),
-      Column::new().width(Dimension::Px(CONTROL_WIDTH)).child(
-        ActionButton::new(
-          "sharing-make-local-button",
-          ButtonKind::Secondary,
-          ctx.t("sharing.linked.makeLocalButton"),
-        )
-        .icon(Icon::Unlink)
-        .unavailable(ctx.t("sharing.linked.makeLocalNotBuilt")),
-      ),
-      Place::Within,
-      true,
+  /// *Leave or make local*: *Make local* and *Leave Kontur*, each asked in place.
+  /// `shared` is the server project's name.
+  fn leave_section(&self, ctx: &mut Ctx, props: &Props, (shared, server): (&str, &str), key: &str) -> Element {
+    let make_local = ctx.mount_keyed::<make_local::MakeLocal>(
+      "sharing-make-local-component",
+      make_local::Props {
+        project: props.project.clone(),
+        server: server.to_owned(),
+        key: key.to_owned(),
+        made: props.made_local.clone(),
+        revision: props.revision.clone(),
+        asking: self.making_local.clone(),
+      },
     );
     let removed = props.facts.link.as_ref().is_some_and(|link| link.removed_at.is_some());
+    if removed {
+      return section(
+        "project-settings-sharing-leave",
+        &ctx.t("sharing.linked.makeLocalSection"),
+        None,
+        vec![make_local],
+      )
+      .into();
+    }
     let state = self.leave.state().get();
     let mut control = Column::new()
       .width(Dimension::Px(CONTROL_WIDTH))
       .spacing(SpacingSize::Sm);
-    if removed {
-      control = control.child(page::note("sharing-left", &ctx.t("sharing.linked.left")));
-    } else if self.asking.get() {
+    if self.asking.get() {
       control = control.child(self.question(ctx, (shared, server), state.is_pending()));
     } else {
       let asking = self.asking.clone();
@@ -283,4 +309,27 @@ fn shared_state(ctx: &Ctx, link: &orchester_store::SharingLink, (server, role): 
         ],
       ),
     ))
+}
+
+/// *Members*, read-only, with who the person is there.
+fn members_section(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> Element {
+  let link = props.facts.link.as_ref();
+  let entry = props.facts.linked_server();
+  let account = entry.and_then(|entry| entry.stored.account.as_ref());
+  ctx.mount_keyed::<members::Members>(
+    "sharing-members",
+    members::Props {
+      project: props.project.clone(),
+      server: server.to_owned(),
+      shared: shared.to_owned(),
+      address: link.and_then(|link| link.address.clone()),
+      owner: link.is_some_and(|link| link.role == Some(MemberRole::Owner)),
+      admin: account.is_some_and(|account| account.admin),
+      me: account.map(|account| account.user),
+      connected: entry
+        .is_some_and(|entry| entry.connection == Some(orchester_workspace::sharing::Connection::Connected)),
+      removed: link.and_then(|link| link.removed_at),
+      username: account.map(|account| account.username.clone()),
+    },
+  )
 }

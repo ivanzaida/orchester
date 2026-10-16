@@ -209,6 +209,22 @@ pub fn follow(ctx: &mut Ctx, (servers, cloud): (&Servers, &Cloud)) -> u64 {
   stream.state().get().data.unwrap_or_default()
 }
 
+/// Counts changes of the shared projects' caches (a role, a removal, a sync), for a screen that shows how a project
+/// stands with its server.
+pub fn follow_shared(ctx: &mut Ctx, servers: &Servers) -> u64 {
+  let stream = ctx.stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
+    let mut shared = servers.subscribe_shared();
+    let mut count = 0_u64;
+    loop {
+      if !emitter.emit(count) || shared.changed().await.is_err() {
+        return;
+      }
+      count += 1;
+    }
+  });
+  stream.state().get().data.unwrap_or_default()
+}
+
 /// What the tab shows, read off the UI thread at `revision`; `None` until the first read finished.
 fn snapshot(ctx: &mut Ctx, revision: u64, (servers, cloud): (&Servers, &Cloud)) -> Result<Option<Snapshot>, Said> {
   let state = ctx
