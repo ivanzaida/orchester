@@ -448,6 +448,20 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
     lurq::node::BackgroundColor::Palette(PaletteColor::BorderFocus),
     "in `border_focus`, as the design draws focus"
   );
+  let link_ring = theme.shadow_style(ExtraShadow::LinkFocusRing.role());
+  assert_eq!(
+    link_ring
+      .iter()
+      .map(|shadow| (shadow.spread, shadow.inset, shadow.color.clone()))
+      .collect::<Vec<_>>(),
+    [(
+      2.0,
+      false,
+      lurq::node::BackgroundColor::Palette(PaletteColor::BorderFocus)
+    )],
+    "a link's ring: 2 of `border_focus` outside its words (`Mjhop`)"
+  );
+  assert_eq!(theme.radius_value(ExtraRadius::Link.role()), 3.0, "its corners");
   for (mode, code, link) in [(Mode::Dark, "#0E0E10", "#EDEDF0"), (Mode::Light, "#F6F6F8", "#18181B")] {
     theme::apply(theme, mode);
     let markdown = theme.markdown().clone();

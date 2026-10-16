@@ -5,7 +5,7 @@ use lurq::{
   node::box_shadow::BoxShadow,
 };
 
-use super::ExtraColor;
+use super::{ExtraColor, markdown::LINK_RING_WIDTH};
 
 /// Shadows without a built-in lurq role, registered as `ShadowStyle::Extra`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,10 +14,13 @@ pub enum ExtraShadow {
   /// draws a focused button (`pWR5E`, `iFzXa`); a focused field takes the same color as its stroke. Inside
   /// the edge no parent clips it and it never moves layout; `selection` stays for what is selected.
   FocusRing,
+  /// The ring of a focused control that is only words, a link or a disclosure line: 2 of `border_focus` outside
+  /// them, as the design draws a focused link (`Mjhop`) and the Markdown links do. Paint only: it never moves layout.
+  LinkFocusRing,
 }
 
 impl ExtraShadow {
-  pub const ALL: [Self; 1] = [Self::FocusRing];
+  pub const ALL: [Self; 2] = [Self::FocusRing, Self::LinkFocusRing];
 
   pub fn role(self) -> ShadowStyle {
     ShadowStyle::extra(self.name())
@@ -26,6 +29,7 @@ impl ExtraShadow {
   const fn name(self) -> &'static str {
     match self {
       Self::FocusRing => "focus_ring",
+      Self::LinkFocusRing => "link_focus_ring",
     }
   }
 
@@ -34,6 +38,9 @@ impl ExtraShadow {
       Self::FocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus)
         .spread(FOCUS_RING_WIDTH)
         .inset()]),
+      Self::LinkFocusRing => {
+        Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus).spread(LINK_RING_WIDTH)])
+      }
     }
   }
 }

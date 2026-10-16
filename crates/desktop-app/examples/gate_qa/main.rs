@@ -1,10 +1,11 @@
 //! The sign-in gate's states for design verification without a person's press (layer *Sign-in gate* `ASl21`): the
 //! window opens in one of [`State::ALL`] at 1440 or, with `--narrow`, 960 wide. What a person would have done is done
 //! before the window shows: signing in, the cloud ending the sign-in, or typing and pressing *Sign in* with the pointer
-//! ([`drive`]). The window keeps its tokens in a keychain in memory, and its cloud is a stand-in on loopback. Fixture
-//! data for QA, never shipped: an example is no part of the app's program.
+//! ([`drive`]); with `--tab <count>`, Tab pressed that many times after, so a focus ring shows. The window keeps its
+//! tokens in a keychain in memory, and its cloud is a stand-in on loopback. Fixture data for QA, never shipped: an
+//! example is no part of the app's program.
 //!
-//!   ORCHESTER_CLOUD_URL=http://localhost:47990 cargo run -p orchester-app --example gate_qa -- <state> [--narrow]
+//!   ORCHESTER_CLOUD_URL=http://localhost:47990 cargo run -p orchester-app --example gate_qa -- <state> [--narrow] [--tab <count>]
 //!
 //! Built that way, the stand-in is the build's own cloud, as the frames draw it (*default*, no test cloud); built
 //! without it, the stand-in is set as a test cloud, and the gate says so. It prints its pid and the folder of its MCP
@@ -125,7 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let names: Vec<&str> = State::ALL.iter().map(|(name, _)| *name).collect();
     format!("expected one of {}", names.join(", "))
   })?;
-  let narrow = args.next().as_deref() == Some("--narrow");
+  let (narrow, tabs) = options(args)?;
   let position = WindowPosition::from_environment()?;
   let scratch = qa_folder()?;
   std::fs::create_dir_all(&scratch)?;
@@ -155,9 +156,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     data.path().display(),
     if narrow { 960 } else { 1440 }
   );
-  window(&runtime, &launch, (state, narrow, position))?;
+  window(&runtime, &launch, (state, narrow, position), tabs)?;
   launch.end();
   Ok(())
+}
+
+/// `--narrow` and `--tab <count>` after the state's name: 960 wide, and Tab pressed `count` times once the state shows.
+fn options(mut args: impl Iterator<Item = String>) -> Result<(bool, usize), Box<dyn Error>> {
+  let (mut narrow, mut tabs) = (false, 0);
+  while let Some(arg) = args.next() {
+    match arg.as_str() {
+      "--narrow" => narrow = true,
+      "--tab" => tabs = args.next().ok_or("--tab takes a count")?.parse()?,
+      other => return Err(format!("unknown option {other}; expected --narrow or --tab <count>").into()),
+    }
+  }
+  Ok((narrow, tabs))
 }
 
 /// What the person and the cloud did before the window opens on `state`.
@@ -214,6 +228,7 @@ fn window(
   runtime: &Runtime,
   launch: &Launch,
   (state, narrow, position): (State, bool, Option<WindowPosition>),
+  tabs: usize,
 ) -> Result<(), Box<dyn Error>> {
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
@@ -242,7 +257,7 @@ fn window(
   );
   let width = if narrow { 960 } else { 1440 };
   tree.resize(width, 900);
-  drive::to(&mut app, &mut tree, (state, &link))?;
+  drive::to(&mut app, &mut tree, (state, &link), tabs)?;
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let window = WinitWindow::new(app, tree)
     .with_title("Orchester sign-in gate QA")

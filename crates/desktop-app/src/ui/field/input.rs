@@ -88,6 +88,8 @@ pub struct FieldInput {
   on_typed: Option<OnTyped>,
   /// The input, for its owner to focus.
   element: Option<ElementRef>,
+  /// Its place among the window's first Tab stops ([`FieldInput::tab_first`]).
+  tab_first: Option<i32>,
 }
 
 /// Compared by what it shows; the value by its signal. The input's element ref is its owner's, kept for
@@ -115,6 +117,7 @@ impl PartialEq for FieldInput {
       && self.trailing == other.trailing
       && self.invalid == other.invalid
       && self.masked == other.masked
+      && self.tab_first == other.tab_first
   }
 }
 
@@ -149,6 +152,7 @@ impl FieldInput {
       on_leave: None,
       on_typed: None,
       element: None,
+      tab_first: None,
     }
   }
 
@@ -306,6 +310,13 @@ impl FieldInput {
     self
   }
 
+  /// Tab reaches the field `position`th (from 1) of the window's first stops, before the stops in the order the window
+  /// shows them, where a control drawn over the field comes after it, as *Forgot password?* over the gate's password.
+  pub fn tab_first(mut self, position: i32) -> Self {
+    self.tab_first = Some(position);
+    self
+  }
+
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let key = format!("field-{}", self.id);
     ctx.mount_keyed::<FieldBox>(&key, self)
@@ -442,6 +453,9 @@ impl FieldBox {
     }
     if let Some(element) = &props.element {
       input = input.ref_element(element.clone());
+    }
+    if let Some(position) = props.tab_first {
+      input = input.tab_index(position);
     }
     if let Some(placeholder) = &props.placeholder {
       input = input.placeholder(placeholder);

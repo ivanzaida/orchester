@@ -2,12 +2,14 @@
 //! only the gate shows, and nothing behind it is reachable; signing in opens the window with the tabs it had; the
 //! refusals in place; signed in, the app stays open while the cloud cannot be reached and says so in the status bar;
 //! each reason the cloud gives brings the gate back with its notice and the email filled in; *Sign out and lock* in
-//! Settings › Orchester locks; and synthetic input never signs in nor changes the cloud's address.
+//! Settings › Orchester locks; synthetic input never signs in nor changes the cloud's address; and the card and
+//! *Advanced* are forms, which Tab goes through and Enter submits ([`keyboard`]).
 //!
 //! `cargo test -p orchester-app --test gate gate_`
 
 mod accounts;
 mod came_back;
+mod keyboard;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
