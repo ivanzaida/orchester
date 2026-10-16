@@ -2,9 +2,10 @@
 //! account signed in sees and uses only its own servers, and another account's is not found; the servers joined while
 //! no account was signed in go to the first one that signs in; the same server joined by two accounts is two entries,
 //! two devices on the server and two tokens, which signing out of the cloud leaves in the keychain; nothing is linked
-//! through another account's server; a cloud join that another sign-in overtakes keeps the server for the account whose
-//! identity joined; a server nobody owns goes to the account whose projects link to it, never to the first to sign
-//! in; and the background sync keeps a hidden account's shared projects in step through its own servers only.
+//! through another account's server; a cloud join or a code join that another sign-in overtakes keeps the server for
+//! the account whose identity joined; a server nobody owns goes to the account whose projects link to it, never to the
+//! first to sign in; and the background sync keeps a hidden account's shared projects in step through its own servers
+//! only.
 //!
 //! `cargo test -p orchester-workspace --test servers_per_account per_account_`
 
@@ -386,6 +387,52 @@ fn per_account_a_cloud_join_overtaken_by_another_sign_in_stays_the_joining_accou
   switch_to(&desktop, EMAIL);
   let back = entries(&desktop);
   assert_eq!(back.len(), 1);
+  desktop
+    .block_on(desktop.servers.me(&back[0]))
+    .expect("the new token is Bohdan's and works");
+}
+
+#[test]
+fn per_account_a_code_join_overtaken_by_another_sign_in_stays_the_joining_accounts() {
+  let cloud = AccountCloud::start();
+  let (server, audience) = linked_server(&cloud);
+  cloud.name_server(&audience, &server.url(), None);
+  let desktop = Desktop::signed_in(&cloud);
+  let request = CodeRequest {
+    code: server.code_for("bohdan", false),
+    username: Some("bohdan".into()),
+    display_name: Some("Bohdan Koval".into()),
+    proof: None,
+  };
+
+  // Bohdan enters a code; Olena signs in while the cloud's registry answers the lookup for the code's proof.
+  cloud.hold_registry();
+  let asked = cloud.registry_arrived();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let joining = {
+    let cloud = desktop.cloud.clone();
+    desktop.runtime.spawn(async move {
+      cloud
+        .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request)
+        .await
+    })
+  };
+  desktop.block_on(async {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    while cloud.registry_arrived() == asked {
+      assert!(tokio::time::Instant::now() < deadline, "the proof reached the registry");
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  });
+  switch_to(&desktop, OTHER_EMAIL);
+  cloud.let_registry_go();
+  let joined = desktop.block_on(joining).expect("the join ran").expect("joined");
+  assert!(entries(&desktop).is_empty(), "nothing of Bohdan's code join is Olena's");
+
+  switch_to(&desktop, EMAIL);
+  let back = entries(&desktop);
+  assert_eq!(back.len(), 1);
+  assert_eq!(back[0].stored.id, joined, "Bohdan's own entry");
   desktop
     .block_on(desktop.servers.me(&back[0]))
     .expect("the new token is Bohdan's and works");

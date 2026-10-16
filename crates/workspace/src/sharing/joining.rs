@@ -58,7 +58,7 @@ pub struct CloudIdentity<'a> {
 
 impl Servers {
   /// Joins the team server at `address`, trusted as `trust`, with a code, and keeps the device token. The server is
-  /// added to the list when it is not in it yet.
+  /// added to the list of the account signed in now when it is not in it yet.
   pub async fn join_with_code(
     &self,
     address: &ServerAddress,
@@ -66,6 +66,18 @@ impl Servers {
     request: CodeRequest,
   ) -> Result<ServerId, SharingError> {
     let owner = self.joining_account().await?;
+    self.join_with_code_for(address, trust, request, owner).await
+  }
+
+  /// [`Self::join_with_code`] for the cloud account `owner`, read from the same stored sign-in that asked for the
+  /// code's proof: the server goes into its list, whoever is signed in once the join finished, as a cloud join's does.
+  pub(crate) async fn join_with_code_for(
+    &self,
+    address: &ServerAddress,
+    trust: Trust,
+    request: CodeRequest,
+    owner: Option<CloudAccountId>,
+  ) -> Result<ServerId, SharingError> {
     let client = trust.client(address.clone())?;
     // The certificate is checked by this first request, before the code is sent.
     let name = client.server_info().await.map_err(|error| trust.refusal(error))?.name;

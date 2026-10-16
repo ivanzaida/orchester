@@ -92,7 +92,8 @@ impl Cloud {
   /// Joins the team server at `address`, trusted as `trust`, with a code (*Connect a server › With a code*). A code
   /// needs this computer's cloud identity with two-factor authentication, asked for before the code is sent
   /// ([`crate::sharing::Servers::code_proof`]); a server that cannot check one is sent the code alone, and takes only
-  /// its setup code then.
+  /// its setup code then. The server goes into the list of the account whose sign-in asked for the proof, whoever is
+  /// signed in once the join finished.
   pub async fn join_with_code(
     &self,
     address: &ServerAddress,
@@ -108,7 +109,12 @@ impl Cloud {
     };
     let proof = self.servers().code_proof(address, trust, identity).await?;
     let request = CodeRequest { proof, ..request };
-    Ok(self.servers().join_with_code(address, trust, request).await?)
+    Ok(
+      self
+        .servers()
+        .join_with_code_for(address, trust, request, Some(account))
+        .await?,
+    )
   }
 }
 
