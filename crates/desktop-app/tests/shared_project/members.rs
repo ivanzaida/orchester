@@ -58,6 +58,16 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
       .is_some_and(|texts| texts.join(" ").contains("when Kontur team was last reached"))
   });
   shows(&mut window, "sharing-member-alice");
+  assert!(
+    window
+      .text("project-settings-sharing-members-note")
+      .contains(" · as of "),
+    "the count says when the list was read"
+  );
+  assert_eq!(
+    window.text("sharing-leave-unavailable"),
+    "Kontur team can't be reached now; Leave works when it's back."
+  );
   press(&mut window, "sharing-members-manage");
   assert_eq!(
     window.launch.services().expect("services").links.recorded().len(),

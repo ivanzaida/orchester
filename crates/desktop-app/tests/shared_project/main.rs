@@ -3,7 +3,8 @@
 //! page, a later checkout gets new numbers, members are read-only with *Manage members and invites* opening the
 //! server admin (links recorded, no browser), *Make local* keeps every task, `orchester.toml` is contacted only after
 //! the person confirms it, and a conflicting edit of a shared task shows the field-by-field view with the server's
-//! names. No test calls an endpoint of the server admin.
+//! names. Without the project's server in the list, what needs it says why before any press. No test calls an
+//! endpoint of the server admin.
 //!
 //! `cargo test -p orchester-app --test shared_project shared_project_`
 
@@ -15,6 +16,7 @@ mod harness;
 mod linking;
 mod make_local;
 mod members;
+mod no_server;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
 #[path = "../support/mod.rs"]

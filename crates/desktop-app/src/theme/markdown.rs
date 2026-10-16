@@ -26,7 +26,7 @@ const BULLET_MARKER: f32 = 12.0;
 /// A link's corners and its focus ring's (`Mjhop`, `K52XFs` in `agv8r`).
 pub const LINK_RADIUS: f32 = 3.0;
 /// A focused link's ring: 2 of `border_focus` outside its words (`Mjhop` in `agv8r`).
-const LINK_RING_WIDTH: f32 = 2.0;
+pub(super) const LINK_RING_WIDTH: f32 = 2.0;
 /// A link's tooltip, as the kit's (`Tooltip` `b6q3OZ`): 11/500 `text_inverse` on `text_primary`, radius 4, 4 over
 /// and under its words and 8 at their sides, 22 high.
 const TOOLTIP_SIZE: f32 = 11.0;

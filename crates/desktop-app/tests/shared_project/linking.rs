@@ -2,7 +2,8 @@
 //! (`KSnOW`), and writes `orchester.toml` when the person leaves the switch on; a later checkout without tasks takes
 //! the project's tasks as they are, and one with tasks gets new numbers (its review is N3's, so the window says so and
 //! sends nothing; the join runs through the workspace as that review will). Only a person confirms the link or turns
-//! the discovery switch, and a task added after the page read the project sends nothing and asks for a review again.
+//! the discovery switch, and a task added after the page read the project sends nothing and asks for a review again,
+//! which only a person asks for too. Under the server, the page says whether it answers now.
 
 use std::fs;
 
@@ -136,6 +137,18 @@ fn shared_project_first_link_is_a_person_s_and_reviewed_again_when_the_tasks_cha
     window.tree.get_element_by_id("sharing-link-confirm").is_none(),
     "the old plan can't be confirmed again"
   );
+  let note = window.text("sharing-upload-nothing-yet");
+  assert!(
+    note.contains("Review again") && !note.contains("Link and upload"),
+    "the note names the button there is now: {note}"
+  );
+
+  with_synthetic_input(|| window.press("sharing-upload-review-again"));
+  shows(&mut window, "sharing-upload-review-again-person-only");
+  assert!(
+    window.tree.get_element_by_id("sharing-upload-changed").is_some(),
+    "an MCP client's press doesn't read the page again"
+  );
 
   press(&mut window, "sharing-upload-review-again");
   window.until("the page read again", |window| {
@@ -153,4 +166,25 @@ fn shared_project_first_link_is_a_person_s_and_reviewed_again_when_the_tasks_cha
     "the switch stayed on: the MCP press didn't turn it off"
   );
   no_admin_endpoint(&recorder);
+}
+
+#[test]
+fn shared_project_link_page_says_when_its_server_cannot_be_reached() {
+  let (server, kontur) = server();
+  let mut window = harness::window(Some(KONTUR_REMOTE));
+  let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
+  open_sharing(&mut window, "sharing-server-state");
+  assert_eq!(
+    window.text("sharing-server-state"),
+    "Connected · another server: Settings › Orchester"
+  );
+
+  recorder.go_down();
+  let services = window.launch.services().expect("services").clone();
+  services.servers.retry_now(entry(&window).stored.id);
+  window.until("the server's state under it", |window| {
+    window
+      .texts("sharing-server-state")
+      .is_some_and(|texts| texts.join(" ").starts_with("Reconnecting · try "))
+  });
 }

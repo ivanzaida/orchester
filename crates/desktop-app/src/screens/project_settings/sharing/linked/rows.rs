@@ -105,8 +105,9 @@ pub(super) fn hint(ctx: &mut Ctx, link: &SharingLink, entry: Option<&ServerEntry
   }
 }
 
-/// *Project address*: the address in a read-only field, and the server's name, state and certificate under it.
-pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, entry: Option<&ServerEntry>) -> Element {
+/// *Project address*: the address in a read-only field, cut with an ellipsis where it is longer, and the server's name,
+/// state and certificate under it; `server` names it once it left the list.
+pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (Option<&ServerEntry>, &str)) -> Element {
   let address = link
     .address
     .clone()
@@ -118,9 +119,14 @@ pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, entry: Option<&Serv
   )
   .mono()
   .locked()
+  .cut()
   .render(ctx);
   let state = entry.map_or_else(
-    || ctx.t("sharing.linked.unknownServer").to_string(),
+    || {
+      ctx
+        .t_args("sharing.linked.missingServer", [("server", server)])
+        .to_string()
+    },
     |entry| server_state(ctx, entry),
   );
   let control = Column::new()
@@ -192,6 +198,7 @@ pub(super) fn repository_row(
   )
   .mono()
   .locked()
+  .cut()
   .placeholder(ctx.t("sharing.linked.repository.reading"))
   .render(ctx);
   let (glyph, color, words) = compared(ctx, props, hint);

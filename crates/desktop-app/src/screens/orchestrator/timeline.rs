@@ -13,11 +13,9 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    events::scroll_event::ScrollEvent,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Spacer, Text, VirtualizedList},
-  core::Signal,
   layout::{
     Alignment,
     scrollbar::{ScrollBarPlacement, ScrollBarStyle},
@@ -102,13 +100,11 @@ impl PartialEq for TurnRow {
 
 impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 
-/// The list of `rows`, opening on the newest. Once the person scrolls, `scrolled` holds the newest turn's key and
-/// the list stops revealing it, until a newer turn comes: lurq (0.46.0) never ends the reveal of a turn taller than
-/// the view, and puts that turn's top back at the view's top after every layout, whatever the person scrolled.
-pub(super) fn list(ctx: &mut Ctx, rows: Vec<TurnRow>, scrolled: &Signal<Option<String>>) -> Element {
+/// The list of `rows`, opening on the newest. lurq reveals a key once, when it changes, so the list shows a new
+/// turn when it comes and otherwise stays where the person scrolled it; a turn taller than the view is revealed at
+/// its top.
+pub(super) fn list(ctx: &mut Ctx, rows: Vec<TurnRow>) -> Element {
   let newest = rows.last().map(|row| row.turn.key());
-  let reveal = newest.clone().filter(|key| scrolled.get().as_ref() != Some(key));
-  let scrolled = scrolled.clone();
   // The thumb keeps a lane of its own, so it never covers a message's end.
   let scrollbar = ScrollBarStyle {
     placement: ScrollBarPlacement::Reserved,
@@ -117,12 +113,7 @@ pub(super) fn list(ctx: &mut Ctx, rows: Vec<TurnRow>, scrolled: &Signal<Option<S
   VirtualizedList::new_shared(ctx, Arc::new(rows))
     .list_key("orchestrator-chat")
     .scrollbar(scrollbar)
-    .reveal_key(reveal)
-    .on_scroll(move |_: ScrollEvent| {
-      if scrolled.get_untracked() != newest {
-        scrolled.set(newest.clone());
-      }
-    })
+    .reveal_key(newest)
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .mount_keyed::<TurnView, _, _, _>(|row| row.turn.key(), Clone::clone)

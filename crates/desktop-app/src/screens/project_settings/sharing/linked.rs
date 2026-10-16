@@ -1,8 +1,11 @@
 //! A linked project's Sharing (`L5o9Xy`, *Removed from the project* in `N9NFio`): where its task list lives, its
 //! address with the server's state, its repository and discovery file ([`discovery`]), its members read-only
 //! ([`super::members`]), and *Leave or make local*. *Make local* asks in place ([`super::make_local`]); *Leave* asks
-//! in place and keeps a local copy of the tasks and this computer's connection to the server. Once the person is no
-//! longer a member, the page says so instead of offering *Leave* and the members, and *Make local* stays.
+//! in place and keeps a local copy of the tasks and this computer's connection to the server; it is done on the server,
+//! so it is unavailable, with why, while this computer is not signed in there or it can't be reached. Once the person
+//! is no longer a member, the page says so instead of offering *Leave* and the members, and *Make local* stays.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -15,7 +18,10 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_api::MemberRole;
-use orchester_workspace::sharing::project::{MemberChange, ProjectServer};
+use orchester_workspace::sharing::{
+  Connection, ProjectAddress, ServerEntry,
+  project::{MemberChange, ProjectServer},
+};
 
 mod discovery;
 mod removed;
@@ -35,6 +41,7 @@ use crate::{
     field::field_error,
     form_section::{Label, Place, section, side_row},
     icon::Icon,
+    unavailable::reason_line,
   },
 };
 
@@ -105,10 +112,10 @@ impl Component for Linked {
     let Some(link) = props.facts.link.as_ref() else {
       return Column::new();
     };
-    let server = props.facts.linked_server().map_or_else(
-      || ctx.t("sharing.linked.unknownServer").to_string(),
-      |entry| entry.stored.name.clone(),
-    );
+    let server = props
+      .facts
+      .linked_server()
+      .map_or_else(|| missing_server(ctx, link), |entry| entry.stored.name.clone());
     let name = props.project.open.project.name().as_str().to_owned();
     let role = match link.role {
       Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
@@ -141,7 +148,7 @@ impl Component for Linked {
       Place::Within,
       true,
     );
-    let address_row = rows::address_row(ctx, link, entry);
+    let address_row = rows::address_row(ctx, link, (entry, &server));
     let repository_row = rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server));
     let discovery_row = ctx.mount_keyed::<discovery::DiscoveryRow>(
       "sharing-discovery-row",
@@ -214,17 +221,21 @@ impl Linked {
     let mut control = Column::new()
       .width(Dimension::Px(CONTROL_WIDTH))
       .spacing(SpacingSize::Sm);
-    if self.asking.get() {
-      control = control.child(self.question(ctx, (shared, server), state.is_pending()));
-    } else {
-      let asking = self.asking.clone();
-      control = control.child(
-        Row::new().child(
-          ActionButton::new("sharing-leave", ButtonKind::Ghost, ctx.t("sharing.linked.leaveButton"))
-            .icon(Icon::LogOut)
-            .on_click(move || asking.set(true)),
-        ),
-      );
+    let entry = props.facts.linked_server();
+    let unavailable = leave_unavailable(ctx, entry, server);
+    let button =
+      ActionButton::new("sharing-leave", ButtonKind::Ghost, ctx.t("sharing.linked.leaveButton")).icon(Icon::LogOut);
+    match &unavailable {
+      Some(reason) => {
+        control = control
+          .child(Row::new().child(button.unavailable(reason.clone())))
+          .child(reason_line("sharing-leave-unavailable", reason));
+      }
+      None if self.asking.get() => control = control.child(self.question(ctx, (shared, server), state.is_pending())),
+      None => {
+        let asking = self.asking.clone();
+        control = control.child(Row::new().child(button.on_click(move || asking.set(true))));
+      }
     }
     control = control.with_children(self.person.reason(ctx, LEAVE));
     if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
@@ -235,7 +246,15 @@ impl Linked {
         "sharing-leave-row",
         ctx.t_args("sharing.linked.leave", [("project", shared)]),
       )
-      .description(ctx.t_args("sharing.linked.leaveDescription", [("server", server)])),
+      .description(ctx.t_args(
+        // Without the server in the list, this computer is not connected to it for anything else either.
+        if entry.is_some() {
+          "sharing.linked.leaveDescription"
+        } else {
+          "sharing.linked.leaveDescriptionNoServer"
+        },
+        [("server", server)],
+      )),
       control,
       Place::Last,
       true,
@@ -327,23 +346,42 @@ fn members_section(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> 
       owner: link.is_some_and(|link| link.role == Some(MemberRole::Owner)),
       admin: account.is_some_and(|account| account.admin),
       me: account.map(|account| account.user),
-      connected: entry
-        .is_some_and(|entry| entry.connection == Some(orchester_workspace::sharing::Connection::Connected)),
+      connected: entry.is_some_and(|entry| entry.connection == Some(Connection::Connected)),
       removed: link.and_then(|link| link.removed_at),
       username: account.map(|account| account.username.clone()),
     },
   )
 }
 
+/// What the page calls the project's server once it left the list: the host of the project's address, which the
+/// person can connect to again.
+fn missing_server(ctx: &Ctx, link: &orchester_store::SharingLink) -> String {
+  link
+    .address
+    .as_deref()
+    .and_then(|address| ProjectAddress::parse(address).ok())
+    .map_or_else(
+      || ctx.t("sharing.linked.unknownServer").to_string(),
+      |address| address.server().authority(),
+    )
+}
+
+/// Why *Leave* cannot be pressed now: it is done on the server, by the person signed in there, so it needs the server
+/// in the list, a sign-in and an answer (as *Manage* in `q8DIyg`). *Make local* works without them.
+fn leave_unavailable(ctx: &Ctx, entry: Option<&ServerEntry>, server: &str) -> Option<Arc<str>> {
+  let server = [("server", server)];
+  match entry.filter(|entry| entry.in_use()).map(|entry| entry.connection) {
+    None | Some(Some(Connection::SignedOut)) => Some(ctx.t_args("sharing.linked.leaveNoServer", server)),
+    Some(Some(Connection::Connected)) => None,
+    Some(_) => Some(ctx.t_args("sharing.linked.leaveOffline", server)),
+  }
+}
+
 /// The repository hint as the server says it; while it doesn't (offline, or no longer listing the project for a
 /// removed member), the hint as last read stands, with when it was checked.
 fn shown_hint(
   ctx: &mut Ctx,
-  (props, link, entry): (
-    &Props,
-    &orchester_store::SharingLink,
-    Option<&orchester_workspace::sharing::ServerEntry>,
-  ),
+  (props, link, entry): (&Props, &orchester_store::SharingLink, Option<&ServerEntry>),
   name: &str,
 ) -> Option<Result<rows::Hint, Said>> {
   match (rows::hint(ctx, link, entry), props.facts.cached_hint.as_ref()) {

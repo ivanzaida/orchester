@@ -1,4 +1,5 @@
-//! Text fields, text areas, search, number fields with their unit and read-back, and selects.
+//! Text fields, text areas, search, number fields with their unit and read-back, selects, and a locked value cut with
+//! an ellipsis.
 
 use lurq::{
   app::theme::SpacingSize,
@@ -228,6 +229,32 @@ fn a_select_with_a_glyph_cuts_a_long_label_before_its_chevron() {
   assert!(
     label.x + label.width <= select.x + select.width,
     "the label stays inside the box: {label:?}"
+  );
+}
+
+#[test]
+fn a_cut_field_keeps_a_long_value_inside_its_box() {
+  let value = Signal::new("https://orchester.elsewhere.example/kontur-and-a-long-slug".to_owned());
+  let mut kit = Kit::show(move |ctx| {
+    Column::new()
+      .child(
+        FieldInput::new("address", "Project address", value.clone())
+          .mono()
+          .cut()
+          .width(Dimension::Px(170.0))
+          .render(ctx),
+      )
+      .into()
+  });
+  let (frame, shown) = (kit.bounds("address-box"), kit.bounds("address"));
+  assert_close(frame.width, 170.0, "box width");
+  assert!(
+    shown.x + shown.width <= frame.x + frame.width,
+    "the value ends inside the box: {shown:?}"
+  );
+  assert_eq!(
+    kit.texts("address"),
+    ["https://orchester.elsewhere.example/kontur-and-a-long-slug"]
   );
 }
 

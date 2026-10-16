@@ -90,6 +90,8 @@ impl Component for SignInGate {
       .id("gate-column")
       .width(Dimension::Px(COLUMN_WIDTH))
       .spacing(GateSpacing::Column.role())
+      // *Advanced*'s line ends the column; its ring shows past the column's edge (`Focus::Link`).
+      .overflow_visible()
       .child(ended::head(ctx, ended.is_some()))
       .with_children(ended.as_ref().map(|ended| ended::notice(ctx, ended)))
       .child(form::card(ctx, &self.form, &host))
@@ -97,6 +99,7 @@ impl Component for SignInGate {
         Row::new()
           .width(Dimension::Pct(100.0))
           .opacity(DISABLED_OPACITY)
+          .overflow_visible()
           .child(advanced)
           .into()
       } else {

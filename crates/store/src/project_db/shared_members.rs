@@ -82,10 +82,28 @@ impl ProjectDb {
     Ok(Some((Timestamp::from_unix_millis(read_at), members)))
   }
 
-  /// Replaces the members with `members`, as the server listed them at `read_at`.
-  pub fn record_shared_members(&mut self, members: &[SharedMember], read_at: Timestamp) -> Result<(), StoreError> {
+  /// The person's user on the server when the members were last read; `None` until they were read by one.
+  pub fn members_read_as(&self) -> Result<Option<UserId>, StoreError> {
+    let read_as: Option<String> = self
+      .connection
+      .query_row("SELECT members_read_as FROM sharing", [], |row| row.get(0))
+      .optional()?
+      .flatten();
+    read_as.map(|user| parse("member id", &user)).transpose()
+  }
+
+  /// Replaces the members with `members`, as the server listed them at `read_at` to `read_as`, the person's user there.
+  pub fn record_shared_members(
+    &mut self,
+    members: &[SharedMember],
+    read_at: Timestamp,
+    read_as: Option<UserId>,
+  ) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
-    let updated = transaction.execute("UPDATE sharing SET members_read_at = ?1", [read_at.unix_millis()])?;
+    let updated = transaction.execute(
+      "UPDATE sharing SET members_read_at = ?1, members_read_as = ?2",
+      params![read_at.unix_millis(), read_as.map(|user| user.to_string())],
+    )?;
     if updated == 0 {
       return Err(StoreError::NotShared);
     }

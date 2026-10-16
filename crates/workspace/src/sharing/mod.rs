@@ -166,6 +166,13 @@ impl Servers {
     self.inner.sharing_now.lock().contains(root)
   }
 
+  /// Runs `change` unless the project at `root` is being shared now (`None` then). No share starts while it runs, so a
+  /// share that starts later reads what it changed.
+  pub(crate) fn outside_share<T>(&self, root: &Path, change: impl FnOnce() -> T) -> Option<T> {
+    let sharing = self.inner.sharing_now.lock();
+    (!sharing.contains(root)).then(change)
+  }
+
   /// Reads the shared projects' caches again now (opening a project, *Try now*, *Check again*).
   pub fn sync_now(&self) {
     self.inner.sync.send_modify(|count| *count += 1);

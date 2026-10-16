@@ -59,10 +59,11 @@ pub enum SharingError {
   /// the link is reviewed again.
   #[error("the project's tasks changed since the link was reviewed")]
   ProjectChanged,
-  /// The server reported an address for one of its projects that is on another server: Orchester neither keeps it,
-  /// writes it into a repository nor opens it.
-  #[error("the server reported a project address on another server")]
-  ForeignAddress,
+  /// The server reported an address for one of its projects that is on another server, `own`: Orchester neither keeps
+  /// it, writes it into a repository nor opens it. A server reached by another address than the one it names itself
+  /// by does this; the person connects to it by `own`.
+  #[error("the server reported a project address on another server, {own}")]
+  ForeignAddress { own: ServerAddress },
 }
 
 impl From<Message> for SharingError {
@@ -101,7 +102,9 @@ impl SharingError {
       }
       Self::NoProject => Message::new("sharing.errors.noProject"),
       Self::ProjectChanged => Message::new("sharing.errors.projectChanged"),
-      Self::ForeignAddress => Message::new("sharing.errors.foreignAddress").with("server", address.as_str().to_owned()),
+      Self::ForeignAddress { own } => Message::new("sharing.errors.foreignAddress")
+        .with("server", address.as_str().to_owned())
+        .with("own", own.as_str().to_owned()),
     }
   }
 }

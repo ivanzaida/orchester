@@ -4,7 +4,7 @@
 //! the project's tags change through the same writer, so no screen changes a shared task only on
 //! this computer. Every method blocks; the UI calls them off the UI thread.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use orchester_api::client::ServerAddress;
 use orchester_core::{
@@ -78,8 +78,33 @@ impl WriteError {
 
 /// A project's tasks, for changing them.
 pub enum TaskWriter {
-  Local(ProjectDb),
+  Local(Box<LocalTasks>),
   Shared(Box<RemoteTaskStore>),
+}
+
+/// A local project's tasks. Each change checks again that the project is not being shared, and was not linked since
+/// the writer opened: the share reads the tasks once, and a change after that would be lost or stay on this computer.
+pub struct LocalTasks {
+  db: ProjectDb,
+  servers: Servers,
+  root: PathBuf,
+}
+
+impl LocalTasks {
+  /// Makes `change` unless the project is being shared or was linked meanwhile ([`SharingError::ShareInProgress`]).
+  fn change<T>(&mut self, change: impl FnOnce(&mut ProjectDb) -> Result<T, StoreError>) -> Result<T, WriteError> {
+    let in_progress = || WriteError::sharing(SharingError::ShareInProgress, None);
+    let db = &mut self.db;
+    self
+      .servers
+      .outside_share(&self.root, || {
+        if db.sharing()?.is_some() {
+          return Err(in_progress());
+        }
+        Ok(change(db)?)
+      })
+      .unwrap_or_else(|| Err(in_progress()))
+  }
 }
 
 impl TaskWriter {
@@ -93,7 +118,11 @@ impl TaskWriter {
     }
     let db = ProjectDb::open(repo_root)?;
     if db.sharing()?.is_none() {
-      return Ok(Self::Local(db));
+      return Ok(Self::Local(Box::new(LocalTasks {
+        db,
+        servers: servers.clone(),
+        root: repo_root.to_owned(),
+      })));
     }
     let server = ProjectServer::open(servers, repo_root)
       .map_err(|source| WriteError::sharing(source, None))?
@@ -107,7 +136,7 @@ impl TaskWriter {
   /// The project database, for reads: a shared project's cache.
   pub fn db(&self) -> &ProjectDb {
     match self {
-      Self::Local(db) => db,
+      Self::Local(local) => &local.db,
       Self::Shared(store) => store.db(),
     }
   }
@@ -122,11 +151,11 @@ impl TaskWriter {
     now: Timestamp,
   ) -> Result<TaskUpdate, WriteError> {
     match (self, target) {
-      (Self::Local(db), SaveTarget::New(batch)) => Ok(TaskUpdate::Saved(
-        db.create_organized_task(batch, details, edited, now)?,
-      )),
-      (Self::Local(db), SaveTarget::Task(task, read)) => {
-        Ok(db.update_organized_task(task, read, details, (base, edited), now)?)
+      (Self::Local(local), SaveTarget::New(batch)) => local
+        .change(|db| db.create_organized_task(batch, details, edited, now))
+        .map(TaskUpdate::Saved),
+      (Self::Local(local), SaveTarget::Task(task, read)) => {
+        local.change(|db| db.update_organized_task(task, read, details, (base, edited), now))
       }
       (Self::Shared(store), SaveTarget::New(batch)) => {
         let created = store.create_organized(batch, &details, edited);
@@ -147,7 +176,9 @@ impl TaskWriter {
     update: impl FnOnce(TaskOrganization) -> TaskOrganization,
   ) -> Result<bool, WriteError> {
     match self {
-      Self::Local(db) => Ok(db.update_task_organization(task, ChangeActor::Person, Timestamp::now(), update)?),
+      Self::Local(local) => {
+        local.change(|db| db.update_task_organization(task, ChangeActor::Person, Timestamp::now(), update))
+      }
       Self::Shared(store) => {
         let base = store.db().task_organization(task)?;
         let edited = update(base.clone());
@@ -160,7 +191,7 @@ impl TaskWriter {
 
   pub fn create_tag(&mut self, name: Name) -> Result<Tag, WriteError> {
     match self {
-      Self::Local(db) => Ok(db.create_project_tag(name)?),
+      Self::Local(local) => local.change(|db| db.create_project_tag(name)),
       Self::Shared(store) => {
         let created = store.create_tag(&name);
         shared(store, created)
@@ -170,7 +201,7 @@ impl TaskWriter {
 
   pub fn rename_tag(&mut self, id: TagId, name: &Name) -> Result<(), WriteError> {
     match self {
-      Self::Local(db) => Ok(db.rename_project_tag(id, name)?),
+      Self::Local(local) => local.change(|db| db.rename_project_tag(id, name)),
       Self::Shared(store) => {
         let renamed = store.rename_tag(id, name);
         shared(store, renamed)
@@ -180,7 +211,7 @@ impl TaskWriter {
 
   pub fn merge_tags(&mut self, source: TagId, target: TagId) -> Result<(), WriteError> {
     match self {
-      Self::Local(db) => Ok(db.merge_project_tags(source, target, Timestamp::now())?),
+      Self::Local(local) => local.change(|db| db.merge_project_tags(source, target, Timestamp::now())),
       Self::Shared(store) => {
         let merged = store.merge_tags(source, target);
         shared(store, merged)
@@ -190,7 +221,7 @@ impl TaskWriter {
 
   pub fn delete_tag(&mut self, id: TagId) -> Result<(), WriteError> {
     match self {
-      Self::Local(db) => Ok(db.delete_project_tag(id, Timestamp::now())?),
+      Self::Local(local) => local.change(|db| db.delete_project_tag(id, Timestamp::now())),
       Self::Shared(store) => {
         let deleted = store.delete_tag(id);
         shared(store, deleted)
@@ -209,7 +240,7 @@ impl TaskStore for TaskWriter {
     now: Timestamp,
   ) -> Result<Vec<Task>, WriteError> {
     match self {
-      Self::Local(db) => Ok(db.create_tasks(batch, details, now)?),
+      Self::Local(local) => local.change(|db| db.create_tasks(batch, details, now)),
       Self::Shared(store) => {
         let created = store.create_tasks(batch, details, now);
         shared(store, created)
@@ -227,7 +258,7 @@ impl TaskStore for TaskWriter {
 
   fn save_task(&mut self, task: &Task) -> Result<TaskUpdate, WriteError> {
     match self {
-      Self::Local(db) => Ok(db.save_task(task)?),
+      Self::Local(local) => local.change(|db| db.save_task(task)),
       Self::Shared(store) => {
         let saved = store.save_task(task);
         shared(store, saved)
@@ -237,7 +268,7 @@ impl TaskStore for TaskWriter {
 
   fn update_task(&mut self, id: TaskId, read: TaskRevision, details: TaskDetails) -> Result<TaskUpdate, WriteError> {
     match self {
-      Self::Local(db) => Ok(db.update_task(id, read, details)?),
+      Self::Local(local) => local.change(|db| db.update_task(id, read, details)),
       Self::Shared(store) => {
         let updated = store.update_task(id, read, details);
         shared(store, updated)
