@@ -244,7 +244,7 @@ fn local_tasks(repo: &Path) -> Result<(), Box<dyn Error>> {
     .iter()
     .map(|title| {
       Ok(TaskDetails {
-        title: Name::new(*title)?,
+        title: Name::new(title)?,
         brief: String::new(),
         acceptance_criteria: Vec::new(),
         pipeline: None,
