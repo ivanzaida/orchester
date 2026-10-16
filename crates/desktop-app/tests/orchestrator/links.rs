@@ -17,6 +17,7 @@ use lurq::{
   node::color::Color,
 };
 use orchester_app::{
+  navigation::press::LinkPress,
   routes::{OrchestratorChat, Route},
   ui::{
     chat::links::{Followed, follow},
@@ -333,7 +334,7 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
 
   back_to_the_chat(&mut screen);
   let chat = screen.route();
-  let followed = with_synthetic_input(|| follow(&screen.window.navigation(), PULL_REQUEST));
+  let followed = with_synthetic_input(|| follow(&screen.window.navigation(), PULL_REQUEST, LinkPress::PLAIN));
   assert!(
     matches!(followed, Followed::NotOpened),
     "synthetic input never opens the browser: {followed:?}"

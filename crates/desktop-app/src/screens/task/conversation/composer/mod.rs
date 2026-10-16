@@ -317,7 +317,7 @@ impl Composer {
     };
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let placeholder = words::placeholder(ctx, mode, &props.conversation);
-    let keys = presses::keys(presses, leave, self.menu.clone());
+    let keys = presses::keys(presses, (leave, self.input.clone()), self.menu.clone());
     TextInput::styled(props.composing.state.draft.clone(), resolve(PaletteColor::TextPrimary))
       .placeholder_style(resolve(PaletteColor::TextMuted))
       .caret_color(PaletteColor::TextPrimary)
