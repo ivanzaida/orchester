@@ -4,6 +4,12 @@ How to run Orchester Cloud (the backend `crates/cloud` and its web front `web/cl
 `orchester-cloud.lurq.dev`. What the service is, its configuration keys and the key ceremony are in
 [docs/cloud-hosting.md](../../docs/cloud-hosting.md); its API is in [docs/cloud-api.md](../../docs/cloud-api.md).
 
+**On a host whose ingress is Traefik, managed with Portainer** (the server of `orchester-cloud.lurq.dev`), follow
+[PORTAINER.md](PORTAINER.md) instead: `compose.portainer.yaml` runs the images GitHub Actions builds
+(`.github/workflows/cloud-images.yml`) behind that Traefik, and the workflow redeploys the stack. The Caddy compose
+files below remain for hosts without Traefik; the sections on the SMTP relay, backups, upgrades and logs apply to
+both.
+
 ## What runs
 
 | File | What |
@@ -11,6 +17,7 @@ How to run Orchester Cloud (the backend `crates/cloud` and its web front `web/cl
 | `compose.yaml` | PostgreSQL 18, the backend (`cloud`, built from `Dockerfile` at the repository root) and Caddy with `Caddyfile`, which serves only `/api/*` and answers 503 on every other path |
 | `compose.web.yaml` | Adds the web front (`web`, built from `web/Dockerfile.cloud`) and switches Caddy to `Caddyfile.web`: `/api/*` to the backend, every other path to the web front |
 | `cloud.example.toml` | The backend's optional TOML file. Compose does not use it; everything comes from the environment |
+| `compose.portainer.yaml` | The Portainer stack behind Traefik, from the GHCR images ([PORTAINER.md](PORTAINER.md)); not combined with the files above |
 
 Always start both files together. Without `compose.web.yaml` there are no sign-up, sign-in or account pages:
 

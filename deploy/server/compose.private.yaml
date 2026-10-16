@@ -1,0 +1,55 @@
+# An Orchester team server with its admin, for a host with no public DNS name: a private network, or an air-gapped one
+# (deploy/server/README.md). The server presents its own certificate (tls = "self_signed") on port 8740 and forwards
+# every path outside /api to the admin on the private network. The images come from Docker Hub, or from `docker load`
+# without the internet. Put the values into `.env` beside this file (from `.env.example`), then:
+#   docker compose -f compose.private.yaml up -d
+#   docker compose -f compose.private.yaml logs server     # the setup code, then open https://<host>:8740/admin
+services:
+  server:
+    image: ivanzaida/orchester-server:${ORCHESTER_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
+      # Names and addresses people reach this host by, for the generated certificate (comma-separated). Read only
+      # when the certificate is generated, on the first start.
+      ORCHESTER_SERVER_TLS_NAMES: ${ORCHESTER_SERVER_TLS_NAMES:-}
+      ORCHESTER_SERVER_ADMIN_URL: http://admin:3100
+      # The admin calls the API here, on the private network only; this port is never published. The server warns at
+      # start that it listens on every interface of its container: that is this network, as long as 8741 stays
+      # unpublished.
+      ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741
+    ports:
+      - "8740:8080"
+    volumes:
+      - server_data:/data
+    # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8741 && printf 'GET /api/v1/server HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ status _ <&3 && [ \"$$status\" = 200 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+  admin:
+    image: ivanzaida/orchester-server-admin:${ORCHESTER_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ORCHESTER_ADMIN_SERVER_URL: http://server:8741
+      # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).
+      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}
+      # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.
+      # Set it empty on an air-gapped network: the admin then offers codes only.
+      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+networks:
+  backend:
+volumes:
+  server_data:
