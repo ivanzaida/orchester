@@ -164,7 +164,7 @@ checks the signature with the key the server linked with, keeps the invite once 
 and emails the invitee in its own words only (nothing the server chose: an account gets *open Orchester*, an address
 with no account `/signup?invite=<id>`). The answer names the inviting server as registered (`202 { server }`).
 `GET /invites` lists them to the account with that email; a revocation (`orchester-invite-revocation+jws`,
-`{ id, server, issued_at }`) deletes one and keeps its id in `revoked_invites` until the invite would have expired
+`{ id, server, issued_at }`) deletes one and keeps its id and server in `revoked_invites` until the invite would have expired
 (at most 8 days), so the same signed invite cannot be delivered again (security review 1, minor 1); expired invites
 and ended tombstones are deleted by the minute's sweep.
 

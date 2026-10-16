@@ -11,8 +11,9 @@ CREATE TABLE used_link_statements (
 CREATE INDEX used_link_statements_expiry ON used_link_statements (expires_at);
 
 CREATE TABLE revoked_invites (
-  id uuid PRIMARY KEY,
+  id uuid NOT NULL,
   server uuid NOT NULL,
-  until timestamptz NOT NULL
+  until timestamptz NOT NULL,
+  PRIMARY KEY (id, server)
 );
 CREATE INDEX revoked_invites_until ON revoked_invites (until);

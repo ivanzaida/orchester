@@ -52,10 +52,10 @@ impl Cloud {
       return Err(CloudErrorCode::Invalid.into());
     }
     let server = inviting(&client, invite.server).await?;
-    if revoked(&client, invite.id).await? {
+    if revoked(&client, invite.id, invite.server).await? {
       return Err(CloudErrorCode::Invalid.into());
     }
-    if known(&client, invite.id).await? {
+    if known(&client, invite.id, invite.server).await? {
       return Ok(server);
     }
     self
@@ -110,8 +110,8 @@ impl Cloud {
     client
       .execute(
         "INSERT INTO revoked_invites (id, server, until)
-         VALUES ($1, $2, coalesce((SELECT expires_at FROM invites WHERE id = $1), $3))
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ($1, $2, coalesce((SELECT expires_at FROM invites WHERE id = $1 AND server = $2), $3))
+         ON CONFLICT (id, server) DO NOTHING",
         &[
           &id.as_uuid(),
           &revocation.server.as_uuid(),
@@ -174,19 +174,27 @@ async fn inviting(client: &impl GenericClient, server: TeamServerId) -> Result<I
   })
 }
 
-async fn revoked(client: &impl GenericClient, id: InviteId) -> Result<bool, CloudError> {
+/// Whether `server` revoked its invite `id`; another server's revocation of the same id says nothing about this one.
+async fn revoked(client: &impl GenericClient, id: InviteId, server: TeamServerId) -> Result<bool, CloudError> {
   Ok(
     client
-      .query_opt("SELECT 1 FROM revoked_invites WHERE id = $1", &[&id.as_uuid()])
+      .query_opt(
+        "SELECT 1 FROM revoked_invites WHERE id = $1 AND server = $2",
+        &[&id.as_uuid(), &server.as_uuid()],
+      )
       .await?
       .is_some(),
   )
 }
 
-async fn known(client: &impl GenericClient, id: InviteId) -> Result<bool, CloudError> {
+/// Whether `server` delivered its invite `id` already.
+async fn known(client: &impl GenericClient, id: InviteId, server: TeamServerId) -> Result<bool, CloudError> {
   Ok(
     client
-      .query_opt("SELECT 1 FROM invites WHERE id = $1", &[&id.as_uuid()])
+      .query_opt(
+        "SELECT 1 FROM invites WHERE id = $1 AND server = $2",
+        &[&id.as_uuid(), &server.as_uuid()],
+      )
       .await?
       .is_some(),
   )

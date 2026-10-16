@@ -478,3 +478,31 @@ pub async fn invite_deliveries_are_limited_per_address_and_per_owner() {
   assert_eq!(deliver(&cloud, &after, "198.51.100.9").await.status, 429);
   cloud.finish().await;
 }
+
+/// Security review 2, 2: an invite id is one server's own. Another server's revocation of the same id neither blocks
+/// this server's invite nor takes the place of this server's own revocation.
+pub async fn invite_ids_are_one_servers_own() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let (kontur, other) = (TeamServer::generate(), TeamServer::generate());
+  link(&cloud, &owner, &kontur).await;
+  link(&cloud, &owner, &other).await;
+  let now = cloud.clock.now_ms();
+  let id = InviteId::generate();
+  revoke(&cloud, &other, id, now).await;
+  let invite = json!({"invite": kontur.invite(id, "dana@example.test", now)});
+  let delivered = cloud.request("POST", "/invites", None, Some(invite.clone())).await;
+  assert_eq!(
+    delivered.status, 202,
+    "another server's revocation of the id is not this server's"
+  );
+  revoke(&cloud, &kontur, id, now).await;
+  let again = cloud.request("POST", "/invites", None, Some(invite)).await;
+  assert_eq!(
+    (again.status, again.error()),
+    (422, "invalid".into()),
+    "this server's own revocation holds"
+  );
+  cloud.finish().await;
+}
