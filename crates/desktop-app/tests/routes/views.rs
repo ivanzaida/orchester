@@ -1,13 +1,20 @@
 //! The tabs, filters, items and panels a screen keeps in its route, so each is an entry of a tab's history:
-//! Secrets, the Skills library, an agent profile, Instructions and Project settings.
+//! Secrets, the Skills library, an agent profile, Instructions, a pipeline's editor and Project settings.
 
 use orchester_app::routes::{
-  AgentTab, InstructionsTab, InstructionsView, ProjectPage, ProjectSettingsTab, Route, SecretsPanel, SecretsTab,
-  SecretsView, SkillsFilter,
+  AgentTab, InstructionsPanel, InstructionsTab, InstructionsView, PipelinePanel, ProjectPage, ProjectSettingsTab,
+  Route, SecretsPanel, SecretsTab, SecretsView, SkillsFilter,
 };
-use orchester_core::secret::Environment;
+use orchester_core::{resource::StepKey, secret::Environment};
 
 use super::{CONNECTION, PROJECT, at};
+
+const PANELS: [InstructionsPanel; 4] = [
+  InstructionsPanel::Hidden,
+  InstructionsPanel::Variables,
+  InstructionsPanel::Preview,
+  InstructionsPanel::Full,
+];
 
 /// Every view of those screens, with each choice they keep.
 pub(super) fn view_routes() -> Vec<Route> {
@@ -37,11 +44,26 @@ pub(super) fn view_routes() -> Vec<Route> {
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::Agent(id, tab))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::NewAgent(tab))));
   for tab in InstructionsTab::ALL {
-    all.push(at(ProjectPage::Instructions(InstructionsView::Rule(tab, None))));
-    all.push(at(ProjectPage::Instructions(InstructionsView::Rule(tab, Some(id)))));
-    all.push(at(ProjectPage::Instructions(InstructionsView::New(tab))));
+    for panel in PANELS {
+      all.push(at(ProjectPage::Instructions(InstructionsView::Rule(tab, None, panel))));
+      all.push(at(ProjectPage::Instructions(InstructionsView::Rule(
+        tab,
+        Some(id),
+        panel,
+      ))));
+      all.push(at(ProjectPage::Instructions(InstructionsView::New(tab, panel))));
+    }
   }
   all.push(at(ProjectPage::Instructions(InstructionsView::Import)));
+  for panel in [
+    PipelinePanel::Pipeline,
+    PipelinePanel::Step(StepKey::new("review").expect("a step key")),
+    PipelinePanel::Settings,
+    PipelinePanel::History,
+    PipelinePanel::Publish,
+  ] {
+    all.push(at(ProjectPage::Pipeline(id, panel)));
+  }
   all.extend(ProjectSettingsTab::ALL.map(|tab| at(ProjectPage::Settings(tab))));
   all
 }
@@ -85,15 +107,31 @@ fn views_have_their_documented_paths() {
       format!("{root}/instructions"),
     ),
     (
-      at(ProjectPage::Instructions(InstructionsView::Rule(
+      at(ProjectPage::Instructions(InstructionsView::rule(
         InstructionsTab::Roles,
         Some(id.parse().expect("an id")),
       ))),
       format!("{root}/instructions?tab=roles&rule={id}"),
     ),
     (
-      at(ProjectPage::Instructions(InstructionsView::New(InstructionsTab::Steps))),
+      at(ProjectPage::Instructions(InstructionsView::Rule(
+        InstructionsTab::Roles,
+        None,
+        InstructionsPanel::Preview,
+      ))),
+      format!("{root}/instructions?tab=roles&panel=preview"),
+    ),
+    (
+      at(ProjectPage::Instructions(InstructionsView::new_rule(
+        InstructionsTab::Steps,
+      ))),
       format!("{root}/instructions?tab=steps&rule=new"),
+    ),
+    (
+      at(ProjectPage::Instructions(
+        InstructionsView::default().with_panel(InstructionsPanel::Full),
+      )),
+      format!("{root}/instructions?panel=prompt"),
     ),
     (
       at(ProjectPage::Instructions(InstructionsView::Import)),
@@ -110,8 +148,40 @@ fn views_have_their_documented_paths() {
 }
 
 #[test]
+fn pipeline_panels_have_their_documented_paths() {
+  let pipeline = format!("/project/{PROJECT}/pipelines/{CONNECTION}");
+  let at_panel = |panel| at(ProjectPage::Pipeline(CONNECTION.parse().expect("an id"), panel));
+  let step = PipelinePanel::Step(StepKey::new("review").expect("a step key"));
+  for (panel, path) in [
+    (PipelinePanel::Pipeline, pipeline.clone()),
+    (step, format!("{pipeline}?step=review")),
+    (PipelinePanel::Settings, format!("{pipeline}?panel=settings")),
+    (PipelinePanel::History, format!("{pipeline}?panel=history")),
+    (PipelinePanel::Publish, format!("{pipeline}?panel=publish")),
+  ] {
+    assert_eq!(at_panel(panel).path(), path);
+  }
+}
+
+/// A panel named in the query that is the tab's own reads as the rule without it.
+#[test]
+fn an_instructions_panel_of_the_tab_reads_as_the_rule() {
+  let root = format!("/project/{PROJECT}");
+  let route = Route::parse(&format!("{root}/instructions?tab=steps&panel=preview")).expect("a route");
+  assert_eq!(
+    route,
+    at(ProjectPage::Instructions(InstructionsView::rule(
+      InstructionsTab::Steps,
+      None
+    )))
+  );
+  assert_eq!(route.path(), format!("{root}/instructions?tab=steps"));
+}
+
+#[test]
 fn views_refuse_what_they_do_not_name() {
   let root = format!("/project/{PROJECT}");
+  let id = CONNECTION;
   for path in [
     format!("{root}/secrets?panel=open"),
     format!("{root}/secrets?environment=moon"),
@@ -119,6 +189,11 @@ fn views_refuse_what_they_do_not_name() {
     format!("{root}/agents/new?tab=history"),
     format!("{root}/instructions?view=library"),
     format!("{root}/instructions?rule=first"),
+    format!("{root}/instructions?panel=sources"),
+    format!("{root}/instructions?view=import&panel=preview"),
+    format!("{root}/pipelines/{id}?panel=steps"),
+    format!("{root}/pipelines/{id}?step=Not%20a%20key"),
+    format!("{root}/pipelines/{id}?step=review&panel=history"),
     format!("{root}/settings?tab=memory"),
   ] {
     assert!(Route::parse(&path).is_err(), "{path} names no view");

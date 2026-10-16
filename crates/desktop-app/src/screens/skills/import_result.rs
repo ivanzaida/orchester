@@ -157,7 +157,7 @@ fn header(ctx: &mut Ctx, p: &PageProps, count: usize) -> Column {
     "skill-result-crumb",
     CrumbSeparator::Chevron,
     vec![
-      Crumb::link(ctx.t("skills.title"), move || back.set(Panel::LIBRARY)),
+      Crumb::link(ctx.t("skills.title"), move || back.set(back.library())),
       Crumb::here(ctx.t("skills.import")),
     ],
   );

@@ -15,9 +15,10 @@
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
 //! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Secrets, the Skills
-//! library, an agent profile, Instructions and Project settings keep their tab, filter, item and panel in
-//! the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`], [`InstructionsView`],
-//! [`ProjectSettingsTab`]). A tab, source or kind left out of the query is the one the screen opens on.
+//! library, an agent profile, Instructions, a pipeline's editor and Project settings keep their tab, filter,
+//! item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`], [`InstructionsView`],
+//! [`PipelinePanel`], [`ProjectSettingsTab`]). A tab, source or kind left out of the query is the one the
+//! screen opens on.
 //!
 //! Every place a person chooses — another screen, tab, filter, item or panel — is a new entry of the tab's
 //! history (`Navigation::go`), so Back returns to it as in a browser. Only what chooses no place takes the
@@ -40,6 +41,7 @@ mod orchester;
 mod orchestrator;
 mod overview;
 mod page;
+mod pipeline;
 mod project_settings;
 mod query;
 mod screen;
@@ -63,11 +65,12 @@ pub use self::{
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
-  instructions::{InstructionsTab, InstructionsView},
+  instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
   orchester::{OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
+  pipeline::PipelinePanel,
   project_settings::ProjectSettingsTab,
   screen::Screen,
   secrets::{SecretsPanel, SecretsTab, SecretsView},
@@ -149,7 +152,7 @@ impl Route {
   pub fn pattern(&self) -> String {
     match self {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Pipeline(..)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::PullRequest(..)) => PULL_REQUEST_PATTERN.to_owned(),

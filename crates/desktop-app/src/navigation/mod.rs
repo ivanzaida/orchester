@@ -152,7 +152,17 @@ impl Navigation {
 
   /// Holds departures while a mounted editor has work it must not lose.
   pub fn guard(&self, holds_edits: impl Fn() -> bool + Send + Sync + 'static) -> guard::LeaveGuard {
-    let guard = guard::LeaveGuard::new(holds_edits);
+    self.guard_within(holds_edits, |_| false)
+  }
+
+  /// Holds departures like [`guard`](Self::guard), but not a move in the same tab to a place `within` says
+  /// is the editor's own (another of its panels), which stays on its edits.
+  pub fn guard_within(
+    &self,
+    holds_edits: impl Fn() -> bool + Send + Sync + 'static,
+    within: impl Fn(&Route) -> bool + Send + Sync + 'static,
+  ) -> guard::LeaveGuard {
+    let guard = guard::LeaveGuard::new(holds_edits, Box::new(within));
     *self.guard.lock() = guard.downgrade();
     guard
   }
@@ -163,9 +173,12 @@ impl Navigation {
     if !change(&mut next) {
       return;
     }
-    let leaving = before.active().id() != next.active().id() || before.active().route() != next.active().route();
+    let other_tab = before.active().id() != next.active().id();
+    let leaving = other_tab || before.active().route() != next.active().route();
     let guard = self.guard.lock().upgrade();
-    if leaving && guard.is_some_and(|guard| guard.hold(next.clone())) {
+    if leaving
+      && guard.is_some_and(|guard| (other_tab || !guard.within(next.active().route())) && guard.hold(next.clone()))
+    {
       return;
     }
     self.apply(next);

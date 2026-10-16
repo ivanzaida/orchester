@@ -13,6 +13,7 @@ use orchester_workspace::{background, pipelines::data::OpenedPipeline};
 use super::{
   editor::{Editor, EditorProps},
   parts,
+  state::Panel,
 };
 use crate::{
   project::ShownProject,
@@ -26,6 +27,8 @@ use crate::{
 pub struct LoadProps {
   pub project: ShownProject,
   pub id: ResourceId,
+  /// The panel the route shows.
+  pub panel: Panel,
 }
 impl DevtoolsInspectable for LoadProps {}
 pub struct LoadEditor {
@@ -66,6 +69,7 @@ impl Component for LoadEditor {
         EditorProps {
           project: props.project,
           opened,
+          panel: props.panel,
           reload: self.retry.clone(),
           loading: loaded.is_pending(),
         },

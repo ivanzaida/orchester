@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 
 use super::{
   parts,
-  state::{Editing, Panel, State},
+  state::{Editing, Panel, Panels, State},
   work::{self, Action, Work},
 };
 use crate::{
@@ -39,12 +39,17 @@ use crate::{
 pub struct EditorProps {
   pub project: ShownProject,
   pub opened: OpenedPipeline,
+  /// The panel the route shows.
+  pub panel: Panel,
   pub reload: Signal<u64>,
   pub loading: bool,
 }
 impl PartialEq for EditorProps {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.opened == other.opened && self.loading == other.loading
+    self.project == other.project
+      && self.opened == other.opened
+      && self.panel == other.panel
+      && self.loading == other.loading
   }
 }
 impl DevtoolsInspectable for EditorProps {}
@@ -65,15 +70,20 @@ impl Component for Editor {
   type Props = EditorProps;
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<EditorProps>().clone();
-    let state = ctx.signal(Editing::new(props.opened));
+    let navigation = Navigation::of(ctx);
+    let panels = Panels::new(navigation.clone(), props.project.open.project.id(), props.opened.id);
+    let state = ctx.signal(Editing::new(props.opened, (panels.clone(), props.panel)));
     let action = work::action(ctx, props.project.open.project.id());
     follow_writes(ctx, &action, &state);
     let writing = ctx.signal(false);
     let (edits, pending) = (state.clone(), writing.clone());
-    let leave = Navigation::of(ctx).guard(move || {
-      let edits = edits.get_untracked();
-      edits.dirty() || !edits.errors.is_empty() || pending.get_untracked()
-    });
+    let leave = navigation.guard_within(
+      move || {
+        let edits = edits.get_untracked();
+        edits.dirty() || !edits.errors.is_empty() || pending.get_untracked()
+      },
+      move |route| panels.holds(route),
+    );
     Self {
       state,
       action,
@@ -89,6 +99,10 @@ impl Component for Editor {
     let writing = action.state().get().is_pending();
     if self.writing.get_untracked() != writing {
       self.writing.set(writing);
+    }
+    // The panel is the route's; the state follows it for the parts that read it there.
+    if self.state.get_untracked().panel != props.panel {
+      self.state.update(|s| s.panel = props.panel.clone());
     }
     // First: lurq keeps a component's futures by the order it asks for them.
     self.autosave(ctx, &props, writing);
@@ -318,27 +332,26 @@ impl Editor {
     head.child(publish).into()
   }
   fn publish_button(&self, ctx: &Ctx, editing: &Editing, busy: bool) -> ActionButton {
+    let panels = editing.panels.clone();
     if editing.opened.latest.is_some() && editing.opened.draft_saved_at.is_none() && !editing.dirty() {
-      let state = self.state.clone();
       return ActionButton::new(
         "pipeline-header-history",
         ButtonKind::Secondary,
         ctx.t("pipelines.history"),
       )
       .icon(crate::ui::icon::Icon::History)
-      .on_click(move || state.update(|s| s.panel = Panel::History));
+      .on_click(move || panels.choose(Panel::History));
     }
     let next = next_version(&editing.opened)
       .map(|v| v.get().to_string())
       .unwrap_or_default();
-    let state = self.state.clone();
     let publish = ActionButton::new(
       "pipeline-publish",
       ButtonKind::Primary,
       ctx.t_args("pipelines.publish", [("version", next)]),
     )
     .icon(crate::ui::icon::Icon::ArrowUp)
-    .on_click(move || state.update(|s| s.panel = Panel::Publish));
+    .on_click(move || panels.choose(Panel::Publish));
     if busy
       || editing.panel == Panel::Publish
       || editing.dirty()
@@ -405,7 +418,7 @@ impl Editor {
         props.project.open.repo_root.clone(),
         editing.opened.clone(),
       );
-      let keep = self.state.clone();
+      let keep = editing.panels.clone();
       if reasons.is_empty() {
         Some(super::publication::footer(
           ctx,
@@ -447,7 +460,7 @@ impl Editor {
                 allowed: Allowed(reasons.clone()),
               });
             }),
-            on_keep: Arc::new(move || keep.update(|s| s.panel = Panel::Pipeline)),
+            on_keep: Arc::new(move || keep.close()),
           },
         ))
       }
@@ -476,12 +489,11 @@ fn follow_writes(ctx: &mut Ctx, action: &Action, state: &State) {
       && result.error.is_none()
       && let Some(opened) = &result.data
     {
-      state.update(|state| {
-        state.saved(opened.clone());
-        if state.panel == Panel::Publish {
-          state.panel = Panel::Pipeline;
-        }
-      });
+      state.update(|state| state.saved(opened.clone()));
+      let editing = state.get_untracked();
+      if editing.panel == Panel::Publish {
+        editing.panels.close();
+      }
     }
   });
 }

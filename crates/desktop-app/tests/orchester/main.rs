@@ -13,6 +13,7 @@ mod account_cloud;
 mod clipboard;
 mod design;
 mod harness;
+mod history;
 mod person_only;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;

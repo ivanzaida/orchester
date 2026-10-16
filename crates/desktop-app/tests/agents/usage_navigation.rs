@@ -64,7 +64,7 @@ fn used_profile() -> (Agents, ResourceId, ResourceId) {
 fn current_pipeline(screen: &mut Agents, pipeline: ResourceId) {
   assert_eq!(
     screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipeline(pipeline))
+    Route::Project(project_id(), ProjectPage::Pipeline(pipeline, Default::default()))
   );
   screen.until("actual current pipeline editor", |s| s.exists("pipeline-canvas"));
   assert!(screen.text("screen-pipelines").contains("Linked delivery"));

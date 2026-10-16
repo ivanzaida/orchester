@@ -74,7 +74,10 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::ImportSkills),
     at(ProjectPage::NewPipeline),
     at(ProjectPage::NewEmptyPipeline),
-    at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),
+    at(ProjectPage::Pipeline(
+      PROJECT.parse().expect("a resource id"),
+      Default::default(),
+    )),
     at(ProjectPage::Agent(
       CONNECTION.parse().expect("an agent resource id"),
       Default::default(),
@@ -443,7 +446,7 @@ fn pipelines_pages_have_their_own_paths_and_select_pipelines() {
   let id = PROJECT.parse().expect("resource id");
   for (page, suffix) in [
     (ProjectPage::NewPipeline, "new".to_owned()),
-    (ProjectPage::Pipeline(id), id.to_string()),
+    (ProjectPage::Pipeline(id, Default::default()), id.to_string()),
   ] {
     let route = at(page);
     assert_eq!(route.path(), format!("/project/{PROJECT}/pipelines/{suffix}"));

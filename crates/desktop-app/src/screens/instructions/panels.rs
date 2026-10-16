@@ -18,7 +18,9 @@ use orchester_workspace::instructions::{
 
 use super::{
   availability::{Availability, CatalogState},
-  preview, variables,
+  preview,
+  state::{Panel, SidePanel},
+  variables,
 };
 use crate::{
   project::ShownProject,
@@ -35,13 +37,6 @@ use crate::{
 
 // Variables panel r8Ipz and prompt viewer's sources rail.
 pub const PANEL_WIDTH: f32 = 340.0;
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Panel {
-  Hidden,
-  Variables,
-  Preview,
-  Full,
-}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CopyReceipt {
   pub composition: orchester_core::run::Composition,
@@ -56,7 +51,6 @@ pub enum Copied {
   Failed(CopyReceipt),
 }
 impl DevtoolsInspectable for Copied {}
-impl DevtoolsInspectable for Panel {}
 #[derive(Clone)]
 pub struct Props {
   pub project: ShownProject,
@@ -69,7 +63,7 @@ pub struct Props {
   pub choice: Signal<PreviewChoice>,
   pub catalog: CatalogState,
   pub availability: Availability,
-  pub panel: Signal<Panel>,
+  pub panel: SidePanel,
   pub data: ProjectInstructions,
 }
 impl PartialEq for Props {
@@ -80,7 +74,7 @@ impl PartialEq for Props {
       && self.data == other.data
       && self.catalog == other.catalog
       && self.availability == other.availability
-      && self.panel.id() == other.panel.id()
+      && self.panel.same(&other.panel)
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -206,14 +200,14 @@ impl Panels {
         format!("instruction-panel-{index}"),
         SegmentFace::Text(ctx.t(key)),
         props.panel.get() == panel,
-        move || chosen.set(panel),
+        move || chosen.choose(panel),
       )
     })
     .collect::<Vec<_>>();
     let close = props.panel.clone();
     let cross = IconButton::new("instruction-panel-close", Icon::X, ctx.t("instructions.closePanel"))
       .inspector()
-      .on_click(move || close.set(Panel::Hidden))
+      .on_click(move || close.close(Panel::Hidden))
       .render(ctx);
     Row::new()
       .width(Dimension::Pct(100.0))

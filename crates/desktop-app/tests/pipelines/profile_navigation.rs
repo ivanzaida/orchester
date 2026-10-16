@@ -1,7 +1,7 @@
 //! Actual current-profile navigation keeps pending decisions and unsaved Pipeline fields intact.
 use std::collections::BTreeSet;
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{PipelinePanel, ProjectPage, Route};
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -91,9 +91,10 @@ fn current_agent(editor: &mut Editor, profile: ResourceId, role: &str) {
   assert!(editor.text("agent-model").contains("test-model"));
 }
 fn stays(editor: &Editor, id: ResourceId) {
+  let step = PipelinePanel::Step(StepKey::new("research").expect("valid step key"));
   assert_eq!(
     editor.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipeline(id))
+    Route::Project(project_id(), ProjectPage::Pipeline(id, step))
   );
 }
 

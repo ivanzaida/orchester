@@ -146,11 +146,20 @@ fn pipelines_sidebar_history_and_tabs_preserve_unconfirmed_and_invalid_edits() {
   assert_eq!(editor.selected(), id);
   assert!(editor.exists("pipeline-leave-question"));
   editor.click("pipeline-leave-keep");
+  // Back first closes the step's panel, a place of the editor's own, and keeps its edits unasked.
+  editor.window.navigation().back();
+  editor.window.pass();
+  assert_eq!(editor.selected(), id);
+  assert!(!editor.exists("pipeline-leave-question"));
+  assert!(editor.exists("pipeline-summary-name"));
   editor.window.navigation().back();
   editor.window.pass();
   assert_eq!(editor.selected(), id);
   assert!(editor.exists("pipeline-leave-question"));
   editor.click("pipeline-leave-keep");
+  editor.window.navigation().forward();
+  editor.window.pass();
+  assert!(editor.exists("step-budget"), "Forward reopens the step with its edits");
   editor.window.navigation().open_tab();
   editor.window.pass();
   assert_eq!(editor.window.navigation().tabs_now().tabs().len(), 1);

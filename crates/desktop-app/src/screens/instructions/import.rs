@@ -24,7 +24,7 @@ use orchester_workspace::{
 
 use super::{
   import_rows::{Unchosen, Viewed},
-  state::{Selection, Tab, View},
+  state::Selection,
 };
 use crate::{
   project::ShownProject,
@@ -193,7 +193,7 @@ impl Import {
         ButtonKind::Primary,
         ctx.t("instructions.back"),
       )
-      .on_click(move || selection.open(View::Rule(Tab::Project, None))),
+      .on_click(move || selection.open(selection.opened_from())),
     )
   }
   fn review(&self, ctx: &mut Ctx, scan: &RepositoryScan, busy: bool) -> Element {
@@ -234,7 +234,7 @@ impl Import {
       ButtonKind::Secondary,
       ctx.t("instructions.cancel"),
     )
-    .on_click(move || cancel.close(View::Rule(Tab::Project, None)));
+    .on_click(move || cancel.close(cancel.opened_from()));
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(IMPORT_FOOTER_HEIGHT))
@@ -305,9 +305,7 @@ fn header(ctx: &mut Ctx, props: &Props) -> Element {
     "instruction-import-crumbs",
     CrumbSeparator::Chevron,
     vec![
-      Crumb::link(ctx.t("instructions.title"), move || {
-        back.open(View::Rule(Tab::Project, None))
-      }),
+      Crumb::link(ctx.t("instructions.title"), move || back.open(back.opened_from())),
       Crumb::here(ctx.t("instructions.import")),
     ],
   );
@@ -318,7 +316,7 @@ fn header(ctx: &mut Ctx, props: &Props) -> Element {
     ctx.t("instructions.backInstructions"),
   )
   .small()
-  .on_click(move || back.open(View::Rule(Tab::Project, None)))
+  .on_click(move || back.open(back.opened_from()))
   .render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))

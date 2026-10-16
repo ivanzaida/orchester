@@ -8,8 +8,8 @@ use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usa
 
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, NEW, NewConnection, ORCHESTRATOR,
-  OrchestratorChat, OverviewTab, PULL_REQUESTS, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView,
-  SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS, Screen,
+  SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
   query::{Params, with_query},
@@ -39,7 +39,8 @@ pub enum ProjectPage {
   Pipelines,
   NewPipeline,
   NewEmptyPipeline,
-  Pipeline(ResourceId),
+  /// A pipeline's editor, with the panel it shows beside the graph.
+  Pipeline(ResourceId, PipelinePanel),
   Agents,
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
@@ -110,7 +111,7 @@ impl ProjectPage {
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
       Self::Usage(_) => Screen::Usage,
-      Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
+      Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) => Screen::Pipelines,
       Self::Agents | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
       Self::Memory => Screen::Memory,
@@ -151,7 +152,7 @@ impl ProjectPage {
       ),
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
-      Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
+      Self::Pipeline(id, panel) => panel.path(format!("{project_root}/pipelines/{id}")),
       Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
@@ -212,7 +213,10 @@ impl ProjectPage {
           value: value.to_owned(),
         }),
       },
-      ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
+      ["pipelines", id] => {
+        let id = id.parse().map_err(|_| RouteError::NoScreen)?;
+        PipelinePanel::take(params).map(|panel| Self::Pipeline(id, panel))
+      }
       ["agents", NEW] => AgentTab::take(params).map(Self::NewAgent),
       ["agents", id] => {
         let id = id.parse().map_err(|_| RouteError::NoScreen)?;

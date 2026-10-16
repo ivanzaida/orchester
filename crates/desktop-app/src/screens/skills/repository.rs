@@ -25,7 +25,7 @@ use orchester_workspace::{
   },
 };
 
-use super::{PageProps, state::Panel};
+use super::PageProps;
 use crate::{
   services::Services,
   theme::{ExtraSpacing, ExtraTypography},
@@ -357,7 +357,7 @@ impl Import {
     .variant(TypographyStyle::Caption);
     let back = p.view.panel.clone();
     let cancel = ActionButton::new("skills-back", ButtonKind::Secondary, ctx.t("skills.cancel"))
-      .on_click(move || back.close(Panel::LIBRARY));
+      .on_click(move || back.close(back.library()));
     let cancel = if pending { cancel.disabled() } else { cancel };
     Row::new()
       .id("skill-import-footer")
@@ -379,7 +379,7 @@ impl Import {
       "skill-import-crumb",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::LIBRARY)),
+        Crumb::link(ctx.t("skills.title"), move || back.set(back.library())),
         Crumb::here(ctx.t("skills.import")),
       ],
     );

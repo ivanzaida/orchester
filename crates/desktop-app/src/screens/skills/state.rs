@@ -49,6 +49,13 @@ impl PanelNav {
   pub fn close(&self, panel: Panel) {
     self.navigation.close_panel(Route::Project(self.project, panel.page()));
   }
+  /// The library a page was opened from, with its filter; on every skill when the page was not.
+  pub fn library(&self) -> Panel {
+    match self.navigation.tabs_now().active().behind() {
+      Some(Route::Project(project, ProjectPage::Skills(filter))) if *project == self.project => Panel::Library(*filter),
+      _ => Panel::LIBRARY,
+    }
+  }
 }
 #[derive(Clone)]
 pub struct View {

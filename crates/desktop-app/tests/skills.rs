@@ -6,7 +6,7 @@ mod support;
 mod visual;
 use std::{fs, path::PathBuf};
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{ProjectPage, Route, SkillsFilter};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   id::ResourceId,
@@ -510,4 +510,20 @@ fn skills_save_retry_saves_the_local_draft_without_a_publish_question() {
   s.settle(id, "My local draft.");
   assert!(s.window.tree.get_element_by_id("skill-save-error").is_none());
   assert!(s.entry(id).state.published().is_none());
+}
+
+/// The crumb back to the library returns to the filter the skill was opened from.
+#[test]
+fn skills_crumb_returns_to_the_library_filter_it_came_from() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  let library = Route::Project(project_id(), ProjectPage::Skills(SkillsFilter::Project));
+  s.window.navigation().go(library.clone());
+  s.go(ProjectPage::Skill(id));
+  s.window.until("the skill's crumb", |w| {
+    w.tree.get_element_by_id("skill-crumb-0").is_some()
+  });
+  s.click("skill-crumb-0");
+  s.window.pass();
+  assert_eq!(s.window.navigation().route_now(), library);
 }

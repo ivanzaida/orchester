@@ -59,7 +59,7 @@ pub fn header(
     .child(
       ActionButton::new("instructions-new", ButtonKind::Primary, ctx.t("instructions.new"))
         .icon(Icon::Plus)
-        .on_click(move || new.open(View::New(tab))),
+        .on_click(move || new.open(View::new_rule(tab))),
     );
   let tabs = Tab::ALL
     .into_iter()
@@ -75,7 +75,7 @@ pub fn header(
         format!("instruction-tab-{index}"),
         counted(ctx, &ctx.t(choice.key()), count),
         tab == choice,
-        move || selection.open(View::Rule(choice, None)),
+        move || selection.open(View::rule(choice, None)),
       )
     })
     .collect::<Vec<_>>();

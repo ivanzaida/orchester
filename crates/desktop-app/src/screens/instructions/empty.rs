@@ -111,7 +111,7 @@ impl Component for Empty {
         ctx.t("instructions.new"),
       )
       .icon(Icon::Plus)
-      .on_click(move || new.open(View::New(tab))),
+      .on_click(move || new.open(View::new_rule(tab))),
     );
     if let Some(scan) = read.data.as_ref().filter(|scan| !scan.items.is_empty()) {
       empty = empty.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));

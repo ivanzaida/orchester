@@ -121,7 +121,10 @@ fn every_link() -> Vec<(Link, Route)> {
       Link::Task(project, key(), TaskPage::Changes),
       at(ProjectPage::Task(key(), TaskView::Changes(None))),
     ),
-    (Link::Pipeline(project, id()), at(ProjectPage::Pipeline(id()))),
+    (
+      Link::Pipeline(project, id()),
+      at(ProjectPage::Pipeline(id(), Default::default())),
+    ),
     (
       Link::Profile(project, id()),
       at(ProjectPage::Agent(id(), Default::default())),

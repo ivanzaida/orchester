@@ -58,6 +58,11 @@ impl Tab {
     &self.history[self.at]
   }
 
+  /// The place Back returns to, if any: where a page was opened from, for its *Cancel* to go back to.
+  pub fn behind(&self) -> Option<&Route> {
+    self.at.checked_sub(1).map(|at| &self.history[at])
+  }
+
   /// The project the sidebar shows: the route's, and on the app's Settings, which belong to no project,
   /// the one the tab was in last; `None` when the tab has not been in a project.
   pub fn sidebar_project(&self) -> Option<ProjectId> {

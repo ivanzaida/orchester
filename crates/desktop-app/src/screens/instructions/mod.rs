@@ -65,18 +65,21 @@ impl Component for InstructionsScreen {
     let dirty = ctx.signal(false);
     let busy = ctx.signal(false);
     let (edits, writing) = (dirty.clone(), busy.clone());
-    let navigation = crate::navigation::Navigation::of(ctx);
-    let leave = navigation.guard(move || edits.get_untracked() || writing.get_untracked());
+    let selection = Selection {
+      project: ctx.props::<Props>().0.open.project.id(),
+      navigation: crate::navigation::Navigation::of(ctx),
+      pending: ctx.signal(None),
+      created: ctx.signal(state::Saved::default()),
+      dirty,
+      busy,
+    };
+    let rule = selection.clone();
+    let leave = selection.navigation.guard_within(
+      move || edits.get_untracked() || writing.get_untracked(),
+      move |route| rule.holds(route),
+    );
     Self {
-      selection: Selection {
-        project: ctx.props::<Props>().0.open.project.id(),
-        navigation,
-        pending: ctx.signal(None),
-        created: ctx.signal(state::Saved::default()),
-        dirty,
-        busy,
-        full: ctx.signal(false),
-      },
+      selection,
       retry: ctx.signal(0),
       reloads: ctx.signal(0),
       leave,
@@ -132,7 +135,7 @@ impl Component for InstructionsScreen {
       .with_children(
         view
           .tab()
-          .filter(|_| !self.selection.full.get())
+          .filter(|_| view.panel() != Some(state::Panel::Full))
           .map(|tab| frame::header(ctx, &project, &data, tab, &self.selection)),
       )
       .with_children(leaving::question(ctx, &self.selection, &self.leave))
@@ -161,7 +164,7 @@ impl InstructionsScreen {
           self.selection.created.set(state::Saved::default());
         }
         let entry = match view {
-          View::Rule(_, selected) => selected
+          View::Rule(_, selected, _) => selected
             .and_then(|id| {
               data
                 .entry(id)
@@ -171,7 +174,7 @@ impl InstructionsScreen {
             .cloned(),
           _ => None,
         };
-        if entry.is_none() && !matches!(view, View::New(_)) {
+        if entry.is_none() && !matches!(view, View::New(..)) {
           return frame::empty(ctx, &project, (&data, tab), &self.selection);
         }
         let key = format!("instruction-editor-{tab:?}-{:?}", entry.as_ref().map(|entry| entry.id));
@@ -182,6 +185,7 @@ impl InstructionsScreen {
             data,
             entry,
             tab,
+            panel: view.panel().unwrap_or(tab.panel()),
             selection: self.selection.clone(),
             reloads: self.reloads.clone(),
             reading,

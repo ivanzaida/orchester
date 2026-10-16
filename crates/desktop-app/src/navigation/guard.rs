@@ -4,9 +4,15 @@ use std::sync::{Arc, Weak};
 use lurq::core::Signal;
 
 use super::{Navigation, tabs::TabSet};
+use crate::routes::Route;
+
+pub(super) type Within = Box<dyn Fn(&Route) -> bool + Send + Sync>;
 
 pub(super) struct PendingLeave {
   holds_edits: Box<dyn Fn() -> bool + Send + Sync>,
+  /// Whether a place is the editor's own, e.g. another of its panels: going there in the same tab leaves
+  /// nothing.
+  within: Within,
   destination: Signal<Option<TabSet>>,
 }
 
@@ -18,6 +24,10 @@ impl PendingLeave {
     self.destination.set(Some(destination));
     true
   }
+
+  pub(super) fn within(&self, route: &Route) -> bool {
+    (self.within)(route)
+  }
 }
 
 /// Owned by the mounted editor. Navigation holds only a weak reference, so unmounting releases it.
@@ -25,9 +35,10 @@ impl PendingLeave {
 pub struct LeaveGuard(Arc<PendingLeave>);
 
 impl LeaveGuard {
-  pub(super) fn new(holds_edits: impl Fn() -> bool + Send + Sync + 'static) -> Self {
+  pub(super) fn new(holds_edits: impl Fn() -> bool + Send + Sync + 'static, within: Within) -> Self {
     Self(Arc::new(PendingLeave {
       holds_edits: Box::new(holds_edits),
+      within,
       destination: Signal::new(None),
     }))
   }
