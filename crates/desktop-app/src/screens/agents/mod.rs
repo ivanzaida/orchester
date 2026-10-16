@@ -81,7 +81,8 @@ impl Component for AgentsScreen {
       outside.of(Outside::Connections),
       outside.of(Outside::Pipelines),
       outside.of(Outside::Profiles),
-      project.feed.changes.get(),
+      // The profiles' active uses: the runs that run them start and end.
+      project.feed.states.get(),
     );
     let hold = crate::services::Services::of(ctx).hold;
     let loaded = ctx

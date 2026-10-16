@@ -195,7 +195,8 @@ impl CodeIndex {
         (
           props.project.open.repo_root.clone(),
           self.list_revision.get(),
-          props.project.feed.changes.get(),
+          // The runs an index is used by start and end; its own building is followed by the tab's poll.
+          props.project.feed.states.get(),
           props.project.feed.revision.get(),
           props.project.feed.outside.get().of(Outside::CodeIndex),
         ),

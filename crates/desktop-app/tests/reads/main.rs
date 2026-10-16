@@ -11,6 +11,7 @@
 mod kontur;
 #[path = "../support/mod.rs"]
 mod support;
+mod screens;
 mod transcript;
 
 use std::{
