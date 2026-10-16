@@ -31,7 +31,6 @@ use orchester_core::{
   project::TaskKey,
 };
 use orchester_workspace::{messages::Message, runner::state::RunnerState};
-use parking_lot::Mutex;
 
 pub use self::context::TaskContext;
 pub(crate) use self::conversation::{links, step_label};
@@ -244,7 +243,7 @@ struct TaskFrame {
   composer: conversation::ComposerState,
   /// Whether the task's latest run ran when the task was last read: only then do its transcript's lines
   /// change the task.
-  live: Mutex<bool>,
+  live: Signal<bool>,
 }
 
 impl Component for TaskFrame {
@@ -263,7 +262,7 @@ impl Component for TaskFrame {
         discard: ctx.signal(false),
         summary_scroll: ScrollState::new(),
       },
-      live: Mutex::new(false),
+      live: ctx.signal(false),
     }
   }
 
@@ -277,7 +276,7 @@ impl Component for TaskFrame {
     let feed = &props.project.feed;
     let saves = feed.revision.get() + feed.outside.get().tasks;
     let again = ReadAgain {
-      changes: feed.run_changes(*self.live.lock()),
+      changes: feed.run_changes(self.live.get()),
       saves,
       retries: self.retries.get(),
     };
@@ -287,7 +286,11 @@ impl Component for TaskFrame {
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
     };
-    *self.live.lock() = read::runs(&detail);
+    // Set only when it changes: the frame then renders again, following the transcript's lines or not.
+    let live = read::runs(&detail);
+    if self.live.get_untracked() != live {
+      self.live.set(live);
+    }
     let services = Services::of(ctx);
     let jobs = feed.job_state.get();
     let separator = ctx.t("task.listSeparator");
