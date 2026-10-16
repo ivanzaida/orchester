@@ -350,7 +350,10 @@ pub fn seed(request: &SeedRequest) -> Result<Seeded, SeedError> {
   let Kontur {
     app_database, seeded, ..
   } = kontur;
-  AppDb::open(&app_database)?.register_project(&project, &repo, request.now)?;
+  let mut db = AppDb::open(&app_database)?;
+  // The signed-in account's project, or the next one's to sign in.
+  let owner = db.cloud_account()?.map(|account| account.account);
+  db.register_project(&project, &repo, request.now, owner.as_ref())?;
   Ok(Seeded {
     project: project.id(),
     repo,

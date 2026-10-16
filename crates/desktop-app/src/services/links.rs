@@ -5,6 +5,7 @@
 
 use std::{env, io, sync::Arc};
 
+use orchester_workspace::sharing::ServerEntry;
 use parking_lot::Mutex;
 
 /// The environment variable that makes the app record links instead of opening them.
@@ -40,6 +41,30 @@ impl Links {
       return Ok(());
     }
     orchester_exec::external::open_url(url)
+  }
+
+  /// Opens `url`, a page of `server`'s (*Manage members and invites*), in the browser, or records it. A page of a
+  /// server the app talks to over plain HTTP, one on this computer or one the person allowed it for, opens over plain
+  /// HTTP as well; any other address is refused.
+  pub fn open_server_page(&self, server: &ServerEntry, url: &str) -> io::Result<()> {
+    let refused = |why: &str| Err(io::Error::new(io::ErrorKind::InvalidInput, format!("{url} {why}")));
+    if !url.starts_with(&format!("{}/", server.address.as_str())) {
+      return refused("is not a page of the server");
+    }
+    let plain = !server.address.is_https();
+    if plain && !server.address.is_loopback() && !server.stored.plain_http_allowed {
+      return refused("is plain HTTP, which the person did not allow for the server");
+    }
+    if let Some(recorded) = self.recorded.lock().as_mut() {
+      tracing::info!(url, "a link was recorded instead of opened");
+      recorded.push(url.to_owned());
+      return Ok(());
+    }
+    if plain {
+      orchester_exec::external::open_plain_http_url(url)
+    } else {
+      orchester_exec::external::open_url(url)
+    }
   }
 
   /// The addresses recorded so far; none while pages open in the browser.

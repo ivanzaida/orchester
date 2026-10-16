@@ -12,6 +12,10 @@ use rusqlite::Connection;
 
 use self::support::{at, copied_at_version, pending_run, started_run};
 
+/// The schema before the migration that let a failed run have no failed step (`worktree_not_created`, the 67th).
+/// Migrations are append-only.
+const BEFORE_NOT_STARTED: u32 = 66;
+
 fn reloaded(db: &ProjectDb, run: &Run) -> Run {
   db.run(run.id()).expect("read").expect("run")
 }
@@ -81,12 +85,8 @@ fn runs_that_failed_before_the_migration_keep_their_step() {
   assert!(matches!(run.status(), RunStatus::Failed(RunFailure::StepFailed(_))));
   drop(db);
   let current = repo.path().join(".orchester").join("orchester.db");
-  let version: u32 = Connection::open(&current)
-    .expect("open")
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
 
-  let old = copied_at_version(&current, version - 1);
+  let old = copied_at_version(&current, BEFORE_NOT_STARTED);
 
   let db = ProjectDb::open(old.path()).expect("migrated");
   assert_eq!(reloaded(&db, &run), run);

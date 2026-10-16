@@ -110,7 +110,7 @@ impl Component for McpItem {
 }
 
 /// What the item says, and in which color.
-fn words(ctx: &Ctx, status: &McpStatus) -> (String, PaletteColor) {
+pub(super) fn words(ctx: &Ctx, status: &McpStatus) -> (String, PaletteColor) {
   match (&status.kind, &status.server) {
     (_, ServerState::PortTaken { port, how }) => (
       ctx

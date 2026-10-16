@@ -1,4 +1,4 @@
-//! Settings › Orchester (`Cu20b` signed in, `DUWM5` signed out, `SFaAp` a team server's entry, `Aowlk` their states;
+//! Settings › Orchester (`Cu20b` signed in, `SFaAp` a team server's entry, `Aowlk` their states;
 //! layer `uyO5v`): the list of the Orchester Cloud account and the team servers on the left, and the shown one's
 //! details on the right; *Connect a server* (`zxe2P`, `bIwte`) is a page of its own ([`connect`]). Member actions only:
 //! everything administrative is in a server's admin in the browser, which the entry links to.
@@ -21,7 +21,6 @@ mod person;
 mod server;
 mod server_parts;
 mod server_projects;
-mod sign_in;
 mod words;
 
 use std::sync::Arc;
@@ -47,10 +46,11 @@ use orchester_workspace::{
   },
 };
 
+pub(crate) use self::advanced::{Advanced, Place, section as advanced_section};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,
-  words::{Said, day as day_of, moment, runs, sharing_error as sharing_said, shown_address},
+  words::{Said, cloud_error as cloud_said, day as day_of, moment, runs, sharing_error as sharing_said, shown_address},
 };
 
 /// The cloud account as read, for a future's answer.
@@ -206,6 +206,22 @@ pub fn follow(ctx: &mut Ctx, (servers, cloud): (&Servers, &Cloud)) -> u64 {
       }
     },
   );
+  stream.state().get().data.unwrap_or_default()
+}
+
+/// Counts changes of the shared projects' caches (a role, a removal, a sync), for a screen that shows how a project
+/// stands with its server.
+pub fn follow_shared(ctx: &mut Ctx, servers: &Servers) -> u64 {
+  let stream = ctx.stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
+    let mut shared = servers.subscribe_shared();
+    let mut count = 0_u64;
+    loop {
+      if !emitter.emit(count) || shared.changed().await.is_err() {
+        return;
+      }
+      count += 1;
+    }
+  });
   stream.state().get().data.unwrap_or_default()
 }
 

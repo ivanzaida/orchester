@@ -1,8 +1,5 @@
 //! Forward-only SQL migrations compiled into the binary, each applied in its own transaction under one advisory lock,
-//! so instances that start together apply each once (`docs/architecture/server.md`, "The cloud's migrations"). A
-//! migration is applied when its version is not recorded yet, not only when it is above the newest recorded one:
-//! branches developed side by side take numbers out of order (9 is the sign-in gate's, 10 two-factor
-//! authentication's), and a database that got 10 first still gets 9.
+//! so instances that start together apply each once (`docs/architecture/server.md`, "The cloud's migrations").
 
 use std::time::SystemTime;
 
@@ -21,6 +18,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
   (6, include_str!("../../migrations/0006_invite_answers.sql")),
   (7, include_str!("../../migrations/0007_last_owner.sql")),
   (8, include_str!("../../migrations/0008_root_key.sql")),
+  (9, include_str!("../../migrations/0009_token_end_reasons.sql")),
   (10, include_str!("../../migrations/0010_two_factor.sql")),
 ];
 
@@ -48,14 +46,7 @@ pub(super) async fn migrate(client: &mut Client, now: SystemTime) -> Result<(), 
     if current > LATEST_SCHEMA {
       return Err(CloudError::SchemaTooNew(current));
     }
-    let applied: bool = transaction
-      .query_one(
-        "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)",
-        &[version],
-      )
-      .await?
-      .get(0);
-    if !applied {
+    if current < *version {
       transaction.batch_execute(sql).await?;
       if *version == 4 {
         drop_foreign_ids(&transaction).await?;

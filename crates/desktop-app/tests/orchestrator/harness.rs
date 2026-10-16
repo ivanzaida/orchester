@@ -12,10 +12,7 @@ use std::{
 };
 
 use lurq::app::events::MouseButton;
-use orchester_app::{
-  routes::{OrchestratorChat, ProjectPage, Route},
-  startup::Launch,
-};
+use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
@@ -117,10 +114,10 @@ impl Orchestrator {
     let (runner, fake, fake_codex) = programs();
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
     fs::create_dir_all(&scratch).expect("scratch directory");
-    let data = Data {
-      dir: tempfile::tempdir_in(scratch).expect("test directory"),
-      runtime: tokio::runtime::Runtime::new().expect("runtime"),
-    };
+    let data = Data::at(
+      tempfile::tempdir_in(scratch).expect("test directory"),
+      tokio::runtime::Runtime::new().expect("runtime"),
+    );
     let repo = data.dir.path().join("kontur");
     fs::create_dir_all(&repo).expect("the repository's folder");
     git(&repo, &["init", "--quiet", "--initial-branch=main"]);
@@ -134,7 +131,7 @@ impl Orchestrator {
       Setup::NoRunner => data.dir.path().join("no-runner").join("orchester-runner"),
       Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly => runner,
     };
-    let launch = Launch::begin_at(&data.database(), runner, data.runtime.handle(), None);
+    let launch = data.launch_with(runner);
     let project = ProjectId::generate();
     let open = add_project(
       launch.workspace().expect("the session started"),
@@ -341,14 +338,16 @@ the agent logged: {agent}"
   /// Kontur named `name` in the list of projects, as when its database names it differently.
   pub fn rename(&self, name: &str) {
     let key = self.db().project().key().clone();
-    AppDb::open(&self.window.data.database())
-      .expect("the app's database")
-      .register_project(
-        &Project::new(self.project, key, named(name)),
-        &self.root,
-        Timestamp::now(),
-      )
-      .expect("renamed");
+    let mut db = AppDb::open(&self.window.data.database()).expect("the app's database");
+    // The project stays the signed-in account's.
+    let owner = db.cloud_account().expect("the account").map(|account| account.account);
+    db.register_project(
+      &Project::new(self.project, key, named(name)),
+      &self.root,
+      Timestamp::now(),
+      owner.as_ref(),
+    )
+    .expect("renamed");
   }
 
   /// Another project named `name`, in a repository of its own; its folder.

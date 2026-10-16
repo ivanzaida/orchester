@@ -159,9 +159,10 @@ impl Servers {
   }
 }
 
-/// The shared projects of the workspace whose folder can be read.
+/// The shared projects on this computer whose folder can be read, whichever account's: each keeps in step with its
+/// server while another account is signed in.
 pub(super) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
-  let projects = match servers.inner.workspace.projects() {
+  let projects = match servers.inner.workspace.every_project() {
     Ok(projects) => projects,
     Err(error) => {
       tracing::error!(%error, "cannot read the projects of the workspace");

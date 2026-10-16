@@ -105,13 +105,15 @@ pub fn projects(folders: &Folders) -> Result<Seeded, Box<dyn Error>> {
     now,
   })?;
   let mut app = AppDb::open(&seeded.app_database)?;
+  // The signed-in account's projects, or the next one's to sign in.
+  let owner = app.cloud_account()?.map(|account| account.account);
   for (name, key, folder, minutes) in LISTED {
     let repo = folders.root.join("projects").join(folder);
     git_init(&repo)?;
     let project = Project::new(ProjectId::generate(), ProjectKey::new(key)?, Name::new(name)?);
     ProjectDb::create(&repo, project.clone())?;
     let opened = Timestamp::from_unix_millis(now.unix_millis() - minutes * 60 * 1000);
-    app.register_project(&project, &repo, opened)?;
+    app.register_project(&project, &repo, opened, owner.as_ref())?;
     if folder == NEWER {
       rusqlite::Connection::open(repo.join(".orchester").join("orchester.db"))?.pragma_update(
         None,

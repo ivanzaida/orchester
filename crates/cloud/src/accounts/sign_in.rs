@@ -1,8 +1,9 @@
 use std::{net::IpAddr, time::SystemTime};
 
+use deadpool_postgres::GenericClient;
 use orchester_api::{
   Credential,
-  cloud::{CloudDevice, CloudErrorCode, CloudSignIn, CloudSignInChallenge, CloudSignedIn, DeviceInfo},
+  cloud::{CloudDevice, CloudErrorCode, CloudSignIn, CloudSignInChallenge, CloudSignedIn, DeviceInfo, SessionEnd},
 };
 use orchester_core::id::{CloudAccountId, CloudDeviceId};
 
@@ -144,13 +145,16 @@ impl Cloud {
     let now = self.now();
     let client = self.inner.db.client().await?;
     let (idle, web) = active_since(now);
-    let row = client
+    let hash = token_hash(token);
+    let Some(row) = client
       .query_opt(
         &format!("SELECT id, account, last_used_at FROM devices WHERE token_hash = $1 AND {ACTIVE}"),
-        &[&token_hash(token), &idle, &web],
+        &[&hash, &idle, &web],
       )
       .await?
-      .ok_or(CloudErrorCode::Unauthorized)?;
+    else {
+      return Err(ended(&client, &hash).await?);
+    };
     let auth = Authenticated {
       device: CloudDeviceId::from_uuid(row.try_get(0)?),
       account: CloudAccountId::from_uuid(row.try_get(1)?),
@@ -165,6 +169,30 @@ impl Cloud {
     }
     Ok(auth)
   }
+}
+
+/// Why the token with `hash` no longer signs in: how its device was revoked, or that its account was deleted; plain
+/// `unauthorized` for a token that ended unused, one revoked before reasons were kept, or one the cloud never issued.
+async fn ended(client: &impl GenericClient, hash: &[u8]) -> Result<CloudError, CloudError> {
+  let row = client
+    .query_opt(
+      "SELECT revoked_reason, revoked_at FROM devices WHERE token_hash = $1 AND revoked_reason IS NOT NULL
+       UNION ALL SELECT reason, ended_at FROM ended_tokens WHERE token_hash = $1",
+      &[&hash],
+    )
+    .await?;
+  let Some(row) = row else {
+    return Ok(CloudErrorCode::Unauthorized.into());
+  };
+  let reason = match row.try_get::<_, &str>(0)? {
+    "revoked" => SessionEnd::Revoked,
+    "password_reset" => SessionEnd::PasswordReset,
+    "signed_out" => SessionEnd::SignedOut,
+    "account_deleted" => SessionEnd::AccountDeleted,
+    _ => return Err(CloudError::StoredData),
+  };
+  let at = millis(row.try_get::<_, SystemTime>(1)?)?;
+  Ok(CloudError::Ended { reason, at })
 }
 
 pub(super) fn signed_in(

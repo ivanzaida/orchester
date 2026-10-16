@@ -1,6 +1,7 @@
 //! The custom window chrome (`Title bar` `yZzwy` of `q9mf0k`): the title bar with the app menu and the
-//! tabs, the window controls, and the window's frame. The operating system's title bar and border are
-//! not shown; the empty parts of the title bar drag the window and maximize it on a double-click.
+//! tabs (the mark alone on the sign-in gate, `dd04F` in `Lpznn`), the window controls, and the window's frame. The
+//! operating system's title bar and border are not shown; the empty parts of the title bar drag the window and maximize
+//! it on a double-click.
 
 mod app_menu;
 pub mod tab_fit;
@@ -28,7 +29,7 @@ use lurq::{
   node::{Element, HitTestBehavior, TextColor, dimension::Dimension},
 };
 
-pub use self::tab_strip::PillRef;
+pub use self::{tab_strip::PillRef, title_bar::Bar};
 use crate::{
   services::Services,
   theme::{ExtraColor, ExtraRadius, IconSize},
@@ -41,16 +42,22 @@ const TITLE_BAR_HEIGHT: f32 = 36.0;
 /// The window around `screen`, with the tabs in its title bar; `closing` while the closing panel holds
 /// the window.
 pub fn chrome(ctx: &mut Ctx, screen: Element, closing: bool) -> Element {
-  window(ctx, screen, true, closing)
+  window(ctx, screen, Bar::Tabs, closing)
 }
 
 /// The window around a startup screen: its title bar has the app menu and the window controls only
 /// (`Title bar` `bcDe3` of `N0Lpc`).
 pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
-  window(ctx, screen, false, false)
+  window(ctx, screen, Bar::Menu, false)
 }
 
-fn window(ctx: &mut Ctx, screen: Element, tabs: bool, closing: bool) -> Element {
+/// The window around the sign-in gate: its title bar has the mark and the window controls only, no menu (`Title
+/// bar` `dd04F` of `Lpznn`); `closing` while the closing panel holds the window.
+pub fn gate(ctx: &mut Ctx, screen: Element, closing: bool) -> Element {
+  window(ctx, screen, Bar::Mark, closing)
+}
+
+fn window(ctx: &mut Ctx, screen: Element, kind: Bar, closing: bool) -> Element {
   let close = close(ctx);
   let lights = cfg!(target_os = "macos").then(|| {
     ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close.clone()))
@@ -70,7 +77,7 @@ fn window(ctx: &mut Ctx, screen: Element, tabs: bool, closing: bool) -> Element 
         .windows_height(TITLE_BAR_HEIGHT)
         .macos_height(TITLE_BAR_HEIGHT),
     )
-    .title_bar(title_bar::content(ctx, bar, (tabs, closing), lights))
+    .title_bar(title_bar::content(ctx, bar, (kind, closing), lights))
     .content(screen)
     .overlay(outline)
     .mount(ctx)

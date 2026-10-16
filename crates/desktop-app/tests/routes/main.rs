@@ -88,6 +88,8 @@ fn every_route() -> Vec<Route> {
   all.extend(files_routes());
   all.extend(PullRequestTab::ALL.map(|tab| at(ProjectPage::PullRequests(tab))));
   all.push(at(ProjectPage::PullRequest(pull_request())));
+  all.push(at(ProjectPage::Sharing { make_local: false }));
+  all.push(at(ProjectPage::Sharing { make_local: true }));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -181,6 +183,14 @@ fn paths_are_the_documented_ones() {
       format!("{root}/pull-requests/142"),
     ),
     (at(ProjectPage::Settings), format!("{root}/settings")),
+    (
+      at(ProjectPage::Sharing { make_local: false }),
+      format!("{root}/settings/sharing"),
+    ),
+    (
+      at(ProjectPage::Sharing { make_local: true }),
+      format!("{root}/settings/sharing?ask=make-local"),
+    ),
   ];
   for (route, path) in paths {
     assert_eq!(route.path(), path);

@@ -31,12 +31,13 @@ Two kinds of client call it:
 - Every response carries `Cache-Control: no-store`.
 - A request with a body must say `Content-Type: application/json` (`415 unsupported_media_type` otherwise).
 - Errors have the form `{ "error": "<code>", "message": "<English, for logs>" }`. Clients show their own words by
-  `error`. A `429` and a `503 busy` carry `Retry-After` in seconds.
+  `error`. A `429` and a `503 busy` carry `Retry-After` in seconds. A `401 unauthorized` for a token the cloud ended
+  adds `reason` and `ended_at` ([Why a token ended](#why-a-token-ended)).
 
 | Code | Status | Meaning |
 | --- | --- | --- |
 | `bad_request` | 400 | Malformed JSON, a wrong field type or an unknown field |
-| `unauthorized` | 401 | No device token, or one that is unknown, revoked or expired |
+| `unauthorized` | 401 | No device token, or one that is unknown, revoked or expired; one the cloud ended says why ([Why a token ended](#why-a-token-ended)) |
 | `invalid_credentials` | 401 | Wrong email or password. One answer for both, and for an email with no account |
 | `invalid_code` | 401 | A two-factor code that is wrong or was used, or a recovery code that is unknown or used ([Two-factor authentication](#two-factor-authentication)) |
 | `challenge_expired` | 401 | A sign-in's two-factor challenge that is unknown, used, past its 5 minutes or 5 tries, or whose password changed since: sign in again |
@@ -140,6 +141,25 @@ comes only after the right password. The token in `201` is shown once; the cloud
 names the computer (the desktop) or the browser (the web front, platform `web`). An account with two-factor
 authentication answers the right password with `202 { challenge, expires_at }` instead, and a code finishes the sign-in
 ([Two-factor authentication](#two-factor-authentication)).
+
+**Why a token ended** (the desktop's sign-in gate, 2026-10-16). A `401 unauthorized` for a device's or a web
+session's token that the cloud ended carries why and when (milliseconds):
+`{ "error": "unauthorized", "message": "…", "reason": "<reason>", "ended_at": 1792147957042 }`.
+
+| `reason` | The token ended because |
+| --- | --- |
+| `revoked` | another device of the account signed it out (`DELETE /devices/{id}`, also from the account page's Devices) |
+| `password_reset` | the password was reset (`/auth/reset/finish`), or changed on another device (`/auth/password`) |
+| `account_deleted` | the account was deleted (`DELETE /me`) |
+| `signed_out` | the device signed itself out (`DELETE /auth/sessions/current`) |
+
+Any other `401` has no `reason`: no token, one the cloud never issued, a desktop's token that ended after 90 days
+without use, a browser's after its 12 hours, or one revoked before migration 9. A client reads a reason it does not
+know as none and shows its general words. A revoked device keeps its reason in `devices.revoked_reason`. A deleted
+account's devices go with it, so the hashes of their tokens are kept in `ended_tokens` (the hash, the reason, when,
+and nothing that names the account) until they would have ended unused, 90 days later; the minute's sweep deletes
+them then. Telling a token's holder why it ended says nothing they could not see in the app, and an unknown token
+learns nothing.
 
 **Forgot password.** `POST /auth/reset { email }` answers `202` for any email, before it touches the database. The
 lookup, the link (valid for 1 hour) and the email happen in the background, and only an account gets one.
@@ -260,9 +280,8 @@ account's id with the actions it took.
 
 ## Two-factor authentication
 
-Added 2026-10-16 with migration 10 (the sign-in gate's migration 9 is applied apart; a migration is applied when its
-number is not recorded yet, whatever newer ones the database has). An invite to a team server is sent and accepted only
-by a person with two-factor authentication on.
+Added 2026-10-16 with migration 10. An invite to a team server is sent and accepted only by a person with two-factor
+authentication on.
 
 **Method.** TOTP (RFC 6238): HMAC-SHA-1, 6 digits, a 30-second step, accepted for the step before, the current one and
 the one after. A code works once: the cloud keeps the last step it accepted, and refuses that step and every earlier

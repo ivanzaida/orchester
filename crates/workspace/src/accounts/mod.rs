@@ -89,7 +89,7 @@ impl Workspace {
   /// account of every CLI and each CLI's own folder, which it may neither be, lie in nor hold.
   pub fn brought_folder_problem(&self, folder: &Path) -> Result<Option<FolderProblem>, StoreError> {
     let accounts = self.agent_accounts()?;
-    let projects = self.projects()?;
+    let projects = self.every_project()?;
     Ok(folders::brought_problem(
       folder,
       &accounts,
@@ -110,7 +110,7 @@ impl Workspace {
           .planned_folder(new.cli, new.name.as_str())
           .ok_or(AccountsError::NoFolderHere)?;
         // Where accounts' folders go may be named (`ORCHESTER_ACCOUNTS_DIR`): never inside a repository either.
-        if let Some(repository) = folders::repository_of(&folders::found(&folder), &self.projects()?) {
+        if let Some(repository) = folders::repository_of(&folders::found(&folder), &self.every_project()?) {
           return Err(AccountsError::Folder(FolderProblem::InsideRepository(repository)));
         }
         // Nor in a folder brought before the rule that keeps them out of the accounts' folder, nor holding one.
@@ -183,14 +183,14 @@ impl Workspace {
     Ok(uses::uses(&account, &self.projects()?))
   }
 
-  /// Removes the account as `move_to` and `trash` say: its connections in every listed project move first, then
-  /// the account leaves the list, then its folder goes to the Recycle Bin / Trash if asked. Refused for Default,
-  /// while a run that has not ended is on it, while a listed project can't be read (a run there may be on it), and
-  /// for a folder Orchester did not create.
+  /// Removes the account as `move_to` and `trash` say: its connections in every project on this computer (another
+  /// Orchester Cloud account's too) move first, then the account leaves the list, then its folder goes to the Recycle
+  /// Bin / Trash if asked. Refused for Default, while a run that has not ended is on it, while a project can't be read
+  /// (a run there may be on it), and for a folder Orchester did not create.
   pub fn remove_agent_account(&self, id: AgentAccountId, move_to: MoveTo, trash: bool) -> Result<(), AccountsError> {
     let account = self.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     let accounts = self.agent_accounts()?;
-    let projects = self.projects()?;
+    let projects = self.every_project()?;
     let uses = uses::uses(&account, &projects);
     if !uses.unreadable.is_empty() {
       return Err(AccountsError::ProjectsUnreadable(uses.unreadable));
@@ -271,7 +271,7 @@ impl Workspace {
       .into_iter()
       .filter(|other| other.id() != id)
       .collect();
-    let projects = self.projects()?;
+    let projects = self.every_project()?;
     if let Some(problem) = folders::brought_problem(folder, &others, &projects, self.account_root.as_deref()) {
       return Err(AccountsError::Folder(problem));
     }
@@ -290,7 +290,7 @@ impl Workspace {
   /// account's details show before this session's runs report. A project that can't be read is passed over.
   pub fn last_plan_reading(&self, id: AgentAccountId) -> Result<Option<LimitReading>, AccountsError> {
     let mut last: Option<LimitReading> = None;
-    for project in self.projects()?.iter().filter(|project| !project.folder_missing()) {
+    for project in self.every_project()?.iter().filter(|project| !project.folder_missing()) {
       let reading = orchester_store::ProjectDb::open(&project.repo_root).and_then(|db| db.last_account_reading(id));
       match reading {
         Ok(Some(reading)) if last.as_ref().is_none_or(|known| known.at < reading.at) => last = Some(reading),

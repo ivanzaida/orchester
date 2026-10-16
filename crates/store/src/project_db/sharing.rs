@@ -83,7 +83,7 @@ impl ProjectDb {
   /// Stops sharing on this computer (*Make local*): the link goes, and every cached task, with its
   /// id, number and organization as last synced, becomes a local task of the project; their
   /// pipelines are this computer's pipelines of their slugs. Claims and run statuses leave the
-  /// cache, and the next task number follows the highest. The project's tags, the server project's
+  /// cache, as do the members, and the next task number follows the highest. The project's tags, the server project's
   /// as last synced, become its local tags with their ids. The tasks kept *Not shared* when it
   /// joined return to the list after the highest number; they are returned with their keys.
   pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
@@ -100,6 +100,7 @@ impl ProjectDb {
       "DELETE FROM task_claims;
        DELETE FROM task_run_status;
        DELETE FROM shared_automatic_status;
+       DELETE FROM shared_members;
        DELETE FROM sharing;
        UPDATE counters SET next = (SELECT COALESCE(MAX(number), 0) + 1 FROM tasks) WHERE name = 'task';",
     )?;
@@ -173,7 +174,7 @@ pub(super) const fn role_text(role: MemberRole) -> &'static str {
   }
 }
 
-fn parse_role(value: &str) -> Result<MemberRole, StoreError> {
+pub(super) fn parse_role(value: &str) -> Result<MemberRole, StoreError> {
   match value {
     "owner" => Ok(MemberRole::Owner),
     "member" => Ok(MemberRole::Member),

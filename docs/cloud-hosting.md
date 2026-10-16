@@ -44,9 +44,8 @@ filter is fixed to the cloud's own records (`orchester_cloud=info`). Do not wide
 
 The migrations are compiled into the binary (`crates/cloud/migrations/`). They are applied at every start, each in
 its own transaction under a PostgreSQL advisory lock, so two instances starting together apply each one once. They
-are recorded in `schema_migrations`, and each is applied when its number is not recorded yet: migration 10 (two-factor
-authentication) was released before 9 (the desktop's sign-in gate), and a database that has 10 still gets 9. A
-database at a newer version than the binary knows is refused at start; run the newer binary or restore a backup. Backups, replication and point-in-time recovery are the database server's
+are recorded in `schema_migrations`. A database at a newer version than the binary knows is refused at start; run
+the newer binary or restore a backup. Backups, replication and point-in-time recovery are the database server's
 job. Back up the key-encryption key separately from the database: the database alone does not open the root key or
 the signing keys.
 

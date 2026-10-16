@@ -1,5 +1,4 @@
--- Two-factor authentication (2026-10-16; docs/cloud-api.md, "Two-factor authentication"). Migration 9 is the sign-in
--- gate's; the migrations do not depend on each other, and each is applied when it is not recorded yet.
+-- Two-factor authentication (2026-10-16; docs/cloud-api.md, "Two-factor authentication").
 --
 -- An account's authenticator: its TOTP secret sealed with the key-encryption key and bound to the account, the last
 -- time step a code was accepted for (a code works once), and when it was confirmed; a row without `confirmed_at` is a

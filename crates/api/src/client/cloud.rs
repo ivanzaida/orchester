@@ -182,6 +182,7 @@ fn refusal(bytes: &[u8], status: StatusCode, retry_after: Option<u64>) -> Client
       status,
       code: error.error,
       retry_after,
+      ended: error.reason.map(|reason| (reason, error.ended_at)),
     },
     Err(_) => ClientError::NotOrchester { status },
   }

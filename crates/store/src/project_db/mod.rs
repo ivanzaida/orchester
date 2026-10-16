@@ -43,6 +43,7 @@ mod run_connections;
 mod runs;
 mod schema;
 mod secrets;
+mod shared_members;
 mod shared_tasks;
 mod sharing;
 mod sources;
@@ -76,6 +77,7 @@ pub use self::{
   read_only::ReadOnlyProjectDb,
   resources::ResourceUpdate,
   runs::RunBranch,
+  shared_members::SharedMember,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   sharing::SharingLink,
 };

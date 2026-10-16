@@ -30,8 +30,7 @@ pub async fn migrations_apply_once_and_a_newer_database_is_refused() {
     .expect("migrations");
   assert_eq!(
     (row.get::<_, i64>(0), row.get::<_, i32>(1)),
-    (migration_files(), LATEST_SCHEMA),
-    "every migration once, the newest last"
+    (i64::from(LATEST_SCHEMA), LATEST_SCHEMA)
   );
   admin
     .execute(
@@ -46,17 +45,6 @@ pub async fn migrations_apply_once_and_a_newer_database_is_refused() {
   }
   drop(admin);
   postgres().drop_database(&database).await;
-}
-
-/// The migrations the binary carries: their numbers may leave a gap for a branch not merged yet (9).
-fn migration_files() -> i64 {
-  let folder = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/migrations")).expect("the migrations");
-  let files = folder.filter(|entry| {
-    entry
-      .as_ref()
-      .is_ok_and(|entry| entry.path().extension().is_some_and(|extension| extension == "sql"))
-  });
-  i64::try_from(files.count()).expect("a few migrations")
 }
 
 /// Security review 2, 3: a database linked under migration 3 may hold a server whose id is not its key's. Migration 4

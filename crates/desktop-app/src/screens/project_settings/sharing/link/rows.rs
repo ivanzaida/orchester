@@ -50,11 +50,23 @@ impl Link {
     .into()
   }
 
-  /// *orchester.toml names a project* with *Use this address* and *Not now*; nothing is contacted before.
-  fn discovery_offer(&self, ctx: &Ctx, props: &Props) -> Option<Element> {
+  /// *orchester.toml names a project* on a connected server, with *Use this address* and *Not now*; nothing is
+  /// contacted before. A file that names a server this computer isn't connected to asks step by step instead.
+  fn discovery_offer(&self, ctx: &mut Ctx, props: &Props) -> Option<Element> {
+    if let Some(offer) = self.unconnected_offer(ctx, props) {
+      return Some(offer);
+    }
     let ProjectDiscovery::Project(address) = &props.facts.discovery else {
       return None;
     };
+    if !props
+      .facts
+      .servers
+      .iter()
+      .any(|entry| entry.address == *address.server())
+    {
+      return None;
+    }
     if self.discovery_answered.get() {
       return None;
     }
@@ -62,7 +74,7 @@ impl Link {
     let (field_value, answered) = (self.address.clone(), self.discovery_answered.clone());
     let use_it = ActionButton::new(
       "sharing-discovery-use",
-      ButtonKind::Secondary,
+      ButtonKind::Primary,
       ctx.t("sharing.link.discovery.use"),
     )
     .on_click(move || {
@@ -76,17 +88,28 @@ impl Link {
       ctx.t("sharing.link.discovery.notNow"),
     )
     .on_click(move || answered.set(true));
+    // The answers stand under the notice, *Use this address* first (`Discovery file · offered` in `N9NFio`).
     Some(
-      Callout::new(
-        "sharing-discovery",
-        CalloutTone::Info,
-        ctx.t("sharing.link.discovery.title"),
-      )
-      .icon(Icon::FileText)
-      .body(ctx.t_args("sharing.link.discovery.body", [("address", address.to_text())]))
-      .action(use_it)
-      .action(not_now)
-      .into(),
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(
+          Callout::new(
+            "sharing-discovery",
+            CalloutTone::Info,
+            ctx.t("sharing.link.discovery.title"),
+          )
+          .icon(Icon::FileText)
+          .body(ctx.t_args("sharing.link.discovery.body", [("address", address.to_text())])),
+        )
+        .child(
+          Row::new()
+            .id("sharing-discovery-answers")
+            .spacing(SpacingSize::Sm)
+            .child(use_it)
+            .child(not_now),
+        )
+        .into(),
     )
   }
 

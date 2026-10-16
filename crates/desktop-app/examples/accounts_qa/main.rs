@@ -17,6 +17,8 @@ mod kontur;
 
 mod accounts;
 mod data;
+#[path = "../../tests/support/signed_in.rs"]
+mod signed_in;
 mod stand_ins;
 
 use std::{
@@ -36,7 +38,6 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{Root, RootProps, Start},
   routes::{AccountsPanel, AccountsView, ProjectPage, Route, TaskTab, TaskView},
-  startup::Launch,
   theme::{self, Mode},
   ui::loader,
 };
@@ -190,7 +191,9 @@ fn window(state: State, account: Option<&str>) -> Result<(), Box<dyn Error>> {
     .and_then(Path::parent)
     .ok_or("the example's folder is in the target folder")?
     .join(format!("orchester-runner{}", env::consts::EXE_SUFFIX));
-  let launch = Launch::begin_at(&database, runner, runtime.handle(), None);
+  // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
+  let cloud = signed_in::account_cloud::AccountCloud::start();
+  let launch = signed_in::launch(&database, runner, runtime.handle(), &cloud);
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
   // Removed accounts' folders go to the QA folder's own trash, never the person's Recycle Bin.
   let root = PathBuf::from(variable(CHILD)?);

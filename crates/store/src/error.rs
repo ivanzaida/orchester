@@ -1,7 +1,9 @@
 use std::{io, path::PathBuf};
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, InvocationId, MemoryId, ResourceId, RunId, SecretId, ServerId, TaskId},
+  id::{
+    AgentAccountId, ConnectionId, InvocationId, MemoryId, ProjectId, ResourceId, RunId, SecretId, ServerId, TaskId,
+  },
   resource::{PublishError, ResourceKind},
   run::{AlwaysAllowError, RunError},
   task::EditError,
@@ -23,6 +25,10 @@ pub enum StoreError {
   AlreadyInitialized(PathBuf),
   #[error("{0} does not contain an Orchester project")]
   NotInitialized(PathBuf),
+  /// The project is another Orchester Cloud account's on this computer: it is listed and opened only for that account.
+  /// Nothing was changed.
+  #[error("project {0} is another account's")]
+  ProjectOfAnotherAccount(ProjectId),
   #[error("database schema version {found} is newer than this build supports ({supported})")]
   SchemaTooNew { found: u32, supported: u32 },
   /// A database opened only to read it has not been migrated to this build's schema yet.
