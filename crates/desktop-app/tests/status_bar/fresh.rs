@@ -1,5 +1,6 @@
 //! The bar in the real window follows the accounts and the project's connections: an account renamed is read
-//! again, and a connection moved to it shows its plan limits at once, without the project being opened again. Its readings are handed on as a runner would (`Runners::observe_plan_limits_for_test`).
+//! again, and a connection moved to it shows its plan limits at once, without the project being opened again. Its
+//! readings are handed on as a runner would (`Runners::observe_plan_limits_for_test`).
 
 use orchester_app::routes::{ProjectPage, Route, TaskList};
 use orchester_core::{

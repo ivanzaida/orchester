@@ -36,7 +36,6 @@ use orchester_workspace::{
   },
   workspace::OpenProject,
 };
-
 use parking_lot::Mutex;
 
 use super::{Projects, hold::ReadHold};
