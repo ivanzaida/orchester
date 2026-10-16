@@ -244,16 +244,50 @@ fn files_name_search_puts_the_file_name_before_the_path() {
     found,
     [
       "src/main.rs",
-      "docs/maintenance.md",
       "crates/app/src/main.rs",
+      "docs/maintenance.md",
       "src/domain/mod.rs"
-    ]
+    ],
+    "a name that is the query but for its extension first"
   );
   let found: Vec<String> = list.search("SDM", 10).paths.iter().map(ToString::to_string).collect();
   assert_eq!(found, ["src/domain/mod.rs"]);
-  assert!(list.search("   ", 10).paths.is_empty());
+  let all = list.search("   ", 3);
+  assert_eq!(
+    (all.paths.len(), all.total),
+    (3, 5),
+    "with nothing typed, the version's files"
+  );
   let some = list.search("s", 2);
   assert_eq!((some.paths.len(), some.total), (2, 4));
+}
+
+#[test]
+fn files_name_search_puts_the_name_closest_to_the_query_first() {
+  let list = FileList::new(
+    [
+      "plan_limits_1.rs",
+      "plan_limits_2.rs",
+      "crates/workspace/src/plan_limits.rs",
+      "crates/core/src/connection/plan_limits/parse.rs",
+    ]
+    .map(String::from),
+  );
+  let found: Vec<String> = list
+    .search("plan_lim", 10)
+    .paths
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+  assert_eq!(
+    found,
+    [
+      "crates/workspace/src/plan_limits.rs",
+      "plan_limits_1.rs",
+      "plan_limits_2.rs",
+      "crates/core/src/connection/plan_limits/parse.rs"
+    ]
+  );
 }
 
 #[test]

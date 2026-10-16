@@ -32,7 +32,7 @@ pub use self::{
   read::{FileView, MAX_VIEW_BYTES, read_file},
   text::{FileText, LineRange, LineRangeError, MAX_MATCHES, TextMatch},
   version::{Version, VersionParseError},
-  versions::{FileFacts, RunFacts, VersionChoice, Versions, versions},
+  versions::{FileFacts, Removal, RunFacts, VersionChoice, Versions, versions},
 };
 use crate::messages::Message;
 

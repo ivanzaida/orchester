@@ -105,19 +105,30 @@ impl FileList {
   }
 
   /// The files whose path holds `query`'s characters in order, ignoring case, at most `limit` of them; best
-  /// first: the file's name is the query, starts with it, holds it; then the path holds it; then the
-  /// characters in order. Shorter paths first within each.
+  /// first: the file's name, or its name without the extension, is the query; the name starts with it; holds
+  /// it; then the path holds it; then the characters in order. Within each, shorter names first (the closer to
+  /// the query), then shorter paths. With nothing typed, the first `limit` files of the version, in path order.
   pub fn search(&self, query: &str, limit: usize) -> NameMatches {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
-      return NameMatches::default();
+      return NameMatches {
+        paths: self.paths.iter().take(limit).cloned().collect(),
+        total: self.paths.len(),
+      };
     }
     let mut found: Vec<(u8, &Arc<str>)> = self
       .paths
       .iter()
       .filter_map(|path| rank(path, &query).map(|rank| (rank, path)))
       .collect();
-    found.sort_by(|(a_rank, a), (b_rank, b)| a_rank.cmp(b_rank).then(a.len().cmp(&b.len())).then(a.cmp(b)));
+    let name_length = |path: &str| path.rsplit('/').next().unwrap_or(path).len();
+    found.sort_by(|(a_rank, a), (b_rank, b)| {
+      a_rank
+        .cmp(b_rank)
+        .then(name_length(a).cmp(&name_length(b)))
+        .then(a.len().cmp(&b.len()))
+        .then(a.cmp(b))
+    });
     NameMatches {
       total: found.len(),
       paths: found.into_iter().take(limit).map(|(_, path)| path.clone()).collect(),
@@ -136,7 +147,8 @@ pub struct NameMatches {
 fn rank(path: &str, query: &str) -> Option<u8> {
   let lower = path.to_lowercase();
   let name = lower.rsplit('/').next().unwrap_or(&lower);
-  if name == query {
+  let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+  if name == query || stem == query {
     Some(0)
   } else if name.starts_with(query) {
     Some(1)

@@ -12,7 +12,8 @@ use orchester_core::{
   project::TaskKey,
   revision::Revision,
   run::BranchName,
-  store::{RunStore, TaskStore},
+  store::{MergeStore, RunStore, TaskStore, WorktreeStore},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
@@ -21,7 +22,7 @@ use super::{
   read::read_file,
   source::{Source, git_error, git_output, source},
 };
-use crate::tasks::changes::GIT;
+use crate::tasks::{changes::GIT, history::last_step};
 
 /// One version the page can show, with what names it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,11 +44,21 @@ pub struct Versions {
   pub run: Option<RunFacts>,
 }
 
-/// A run as the switch names it: `Run #12 · ORC-24`.
+/// A run as the switch names it: `Run #12 · ORC-24 · Implement`, and when its worktree was removed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunFacts {
   pub number: u32,
   pub task: TaskKey,
+  /// The step of its last agent or command, else its first step that did not pass.
+  pub step: Option<String>,
+  pub removal: Option<Removal>,
+}
+
+/// When a run's worktree was removed, and the branch its merge went into when a merge removed it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Removal {
+  pub at: Timestamp,
+  pub merged_into: Option<BranchName>,
 }
 
 /// What a file is in one version.
@@ -162,8 +173,22 @@ fn run_facts(repo_root: &Path, run: RunId) -> Result<Option<RunFacts>, FilesErro
   let Some(task) = db.task(found.task()).map_err(store)? else {
     return Ok(None);
   };
+  let step = last_step(&db, &found).map_err(store)?;
+  let removal = db
+    .worktree_removal(run)
+    .map_err(store)?
+    .map(|at| Removal { at, merged_into: None });
+  let removal = match (removal, db.run_merge(run).map_err(store)?) {
+    (Some(removal), Some(merge)) => Some(Removal {
+      merged_into: Some(merge.into),
+      ..removal
+    }),
+    (removal, _) => removal,
+  };
   Ok(Some(RunFacts {
     number: found.number().get(),
     task: task.key().clone(),
+    step,
+    removal,
   }))
 }
