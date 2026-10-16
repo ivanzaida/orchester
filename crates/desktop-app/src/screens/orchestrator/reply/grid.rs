@@ -5,7 +5,7 @@
 use lurq::{
   app::theme::SpacingSize,
   components::{Column, MarkdownList, Row, Text},
-  layout::{Alignment, text_style::TextStyle},
+  layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
@@ -16,10 +16,12 @@ use crate::{
 
 /// The label's column (`p0bb6` in `w262B`).
 const LABEL_WIDTH: f32 = 84.0;
+/// A row too long for its line: the detail wraps first, down to this width, and only then the link.
+const DETAIL_WIDTH: f32 = 200.0;
+const LINK_ORDER: i32 = 1;
 
 /// `list` as a grid of labelled links, or `None` when it is not one: the document draws it as a list then.
-/// `detail` is the details' text style.
-pub(super) fn grid(list: &MarkdownList<'_>, detail: &TextStyle) -> Option<Element> {
+pub(super) fn grid(list: &MarkdownList<'_>) -> Option<Element> {
   let rows = labelled_links(list.items())?;
   let grid = Column::new()
     .class("orchestrator-link-grid")
@@ -30,14 +32,18 @@ pub(super) fn grid(list: &MarkdownList<'_>, detail: &TextStyle) -> Option<Elemen
         .bottom(ExtraSpacing::Tight.role()),
     )
     .spacing(SpacingSize::Sm)
-    .with_children(rows.iter().map(|row| grid_row(list, row, detail)));
+    .with_children(rows.iter().map(|row| grid_row(list, row)));
   Some(grid.into())
 }
 
-fn grid_row(list: &MarkdownList<'_>, row: &LabelledLink<'_>, detail: &TextStyle) -> Element {
-  // Content-sized, so the detail follows the link's words rather than the end of the row.
+/// The label, the link as the document draws it (presented, focusable, followed), and the detail, plain text as the
+/// design draws it. Both are as wide as their words, the detail taking the rest of the row after the link; when they
+/// do not fit the row, the detail wraps first, then the link.
+fn grid_row(list: &MarkdownList<'_>, row: &LabelledLink<'_>) -> Element {
   let link = Row::new()
     .flex_shrink(1.0)
+    .shrink_order(LINK_ORDER)
+    .min_width(Dimension::Px(0.0))
     .child(list.inlines(std::slice::from_ref(row.link), list.style()));
   let mut line = Row::new()
     .width(Dimension::Pct(100.0))
@@ -50,12 +56,14 @@ fn grid_row(list: &MarkdownList<'_>, row: &LabelledLink<'_>, detail: &TextStyle)
         .flex_shrink(0.0),
     )
     .child(link);
-  if !row.detail.is_empty() {
+  let detail = row.detail_text();
+  if !detail.is_empty() {
     line = line.child(
-      Row::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .child(list.inlines(&row.detail, detail)),
+      Text::new(&detail)
+        .variant(OrchestratorText::LinkDetail.role())
+        .selectable(true)
+        .flex_full(1.0, 1.0, None)
+        .min_width(Dimension::Px(DETAIL_WIDTH)),
     );
   }
   line.into()

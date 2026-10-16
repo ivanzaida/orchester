@@ -22,10 +22,7 @@ use orchester_core::id::ProjectId;
 
 use self::present::Words;
 use super::data::ProjectNames;
-use crate::{
-  theme::{ChatLinkLooks, OrchestratorText},
-  ui::markdown::LinkHandler,
-};
+use crate::{theme::ChatLinkLooks, ui::markdown::LinkHandler};
 
 /// The reply `text`, its links followed by `links`; `project` is the conversation's, `names` the projects' names.
 /// `id` names it.
@@ -81,15 +78,14 @@ impl Component for Reply {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ReplyProps>().clone();
-    let (style, looks, detail) = {
+    let (style, looks) = {
       let theme = ctx.theme();
       let style = FormTextRole {
         typography: TypographyStyle::Body,
         color: PaletteColor::TextPrimary,
       }
       .resolve(&theme.typography(), &theme.palette());
-      let detail = theme.typography_style(OrchestratorText::LinkDetail.role());
-      (style, ChatLinkLooks::of(theme), detail)
+      (style, ChatLinkLooks::of(theme))
     };
     let words = Words::new(ctx.i18n().clone(), (props.project, props.names.clone()));
     let on_link = props.links.clone();
@@ -98,7 +94,7 @@ impl Component for Reply {
       .selectable(true)
       .on_link_click(move |link: &MarkdownLink| on_link(link.destination()))
       .link_presentation(move |link| present::presentation(link, &looks, &words))
-      .list_view(move |list| grid::grid(list, &detail));
+      .list_view(grid::grid);
     Markdown::mount(ctx, markdown).id(props.id.to_string())
   }
 }

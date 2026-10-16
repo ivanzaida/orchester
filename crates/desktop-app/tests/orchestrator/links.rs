@@ -290,6 +290,8 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
   screen.go(OrchestratorChat::New);
   screen.send(&format!(
     "Status:\n\n- Task: [KON-1 · Delivery log](orchester:/project/{project}/tasks/KON-1) — ready for review\n\
+     - Usage: [Usage · 1–15 Oct · KON-1 · by step](orchester:/project/{project}/usage-not-built?from=2026-10-01&\
+     to=2026-10-15&group=step) — 6.1M tokens over 3 runs\n\
      - Pull request: [#42 Delivery log]({PULL_REQUEST})\n\nAnd:\n\n\
      - [KON-2](orchester:/project/{project}/tasks/KON-2) waits\n- Task: no link here"
   ));
@@ -326,5 +328,16 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
   assert!(
     (10.0..=14.0).contains(&gap),
     "the detail follows the link's words, 12 after them: {gap}"
+  );
+  // A link the chat does not follow, its long address after its words, leaves its detail room.
+  let long = screen
+    .window
+    .tree
+    .find_element(|element| element.text_content() == Some("6.1M tokens over 3 runs"))
+    .expect("the usage row's detail")
+    .bounds();
+  assert!(
+    long.width > 100.0 && long.height < 80.0,
+    "the detail keeps room beside a long address: {long:?}"
   );
 }

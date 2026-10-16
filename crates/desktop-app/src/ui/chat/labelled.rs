@@ -15,6 +15,34 @@ pub struct LabelledLink<'a> {
   pub detail: Vec<MarkdownInline>,
 }
 
+impl LabelledLink<'_> {
+  /// The detail as plain text, as the grid shows it.
+  pub fn detail_text(&self) -> String {
+    let mut text = String::new();
+    plain(&mut text, &self.detail);
+    text.trim().to_owned()
+  }
+}
+
+fn plain(text: &mut String, inlines: &[MarkdownInline]) {
+  for inline in inlines {
+    match inline {
+      MarkdownInline::Text(value)
+      | MarkdownInline::Code(value)
+      | MarkdownInline::Math(value)
+      | MarkdownInline::Html(value)
+      | MarkdownInline::FootnoteReference(value) => text.push_str(value),
+      MarkdownInline::Emphasis(children)
+      | MarkdownInline::Strong(children)
+      | MarkdownInline::Strikethrough(children)
+      | MarkdownInline::Link { children, .. }
+      | MarkdownInline::Image { alt: children, .. } => plain(text, children),
+      MarkdownInline::SoftBreak | MarkdownInline::HardBreak => text.push(' '),
+      MarkdownInline::TaskListMarker(_) => {}
+    }
+  }
+}
+
 /// The dashes that may part a labelled link from its detail.
 const DASHES: [char; 3] = ['—', '–', '-'];
 
