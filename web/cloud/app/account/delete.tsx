@@ -21,7 +21,7 @@ const CLOSED: DeleteState = { view: "closed" };
  * question, what happens, the account's password, *Keep* and *Delete account*. A deletion ends this browser's session
  * and leaves for sign-in.
  */
-export function DeleteAccount({ csrf, email }: { csrf: string; email: string }) {
+export function DeleteAccount({ csrf, email, owned }: { csrf: string; email: string; owned: readonly string[] | null }) {
   const [state, action] = useActionState<DeleteState, FormData>(deleteAccountAction, CLOSED);
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(state);
@@ -42,6 +42,7 @@ export function DeleteAccount({ csrf, email }: { csrf: string; email: string }) 
           <CsrfField token={csrf} />
           <p className={styles.confirmationTitle}>{t("account.settings.deleteTitle")}</p>
           <p className={styles.confirmationText}>{t("account.settings.deleteText", { email })}</p>
+          <OwnedServers owned={owned} />
           <span className={styles.form}>
             <PasswordField name="password" size="row" label={t("account.settings.deletePassword")} value={password}
               onChange={setPassword} error={state.view === "open" ? state.errors.password : undefined}
@@ -66,4 +67,18 @@ export function DeleteAccount({ csrf, email }: { csrf: string; email: string }) 
       )}
     </SettingRow>
   );
+}
+
+/**
+ * The team servers this account linked: deleting it leaves them registered with no owner, their members' joins and
+ * invites too, until an admin of each links it again. Without the list (it did not load), the line says so generally.
+ */
+function OwnedServers({ owned }: { owned: readonly string[] | null }) {
+  if (owned === null) {
+    return <p className={styles.confirmationText}>{t("account.settings.deleteServersUnknown")}</p>;
+  }
+  if (owned.length === 0) {
+    return null;
+  }
+  return <p className={styles.confirmationText}>{t("account.settings.deleteServers", { servers: owned.join(", ") })}</p>;
 }

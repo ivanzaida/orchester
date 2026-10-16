@@ -234,11 +234,15 @@ async fn known(client: &impl GenericClient, id: InviteId, server: TeamServerId) 
   )
 }
 
-/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts.
+/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts; a server whose owner deleted
+/// their account counts on its own until an admin links it again.
 async fn owner(client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
   Ok(
     client
-      .query_one("SELECT owner FROM servers WHERE id = $1", &[&server.as_uuid()])
+      .query_one(
+        "SELECT coalesce(owner, id) FROM servers WHERE id = $1",
+        &[&server.as_uuid()],
+      )
       .await?
       .try_get(0)?,
   )

@@ -205,9 +205,10 @@ other) and, like a revocation, keeps its id refused until it would have expired:
 with it, since a join needs the invitee's own identity token.
 
 **Deleting the account.** `DELETE /me { password }` asks for the password again (failures count as a password
-change's do). It deletes the account, its devices, links and joins, the servers it linked (with their invites and
-other accounts' joins of them), and the open invites to its email. The audit keeps the account's id with the actions it
-took.
+change's do). It deletes the account, its devices, links and joins, and the open invites to its email. The team
+servers it linked stay registered with no owner, with their members' joins and invites (migration 5), until an admin of
+the server links it again: the newest statement the server's key signs owns it. Meanwhile the server's daily invites
+count on the server itself. The audit keeps the account's id with the actions it took.
 
 ## Rate limits
 

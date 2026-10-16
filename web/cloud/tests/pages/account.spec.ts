@@ -171,6 +171,21 @@ test.describe("account settings", () => {
     expect(phone.width).toBeGreaterThan(250);
   });
 
+  test("the delete confirmation names the servers this account linked, which stay registered with no owner", async ({ page }) => {
+    await resetFake();
+    await openAccount(page, FULL);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    const servers = page.getByText("stay registered with no owner", { exact: false });
+    await expect(servers).toBeVisible();
+    await expect(servers).toContainText("Koval lab");
+    await expect(servers).not.toContainText("Platform guild");
+    await resetFake();
+    await openAccount(page, NEW);
+    await page.getByRole("button", { name: "Delete account" }).click();
+    await expect(page.getByText("Delete your Orchester account?")).toBeVisible();
+    await expect(page.getByText("stay registered with no owner", { exact: false })).toHaveCount(0);
+  });
+
   test("the delete confirmation's question is 600 and its text 12.5 px, as QEHMk", async ({ page }) => {
     await resetFake();
     await openAccount(page, NEW);

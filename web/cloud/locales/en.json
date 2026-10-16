@@ -254,7 +254,9 @@
       "deleteEmpty": "Enter your password.",
       "deleteWrong": "The password is not right.",
       "keep": "Keep",
-      "deleting": "Deleting…"
+      "deleting": "Deleting…",
+      "deleteServers": "The team servers you linked ({{servers}}) stay registered with no owner, with their members and invites, until an admin of that server links it again.",
+      "deleteServersUnknown": "Team servers you linked stay registered with no owner, with their members and invites, until an admin of that server links it again."
     },
     "today": "Today, {{time}}"
   },

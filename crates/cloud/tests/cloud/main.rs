@@ -48,6 +48,7 @@ const TESTS: &[(&str, Test)] = tests![
   limits::parallel_confirm_guesses_stay_within_the_link_limit,
   deletion::deleting_the_account_removes_what_the_cloud_holds,
   deletion::deleting_with_wrong_passwords_is_limited,
+  deletion::a_deleted_owners_server_stays_for_its_members,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,
