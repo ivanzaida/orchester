@@ -37,3 +37,25 @@ fn orchester_roles_follow_the_design() {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }
 }
+
+#[test]
+fn gate_roles_follow_the_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  for (role, size, weight, family, tracking) in [
+    (GateText::Eyebrow, 11.0, FontWeight::Normal, "Geist Mono", 0.6),
+    (GateText::Title, 26.0, FontWeight::SemiBold, "Geist", -0.5),
+    (GateText::Lead, 13.5, FontWeight::Normal, "Geist", 0.0),
+  ] {
+    let style = theme.typography_style(role.role());
+    assert_eq!(
+      (style.font_size, style.weight, &*style.font_family, style.letter_spacing),
+      (size, weight, family, tracking),
+      "{role:?}"
+    );
+  }
+  assert_eq!(theme.typography_style(GateText::Lead.role()).line_height, 1.55);
+  for (spacing, value) in [(GateSpacing::Column, 20.0), (GateSpacing::Side, 56.0)] {
+    assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
+  }
+}

@@ -21,6 +21,7 @@ mod decisions;
 mod files;
 mod fonts;
 mod form;
+mod gate;
 pub mod instructions;
 mod lifecycle;
 mod local_integration;
@@ -64,6 +65,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
+  gate::{GateSpacing, GateText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
@@ -109,6 +111,7 @@ pub fn install(app: &mut App, mode: Mode) {
   settings::install(theme);
   accounts::install(theme);
   orchester::install(theme);
+  gate::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);
