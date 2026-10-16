@@ -104,6 +104,25 @@ impl ListedData {
     )
   }
 
+  /// The data of `entries` whose folder is there: of the projects in `again` read anew, of the others as `self`
+  /// holds it, or read when it holds none.
+  pub fn read_again(&self, entries: &[ProjectEntry], again: &[ProjectId], programs: &Programs) -> Self {
+    Self(
+      entries
+        .iter()
+        .filter(|entry| !entry.folder_missing)
+        .map(|entry| {
+          let id = entry.project.id;
+          let data = match self.0.get(&id) {
+            Some(data) if !again.contains(&id) => data.clone(),
+            _ => ProjectData::read(&entry.project, programs),
+          };
+          (id, data)
+        })
+        .collect(),
+    )
+  }
+
   pub fn of(&self, project: ProjectId) -> Option<&ProjectData> {
     self.0.get(&project)
   }
