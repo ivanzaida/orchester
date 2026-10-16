@@ -42,8 +42,8 @@ enum Focus {
 /// A card's place among the kept: its run and its key in the run's timeline.
 pub(super) type Card<'a> = (RunId, &'a Arc<str>);
 
-/// Made by the Conversation tab when it is created ([`Decisions::new`], before any future of its own),
-/// kept in each render ([`Decisions::keep`], first) and provided to its cards.
+/// Made once, in `create`, by the Conversation tab or the Needs you panel ([`Decisions::new`]) and provided
+/// to its cards.
 #[derive(Clone)]
 pub struct Decisions {
   send: SendAnswer,
@@ -65,7 +65,7 @@ impl PartialEq for Decisions {
 impl lurq::app::component::DevtoolsInspectable for Decisions {}
 
 impl Decisions {
-  /// A tab's, made when it is created, before any future of its own.
+  /// A tab's or the panel's, made once in its `create`.
   pub fn new(ctx: &mut Ctx) -> Self {
     let send = answers::action(ctx);
     let kept = ctx.signal(0);

@@ -1,8 +1,8 @@
 //! What the composer keeps while the task's page shows the task, whichever tab or run it shows: the
 //! context the person left and the sends under way, so a tab switch or a new run does not stop a send; the
 //! draft, its key and the messages put back into it are kept for as long as the app runs ([`super::kept`]).
-//! The task page makes it once ([`ComposerState::new`]) and keeps it in each render
-//! ([`ComposerState::keep`]); the Conversation tab and its messages reach it through the page's context.
+//! The task page makes it once, in `create` ([`ComposerState::new`]); the Conversation tab and its messages
+//! reach it through the page's context.
 //!
 //! A send reads the task again and does what the person pressed, if the run's state still offers it, or
 //! is refused, keeping the draft (`outgoing`); it then lets what its action says follow on the project's
@@ -125,8 +125,7 @@ pub struct ComposerState {
 }
 
 impl ComposerState {
-  /// The composer of `task`, the task `key` of `project`: made once by its page, before any of its own
-  /// futures.
+  /// The composer of `task`, the task `key` of `project`: made once, in its page's `create`.
   pub fn new(ctx: &mut Ctx, project: &ShownProject, (task, key): (TaskId, &TaskKey)) -> Self {
     let (send, after_turn) = (send_action(ctx), after_turn_action(ctx));
     let flight = kept::flight(task);
