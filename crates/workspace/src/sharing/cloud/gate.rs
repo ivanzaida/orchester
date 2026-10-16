@@ -14,8 +14,12 @@ use super::{Cloud, CloudError};
 
 /// How often a signed-in computer asks the cloud whether its sign-in still holds, while the cloud answers.
 pub const CHECK_EVERY: Duration = Duration::from_secs(5 * 60);
-/// How often it tries again while the cloud cannot be reached.
+/// How soon it tries again after the first try the cloud did not answer; each further one waits twice as long.
 pub const RETRY_EVERY: Duration = Duration::from_secs(30);
+/// The longest wait between tries while the cloud cannot be reached.
+pub const RETRY_CAP: Duration = Duration::from_secs(10 * 60);
+/// The longest a cloud's `Retry-After` is waited, so a wrong one never stops the checks.
+pub const RETRY_AFTER_CAP: Duration = Duration::from_secs(60 * 60);
 
 /// Whether this computer is signed in to Orchester Cloud.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,26 +113,59 @@ impl Cloud {
   }
 }
 
+/// How long the check waits after `error`, the `failures`-th failed try in a row (from 1), when it should try again
+/// sooner than [`CHECK_EVERY`]: the cloud's `Retry-After` when it is busy or limits this computer (at most
+/// [`RETRY_AFTER_CAP`]); while it does not answer, [`RETRY_EVERY`] doubled with each failure up to [`RETRY_CAP`], less
+/// up to a fifth by `spread` (0 to 1), so computers that lost the cloud together do not all come back at once. `None`
+/// for any other error.
+pub fn retry_wait(error: &CloudError, failures: u32, spread: f64) -> Option<Duration> {
+  if let Some(seconds) = error.retry_after() {
+    return Some(Duration::from_secs(seconds).min(RETRY_AFTER_CAP));
+  }
+  if !error.unanswered() {
+    return None;
+  }
+  let doubled = RETRY_EVERY.saturating_mul(1 << failures.saturating_sub(1).min(16));
+  let wait = doubled.min(RETRY_CAP);
+  Some(wait.mul_f64(1.0 - spread.clamp(0.0, 1.0) / 5.0))
+}
+
+/// A number from 0 to 1 that differs between calls and between computers, for [`retry_wait`]'s spread.
+fn spread() -> f64 {
+  use std::hash::BuildHasher;
+  // Each `RandomState` has keys of its own, from the system's random source, so its hash of anything is random.
+  let random = std::collections::hash_map::RandomState::new().hash_one(0_u8);
+  let high = u32::try_from(random >> 32).expect("the high half of 64 bits fits in 32");
+  f64::from(high) / f64::from(u32::MAX)
+}
+
 /// Checks this computer's sign-in at once and then while it lasts: every [`CHECK_EVERY`] while the cloud answers,
-/// every [`RETRY_EVERY`] while it cannot be reached, and again whenever the account signs in. Runs until the session
-/// ends.
+/// sooner while it does not or asks to wait ([`retry_wait`]), and again whenever the account signs in. Runs until the
+/// session ends.
 pub async fn keep_checking(cloud: Cloud) {
   let mut sign_in = cloud.follow_sign_in();
+  let mut failures = 0_u32;
   loop {
     let signed_in = sign_in.borrow_and_update().is_signed_in();
     if !signed_in {
+      failures = 0;
       if sign_in.changed().await.is_err() {
         return;
       }
       continue;
     }
     let wait = match cloud.check_sign_in().await {
-      Ok(()) => CHECK_EVERY,
-      Err(error) if error.unanswered() => RETRY_EVERY,
+      Ok(()) => {
+        failures = 0;
+        CHECK_EVERY
+      }
       Err(CloudError::SignedOut) => continue,
       Err(error) => {
-        tracing::warn!(%error, "cannot check this computer's sign-in to Orchester Cloud");
-        CHECK_EVERY
+        failures = failures.saturating_add(1);
+        retry_wait(&error, failures, spread()).unwrap_or_else(|| {
+          tracing::warn!(%error, "cannot check this computer's sign-in to Orchester Cloud");
+          CHECK_EVERY
+        })
       }
     };
     tokio::select! {

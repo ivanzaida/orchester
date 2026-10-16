@@ -4,7 +4,14 @@
 
 #![allow(dead_code, reason = "shared by the shared-project tests, each of which uses a part")]
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+  collections::HashMap,
+  path::Path,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use orchester_api::{
   Credential, MemberRole,
@@ -38,23 +45,51 @@ use crate::server_support::TestServer;
 /// The repository every test shares.
 pub const REMOTE: &str = "https://github.com/ivanzaida/kontur.git";
 
-/// A keychain in memory: tests never touch the keychain of the user running them.
+/// A keychain in memory: tests never touch the keychain of the user running them. It can refuse reads and removals,
+/// as a keychain whose access the person denied does.
 #[derive(Default)]
-pub struct MemoryVault(Mutex<HashMap<VaultKey, String>>);
+pub struct MemoryVault {
+  values: Mutex<HashMap<VaultKey, String>>,
+  refuses_reads: AtomicBool,
+  refuses_deletes: AtomicBool,
+}
+
+impl MemoryVault {
+  /// From now on, reads and removals answer [`VaultError::AccessDenied`] as `reads` and `deletes` say.
+  pub fn refuse(&self, reads: bool, deletes: bool) {
+    self.refuses_reads.store(reads, Ordering::SeqCst);
+    self.refuses_deletes.store(deletes, Ordering::SeqCst);
+  }
+
+  /// Whether a value is stored under `key`, whatever reads answer.
+  pub fn holds(&self, key: &VaultKey) -> bool {
+    self.values.lock().contains_key(key)
+  }
+}
+
+fn denied() -> VaultError {
+  VaultError::AccessDenied("the person denied access".to_owned())
+}
 
 impl SecretVault for MemoryVault {
   fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
-    self.0.lock().insert(key.clone(), value.expose().to_owned());
+    self.values.lock().insert(key.clone(), value.expose().to_owned());
     Ok(())
   }
 
   fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
-    let value = self.0.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
+    if self.refuses_reads.load(Ordering::SeqCst) {
+      return Err(denied());
+    }
+    let value = self.values.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
     SecretValue::new(value).map_err(|_| VaultError::Failed("blank".to_owned()))
   }
 
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
-    self.0.lock().remove(key);
+    if self.refuses_deletes.load(Ordering::SeqCst) {
+      return Err(denied());
+    }
+    self.values.lock().remove(key);
     Ok(())
   }
 }

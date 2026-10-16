@@ -5,6 +5,8 @@
 //! the gate is verified against its design through them. The installed app never does. Signing in is never possible
 //! over MCP: the window's *Sign in* refuses synthetic input.
 
+use orchester_workspace::build::Build;
+
 use super::WINDOW_TEXT;
 use crate::mcp::tools::SIGN_IN_STATE;
 
@@ -18,6 +20,12 @@ pub const REFUSAL: &str = "Sign in required: Orchester is signed out of Orcheste
 
 /// lurq's tools that look at the window and still answer on the gate in a QA copy or a development build.
 pub const LOOKS_ON_GATE: &[&str] = &["lurq_windows"];
+
+/// Whether lurq's looking tools ([`LOOKS_ON_GATE`] and the window's text tools) answer on the gate in `build`: in a QA
+/// copy or a development build, never in the installed app.
+pub const fn looks_on_gate(build: Build) -> bool {
+  matches!(build, Build::Other)
+}
 
 /// Whether `tool` answers while signed out; `looks` in a QA copy or a development build.
 pub fn answers(tool: &str, looks: bool) -> bool {

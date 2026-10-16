@@ -5,7 +5,7 @@ use orchester_api::cloud::{AccountDeletion, CloudErrorCode};
 use super::{
   Authenticated, Cloud,
   links::lock_account,
-  rows::{ENDED_KEPT_MS, account},
+  rows::{ACTIVE, ENDED_KEPT_MS, account, active_since},
 };
 use crate::{
   db::{audit, time},
@@ -61,14 +61,24 @@ impl Cloud {
         &[&auth.account.as_uuid(), &self.inner.people.of(&row.account.email)],
       )
       .await?;
-    // The devices go with the account; their tokens' `401` still says the account was deleted until they would have
-    // ended unused (`docs/cloud-api.md`, "Why a token ended").
+    // The devices go with the account; the tokens still in use then still say the account was deleted until they
+    // would have ended unused (`docs/cloud-api.md`, "Why a token ended"). A token that had ended already stays a
+    // plain `401`.
+    let (idle, web) = active_since(now);
     transaction
       .execute(
-        "INSERT INTO ended_tokens (token_hash, reason, ended_at, until)
-         SELECT token_hash, 'account_deleted', $2, $3 FROM devices WHERE account = $1 AND revoked_at IS NULL
-         ON CONFLICT (token_hash) DO NOTHING",
-        &[&auth.account.as_uuid(), &time(now), &time(now + ENDED_KEPT_MS)],
+        &format!(
+          "INSERT INTO ended_tokens (token_hash, reason, ended_at, until)
+           SELECT token_hash, 'account_deleted', $4, $5 FROM devices WHERE account = $1 AND {ACTIVE}
+           ON CONFLICT (token_hash) DO NOTHING"
+        ),
+        &[
+          &auth.account.as_uuid(),
+          &idle,
+          &web,
+          &time(now),
+          &time(now + ENDED_KEPT_MS),
+        ],
       )
       .await?;
     transaction

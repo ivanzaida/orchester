@@ -2,7 +2,7 @@
 //! only the gate shows, and nothing behind it is reachable; signing in opens the window with the tabs it had; the
 //! refusals in place; signed in, the app stays open while the cloud cannot be reached and says so in the status bar;
 //! each reason the cloud gives brings the gate back with its notice and the email filled in; *Sign out and lock* in
-//! Settings › Orchester locks; and synthetic input never signs in.
+//! Settings › Orchester locks; and synthetic input never signs in nor changes the cloud's address.
 //!
 //! `cargo test -p orchester-app --test gate gate_`
 
@@ -197,5 +197,33 @@ fn gate_synthetic_input_cannot_sign_in() {
   );
   let services = window.launch.services().expect("services").clone();
   assert!(!services.cloud.is_signed_in());
+  assert!(has(&mut window, "screen-sign-in-gate"));
+}
+
+#[test]
+fn gate_advanced_refuses_synthetic_input() {
+  let mut window = signed_out();
+  let services = window.launch.services().expect("services").clone();
+  shows(&mut window, "orchester-advanced");
+  window.press("orchester-advanced");
+  shows(&mut window, "orchester-advanced-address");
+  window.set("orchester-advanced-address", "http://localhost:9");
+  with_synthetic_input(|| window.press("orchester-advanced-use"));
+  shows(&mut window, "orchester-advanced-use-person-only");
+  assert!(
+    services.cloud.address().expect("address").default,
+    "the build's cloud stays"
+  );
+
+  use_stand_in(&mut window);
+  let stand_in = services.cloud.address().expect("address");
+  shows(&mut window, "orchester-advanced-reset");
+  with_synthetic_input(|| window.press("orchester-advanced-reset"));
+  shows(&mut window, "orchester-advanced-reset-person-only");
+  assert_eq!(
+    services.cloud.address().expect("address"),
+    stand_in,
+    "the test cloud stays"
+  );
   assert!(has(&mut window, "screen-sign-in-gate"));
 }

@@ -62,6 +62,7 @@ const TESTS: &[(&str, Test)] = tests![
   sessions::a_sign_in_racing_a_reset_does_not_survive_it,
   ended::a_refused_token_says_why_it_ended,
   ended::tokens_of_a_deleted_account_say_so_until_they_would_have_ended,
+  ended::tokens_ended_before_the_account_was_deleted_say_nothing,
   identity::identity_token_verifies_with_the_published_key_set,
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
   identity::many_concurrent_identity_tokens_do_not_starve_the_pool,

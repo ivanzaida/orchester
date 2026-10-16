@@ -10,11 +10,11 @@ use orchester_app::{
   i18n,
   mcp::{
     chat::ChatServers,
-    input_gate::signed_out::{CODE, LOOKS_ON_GATE},
+    input_gate::signed_out::{CODE, LOOKS_ON_GATE, looks_on_gate},
   },
 };
 use orchester_core::id::{ChatId, ChatMessageId, ProjectId};
-use orchester_workspace::orchestrator::tools::ChatScope;
+use orchester_workspace::{build::Build, orchestrator::tools::ChatScope};
 use serde_json::{Value, json};
 
 use super::{
@@ -84,12 +84,31 @@ fn signed_out_the_installed_app_refuses_its_looking_tools_too() {
   let mut served = Served::start_signed_out(true);
   let services = served.launch.services().expect("services").clone();
   // As the installed app binds the session's cloud account: no look at the gate.
-  served.link.input_gate().bind_cloud(services.cloud, false);
+  let installed = Build::of(Some("1"), false);
+  assert_eq!(installed, Build::Installed);
+  served
+    .link
+    .input_gate()
+    .bind_cloud(services.cloud, looks_on_gate(installed));
   let session = served.session();
   for name in LOOKS.iter().chain(LOOKS_ON_GATE) {
     assert!(refused(&mut served, &session, name), "{name}");
   }
   assert!(!refused(&mut served, &session, "sign_in_state"));
+}
+
+#[test]
+fn signed_out_only_qa_and_development_builds_look_at_the_gate() {
+  for (flag, debug, looks) in [
+    (Some("1"), false, false),
+    (Some("1"), true, true),
+    (None, true, true),
+    (None, false, true),
+    (Some("0"), false, true),
+  ] {
+    let build = Build::of(flag, debug);
+    assert_eq!(looks_on_gate(build), looks, "{flag:?}, debug {debug}: {build:?}");
+  }
 }
 
 #[test]

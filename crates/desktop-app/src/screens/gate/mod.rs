@@ -208,7 +208,7 @@ fn address(ctx: &mut Ctx, cloud: &Cloud) -> Result<Option<CloudAddress>, ()> {
     .future((revision, cloud.clone()), |(_, cloud)| async move {
       background::run(move || cloud.address())
         .await
-        .map_err(|_| ())?
+        .map_err(|message| tracing::error!(?message, "the gate's read of the cloud's address did not finish"))?
         .map_err(|error| tracing::error!(%error, "the gate cannot read the cloud's address"))
     })
     .state()

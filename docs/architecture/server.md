@@ -1385,7 +1385,10 @@ cannot complete it, and their own sign-up's link sets their own password. Every 
 and nothing else about the person (later, a provider's id when one is linked). An invitee's email is kept only while the invite is open; an
 unregistered invitee gets one email and is not added anywhere. Logs carry account ids, never emails. Emails hold no
 project content beyond the project's name and the inviter's display name. Team servers never store an email: they
-keep the cloud account id and the display name. Deleting a cloud account deletes everything the cloud holds about it.
+keep the cloud account id and the display name. Deleting a cloud account deletes everything the cloud holds about it,
+except the hashes of its tokens still in use then, with the time of the deletion and no account id or email: for 90
+days, until they would have ended unused, they answer that the account was deleted (`docs/cloud-api.md`, "Why a token
+ended").
 
 **What never leaves the computer.** Transcripts, prompts, messages, conversations, memory, plans, questions and
 answers, approvals' actions and decisions, diffs, file names, commits, worktree names, tool calls and their output,
