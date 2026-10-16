@@ -1,7 +1,8 @@
 //! Orchester Cloud from this tree on loopback: the `orchester-cloud` program (`cargo build -p orchester-cloud`), run
 //! as its own process so the app's tests do not link the cloud's web stack, on a database of its own in the PostgreSQL
-//! that `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, sending its mail to an SMTP stub, with the key ceremony done as an
-//! operator does it. The process is stopped and the database dropped at the end.
+//! that `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, sending its mail to an SMTP stub, configured as an operator
+//! configures it: the cloud makes its root key and key set itself. The process is stopped and the database dropped at
+//! the end.
 
 use std::{
   net::{SocketAddr, TcpListener},
@@ -15,7 +16,6 @@ use orchester_api::{
   Credential,
   client::{CloudClient, ServerAddress},
   cloud::{CloudPlatform, CloudSignIn, DeviceInfo, ServerLinked},
-  identity::{KeySetStatement, PrivateKey, RootKey},
 };
 use orchester_core::id::IdempotencyKey;
 use parking_lot::Mutex;
@@ -41,7 +41,8 @@ pub struct RealCloud {
 }
 
 impl RealCloud {
-  /// The cloud on a new database of the PostgreSQL `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, keys published.
+  /// The cloud on a new database of the PostgreSQL `ORCHESTER_CLOUD_TEST_DATABASE_URL` names; it publishes its keys
+  /// before it listens.
   pub fn start() -> Self {
     let server = std::env::var(DATABASE_URL)
       .unwrap_or_else(|_| panic!("{DATABASE_URL} names the PostgreSQL these tests run against"))
@@ -62,10 +63,8 @@ impl RealCloud {
       .prefix("cloud-")
       .tempdir_in(scratch_root())
       .expect("scratch");
-    let root = RootKey::new(&PrivateKey::generate().expect("root key")).expect("root");
     let address = free_address();
-    let environment = environment((&server, &database), (address, relay), &root.public_key().encoded());
-    ceremony(&scratch, &environment, &root);
+    let environment = environment((&server, &database), (address, relay));
     let process = Command::new(program())
       .arg("serve")
       .current_dir(scratch.path())
@@ -188,29 +187,6 @@ impl Drop for RealCloud {
   }
 }
 
-/// The weekly ceremony on a new cloud: a signing key, its key set signed offline by `root`, published.
-fn ceremony(scratch: &TempDir, environment: &[(String, String)], root: &RootKey) {
-  let run = |args: &[&str]| {
-    let status = Command::new(program())
-      .args(args)
-      .current_dir(scratch.path())
-      .envs(environment.iter().cloned())
-      .stdout(Stdio::null())
-      .status()
-      .expect("run orchester-cloud");
-    assert!(status.success(), "orchester-cloud {args:?} failed");
-  };
-  run(&["keys", "rotate"]);
-  let statement = scratch.path().join("statement.json");
-  run(&["keys", "prepare", path(&statement)]);
-  let prepared: KeySetStatement =
-    serde_json::from_slice(&std::fs::read(&statement).expect("statement")).expect("a key set statement");
-  let signed = scratch.path().join("signed.jws");
-  let compact = root.sign_key_set(&prepared, prepared.issued_at).expect("signed");
-  std::fs::write(&signed, compact).expect("write the signed key set");
-  run(&["keys", "publish", path(&signed)]);
-}
-
 /// The program built from this tree, beside the test binaries' folder (`target/<profile>/`).
 fn program() -> PathBuf {
   let deps = std::env::current_exe().expect("the test binary");
@@ -230,10 +206,6 @@ fn scratch_root() -> PathBuf {
   root
 }
 
-fn path(path: &std::path::Path) -> &str {
-  path.to_str().expect("a UTF-8 path")
-}
-
 fn free_address() -> SocketAddr {
   TcpListener::bind("127.0.0.1:0")
     .and_then(|listener| listener.local_addr())
@@ -241,11 +213,7 @@ fn free_address() -> SocketAddr {
 }
 
 /// The cloud's configuration, as `ORCHESTER_CLOUD_*` variables.
-fn environment(
-  (server, database): (&str, &str),
-  (listen, relay): (SocketAddr, SocketAddr),
-  root_public_key: &str,
-) -> Vec<(String, String)> {
+fn environment((server, database): (&str, &str), (listen, relay): (SocketAddr, SocketAddr)) -> Vec<(String, String)> {
   [
     ("LISTEN", listen.to_string()),
     ("PUBLIC_URL", "https://cloud.example.test".to_owned()),
@@ -253,7 +221,6 @@ fn environment(
     ("SMTP_URL", format!("smtp://{relay}")),
     ("SMTP_FROM", "Orchester <no-reply@cloud.example.test>".to_owned()),
     ("KEY_ENCRYPTION_KEY", "ab".repeat(32)),
-    ("ROOT_PUBLIC_KEY", root_public_key.to_owned()),
   ]
   .into_iter()
   .map(|(key, value)| (format!("ORCHESTER_CLOUD_{key}"), value))

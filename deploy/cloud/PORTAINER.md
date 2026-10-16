@@ -2,8 +2,9 @@
 
 How to run Orchester Cloud at `orchester-cloud.lurq.dev` as a Portainer stack on a Docker host whose ingress is
 Traefik, with images that GitHub Actions builds and redeploys. For a host without Traefik, use the Caddy compose
-files in [README.md](README.md). What the service is, its configuration keys and the key ceremony are in
-[docs/cloud-hosting.md](../../docs/cloud-hosting.md).
+files in [README.md](README.md). What the service is, its configuration and how it keeps its keys are in
+[docs/cloud-hosting.md](../../docs/cloud-hosting.md). Deploying is setting the variables and pressing *Deploy*: the
+cloud makes its own root key at its first start and rotates and signs its keys itself.
 
 ## What runs
 
@@ -33,7 +34,7 @@ Look these up once, in Traefik's own stack or its static configuration:
 - **The network** the other stacks join (the `traefik.docker.network` label of, for example, `pwstudio_web`); by
   default `traefik`.
 - **The HTTPS entry point** (`websecure`), **the HTTP entry point** (`web`) and **the certificate resolver**
-  (`letsencrypt`). Set the variables of step 7 if any name differs.
+  (`letsencrypt`). Set the variables of step 6 if any name differs.
 
 ### The access log
 
@@ -64,7 +65,7 @@ Set both to **DNS only (grey cloud)**. The Cloudflare proxy must be off for this
 
 The stack pulls the images, so they must exist first. Once the workflow is on `master`, open the repository on
 GitHub → *Actions* → *Cloud images* → *Run workflow* on `master`. Both *Image* jobs push to GHCR. *Redeploy the
-Portainer stack* is skipped, and the run shows the notice *Deploy skipped: repository secrets not set*, until step 9.
+Portainer stack* is skipped, and the run shows the notice *Deploy skipped: repository secrets not set*, until step 7.
 
 The repository is private, so the two packages are private too. They are linked to the repository and appear under
 its *Packages*.
@@ -80,20 +81,7 @@ Portainer needs a read-only login to pull private images:
    `ghcr.io`, *Authentication* on, username: the GitHub user, password: the token.
 3. When the token expires, generate a new one and put it into this registry.
 
-## 5. The root key
-
-Once, on an offline machine, as in [README.md](README.md), "First start". With the image (pulled while still online,
-after `docker login ghcr.io` with the token of step 4):
-
-```sh
-docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/keys" -w /keys \
-  ghcr.io/ivanzaida/orchester-cloud:latest root generate root.key
-```
-
-It writes `root.key` and prints `ORCHESTER_CLOUD_ROOT_PUBLIC_KEY=…` and the fingerprint team servers pin. Keep
-`root.key` on that machine, with a second offline copy.
-
-## 6. Trusted proxies: Traefik's address
+## 5. Trusted proxies: Traefik's address
 
 The backend believes the client address in `X-Forwarded-For` only from the addresses in
 `ORCHESTER_CLOUD_TRUSTED_PROXIES`. The compose file sets it to `TRAEFIK_ADDRESS` and the web front (`10.231.0.5`,
@@ -126,7 +114,7 @@ this stack a network of its own with Traefik:
 3. In this stack set `TRAEFIK_NETWORK=orchester-cloud-edge` and `TRAEFIK_ADDRESS=10.231.1.0/24`. Trusting that whole
    subnet is right as long as nothing else joins it: its only members are Traefik, `cloud` and `web`.
 
-## 7. Create the stack
+## 6. Create the stack
 
 In Portainer: *Stacks* → *Add stack*.
 
@@ -141,12 +129,13 @@ In Portainer: *Stacks* → *Add stack*.
    ORCHESTER_CLOUD_SMTP_URL=smtps://<user>:<password>@<relay host>:465
    ORCHESTER_CLOUD_SMTP_FROM=Orchester <no-reply@lurq.dev>
    ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY=<openssl rand -hex 32>
-   ORCHESTER_CLOUD_ROOT_PUBLIC_KEY=<printed in step 5>
    ORCHESTER_CLOUD_WEB_SECRET=<openssl rand -base64 32>
-   TRAEFIK_ADDRESS=<step 6>
+   TRAEFIK_ADDRESS=<step 5>
    ```
 
-4. *Deploy the stack*. The backend applies its database migrations when it starts. The web pages answer 404 for
+4. *Deploy the stack*. The backend applies its database migrations when it starts, makes its root key on the very
+   first start (its log names it: `root key ready root_public_key=… root_fingerprint=…`) and publishes its first key
+   set before it listens. The web pages answer 404 for
    about ten seconds, until `web`'s health check passes (Traefik does not route to a container that is starting or
    unhealthy).
 
@@ -158,59 +147,21 @@ Keep a copy of the values in a password manager: Portainer is then the only othe
 | `POSTGRES_PASSWORD` | required | The database password, put into the backend's connection URL as it is, so URL-safe characters only (hex). PostgreSQL reads it only when it creates the volume; changing it later needs `ALTER USER` as well |
 | `ORCHESTER_CLOUD_SMTP_URL` | required | The SMTP relay: `smtps://user:pass@host:465` or `smtp://user:pass@host:587?tls=required`, user and password URL-encoded ([README.md](README.md), "The SMTP relay") |
 | `ORCHESTER_CLOUD_SMTP_FROM` | required | The sender of every email |
-| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | required | 64 hex characters. Seals the signing keys in the database. Changing it makes the stored keys unusable |
-| `ORCHESTER_CLOUD_ROOT_PUBLIC_KEY` | required | The public half of the offline root key |
+| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | required | 64 hex characters. Seals the cloud's root key and signing keys in the database. Set it once and keep it: with another key the backend refuses to start ([docs/cloud-hosting.md](../../docs/cloud-hosting.md), "Losing the key-encryption key") |
 | `ORCHESTER_CLOUD_WEB_SECRET` | required | 32 random bytes in standard base64. Signs the forms' CSRF tokens and seals the session cookie. Changing it signs every browser out |
-| `TRAEFIK_ADDRESS` | required | Traefik's address on its network (step 6) |
+| `TRAEFIK_ADDRESS` | required | Traefik's address on its network (step 5) |
 | `ORCHESTER_CLOUD_HOST` | `orchester-cloud.lurq.dev` | The host Traefik routes |
 | `TRAEFIK_NETWORK` | `traefik` | Traefik's external network |
 | `TRAEFIK_ENTRYPOINT` | `websecure` | Traefik's HTTPS entry point |
 | `TRAEFIK_HTTP_ENTRYPOINT` | `web` | Traefik's HTTP entry point, for the redirect to HTTPS |
 | `TRAEFIK_CERT_RESOLVER` | `letsencrypt` | Traefik's certificate resolver |
 | `CLOUD_SUBNET_PREFIX` | `10.231.0` | The first three numbers of the stack's own `/24`. Change it if another network on the host already uses `10.231.0.0/24` (the deploy then fails with *Pool overlaps*) |
-| `CLOUD_TAG` | `latest` | The image tag of both images; set it to a `sha-` tag to roll back (step 11) |
+| `CLOUD_TAG` | `latest` | The image tag of both images; set it to a `sha-` tag to roll back (step 9) |
 
 If a required variable is missing, the deploy fails and names it. If a value is wrong, the backend or the web front
 exits at once and logs the variable (*Containers* → the container → *Logs*), and Docker restarts it in a loop.
 
-## 8. The first key set
-
-Until a key set is published, `GET /api/v1/keys` and identity tokens answer `503 keys_unavailable`; sign-up and
-sign-in work without it. The ceremony is the one in [docs/cloud-hosting.md](../../docs/cloud-hosting.md); in
-Portainer it runs in the backend's console: *Containers* → `orchester-cloud-cloud-1` → *Console* → command
-`/bin/sh` → *Connect*.
-
-1. In the console:
-
-   ```sh
-   orchester-cloud keys rotate
-   orchester-cloud keys prepare /tmp/statement.json
-   cat /tmp/statement.json
-   ```
-
-   Copy the printed JSON into `statement.json` on the offline machine. It holds only public keys and dates.
-2. On the offline machine:
-
-   ```sh
-   docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/keys" -w /keys \
-     ghcr.io/ivanzaida/orchester-cloud:latest keys sign statement.json root.key signed.jws
-   ```
-
-   It prints the key set it signed and writes `signed.jws`, one line of public data.
-3. Back in the console, with the content of `signed.jws` between the quotes:
-
-   ```sh
-   printf '%s' '<the content of signed.jws>' > /tmp/signed.jws
-   orchester-cloud keys publish /tmp/signed.jws
-   ```
-
-   It answers `Key set published.`
-
-Repeat steps 1 (without `keys rotate`) to 3 every week, and run `keys rotate` first every 28 days at most. With a
-shell on the host, the same works with `docker exec orchester-cloud-cloud-1 …` and `docker cp`, as in
-[README.md](README.md).
-
-## 9. Automatic deploys
+## 7. Automatic deploys
 
 The deploy job updates the stack through Portainer's API: it reads the stack's compose file and variables and sends
 them back unchanged with *re-pull images*, so Portainer pulls the new `latest` and recreates `cloud` and `web`.
@@ -239,11 +190,10 @@ them back unchanged with *re-pull images*, so Portainer pulls the new `latest` a
 The job never prints the token or the stack's variables: it masks every variable's value before anything else and
 hands the token to `curl` in a file.
 
-## 10. Check it works
+## 8. Check it works
 
 - `https://orchester-cloud.lurq.dev/signup` shows the sign-up page, and a sign-up gets its email.
-- `curl -s -o /dev/null -w '%{http_code}\n' https://orchester-cloud.lurq.dev/api/v1/keys` answers `200` after step 8
-  (`503` before it).
+- `curl -s -o /dev/null -w '%{http_code}\n' https://orchester-cloud.lurq.dev/api/v1/keys` answers `200` from the first start.
 - `curl -sI https://orchester-cloud.lurq.dev/signin` shows `strict-transport-security: max-age=31536000`.
 - `curl -sI http://orchester-cloud.lurq.dev/` answers with a redirect to `https://`.
 - Traefik's access log, if it is on, has no line for `orchester-cloud.lurq.dev`.
@@ -251,7 +201,7 @@ hands the token to `curl` in a file.
   routing to it: the pages answer `404` while `/api/*` (the desktop apps, team servers' invites) keeps working.
   Watch that state in your monitoring.
 
-## 11. Roll back
+## 9. Roll back
 
 Every build keeps its `sha-` tags in GHCR (the repository → *Packages* → `orchester-cloud` → the versions; the tag is
 the commit's first 7 characters).
@@ -272,4 +222,4 @@ version you go back to is older than a migration, restore the dump taken before 
 [README.md](README.md), "Backups" and "Logs", applies as written; with a shell on the host, `dc exec` becomes
 `docker exec` with the container name, for example
 `docker exec orchester-cloud-postgres-1 pg_dump -U orchester_cloud -Fc orchester_cloud > orchester-cloud-$(date +%F).dump`.
-The values of step 7 take the place of `.env` in the backups.
+The values of step 6 take the place of `.env` in the backups.

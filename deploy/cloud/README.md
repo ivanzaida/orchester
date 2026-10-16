@@ -1,7 +1,7 @@
 # Deploying Orchester Cloud
 
 How to run Orchester Cloud (the backend `crates/cloud` and its web front `web/cloud`) with Docker at
-`orchester-cloud.lurq.dev`. What the service is, its configuration keys and the key ceremony are in
+`orchester-cloud.lurq.dev`. What the service is, its configuration and how it keeps its keys are in
 [docs/cloud-hosting.md](../../docs/cloud-hosting.md); its API is in [docs/cloud-api.md](../../docs/cloud-api.md).
 
 **On a host whose ingress is Traefik, managed with Portainer** (the server of `orchester-cloud.lurq.dev`), follow
@@ -55,7 +55,6 @@ POSTGRES_PASSWORD=<openssl rand -hex 24>
 ORCHESTER_CLOUD_SMTP_URL=smtps://<user>:<password>@<relay host>:465
 ORCHESTER_CLOUD_SMTP_FROM=Orchester <no-reply@lurq.dev>
 ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY=<openssl rand -hex 32>
-ORCHESTER_CLOUD_ROOT_PUBLIC_KEY=<printed by `orchester-cloud root generate`>
 ORCHESTER_CLOUD_WEB_SECRET=<openssl rand -base64 32>
 ```
 
@@ -65,8 +64,7 @@ ORCHESTER_CLOUD_WEB_SECRET=<openssl rand -base64 32>
 | `POSTGRES_PASSWORD` | PostgreSQL, cloud | The database password. Compose puts it into the backend's connection URL as it is, so use only URL-safe characters (the hex above). PostgreSQL reads it only when it creates the `postgres_data` volume; changing it later needs `ALTER USER` as well |
 | `ORCHESTER_CLOUD_SMTP_URL` | cloud | The SMTP relay: `smtps://user:pass@host:465` (TLS) or `smtp://user:pass@host:587?tls=required` (STARTTLS required). URL-encode the user and password |
 | `ORCHESTER_CLOUD_SMTP_FROM` | cloud | The sender of every email |
-| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | cloud | 64 hex characters. It seals the signing keys in the database, and keys the hashes of deleted owners' emails that keep their abuse limits. Changing it makes the stored keys unusable and resets those limits |
-| `ORCHESTER_CLOUD_ROOT_PUBLIC_KEY` | cloud | The public half of the offline root key |
+| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | cloud | 64 hex characters. It seals the cloud's root key and signing keys in the database, and keys the hashes of deleted owners' emails that keep their abuse limits. Set it once and keep it: with another key the backend refuses to start ([docs/cloud-hosting.md](../../docs/cloud-hosting.md), "Losing the key-encryption key") |
 | `ORCHESTER_CLOUD_WEB_SECRET` | web | 32 random bytes in standard base64. It signs the forms' CSRF tokens and seals the session cookie. Changing it signs every browser out |
 
 Compose sets the rest: the backend's `ORCHESTER_CLOUD_DATABASE_URL` (PostgreSQL on the compose network,
@@ -95,43 +93,27 @@ email's purpose only, never its address.
 
 ## First start
 
-1. **Root key**, once, on an offline machine, with the image or a release build of `orchester-cloud`:
-   `orchester-cloud root generate root.key`. It prints `ORCHESTER_CLOUD_ROOT_PUBLIC_KEY` and the fingerprint team
-   servers pin. Keep `root.key` on that machine.
-2. Write `.env` as above.
-3. `docker compose -f compose.yaml -f compose.web.yaml up -d --build`. The backend applies its database migrations
-   when it starts.
-4. **The first key set** (the key ceremony in [docs/cloud-hosting.md](../../docs/cloud-hosting.md)). Until it is
-   published, `GET /api/v1/keys` and identity tokens answer `503 keys_unavailable`; sign-up and sign-in work
-   without it:
-
-   ```sh
-   dc exec cloud orchester-cloud keys rotate
-   dc exec cloud orchester-cloud keys prepare /tmp/statement.json
-   dc cp cloud:/tmp/statement.json .
-   # on the offline machine: orchester-cloud keys sign statement.json root.key signed.jws
-   dc cp signed.jws cloud:/tmp/signed.jws
-   dc exec cloud orchester-cloud keys publish /tmp/signed.jws
-   ```
-
-   Repeat `keys prepare`, `keys sign` and `keys publish` every week, and run `keys rotate` first every 28 days at most.
-5. Check it: `https://orchester-cloud.lurq.dev/signup` shows the sign-up page,
+1. Write `.env` as above.
+2. `docker compose -f compose.yaml -f compose.web.yaml up -d --build`. The backend applies its database migrations
+   when it starts, makes its root key on the very first start, and publishes its first key set before it listens;
+   from then on it rotates its signing keys and signs key sets itself ([docs/cloud-hosting.md](../../docs/cloud-hosting.md),
+   "Keys"). `dc logs cloud` names the root key (`root key ready root_public_key=… root_fingerprint=…`).
+3. Check it: `https://orchester-cloud.lurq.dev/signup` shows the sign-up page,
    `https://orchester-cloud.lurq.dev/api/v1/keys` answers `200`, and a sign-up gets its email.
 
 ## Backups
 
 | What | How | Why |
 | --- | --- | --- |
-| The database | `dc exec -T postgres pg_dump -U orchester_cloud -Fc orchester_cloud > orchester-cloud-$(date +%F).dump`, daily, kept off the host | Accounts, devices, links, signing keys, key sets and the audit log |
-| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | Keep it apart from the database dumps, for example in a password manager | Without it, the dumps' signing keys cannot be opened. If it is lost, run `keys rotate` and a ceremony |
-| `root.key` | A second offline copy | Without it, no new key set can be signed, and team servers that pinned its fingerprint have to pin a new one |
+| The database | `dc exec -T postgres pg_dump -U orchester_cloud -Fc orchester_cloud > orchester-cloud-$(date +%F).dump`, daily, kept off the host | Accounts, devices, links, the sealed root and signing keys, key sets and the audit log |
+| `ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY` | Keep it apart from the database dumps, for example in a password manager | Without it, the dumps' root and signing keys cannot be opened and the backend refuses to start on them. If it is lost, the cloud needs a new root, which every linked team server pins again ([docs/cloud-hosting.md](../../docs/cloud-hosting.md), "Losing the key-encryption key") |
 | `.env` | With the operator's secrets | It holds every other secret |
 | `caddy_data` volume | Optional | Caddy gets a new certificate if it is lost |
 
 **Encrypt the database dumps** wherever they are kept, for example with `age` or `gpg` before they leave the host,
 or on encrypted storage: they hold every account's email, password hash and display name, the devices' token
-hashes, the invites in flight and the sealed signing keys (sealed with the key-encryption key, which must not travel
-with them). Keep the key that opens them apart from the dumps.
+hashes, the invites in flight and the sealed root and signing keys (sealed with the key-encryption key, which must not
+travel with them). Keep the key that opens them apart from the dumps.
 
 **Rotating the key-encryption key resets the limits of deleted accounts.** A deleted account's team servers keep a
 keyed hash of its email (`servers.last_owner`), so signing up again with that email gets no new server or invite

@@ -17,10 +17,11 @@ mod identity;
 mod limits;
 mod links;
 mod registry;
+mod root_key;
 mod sessions;
 mod support;
 
-use std::{future::Future, pin::Pin, process::ExitCode};
+use std::{future::Future, pin::Pin, process::ExitCode, sync::Arc};
 
 use support::{Postgres, args::Selection, log::Capture};
 
@@ -61,6 +62,8 @@ const TESTS: &[(&str, Test)] = tests![
   sessions::a_sign_in_racing_a_reset_does_not_survive_it,
   identity::identity_token_verifies_with_the_published_key_set,
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
+  identity::identity_key_sets_are_signed_weekly_and_renewed_after_a_stop,
+  identity::identity_keys_leave_no_gap_after_a_stop,
   identity::many_concurrent_identity_tokens_do_not_starve_the_pool,
   hosting::migrations_apply_once_and_a_newer_database_is_refused,
   hosting::migration_4_removes_servers_whose_id_is_not_their_keys,
@@ -80,7 +83,20 @@ const TESTS: &[(&str, Test)] = tests![
   registry::invites_reach_the_invitee_once_and_end_when_revoked,
   registry::invites_are_declined_by_the_invitee,
   accept::invites_are_accepted_with_a_token_that_names_them,
+  root_key::the_first_start_makes_the_root,
+  root_key::a_restart_reuses_the_root,
+  root_key::replicas_starting_together_make_one_root,
+  root_key::a_changed_key_encryption_key_stops_the_start,
+  root_key::keys_without_a_root_stop_the_start,
+  root_key::losing_the_key_encryption_key_starts_over_with_a_new_root,
+  root_key::a_corrupt_root_is_stored_data,
+  root_key::a_key_set_dated_in_the_future_is_ignored,
+  root_key::keys_verify_with_the_root_a_linked_server_pins,
 ];
+
+/// Tests that run at once: each holds a few connections, some many more, and PostgreSQL allows 100 by default (CI's
+/// service container keeps the default).
+const PARALLEL: usize = 16;
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.
 const LOG_CHECK: &str = "logs::no_secret_in_the_whole_log";
@@ -129,10 +145,15 @@ async fn run(tests: &[&'static (&'static str, Test)], capture: &Capture) -> usiz
   };
   println!("running {} tests", tests.len() + 1);
   let mut running = tokio::task::JoinSet::new();
+  let slots = Arc::new(tokio::sync::Semaphore::new(PARALLEL));
   for (name, test) in tests {
     let name = *name;
     let test = *test;
-    running.spawn(async move { (name, tokio::spawn(test()).await.is_ok()) });
+    let slots = Arc::clone(&slots);
+    running.spawn(async move {
+      let _slot = slots.acquire_owned().await.expect("the runner never closes its slots");
+      (name, tokio::spawn(test()).await.is_ok())
+    });
   }
   let mut failed = 0;
   while let Some(finished) = running.join_next().await {
