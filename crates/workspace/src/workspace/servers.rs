@@ -2,7 +2,7 @@
 //! (the person's decision, 2026-10-16: servers per account, as projects are). The list and every use of a server for
 //! the person or automation are the signed-in account's alone ([`Workspace::servers`]); another account's servers are
 //! not found. Only the work that keeps every server's connection and every shared project in step on this computer, and
-//! shows none of it, reads them all.
+//! shows none of it, reads them all. Only this crate changes a server's row, after it checked whose the server is.
 
 use orchester_core::id::{CloudAccountId, ServerId};
 use orchester_store::{RegisteredProject, ServerAccount, StoreError, StoredServer};
@@ -50,19 +50,35 @@ impl Workspace {
     self.db.lock().add_server(server, owner)
   }
 
+  /// Whether `server` is the signed-in account's, read in one statement.
+  pub(crate) fn is_own_server(&self, server: ServerId) -> Result<bool, StoreError> {
+    self.db.lock().is_signed_in_accounts_server(server)
+  }
+
+  /// Forgets who is signed in to `server` from this computer if it is the signed-in account's, checked in the same
+  /// statement; whether it was.
+  pub(crate) fn sign_out_of_server(&self, server: ServerId) -> Result<bool, StoreError> {
+    self.db.lock().sign_out_of_server(server)
+  }
+
   /// Records how this computer trusts `server`: its pinned certificate, or the system's trust store and whether plain
   /// HTTP is allowed there.
-  pub fn set_server_trust(&self, server: ServerId, pin: Option<&str>, plain_http: bool) -> Result<(), StoreError> {
+  pub(crate) fn set_server_trust(
+    &self,
+    server: ServerId,
+    pin: Option<&str>,
+    plain_http: bool,
+  ) -> Result<(), StoreError> {
     self.db.lock().set_server_trust(server, pin, plain_http)
   }
 
   /// Records the name the server gives itself now.
-  pub fn set_server_name(&self, server: ServerId, name: &str) -> Result<(), StoreError> {
+  pub(crate) fn set_server_name(&self, server: ServerId, name: &str) -> Result<(), StoreError> {
     self.db.lock().set_server_name(server, name)
   }
 
   /// Records who is signed in to `server` from this computer; `None` after signing out.
-  pub fn set_server_account(&self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
+  pub(crate) fn set_server_account(&self, server: ServerId, account: Option<&ServerAccount>) -> Result<(), StoreError> {
     self.db.lock().set_server_account(server, account)
   }
 }

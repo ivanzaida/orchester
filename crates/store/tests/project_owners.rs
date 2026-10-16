@@ -53,6 +53,20 @@ fn owners_list_and_change_only_their_own_projects() {
   assert_eq!(names(&db, Some(&olena)), ["Ledger"]);
   assert_eq!(names(&db, None), ["Notes"]);
   assert_eq!(db.every_project().expect("all").len(), 3);
+  let owned: Vec<_> = db
+    .owned_projects()
+    .expect("all, with whose")
+    .into_iter()
+    .map(|(owner, project)| (owner, project.name.as_str().to_owned()))
+    .collect();
+  assert_eq!(
+    owned,
+    [
+      (None, "Notes".to_owned()),
+      (Some(olena), "Ledger".to_owned()),
+      (Some(bohdan), "Kontur".to_owned())
+    ]
+  );
 
   let refused = db.register_project(&kontur, Path::new("H:/projects/kontur"), at(9), Some(&olena));
   assert!(

@@ -36,11 +36,13 @@ pub enum CloudJoined {
   Waiting(Approval),
 }
 
-/// What a cloud join needs from Orchester Cloud: its client, this computer's cloud device token, and the invite the
-/// identity token accepts, when the join answers one.
+/// What a cloud join needs from Orchester Cloud: its client, this computer's cloud device token, the account that
+/// token is of, read from the same stored sign-in, and the invite the identity token accepts, when the join answers
+/// one. The server joined goes into that account's list, whoever is signed in once the join finished.
 pub struct CloudIdentity<'a> {
   pub cloud: &'a CloudClient,
   pub device: &'a SecretValue,
+  pub account: CloudAccountId,
   pub invite: Option<InviteId>,
 }
 
@@ -81,7 +83,7 @@ impl Servers {
     identity: CloudIdentity<'_>,
     approval: Option<ApprovalId>,
   ) -> Result<CloudJoined, SharingError> {
-    let owner = self.joining_account().await?;
+    let owner = Some(identity.account);
     let (address, trust, client, name) = Self::reach_named(server).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
     let issued = identity
@@ -133,8 +135,8 @@ impl Servers {
       .await
   }
 
-  /// The Orchester Cloud account a join that begins now is for: the server it joins goes into that account's list,
-  /// even when another account signs in before the join finished.
+  /// The Orchester Cloud account a code join that begins now is for, read once before anything is sent: the server it
+  /// joins goes into that account's list, even when another account signs in before the join finished.
   async fn joining_account(&self) -> Result<Option<CloudAccountId>, SharingError> {
     let workspace = self.inner.workspace.clone();
     Ok(background::run(move || workspace.signed_in_account()).await??)

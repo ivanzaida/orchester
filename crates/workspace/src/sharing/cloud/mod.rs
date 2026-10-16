@@ -9,6 +9,7 @@
 
 mod accepting;
 mod asking;
+mod claiming;
 mod error;
 mod gate;
 mod invites;
@@ -25,6 +26,7 @@ use orchester_api::{
   cloud::{CloudErrorCode, CloudSignIn},
 };
 use orchester_core::{
+  id::CloudAccountId,
   secret::{SecretValue, VaultError, VaultKey},
   time::Timestamp,
 };
@@ -207,17 +209,21 @@ impl Cloud {
     let (cloud, kept) = (self.clone(), account.clone());
     background::run(move || -> Result<(), CloudError> {
       let inner = &cloud.inner;
+      let links = claiming::Links::read(&inner.workspace)?;
       let _keychain = inner.keychain.lock();
       let key = device_key(&inner.workspace)?;
       inner.vault.get().store(&key, &token)?;
-      let mut db = inner.workspace.db.lock();
-      inner.generation.fetch_add(1, Ordering::SeqCst);
-      db.set_cloud_account(Some(&kept))?;
-      db.set_cloud_sign_in_ended(None)?;
-      // The projects and team servers added while no account was signed in, and those from before they had owners,
-      // are its.
-      db.claim_unowned_projects(&kept.account)?;
-      db.claim_unowned_servers(&kept.account)?;
+      let removed = {
+        let mut db = inner.workspace.db.lock();
+        inner.generation.fetch_add(1, Ordering::SeqCst);
+        db.set_cloud_account(Some(&kept))?;
+        db.set_cloud_sign_in_ended(None)?;
+        // The projects added while no account was signed in, and those from before projects had owners, are its; the
+        // team servers nobody owns go to the account whose projects link to them ([`claiming`]).
+        db.claim_unowned_projects(&kept.account)?;
+        claiming::claim_servers(&mut db, &kept.account, &links)?
+      };
+      claiming::forget_tokens(&inner.vault, &removed);
       Ok(())
     })
     .await??;
@@ -372,14 +378,18 @@ impl Cloud {
     .await?
   }
 
-  /// The client of the cloud the account signed in at, and its device token; signed out without either.
-  async fn signed_in(&self) -> Result<(CloudClient, SecretValue), CloudError> {
-    self.session().await.map(|(client, token, _)| (client, token))
+  /// The client of the cloud the account signed in at, its device token and the account, all of one stored sign-in;
+  /// signed out without either.
+  async fn signed_in(&self) -> Result<(CloudClient, SecretValue, CloudAccountId), CloudError> {
+    self
+      .session()
+      .await
+      .map(|(client, token, _, account)| (client, token, account))
   }
 
   /// [`Self::signed_in`] with the sign-in's generation. An account whose token is gone from the keychain, or which the
   /// keychain does not give, is signed out here (reason *other*): a sign-in that cannot be checked does not stay open.
-  async fn session(&self) -> Result<(CloudClient, SecretValue, u64), CloudError> {
+  async fn session(&self) -> Result<(CloudClient, SecretValue, u64, CloudAccountId), CloudError> {
     let Some(kept) = self.kept().await? else {
       return Err(CloudError::SignedOut);
     };
@@ -401,7 +411,7 @@ impl Cloud {
       }
     };
     let client = CloudClient::new(ServerAddress::parse(&kept.account.cloud_address)?)?;
-    Ok((client, token, kept.generation))
+    Ok((client, token, kept.generation, kept.account.account))
   }
 
   /// Runs `call` with the signed-in client and token; a token the cloud no longer accepts signs this computer out with
@@ -412,7 +422,7 @@ impl Cloud {
     F: FnOnce(CloudClient, SecretValue) -> Fut,
     Fut: Future<Output = Result<T, CloudError>>,
   {
-    let (client, token, generation) = self.session().await?;
+    let (client, token, generation, _) = self.session().await?;
     let answer = call(client, token).await;
     self.inner.reach.send_if_modified(|reach| {
       let after = reach.after(&answer, Timestamp::now());

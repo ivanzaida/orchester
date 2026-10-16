@@ -32,8 +32,7 @@ impl Servers {
   /// Refuses `server` unless it is one of the signed-in account's: another account's server is not found.
   pub(super) async fn own(&self, server: ServerId) -> Result<(), SharingError> {
     let workspace = self.inner.workspace.clone();
-    let servers = background::run(move || workspace.servers()).await??;
-    if servers.iter().any(|stored| stored.id == server) {
+    if background::run(move || workspace.is_own_server(server)).await?? {
       Ok(())
     } else {
       Err(SharingError::ServerMissing)

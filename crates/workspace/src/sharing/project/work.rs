@@ -198,7 +198,8 @@ fn shared_projects_of(servers: &Servers, owner: Option<&CloudAccountId>) -> Vec<
       |project| match ProjectServer::in_background(servers, &entries, &project.repo_root) {
         Ok(found) => found,
         Err(error) => {
-          tracing::debug!(%error, root = %project.repo_root.display(), "a project's sharing cannot be read");
+          // By id: the project may be another account's, whose folders the log does not name.
+          tracing::debug!(%error, project = %project.id, "a project's sharing cannot be read");
           None
         }
       },

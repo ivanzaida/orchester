@@ -1,6 +1,7 @@
 //! Whose each team server is (the person's decision, 2026-10-16: servers per account, as projects are): listed for its
-//! own Orchester Cloud account only, an address once per account, the servers no account took yet go to the next one
-//! that signs in, and those known before servers had owners to the account signed in then, with all they kept.
+//! own Orchester Cloud account only, an address once per account, a server no account took yet given once and never
+//! beside an account's own entry at its address, and those known before servers had owners to the account signed in
+//! then, with all they kept.
 //!
 //! `cargo test -p orchester-store --test server_owners server_owners_`
 
@@ -70,7 +71,7 @@ fn server_owners_list_only_their_own_and_an_address_once_each() {
 }
 
 #[test]
-fn server_owners_unowned_go_to_the_first_account_to_sign_in() {
+fn server_owners_an_unowned_server_is_given_once_and_never_beside_an_accounts_own() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
   let (bohdan, olena) = (CloudAccountId::generate(), CloudAccountId::generate());
@@ -81,21 +82,21 @@ fn server_owners_unowned_go_to_the_first_account_to_sign_in() {
   db.add_server(&lab, None).expect("nobody's");
   db.add_server(&bohdans_lab, Some(&bohdan)).expect("Bohdan's");
 
-  db.claim_unowned_servers(&bohdan).expect("claimed");
+  assert!(db.give_unowned_server(kontur.id, &bohdan).expect("given"));
+  assert!(
+    !db.give_unowned_server(kontur.id, &olena).expect("asked"),
+    "a server an account has is never given on"
+  );
+  assert!(
+    !db.give_unowned_server(lab.id, &bohdan).expect("asked"),
+    "not beside Bohdan's own entry at that address"
+  );
   assert_eq!(ids(&db, Some(&bohdan)), [kontur.id, bohdans_lab.id]);
-  assert_eq!(
-    ids(&db, None),
-    [lab.id],
-    "an address Bohdan has already stays nobody's: his own entry and token stay his"
-  );
-  db.claim_unowned_servers(&olena).expect("claimed");
-  assert_eq!(ids(&db, Some(&olena)), [lab.id]);
-  assert_eq!(
-    ids(&db, Some(&bohdan)),
-    [kontur.id, bohdans_lab.id],
-    "Bohdan's stay his"
-  );
+  assert_eq!(ids(&db, None), [lab.id]);
+  assert!(!db.forget_unowned_server(kontur.id).expect("asked"), "Bohdan's stays");
+  assert!(db.forget_unowned_server(lab.id).expect("forgotten"));
   assert!(ids(&db, None).is_empty());
+  assert_eq!(ids(&db, Some(&bohdan)), [kontur.id, bohdans_lab.id]);
 }
 
 /// A server row as the schema before owners kept it: joined with the cloud, pinned, signed in.

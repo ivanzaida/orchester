@@ -28,13 +28,14 @@ impl Servers {
         if project.writable().is_err() {
           continue;
         }
-        let root = project.repo_root().to_owned();
-        let result = ProjectDb::open(&root)
+        let shared = project.link().project;
+        let result = ProjectDb::open(project.repo_root())
           .map_err(SharingError::from)
           .and_then(|db| RemoteTaskStore::new(db, project))
           .and_then(|mut store| send(&mut store));
         if let Err(error) = result {
-          tracing::warn!(%error, root = %root.display(), "cannot send the runs' workflow statuses");
+          // By the server project's id: the project may be another account's, whose folders the log does not name.
+          tracing::warn!(%error, project = %shared, "cannot send the runs' workflow statuses");
         }
       }
     })

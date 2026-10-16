@@ -2,8 +2,9 @@
 //! account signed in sees and uses only its own servers, and another account's is not found; the servers joined while
 //! no account was signed in go to the first one that signs in; the same server joined by two accounts is two entries,
 //! two devices on the server and two tokens, which signing out of the cloud leaves in the keychain; nothing is linked
-//! through another account's server; and the background sync keeps a hidden account's shared projects in step through
-//! its own servers only.
+//! through another account's server; a cloud join that another sign-in overtakes keeps the server for the account whose
+//! identity joined; a server nobody owns goes to the account whose projects link to it, never to the first to sign
+//! in; and the background sync keeps a hidden account's shared projects in step through its own servers only.
 //!
 //! `cargo test -p orchester-workspace --test servers_per_account per_account_`
 
@@ -18,8 +19,8 @@ mod support;
 
 use std::{fs, path::PathBuf};
 
-use account_cloud::{AccountCloud, EMAIL, OTHER_EMAIL, PASSWORD};
-use desktop::Desktop;
+use account_cloud::{ACCOUNT, AccountCloud, EMAIL, OTHER_EMAIL, PASSWORD};
+use desktop::{Desktop, linked_server};
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
@@ -37,7 +38,8 @@ use orchester_store::ProjectDb;
 use orchester_workspace::{
   project_setup::NewProject,
   sharing::{
-    CodeRequest, ProjectAddress, ServerEntry, SharingError, Trust,
+    CloudJoined, CodeRequest, ProjectAddress, ServerEntry, SharingError, Trust,
+    cloud::ServerJoin,
     project::{LinkFirst, ProjectServer, ShareError, link::LinkProblem},
   },
   tasks::writer::{TaskWriter, WriteError},
@@ -336,4 +338,106 @@ fn per_account_sync_keeps_a_hidden_accounts_projects_in_step_and_shows_nothing()
     "Olena's checkout is not synced through Bohdan's server"
   );
   assert!(entries(&desktop).is_empty(), "and the sync showed Olena nothing");
+}
+
+#[test]
+fn per_account_a_cloud_join_overtaken_by_another_sign_in_stays_the_joining_accounts() {
+  let cloud = AccountCloud::start();
+  let (server, audience) = linked_server(&cloud);
+  server.set_join_approval(false);
+  let invite = server.email_invite(EMAIL);
+  cloud.name_server(&audience, &server.url(), None);
+  cloud.invite(&invite, None);
+  let desktop = Desktop::signed_in(&cloud);
+  let listed = desktop.block_on(desktop.cloud.invites()).expect("invites").remove(0);
+  desktop
+    .block_on(desktop.cloud.accept(&listed))
+    .expect("Bohdan's account is on the server");
+  let first = entries(&desktop).remove(0).stored.id;
+
+  // Bohdan joins again with his account; Olena signs in while the cloud's registry is answering.
+  cloud.hold_registry();
+  let asked = cloud.registry_arrived();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let joining = {
+    let cloud = desktop.cloud.clone();
+    let id = audience.parse().expect("server id");
+    desktop
+      .runtime
+      .spawn(async move { cloud.join_server(&address, Some(id)).await })
+  };
+  desktop.block_on(async {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    while cloud.registry_arrived() == asked {
+      assert!(tokio::time::Instant::now() < deadline, "the join reached the registry");
+      tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+  });
+  switch_to(&desktop, OTHER_EMAIL);
+  cloud.let_registry_go();
+  let joined = desktop.block_on(joining).expect("the join ran").expect("joined");
+  assert!(
+    matches!(joined, ServerJoin::Joined(CloudJoined::Joined(id)) if id == first),
+    "Bohdan's own entry: {joined:?}"
+  );
+  assert!(entries(&desktop).is_empty(), "nothing of Bohdan's join is Olena's");
+
+  switch_to(&desktop, EMAIL);
+  let back = entries(&desktop);
+  assert_eq!(back.len(), 1);
+  desktop
+    .block_on(desktop.servers.me(&back[0]))
+    .expect("the new token is Bohdan's and works");
+}
+
+#[test]
+fn per_account_a_server_nobody_owns_goes_to_the_account_whose_projects_link_to_it() {
+  let (cloud, repos) = (AccountCloud::start(), TempDir::new().expect("repositories"));
+  let (linked, duplicated, unlinked) = (team_server(), team_server(), team_server());
+  let desktop = Desktop::signed_in(&cloud);
+  let kontur_server = join(&desktop, &linked, "bohdan");
+  let kontur_there = linked.create_project("kontur", Some(REMOTE));
+  let (_, kontur) = add(&desktop, &repos, "Kontur");
+  desktop
+    .block_on(desktop.servers.link_first(&entries(&desktop)[0], &kontur, link_first()))
+    .expect("Bohdan links Kontur");
+  let bohdans_duplicate = join(&desktop, &duplicated, "bohdan");
+  let lab = join(&desktop, &unlinked, "bohdan");
+  switch_to(&desktop, OTHER_EMAIL);
+  let olenas = join(&desktop, &duplicated, "olena");
+  // Bohdan's servers as after the update while nobody was signed in: nobody's yet.
+  desktop.block_on(desktop.cloud.sign_out()).expect("signed out");
+  desktop.disown_servers_of(ACCOUNT);
+
+  desktop
+    .block_on(
+      desktop
+        .cloud
+        .sign_in(OTHER_EMAIL.into(), Credential::new(PASSWORD.into())),
+    )
+    .expect("Olena signs in first");
+  let mut olenas_list: Vec<ServerId> = entries(&desktop).iter().map(|entry| entry.stored.id).collect();
+  olenas_list.sort();
+  let mut expected = vec![olenas, lab];
+  expected.sort();
+  assert_eq!(
+    olenas_list, expected,
+    "Olena gets her own and the server no project links to, not the one Bohdan's Kontur links to"
+  );
+  assert!(
+    desktop.vault.read(&VaultKey::server_token(bohdans_duplicate)).is_err(),
+    "the duplicate of Olena's own entry went with its token"
+  );
+  assert!(desktop.vault.read(&VaultKey::server_token(kontur_server)).is_ok());
+
+  switch_to(&desktop, EMAIL);
+  let bohdans: Vec<ServerId> = entries(&desktop).iter().map(|entry| entry.stored.id).collect();
+  assert_eq!(bohdans, [kontur_server], "Kontur's server is Bohdan's");
+  let key = linked.task_keys(&kontur_there).remove(0);
+  linked.retitle(&kontur_there, &key, "Fix reconnect after sleep");
+  let project = ProjectServer::open(&desktop.servers, &kontur)
+    .expect("Kontur's server is found")
+    .expect("shared");
+  desktop.block_on(project.sync()).expect("Kontur syncs");
+  assert_eq!(title(&kontur), "Fix reconnect after sleep");
 }

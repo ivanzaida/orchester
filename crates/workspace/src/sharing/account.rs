@@ -64,24 +64,35 @@ impl Servers {
     Err(SharingError::NoPasswords)
   }
 
-  /// Signs this computer out of `server`, one of the signed-in account's: the server ends the session if it can be
-  /// reached, and the token leaves the keychain and the account the list either way.
+  /// Signs this computer out of `server`, one of the signed-in account's: the account leaves the list and the token
+  /// the keychain, then the server ends the session if it can be reached. Whose the server is is checked in the same
+  /// statement that signs out of it, so another account's server, and its token, stay as they are
+  /// ([`SharingError::ServerMissing`]).
   pub async fn sign_out(&self, server: &ServerEntry) -> Result<(), SharingError> {
     let id = server.stored.id;
     self.own(id).await?;
-    match self
-      .with_token(server, |client, token| async move { client.sign_out(&token).await })
-      .await
-    {
-      Ok(()) | Err(SharingError::SignedOut) => {}
-      // The device token ends on the server by itself once unused for 90 days; this computer is
-      // signed out regardless.
-      Err(error) => tracing::warn!(%error, server = %id, "the server did not end the session"),
+    let token = match self.token(id).await {
+      Ok(token) => Some(token),
+      Err(SharingError::SignedOut) => None,
+      Err(error) => return Err(error),
+    };
+    let workspace = self.inner.workspace.clone();
+    if !background::run(move || workspace.sign_out_of_server(id)).await?? {
+      return Err(SharingError::ServerMissing);
     }
     self.delete_token(id).await?;
-    let workspace = self.inner.workspace.clone();
-    background::run(move || workspace.set_server_account(id, None)).await??;
     self.forget(id);
+    if let Some(token) = token {
+      let ended = match Self::client(server) {
+        Ok((client, trust)) => client.sign_out(&token).await.map_err(|error| trust.refusal(error)),
+        Err(error) => Err(error),
+      };
+      if let Err(error) = ended {
+        // The device token ends on the server by itself once unused for 90 days; this computer is signed out
+        // regardless.
+        tracing::warn!(%error, server = %id, "the server did not end the session");
+      }
+    }
     Ok(())
   }
 

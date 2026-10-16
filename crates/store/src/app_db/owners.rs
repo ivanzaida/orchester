@@ -13,7 +13,10 @@ use orchester_core::{
 use rusqlite::{OptionalExtension, params};
 
 use super::{AppDb, RegisteredProject};
-use crate::{StoreError, rows::path_text};
+use crate::{
+  StoreError,
+  rows::{parse, path_text},
+};
 
 /// The projects known before this change belong to the account signed in then, if one was; the others wait for the
 /// first account to sign in.
@@ -46,6 +49,26 @@ impl AppDb {
       .query_map([], super::project_row)?
       .collect::<Result<Vec<_>, _>>()?;
     rows.into_iter().map(super::registered).collect()
+  }
+
+  /// Every known project with whose it is (`None`: no account's yet): for deciding whose a server nobody owns is, by
+  /// the projects linked to it, never to show.
+  pub fn owned_projects(&self) -> Result<Vec<(Option<CloudAccountId>, RegisteredProject)>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT id, name, repo_root, last_opened_at, owner FROM projects ORDER BY last_opened_at DESC")?;
+    let rows = statement
+      .query_map([], |row| {
+        Ok((super::project_row(row)?, row.get::<_, Option<String>>(4)?))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(project, owner)| {
+        let owner = owner.map(|owner| parse("cloud account id", &owner)).transpose()?;
+        Ok((owner, super::registered(project)?))
+      })
+      .collect()
   }
 
   /// Adds the project for `owner` or, if it is already known, updates its name, location and last use; a project
