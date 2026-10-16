@@ -35,14 +35,26 @@ impl ServerKeys {
     Ok(())
   }
 
-  /// Gives a server made before ids came from keys (S1c's random id) its key's id. Run once, by schema 4.
-  pub fn derive_id(db: &Connection) -> Result<(), ServerError> {
-    let signing: Vec<u8> = db.query_row("SELECT signing_key FROM server_keys WHERE id=1", [], |row| row.get(0))?;
+  /// Gives a server whose stored id is not its key's its key's id, and says so in the log: S1c's random ids, and
+  /// schema 4 databases of earlier server admin builds (security review 2, 3). Safe under security review 1's B1:
+  /// the key is this server's own, so the id derived from it can be no other server's. Run at every open.
+  pub fn own_id(db: &Connection) -> Result<(), ServerError> {
+    let (stored, signing): (String, Vec<u8>) =
+      db.query_row("SELECT server_id,signing_key FROM server_keys WHERE id=1", [], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+      })?;
     let id = SigningKey::new(&PrivateKey::from_pkcs8(signing))
       .map_err(|_| ServerError::StoredData)?
       .public_key()
       .server_id();
-    db.execute("UPDATE server_keys SET server_id=?1 WHERE id=1", [id.to_string()])?;
+    if stored != id.to_string() {
+      db.execute("UPDATE server_keys SET server_id=?1 WHERE id=1", [id.to_string()])?;
+      tracing::warn!(
+        from = %stored,
+        to = %id,
+        "the server's id is now its key's; if it was linked to Orchester Cloud, link it again in the admin's Settings"
+      );
+    }
     Ok(())
   }
 

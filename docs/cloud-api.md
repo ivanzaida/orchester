@@ -135,9 +135,11 @@ statement is a compact JWS of type `orchester-link+jws` that the server signed w
 
 - **A server's id is its key's** (security review 1, B1): `server` must be
   `orchester_api::identity::PublicKey::server_id(public_key)`, a version-8 UUID of the first 16 bytes of
-  SHA-256(`"orchester-team-server-id\0"` ‖ the 32 key bytes). A team server makes its id that way and refuses to start
-  with a stored id that is not its key's, so nobody can register another server's id with a key of their own, and every
-  identity token the cloud issues for an id (the token's `aud`) is for the holder of that key.
+  SHA-256(`"orchester-team-server-id\0"` ‖ the 32 key bytes). A team server makes its id that way and, at every
+  start, replaces a stored id that is not its key's with its key's, so nobody can register another server's id with a
+  key of their own, and every identity token the cloud issues for an id (the token's `aud`) is for the holder of that
+  key. Migration 4 deletes the servers linked under migration 3 whose id is not their key's (with their accounts and
+  invites, logged); such a server links again under its own id (security review 2).
 - The cloud verifies the statement with the `public_key` inside, refuses one issued more than 10 minutes ago, and
   uses each `nonce` once: a replay is `409 conflict`.
 - **The newest statement owns the server.** A statement newer than the one that linked it takes the server over for

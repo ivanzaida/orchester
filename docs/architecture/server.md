@@ -1081,8 +1081,9 @@ A project owner who is not an admin sees only Projects (their own, rename and hi
   `/authorize/start` (purpose `link`), the cloud registers the server for the signed-in owner and returns its key set
   with an identity token, and the admin hands both to the team server, which pins the cloud's root.
 - **A server's id is its own key's** (security review 1, B1): the team server's id is a hash of its Ed25519 public key
-  (`PublicKey::server_id`), the server refuses to start with a stored id that is not its key's, and the cloud
-  registers an id only from a statement that key signed. A statement works once (its `nonce`), and the newest one
+  (`PublicKey::server_id`), the server replaces a stored id that is not its key's with its key's at every start
+  (logged; an earlier admin build's database, security review 2), and the cloud registers an id only from a statement
+  that key signed, and drops migration 3 registrations whose id is not their key's. A statement works once (its `nonce`), and the newest one
   owns the server, so the server's admins can always take it back. Squatting a server's id with another key, and with
   it getting identity tokens whose audience is that server, is not possible.
 

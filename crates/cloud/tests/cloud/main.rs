@@ -48,6 +48,7 @@ const TESTS: &[(&str, Test)] = tests![
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
   identity::many_concurrent_identity_tokens_do_not_starve_the_pool,
   hosting::migrations_apply_once_and_a_newer_database_is_refused,
+  hosting::migration_4_removes_servers_whose_id_is_not_their_keys,
   hosting::smtp_mailer_sends_through_the_relay,
   hosting::requests_follow_the_contract,
   hosting::unsafe_configuration_is_refused,

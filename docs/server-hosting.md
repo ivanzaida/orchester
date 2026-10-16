@@ -205,8 +205,9 @@ who has no signed-in device left gets an account code: `orchester-server account
 The old desktop app's password sign-in no longer works against this server, by design.
 
 Schema 4 (the server admin) gives a server made by S1c its key's id (`PublicKey::server_id`, security review 1): the
-server's id is a hash of its own Ed25519 key, and it refuses to start with a stored id that is not. A server linked to
-Orchester Cloud before that must be linked again from the admin's Settings.
+server's id is a hash of its own Ed25519 key. At every start a stored id that is not (an earlier server admin build's
+database) becomes the key's, and the log says so. A server linked to Orchester Cloud before that must be linked again
+from the admin's Settings.
 
 What else changes for an existing installation:
 

@@ -1,5 +1,6 @@
 //! Security review 1, B1: a team server's id is its own key's. Its link statement names that id and key and is
-//! usable once; a stored id that is not its key's stops the server; a token for another id is refused.
+//! usable once; a stored id that is not its key's becomes its key's when the server opens; a token for another id is
+//! refused.
 
 use base64::Engine as _;
 use orchester_api::{ErrorCode, ServerInfo, identity::PublicKey};
@@ -41,24 +42,35 @@ async fn sa_a_servers_id_is_its_keys_and_each_statement_is_new() {
   server.finish().await;
 }
 
+/// Security review 2, 3: a schema 4 database of an earlier server admin build holds an id that is not its key's. The
+/// server opens with its key's id instead of refusing to start.
 #[tokio::test]
-async fn sa_a_stored_id_that_is_not_the_keys_stops_the_server() {
+async fn sa_a_stored_id_that_is_not_the_keys_becomes_the_keys_when_the_server_opens() {
   let server = TestServer::start(|_| {}).await;
+  let stored = || -> String {
+    server
+      .database()
+      .query_row("SELECT server_id FROM server_keys", [], |row| row.get(0))
+      .expect("the stored id")
+  };
+  let own = stored();
   server
     .database()
     .execute(
       "UPDATE server_keys SET server_id=?1",
       [orchester_core::id::TeamServerId::generate().to_string()],
     )
-    .expect("another id");
+    .expect("an earlier build's id");
   // Opened again on the same data, as a host command opens it.
   let config = Config {
     data_dir: server.directory.path().to_path_buf(),
     tls: orchester_server::config::TlsMode::Off,
     ..Config::default()
   };
-  let opened = Server::open(config, server.clock.clone()).await;
-  assert!(opened.is_err(), "a server never answers to an id that is not its key's");
+  Server::open(config, server.clock.clone())
+    .await
+    .expect("opens with its key's id");
+  assert_eq!(stored(), own, "the id is its key's again");
   server.finish().await;
 }
 

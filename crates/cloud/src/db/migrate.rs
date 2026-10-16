@@ -3,7 +3,9 @@
 
 use std::time::SystemTime;
 
-use tokio_postgres::Client;
+use orchester_api::identity::PublicKey;
+use tokio_postgres::{Client, Transaction};
+use uuid::Uuid;
 
 use crate::error::CloudError;
 
@@ -40,6 +42,9 @@ pub(super) async fn migrate(client: &mut Client, now: SystemTime) -> Result<(), 
     }
     if current < *version {
       transaction.batch_execute(sql).await?;
+      if *version == 4 {
+        drop_foreign_ids(&transaction).await?;
+      }
       transaction
         .execute(
           "INSERT INTO schema_migrations (version, applied_at) VALUES ($1, $2)",
@@ -49,6 +54,23 @@ pub(super) async fn migrate(client: &mut Client, now: SystemTime) -> Result<(), 
       tracing::info!(version, "database migration applied");
     }
     transaction.commit().await?;
+  }
+  Ok(())
+}
+
+/// A server's id is its key's (security review 1, B1). A server linked under migration 3 with another id holds an id
+/// it may not own, and it would keep the key that id belongs to from linking: its row goes, with its accounts and
+/// invites, and the log names it. The server links again under its own id (security review 2, 3).
+async fn drop_foreign_ids(transaction: &Transaction<'_>) -> Result<(), CloudError> {
+  let rows = transaction.query("SELECT id, public_key FROM servers", &[]).await?;
+  for row in rows {
+    let id: Uuid = row.try_get(0)?;
+    let key: String = row.try_get(1)?;
+    let own = PublicKey::parse(&key).is_ok_and(|key| key.server_id().as_uuid() == id);
+    if !own {
+      transaction.execute("DELETE FROM servers WHERE id = $1", &[&id]).await?;
+      tracing::warn!(server = %id, "a linked server's id is not its key's; its link is removed");
+    }
   }
   Ok(())
 }
