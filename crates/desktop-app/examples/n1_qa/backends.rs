@@ -83,9 +83,14 @@ impl Backends {
 
   /// An invite to Billing for the cloud's account, delivered through the cloud; its id.
   pub fn invite_to_billing(&self) -> String {
-    let invite = self.server.project_email_invite(EMAIL, &self.billing);
-    let address = format!("{}/billing", self.server.url());
-    self.cloud.invite(&invite, Some(("Billing", &address)));
+    self.invite_to("Billing", &self.billing)
+  }
+
+  /// An invite to `project`, called `name`, for the cloud's account, delivered through the cloud; its id.
+  pub fn invite_to(&self, name: &str, project: &SharedProject) -> String {
+    let invite = self.server.project_email_invite(EMAIL, project);
+    let address = format!("{}/{}", self.server.url(), project.slug);
+    self.cloud.invite(&invite, Some((name, &address)));
     invite
   }
 

@@ -5,25 +5,28 @@
 use std::{error::Error, path::Path};
 
 use orchester_api::{Credential, client::ServerAddress};
-use orchester_app::{routes::OrchesterPanel, services::Services};
+use orchester_app::{
+  routes::{OrchesterPanel, OrchesterView, Route},
+  services::Services,
+};
 use orchester_core::time::Timestamp;
 use orchester_store::{AcceptedInvite, AppDb};
-use orchester_workspace::sharing::CloudJoined;
+use orchester_workspace::{sharing::CloudJoined, workspace::Workspace};
 use tokio::runtime::Runtime;
 
 use super::{
   State,
   account_cloud::{EMAIL, PASSWORD},
   backends::Backends,
+  project,
 };
 
-/// Seeds `state` for the window whose services are `services` and whose database is `database`; the tab it opens on.
+/// Seeds `state` for the window of `services` and `workspace`, whose data is in `folder`; where it opens.
 pub fn seed(
   state: State,
-  backends: &Backends,
-  services: &Services,
-  (runtime, database, other): (&Runtime, &Path, &Path),
-) -> Result<OrchesterPanel, Box<dyn Error>> {
+  (backends, services, workspace): (&Backends, &Services, &Workspace),
+  (runtime, folder): (&Runtime, &Path),
+) -> Result<Route, Box<dyn Error>> {
   let cloud = &services.cloud;
   runtime.block_on(async {
     cloud
@@ -32,19 +35,25 @@ pub fn seed(
     cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())).await?;
     Ok::<_, Box<dyn Error>>(())
   })?;
+  let settings = |panel| Route::Orchester(OrchesterView { server: None, panel });
+  if matches!(state, State::Project | State::LinkConfirm | State::Linked) {
+    return project::seed(state, (backends, services, workspace), (runtime, folder));
+  }
   if state == State::SignedIn {
     backends.invite_to_billing();
-    return Ok(OrchesterPanel::Account);
+    return Ok(settings(OrchesterPanel::Account));
   }
+  let database = folder.join("orchester.db");
+  let database = database.as_path();
   if matches!(state, State::Pending | State::Failed) {
     failed_join(backends, services, runtime)?;
     if state == State::Pending {
       // Accepted, and nothing asked for it yet: as a computer that closed before its first ask leaves it.
       rekeep(database, |kept| AcceptedInvite { asks: 0, ..kept })?;
     }
-    return Ok(OrchesterPanel::Invites);
+    return Ok(settings(OrchesterPanel::Invites));
   }
-  waiting_join(backends, services, runtime, other)?;
+  waiting_join(backends, services, runtime, &folder.join("other-computer"))?;
   let due = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 1000);
   match state {
     State::Unanswered => rekeep(database, |kept| AcceptedInvite {
@@ -73,7 +82,7 @@ pub fn seed(
     }
     _ => {}
   }
-  Ok(OrchesterPanel::Invites)
+  Ok(settings(OrchesterPanel::Invites))
 }
 
 /// Accepts the Billing invite while the cloud names an address where nothing listens: the join fails after the

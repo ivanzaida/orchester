@@ -15,6 +15,7 @@
 #[path = "../../../workspace/tests/sharing_support/account_cloud.rs"]
 mod account_cloud;
 mod backends;
+mod project;
 mod seed;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
@@ -35,7 +36,6 @@ use orchester_app::{
   brand, i18n,
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{Root, RootProps, Start},
-  routes::{OrchesterView, Route},
   startup::{Launch, WindowPosition},
   theme::{self, Mode},
   ui::loader,
@@ -62,10 +62,16 @@ pub enum State {
   Approved,
   /// Refused while it waited: the check finds it as the window opens (`S5mMY`).
   Refused,
+  /// Kontur registered here and Kontur team joined, with the Billing invite waiting: All projects and its notice.
+  Project,
+  /// The same, at Project settings › Sharing asking *Link and upload* in place.
+  LinkConfirm,
+  /// The same with Kontur linked: Project settings › Sharing as `L5o9Xy`, with *Leave*.
+  Linked,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 8] = [
+  const ALL: [(&'static str, Self); 11] = [
     ("signed-in", Self::SignedIn),
     ("pending", Self::Pending),
     ("failed", Self::Failed),
@@ -74,6 +80,9 @@ impl State {
     ("too-many", Self::TooMany),
     ("approved", Self::Approved),
     ("refused", Self::Refused),
+    ("project", Self::Project),
+    ("link-confirm", Self::LinkConfirm),
+    ("linked", Self::Linked),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -94,8 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   let scratch = qa_folder()?;
   std::fs::create_dir_all(&scratch)?;
   let data = tempfile::Builder::new().prefix("app-").tempdir_in(&scratch)?;
-  let other = data.path().join("other-computer");
-  std::fs::create_dir_all(&other)?;
+  std::fs::create_dir_all(data.path().join("other-computer"))?;
   let backends = Backends::start(true);
   let runtime = Runtime::new()?;
   let launch = Launch::begin_with_vault(
@@ -105,31 +113,35 @@ fn main() -> Result<(), Box<dyn Error>> {
     (None, Vault::with(Arc::new(vault::QaVault::default()))),
   );
   let services = launch.services().ok_or("the QA session did not start")?.clone();
-  let database = data.path().join("orchester.db");
-  let panel = seed::seed(state, &backends, &services, (&runtime, &database, &other))?;
+  let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
+  let route = seed::seed(state, (&backends, &services, &workspace), (&runtime, data.path()))?;
   let start = match launch.start() {
     Start::Ready(mut ready) => {
-      ready.landing.route = Route::Orchester(OrchesterView { server: None, panel });
+      ready.landing.route = route;
       Start::Ready(ready)
     }
     problem @ Start::Problem(_) => problem,
   };
+  // Sharing opens on its tab; *Link and upload* asks after the person's *Link*, which the example presses before the
+  // window shows.
+  let sharing = matches!(state, State::LinkConfirm | State::Linked).then(|| (state, backends.server.url()));
   println!(
     "pid {}\nmcp {}\ndata {}\nstate {name}",
     std::process::id(),
     scratch.join("mcp").display(),
     data.path().display()
   );
-  window(&runtime, (&launch, start), position)?;
+  window(&runtime, (&launch, start), (position, sharing))?;
   launch.end();
   Ok(())
 }
 
-/// The window on `start` until it closes, with the app's MCP server in QA mode.
+/// The window on `start` until it closes, with the app's MCP server in QA mode; `sharing`: the state to open
+/// Project settings › Sharing for, and the server ([`project::open_sharing`]).
 fn window(
   runtime: &Runtime,
   (launch, start): (&Launch, Start),
-  position: Option<WindowPosition>,
+  (position, sharing): (Option<WindowPosition>, Option<(State, String)>),
 ) -> Result<(), Box<dyn Error>> {
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
@@ -137,7 +149,6 @@ fn window(
   theme::install(&mut app, Mode::Dark);
   i18n::install(&app)?;
   let mut tree = Tree::new();
-  tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::with_window_control(true);
@@ -157,6 +168,11 @@ fn window(
       start,
     },
   );
+  if let Some((state, server)) = sharing {
+    tree.resize(1440, 900);
+    project::open_sharing(&mut app, &mut tree, (state, &server))?;
+  }
+  tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let window = WinitWindow::new(app, tree)
     .with_title("Orchester N1 QA")
     .with_icon(brand::window_icon()?)
