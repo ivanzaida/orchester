@@ -142,7 +142,8 @@ pub(crate) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
     .spacing(SpacingSize::Md);
   column = match place {
     Place::Settings => column.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-    Place::Gate => column.padding(Padding::horizontal(SpacingSize::Xs)),
+    // The line's ring shows past the section's top and bottom (`Focus::Link`).
+    Place::Gate => column.padding(Padding::horizontal(SpacingSize::Xs)).overflow_visible(),
   };
   column = column.child(line);
   if open {

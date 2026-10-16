@@ -250,9 +250,10 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
   form.take_focus(ctx);
   let pending = form.pending();
   let refusal = form.refusal();
-  // Always inside the same row, so a field keeps its input, and the focus, while the sign-in fades it.
+  // Always inside the same row, so a field keeps its input, and the focus, while the sign-in fades it. The row lets
+  // *Forgot password?*'s ring show past its edge (`Focus::Link`).
   let faded = |part: Element| -> Element {
-    let row = Row::new().width(Dimension::Pct(100.0)).child(part);
+    let row = Row::new().width(Dimension::Pct(100.0)).overflow_visible().child(part);
     if pending { row.opacity(DISABLED_OPACITY) } else { row }.into()
   };
   let (email, password) = fields(ctx, form, refusal == Some(Refusal::Wrong));
@@ -325,6 +326,8 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
   let label = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(PASSWORD_LABEL_HEIGHT))
+    // *Forgot password?* ends where the row does; its ring shows past the row's edge (`Focus::Link`).
+    .overflow_visible()
     .align_items(Alignment::Center)
     .child(Text::new(&ctx.t("gate.password")).variant(TypographyStyle::FieldLabel))
     .child(Spacer::new().flex(1.0))
@@ -332,6 +335,7 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
   let password = Column::new()
     .id("gate-password-field")
     .width(Dimension::Pct(100.0))
+    .overflow_visible()
     .spacing(ExtraSpacing::Snug.role())
     .child(label)
     .child(password.render(ctx));

@@ -50,7 +50,9 @@ pub enum Focus {
   Keyboard,
   /// A form control that is only words, with no padding of its own (a link, a disclosure line): a Tab stop that
   /// Enter or Space presses, with the link's ring outside its words, corners rounded, only while the keyboard moved
-  /// the focus there (`Mjhop`). An inset ring would run through its words.
+  /// the focus there (`Mjhop`). An inset ring would run through its words. lurq clips a child at its parent's edge,
+  /// so every parent between the control and one with room around it is `overflow_visible`: nothing moves, only
+  /// the clip goes.
   Link,
 }
 
