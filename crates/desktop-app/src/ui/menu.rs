@@ -28,10 +28,10 @@ use super::{
 };
 use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
-/// The panel of a menu with the element id `id`; add its rows as children.
 /// A row's label line, 16 high (`Label` in `Menu item/detail` `j6ZUhL`).
 const LABEL_HEIGHT: f32 = 16.0;
 
+/// The panel of a menu with the element id `id`; add its rows as children.
 pub fn menu_panel(id: &str) -> Column {
   Column::new()
     .id(id.to_owned())
