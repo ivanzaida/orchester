@@ -2,8 +2,9 @@
 //! `orchester-server` on loopback (behind a port the seed can take down, for the offline states), in one of
 //! [`State::ALL`]. What only a person does in the app (linking, *Make local*'s confirmation) is done by the seed
 //! through the workspace before the window opens ([`seed`]), or by the example's own presses before it shows
-//! ([`drive`]); the window keeps its tokens in a keychain in memory, never the OS's. Fixture data for QA, never
-//! shipped: an example is no part of the app's program.
+//! ([`drive`]); the window keeps its tokens in a keychain in memory, never the OS's. It signs in past the sign-in gate
+//! to a stand-in cloud on loopback first, as the other QA examples do, so Kontur belongs to that account. Fixture data
+//! for QA, never shipped: an example is no part of the app's program.
 //!
 //!   cargo run -p orchester-app --example n2_qa -- <state>
 //!
@@ -20,6 +21,8 @@ mod forwarder;
 mod seed;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
+#[path = "../../tests/support/signed_in.rs"]
+mod signed_in;
 #[path = "../secrets_qa/vault.rs"]
 #[allow(dead_code, reason = "the secrets QA's delays and failures are not used here")]
 mod vault;
@@ -159,6 +162,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   );
   let services = launch.services().ok_or("the QA session did not start")?.clone();
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
+  // Past the sign-in gate, as a person who signed in, before the seed adds Kontur to that account; the stand-in cloud
+  // answers while the window is open.
+  let cloud = signed_in::account_cloud::AccountCloud::start();
+  signed_in::sign_in(&services, runtime.handle(), &cloud);
   let seeded = seed::seed(state, (&services, &workspace), (&runtime, data.path()))?;
   let start = match launch.start() {
     Start::Ready(mut ready) => {
