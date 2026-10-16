@@ -9,13 +9,12 @@ import { Submit } from "@orchester/ui/components/submit";
 
 import { PasswordField, TextField } from "@/components/fields";
 import { CsrfField, Hidden } from "@/components/hidden";
-import { t } from "@/lib/i18n";
+import { t, type Message } from "@/lib/i18n";
 
 import { markSection } from "./nav";
-import type { SetupState } from "./security-actions";
+import type { SetupKey, SetupState } from "./security-actions";
 import styles from "./security.module.css";
 
-type Scan = Extract<SetupState, { view: "scan" }>;
 type Step = { action: (form: FormData) => void; csrf: string; close: () => void };
 
 /** The password that starts the setup; a new answer remounts it, which empties the field. */
@@ -45,9 +44,9 @@ function grouped(secret: string): string {
 }
 
 /** The QR code and its key for the authenticator app, and the app's first code, which turns it on. */
-function ScanStep({ action, csrf, close, scan }: Step & { scan: Scan }) {
+function ScanStep({ action, csrf, close, setupKey, error }: Step & { setupKey: SetupKey; error?: Message }) {
   const [code, setCode] = useState("");
-  const { qr } = scan;
+  const { qr, secret } = setupKey;
   return (
     <form className={styles.flow} action={action} noValidate>
       <CsrfField token={csrf} />
@@ -60,13 +59,13 @@ function ScanStep({ action, csrf, close, scan }: Step & { scan: Scan }) {
         </svg>
         <div className={styles.keyColumn}>
           <p className={styles.text}>{t("account.security.scanText")}</p>
-          <output className={styles.key}>{grouped(scan.secret)}</output>
-          <CopyButton value={scan.secret} label={t("account.security.copyKey")} copiedLabel={t("account.security.copiedKey")} />
+          <output className={styles.key}>{grouped(secret)}</output>
+          <CopyButton value={secret} label={t("account.security.copyKey")} copiedLabel={t("account.security.copiedKey")} />
         </div>
       </div>
       <span className={styles.form}>
         <TextField name="code" type="text" size="row" label={t("account.security.codeLabel")} value={code} onChange={setCode}
-          error={scan.error} autoComplete="one-time-code" code />
+          error={error} autoComplete="one-time-code" code />
       </span>
       <span className={styles.buttons}>
         <ActionButton kind="ghost" row onClick={close}>
@@ -103,8 +102,8 @@ export function TurnOn({ csrf, state, action }: { csrf: string; state: SetupStat
       </>
     );
   }
-  if (state.view === "scan") {
-    return <ScanStep key={state.answer} action={action} csrf={csrf} close={close} scan={state} />;
+  if (state.view === "scan" && state.key !== undefined) {
+    return <ScanStep key={state.answer} action={action} csrf={csrf} close={close} setupKey={state.key} error={state.error} />;
   }
   const answer = state.view === "password" ? state.answer : 0;
   return <PasswordStep key={answer} action={action} csrf={csrf} close={close}

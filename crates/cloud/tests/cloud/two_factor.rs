@@ -7,7 +7,7 @@ use orchester_api::cloud::{AccountResponse, RecoveryCodes, SteppedUp, TwoFactorS
 use orchester_cloud::mail::EmailPurpose;
 use serde_json::json;
 
-use crate::support::{PASSWORD, TestCloud, remember};
+use crate::support::{PASSWORD, TestCloud, remember, two_factor::remember_recovery_code};
 
 /// What `GET /me` says of two-factor authentication to the device `token`.
 pub(crate) async fn status(cloud: &TestCloud, token: &str) -> TwoFactorStatus {
@@ -174,7 +174,7 @@ pub async fn recovery_codes_work_once_and_are_replaced_with_a_code() {
     .recovery_codes
     .iter()
     .map(|code| {
-      remember(code.expose());
+      remember_recovery_code(code.expose());
       code.expose().to_owned()
     })
     .collect();

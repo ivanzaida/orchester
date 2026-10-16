@@ -33,6 +33,8 @@ pub enum EmailPurpose {
   TwoFactorOff,
   /// A recovery code of the account was used to sign in.
   RecoveryCodeUsed,
+  /// Many wrong two-factor codes were entered for the account within a day.
+  TwoFactorFailures,
 }
 
 impl EmailPurpose {
@@ -45,6 +47,7 @@ impl EmailPurpose {
       Self::TwoFactorOn => "two_factor_on",
       Self::TwoFactorOff => "two_factor_off",
       Self::RecoveryCodeUsed => "recovery_code_used",
+      Self::TwoFactorFailures => "two_factor_failures",
     }
   }
 }

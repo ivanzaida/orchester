@@ -58,7 +58,8 @@ impl Cloud {
     rows.iter().map(|row| device_row(row, auth.device)).collect()
   }
 
-  /// Signs a device of the account out; `None` is the device asking.
+  /// Signs a device of the account out; `None` is the device asking. Another device is signed out only from a
+  /// two-factor session while two-factor authentication is on.
   pub(crate) async fn revoke_device(
     &self,
     auth: Authenticated,
@@ -69,6 +70,9 @@ impl Cloud {
     let reason = if device == auth.device { "signed_out" } else { "revoked" };
     let now = self.now();
     let client = self.inner.db.client().await?;
+    if device != auth.device {
+      super::require_session_when_on(&client, auth.device).await?;
+    }
     let revoked = client
       .execute(
         "UPDATE devices SET revoked_at = $1, revoked_reason = $4 WHERE id = $2 AND account = $3 AND revoked_at IS NULL",

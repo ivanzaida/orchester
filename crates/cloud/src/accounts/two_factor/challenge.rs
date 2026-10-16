@@ -127,18 +127,27 @@ impl Cloud {
       .await?
       .filter(|authenticator| authenticator.id == pending.two_factor)
       .ok_or_else(expired)?;
-    self.check_code(&client, &authenticator, &input.code, true).await?;
+    let attempt = self.attempt_code(&client, &authenticator).await?;
     let token = random_token(crate::tokens::DEVICE_PREFIX)?;
     let id = CloudDeviceId::generate();
     let now = self.now();
     let transaction = client.transaction().await?;
-    let used = transaction
+    // The challenge is taken before the code is spent, in one transaction: another request with it waits for this
+    // one, then finds it used and spends no code of its own; a wrong code rolls the taking back.
+    let taken = transaction
       .execute(
         "UPDATE sign_in_challenges SET used_at = $2 WHERE token_hash = $1 AND used_at IS NULL",
         &[&hash, &time(now)],
       )
       .await?;
-    if used == 0 || !add_device(&transaction, (&pending, &hash), (id, &token), now).await? {
+    if taken == 0 {
+      return Err(expired());
+    }
+    let Some(used) = self.spend_code(&transaction, &authenticator, &input.code, true).await? else {
+      transaction.rollback().await?;
+      return Err(self.code_failed(&client, &authenticator).await?);
+    };
+    if !add_device(&transaction, (&pending, &hash), (id, &token), now).await? {
       return Err(expired());
     }
     audit(
@@ -153,6 +162,7 @@ impl Cloud {
     let row = account(&transaction, pending.account).await?;
     let recovery_codes_left = recovery_codes_left(&transaction, &authenticator).await?;
     transaction.commit().await?;
+    self.code_passed(&client, &authenticator, (attempt, used)).await?;
     Ok(TwoFactorSignedIn {
       signed_in: signed_in(token, row, id, pending.device, now),
       recovery_codes_left,

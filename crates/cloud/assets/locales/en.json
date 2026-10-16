@@ -31,6 +31,10 @@
     "recoveryCodeUsed": {
       "subject": "A recovery code was used",
       "body": "One of your Orchester recovery codes was just used to sign in. Each code works once; you can make new ones in your account's security settings.\n\nIf you did not do this, change your password and make new recovery codes at once:\n\n{url}\n"
+    },
+    "twoFactorFailures": {
+      "subject": "Wrong two-factor codes for your account",
+      "body": "Ten wrong two-factor codes were entered for your Orchester account today. Whoever entered them had your password or one of your signed-in devices.\n\nIf this was not you, change your password and check your signed-in devices at once:\n\n{url}\n"
     }
   }
 }

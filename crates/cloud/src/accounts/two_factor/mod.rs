@@ -5,6 +5,7 @@
 //! (`devices.two_factor`), and only such a session accepts invites. Turning it off deletes the authenticator, which
 //! ends every two-factor session with it.
 
+mod budget;
 mod challenge;
 mod codes;
 mod setup;
@@ -136,6 +137,19 @@ pub(crate) async fn require_session(client: &impl GenericClient, device: CloudDe
     (true, _) => Ok(()),
     (false, true) => Err(CloudErrorCode::SessionWithoutMfa.into()),
     (false, false) => Err(CloudErrorCode::MfaRequired.into()),
+  }
+}
+
+/// While the account has two-factor authentication on, deleting it, changing its password or signing another of its
+/// devices out needs a two-factor session (`session_without_mfa`): a password alone does not undo what the code
+/// protects. With it off, any device of the account may.
+pub(crate) async fn require_session_when_on(
+  client: &impl GenericClient,
+  device: CloudDeviceId,
+) -> Result<(), CloudError> {
+  match standing(client, device).await? {
+    (false, true) => Err(CloudErrorCode::SessionWithoutMfa.into()),
+    _ => Ok(()),
   }
 }
 

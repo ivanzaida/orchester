@@ -22,6 +22,7 @@ mod root_key;
 mod sessions;
 mod support;
 mod two_factor;
+mod two_factor_guards;
 mod two_factor_sign_in;
 
 use std::{future::Future, pin::Pin, process::ExitCode, sync::Arc};
@@ -107,6 +108,10 @@ const TESTS: &[(&str, Test)] = tests![
   two_factor_sign_in::a_password_change_ends_a_challenge,
   two_factor_sign_in::invites_need_a_two_factor_session_and_tokens_say_so,
   two_factor_sign_in::an_operator_turns_it_off_with_the_documented_statement,
+  two_factor_sign_in::tokens_for_codes_name_their_use_and_the_certificate_asked_for,
+  two_factor_guards::wrong_codes_are_capped_a_day_and_the_tenth_is_mailed,
+  two_factor_guards::a_code_is_spent_once_by_requests_that_race,
+  two_factor_guards::a_password_alone_changes_nothing_sensitive_while_it_is_on,
 ];
 
 /// Tests that run at once: each holds a few connections, some many more, and PostgreSQL allows 100 by default (CI's

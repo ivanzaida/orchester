@@ -29,6 +29,7 @@ struct Emails {
   two_factor_on: Template,
   two_factor_off: Template,
   recovery_code_used: Template,
+  two_factor_failures: Template,
 }
 
 #[derive(Deserialize)]
@@ -58,6 +59,7 @@ impl Messages {
       (&emails.two_factor_on, "{url}"),
       (&emails.two_factor_off, "{url}"),
       (&emails.recovery_code_used, "{url}"),
+      (&emails.two_factor_failures, "{url}"),
     ];
     if placeholders
       .iter()
@@ -101,6 +103,7 @@ impl Messages {
     let template = match purpose {
       EmailPurpose::TwoFactorOff => &self.emails.two_factor_off,
       EmailPurpose::RecoveryCodeUsed => &self.emails.recovery_code_used,
+      EmailPurpose::TwoFactorFailures => &self.emails.two_factor_failures,
       _ => &self.emails.two_factor_on,
     };
     let url = format!("{}/account#security", self.base_url);

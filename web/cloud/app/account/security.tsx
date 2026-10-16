@@ -21,8 +21,10 @@ import {
   turnOffAction,
   turnOnAction,
   type CodeFormState,
+  type CodeStep,
   type OffState,
   type SetupState,
+  type SetupStep,
 } from "./security-actions";
 import { CodesShown } from "./security-codes";
 import { TurnOn } from "./security-setup";
@@ -88,10 +90,35 @@ function TurnOff({ csrf }: { csrf: string }) {
 }
 
 const SETUP_CLOSED: SetupState = { view: "closed" };
+const CODES_CLOSED: CodeFormState = { view: "closed" };
+
+/**
+ * *Turn on*'s next answer from its last: the server takes back only the step (`SetupStep`), so the key and the
+ * recovery codes are never posted again; the key stays shown when a wrong code answers without it.
+ */
+async function nextSetup(previous: SetupState, form: FormData): Promise<SetupState> {
+  const step: SetupStep = previous.view === "password" || previous.view === "scan"
+    ? { view: previous.view, answer: previous.answer }
+    : { view: "closed" };
+  const next = await turnOnAction(step, form);
+  if (next.view === "scan" && next.key === undefined && previous.view === "scan") {
+    return { ...next, key: previous.key };
+  }
+  return next;
+}
+
+/** A one-code form's next answer from its last, which gives the server only how many answers there were. */
+function nextCodes(send: (previous: CodeStep, form: FormData) => Promise<CodeFormState>) {
+  return (previous: CodeFormState, form: FormData): Promise<CodeFormState> =>
+    send({ answer: previous.view === "open" ? previous.answer : 0 }, form);
+}
+
+const nextRecoveryCodes = nextCodes(recoveryCodesAction);
+const nextStepUp = nextCodes(stepUpAction);
 
 function TwoFactorSetting({ status, csrf }: { status: TwoFactorStatus; csrf: string }) {
   const label = t("account.security.twoFactor");
-  const [setup, setupAction] = useActionState<SetupState, FormData>(turnOnAction, SETUP_CLOSED);
+  const [setup, setupAction] = useActionState<SetupState, FormData>(nextSetup, SETUP_CLOSED);
   const [doneWith, setDoneWith] = useState<SetupState | null>(null);
   const router = useRouter();
   if (setup.view === "codes" && doneWith !== setup) {
@@ -127,7 +154,7 @@ function TwoFactorSetting({ status, csrf }: { status: TwoFactorStatus; csrf: str
 
 /** The recovery codes left, and *Make new codes* with a code, which shows the new ones once. */
 function RecoverySetting({ left, csrf }: { left: number; csrf: string }) {
-  const [state, action] = useActionState<CodeFormState, FormData>(recoveryCodesAction, { view: "closed" });
+  const [state, action] = useActionState<CodeFormState, FormData>(nextRecoveryCodes, CODES_CLOSED);
   const [open, setOpen] = useState(false);
   const [seen, setSeen] = useState(state);
   if (seen !== state) {
@@ -163,7 +190,7 @@ function RecoverySetting({ left, csrf }: { left: number; csrf: string }) {
 
 /** A browser signed in before two-factor authentication was on, or without it: a code makes it a two-factor session. */
 function ThisBrowser({ csrf }: { csrf: string }) {
-  const [state, action] = useActionState<CodeFormState, FormData>(stepUpAction, { view: "closed" });
+  const [state, action] = useActionState<CodeFormState, FormData>(nextStepUp, CODES_CLOSED);
   return (
     <SettingRow label={t("account.security.thisBrowser")}>
       <RowLine>{t("account.security.thisBrowserText")}</RowLine>

@@ -20,7 +20,7 @@ use std::{sync::Arc, time::Duration};
 use orchester_api::identity::PublicKey;
 pub(crate) use rows::Authenticated;
 pub(crate) use sign_in::SignInAnswer;
-use two_factor::RecoveryKey;
+use two_factor::{RecoveryKey, require_session_when_on};
 pub(crate) use two_factor::{
   require_session as require_two_factor_session, session as two_factor_session, sweep as sweep_two_factor,
 };

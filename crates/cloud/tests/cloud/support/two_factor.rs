@@ -74,7 +74,7 @@ impl TestCloud {
       .recovery_codes
       .iter()
       .map(|code| {
-        remember(code.expose());
+        remember_recovery_code(code.expose());
         code.expose().to_owned()
       })
       .collect();
@@ -117,4 +117,11 @@ impl TestCloud {
       )
       .await
   }
+}
+
+/// Keeps a recovery code for the log check as it was shown and as the cloud reads it, without the dash: neither may
+/// reach the log.
+pub fn remember_recovery_code(code: &str) {
+  remember(code);
+  remember(&code.replace('-', ""));
 }

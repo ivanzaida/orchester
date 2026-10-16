@@ -14,7 +14,9 @@ import type { FieldErrors } from "@/lib/validation";
 
 /**
  * The Security section's forms (`docs/cloud-api.md`, "Two-factor authentication"). Each answer counts in `answer`, so
- * its form empties its fields; a refusal is said at its field, anything else under the form.
+ * its form empties its fields; a refusal is said at its field, anything else under the form. An action takes back only
+ * the step its last answer reached (`SetupStep`, `CodeStep`): the key, the QR code and the recovery codes it answered
+ * stay in the page, which never posts them again (`security.tsx`).
  */
 
 function refused(failure: ApiFailure, code: string): boolean {
@@ -26,20 +28,27 @@ async function failed(failure: ApiFailure): Promise<Message> {
   return failureMessage(failure, "error.tooManyTries", Date.now());
 }
 
+/** The key for the authenticator app, as its text and its QR code: answered once, when the setup starts. */
+export interface SetupKey {
+  readonly secret: string;
+  readonly qr: QrCode;
+}
+
+/**
+ * Where *Turn on* is. `scan` carries the key only in the answer that starts the setup; a wrong code answers `scan`
+ * without it, and the page keeps showing the one it has.
+ */
 export type SetupState =
   | { readonly view: "closed" }
   | { readonly view: "password"; readonly answer: number; readonly error?: Message }
-  | {
-      readonly view: "scan";
-      readonly answer: number;
-      readonly secret: string;
-      readonly qr: QrCode;
-      readonly error?: Message;
-    }
+  | { readonly view: "scan"; readonly answer: number; readonly key?: SetupKey; readonly error?: Message }
   | { readonly view: "codes"; readonly codes: readonly string[] };
 
-function answerOf(previous: SetupState): number {
-  return previous.view === "password" || previous.view === "scan" ? previous.answer + 1 : 1;
+/** What the next answer of *Turn on* needs of the last: its step, never its key or codes. */
+export type SetupStep = { readonly view: "closed" } | { readonly view: "password" | "scan"; readonly answer: number };
+
+function answerOf(previous: SetupStep): number {
+  return previous.view === "closed" ? 1 : previous.answer + 1;
 }
 
 async function start(form: FormData, answer: number): Promise<SetupState> {
@@ -53,7 +62,7 @@ async function start(form: FormData, answer: number): Promise<SetupState> {
   }
   const result = await startSetup(password, options);
   if (result.ok) {
-    return { view: "scan", answer, secret: result.value.secret, qr: qrCode(result.value.uri) };
+    return { view: "scan", answer, key: { secret: result.value.secret, qr: qrCode(result.value.uri) } };
   }
   if (refused(result.error, "conflict")) {
     // Turned on meanwhile, from another device: the page shows it on.
@@ -66,15 +75,14 @@ async function start(form: FormData, answer: number): Promise<SetupState> {
   return { view: "password", answer, error };
 }
 
-async function confirm(form: FormData, scan: Extract<SetupState, { view: "scan" }>): Promise<SetupState> {
-  const answer = scan.answer + 1;
+async function confirm(form: FormData, answer: number): Promise<SetupState> {
   const options = await formSession(form);
   if (isMessage(options)) {
-    return { ...scan, answer, error: options };
+    return { view: "scan", answer, error: options };
   }
   const code = field(form, "code");
   if (code.trim() === "") {
-    return { ...scan, answer, error: message("account.security.codeEmpty") };
+    return { view: "scan", answer, error: message("account.security.codeEmpty") };
   }
   const result = await confirmSetup(code, options);
   if (result.ok) {
@@ -85,13 +93,13 @@ async function confirm(form: FormData, scan: Extract<SetupState, { view: "scan" 
     return { view: "password", answer, error: message("account.security.setupEnded") };
   }
   const error = refused(result.error, "invalid_code") ? message("account.security.codeWrong") : await failed(result.error);
-  return { ...scan, answer, error };
+  return { view: "scan", answer, error };
 }
 
 /** *Turn on*: the password, then a code from the app that scanned the QR code, then the recovery codes, shown once. */
-export async function turnOnAction(previous: SetupState, form: FormData): Promise<SetupState> {
+export async function turnOnAction(previous: SetupStep, form: FormData): Promise<SetupState> {
   if (field(form, "step") === "code" && previous.view === "scan") {
-    return confirm(form, previous);
+    return confirm(form, answerOf(previous));
   }
   return start(form, answerOf(previous));
 }
@@ -135,6 +143,11 @@ export type CodeFormState =
   | { readonly view: "open"; readonly answer: number; readonly error?: Message }
   | { readonly view: "codes"; readonly codes: readonly string[] };
 
+/** What the next answer of a one-code form needs of the last: how many answers it had, never the codes it showed. */
+export interface CodeStep {
+  readonly answer: number;
+}
+
 /** The one code a form takes, or what to say instead of sending it. */
 async function oneCode(form: FormData) {
   const options = await formSession(form);
@@ -146,8 +159,8 @@ async function oneCode(form: FormData) {
 }
 
 /** *Make new codes*: a code replaces every recovery code with ten new ones, shown once. */
-export async function recoveryCodesAction(previous: CodeFormState, form: FormData): Promise<CodeFormState> {
-  const answer = previous.view === "open" ? previous.answer + 1 : 1;
+export async function recoveryCodesAction(previous: CodeStep, form: FormData): Promise<CodeFormState> {
+  const answer = previous.answer + 1;
   const checked = await oneCode(form);
   if ("error" in checked) {
     return { view: "open", answer, error: checked.error };
@@ -162,8 +175,8 @@ export async function recoveryCodesAction(previous: CodeFormState, form: FormDat
 }
 
 /** *Verify* this browser: a code makes its session a two-factor one, which may accept invites. */
-export async function stepUpAction(previous: CodeFormState, form: FormData): Promise<CodeFormState> {
-  const answer = previous.view === "open" ? previous.answer + 1 : 1;
+export async function stepUpAction(previous: CodeStep, form: FormData): Promise<CodeFormState> {
+  const answer = previous.answer + 1;
   const checked = await oneCode(form);
   if ("error" in checked) {
     return { view: "open", answer, error: checked.error };

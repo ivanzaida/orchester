@@ -1,25 +1,17 @@
 //! Checking a two-factor code: six digits from the authenticator app, accepted for the current 30-second step or the
 //! one before or after it, each step once; or a recovery code, each once. Every check counts against the account's
-//! code limit (`Limits::two_factor_code`), and a used recovery code is mailed to the account's email.
+//! budget (`budget.rs`), and a used recovery code is mailed to the account's email.
 
 use deadpool_postgres::GenericClient;
 use orchester_api::{
   Credential,
-  cloud::CloudErrorCode,
   totp::{self, DIGITS},
 };
 use ring::hmac;
 
 use super::Authenticator;
 use crate::{
-  Cloud,
-  accounts::rows::account,
-  clock::seconds,
-  db::{audit, time},
-  error::CloudError,
-  keys::derived_key,
-  mail::EmailPurpose,
-  tokens::random_bytes,
+  Cloud, accounts::rows::account, clock::seconds, db::time, error::CloudError, keys::derived_key, tokens::random_bytes,
 };
 
 /// Crockford's base32 in lower case: no `i`, `l`, `o` or `u`, so a code read aloud or typed from paper is not misread.
@@ -112,8 +104,8 @@ pub(super) enum Used {
 }
 
 impl Cloud {
-  /// Checks `code` for `authenticator`, counting against the account's code limit; `recovery` also takes a recovery
-  /// code. A wrong or used code is `invalid_code` and is audited; a right one gives its reservation back.
+  /// Checks `code` for `authenticator` within the account's budget; `recovery` also takes a recovery code. A wrong or
+  /// used code is `invalid_code`, audited and counted; a right one is spent and gives its reservation back.
   pub(super) async fn check_code(
     &self,
     client: &impl GenericClient,
@@ -121,40 +113,30 @@ impl Cloud {
     code: &Credential,
     recovery: bool,
   ) -> Result<Used, CloudError> {
-    let account = authenticator.account;
-    let reserved = self.inner.limits.two_factor_code(account, self.now())?;
-    let used = match read(code) {
-      Code::App(digits) => self.app_code(client, authenticator, &digits).await?,
-      Code::Recovery(normalized) if recovery => self.recovery_code(client, authenticator, &normalized).await?,
-      Code::Recovery(_) | Code::Malformed => None,
-    };
-    let Some(used) = used else {
-      audit(
-        client,
-        Some(account),
-        "two_factor_failed",
-        &account.to_string(),
-        None,
-        self.now(),
-      )
-      .await?;
-      return Err(CloudErrorCode::InvalidCode.into());
-    };
-    self.inner.limits.two_factor_passed(account, reserved);
-    if used == Used::Recovery {
-      audit(
-        client,
-        Some(account),
-        "recovery_code_used",
-        &account.to_string(),
-        None,
-        self.now(),
-      )
-      .await?;
-      let email = account_email(client, account).await?;
-      self.send_later(self.inner.messages.two_factor(email, EmailPurpose::RecoveryCodeUsed));
+    let attempt = self.attempt_code(client, authenticator).await?;
+    match self.spend_code(client, authenticator, code, recovery).await? {
+      Some(used) => {
+        self.code_passed(client, authenticator, (attempt, used)).await?;
+        Ok(used)
+      }
+      None => Err(self.code_failed(client, authenticator).await?),
     }
-    Ok(used)
+  }
+
+  /// Spends `code` with `client`, which may be a transaction that rolls back to leave it unspent: a code of the app
+  /// for a step not used yet, or with `recovery` an unused recovery code. `None` for any other.
+  pub(super) async fn spend_code(
+    &self,
+    client: &impl GenericClient,
+    authenticator: &Authenticator,
+    code: &Credential,
+    recovery: bool,
+  ) -> Result<Option<Used>, CloudError> {
+    match read(code) {
+      Code::App(digits) => self.app_code(client, authenticator, &digits).await,
+      Code::Recovery(normalized) if recovery => self.recovery_code(client, authenticator, &normalized).await,
+      Code::Recovery(_) | Code::Malformed => Ok(None),
+    }
   }
 
   /// A code of the app for the step before, at or after now, later than the last step accepted, which it becomes.

@@ -95,7 +95,7 @@ or turned two-factor authentication on itself.
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the cloud's root key signed. The cloud makes its root at its first start and publishes a key set before it listens, so a running cloud always has one | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose?, invite?, certificate? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts; `certificate`: with purpose `code` only, the SHA-256 fingerprint (64 lower-case hex) of the certificate the app pinned for a server not linked here | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, `invite` with a purpose, or a `certificate` without purpose `code` or not 64 lower-case hex), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
@@ -171,17 +171,22 @@ set, the email counts as confirmed (the link proves it), every device of the acc
 other reset link ends.
 
 **Password change** (signed in). It needs the current password. It signs out the account's other devices and ends
-open reset links; the device that asked stays signed in.
+open reset links; the device that asked stays signed in. With two-factor authentication on, only a two-factor session
+changes it, deletes the account (`DELETE /me`) or signs another device out (`DELETE /devices/{id}`); any other device
+gets `403 session_without_mfa` before its password is looked at
+([Two-factor authentication](#two-factor-authentication)).
 
 **Identity tokens.** `POST /identity-tokens { audience, purpose? }` returns a token for one team server, valid for 5
 minutes.
 The desktop hands it to that team server, which checks it with `orchester_api::identity::VerifiedKeySet` against
 the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
 Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
-`purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server),
-`invite` (when the token accepts an invite), `mfa` (`true` when the device it was issued to is a two-factor session;
-absent otherwise, and in every token from a cloud before two-factor authentication), `jti`, `iat`, `exp`. A team server
-accepts a token only for the use it was issued for.
+`purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server;
+`code` to show with a code), `invite` (when the token accepts an invite), `mfa` (`true` when the device it was issued
+to is a two-factor session; absent otherwise, and in every token from a cloud before two-factor authentication),
+`certificate` (a `code` token's certificate fingerprint, when the app asked for one), `jti`, `iat`, `exp`. A team server
+accepts a token only for the use it was issued for: a `code` token is taken with a code and nowhere else, so a server
+that passes on a token an app got for a code there cannot join or sign in with it anywhere.
 
 **Accepting an invite** (the desktop, N1). The app reads the invite's server from the registry (`GET /servers/{id}`:
 the address and the certificate fingerprint it pins), then asks `POST /identity-tokens { audience, invite }`. The
@@ -307,8 +312,9 @@ that confirmed it a two-factor session. Other devices stay signed in as they wer
 the authenticator with its recovery codes, and every device stops being a two-factor session. No token ends with it,
 so it records no `reason` ([Why a token ended](#why-a-token-ended)): the devices stay signed in, without two-factor. **New recovery codes**
 take a code (`POST /me/two-factor/recovery-codes`) and end every earlier one. The account's email gets a notice when
-two-factor authentication is turned on or off and when a recovery code is used (purposes `two_factor_on`,
-`two_factor_off`, `recovery_code_used`, each with a link to `<public URL>/account#security`).
+two-factor authentication is turned on or off, when a recovery code is used, and at the tenth wrong code of a day
+(purposes `two_factor_on`, `two_factor_off`, `recovery_code_used`, `two_factor_failures`, each with a link to
+`<public URL>/account#security`).
 
 **Signing in.** With it on, the right password answers `202 { challenge, expires_at }`, for the desktop and the web
 front alike. `challenge` is `orcm_` and 64 hex characters; the cloud keeps only its SHA-256. It works once, for 5 minutes
@@ -321,27 +327,48 @@ be tried again; an ended one answers `401 challenge_expired`, and the client sig
 on another device) becomes a two-factor session with `POST /auth/sessions/current/two-factor { code }`: no password,
 no new token. The web front's Account page uses it.
 
-**Code limits.** Every code check of an account counts against one limit: 5 wrong codes in 15 minutes per account,
-whichever endpoint and challenge they came to (`429` with `Retry-After` until the oldest leaves the window). Each check
-reserves its place before it runs, so parallel guesses cannot pass it, and a right code takes its place back. This
-limit is apart from the password limits: wrong codes do not block passwords, and a right password with two-factor
+**Code limits.** Every code check of an account counts against two limits, whichever endpoint and challenge it came
+to: 5 wrong codes in 15 minutes per account, in memory (`429` with `Retry-After` until the oldest leaves the window),
+and 20 wrong codes a day per account, counted from the first of them and kept with the authenticator, so a restart
+does not reset it (`429` with `Retry-After` until that day ends). Each check reserves its place in the first before it
+runs, so parallel guesses cannot pass it, and a right code takes its place back. At most 20 guesses a day at 3 codes in
+a million keep a guesser's chance under one in ten thousand a year. The tenth wrong code of a day mails the account's
+email (purpose `two_factor_failures`): whoever entered it had the password or a signed-in device. These limits are
+apart from the password limits: wrong codes do not block passwords, and a right password with two-factor
 authentication counts as a successful password check. A challenge also ends after 5 codes, right or wrong. Failed
-codes are audited (`two_factor_failed`).
+codes are audited (`two_factor_failed`). A sign-in takes its challenge in the same transaction that spends the code,
+before the code is looked at: a second request with the challenge waits for the first, then finds it used and spends
+no code of its own.
 
 **What a two-factor session may do.** Only a two-factor session accepts an invite (`POST /identity-tokens` with
 `invite`: `403 mfa_required` or `403 session_without_mfa` otherwise, and the invite stays open), and `GET /invites`
 says for each whether this device would be refused (`needs_two_factor`). Every identity token says whether its device
 is a two-factor session (claim `mfa`). Team servers take an invite's join token only with `mfa`, make invites (by email
 or with a code) only from a device token issued for an identity token with it, and take every code but the setup code
-from an app only with a join token (no purpose, the server's id as `aud`) that says `mfa`
+from an app only with a token for codes (purpose `code`, the server's id as `aud`) that says `mfa`
 ([architecture/server.md](architecture/server.md), "Invites", "Codes"). So the desktop asks for a token for the server it
-enters a code for, from a two-factor session, and carries the key set with it. Invites made before and delivered later
-are not held to it: delivering (`POST /invites`) checks the server's signature only.
+enters a code for, from a two-factor session, and carries the key set with it. It never takes that server's id on the
+server's word alone: a server linked here must be the one this registry has under that id (`GET /servers/{id}`: the
+address the person connected to and, when the registry has one, the certificate fingerprint it presents), and a server
+not linked here gets a token bound to the certificate the person confirmed with its check code (`certificate`), which
+the server takes only while it presents that certificate itself. Over plain HTTP a server not linked here gets no token
+and so takes no code but its setup code. Invites made before and delivered later are not held to it: delivering
+(`POST /invites`) checks the server's signature only. A team server keeps whether a device joined with `mfa` for as
+long as that device token lives: turning two-factor authentication off at the cloud does not reach team servers, and
+a device keeps sending invites there until an admin signs it out or the person joins it again.
 
 **A lost phone.** The recovery codes are the only way back; two-factor authentication is not reset by email, and a
 password reset leaves it on. On a cloud the person runs, an operator can turn it off for an account with one
 statement, which deletes the authenticator, its recovery codes and its challenges and ends every two-factor session
 with it (`docs/cloud-hosting.md`, "Two-factor authentication for an account that lost its phone").
+
+**Someone else turned it on.** Turning it on needs only the password from a signed-in device. Whoever has both while
+it is off (a stolen password and an unlocked computer) can turn it on with their own phone and lock the person out of
+new sign-ins. The person learns of it from the `two_factor_on` email. Their devices stay signed in, but none of them is
+a two-factor session, so none can turn it off, make recovery codes, change the password, delete the account or sign
+the intruder's device out. The way back is the operator's: on proof of the account (the mailbox), the statement above
+turns it off, after which the person changes the password and signs the other devices out. Orchester Cloud adds no
+self-service path for this, since any path that skips the code is one an intruder could take as well.
 
 ## Rate limits
 
@@ -353,13 +380,14 @@ with it (`docs/cloud-hosting.md`, "Two-factor authentication for an account that
 | Failed `confirm`, `reset/finish` and `links/inspect` | 20 per client address and 100 per IPv6 /48 in 15 minutes; for `confirm` and `reset/finish`, 5 an hour per link, each try counted before its password check |
 | Wrong passwords for `DELETE /me` | Counted with the failed current passwords of `/auth/password` |
 | Identity tokens | 60 an hour per device |
-| Two-factor codes (sign-in, step-up, setup, turning off, new recovery codes) | 5 wrong an account in 15 minutes, apart from the password limits; a sign-in's challenge takes 5 codes |
+| Two-factor codes (sign-in, step-up, setup, turning off, new recovery codes) | 5 wrong an account in 15 minutes, and 20 wrong a day kept in the database, apart from the password limits; a sign-in's challenge takes 5 codes |
 | Invite deliveries (`POST /invites`) | 60 an hour per client address and 300 per IPv6 /48, counted before the signature is checked |
 | New invites | 100 a day for all the servers one person owns, ownerless ones they linked included |
 | Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
 | Linked servers | 5 per person (`409 too_many_servers`), ownerless ones they linked included; not a rate |
 
-The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
+The counters are in memory, but for the daily cap on wrong two-factor codes. A restart clears them; the cloud runs as
+one instance in v1. A client address is its
 IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest key that holds no count, block or
 attempt in flight, rather than being refused, so a flood of new emails cannot lock everyone out. When every key
 still counts, the counter grows past 100,000 until those counts expire; it never lifts a block or resets a count
