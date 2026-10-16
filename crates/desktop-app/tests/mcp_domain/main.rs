@@ -7,6 +7,7 @@
 mod accounts;
 mod accounts_window;
 mod automation_permissions;
+mod cloud_accounts;
 mod connections_window;
 mod drafts;
 mod gates;
@@ -26,6 +27,8 @@ mod pipeline_permissions;
 mod pull_requests;
 mod reads;
 mod reads_setup;
+#[path = "../support/signed_in.rs"]
+mod signed_in;
 mod skills_window;
 mod tools;
 mod tools_window;
@@ -101,7 +104,12 @@ impl Served {
     (window_control, vault): (bool, Option<Arc<MemoryVault>>),
   ) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
-    let launch = Launch::begin_at(database, runner, runtime.handle(), None);
+    let launch = signed_in::launch(
+      database,
+      runner,
+      runtime.handle(),
+      &signed_in::account_cloud::AccountCloud::start(),
+    );
     let mut services = launch.services().cloned();
     if let (Some(services), Some(vault)) = (services.as_mut(), vault) {
       services.vault = Vault::with(vault);

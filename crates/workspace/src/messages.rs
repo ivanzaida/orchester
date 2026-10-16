@@ -59,6 +59,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::NotAGitRepository(_) => Message::new("errors.notAGitRepository"),
     StoreError::AlreadyInitialized(_) => Message::new("errors.alreadyInitialized"),
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),
+    StoreError::ProjectOfAnotherAccount(_) => Message::new("errors.anotherAccountsProject"),
     StoreError::SchemaTooNew { .. } => Message::new("errors.newerSchema"),
     StoreError::SchemaTooOld { .. } => Message::new("errors.olderSchema"),
     StoreError::UnrepresentablePath(_) => Message::new("errors.unsupportedPath"),

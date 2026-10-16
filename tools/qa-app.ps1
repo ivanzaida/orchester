@@ -1,12 +1,15 @@
 # Starts orchester-app on a seeded QA project, isolated from the user's data, for QA and design
 # verification (.claude/skills/design-verification/SKILL.md):
 #
-#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner]
+#   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedOut]
 #       [-WindowX <x> -WindowY <y>]
 #
-# 1. Builds orchester-app, the seed example and orchester-runner (-FakeAgents: the runner with its
-#    `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
-# 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them.
+# 1. Builds the QA app (examples/qa_app: the app's own window, signed in to a stand-in Orchester Cloud on loopback
+#    with its token in a keychain in memory, past the sign-in gate; -SignedOut stops at the gate, with that stand-in
+#    as the cloud), the seed example and orchester-runner (-FakeAgents: the runner with its `test-agent` binaries,
+#    orchester-fake-codex among them; -NoRunner: no runner).
+# 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them; the QA app as
+#    orchester-app-qa.
 # 3. Seeds a new repository .tmp/qa/<task>/repo-<scenario> (examples/seed; -FakeAgents points the
 #    project's Codex connection at the copied fake) and registers it in that orchester.db.
 # 4. Starts the copied app with ORCHESTER_APP_MCP_START_WITHOUT_FOCUS=1, window control on and
@@ -31,6 +34,7 @@ param(
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
+    [switch]$SignedOut,
     [int]$WindowX,
     [int]$WindowY
 )
@@ -94,7 +98,7 @@ if (Test-Path $bin) {
 
 Push-Location $repositoryRoot
 try {
-    cargo build -p orchester-app --bin orchester-app --example seed
+    cargo build -p orchester-app --example qa_app --example seed
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     if ($FakeAgents) {
         cargo build -p orchester-runner --features test-agent --bins
@@ -115,12 +119,14 @@ if (Test-Path $qa) {
 }
 New-Item -ItemType Directory -Force -Path $bin | Out-Null
 New-Item -ItemType Directory -Force -Path $mcp | Out-Null
-$programs = @("orchester-app")
+$programs = @()
 if (-not $NoRunner) { $programs += "orchester-runner" }
 if ($FakeAgents) { $programs += @("orchester-fake-codex", "orchester-fake-claude") }
 foreach ($program in $programs) {
     Copy-Item (Join-Path $built "$program$exe") -Destination $bin
 }
+# The QA app keeps its data beside it, and starts the runner from beside it, as the app does.
+Copy-Item (Join-Path $built "examples/qa_app$exe") -Destination (Join-Path $bin "orchester-app-qa$exe")
 
 $seedArgs = @("--data-dir", $bin, "--repo", $repo, "--scenario", $Scenario)
 if ($FakeAgents) { $seedArgs += @("--fake-codex", (Join-Path $bin "orchester-fake-codex$exe")) }
@@ -133,7 +139,9 @@ $env:ORCHESTER_APP_MCP_START_WITHOUT_FOCUS = "1"
 $env:ORCHESTER_APP_MCP_WINDOW_CONTROL = "on"
 $env:ORCHESTER_APP_MCP_DISCOVERY = $mcp
 $env:ORCHESTER_APP_WINDOW_POSITION = $windowPosition
-$appProgram = Join-Path $bin "orchester-app$exe"
+$appProgram = Join-Path $bin "orchester-app-qa$exe"
+# Start-Process takes no empty argument list: an option that is always there leads the QA app's arguments.
+$appArguments = if ($SignedOut) { "--signed-out" } else { "--signed-in" }
 $appLog = Join-Path $qa "app.log"
 $appErrors = Join-Path $qa "app.err.log"
 if ($onWindows) {
@@ -142,7 +150,7 @@ if ($onWindows) {
     # starts it, sharing that PowerShell's hidden console: a debug build is a console program, and a console
     # window of its own would take the focus. The app's output goes to files.
     $pidFile = Join-Path $qa "app.pid"
-    $launch = "(Start-Process -FilePath '$appProgram' -WorkingDirectory '$bin' -NoNewWindow -PassThru " +
+    $launch = "(Start-Process -FilePath '$appProgram' -ArgumentList '$appArguments' -WorkingDirectory '$bin' -NoNewWindow -PassThru " +
         "-RedirectStandardOutput '$appLog' -RedirectStandardError '$appErrors').Id | Set-Content -Path '$pidFile'"
     $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($launch))
     # Not `-Wait`, which waits for the launcher's descendants too: the app among them.
@@ -152,7 +160,7 @@ if ($onWindows) {
     $app = Get-Process -Id ([int](Get-Content $pidFile))
 }
 else {
-    $app = Start-Process -FilePath $appProgram -WorkingDirectory $bin -PassThru `
+    $app = Start-Process -FilePath $appProgram -ArgumentList $appArguments -WorkingDirectory $bin -PassThru `
         -RedirectStandardOutput $appLog -RedirectStandardError $appErrors
 }
 

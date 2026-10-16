@@ -89,6 +89,11 @@ impl OperationSpec {
     self
   }
 
+  /// What the operation opens: the target given to [`Self::target`].
+  pub(super) fn opens(&self) -> &Target {
+    &self.target
+  }
+
   /// Not listed while it runs, only its outcome is recorded: local draft saves are too fast
   /// to follow and appear only as finished events.
   pub fn quiet(mut self) -> Self {
@@ -340,6 +345,14 @@ impl ActivityLog {
       .events
       .retain(|event| !(event.target == *target && matches!(event.outcome, Outcome::NeedsYou { .. })));
     self.events.len() != before
+  }
+
+  /// Forgets the operations and events whose target `hidden` names. Whether any went.
+  pub fn forget(&mut self, hidden: impl Fn(&Target) -> bool) -> bool {
+    let before = (self.running.len(), self.events.len());
+    self.running.retain(|operation| !hidden(&operation.spec.target));
+    self.events.retain(|event| !hidden(&event.target));
+    before != (self.running.len(), self.events.len())
   }
 
   /// The user opened the failure's object or dismissed it; it stays in the recent list.

@@ -22,7 +22,6 @@ use lurq::{
 };
 use orchester_app::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  startup::Launch,
   theme::{self, Mode, TaskSpacing, TaskText},
   ui::icon::Icon,
 };
@@ -78,17 +77,14 @@ impl Page {
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
-    let data = Data {
-      dir,
-      runtime: Runtime::new().expect("tokio runtime"),
-    };
+    let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
     assert_eq!(
       seeded.app_database,
       data.database(),
       "the seed registers in the window's folder"
     );
     let launch = match programs {
-      Some((runner, _)) => Launch::begin_at(&data.database(), runner, data.runtime.handle(), None),
+      Some((runner, _)) => data.launch_with(runner),
       None => data.launch(),
     };
     let window = Window::of(data, launch);

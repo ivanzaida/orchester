@@ -1,0 +1,72 @@
+{
+  "gate": {
+    "first": {
+      "eyebrow": "WELCOME TO ORCHESTER",
+      "title": "Sign in to start",
+      "lead": "Orchester works with your Orchester Cloud account. Sign in once on this computer; after that, it keeps working offline too."
+    },
+    "again": {
+      "eyebrow": "ORCHESTER CLOUD",
+      "title": "Sign in again"
+    },
+    "email": "Email",
+    "emailPlaceholder": "you@example.com",
+    "password": "Password",
+    "forgot": "Forgot password?",
+    "submit": "Sign in",
+    "signingIn": "Signing in…",
+    "checking": "Checking with {{host}}…",
+    "newHere": "New to Orchester?",
+    "create": "Create an account",
+    "browserNote": "Create an account and Forgot password? open the cloud's pages in your browser. Confirm your email there, then sign in here.",
+    "wrong": "The email or password is not right. Check both, or reset your password.",
+    "unconfirmed": {
+      "title": "Confirm your email first",
+      "body": "Open the link Orchester Cloud sent to {{email}}, then sign in here. No email? Ask for a new one on the cloud's page.",
+      "open": "Open Orchester Cloud"
+    },
+    "paused": {
+      "title": "Too many attempts",
+      "body": "Sign-in for this email is paused. Try again at {{time}}."
+    },
+    "unreachable": {
+      "title": "Signing in needs the internet once",
+      "body": "Orchester Cloud can't be reached from this computer. Connect to the internet, then sign in. After this first sign-in, Orchester works offline.",
+      "when": "{{host}} didn't answer · {{time}}"
+    },
+    "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
+    "footer": {
+      "offline": "Signing in needs the internet once. After that, Orchester works offline and checks your sign-in when it can reach Orchester Cloud.",
+      "offlineShort": "Signing in needs the internet once. After that, Orchester works offline.",
+      "personOnly": "Only you can sign in, here in this window. Orchester's MCP tools can't sign in for you.",
+      "testCloud": "{{host}} · test cloud"
+    },
+    "ended": {
+      "revoked": {
+        "title": "This computer was signed out",
+        "body": "Its sign-in to Orchester Cloud ended at {{time}}, from another device or from Devices on the cloud's account page."
+      },
+      "passwordReset": {
+        "title": "Your password was changed",
+        "body": "Changing or resetting the password of {{email}} signs out your other computers, this one too. Sign in with the new password."
+      },
+      "accountDeleted": {
+        "title": "Your account was deleted",
+        "body": "The Orchester Cloud account {{email}} was deleted at {{time}}, which ended this computer's sign-in. Sign in with another account, or create one."
+      },
+      "signedOut": {
+        "title": "You signed out",
+        "body": "Orchester stays locked on this computer until you sign in again."
+      },
+      "other": {
+        "title": "Your sign-in ended",
+        "body": "Orchester Cloud no longer accepts this computer's sign-in. Sign in again to keep working."
+      }
+    },
+    "whileSignedOut": {
+      "projects": "Your projects and tasks stay on this computer.",
+      "runs": "Runs that are going keep going. Anything that needs you waits until you're back.",
+      "mcp": "Agents and other MCP clients get “sign in required” until then."
+    }
+  }
+}

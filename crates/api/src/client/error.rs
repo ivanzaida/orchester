@@ -7,7 +7,10 @@ use std::{error::Error as StdError, io};
 use thiserror::Error;
 
 use super::AddressError;
-use crate::{ErrorCode, SharingErrorDetails, cloud::CloudErrorCode};
+use crate::{
+  ErrorCode, SharingErrorDetails,
+  cloud::{CloudErrorCode, SessionEnd},
+};
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ClientError {
@@ -41,12 +44,14 @@ pub enum ClientError {
     retry_after: Option<u64>,
     details: Option<Box<SharingErrorDetails>>,
   },
-  /// Orchester Cloud refused the request with one of its error codes; `retry_after` comes with `rate_limited`.
+  /// Orchester Cloud refused the request with one of its error codes; `retry_after` comes with `rate_limited`, and
+  /// `ended` with an `unauthorized` for a token the cloud ended: why, and when (milliseconds).
   #[error("Orchester Cloud refused the request: {code:?} (HTTP {status})")]
   Cloud {
     status: u16,
     code: CloudErrorCode,
     retry_after: Option<u64>,
+    ended: Option<(SessionEnd, Option<i64>)>,
   },
   /// The HTTP client could not be set up, e.g. the operating system's certificate store failed.
   #[error("the HTTP client cannot be set up")]

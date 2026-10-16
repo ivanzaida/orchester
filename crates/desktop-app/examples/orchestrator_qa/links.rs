@@ -21,7 +21,10 @@ pub fn register_atlas(database: &Path, root: &Path) -> Result<ProjectId, Box<dyn
   let atlas = Project::new(ProjectId::generate(), ProjectKey::new("ATL")?, Name::new("Atlas")?);
   let folder = root.join("repo-atlas");
   fs::create_dir_all(&folder)?;
-  AppDb::open(database)?.register_project(&atlas, &folder, Timestamp::now())?;
+  let mut db = AppDb::open(database)?;
+  // The signed-in account's project, or the next one's to sign in.
+  let owner = db.cloud_account()?.map(|account| account.account);
+  db.register_project(&atlas, &folder, Timestamp::now(), owner.as_ref())?;
   Ok(atlas.id())
 }
 

@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use orchester_api::{
-  cloud::{CloudError as ApiError, CloudErrorCode},
+  cloud::{CloudError as ApiError, CloudErrorCode, SessionEnd},
   identity::IdentityError,
 };
 use thiserror::Error;
@@ -39,6 +39,9 @@ pub enum CloudError {
   Api(CloudErrorCode),
   #[error("rate limited")]
   RateLimited(u64),
+  /// A device's token the cloud ended, `reason` and when (milliseconds): `401 unauthorized` with both.
+  #[error("the token ended: {reason:?}")]
+  Ended { reason: SessionEnd, at: i64 },
 }
 
 impl From<CloudErrorCode> for CloudError {
@@ -92,6 +95,7 @@ impl CloudError {
       Self::Mail => "Mail",
       Self::Api(_) => "Api",
       Self::RateLimited(_) => "RateLimited",
+      Self::Ended { .. } => "Ended",
     }
   }
 
@@ -115,6 +119,7 @@ impl CloudError {
     match self {
       Self::Api(code) => *code,
       Self::RateLimited(_) => CloudErrorCode::RateLimited,
+      Self::Ended { .. } => CloudErrorCode::Unauthorized,
       _ => CloudErrorCode::Internal,
     }
   }
@@ -138,9 +143,15 @@ impl ResponseError for CloudError {
     if code == CloudErrorCode::Busy {
       response.insert_header(("Retry-After", "1"));
     }
+    let (reason, ended_at) = match self {
+      Self::Ended { reason, at } => (Some(*reason), Some(*at)),
+      _ => (None, None),
+    };
     response.json(ApiError {
       error: code,
       message: message.into(),
+      reason,
+      ended_at,
     })
   }
 }

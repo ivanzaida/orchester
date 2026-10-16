@@ -331,4 +331,27 @@ pub struct CloudError {
   pub error: CloudErrorCode,
   /// English diagnostics; the desktop and the web front show their own text by code.
   pub message: String,
+  /// Why a device's or a web session's token ended, with `unauthorized` for a token the cloud ended itself.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub reason: Option<SessionEnd>,
+  /// When that token ended, in milliseconds, with `reason`.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub ended_at: Option<i64>,
+}
+
+/// Why the cloud ended a device's token (`docs/cloud-api.md`, "Why a token ended"). A client that meets a reason it
+/// does not know reads [`Self::Other`] and shows its general words.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionEnd {
+  /// Signed out from another device of the account, or from Devices on the cloud's account page.
+  Revoked,
+  /// The account's password was reset, or changed on another device.
+  PasswordReset,
+  /// The account was deleted.
+  AccountDeleted,
+  /// The device signed itself out.
+  SignedOut,
+  #[serde(other)]
+  Other,
 }

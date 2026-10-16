@@ -10,8 +10,8 @@ mod project_db;
 mod rows;
 
 pub use app_db::{
-  AcceptedInvite, AppDb, JoinedWith, PreviousSession, RegisteredProject, ServerAccount, SessionEnd, SessionId,
-  StoredCloudAccount, StoredServer,
+  AcceptedInvite, AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, RegisteredProject,
+  ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredServer,
 };
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;

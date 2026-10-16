@@ -10,6 +10,7 @@ mod agents;
 mod all_projects;
 mod connections;
 mod files;
+pub(crate) mod gate;
 mod instructions;
 mod not_found;
 mod orchestrator;

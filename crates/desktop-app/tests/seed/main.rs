@@ -148,7 +148,7 @@ fn seed_every_scenario_builds_a_repository_and_registers_kontur() {
     );
     let projects = AppDb::open(&seed.seeded.app_database)
       .expect("app database")
-      .projects()
+      .every_project()
       .expect("projects");
     let [project] = projects.as_slice() else {
       panic!("one project registered for {}: {projects:?}", scenario.name());

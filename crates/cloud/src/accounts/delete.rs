@@ -2,8 +2,15 @@ use std::net::IpAddr;
 
 use orchester_api::cloud::{AccountDeletion, CloudErrorCode};
 
-use super::{Authenticated, Cloud, links::lock_account, rows::account};
-use crate::{db::audit, error::CloudError};
+use super::{
+  Authenticated, Cloud,
+  links::lock_account,
+  rows::{ACTIVE, ENDED_KEPT_MS, account, active_since},
+};
+use crate::{
+  db::{audit, time},
+  error::CloudError,
+};
 
 impl Cloud {
   /// Deletes the account with its password: its devices, links and joins go with it, and the open invites to its
@@ -52,6 +59,26 @@ impl Cloud {
       .execute(
         "UPDATE servers SET last_owner = $2 WHERE owner = $1",
         &[&auth.account.as_uuid(), &self.inner.people.of(&row.account.email)],
+      )
+      .await?;
+    // The devices go with the account; the tokens still in use then still say the account was deleted until they
+    // would have ended unused (`docs/cloud-api.md`, "Why a token ended"). A token that had ended already stays a
+    // plain `401`.
+    let (idle, web) = active_since(now);
+    transaction
+      .execute(
+        &format!(
+          "INSERT INTO ended_tokens (token_hash, reason, ended_at, until)
+           SELECT token_hash, 'account_deleted', $4, $5 FROM devices WHERE account = $1 AND {ACTIVE}
+           ON CONFLICT (token_hash) DO NOTHING"
+        ),
+        &[
+          &auth.account.as_uuid(),
+          &idle,
+          &web,
+          &time(now),
+          &time(now + ENDED_KEPT_MS),
+        ],
       )
       .await?;
     transaction

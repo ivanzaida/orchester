@@ -4,7 +4,9 @@
 //! (the design names a tone stroke without a thickness, which draws none). Information is `info_muted` with an
 //! `info` icon (`Gbag9`), a neutral fact `hover` with a `text_muted` icon (`wwtNM`), a warning `warning_muted`
 //! (`naoei`), a failure `danger_muted` (`fztvy`) and a success `success_muted` (`ICcO5`), each with its tone's icon.
-//! An action goes under the explanation (`Open Orchester Cloud` in `JsrLB`).
+//! An action goes under the explanation (`Open Orchester Cloud` in `JsrLB`); a quieter line in `text_muted` can follow
+//! it (*… didn't answer · 14:31*, `SWg68` in `i8HD8`), and so can parts of its own (*While signed out* `Qkpc2` in
+//! `ztigw`).
 
 use std::sync::Arc;
 
@@ -66,6 +68,8 @@ pub struct Callout {
   icon: Icon,
   title: Arc<str>,
   body: Option<Arc<str>>,
+  note: Option<Arc<str>>,
+  details: Vec<Element>,
   actions: Vec<Element>,
 }
 
@@ -77,6 +81,8 @@ impl Callout {
       icon: tone.icon(),
       title: title.into(),
       body: None,
+      note: None,
+      details: Vec::new(),
       actions: Vec::new(),
     }
   }
@@ -90,6 +96,18 @@ impl Callout {
   /// What happened and what can be done, under the title.
   pub fn body(mut self, body: impl Into<Arc<str>>) -> Self {
     self.body = Some(body.into());
+    self
+  }
+
+  /// A quieter line under the explanation, in `text_muted`.
+  pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
+    self.note = Some(note.into());
+    self
+  }
+
+  /// A part under the explanation, after the ones added before it.
+  pub fn detail(mut self, detail: impl Into<Element>) -> Self {
+    self.details.push(detail.into());
     self
   }
 
@@ -127,6 +145,14 @@ impl From<Callout> for Element {
           .variant(ExtraTypography::Lead.role())
           .width(Dimension::Pct(100.0))
       }))
+      .with_children(callout.note.as_deref().map(|note| {
+        Text::new(note)
+          .id(format!("{}-note", callout.id))
+          .variant(ExtraTypography::Lead.role())
+          .color(PaletteColor::TextMuted)
+          .width(Dimension::Pct(100.0))
+      }))
+      .with_children(callout.details)
       .with_children(actions);
     Row::new()
       .id(callout.id.clone())

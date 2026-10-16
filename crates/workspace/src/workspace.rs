@@ -1,8 +1,14 @@
 //! The personal workspace: the application database and the projects it knows. Every method
 //! blocks on SQLite or the file system; the UI calls them off the UI thread.
+//!
+//! The projects belong to the Orchester Cloud account signed in from this computer (the person's decision,
+//! 2026-10-16): the list, every lookup and every opening of a project are that account's alone, keyed by the cloud's
+//! account id. Another account signed in on the same computer sees only its own; while none is, only the projects
+//! added meanwhile, which the next account to sign in takes (`sharing::cloud`). Only the work that follows every
+//! project on this computer, and shows none of them, reads them all ([`Workspace::every_project`]).
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   path::{Path, PathBuf},
   sync::{Arc, atomic::AtomicBool},
 };
@@ -10,7 +16,7 @@ use std::{
 use orchester_core::{
   app_mcp::McpPort,
   appearance::ThemeSetting,
-  id::{InstallationId, ProjectId, ServerId},
+  id::{CloudAccountId, InstallationId, ProjectId, ServerId},
   project::Project,
   time::Timestamp,
   usage::limits::WarningThreshold,
@@ -180,7 +186,7 @@ impl Workspace {
   }
 
   pub fn landing(&self) -> Result<Landing, StoreError> {
-    let Some(recent) = self.db.lock().projects()?.into_iter().next() else {
+    let Some(recent) = self.projects()?.into_iter().next() else {
       return Ok(Landing::FirstLaunch);
     };
     Ok(match self.open(&recent.repo_root) {
@@ -189,9 +195,33 @@ impl Workspace {
     })
   }
 
-  /// Known projects, most recently opened first.
+  /// The signed-in account's projects, most recently opened first.
   pub fn projects(&self) -> Result<Vec<RegisteredProject>, StoreError> {
-    self.db.lock().projects()
+    let db = self.db.lock();
+    db.projects_of(owner(&db)?.as_ref())
+  }
+
+  /// Every project known on this computer, whichever account's: for the work that follows them all in the background
+  /// (an agent account's folders and uses, a shared project's sync), never to show or to act on for the person.
+  pub(crate) fn every_project(&self) -> Result<Vec<RegisteredProject>, StoreError> {
+    self.db.lock().every_project()
+  }
+
+  /// The folders of the projects the signed-in account does not see: other accounts' projects on this computer.
+  pub fn unseen_roots(&self) -> Result<HashSet<PathBuf>, StoreError> {
+    let db = self.db.lock();
+    let seen: HashSet<ProjectId> = db
+      .projects_of(owner(&db)?.as_ref())?
+      .into_iter()
+      .map(|project| project.id)
+      .collect();
+    Ok(
+      db.every_project()?
+        .into_iter()
+        .filter(|project| !seen.contains(&project.id))
+        .map(|project| project.repo_root)
+        .collect(),
+    )
   }
 
   /// Known projects, most recently opened first, with whether each one's folder is there.
@@ -210,15 +240,18 @@ impl Workspace {
 
   /// Forgets `project`: only the application database changes, never its folder or its data.
   pub fn forget(&self, project: ProjectId) -> Result<(), StoreError> {
-    self.db.lock().forget_project(project)
+    let mut db = self.db.lock();
+    let owner = owner(&db)?;
+    db.forget_project(project, owner.as_ref())
   }
 
   /// Opens the project Orchester keeps in the folder `repo_root` and records it as the most
-  /// recently used one; a folder whose project was removed from the list is added again.
+  /// recently used one; a folder whose project was removed from the list is added again. Another account's project
+  /// is refused ([`StoreError::ProjectOfAnotherAccount`]).
   pub fn open(&self, repo_root: &Path) -> Result<OpenProject, StoreError> {
     let db = ProjectDb::open(repo_root)?;
     let project = db.project().clone();
-    self.db.lock().register_project(&project, repo_root, Timestamp::now())?;
+    self.register(&project, repo_root)?;
     // The project opens all the same; its connections follow the removal the next time it opens.
     if let Err(error) = self.follow_accounts(repo_root) {
       tracing::warn!(%error, "cannot move a project's connections off removed accounts");
@@ -232,14 +265,18 @@ impl Workspace {
   /// Initializes Orchester in the repository and adds the project to the workspace.
   pub fn create(&self, new: NewProject) -> Result<OpenProject, StoreError> {
     ProjectDb::create(&new.repo_root, new.project.clone())?;
-    self
-      .db
-      .lock()
-      .register_project(&new.project, &new.repo_root, Timestamp::now())?;
+    self.register(&new.project, &new.repo_root)?;
     Ok(OpenProject {
       project: new.project,
       repo_root: new.repo_root,
     })
+  }
+
+  /// Records `project` in `repo_root` as the signed-in account's, used now.
+  fn register(&self, project: &Project, repo_root: &Path) -> Result<(), StoreError> {
+    let mut db = self.db.lock();
+    let owner = owner(&db)?;
+    db.register_project(project, repo_root, Timestamp::now(), owner.as_ref())
   }
 
   /// What an app saved under `key` of the window's state (`ui_state`), as it wrote it. Each app
@@ -463,6 +500,11 @@ impl Workspace {
   pub(crate) fn end_session(&self, session: SessionId, end: SessionEnd) -> Result<(), StoreError> {
     self.db.lock().end_session(session, end, Timestamp::now())
   }
+}
+
+/// Whose projects `db` shows: the account signed in from this computer; `None` while none is.
+fn owner(db: &AppDb) -> Result<Option<CloudAccountId>, StoreError> {
+  Ok(db.cloud_account()?.map(|account| account.account))
 }
 
 /// Published under the database lock; any pending read/write keeps an earlier value from authorizing the window.

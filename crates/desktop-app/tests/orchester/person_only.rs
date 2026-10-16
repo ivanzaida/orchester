@@ -89,6 +89,13 @@ fn orchester_person_only_pairing_codes_and_their_copy() {
 #[test]
 fn orchester_person_only_cloud_address() {
   let mut window = window(None);
+  let before = window
+    .launch
+    .services()
+    .expect("services")
+    .cloud
+    .address()
+    .expect("address");
   go(
     &mut window,
     Route::Orchester(OrchesterView::default()),
@@ -98,10 +105,12 @@ fn orchester_person_only_cloud_address() {
   window.set("orchester-advanced-address", "http://localhost:9");
   refused(&mut window, "orchester-advanced-use");
   let services = window.launch.services().expect("services");
-  assert!(
-    services.cloud.address().expect("address").default,
-    "the build's cloud stays"
+  assert_eq!(
+    services.cloud.address().expect("address"),
+    before,
+    "the cloud in use stays"
   );
+  assert!(services.cloud.is_signed_in(), "and the sign-in with it");
 }
 
 #[test]
@@ -110,19 +119,18 @@ fn orchester_person_only_cloud_sign_in_and_out() {
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
   let address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  // Another cloud signs out: the sign-in is the gate's.
   block_on(&window, services.cloud.set_address(Some(address))).expect("a test cloud");
-  go(
-    &mut window,
-    Route::Orchester(OrchesterView::default()),
-    "orchester-sign-in-form",
-  );
-  window.set("orchester-sign-in-email", EMAIL);
-  window.set("orchester-sign-in-password", PASSWORD);
-  refused(&mut window, "orchester-sign-in");
+  shows(&mut window, "gate-email");
+  window.set("gate-email", EMAIL);
+  window.set("gate-password", PASSWORD);
+  refused(&mut window, "gate-sign-in");
   assert!(services.cloud.account().expect("account").is_none(), "not signed in");
 
   let mut window = signed_in(&cloud);
-  refused(&mut window, "orchester-cloud-sign-out");
+  // *Sign out* asks; signing out and locking is a person's.
+  press(&mut window, "orchester-cloud-sign-out");
+  refused(&mut window, "orchester-cloud-sign-out-confirm");
   let services = window.launch.services().expect("services");
   assert!(services.cloud.account().expect("account").is_some(), "still signed in");
   assert!(!cloud.signed_out());

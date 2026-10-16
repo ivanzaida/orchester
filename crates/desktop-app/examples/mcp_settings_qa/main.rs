@@ -9,6 +9,8 @@
 //! Controls of the section take a person's click only, so states that need one (the Codex tab, *Rotate the
 //! token?*, the token shown, Copied) are covered by `tests/settings_mcp` instead.
 
+#[path = "../../tests/support/signed_in.rs"]
+mod signed_in;
 mod vault;
 
 use std::{
@@ -48,12 +50,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let session = AppSession::start_at(&data.path().join("orchester.db"))?;
   let workspace = session.workspace().clone();
   let Installation { port, taken, vault } = installation(&state, &workspace)?;
+  // A keychain in memory, signed in past the sign-in gate to a stand-in cloud that answers while the window is open.
   let services = Services::start(
     &session,
     data.path().join("no-runner"),
     runtime.handle().clone(),
-    orchester_workspace::secrets::Vault::keychain(),
+    signed_in::keychain(),
   );
+  let cloud = signed_in::account_cloud::AccountCloud::start();
+  signed_in::sign_in(&services, runtime.handle(), &cloud);
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());
