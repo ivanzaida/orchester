@@ -9,6 +9,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -44,6 +45,7 @@ pub(super) fn waiting(ctx: &mut Ctx, (invites, kept): (&Invites, &Kept), answers
   });
   let mut parts: Vec<Element> = vec![paragraph("orchester-invites-lead", &ctx.t("cloud.invites.lead")).into()];
   parts.extend(outcome(ctx, answers, false));
+  parts.extend(super::ended::found(ctx, answers));
   parts.extend(accepted::kept(ctx, kept, answers));
   match invites {
     Invites::SignedOut => {}
@@ -71,7 +73,7 @@ pub(super) fn waiting(ctx: &mut Ctx, (invites, kept): (&Invites, &Kept), answers
 
 /// What the last accept, ask again or decline came to. `waiting`: whether to say that a join waits for approval,
 /// where the invite accepted here does not say so itself (the All projects notice).
-pub(super) fn outcome(ctx: &Ctx, answers: &Answers, waiting: bool) -> Vec<Element> {
+pub(super) fn outcome(ctx: &mut Ctx, answers: &Answers, waiting: bool) -> Vec<Element> {
   let mut parts = Vec::new();
   if answers.stopped.get() {
     parts.push(
@@ -84,14 +86,10 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers, waiting: bool) -> Vec<Elemen
       .into(),
     );
   }
+  parts.extend(answered(ctx, ("orchester-invite", answers.accept.state()), waiting));
   parts.extend(answered(
     ctx,
-    ("orchester-invite", &answers.accept.state().get()),
-    waiting,
-  ));
-  parts.extend(answered(
-    ctx,
-    ("orchester-invite-finish", &answers.finish.state().get()),
+    ("orchester-invite-finish", answers.finish.state()),
     waiting,
   ));
   for (id, state) in [
@@ -106,13 +104,14 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers, waiting: bool) -> Vec<Elemen
 }
 
 /// What one accept or ask again came to, its parts' ids starting with `id`.
-fn answered(ctx: &Ctx, (id, state): (&str, &FutureState<Outcome, Said>), waiting: bool) -> Vec<Element> {
+fn answered(ctx: &mut Ctx, (id, shown): (&str, Signal<FutureState<Outcome, Said>>), waiting: bool) -> Vec<Element> {
+  let state = shown.get();
   let mut parts = Vec::new();
   if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
     parts.push(field_error(&format!("{id}-accept-failed"), &reason.text(ctx)).into());
   }
   match state.data.clone().filter(|_| state.is_fulfilled()) {
-    Some(Outcome::Joined { server, project }) => {
+    Some(Outcome::Joined { server, project, .. }) => {
       let body = match project {
         Some(project) => ctx.t_args("cloud.invites.joined.project", [("project", project)]),
         None => ctx.t("cloud.invites.joined.server"),
@@ -137,6 +136,9 @@ fn answered(ctx: &Ctx, (id, state): (&str, &FutureState<Outcome, Said>), waiting
       .body(ctx.t_args("cloud.invites.approval.body", [("server", server.as_str())]))
       .into(),
     ),
+    Some(Outcome::Refused { server }) => parts.push(super::ended::refused(ctx, id, &server, move || {
+      shown.set(FutureState::idle());
+    })),
     Some(Outcome::Waiting { .. }) | None => {}
   }
   parts

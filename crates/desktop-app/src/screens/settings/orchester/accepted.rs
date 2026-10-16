@@ -1,8 +1,10 @@
 //! The invites accepted here whose join did not finish (N1 security review 1, M2), first in *Waiting invites*. One that
 //! waits for approval (`Waiting for approval · on the joining computer` `Bl08B` in `jUMAF`) says who approves it, that
 //! nothing was uploaded and that it finishes on its own, with *Cancel joining*; while Settings › Orchester shows, it is
-//! asked again every two minutes ([`check`]). One whose join failed says so as `Join stopped` (`DheFE`, the nearest
-//! frame) does, with *Try again*, which only a person presses, and *Later*.
+//! asked again on the workspace's backoff ([`check`]; 2, 4 and 8 minutes, not after its approval expires). One whose
+//! join failed, or that stopped being asked on its own, says so as `Join stopped` (`DheFE`, the nearest frame) does,
+//! with *Try again*, which only a person presses, and *Later*; one asked for as often as Orchester does offers
+//! *Cancel joining* instead of *Try again* (N1 security re-review 2).
 
 use std::time::Duration;
 
@@ -16,10 +18,14 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_core::time::Timestamp;
 use orchester_store::AcceptedInvite;
-use orchester_workspace::sharing::cloud::Cloud;
+use orchester_workspace::sharing::cloud::{Cloud, MAX_ASKS, may_ask, waits};
 
-use super::{Kept, answers::Answers};
+use super::{
+  Kept,
+  answers::{Answers, Outcome},
+};
 use crate::{
   theme::{AccountsSpacing, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -29,19 +35,19 @@ use crate::{
   },
 };
 
-/// How often a join that waits for approval is asked again: each ask takes an identity token, and the cloud gives a
-/// computer 60 an hour.
-pub(super) const CHECK_EVERY: Duration = Duration::from_secs(120);
+/// How often the invites accepted here are looked at for an ask that is due ([`Cloud::check_accepted`]); only a due
+/// ask takes an identity token.
+pub(super) const CHECK_EVERY: Duration = Duration::from_secs(30);
 
 /// The kept invites the person did not put off with *Later*.
 pub(super) fn kept(ctx: &Ctx, kept: &Kept, answers: &Answers) -> Vec<Element> {
-  let later = answers.later.get();
+  let (later, now) = (answers.later.get(), Timestamp::now());
   kept
     .0
     .iter()
     .filter(|invite| !later.0.contains(&invite.invite))
     .map(|invite| {
-      if invite.approval.is_some() {
+      if waits(invite, now) {
         waiting(ctx, invite, answers)
       } else {
         stopped(ctx, invite, answers)
@@ -100,23 +106,12 @@ fn waiting(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
     .into()
 }
 
-/// *Joining Kontur team didn't finish*, with *Try again* and *Later*.
+/// *Joining Kontur team didn't finish*, why, and *Try again* (or *Cancel joining* once asked for as often as
+/// Orchester does) and *Later*.
 fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
   let id = format!("orchester-accepted-{}", invite.invite);
   let server = invite.server_name.as_str();
   let again = format!("{id}-try-again");
-  let try_again = ActionButton::new(
-    again.clone(),
-    ButtonKind::Primary,
-    ctx.t("cloud.invites.joinStopped.tryAgain"),
-  )
-  .icon(Icon::RefreshCw);
-  let try_again = if answers.finish.state().get().is_pending() {
-    try_again.loading()
-  } else {
-    let (answers, kept, again) = (answers.clone(), invite.invite, again.clone());
-    try_again.on_click(move || answers.try_again(&again, kept))
-  };
   let (later, kept) = (answers.later.clone(), invite.invite);
   let put_off = ActionButton::new(
     format!("{id}-later"),
@@ -124,6 +119,27 @@ fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
     ctx.t("cloud.invites.joinStopped.later"),
   )
   .on_click(move || later.update(|later| later.0.push(kept)));
+  let body = if !may_ask(invite) {
+    ctx.t_args(
+      "cloud.invites.joinStopped.tooMany",
+      [("server", server.to_owned()), ("count", MAX_ASKS.to_string())],
+    )
+  } else if invite.approval.is_some() {
+    ctx.t_args("cloud.invites.joinStopped.unanswered", [("server", server)])
+  } else {
+    ctx.t_args("cloud.invites.joinStopped.body", [("server", server)])
+  };
+  let first = if may_ask(invite) {
+    try_again(ctx, &again, invite, answers)
+  } else {
+    let set_aside = answers.set_aside.clone();
+    ActionButton::new(
+      format!("{id}-cancel"),
+      ButtonKind::Secondary,
+      ctx.t("cloud.invites.approval.cancel"),
+    )
+    .on_click(move || set_aside.run(kept))
+  };
   Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
@@ -135,31 +151,54 @@ fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
         ctx.t_args("cloud.invites.joinStopped.title", [("server", server)]),
       )
       .icon(Icon::WifiOff)
-      .body(ctx.t_args("cloud.invites.joinStopped.body", [("server", server)])),
+      .body(body),
     )
-    .child(Row::new().spacing(SpacingSize::Sm).child(try_again).child(put_off))
+    .child(Row::new().spacing(SpacingSize::Sm).child(first).child(put_off))
     .with_children(answers.person.reason(ctx, &again))
     .into()
 }
 
-/// What [`check`] came to; nothing to show, the kept invites are read again when a join finishes.
+/// *Try again*, the button `id`, which only a person presses.
+fn try_again(ctx: &Ctx, id: &str, invite: &AcceptedInvite, answers: &Answers) -> ActionButton {
+  let button = ActionButton::new(
+    id.to_owned(),
+    ButtonKind::Primary,
+    ctx.t("cloud.invites.joinStopped.tryAgain"),
+  )
+  .icon(Icon::RefreshCw);
+  if answers.finish.state().get().is_pending() {
+    button.loading()
+  } else {
+    let (answers, kept, id) = (answers.clone(), invite.clone(), id.to_owned());
+    button.on_click(move || answers.try_again(&id, &kept))
+  }
+}
+
+/// What [`check`] came to; shown through [`Answers::ended`], and the kept invites are read again when one changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Checked;
 
 impl DevtoolsInspectable for Checked {}
 
-/// Asks again, at `tick`, for every invite accepted here that waits for approval: approved, it joins.
-pub(super) fn check(ctx: &mut Ctx, tick: u64, cloud: &Cloud) {
-  ctx.future((tick, cloud.clone()), |(_, cloud)| async move {
-    let kept = cloud
-      .accepted_invites()
-      .await
-      .map_err(|error| tracing::warn!(%error, "the invites accepted here could not be read"))?;
-    for invite in kept.into_iter().filter(|invite| invite.approval.is_some()) {
-      if let Err(error) = cloud.finish_accept(invite.invite).await {
-        tracing::info!(%error, "a join that waits for approval did not finish yet");
+/// Asks again, at `tick`, for each invite accepted here whose ask on its own is due: approved, it joins, and the panel
+/// says so; refused, it says that.
+pub(super) fn check(ctx: &mut Ctx, tick: u64, (cloud, answers): (&Cloud, &Answers)) {
+  let ended = answers.ended.clone();
+  ctx.future((tick, cloud.clone()), move |(_, cloud)| {
+    let ended = ended.clone();
+    async move {
+      let checked = cloud
+        .check_accepted(Timestamp::now())
+        .await
+        .map_err(|error| tracing::warn!(%error, "the invites accepted here could not be checked"))?;
+      for one in checked {
+        match Outcome::asked(one.outcome, &one.server_name) {
+          Ok(Outcome::Waiting { .. }) => {}
+          Ok(outcome) => ended.update(|ended| ended.0.push((one.invite, outcome))),
+          Err(reason) => tracing::info!(reason = reason.key, "a join that waits for approval did not finish yet"),
+        }
       }
+      Ok::<_, ()>(Checked)
     }
-    Ok::<_, ()>(Checked)
   });
 }

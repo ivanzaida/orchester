@@ -12,6 +12,7 @@ mod answers;
 mod cloud;
 mod code;
 pub mod connect;
+mod ended;
 mod invites;
 mod list;
 mod notice;

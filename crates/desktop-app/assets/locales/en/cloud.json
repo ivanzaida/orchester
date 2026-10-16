@@ -114,9 +114,22 @@
         "later": "Nothing has been uploaded. You can close this; Orchester finishes joining when it's approved.",
         "cancel": "Cancel joining"
       },
+      "approved": {
+        "title": "{{server}} approved this computer",
+        "project": "Joined {{server}}. Next: link the checkout of {{project}} from that project's Project settings › Sharing.",
+        "server": "Joined {{server}}. When someone adds you to a project, it's offered here to link a checkout.",
+        "continue": "Continue"
+      },
+      "refused": {
+        "title": "{{server}} refused this computer",
+        "body": "Nothing was uploaded. If you didn't expect this, ask an admin of {{server}}; if someone else refused it, your Orchester password may be known to them.",
+        "back": "Back to Settings › Orchester"
+      },
       "joinStopped": {
         "title": "Joining {{server}} didn't finish",
         "body": "The invite stays accepted for this computer, and nothing was uploaded. Try again once {{server}} can be reached.",
+        "unanswered": "{{server}} hasn't approved this computer yet, and Orchester stopped asking on its own so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Try again once it's approved.",
+        "tooMany": "Orchester asked {{server}} for this invite {{count}} times and stops here, so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Ask an admin of {{server}} for a new invite.",
         "tryAgain": "Try again",
         "later": "Later"
       },
@@ -287,6 +300,7 @@
       "serverRefused": "The server refused this.",
       "serverSignedOut": "This computer's sign-in on the server ended.",
       "joinRefused": "The team server refused this computer. Nothing was uploaded; if you didn't expect this, ask one of its admins.",
+      "tooManyAsks": "Orchester asked for this invite as often as it does. Nothing was uploaded; ask an admin of the server for a new invite.",
       "serverUnreachable": "The server can't be reached. Check that this computer is on its network.",
       "certificateChanged": "The server presents a different certificate; nothing was sent to it.",
       "tooManyCodes": "The server holds as many open codes as it allows. Try again once one is used or expires."

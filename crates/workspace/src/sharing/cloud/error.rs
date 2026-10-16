@@ -34,6 +34,9 @@ pub enum CloudError {
   /// The team server refused this computer's join: its approval was refused, or the account there is disabled.
   #[error("the team server refused this computer")]
   JoinRefused,
+  /// This computer asked for the invite as often as it does ([`super::MAX_ASKS`]); each ask takes an identity token.
+  #[error("asked for this invite as often as Orchester does")]
+  TooManyAsks,
   /// The cloud lists no team server at that address for the account.
   #[error("the cloud lists no team server at that address for the account")]
   NoServer,

@@ -85,7 +85,7 @@ impl Component for CloudPanel {
     self.checks.start();
     if props.account.is_some() {
       let cloud = Services::of(ctx).cloud;
-      super::accepted::check(ctx, self.tick.get(), &cloud);
+      super::accepted::check(ctx, self.tick.get(), (&cloud, &self.invites));
     }
     let Some(account) = &props.account else {
       return sign_in::panel(ctx, &props.address, &self.form, &self.advanced);

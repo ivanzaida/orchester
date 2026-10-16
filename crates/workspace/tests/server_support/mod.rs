@@ -285,6 +285,15 @@ impl TestServer {
 
   /// The first admin approves every join that waits for approval; answers how many.
   pub fn approve_waiting(&self) -> usize {
+    self.answer_waiting(true)
+  }
+
+  /// The first admin refuses every join that waits for approval; answers how many.
+  pub fn refuse_waiting(&self) -> usize {
+    self.answer_waiting(false)
+  }
+
+  fn answer_waiting(&self, approve: bool) -> usize {
     let waiting = self.admin_request("GET", "/auth/approvals", &Value::Null);
     let ids: Vec<String> = waiting["approvals"]
       .as_array()
@@ -293,7 +302,7 @@ impl TestServer {
       .filter_map(|approval| approval["id"].as_str().map(str::to_owned))
       .collect();
     for id in &ids {
-      self.admin_request("POST", &format!("/auth/approvals/{id}"), &json!({ "approve": true }));
+      self.admin_request("POST", &format!("/auth/approvals/{id}"), &json!({ "approve": approve }));
     }
     ids.len()
   }

@@ -113,6 +113,7 @@ pub fn cloud_error(error: &CloudError) -> Said {
     CloudError::Address(_) => Said::new("cloud.errors.address"),
     CloudError::SignedOut => Said::new("cloud.errors.signedOut"),
     CloudError::JoinRefused => Said::new("cloud.errors.joinRefused"),
+    CloudError::TooManyAsks => Said::new("cloud.errors.tooManyAsks"),
     CloudError::InviteEnded => Said::new("cloud.invites.ended"),
     CloudError::NoServer => Said::new("cloud.errors.noServer"),
     CloudError::Join(error) => sharing_error(error),

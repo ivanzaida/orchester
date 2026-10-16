@@ -6,6 +6,7 @@
 //! QA copy never signs the installed app in or out. Team servers joined through the cloud keep working without it.
 
 mod accepting;
+mod asking;
 mod error;
 mod invites;
 
@@ -23,7 +24,12 @@ use orchester_core::{
 use orchester_store::StoredCloudAccount;
 use tokio::sync::watch;
 
-pub use self::{accepting::Accepted, error::CloudError, invites::ServerJoin};
+pub use self::{
+  accepting::Accepted,
+  asking::{Checked, MAX_ASKS, may_ask, waits},
+  error::CloudError,
+  invites::ServerJoin,
+};
 use super::{Servers, device};
 use crate::{background, secrets::Vault, workspace::Workspace};
 

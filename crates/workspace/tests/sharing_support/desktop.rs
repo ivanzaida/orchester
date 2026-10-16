@@ -1,0 +1,78 @@
+//! A desktop's cloud and servers on a temporary database with a keychain in memory, and a team server linked to a
+//! stand-in cloud: shared by the tests of this computer's Orchester Cloud account.
+#![allow(dead_code, reason = "each test binary uses part of it")]
+
+use std::sync::Arc;
+
+use orchester_api::{Credential, client::ServerAddress};
+use orchester_core::secret::VaultKey;
+use orchester_store::AppDb;
+use orchester_workspace::{
+  secrets::Vault,
+  sharing::{Servers, cloud::Cloud},
+  workspace::Workspace,
+};
+use tempfile::TempDir;
+use tokio::runtime::Runtime;
+
+use super::{
+  account_cloud::{AccountCloud, EMAIL, PASSWORD},
+  server_support::TestServer,
+  support::MemoryVault,
+};
+
+/// A desktop with a keychain in memory, using the cloud at `cloud`.
+pub struct Desktop {
+  pub workspace: Workspace,
+  pub vault: Arc<MemoryVault>,
+  pub servers: Servers,
+  pub cloud: Cloud,
+  pub runtime: Runtime,
+  _data: TempDir,
+}
+
+impl Desktop {
+  pub fn new(cloud: &str) -> Self {
+    let data = TempDir::new().expect("application data");
+    let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
+    let vault = Arc::new(MemoryVault::default());
+    let servers = Servers::new(workspace.clone(), Vault::with(vault.clone()));
+    let desktop = Self {
+      cloud: Cloud::new(workspace.clone(), Vault::with(vault.clone()), servers.clone()),
+      workspace,
+      vault,
+      servers,
+      runtime: Runtime::new().expect("runtime"),
+      _data: data,
+    };
+    let address = ServerAddress::parse(cloud).expect("cloud address");
+    desktop
+      .block_on(desktop.cloud.set_address(Some(address)))
+      .expect("test cloud");
+    desktop
+  }
+
+  pub fn block_on<T>(&self, work: impl Future<Output = T>) -> T {
+    self.runtime.block_on(work)
+  }
+
+  pub fn signed_in(cloud: &AccountCloud) -> Self {
+    let desktop = Self::new(&cloud.url());
+    desktop
+      .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
+      .expect("sign in");
+    desktop
+  }
+
+  pub fn device_key(&self) -> VaultKey {
+    VaultKey::cloud_device(self.workspace.installation_id().expect("installation"))
+  }
+}
+
+/// A team server with Alice as its admin, linked to `cloud`; returns it and its id, the identity tokens' audience.
+pub fn linked_server(cloud: &AccountCloud) -> (TestServer, String) {
+  let server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  let audience = server.link_cloud(&cloud.root_key, &cloud.key_set);
+  (server, audience)
+}

@@ -60,6 +60,7 @@ CREATE TABLE ui_state (
   settings::ORCHESTRATOR_PUBLISHES_MIGRATION,
   cloud::MIGRATION,
   cloud_joins::MIGRATION,
+  cloud_joins::ASKS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
