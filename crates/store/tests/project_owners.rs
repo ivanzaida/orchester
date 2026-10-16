@@ -22,6 +22,9 @@ fn project(name: &str) -> Project {
   )
 }
 
+/// The schema version before projects had owners: the migrations up to `owners`.
+const BEFORE_OWNERS: u32 = 15;
+
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
 }
@@ -78,15 +81,7 @@ fn owners_list_and_change_only_their_own_projects() {
 fn owners_of_projects_known_before_are_the_account_signed_in_then() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
-  let current = {
-    let other = dir.path().join("current.db");
-    drop(AppDb::open(&other).expect("create"));
-    rusqlite::Connection::open(&other)
-      .expect("raw connection")
-      .pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))
-      .expect("schema version")
-  };
-  let raw = AppDb::create_at_version(&path, current - 1).expect("the schema before owners");
+  let raw = AppDb::create_at_version(&path, BEFORE_OWNERS).expect("the schema before owners");
   raw
     .execute(
       "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES (?1, 'Kontur', 'H:/k', 1, 1)",
@@ -115,8 +110,7 @@ fn owners_of_projects_known_before_are_the_account_signed_in_then() {
   let raw = rusqlite::Connection::open(&signed_in).expect("raw connection");
   raw
     .execute_batch(&format!(
-      "ALTER TABLE projects DROP COLUMN owner; PRAGMA user_version = {};",
-      current - 1
+      "ALTER TABLE projects DROP COLUMN owner; PRAGMA user_version = {BEFORE_OWNERS};"
     ))
     .expect("the schema before owners");
   raw

@@ -1,14 +1,15 @@
 //! The application database next to the executable: known projects, the session log used to
 //! detect that the previous run of Orchester ended abnormally, whose each project is ([`owners`]), the state of the
-//! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and the
-//! application's own settings ([`settings`]), among them the Usage dashboard's warning threshold, and the person's
-//! agent CLI accounts ([`accounts`]).
+//! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
+//! is ([`server_owners`]), the application's own settings ([`settings`]), among them the Usage dashboard's warning
+//! threshold, and the person's agent CLI accounts ([`accounts`]).
 
 mod accounts;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
 mod owners;
+mod server_owners;
 mod servers;
 mod settings;
 
@@ -66,6 +67,7 @@ CREATE TABLE ui_state (
   cloud_joins::ASKS_MIGRATION,
   cloud_ended::MIGRATION,
   owners::MIGRATION,
+  server_owners::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

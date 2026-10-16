@@ -37,7 +37,7 @@ impl AppDb {
   }
 
   /// Every known project, whoever's it is, most recently opened first: for the work that follows every project on
-  /// this computer (an agent account's folders, a shared project's sync), never to show.
+  /// this computer (an agent account's folders), never to show.
   pub fn every_project(&self) -> Result<Vec<RegisteredProject>, StoreError> {
     let mut statement = self
       .connection
