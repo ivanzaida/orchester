@@ -197,8 +197,12 @@ impl CodeIndex {
         (
           props.project.open.repo_root.clone(),
           self.list_revision.get(),
-          // The runs an index is used by start and end; its own building is followed by the tab's poll.
-          props.project.feed.states.get(),
+          // The runs an index is used by start and end. A build the tab knows of is followed by its poll; while a
+          // run runs and none is, a transcript line may be the runner starting one.
+          props
+            .project
+            .feed
+            .run_changes(props.project.feed.running.get() && !self.watching.load(Ordering::Relaxed)),
           props.project.feed.revision.get(),
           props.project.feed.outside.get().of(Outside::CodeIndex),
         ),

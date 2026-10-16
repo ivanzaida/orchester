@@ -54,8 +54,8 @@ fn reads_a_transcript_line_again_only_where_its_run_runs() {
   let line = running.settle();
   assert_eq!(
     line,
-    counts(&[("requests", 1), ("task", 1), ("transcript", 1)]),
-    "the running run's page reads it, the project's usage does not"
+    counts(&[("project usage", 1), ("requests", 1), ("task", 1), ("transcript", 1)]),
+    "the running run's page reads it, and the project's use today"
   );
   assert!(title(&mut running).contains("Retry webhooks, renamed"), "and shows it");
 
@@ -63,7 +63,11 @@ fn reads_a_transcript_line_again_only_where_its_run_runs() {
   retitle(&ended, "KON-1", "CI caching, renamed");
   ended.report(false);
   let line = ended.settle();
-  assert_eq!(line, counts(&[]), "another run's lines read nothing");
+  assert_eq!(
+    line,
+    counts(&[("project usage", 1)]),
+    "another run's lines read only the project's use today"
+  );
   ended.report(true);
   let state = ended.settle();
   assert_eq!(
@@ -96,9 +100,27 @@ fn reads_a_burst_of_lines_once_per_pace_and_shows_the_last() {
     (1..=paces + 1).contains(&reads),
     "{reads} reads of the task in {paces} paces"
   );
-  assert_eq!(burst.len(), 1, "only the task is read: {burst:?}");
+  let usage = burst.get("project usage").copied().unwrap_or(0);
+  assert!(
+    (1..=paces + 1).contains(&usage),
+    "{usage} reads of today's use in {paces} paces"
+  );
+  assert_eq!(burst.len(), 2, "only the task and today's use are read: {burst:?}");
   assert!(
     title(&mut counted).contains("after the burst"),
     "the last line is read too"
+  );
+}
+
+#[test]
+fn reads_todays_use_on_a_line_while_one_of_the_projects_runs_runs() {
+  // KON-12 runs; KON-1's page shows the project's limits and today's use in the status bar.
+  let mut counted = task_page("KON-1", TaskView::Summary, "task-summary");
+  counted.report(false);
+  let line = counted.settle();
+  assert_eq!(
+    line.get("project usage"),
+    Some(&1),
+    "an agent's turn moves today's use: {line:?}"
   );
 }

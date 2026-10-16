@@ -22,7 +22,7 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{id::ProjectId, run::TaskPhase, time::Timestamp};
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   background,
@@ -55,9 +55,11 @@ pub struct ProjectFeed {
   /// Counts changes of runs and transcripts while a tab of the project is active, at most once per
   /// [`TRANSCRIPT_PACE`].
   pub changes: Signal<u64>,
-  /// Counts changes of the state of the project's runs: a run started, waits, recorded what it used or
-  /// ended. A transcript's lines do not count.
+  /// Counts changes of the state of the project's runs: a run started, waits or ended. A transcript's lines do
+  /// not count.
   pub states: Signal<u64>,
+  /// Whether one of the project's runs runs, as its tasks were last read.
+  pub running: Signal<bool>,
   /// Counts saves of the project's tasks a screen made; the tasks are read again after each
   /// ([`ProjectFeed::saved`]).
   pub revision: Signal<u64>,
@@ -147,6 +149,7 @@ impl ProjectFeed {
       status: Signal::new(None),
       changes: Signal::new(0),
       states: Signal::new(0),
+      running: Signal::new(false),
       revision: Signal::new(0),
       outside: Signal::new(OutsideCounts::default()),
       job_state: Signal::new(jobs.state()),
@@ -272,19 +275,31 @@ impl Component for FeedLoader {
     let saved = self.feed.revision.get() + outside.tasks;
     let hold = services.hold;
     let (tasks, stale) = tasks(ctx, (root.clone(), saved, states), (&hold, &services.programs));
+    let running = tasks.ready().is_some_and(runs_now);
+    publish(&self.feed.running, running);
     publish(&self.feed.tasks, tasks);
     if let Some(stale) = stale {
       publish(&self.feed.stale, stale);
     }
     let day_start = Timestamp::now().local_day_start();
-    // Limits automation changed count too: the status bar and New task show them. A run records what it
-    // used as a change of its state, so its transcript's lines change nothing here.
-    let deps = (root, saved + outside.limits, states, day_start);
+    // Limits automation changed count too: the status bar and New task show them. Today's use grows with each
+    // agent turn, which the runner reports as transcript activity: it is read again on those while a run runs
+    // and the project is followed that closely, on run state changes otherwise.
+    let runs = if running && active { changes } else { states };
+    let deps = (root, saved + outside.limits, runs, day_start);
     if let Some(usage) = usage(ctx, deps, &hold) {
       publish(&self.feed.usage, Some(usage));
     }
     Element::new()
   }
+}
+
+/// Whether one of `tasks`' latest runs runs.
+fn runs_now(tasks: &ProjectTasks) -> bool {
+  tasks
+    .phases
+    .values()
+    .any(|latest| latest.phase() == Some(TaskPhase::Running))
 }
 
 /// Sets `signal` to `value` unless it holds it already, so its readers render only for a change.
