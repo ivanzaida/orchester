@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use orchester_api::cloud::SessionEnd;
-use orchester_core::time::Timestamp;
+use orchester_core::{id::CloudAccountId, time::Timestamp};
 use orchester_store::{CloudSignInEnd, EndedCloudSignIn};
 
 use super::{Cloud, CloudError};
@@ -24,8 +24,8 @@ pub const RETRY_AFTER_CAP: Duration = Duration::from_secs(60 * 60);
 /// Whether this computer is signed in to Orchester Cloud.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SignIn {
-  /// The app is open.
-  SignedIn { email: String },
+  /// The app is open, with the projects of the cloud account `account` (`crate::workspace`).
+  SignedIn { account: CloudAccountId, email: String },
   /// Only the sign-in gate shows, since `since`; `ended` says why the last sign-in from here ended, if one did.
   SignedOut {
     ended: Option<EndedCloudSignIn>,
@@ -36,6 +36,14 @@ pub enum SignIn {
 impl SignIn {
   pub const fn is_signed_in(&self) -> bool {
     matches!(self, Self::SignedIn { .. })
+  }
+
+  /// The account signed in, whose projects the app shows.
+  pub const fn account(&self) -> Option<CloudAccountId> {
+    match self {
+      Self::SignedIn { account, .. } => Some(*account),
+      Self::SignedOut { .. } => None,
+    }
   }
 }
 

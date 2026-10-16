@@ -338,14 +338,16 @@ the agent logged: {agent}"
   /// Kontur named `name` in the list of projects, as when its database names it differently.
   pub fn rename(&self, name: &str) {
     let key = self.db().project().key().clone();
-    AppDb::open(&self.window.data.database())
-      .expect("the app's database")
-      .register_project(
-        &Project::new(self.project, key, named(name)),
-        &self.root,
-        Timestamp::now(),
-      )
-      .expect("renamed");
+    let mut db = AppDb::open(&self.window.data.database()).expect("the app's database");
+    // The project stays the signed-in account's.
+    let owner = db.cloud_account().expect("the account").map(|account| account.account);
+    db.register_project(
+      &Project::new(self.project, key, named(name)),
+      &self.root,
+      Timestamp::now(),
+      owner.as_ref(),
+    )
+    .expect("renamed");
   }
 
   /// Another project named `name`, in a repository of its own; its folder.

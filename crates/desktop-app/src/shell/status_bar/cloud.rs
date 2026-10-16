@@ -44,7 +44,7 @@ impl DevtoolsInspectable for CloudFacts {}
 impl CloudFacts {
   pub fn of(sign_in: &SignIn, reach: Reach) -> Self {
     match (sign_in, reach) {
-      (SignIn::SignedIn { email }, Reach::Unreachable { since }) => Self::Offline {
+      (SignIn::SignedIn { email, .. }, Reach::Unreachable { since }) => Self::Offline {
         since,
         email: email.clone(),
       },

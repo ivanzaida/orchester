@@ -1,8 +1,9 @@
 //! Moving around the window: the tabs (`tabs`), each with its own history, and the router that shows
 //! the active tab's place. Every navigation goes through [`Navigation`], which changes the tabs and then
 //! has the router show the active tab's route; the router keeps no history of its own (it is always
-//! replaced), so Back and Forward are the active tab's.
+//! replaced), so Back and Forward are the active tab's. Each Orchester Cloud account has tabs of its own (`accounts`).
 
+pub mod accounts;
 pub mod guard;
 pub mod input;
 pub mod pointed;
@@ -121,6 +122,14 @@ impl Navigation {
   /// Closes the active tab, when it can be closed.
   pub fn close_active(&self) {
     self.change(|tabs| tabs.close(tabs.active().id()));
+  }
+
+  /// Shows `tabs` in place of the window's tabs, whatever those hold, and returns them: the tabs of another account
+  /// signing in take the place of the last one's (`root`), with no leave guard, which held that account's edits.
+  pub fn swap_tabs(&self, tabs: TabSet) -> TabSet {
+    let before = self.tabs_now();
+    self.apply(tabs);
+    before
   }
 
   /// Goes to `route` like [`go`](Self::go), pointing at `card` on the page it opens; also when the active

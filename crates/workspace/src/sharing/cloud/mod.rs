@@ -11,6 +11,7 @@ mod asking;
 mod error;
 mod gate;
 mod invites;
+mod seen;
 
 use std::sync::{
   Arc,
@@ -36,6 +37,7 @@ pub use self::{
   error::CloudError,
   gate::{CHECK_EVERY, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait},
   invites::ServerJoin,
+  seen::keep_activity_to_the_account,
 };
 use super::{Servers, device};
 use crate::{background, secrets::Vault, workspace::Workspace};
@@ -211,11 +213,14 @@ impl Cloud {
       inner.generation.fetch_add(1, Ordering::SeqCst);
       db.set_cloud_account(Some(&kept))?;
       db.set_cloud_sign_in_ended(None)?;
+      // The projects added while no account was signed in, and those from before projects had owners, are its.
+      db.claim_unowned_projects(&kept.account)?;
       Ok(())
     })
     .await??;
     self.inner.reach.send_replace(Reach::Reached);
     self.inner.sign_in.send_replace(SignIn::SignedIn {
+      account: account.account,
       email: account.email.clone(),
     });
     self.changed();
@@ -327,7 +332,7 @@ impl Cloud {
   /// Why the sign-in of now ended, as this session knows it, for when the database cannot say.
   fn ended_now(&self, reason: CloudSignInEnd, at: Timestamp) -> Option<EndedCloudSignIn> {
     match self.sign_in_state() {
-      SignIn::SignedIn { email } => Some(EndedCloudSignIn {
+      SignIn::SignedIn { email, .. } => Some(EndedCloudSignIn {
         email,
         reason,
         ended_at: at,
@@ -428,7 +433,10 @@ impl Cloud {
 fn stored_sign_in(workspace: &Workspace) -> SignIn {
   let db = workspace.db.lock();
   match (db.cloud_account(), db.cloud_sign_in_ended()) {
-    (Ok(Some(account)), _) => SignIn::SignedIn { email: account.email },
+    (Ok(Some(account)), _) => SignIn::SignedIn {
+      account: account.account,
+      email: account.email,
+    },
     (Ok(None), Ok(ended)) => SignIn::SignedOut {
       ended,
       since: Timestamp::now(),

@@ -6,7 +6,8 @@
 //!
 //! Until this computer is signed in to Orchester Cloud, the session's window is the sign-in gate alone
 //! (`screens::gate`): no tabs, menu, sidebar, screens or keyboard shortcuts. The tabs stay as they were behind it, so
-//! signing in opens them again; the projects' runners keep running, and the close flow still holds a close.
+//! signing in again opens them again; another account gets its own tabs (`navigation::accounts`). The projects'
+//! runners keep running, and the close flow still holds a close.
 
 use lurq::{
   app::{
@@ -29,6 +30,7 @@ use crate::{
   mcp::{self, McpLink, WindowLink},
   navigation::{
     Navigation,
+    accounts::AccountTabs,
     input::{FirstKeys, window_input},
     tabs::TabSet,
   },
@@ -132,6 +134,8 @@ struct SessionWindow {
   first_keys: FirstKeys,
   /// The one handler every Markdown of the window follows its links with.
   links: ChatLinks,
+  /// Whose tabs the window shows.
+  account_tabs: AccountTabs,
 }
 
 impl Component for SessionWindow {
@@ -156,6 +160,7 @@ impl Component for SessionWindow {
     ));
     Self {
       router,
+      account_tabs: AccountTabs::new(services.cloud.sign_in_state().account()),
       links: ChatLinks::new(navigation.clone()),
       navigation,
       projects,
@@ -178,6 +183,9 @@ impl Component for SessionWindow {
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
+    if let Some(account) = sign_in.account() {
+      self.account_tabs.follow(account, &self.navigation, &self.projects);
+    }
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());

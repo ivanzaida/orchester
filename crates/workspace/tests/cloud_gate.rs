@@ -15,7 +15,7 @@ mod support;
 
 use std::time::Duration;
 
-use account_cloud::{AccountCloud, CheckAnswer, EMAIL, OTHER_EMAIL, PASSWORD};
+use account_cloud::{ACCOUNT, AccountCloud, CheckAnswer, EMAIL, OTHER_ACCOUNT, OTHER_EMAIL, PASSWORD};
 use desktop::Desktop;
 use orchester_api::{Credential, client::ClientError};
 use orchester_core::{secret::SecretVault, time::Timestamp};
@@ -54,7 +54,13 @@ fn cloud_gate_is_closed_until_a_sign_in_and_after_signing_out_here() {
   desktop
     .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
     .expect("sign in");
-  assert_eq!(desktop.cloud.sign_in_state(), SignIn::SignedIn { email: EMAIL.into() });
+  assert_eq!(
+    desktop.cloud.sign_in_state(),
+    SignIn::SignedIn {
+      account: ACCOUNT.parse().expect("an account id"),
+      email: EMAIL.into()
+    }
+  );
   assert_eq!(desktop.cloud.reach(), Reach::Reached);
   assert!(restarted(&desktop).is_signed_in(), "the sign-in holds across starts");
 
@@ -291,6 +297,7 @@ fn cloud_gate_a_late_refusal_ends_only_the_token_it_refused() {
   assert_eq!(
     desktop.cloud.sign_in_state(),
     SignIn::SignedIn {
+      account: OTHER_ACCOUNT.parse().expect("an account id"),
       email: OTHER_EMAIL.into()
     },
     "the newer sign-in stays"

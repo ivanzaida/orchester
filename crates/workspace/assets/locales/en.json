@@ -867,6 +867,7 @@
     "notAGitRepository": "This folder is not the root of a git repository.",
     "alreadyInitialized": "This repository already contains an Orchester project.",
     "projectMissing": "The repository no longer contains its Orchester project. It may have been moved or deleted.",
+    "anotherAccountsProject": "This folder's project belongs to another Orchester account on this computer. Sign in with that account to open it.",
     "newerSchema": "The data was written by a newer version of Orchester.",
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "unstorableValue": "A value is too large to be stored. The log has the details.",

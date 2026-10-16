@@ -6,6 +6,7 @@
 //!
 //! `cargo test -p orchester-app --test gate gate_`
 
+mod accounts;
 mod came_back;
 mod states;
 #[path = "../support/mod.rs"]

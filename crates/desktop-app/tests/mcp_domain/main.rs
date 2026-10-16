@@ -7,6 +7,7 @@
 mod accounts;
 mod accounts_window;
 mod automation_permissions;
+mod cloud_accounts;
 mod connections_window;
 mod drafts;
 mod gates;

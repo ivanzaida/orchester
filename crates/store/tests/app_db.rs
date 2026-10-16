@@ -51,14 +51,14 @@ fn projects_are_registered_once_and_listed_by_last_use() {
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
   let kontur = project("Kontur");
   let website = project("Personal website");
-  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(1))
+  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(1), None)
     .expect("register");
-  db.register_project(&website, Path::new("H:/projects/website"), at(2))
+  db.register_project(&website, Path::new("H:/projects/website"), at(2), None)
     .expect("register");
-  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(3))
+  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(3), None)
     .expect("reopen");
 
-  let projects = db.projects().expect("list");
+  let projects = db.projects_of(None).expect("list");
   let names: Vec<&str> = projects.iter().map(|project| project.name.as_str()).collect();
   assert_eq!(names, ["Kontur", "Personal website"]);
   assert_eq!(projects[0].last_opened_at, at(3));
@@ -103,14 +103,19 @@ fn projects_forgotten_leave_their_folder_and_data_on_disk() {
   let kontur = project("Kontur");
   drop(ProjectDb::create(&repo, kontur.clone()).expect("create the project"));
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  db.register_project(&kontur, &repo, at(1)).expect("register");
-  db.register_project(&project("Personal website"), Path::new("H:/projects/website"), at(2))
-    .expect("register");
+  db.register_project(&kontur, &repo, at(1), None).expect("register");
+  db.register_project(
+    &project("Personal website"),
+    Path::new("H:/projects/website"),
+    at(2),
+    None,
+  )
+  .expect("register");
 
-  db.forget_project(kontur.id()).expect("forget");
+  db.forget_project(kontur.id(), None).expect("forget");
 
   let names: Vec<String> = db
-    .projects()
+    .projects_of(None)
     .expect("list")
     .iter()
     .map(|project| project.name.as_str().to_owned())
@@ -123,7 +128,7 @@ fn projects_forgotten_leave_their_folder_and_data_on_disk() {
   let reopened = ProjectDb::open(&repo).expect("the project opens again");
   assert_eq!(reopened.project().id(), kontur.id());
   // Forgetting it again changes nothing.
-  db.forget_project(kontur.id()).expect("forget again");
+  db.forget_project(kontur.id(), None).expect("forget again");
 }
 
 #[test]
@@ -132,11 +137,13 @@ fn projects_whose_folder_is_gone_are_listed_as_missing() {
   let (here, gone) = (dir.path().join("kontur"), dir.path().join("ledger"));
   fs::create_dir_all(&here).expect("create the folder");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  db.register_project(&project("Kontur"), &here, at(2)).expect("register");
-  db.register_project(&project("Ledger"), &gone, at(1)).expect("register");
+  db.register_project(&project("Kontur"), &here, at(2), None)
+    .expect("register");
+  db.register_project(&project("Ledger"), &gone, at(1), None)
+    .expect("register");
 
   let listed: Vec<(String, bool)> = db
-    .projects()
+    .projects_of(None)
     .expect("list")
     .iter()
     .map(|project| (project.name.as_str().to_owned(), project.folder_missing()))
@@ -250,7 +257,7 @@ fn ui_state_and_servers_are_added_to_a_database_of_schema_1() {
   db.set_ui_state("tabs", "saved").expect("store");
   db.add_server(&server("https://orchester.kontur.lan", 2))
     .expect("add a server");
-  assert_eq!(db.projects().expect("list").len(), 1, "the projects are kept");
+  assert_eq!(db.projects_of(None).expect("list").len(), 1, "the projects are kept");
   drop(db);
   assert_eq!(schema_version(&path), current_schema_version());
 }
@@ -272,7 +279,7 @@ fn servers_are_added_to_a_database_of_schema_2_and_its_rows_are_kept() {
 
   let mut db = AppDb::open(&path).expect("migrate");
   let names: Vec<String> = db
-    .projects()
+    .projects_of(None)
     .expect("list")
     .iter()
     .map(|project| project.name.as_str().to_owned())
