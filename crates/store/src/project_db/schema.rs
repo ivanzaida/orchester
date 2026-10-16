@@ -31,6 +31,7 @@ mod questions;
 mod queue_holds;
 mod recovery;
 mod reviewer_usage;
+mod shared_members;
 mod sharing;
 mod sources;
 mod steering;
@@ -551,4 +552,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   editor_drafts::MIGRATION,
   sharing::ADDRESS_MIGRATION,
   pull_request_syncs::MIGRATION,
+  shared_members::MIGRATION,
 ];

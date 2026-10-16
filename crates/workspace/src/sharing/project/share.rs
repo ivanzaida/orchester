@@ -108,8 +108,20 @@ pub enum IdentityProblem {
 
 /// What sharing the project at `repo_root` as `identity` would do. Blocking.
 pub fn plan(repo_root: &Path, identity: RepositoryIdentity) -> Result<SharePlan, StoreError> {
-  let db = ProjectDb::open(repo_root)?;
-  let tasks = db.tasks()?;
+  let (tasks, next, claimed) = upload_keys(&ProjectDb::open(repo_root)?)?;
+  Ok(SharePlan {
+    identity,
+    tasks,
+    next,
+    claimed,
+  })
+}
+
+/// What an upload that keeps numbers takes from `db`: its tasks' keys by number, the key the server gives the next
+/// new task, and the keys of the tasks with a run that has not ended, which are claimed for the person.
+pub(super) fn upload_keys(db: &ProjectDb) -> Result<(Vec<TaskKey>, TaskKey, Vec<TaskKey>), StoreError> {
+  let mut tasks = db.tasks()?;
+  tasks.sort_by_key(|task| task.key().number());
   let mut claimed = Vec::new();
   for task in &tasks {
     if db.active_task_run(task.id())?.is_some() {
@@ -118,12 +130,11 @@ pub fn plan(repo_root: &Path, identity: RepositoryIdentity) -> Result<SharePlan,
   }
   let highest = tasks.iter().map(|task| task.key().number().get()).max().unwrap_or(0);
   let next = NonZeroU32::MIN.saturating_add(highest);
-  Ok(SharePlan {
-    identity,
-    next: TaskKey::new(db.project().key().clone(), next),
-    tasks: tasks.iter().map(|task| task.key().clone()).collect(),
+  Ok((
+    tasks.iter().map(|task| task.key().clone()).collect(),
+    TaskKey::new(db.project().key().clone(), next),
     claimed,
-  })
+  ))
 }
 
 /// What linking a local project to a server project as its first checkout needs.
@@ -179,7 +190,7 @@ impl Servers {
       .await
   }
 
-  async fn link_upload(
+  pub(super) async fn link_upload(
     &self,
     entry: &ServerEntry,
     repo_root: &Path,

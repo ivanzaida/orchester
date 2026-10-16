@@ -233,6 +233,75 @@ impl TestServer {
     self.admin_request("POST", &path, &json!({"username": username, "role": "member"}));
   }
 
+  /// Gives `username` the `role` (`owner` or `member`) in `project`, as an owner does in the server admin.
+  pub fn set_role(&self, project: &SharedProject, username: &str, role: &str) {
+    let path = format!("/projects/{}/members", project.id);
+    let members = self.admin_request("GET", &path, &Value::Null);
+    let user = members["members"]
+      .as_array()
+      .expect("members")
+      .iter()
+      .find(|member| member["username"] == username)
+      .expect("a member")["user"]["id"]
+      .as_str()
+      .expect("member id")
+      .to_owned();
+    self.admin_request("PATCH", &format!("{path}/{user}"), &json!({ "role": role }));
+  }
+
+  /// Removes `username` from `project`, as an owner does in the server admin.
+  pub fn remove_member(&self, project: &SharedProject, username: &str) {
+    let path = format!("/projects/{}/members", project.id);
+    let members = self.admin_request("GET", &path, &Value::Null);
+    let user = members["members"]
+      .as_array()
+      .expect("members")
+      .iter()
+      .find(|member| member["username"] == username)
+      .expect("a member")["user"]["id"]
+      .as_str()
+      .expect("member id")
+      .to_owned();
+    self.admin_request("DELETE", &format!("{path}/{user}"), &Value::Null);
+  }
+
+  /// The keys of `project`'s tasks on the server, by number, as the first admin reads them.
+  pub fn task_keys(&self, project: &SharedProject) -> Vec<String> {
+    let tasks = self.admin_request("GET", &format!("/projects/{}/tasks", project.id), &Value::Null);
+    let mut keys: Vec<(u64, String)> = tasks["tasks"]
+      .as_array()
+      .expect("tasks")
+      .iter()
+      .map(|task| {
+        (
+          task["number"].as_u64().expect("number"),
+          task["key"].as_str().expect("key").to_owned(),
+        )
+      })
+      .collect();
+    keys.sort();
+    keys.into_iter().map(|(_, key)| key).collect()
+  }
+
+  /// Gives the task `key` of `project` the title `title`, as the first admin saves it from their computer.
+  pub fn retitle(&self, project: &SharedProject, key: &str, title: &str) {
+    let path = format!("/projects/{}/tasks", project.id);
+    let tasks = self.admin_request("GET", &path, &Value::Null);
+    let task = tasks["tasks"]
+      .as_array()
+      .expect("tasks")
+      .iter()
+      .find(|task| task["key"] == key)
+      .expect("the task")
+      .clone();
+    let body = json!({
+      "revision": task["revision"],
+      "changes": { "title": title },
+    });
+    let id = task["id"].as_str().expect("task id");
+    self.admin_request("PATCH", &format!("{path}/{id}"), &body);
+  }
+
   /// An invite to `project` as a member by email, which the cloud routes; returns its id.
   pub fn project_email_invite(&self, email: &str, project: &SharedProject) -> String {
     let invite = self.admin_request(

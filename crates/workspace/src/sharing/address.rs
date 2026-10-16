@@ -51,6 +51,12 @@ impl ProjectAddress {
   pub fn to_text(&self) -> String {
     format!("{}/{}", self.server.as_str(), self.slug.as_str())
   }
+
+  /// Where the project's owners manage its members, roles and invites: its page in the server admin
+  /// (`docs/architecture/server.md`, rows 62–63), `https://orchester.example.com/admin/projects/kontur`.
+  pub fn admin_url(&self) -> String {
+    format!("{}/admin/projects/{}", self.server.as_str(), self.slug.as_str())
+  }
 }
 
 /// How a checkout's `origin` compares with the repository a server project was set up for.
