@@ -55,6 +55,7 @@ fn token(key: &SigningKey, audience: &str, now: i64) -> String {
       invite: None,
       purpose: None,
       mfa: false,
+      certificate: None,
     },
     now,
   )

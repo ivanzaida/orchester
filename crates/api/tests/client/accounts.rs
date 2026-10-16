@@ -41,7 +41,7 @@ async fn client_joins_with_a_code_and_a_wrong_code_answers_invalid_code() {
     }
   ));
   let code = server.server.host_setup_code().await.expect("setup").expect("no admin");
-  let joined = server.join(&code, Some("bohdan")).await;
+  let joined = server.join(&code, "bohdan").await;
   assert!(joined.user.admin);
   assert_eq!(joined.session.via, JoinedVia::Code);
   let device = token(&joined.token);
@@ -60,9 +60,9 @@ async fn client_signs_out_and_revokes_another_device() {
   let client = server.client();
   let pairing = server.post(&here, "/auth/pairings", serde_json::json!({})).await;
   let laptop = server
-    .join(
+    .join_as(
       &Credential::new(pairing["code"].as_str().expect("pairing code").into()),
-      None,
+      "alice",
     )
     .await;
   let laptop_token = token(&laptop.token);

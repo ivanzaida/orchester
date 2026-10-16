@@ -6,7 +6,7 @@
 use deadpool_postgres::GenericClient;
 use orchester_api::{
   certificate::CertificatePin,
-  cloud::{AccountServer, CloudErrorCode, CloudServer, RegisteredServer, ServerLink, ServerLinked, TokenPurpose},
+  cloud::{AccountServer, CloudErrorCode, CloudServer, RegisteredServer, ServerLink, ServerLinked},
   identity::{CLOCK_SKEW_SECS, PublicKey, read_statement, verify_statement},
   statements::{LINK_STATEMENT_TYPE, LinkStatement},
 };
@@ -61,7 +61,7 @@ impl Cloud {
     let key_set = self.key_set(&transaction).await?;
     transaction.commit().await?;
     let issued = self
-      .issue_for(auth, statement.server.to_string(), (Some(TokenPurpose::Link), None))
+      .issue_for(auth, statement.server.to_string(), crate::keys::TokenUse::link())
       .await?;
     Ok(ServerLinked {
       server: registered(server(&statement)),

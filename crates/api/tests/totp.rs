@@ -61,6 +61,7 @@ fn totp_identity_claim_is_absent_unless_true() {
     invite: None,
     purpose: None,
     mfa,
+    certificate: None,
     jti: "jti".into(),
     iat: 1,
     exp: 2,

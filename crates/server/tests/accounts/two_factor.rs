@@ -1,8 +1,8 @@
 //! Two-factor authentication on the team server (`docs/architecture/server.md`, "Invites", "Codes"): an invite, by
 //! email or with a code, is made only from a device token issued for a cloud identity that signed in with two-factor
 //! authentication (the identity token's `mfa` claim), or from a browser signed in with a pairing code such a token
-//! made. A join token that accepts an invite must carry the claim, and so must the identity token an app sends with
-//! every code but the setup code, verified against the pinned root.
+//! made. A join token that accepts an invite must carry the claim, and so must the identity token for codes an app
+//! sends with every code but the setup code, verified against the pinned root (`code_identity.rs`: what else binds it).
 
 use orchester_api::{Credential, ErrorCode, InviteCreated, Joined, cloud::TokenPurpose};
 use serde_json::{Value, json};
@@ -116,30 +116,34 @@ async fn two_factor_a_code_entered_in_an_app_needs_a_two_factor_identity() {
   .json();
   let code = invite.code.expect("a code");
   refused(&redeem(&server, &code, None).await, 403, ErrorCode::MfaUnverifiable);
-  let (valid, key_set) = server.two_factor_proof().await;
-  let audience = server
-    .server
-    .host_cloud(orchester_server::host::CloudCommand::Show)
-    .await
-    .expect("pinned")
-    .server;
+  let (valid, key_set) = server.two_factor_proof("bob").await;
+  let audience = server.audience().await;
   refused(&redeem(&server, &code, None).await, 403, ErrorCode::MfaRequired);
   let cloud = server.cloud();
-  let without = cloud.token_mfa(&bob(&audience, None), false, server.seconds());
+  let now = server.seconds();
+  let without = cloud.code_token(&bob(&audience, None), (false, None), now);
   refused(
     &redeem(&server, &code, Some((&without, &key_set))).await,
     403,
     ErrorCode::MfaRequired,
   );
-  let elsewhere = cloud.token_mfa(
-    &bob("0199f0a0-0000-7000-8000-00000000e15e", None),
-    true,
-    server.seconds(),
-  );
+  // A token for another server, or for another use than codes, is none for this code.
+  let elsewhere = cloud.code_token(&bob("0199f0a0-0000-7000-8000-00000000e15e", None), (true, None), now);
+  let to_join = cloud.token_mfa(&bob(&audience, None), true, now);
+  let for_admin = cloud.two_factor_admin_token(&bob(&audience, None), now);
+  for token in [elsewhere, to_join, for_admin] {
+    refused(
+      &redeem(&server, &code, Some((&token, &key_set))).await,
+      401,
+      ErrorCode::InvalidIdentity,
+    );
+  }
+  // Bound to a certificate, which this server, serving plain HTTP behind a proxy, cannot compare.
+  let bound = cloud.code_token(&bob(&audience, None), (true, Some(&"ab".repeat(32))), now);
   refused(
-    &redeem(&server, &code, Some((&elsewhere, &key_set))).await,
-    401,
-    ErrorCode::InvalidIdentity,
+    &redeem(&server, &code, Some((&bound, &key_set))).await,
+    403,
+    ErrorCode::MfaUnverifiable,
   );
   server
     .server

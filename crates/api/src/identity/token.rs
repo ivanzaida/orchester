@@ -34,6 +34,10 @@ pub struct IdentityClaims {
   /// Absent means not: a team server lets an admin send invites by email, and admits an invite's token, only with it.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub mfa: bool,
+  /// For purpose `code` to a server not linked to the cloud: the fingerprint (hex) of the certificate the app pinned
+  /// for it, which the server must present itself to take the token.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub certificate: Option<String>,
   /// Unique per token; a team server accepts each once.
   pub jti: String,
   pub iat: i64,
@@ -51,6 +55,7 @@ pub struct TokenSubject {
   pub invite: Option<String>,
   pub purpose: Option<TokenPurpose>,
   pub mfa: bool,
+  pub certificate: Option<String>,
 }
 
 impl IdentityClaims {
@@ -69,6 +74,7 @@ impl IdentityClaims {
       invite: subject.invite,
       purpose: subject.purpose,
       mfa: subject.mfa,
+      certificate: subject.certificate,
       jti: jws::encode(&jti),
       iat: now,
       exp: now + TOKEN_LIFETIME_SECS,

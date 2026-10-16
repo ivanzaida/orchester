@@ -10,6 +10,7 @@ mod schedule;
 
 use std::fmt;
 
+pub(crate) use issue::TokenUse;
 use orchester_api::{
   Credential,
   identity::{CLOCK_SKEW_SECS, KEY_LISTED_AFTER_SECS, KEY_SIGNS_SECS, PrivateKey},

@@ -109,6 +109,20 @@ pub(crate) fn create_user(
   Ok(user)
 }
 
+/// The cloud account `user` is linked to, if any.
+pub(crate) fn cloud_subject(connection: &Connection, user: UserId) -> Result<Option<String>, ServerError> {
+  Ok(
+    connection
+      .query_row(
+        "SELECT cloud_subject FROM users WHERE id=?1",
+        [user.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?
+      .flatten(),
+  )
+}
+
 /// Links an account to the cloud account `subject`.
 pub(crate) fn link_subject(connection: &Connection, user: UserId, subject: &str, now: i64) -> Result<(), ServerError> {
   connection.execute(

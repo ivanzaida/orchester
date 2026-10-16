@@ -23,7 +23,7 @@ pub(crate) use sessions::{
   touch_session,
 };
 pub(crate) use users::{
-  NewUser, create_user, find_user, has_admin, link_subject, patch_user, user_by_id, user_by_subject,
+  NewUser, cloud_subject, create_user, find_user, has_admin, link_subject, patch_user, user_by_id, user_by_subject,
 };
 
 use crate::error::ServerError;

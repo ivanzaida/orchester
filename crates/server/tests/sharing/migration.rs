@@ -165,18 +165,24 @@ async fn s1c_migration_keeps_s1a_accounts_and_device_tokens_and_revokes_initial_
     .host_account_code("bob".into())
     .await
     .expect("account code");
-  let bob = server.join(&code, None, "new laptop").await;
+  let bob = server.join_as(&code, "bob", "new laptop").await;
   assert_eq!(bob.user.id.to_string(), BOB);
   let projects: Projects = server.request("GET", "/projects", Some(&bob.token), None).await.json();
   assert_eq!(projects.projects.len(), 1);
   assert_eq!(projects.projects[0].id.to_string(), KONTUR);
+  // The migrated accounts have no cloud identity; Bob's account code linked the one his app showed with it.
   let unlinked: i64 = server
     .database()
     .query_row("SELECT COUNT(*) FROM users WHERE cloud_subject IS NULL", [], |row| {
       row.get(0)
     })
     .expect("users");
-  assert_eq!(unlinked, 3);
+  assert_eq!(unlinked, 2);
+  let linked: String = server
+    .database()
+    .query_row("SELECT cloud_subject FROM users WHERE id=?1", [BOB], |row| row.get(0))
+    .expect("Bob's account");
+  assert_eq!(linked, crate::support::cloud::person("bob"));
   server.finish().await;
 }
 

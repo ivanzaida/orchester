@@ -146,6 +146,8 @@ pub fn sharing_error(error: &SharingError) -> Said {
     SharingError::ForeignAddress => Said::new("sharing.upload.foreignAddress"),
     SharingError::TwoFactorOff => Said::new("sharing.connect.twoFactorOff"),
     SharingError::TwoFactorSession => Said::new("sharing.connect.twoFactorSession"),
+    SharingError::NotRegisteredServer => Said::new("sharing.connect.notRegisteredServer"),
+    SharingError::CodeUnbound => Said::new("sharing.connect.codeUnbound"),
     _ => Said::new("cloud.errors.local"),
   }
 }

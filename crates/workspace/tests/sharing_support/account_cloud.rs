@@ -20,7 +20,10 @@ use std::{
   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use orchester_api::identity::{IdentityClaims, SigningKey};
+use orchester_api::{
+  cloud::TokenPurpose,
+  identity::{IdentityClaims, SigningKey},
+};
 use orchester_core::id::IdempotencyKey;
 
 #[allow(
@@ -329,7 +332,9 @@ fn route(
       let two_factor = holder.map_or(Value::Null, |holder| holder.two_factor(off));
       ("200 OK", Some(json!({ "account": account, "two_factor": two_factor })))
     }
-    "POST /api/v1/identity-tokens" => issue(body, state, signing).unwrap_or(not_found),
+    "POST /api/v1/identity-tokens" => holder
+      .and_then(|holder| issue(body, (holder, state), signing))
+      .unwrap_or(not_found),
     "DELETE /api/v1/auth/sessions/current" => {
       state.lock().signed_out = true;
       ("204 No Content", None)
@@ -364,12 +369,15 @@ fn route(
   }
 }
 
-/// `POST /api/v1/identity-tokens`: a join token; with `invite`, one that accepts that invite from the audience, open
-/// or accepted before, which is then accepted and listed no more (`docs/cloud-api.md`). `None` for a declined one.
-fn issue(body: &str, state: &Mutex<State>, signing: &SigningKey) -> Option<Answer> {
+/// `POST /api/v1/identity-tokens`: a token about `holder` for its purpose, bound to the certificate it names; with
+/// `invite`, one that accepts that invite from the audience, open or accepted before, which is then accepted and
+/// listed no more (`docs/cloud-api.md`). `None` for a declined one.
+fn issue(body: &str, (holder, state): (&Account, &Mutex<State>), signing: &SigningKey) -> Option<Answer> {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
   let audience = request["audience"].as_str().unwrap_or_default().to_owned();
   let invite = request["invite"].as_str();
+  let purpose = serde_json::from_value(request["purpose"].clone()).ok()?;
+  let certificate = request["certificate"].as_str().map(str::to_owned);
   if let Some(id) = invite {
     let mut state = state.lock();
     let found = state.invites.iter_mut().find(|answered| {
@@ -378,7 +386,7 @@ fn issue(body: &str, state: &Mutex<State>, signing: &SigningKey) -> Option<Answe
     found["answer"] = json!("accepted");
     state.accepting.push(id.to_owned());
   }
-  let token = identity_token(signing, &audience, invite);
+  let token = identity_token(signing, (holder, &audience), (invite, purpose, certificate));
   Some((
     "201 Created",
     Some(json!({"identity_token": token, "expires_at": now() + 300})),
@@ -476,22 +484,27 @@ fn decline(path: &str, state: &Mutex<State>) -> Option<Answer> {
   Some(("204 No Content", None))
 }
 
-fn identity_token(signing: &SigningKey, audience: &str, invite: Option<&str>) -> String {
+fn identity_token(
+  signing: &SigningKey,
+  (holder, audience): (&Account, &str),
+  (invite, purpose, certificate): (Option<&str>, Option<TokenPurpose>, Option<String>),
+) -> String {
   let iat = now();
   let claims = IdentityClaims {
     iss: "https://cloud.test".into(),
     aud: audience.into(),
-    sub: ACCOUNT.parse().expect("a cloud account id"),
-    email: EMAIL.into(),
-    name: "Bohdan Koval".into(),
+    sub: holder.id.parse().expect("a cloud account id"),
+    email: holder.email.into(),
+    name: holder.display_name.into(),
     device: orchester_api::cloud::DeviceInfo {
       name: "Bohdan's laptop".into(),
       platform: orchester_api::cloud::CloudPlatform::Windows,
     },
     invite: invite.map(str::to_owned),
-    purpose: None,
+    purpose,
     // The person's device signed in with two-factor authentication, which accepting an invite needs.
     mfa: true,
+    certificate,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

@@ -1311,11 +1311,30 @@ Row 45: address plus an 8-character code, for networks without the internet.
 - **Redeeming.** `POST /auth/code { code, device, username?, display_name?, identity_token?, key_set? }` (username and
   display name only when the code creates an account). After the TLS check-code confirmation described above.
 - **Two-factor authentication** (2026-10-16). Every code but the setup code, entered in an app, needs the app's
-  Orchester Cloud identity token for this server (no purpose) whose `mfa` claim says its device signed in with two-factor
-  authentication, with the key set the app carries. The server verifies it offline against the root it pinned, whether
-  or not it takes cloud identities to join with (*cloud off*), uses its `jti` once, and the device token keeps the
-  claim. No token, or one without the claim: `403 mfa_required`; a token the root does not vouch for: `401
-  invalid_identity` (counted as a failed redemption); nothing is used up. A server with no root pinned cannot check it
+  Orchester Cloud identity token for codes to this server (purpose `code`) whose `mfa` claim says its device signed in
+  with two-factor authentication, with the key set the app carries. The server verifies it offline against the root it
+  pinned, whether or not it takes cloud identities to join with (*cloud off*), uses its `jti` once, and the device token
+  keeps the claim. No token, or one without the claim: `403 mfa_required`; a token the root does not vouch for, or one
+  for another use (a join or admin token): `401 invalid_identity` (counted as a failed redemption); nothing is used up.
+  A `code` token is taken nowhere else (`POST /auth/cloud` refuses it as `401 invalid_identity`).
+- **Whose identity.** The token's account must be the code's: an account or pairing code takes only the cloud account
+  its account is linked to, and links an account not linked yet to the first one shown (unless another account here is
+  linked to it already); an invite code links the new account to it, and is refused with `409 conflict` when that cloud
+  account has an account here already. A stolen account or pairing code shown with someone else's two-factor identity
+  is `401 invalid_identity`, and the code stays open.
+- **Which server.** The app never takes the server's id on the server's word alone, since a server could name another
+  one's and pass the token on. Linked to Orchester Cloud, the server must be the one the cloud's registry has under that
+  id (`GET /servers/{id}`): at the address the person connected to and, when the registry has its certificate
+  fingerprint, presenting that certificate; otherwise the app sends nothing. Not linked (the root pinned on the host),
+  the token carries the fingerprint of the certificate the person confirmed with the check code (claim `certificate`),
+  and the server takes it only while it presents that certificate itself: a token the app got for another server's
+  certificate is `401 invalid_identity`, and a server behind a proxy that holds the certificate cannot compare it
+  (`403 mfa_unverifiable`; link it to the cloud). Over plain HTTP an unlinked server gets no token, so it takes no code
+  but its setup code. A `GET /server` that names no `codes_need_two_factor` is a server from before two-factor
+  authentication: the app sends it the code alone, since its `CodeJoin` refuses unknown fields; this server keeps
+  refusing them too, so an app and a server that disagree on the contract fail at once rather than drop a field.
+- **What it lasts.** A device token keeps `mfa` for as long as it lives: turning two-factor authentication off at the
+  cloud is not seen here, and the device keeps making invites until an admin signs it out or it joins again. A server with no root pinned cannot check it
   and refuses those codes with `403 mfa_unverifiable`: it says so rather than let a code in without it. An air-gapped
   server pins the cloud's root on the host without linking (`orchester-server cloud pin <root public key>`, the key the
   cloud's log names); its people's apps then need the internet once per code, for the token and the key set, and the

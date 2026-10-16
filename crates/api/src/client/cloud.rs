@@ -17,6 +17,7 @@ use super::{ClientError, ServerAddress, bearer, builder};
 use crate::cloud::{
   AccountResponse, AccountServer, CloudError, CloudInvite, CloudInvites, CloudSignIn, CloudSignedIn,
   IdentityTokenIssued, IdentityTokenRequest, KeySetResponse, RegisteredServer, ServerResponse, ServersResponse,
+  TokenPurpose,
 };
 
 /// Orchester Cloud's API at one address.
@@ -122,12 +123,39 @@ impl CloudClient {
     audience: TeamServerId,
     invite: Option<InviteId>,
   ) -> Result<IdentityTokenIssued, ClientError> {
-    let body = serde_json::to_vec(&IdentityTokenRequest {
+    let request = IdentityTokenRequest {
       audience: audience.to_string(),
       purpose: None,
       invite,
-    })
-    .map_err(|_| ClientError::Setup)?;
+      certificate: None,
+    };
+    self.issue(device, &request).await
+  }
+
+  /// `POST /identity-tokens` with purpose `code`: a token that shows the team server `audience`, with a code entered
+  /// in the app, that this device signed in with two-factor authentication. `certificate` binds it to the certificate
+  /// the app pinned for a server the cloud has not registered (the fingerprint in hex).
+  pub async fn code_token(
+    &self,
+    device: &SecretValue,
+    audience: TeamServerId,
+    certificate: Option<String>,
+  ) -> Result<IdentityTokenIssued, ClientError> {
+    let request = IdentityTokenRequest {
+      audience: audience.to_string(),
+      purpose: Some(TokenPurpose::Code),
+      invite: None,
+      certificate,
+    };
+    self.issue(device, &request).await
+  }
+
+  async fn issue(
+    &self,
+    device: &SecretValue,
+    request: &IdentityTokenRequest,
+  ) -> Result<IdentityTokenIssued, ClientError> {
+    let body = serde_json::to_vec(request).map_err(|_| ClientError::Setup)?;
     let request = self
       .http
       .request(Method::POST, self.address.endpoint("/identity-tokens")?)

@@ -115,8 +115,27 @@ impl TestCloud {
     Self::token_with(&self.signing, identity, (None, mfa), iat)
   }
 
+  /// A token for codes (purpose `code`) whose two-factor claim says `mfa`, bound to the certificate with the
+  /// fingerprint `certificate` (hex) when there is one, as the cloud binds it for a server it has not registered.
+  pub fn code_token(&self, identity: &Identity<'_>, (mfa, certificate): (bool, Option<&str>), iat: i64) -> String {
+    let mut claims = Self::claims(identity, (Some(TokenPurpose::Code), mfa), iat);
+    claims.certificate = certificate.map(str::to_owned);
+    self
+      .signing
+      .signing()
+      .sign_token(&claims)
+      .expect("token")
+      .expose()
+      .to_owned()
+  }
+
   fn token_with(key: &Key, identity: &Identity<'_>, (purpose, mfa): (Option<TokenPurpose>, bool), iat: i64) -> String {
-    let claims = IdentityClaims {
+    let claims = Self::claims(identity, (purpose, mfa), iat);
+    key.signing().sign_token(&claims).expect("token").expose().to_owned()
+  }
+
+  fn claims(identity: &Identity<'_>, (purpose, mfa): (Option<TokenPurpose>, bool), iat: i64) -> IdentityClaims {
+    IdentityClaims {
       iss: ISSUER.into(),
       aud: identity.audience.into(),
       sub: identity.subject.parse().expect("a cloud account id"),
@@ -129,14 +148,22 @@ impl TestCloud {
       invite: identity.invite.map(Into::into),
       purpose,
       mfa,
+      certificate: None,
       jti: IdempotencyKey::generate().to_string(),
       iat,
       exp: iat + 300,
-    };
-    key.signing().sign_token(&claims).expect("token").expose().to_owned()
+    }
   }
 
   pub fn token(&self, identity: &Identity<'_>, iat: i64) -> String {
     Self::token_by(&self.signing, identity, iat)
   }
+}
+
+/// The cloud account id of the test person `name`: every person their own, the same in every test.
+pub fn person(name: &str) -> String {
+  let hash = name.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+    (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+  });
+  format!("0191c7c0-0000-7000-8000-{:012x}", hash & 0xffff_ffff_ffff)
 }

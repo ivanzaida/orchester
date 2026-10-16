@@ -84,12 +84,12 @@ export async function cloudTwoFactor(email: string): Promise<TwoFactorDevice> {
   return { device, recovery: codes };
 }
 
-/** What an app sends with a code: its identity token for the team server, from a two-factor `device`, and the key set. */
+/** What an app sends with a code: its identity token for codes to the team server, from a two-factor `device`, and the key set. */
 export async function codeProof(device: string): Promise<{ identity_token: string; key_set: string }> {
   const info = await json(await fetch(`${SERVER_API}/server`));
   const audience = (info.cloud as { server?: unknown } | null)?.server;
   const keys = await json(await fetch(`${CLOUD_API}/keys`));
-  const issued = await json(await post(`${CLOUD_API}/identity-tokens`, { audience }, device));
+  const issued = await json(await post(`${CLOUD_API}/identity-tokens`, { audience, purpose: "code" }, device));
   if (typeof issued.identity_token !== "string" || typeof keys.key_set !== "string") {
     throw new Error("the cloud gave no identity token for the server");
   }

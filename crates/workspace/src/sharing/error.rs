@@ -58,6 +58,14 @@ pub enum SharingError {
   /// A code needs this computer to have signed in to Orchester Cloud with two-factor authentication; nothing was sent.
   #[error("this computer signed in to Orchester Cloud without two-factor authentication")]
   TwoFactorSession,
+  /// Orchester Cloud registered the server this one says it is at another address or with another certificate; no
+  /// token was asked for and nothing was sent.
+  #[error("the server is not the one Orchester Cloud registered under its id")]
+  NotRegisteredServer,
+  /// A code's token cannot be bound to a server Orchester Cloud does not know when it is reached over plain HTTP;
+  /// nothing was sent.
+  #[error("a code's identity token cannot be bound to a server reached over plain HTTP")]
+  CodeUnbound,
   /// The server has no project at the address, or the person is not a member of it; it answers both alike.
   #[error("no project the person is a member of at this address")]
   NoProject,
@@ -110,6 +118,8 @@ impl SharingError {
       Self::ForeignAddress => Message::new("sharing.errors.foreignAddress").with("server", address.as_str().to_owned()),
       Self::TwoFactorOff => Message::new("sharing.errors.twoFactorOff"),
       Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
+      Self::NotRegisteredServer => Message::new("sharing.errors.notRegisteredServer"),
+      Self::CodeUnbound => Message::new("sharing.errors.codeUnbound"),
     }
   }
 }

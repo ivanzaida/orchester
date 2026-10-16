@@ -51,6 +51,11 @@ pub struct CloudStatus {
   pub root_fingerprint: String,
   /// Whether the server accepts identity tokens now (the owner can turn it off).
   pub accepting: bool,
+  /// Every code but the setup code needs the app's identity token for codes with the two-factor claim
+  /// (`POST /auth/code`). A server from before two-factor authentication lacks this: it takes a code alone and
+  /// refuses a join that carries the token (its `CodeJoin` has no such fields), so the app sends none to it.
+  #[serde(default)]
+  pub codes_need_two_factor: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

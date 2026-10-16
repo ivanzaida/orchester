@@ -171,7 +171,7 @@ fn request(username: &str, code: &Credential) -> CodeRequest {
 /// A code with this computer's two-factor cloud identity for `server`, which every code but the setup code needs.
 fn proved(server: &TestServer, username: &str, code: &Credential) -> CodeRequest {
   CodeRequest {
-    proof: Some(server.code_proof()),
+    proof: Some(server.code_proof(username)),
     ..request(username, code)
   }
 }
@@ -283,7 +283,7 @@ fn sharing_a_pairing_code_joins_the_same_person_on_another_computer() {
     code: pairing.code,
     username: None,
     display_name: None,
-    proof: Some(server.code_proof()),
+    proof: Some(server.code_proof("alice")),
   };
   server
     .block_on(

@@ -296,7 +296,7 @@ fn join(
     code: server.project_code(kontur),
     username: Some("ivan".into()),
     display_name: Some("Ivan Zaida".into()),
-    proof: Some(server.code_proof()),
+    proof: Some(server.code_proof("ivan")),
   };
   let address = ServerAddress::parse(&port.url())?;
   runtime.block_on(servers.join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request))?;

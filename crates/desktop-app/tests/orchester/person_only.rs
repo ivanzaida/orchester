@@ -292,7 +292,7 @@ fn as_ivan(server: &TestServer, code: orchester_api::Credential) -> CodeRequest 
     code,
     username: Some("ivan".into()),
     display_name: Some("Ivan Zaida".into()),
-    proof: Some(server.code_proof()),
+    proof: Some(server.code_proof("ivan")),
   }
 }
 

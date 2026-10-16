@@ -257,7 +257,7 @@ fn joined_through_recorder(window: &support::Window) -> (TestServer, Recorder) {
     code,
     username: Some("ivan".into()),
     display_name: Some("Ivan Zaida".into()),
-    proof: Some(server.code_proof()),
+    proof: Some(server.code_proof("ivan")),
   };
   block_on(
     window,
@@ -322,7 +322,7 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
     PlainHttp::NotAllowed,
   )
   .expect("client");
-  let proof = server.code_proof();
+  let proof = server.code_proof("ivan");
   let joined = server
     .block_on(other.join_with_code(&CodeJoin {
       code: Credential::new(code),

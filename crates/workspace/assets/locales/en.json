@@ -1537,7 +1537,9 @@
       "projectChanged": "This project's tasks changed since you reviewed the link, so nothing was sent. Review what linking does again.",
       "foreignAddress": "{{server}} named an address on another server for this project, so Orchester didn't use it and nothing was changed.",
       "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account; nothing was sent.",
-      "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent."
+      "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
+      "notRegisteredServer": "Orchester Cloud has this server at another address or with another certificate; nothing was sent.",
+      "codeUnbound": "A code can't be entered for a server that isn't linked to Orchester Cloud over plain HTTP; nothing was sent."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

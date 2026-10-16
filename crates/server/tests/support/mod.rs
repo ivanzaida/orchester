@@ -248,23 +248,37 @@ impl TestServer {
     joined
   }
 
-  /// Joins with `code`; `username` (also the display name) when the code makes an account.
+  /// Joins with `code`, which makes the account `username` (also the display name), as that person.
   pub async fn join(&self, code: &Credential, username: Option<&str>, device: &str) -> Joined {
     let response = self.redeem(code, username, device).await;
     assert_eq!(response.status, 201);
     response.json()
   }
 
-  /// Redeems `code` as an app does, with an identity token whose device signed in with two-factor authentication.
+  /// Joins with an account or pairing `code` of `person`'s account, with `person`'s cloud identity.
+  pub async fn join_as(&self, code: &Credential, person: &str, device: &str) -> Joined {
+    let response = self.redeem_as(code, person, device).await;
+    assert_eq!(response.status, 201);
+    response.json()
+  }
+
+  /// Redeems `code`, which makes the account `username`, as an app does: with that person's identity token, whose
+  /// device signed in with two-factor authentication. An account or pairing code names no username:
+  /// [`Self::redeem_as`].
   pub async fn redeem(&self, code: &Credential, username: Option<&str>, device: &str) -> Response {
-    let proof = self.two_factor_proof().await;
+    let person = username.expect("a code that makes an account; redeem_as for an account or pairing code");
+    let proof = self.two_factor_proof(person).await;
     self.redeem_with(code, username, device, Some(proof)).await
   }
 
-  /// An identity token for this server with the two-factor claim, and the key set that vouches for it, from
-  /// [`Self::cloud`]: what an app signed in with two-factor authentication sends with a code. The server pins that
-  /// cloud's root first when nothing is pinned.
-  pub async fn two_factor_proof(&self) -> (String, String) {
+  /// Redeems an account or pairing `code` with `person`'s identity token, as that person's app does.
+  pub async fn redeem_as(&self, code: &Credential, person: &str, device: &str) -> Response {
+    let proof = self.two_factor_proof(person).await;
+    self.redeem_with(code, None, device, Some(proof)).await
+  }
+
+  /// The audience of this server's identity tokens, pinning [`Self::cloud`]'s root first when nothing is pinned.
+  pub async fn audience(&self) -> String {
     let pinned: Option<String> = self
       .database()
       .query_row("SELECT root_key FROM cloud_link WHERE id=1", [], |row| row.get(0))
@@ -281,15 +295,28 @@ impl TestServer {
         .await
         .expect("pin the test cloud"),
     };
+    link.server
+  }
+
+  /// `person`'s identity token for codes to this server, from a device that signed in with two-factor
+  /// authentication, and the key set that vouches for it, from [`Self::cloud`]: what that person's app sends with a
+  /// code. Every person has a cloud account of their own ([`cloud::person`]).
+  pub async fn two_factor_proof(&self, person: &str) -> (String, String) {
+    let audience = self.audience().await;
+    let subject = cloud::person(person);
+    let email = format!("{person}@example.com");
     let identity = cloud::Identity {
-      audience: &link.server,
-      subject: "0191c7c0-0000-7000-8000-00000000c0de",
-      email: "code@example.com",
-      name: "Code Person",
+      audience: &audience,
+      subject: &subject,
+      email: &email,
+      name: person,
       invite: None,
     };
     let now = self.seconds();
-    (self.cloud.token_mfa(&identity, true, now), self.cloud.key_set(now))
+    (
+      self.cloud.code_token(&identity, (true, None), now),
+      self.cloud.key_set(now),
+    )
   }
 
   pub async fn redeem_with(
@@ -338,7 +365,8 @@ impl TestServer {
     let response = self.request("POST", "/auth/pairings", Some(token), None).await;
     assert_eq!(response.status, 201);
     let pairing: PairingCode = response.json();
-    self.join(&pairing.code, None, "second computer").await
+    let me: orchester_api::UserResponse = self.request("GET", "/auth/me", Some(token), None).await.json();
+    self.join_as(&pairing.code, &me.user.username, "second computer").await
   }
 
   /// The server's time in seconds, as the cloud's tokens and key sets count it.

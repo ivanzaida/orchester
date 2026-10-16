@@ -4,12 +4,12 @@
 //! session accepts invites, which list whether they need it.
 
 use orchester_api::{
-  cloud::{CloudInvites, IdentityTokenIssued, KeySetResponse, TwoFactorSignedIn},
+  cloud::{CloudInvites, IdentityTokenIssued, KeySetResponse, TokenPurpose, TwoFactorSignedIn},
   identity::{IdentityClaims, VerifiedKeySet},
 };
 use orchester_cloud::clock::Clock;
 use orchester_core::id::InviteId;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::{
   registry::{TeamServer, link, signed_in},
@@ -156,9 +156,19 @@ pub async fn a_password_change_ends_a_challenge() {
   cloud.finish().await;
 }
 
-/// The claims of a token for `server`, verified as the team server verifies them.
+/// The claims of a token for `server`, accepting `invite`, verified as the team server verifies them.
 async fn claims(cloud: &TestCloud, device: &str, server: &TeamServer, invite: Option<InviteId>) -> IdentityClaims {
-  let body = json!({"audience": server.id(), "invite": invite});
+  claims_of(
+    cloud,
+    device,
+    server,
+    json!({"audience": server.id(), "invite": invite}),
+  )
+  .await
+}
+
+/// The claims of the token `body` asks for, verified as the team server verifies them.
+async fn claims_of(cloud: &TestCloud, device: &str, server: &TeamServer, body: Value) -> IdentityClaims {
   let issued = cloud
     .request("POST", "/identity-tokens", Some(device), Some(body))
     .await;
@@ -268,5 +278,39 @@ pub async fn an_operator_turns_it_off_with_the_documented_statement() {
     .get(0);
   assert_eq!(audited, 1);
   drop(admin);
+  cloud.finish().await;
+}
+
+pub async fn tokens_for_codes_name_their_use_and_the_certificate_asked_for() {
+  let cloud = TestCloud::start().await;
+  let person = signed_in(&cloud, "codes@example.test").await;
+  // Not linked here: what an app asks for a server the cloud does not know, bound to the certificate it pinned.
+  let server = TeamServer::generate();
+  let certificate = "ab".repeat(32);
+  let body = json!({"audience": server.id(), "purpose": "code", "certificate": certificate});
+  let bound = claims_of(&cloud, &person, &server, body).await;
+  assert_eq!(bound.purpose, Some(TokenPurpose::Code));
+  assert_eq!(bound.certificate.as_deref(), Some(certificate.as_str()));
+  assert!(!bound.mfa, "a session without two-factor authentication says so");
+  let unbound = claims_of(
+    &cloud,
+    &person,
+    &server,
+    json!({"audience": server.id(), "purpose": "code"}),
+  )
+  .await;
+  assert_eq!(unbound.certificate, None);
+  for asked in [
+    json!({"audience": server.id(), "certificate": certificate}),
+    json!({"audience": server.id(), "purpose": "admin", "certificate": certificate}),
+    json!({"audience": server.id(), "purpose": "code", "certificate": "AB".repeat(32)}),
+    json!({"audience": server.id(), "purpose": "code", "certificate": "ab"}),
+    json!({"audience": server.id(), "purpose": "code", "invite": InviteId::generate()}),
+  ] {
+    let refused = cloud
+      .request("POST", "/identity-tokens", Some(&person), Some(asked.clone()))
+      .await;
+    assert_eq!((refused.status, refused.error()), (422, "invalid".into()), "{asked}");
+  }
   cloud.finish().await;
 }

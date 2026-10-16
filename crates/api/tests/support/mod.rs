@@ -80,13 +80,19 @@ impl TestServer {
     .expect("client")
   }
 
-  /// Joins with `code` from this computer; `username` when the code makes an account. Every code but the setup code
-  /// carries an identity token with the two-factor claim ([`Self::code_proof`]).
-  pub async fn join(&self, code: &Credential, username: Option<&str>) -> Joined {
-    let (identity_token, key_set) = self.code_proof().await;
+  /// Joins with `code`, which makes the account `username`, from this computer, with that person's identity token for
+  /// codes, which every code but the setup code needs ([`Self::code_proof`]).
+  pub async fn join(&self, code: &Credential, username: &str) -> Joined {
+    let (identity_token, key_set) = self.code_proof(username).await;
     self
-      .join_with(code, username, (Some(identity_token), Some(key_set)))
+      .join_with(code, Some(username), (Some(identity_token), Some(key_set)))
       .await
+  }
+
+  /// Joins with an account or pairing `code` of `person`'s account, with `person`'s identity token for codes.
+  pub async fn join_as(&self, code: &Credential, person: &str) -> Joined {
+    let (identity_token, key_set) = self.code_proof(person).await;
+    self.join_with(code, None, (Some(identity_token), Some(key_set))).await
   }
 
   async fn join_with(
@@ -110,10 +116,10 @@ impl TestServer {
       .expect("join with a code")
   }
 
-  /// What an app signed in to Orchester Cloud with two-factor authentication sends with a code: an identity token for
-  /// this server from the tests' cloud, and its key set. The server pins that cloud's root first, as its admin does on
-  /// the host.
-  pub async fn code_proof(&self) -> (Credential, String) {
+  /// What the app of `person`, signed in to Orchester Cloud with two-factor authentication, sends with a code: that
+  /// person's identity token for codes to this server from the tests' cloud, and its key set. The server pins that
+  /// cloud's root first, as its admin does on the host.
+  pub async fn code_proof(&self, person: &str) -> (Credential, String) {
     let shown = self
       .server
       .host_cloud(CloudCommand::Show)
@@ -127,12 +133,7 @@ impl TestServer {
         .await
         .expect("pin the tests' cloud"),
     };
-    let person = test_cloud::Person {
-      account: "0191c7c0-0000-7000-8000-00000000c0de",
-      email: "code@example.com",
-      name: "Code Person",
-    };
-    let token = test_cloud::token(&link.server, &person, (None, true));
+    let token = test_cloud::code_token(&link.server, person);
     (Credential::new(token), test_cloud::key_set(test_cloud::now()))
   }
 
@@ -151,7 +152,7 @@ impl TestServer {
       .host_account_code("alice".into())
       .await
       .expect("account code");
-    token(&self.join(&account, None).await.token)
+    token(&self.join_as(&account, "alice").await.token)
   }
 
   /// `username`, invited to the server by `admin` with a code and joined: their id and token.
@@ -160,7 +161,7 @@ impl TestServer {
       .post(admin, "/invites", json!({"kind":"server","delivery":"code"}))
       .await;
     let code = Credential::new(invite["code"].as_str().expect("invite code").into());
-    let joined = self.join(&code, Some(username)).await;
+    let joined = self.join(&code, username).await;
     (joined.user.id, token(&joined.token))
   }
 

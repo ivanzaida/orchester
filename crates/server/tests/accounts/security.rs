@@ -78,7 +78,7 @@ async fn joins(server: &TestServer) -> Vec<String> {
     .request("POST", "/auth/pairings", Some(&bob.token), None)
     .await
     .json();
-  let paired = server.join(&pairing.code, None, "phone").await;
+  let paired = server.join_as(&pairing.code, "bob", "phone").await;
   let cloud = server.cloud();
   let now = server.seconds();
   let key_set = cloud.key_set(now);
@@ -118,7 +118,7 @@ async fn joins(server: &TestServer) -> Vec<String> {
     )
     .await
     .json();
-  let wrong = server.redeem(&credential("ZZZZ-ZZZZ"), None, "laptop").await;
+  let wrong = server.redeem_with(&credential("ZZZZ-ZZZZ"), None, "laptop", None).await;
   assert_eq!(wrong.status, 401);
   vec![
     setup.expose().into(),

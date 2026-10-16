@@ -7,7 +7,7 @@
 use orchester_api::{
   Approval, CloudJoin, CloudJoinAnswer, CodeJoin, Credential, DeviceKind, Joined, PairingCode,
   client::{Client, ClientError, CloudClient, ServerAddress},
-  cloud::CloudServer,
+  cloud::{CloudErrorCode, CloudServer},
 };
 use orchester_core::{
   id::{ApprovalId, InviteId, ServerId, TeamServerId},
@@ -84,9 +84,13 @@ impl Servers {
   }
 
   /// What a code needs from the cloud for the server at `address`: `None` when the server pins no cloud root and so
-  /// cannot check it (it then takes only its setup code). Otherwise the account must have two-factor authentication on
+  /// cannot check it (it then takes only its setup code), or is from before two-factor authentication and takes a code
+  /// alone. Otherwise the account must have two-factor authentication on
   /// and this computer must have signed in with it, checked before the code is sent ([`SharingError::TwoFactorOff`],
   /// [`SharingError::TwoFactorSession`]). The server's certificate is checked first, before anything of the cloud.
+  ///
+  /// The token is for codes only (purpose `code`) and never for a server the person did not connect to: the server's
+  /// own word names only which registered server to look up ([`code_audience`]).
   pub async fn code_proof(
     &self,
     address: &ServerAddress,
@@ -95,7 +99,12 @@ impl Servers {
   ) -> Result<Option<CodeProof>, SharingError> {
     let client = trust.client(address.clone())?;
     let info = client.server_info().await.map_err(|error| trust.refusal(error))?;
-    let Some(audience) = info.cloud.and_then(|cloud| cloud.server.parse::<TeamServerId>().ok()) else {
+    // A server from before two-factor authentication takes the code alone, and would refuse the token's fields.
+    let Some(said) = info
+      .cloud
+      .filter(|cloud| cloud.codes_need_two_factor)
+      .and_then(|cloud| cloud.server.parse::<TeamServerId>().ok())
+    else {
       return Ok(None);
     };
     let two_factor = identity.cloud.me(identity.device).await?.two_factor;
@@ -105,8 +114,9 @@ impl Servers {
     if !two_factor.this_session {
       return Err(SharingError::TwoFactorSession);
     }
+    let certificate = code_audience(&identity, said, (address, trust)).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
-    let issued = identity.cloud.identity_token(identity.device, audience, None).await?;
+    let issued = identity.cloud.code_token(identity.device, said, certificate).await?;
     Ok(Some(CodeProof {
       identity_token: issued.identity_token,
       key_set: Some(key_set),
@@ -223,5 +233,35 @@ impl Servers {
     self.store_token(id, token).await?;
     self.reached(id);
     Ok(id)
+  }
+}
+
+/// What binds a code's token to the server the person connected to and checked, whatever id that server gives
+/// itself (`said`), so that a server cannot pass the token on as another server's (`docs/architecture/server.md`,
+/// "Codes"). A server Orchester Cloud registered must be the one it registered: at this address and, when the cloud
+/// has its certificate, presenting that one ([`SharingError::NotRegisteredServer`]); its id is then the audience and
+/// nothing more is bound. A server the cloud does not know gets a token bound to the certificate it presents here,
+/// which the server takes only while it presents that certificate itself; over plain HTTP there is none to bind to
+/// ([`SharingError::CodeUnbound`]). Nothing is sent to the server.
+async fn code_audience(
+  identity: &CloudIdentity<'_>,
+  said: TeamServerId,
+  (address, trust): (&ServerAddress, Trust),
+) -> Result<Option<String>, SharingError> {
+  let presented = trust.certificate(address).await.map_err(|error| trust.refusal(error))?;
+  match identity.cloud.server(identity.device, said).await {
+    Ok(registered) => {
+      let at = ServerAddress::parse(&registered.server.address).map_err(ClientError::Address)?;
+      let certificate = registered.server.fingerprint;
+      if at != *address || certificate.is_some_and(|hex| presented.as_deref() != Some(hex.as_str())) {
+        return Err(SharingError::NotRegisteredServer);
+      }
+      Ok(None)
+    }
+    Err(ClientError::Cloud {
+      code: CloudErrorCode::NotFound,
+      ..
+    }) => presented.map(Some).ok_or(SharingError::CodeUnbound),
+    Err(error) => Err(error.into()),
   }
 }

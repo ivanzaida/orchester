@@ -48,15 +48,19 @@ async fn s1c_an_account_invite_refuses_the_identity_of_another_account_and_stays
     403,
     ErrorCode::NotInvited,
   );
-  let (accepted, carol_linked): (Option<i64>, bool) = server
+  let (accepted, carol_linked): (Option<i64>, Option<String>) = server
     .database()
     .query_row(
-      "SELECT (SELECT accepted_at FROM invites WHERE id=?1), (SELECT cloud_subject IS NOT NULL FROM users WHERE id=?2)",
+      "SELECT (SELECT accepted_at FROM invites WHERE id=?1), (SELECT cloud_subject FROM users WHERE id=?2)",
       [invite_id, carol.user.id.to_string()],
       |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .expect("invite and account");
-  assert_eq!((accepted, carol_linked), (None, false));
+  // Carol's account keeps the identity her invite code showed.
+  assert_eq!(
+    (accepted, carol_linked),
+    (None, Some(crate::support::cloud::person("carol")))
+  );
   let me: UserResponse = server.request("GET", "/auth/me", Some(&known.token), None).await.json();
   assert_eq!(me.user.id, known.user.id);
   server.finish().await;

@@ -8,7 +8,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use orchester_api::{
-  cloud::{CloudPlatform, DeviceInfo},
+  cloud::{CloudPlatform, DeviceInfo, TokenPurpose},
   identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey},
 };
 use orchester_core::id::IdempotencyKey;
@@ -54,30 +54,33 @@ pub fn key_set(now: i64) -> String {
   root().sign_key_set(&statement, now).expect("key set")
 }
 
-/// Who a token is about.
-pub struct Person<'a> {
-  pub account: &'a str,
-  pub email: &'a str,
-  pub name: &'a str,
+/// The cloud account id of the test person `username`: every person their own, the same in every test, so an
+/// account linked to one takes only that one.
+pub fn account_of(username: &str) -> String {
+  let hash = username.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+    (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+  });
+  format!("0191c7c0-0000-7000-8000-{:012x}", hash & 0xffff_ffff_ffff)
 }
 
-/// A five-minute token for the team server `audience` to join with, about `person`, accepting `invite`; `mfa` says
-/// its device signed in with two-factor authentication.
-pub fn token(audience: &str, person: &Person<'_>, (invite, mfa): (Option<&str>, bool)) -> String {
+/// A five-minute token for codes (purpose `code`) to the team server `audience`, about the test person `username`,
+/// whose device signed in with two-factor authentication: what that person's app sends with a code.
+pub fn code_token(audience: &str, username: &str) -> String {
   let iat = now();
   let claims = IdentityClaims {
     iss: ISSUER.into(),
     aud: audience.into(),
-    sub: person.account.parse().expect("a cloud account id"),
-    email: person.email.into(),
-    name: person.name.into(),
+    sub: account_of(username).parse().expect("a cloud account id"),
+    email: format!("{username}@example.com"),
+    name: username.into(),
     device: DeviceInfo {
       name: "Test computer".into(),
       platform: CloudPlatform::Windows,
     },
-    invite: invite.map(str::to_owned),
-    purpose: None,
-    mfa,
+    invite: None,
+    purpose: Some(TokenPurpose::Code),
+    mfa: true,
+    certificate: None,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

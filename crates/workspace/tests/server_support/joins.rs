@@ -17,7 +17,7 @@ impl TestServer {
     let (identity_token, key_set) = if first {
       (None, None)
     } else {
-      let proof = self.code_proof();
+      let proof = self.code_proof(username);
       (Some(proof.identity_token), proof.key_set)
     };
     let client = self.client();
@@ -35,27 +35,29 @@ impl TestServer {
     joined.token
   }
 
-  /// What an app signed in to Orchester Cloud with two-factor authentication sends with a code: an identity token for
-  /// this server with the claim, from the tests' cloud ([`test_cloud`]), and its key set. The server pins that cloud's
-  /// root first when nothing is pinned, as its admin does with `orchester-server cloud pin`.
-  pub fn code_proof(&self) -> orchester_workspace::sharing::CodeProof {
+  /// What the app of `username`, signed in to Orchester Cloud with two-factor authentication, sends with a code: that
+  /// person's identity token for codes to this server, from the tests' cloud ([`test_cloud`]), and its key set.
+  pub fn code_proof(&self, username: &str) -> orchester_workspace::sharing::CodeProof {
+    orchester_workspace::sharing::CodeProof {
+      identity_token: Credential::new(test_cloud::code_token(&self.cloud_audience(), username)),
+      key_set: Some(test_cloud::key_set(test_cloud::now())),
+    }
+  }
+
+  /// The audience of this server's identity tokens, after it pinned the tests' cloud root when nothing was pinned, as
+  /// its admin does with `orchester-server cloud pin`.
+  pub fn cloud_audience(&self) -> String {
     let shown = self
       .block_on(self.server.host_cloud(CloudCommand::Show))
       .expect("the cloud link");
-    let link = match shown.root_fingerprint {
-      Some(_) => shown,
-      None => self
-        .block_on(self.server.host_cloud(CloudCommand::Pin(test_cloud::root_key())))
-        .expect("pin the tests' cloud"),
-    };
-    let person = test_cloud::Person {
-      account: "0191c7c0-0000-7000-8000-00000000c0de",
-      email: "code@example.com",
-      name: "Code Person",
-    };
-    orchester_workspace::sharing::CodeProof {
-      identity_token: Credential::new(test_cloud::token(&link.server, &person, (None, true))),
-      key_set: Some(test_cloud::key_set(test_cloud::now())),
+    match shown.root_fingerprint {
+      Some(_) => shown.server,
+      None => {
+        self
+          .block_on(self.server.host_cloud(CloudCommand::Pin(test_cloud::root_key())))
+          .expect("pin the tests' cloud")
+          .server
+      }
     }
   }
 
@@ -69,7 +71,7 @@ impl TestServer {
     let code = self
       .block_on(self.server.host_account_code(username.into()))
       .expect("account code");
-    let proof = self.code_proof();
+    let proof = self.code_proof(username);
     let client = self.client();
     self
       .block_on(client.join_with_code(&CodeJoin {
