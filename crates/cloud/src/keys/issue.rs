@@ -121,7 +121,7 @@ impl Cloud {
   /// The cloud signs only with a key a team server holding the newest key set would accept now.
   async fn signing_key(&self, client: &impl GenericClient, now: i64) -> Result<SigningKey, CloudError> {
     let compact = self.key_set(client).await?;
-    let verified = match VerifiedKeySet::verify(&compact, &self.inner.config.root_public_key, seconds(now)) {
+    let verified = match VerifiedKeySet::verify(&compact, &self.inner.root, seconds(now)) {
       Ok(verified) => verified,
       Err(IdentityError::KeySetExpired | IdentityError::NotYetValid) => {
         return Err(CloudErrorCode::KeysUnavailable.into());

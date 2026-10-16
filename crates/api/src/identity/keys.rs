@@ -149,7 +149,7 @@ impl fmt::Debug for SigningKey {
   }
 }
 
-/// The cloud's root key, kept on an offline machine: signs key sets.
+/// The cloud's root key, made at its first start and sealed in its database: signs key sets.
 pub struct RootKey {
   pair: Ed25519KeyPair,
 }

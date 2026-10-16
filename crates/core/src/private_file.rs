@@ -1,4 +1,4 @@
-//! A new file only its owner can read: the team server's TLS key and database snapshots, Orchester Cloud's root key.
+//! A new file only its owner can read: the team server's TLS key and database snapshots.
 
 use std::{
   fs::{File, OpenOptions},

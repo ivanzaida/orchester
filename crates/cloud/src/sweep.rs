@@ -12,6 +12,9 @@ pub(crate) fn spawn(cloud: Cloud) -> JoinHandle<()> {
       if let Err(error) = cloud.sweep().await {
         error.log();
       }
+      if let Err(error) = cloud.keep_keys().await {
+        error.log();
+      }
     }
   })
 }

@@ -111,7 +111,6 @@ async fn link_with(cloud: &TestCloud, device: &str, statement: &str) -> ServerLi
 
 pub async fn servers_link_from_the_statement_they_signed() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let server = TeamServer::generate();
   let stale = json!({"link": server.statement(cloud.clock.now_ms() - 11 * MINUTE)});
@@ -121,7 +120,7 @@ pub async fn servers_link_from_the_statement_they_signed() {
   assert_eq!(linked.server.server.id, server.id);
   assert_eq!(linked.server.check_code.as_deref(), Some("NENT-QAXB-NENT-QAXB"));
   let root = PublicKey::parse(&linked.root_key).expect("root key");
-  assert_eq!(root, cloud.root.public_key());
+  assert_eq!(root, cloud.root().await);
   let set = VerifiedKeySet::verify(&linked.key_set, &root, cloud.clock.now_ms() / 1000).expect("key set");
   let claims = set
     .verify_token(
@@ -146,7 +145,6 @@ pub async fn servers_link_from_the_statement_they_signed() {
 /// their own.
 pub async fn a_server_id_is_its_own_keys() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let mallory = signed_in(&cloud, "mallory@example.test").await;
   let server = TeamServer::generate();
@@ -185,7 +183,6 @@ pub async fn a_server_id_is_its_own_keys() {
 /// older one does not.
 pub async fn a_statement_works_once_and_a_newer_one_takes_the_server_back() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let other = signed_in(&cloud, "alice@example.test").await;
   let server = TeamServer::generate();
@@ -229,7 +226,6 @@ pub async fn a_statement_works_once_and_a_newer_one_takes_the_server_back() {
 /// Security review 1, M2: one account owns at most five linked servers.
 pub async fn an_account_owns_at_most_five_servers() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let servers: Vec<TeamServer> = (0..6).map(|_| TeamServer::generate()).collect();
   for server in &servers[..5] {
@@ -245,7 +241,6 @@ pub async fn an_account_owns_at_most_five_servers() {
 
 pub async fn admin_tokens_are_issued_only_for_linked_servers() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let server = TeamServer::generate();
   let admin = json!({"audience": server.id, "purpose": "admin"});
@@ -261,7 +256,7 @@ pub async fn admin_tokens_are_issued_only_for_linked_servers() {
   let issued: IdentityTokenIssued = issued.json();
   remember(issued.identity_token.expose());
   let keys: KeySetResponse = cloud.request("GET", "/keys", None, None).await.json();
-  let set = VerifiedKeySet::verify(&keys.key_set, &cloud.root.public_key(), cloud.clock.now_ms() / 1000).expect("keys");
+  let set = VerifiedKeySet::verify(&keys.key_set, &cloud.root().await, cloud.clock.now_ms() / 1000).expect("keys");
   let claims = set
     .verify_token(
       issued.identity_token.expose(),
@@ -281,7 +276,6 @@ pub async fn admin_tokens_are_issued_only_for_linked_servers() {
 
 pub async fn invites_reach_the_invitee_once_and_end_when_revoked() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let dana = signed_in(&cloud, "dana@example.test").await;
   let server = TeamServer::generate();
@@ -373,7 +367,6 @@ async fn revoke(cloud: &TestCloud, server: &TeamServer, id: InviteId, now: i64) 
 /// The invitee declines an invite: it is gone from their list, declining it again or someone else's is `404`.
 pub async fn invites_are_declined_by_the_invitee() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let dana = signed_in(&cloud, "dana@example.test").await;
   let server = TeamServer::generate();
@@ -437,7 +430,6 @@ pub(crate) async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crat
 /// expired. The answer to a delivery names the server as the cloud registered it.
 pub async fn a_revoked_invite_cannot_be_delivered_again() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let server = TeamServer::generate();
   link(&cloud, &owner, &server).await;
@@ -462,7 +454,6 @@ pub async fn a_revoked_invite_cannot_be_delivered_again() {
 /// per address, so invites neither spam an address nor use up its confirmation and reset emails.
 pub async fn invite_emails_have_their_own_buckets() {
   let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let dana = signed_in(&cloud, "dana@example.test").await;
   let servers: Vec<TeamServer> = (0..5).map(|_| TeamServer::generate()).collect();
@@ -499,7 +490,6 @@ pub async fn invite_emails_have_their_own_buckets() {
 /// most 100 invites a day through the cloud.
 pub async fn invite_deliveries_are_limited_per_address_and_per_owner() {
   let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
-  cloud.publish_keys().await;
   for _ in 0..60 {
     assert_eq!(deliver(&cloud, "not.an.invite", "203.0.113.30").await.status, 422);
   }
@@ -538,7 +528,6 @@ pub async fn invite_deliveries_are_limited_per_address_and_per_owner() {
 /// this server's invite nor takes the place of this server's own revocation.
 pub async fn invite_ids_are_one_servers_own() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let (kontur, other) = (TeamServer::generate(), TeamServer::generate());
   link(&cloud, &owner, &kontur).await;
