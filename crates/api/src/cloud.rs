@@ -164,6 +164,10 @@ pub struct IdentityTokenRequest {
   /// `admin` for a sign-in to that server's admin, which must be linked to the cloud; `None` to join with a device.
   #[serde(default)]
   pub purpose: Option<TokenPurpose>,
+  /// An open invite to the account's email from that server, which the token accepts: the token names it, and the
+  /// team server admits the verified email to it. Only for a join (no purpose). The cloud's copy of the invite ends.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub invite: Option<InviteId>,
 }
 
 /// What an identity token is for besides joining a team server with a device (`docs/architecture/server.md`, "The

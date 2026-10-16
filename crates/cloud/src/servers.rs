@@ -70,7 +70,7 @@ impl Cloud {
     let key_set = self.key_set(&transaction).await?;
     transaction.commit().await?;
     let issued = self
-      .issue_for(auth, statement.server.to_string(), Some(TokenPurpose::Link))
+      .issue_for(auth, statement.server.to_string(), (Some(TokenPurpose::Link), None))
       .await?;
     Ok(ServerLinked {
       server: registered(server(&statement)),

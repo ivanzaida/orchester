@@ -79,7 +79,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience, purpose? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here), `422 invalid` (also purpose `link`), `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin; `invite`: an open invite from that server to the account's email, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is not open, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict`, `422 invalid`, `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
@@ -142,7 +142,15 @@ The desktop hands it to that team server, which checks it with `orchester_api::i
 the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
 Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
 `purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server),
-`jti`, `iat`, `exp`. A team server accepts a token only for the use it was issued for.
+`invite` (when the token accepts an invite), `jti`, `iat`, `exp`. A team server accepts a token only for the use it
+was issued for.
+
+**Accepting an invite** (the desktop, N1). The app reads the invite's server from the registry (`GET /servers/{id}`:
+the address and the certificate fingerprint it pins), then asks `POST /identity-tokens { audience, invite }`. The
+cloud checks that the invite is open, to the account's email and from that server, issues a join token whose `invite`
+claim names it, records the join, and deletes its copy of the invite, as a decline does. The team server admits the
+verified email to that invite with the token; without the claim it admits only an account it already knows. A token
+that is never used leaves the server's copy open until it expires or is revoked.
 
 **Linking a team server** (`POST /servers { link }`, from the cloud's `/authorize` page, purpose `link`). The link
 statement is a compact JWS of type `orchester-link+jws` that the server signed with its own Ed25519 key:
@@ -191,8 +199,6 @@ early. The address and network limits bound how fast a flood can add counts.
 
 ## Not built yet
 
-- Accepting an invite at the cloud (`POST /invites/{id}/accept`, a token bound to the invite) comes with the app's
-  invite flow (N1); today a join token for a linked server records the join.
 - Unlinking a server from the cloud's side.
 - A new email in `PATCH /me` is refused as an unknown field (`400`); the Account page shows *Changing your email is
   not available yet*, as designed.

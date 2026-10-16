@@ -7,6 +7,7 @@
 // A test runner reports on the console.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+mod accept;
 mod accounts;
 mod deletion;
 mod desktop;
@@ -66,6 +67,7 @@ const TESTS: &[(&str, Test)] = tests![
   registry::admin_tokens_are_issued_only_for_linked_servers,
   registry::invites_reach_the_invitee_once_and_end_when_revoked,
   registry::invites_are_declined_by_the_invitee,
+  accept::invites_are_accepted_with_a_token_that_names_them,
 ];
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.

@@ -1,7 +1,8 @@
 //! The desktop's calls to Orchester Cloud (N1: `orchester-api`'s `CloudClient`, which `orchester-workspace`'s
 //! `sharing::cloud` and so Settings › Orchester use) against this cloud on loopback: an account confirmed through the
-//! API signs a desktop in, a wrong password is refused, this cloud does not deliver invites yet (`404`, which the
-//! desktop says plainly), and signing out ends the token. The desktop's own handling (the keychain, the account row)
+//! API signs a desktop in, a wrong password is refused, a new account has no invites and no servers, and signing out
+//! ends the token. Accepting an invite with a token that names it is in `accept.rs`; the whole flow, through the app,
+//! in `crates/desktop-app/tests/orchester_cloud`. The desktop's own handling (the keychain, the account row)
 //! is tested in `crates/workspace/tests/cloud_account.rs`; neither the workspace nor the app can be built into this
 //! binary without breaking clippy's runs (`tools/check.ps1`).
 
@@ -52,17 +53,8 @@ pub async fn desktop_signs_in_and_out_with_a_confirmed_account() {
   let me = client.me(&token).await.expect("the account");
   assert_eq!(me.account.id, signed.account.id);
 
-  let invites = client.invites(&token).await;
-  assert!(
-    matches!(
-      invites,
-      Err(ClientError::Cloud {
-        code: CloudErrorCode::NotFound,
-        ..
-      })
-    ),
-    "this cloud does not deliver invites yet: {invites:?}"
-  );
+  assert!(client.invites(&token).await.expect("invites").is_empty());
+  assert!(client.servers(&token).await.expect("servers").is_empty());
 
   client.sign_out(&token).await.expect("sign out");
   let after = client.me(&token).await;

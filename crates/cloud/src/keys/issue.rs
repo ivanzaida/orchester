@@ -3,7 +3,7 @@ use orchester_api::{
   cloud::{CloudErrorCode, CloudPlatform, DeviceInfo, IdentityTokenIssued, IdentityTokenRequest, TokenPurpose},
   identity::{IdentityClaims, IdentityError, SigningKey, TokenSubject, VerifiedKeySet},
 };
-use orchester_core::id::CloudAccountId;
+use orchester_core::id::{CloudAccountId, InviteId};
 use uuid::Uuid;
 
 use crate::{
@@ -37,6 +37,12 @@ impl Cloud {
   ) -> Result<IdentityTokenIssued, CloudError> {
     let audience = Uuid::parse_str(request.audience.trim()).map_err(|_| CloudErrorCode::Invalid)?;
     let client = self.client().await?;
+    if let Some(invite) = request.invite {
+      if request.purpose.is_some() {
+        return Err(CloudErrorCode::Invalid.into());
+      }
+      crate::invites::open_to(&client, auth, invite, audience, self.now()).await?;
+    }
     let linked = crate::servers::linked(&client, audience).await?.is_some();
     match request.purpose {
       Some(TokenPurpose::Link) => return Err(CloudErrorCode::Invalid.into()),
@@ -47,21 +53,27 @@ impl Cloud {
       _ => {}
     }
     drop(client);
-    self.issue_for(auth, audience.to_string(), request.purpose).await
+    let issued = self
+      .issue_for(auth, audience.to_string(), (request.purpose, request.invite))
+      .await?;
+    if let Some(invite) = request.invite {
+      self.accepted_invite(auth, invite).await?;
+    }
+    Ok(issued)
   }
 
-  /// A five-minute token for one team server, about the device's account, for `purpose`, signed with the newest key
-  /// the published key set lets sign now.
+  /// A five-minute token for one team server, about the device's account, for `purpose` and accepting `invite`, signed
+  /// with the newest key the published key set lets sign now.
   pub(crate) async fn issue_for(
     &self,
     auth: Authenticated,
     audience: String,
-    purpose: Option<TokenPurpose>,
+    (purpose, invite): (Option<TokenPurpose>, Option<InviteId>),
   ) -> Result<IdentityTokenIssued, CloudError> {
     self.inner.limits.identity_token(auth.device, self.now())?;
     let now = self.now();
     let client = self.inner.db.client().await?;
-    let subject = self.subject(&client, auth, audience, purpose).await?;
+    let subject = self.subject(&client, auth, audience, (purpose, invite)).await?;
     let key = self.signing_key(&client, now).await?;
     let claims = IdentityClaims::new(subject, seconds(now))?;
     let token = key.sign_token(&claims)?;
@@ -85,7 +97,7 @@ impl Cloud {
     client: &impl GenericClient,
     auth: Authenticated,
     audience: String,
-    purpose: Option<TokenPurpose>,
+    (purpose, invite): (Option<TokenPurpose>, Option<InviteId>),
   ) -> Result<TokenSubject, CloudError> {
     let row = client
       .query_opt(
@@ -105,8 +117,7 @@ impl Cloud {
         name: row.try_get(3)?,
         platform: CloudPlatform::parse(row.try_get(4)?).ok_or(CloudError::StoredData)?,
       },
-      // A token bound to an invite comes with accepting one in the app (N1); no endpoint here issues one yet.
-      invite: None,
+      invite: invite.map(|invite| invite.to_string()),
       purpose,
     })
   }

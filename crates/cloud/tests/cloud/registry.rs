@@ -25,6 +25,10 @@ pub(crate) struct TeamServer {
 }
 
 impl TeamServer {
+  pub(crate) fn id(&self) -> TeamServerId {
+    self.id
+  }
+
   pub(crate) fn generate() -> Self {
     Self {
       id: TeamServerId::generate(),
