@@ -3,8 +3,11 @@ import type { ReactNode } from "react";
 import { Icon, type IconName } from "./icon";
 import styles from "./button.module.css";
 
-/** The file's buttons in their large size: `yJ2jo` primary, `Dswcx` secondary, `cnlv1` ghost; `small` is 28 high. */
-export type ButtonKind = "primary" | "secondary" | "ghost";
+/**
+ * The file's buttons in their large size: `yJ2jo` primary, `Dswcx` secondary, `cnlv1` ghost, `O3M8iH` danger (what an
+ * in-place confirmation does that cannot be undone); `small` is 28 high.
+ */
+export type ButtonKind = "primary" | "secondary" | "ghost" | "danger";
 
 /**
  * `row`: the 32 high button of a list row (`J2YICE`), as wide as its label; `inline`: 36 high and as wide as its label
@@ -34,9 +37,16 @@ export function ButtonContent({ icon, spin, children }: { icon?: IconName | unde
 }
 
 /** A link that looks like a button: it only navigates. */
-export function ButtonLink(props: { href: string; kind: ButtonKind; icon?: IconName; row?: boolean; children: ReactNode }) {
+export function ButtonLink(props: {
+  href: string;
+  kind: ButtonKind;
+  icon?: IconName;
+  row?: boolean;
+  inline?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <a className={buttonClass(props.kind, { row: props.row ?? false })} href={props.href}>
+    <a className={buttonClass(props.kind, { row: props.row ?? false, inline: props.inline ?? false })} href={props.href}>
       <ButtonContent icon={props.icon}>{props.children}</ButtonContent>
     </a>
   );
@@ -50,6 +60,10 @@ export function ActionButton(props: {
   inline?: boolean;
   unavailable?: boolean;
   describedBy?: string;
+  /** A row's button whose question is open under the row (`GsAoB`): it stays plain, as drawn, and says so. */
+  expanded?: boolean;
+  /** The first button of a question asked in place takes the focus when it opens. */
+  autoFocus?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }) {
@@ -59,6 +73,8 @@ export function ActionButton(props: {
       className={buttonClass(props.kind, { row: props.row ?? false, inline: props.inline ?? false })}
       disabled={props.unavailable ?? false}
       aria-describedby={props.describedBy}
+      aria-expanded={props.expanded}
+      autoFocus={props.autoFocus}
       onClick={props.onClick}
     >
       <ButtonContent icon={props.icon}>{props.children}</ButtonContent>

@@ -1,7 +1,7 @@
 use axum::{
   Json, Router,
   extract::{Query, State},
-  http::{HeaderMap, StatusCode},
+  http::StatusCode,
   response::{IntoResponse, Response},
   routing::get,
 };
@@ -9,26 +9,29 @@ use orchester_api::*;
 use orchester_core::id::{ProjectId, TagId, UserId};
 use serde::Deserialize;
 
-use super::{
-  base_address,
-  extract::{Auth, Id, SafeJson},
-};
+use super::extract::{Auth, Base, Id, SafeJson};
 use crate::{
   Server, db,
   error::ServerError,
   sharing::{access, members, projects, tags},
 };
 
+/// What the server admin also calls: projects, their settings and members.
 pub fn routes() -> Router<Server> {
   Router::new()
     .route("/projects", get(list).post(create))
     .route("/projects/{project}", get(show).patch(patch))
-    .route("/projects/{project}/link", axum::routing::post(link))
     .route("/projects/{project}/members", get(list_members).post(add_member))
     .route(
       "/projects/{project}/members/{user}",
       axum::routing::patch(change_member).delete(remove_member),
     )
+}
+
+/// What only the app does: linking a checkout, and the project's tags.
+pub fn app_routes() -> Router<Server> {
+  Router::new()
+    .route("/projects/{project}/link", axum::routing::post(link))
     .route("/projects/{project}/tags", get(list_tags).post(add_tag))
     .route(
       "/projects/{project}/tags/{tag}",
@@ -47,11 +50,10 @@ pub struct Lookup {
 async fn list(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   query: Result<Query<Lookup>, axum::extract::rejection::QueryRejection>,
 ) -> Result<Response, ServerError> {
   let Query(query) = query.map_err(|_| ErrorCode::BadRequest)?;
-  let base = base_address(&server, &headers);
   let response = match query.slug {
     Some(slug) => {
       let project = server
@@ -79,10 +81,9 @@ async fn list(
 async fn create(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   SafeJson(input): SafeJson<NewProject>,
 ) -> Result<(StatusCode, Json<ProjectCreated>), ServerError> {
-  let base = base_address(&server, &headers);
   let response = server
     .write(move |db, now| {
       let current = db::checked(db, &auth, now, true)?;
@@ -110,10 +111,9 @@ async fn link(
 async fn show(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   Id(project): Id<ProjectId>,
 ) -> Result<Json<ProjectResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let project = server
     .snapshot(move |db, now| {
       let current = access::member(db, &auth, project, now)?;
@@ -126,11 +126,10 @@ async fn show(
 async fn patch(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   Id(project): Id<ProjectId>,
   SafeJson(input): SafeJson<ProjectChanges>,
 ) -> Result<Json<ProjectResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let project = server
     .write(move |db, now| {
       let current = access::owner(db, &auth, project, now)?;
@@ -147,7 +146,7 @@ async fn list_members(
 ) -> Result<Json<Members>, ServerError> {
   let members = server
     .snapshot(move |db, now| {
-      access::member(db, &auth, project, now)?;
+      access::viewer(db, &auth, project, now)?;
       members::list(db, project)
     })
     .await?;

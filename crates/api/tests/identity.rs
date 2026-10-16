@@ -53,6 +53,7 @@ fn token(key: &SigningKey, audience: &str, now: i64) -> String {
         platform: CloudPlatform::Macos,
       },
       invite: None,
+      purpose: None,
     },
     now,
   )

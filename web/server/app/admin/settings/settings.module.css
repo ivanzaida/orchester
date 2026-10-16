@@ -1,0 +1,39 @@
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.pin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: var(--admin-field);
+  max-width: 100%;
+}
+
+.linkLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-tight);
+  font-size: var(--text-row);
+  color: var(--color-text-secondary);
+}
+
+.key {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  color: var(--color-text-primary);
+}
+
+.checkCode {
+  font-family: var(--font-mono);
+  font-size: var(--text-subtitle);
+  color: var(--color-text-primary);
+}
+
+.callout {
+  width: 100%;
+}

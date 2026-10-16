@@ -7,13 +7,14 @@ mod sign_in;
 
 use std::net::IpAddr;
 
-use orchester_core::id::CloudDeviceId;
+use orchester_core::id::{CloudDeviceId, TeamServerId};
 pub use quota::Quota;
 pub use sign_in::{Attempt, SignInLimit};
+use uuid::Uuid;
 
 use crate::{
   addresses::{rate_address, rate_network},
-  clock::{HOUR_MS, MINUTE_MS},
+  clock::{DAY_MS, HOUR_MS, MINUTE_MS},
   error::CloudError,
 };
 
@@ -26,6 +27,11 @@ pub(crate) struct Limits {
   email_per_network: Quota<IpAddr>,
   email_per_email: Quota<String>,
   identity_tokens: Quota<CloudDeviceId>,
+  invite_posts: Quota<IpAddr>,
+  invite_posts_per_network: Quota<IpAddr>,
+  invites_per_owner: Quota<Uuid>,
+  invite_emails_per_server: Quota<(TeamServerId, String)>,
+  invite_emails_per_email: Quota<String>,
   link_failures: Quota<IpAddr>,
   link_failures_per_network: Quota<IpAddr>,
   link_failures_per_link: Quota<Vec<u8>>,
@@ -39,6 +45,11 @@ impl Limits {
       email_per_network: Quota::new(100, HOUR_MS, MAX_KEYS),
       email_per_email: Quota::new(5, HOUR_MS, MAX_KEYS),
       identity_tokens: Quota::new(60, HOUR_MS, MAX_KEYS),
+      invite_posts: Quota::new(60, HOUR_MS, MAX_KEYS),
+      invite_posts_per_network: Quota::new(300, HOUR_MS, MAX_KEYS),
+      invites_per_owner: Quota::new(100, DAY_MS, MAX_KEYS),
+      invite_emails_per_server: Quota::new(1, DAY_MS, MAX_KEYS),
+      invite_emails_per_email: Quota::new(3, DAY_MS, MAX_KEYS),
       link_failures: Quota::new(20, 15 * MINUTE_MS, MAX_KEYS),
       link_failures_per_network: Quota::new(100, 15 * MINUTE_MS, MAX_KEYS),
       link_failures_per_link: Quota::new(5, HOUR_MS, MAX_KEYS),
@@ -53,6 +64,32 @@ impl Limits {
       self.email_per_network.take(network, now)?;
     }
     self.email_per_email.take(email.to_owned(), now)
+  }
+
+  /// `POST /invites`: 60 an hour per client address and 300 per IPv6 /48, counted before the signature is checked.
+  pub fn invite_post(&self, address: IpAddr, now: i64) -> Result<(), CloudError> {
+    self.invite_posts.take(rate_address(address), now)?;
+    match rate_network(address) {
+      Some(network) => self.invite_posts_per_network.take(network, now),
+      None => Ok(()),
+    }
+  }
+
+  /// A new invite from a server `owner` owns: 100 a day for all the servers of one account, whatever their own limits
+  /// say. Counted when the invite is kept, so revoking or expiring invites gives none back.
+  pub fn invite_per_owner(&self, owner: Uuid, now: i64) -> Result<(), CloudError> {
+    self.invites_per_owner.take(owner, now)
+  }
+
+  /// Whether an invite to `email` from `server` gets an email: at most one a day per server and address, and three a
+  /// day per address, in buckets of their own, so invites never use up an address's confirmation and reset emails
+  /// (security review 1, M2). An invite without its email is still kept and listed.
+  pub fn invite_email(&self, server: TeamServerId, email: &str, now: i64) -> bool {
+    self
+      .invite_emails_per_server
+      .take((server, email.to_owned()), now)
+      .is_ok()
+      && self.invite_emails_per_email.take(email.to_owned(), now).is_ok()
   }
 
   /// 60 identity tokens an hour per device.

@@ -1,4 +1,4 @@
-use orchester_api::{CodeJoin, Credential, ErrorCode, JoinedVia, client::ClientError};
+use orchester_api::{CodeJoin, Credential, DeviceKind, ErrorCode, JoinedVia, client::ClientError};
 
 use crate::support::{TestServer, token};
 
@@ -26,6 +26,7 @@ async fn client_joins_with_a_code_and_a_wrong_code_answers_invalid_code() {
       device: "test computer".into(),
       username: Some("bohdan".into()),
       display_name: Some("Bohdan".into()),
+      kind: DeviceKind::App,
     })
     .await
     .expect_err("no such code");

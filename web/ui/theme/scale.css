@@ -27,9 +27,11 @@
   --leading-error: 1.4; /* Field error `d5xipm` */
   --leading-small: 1.45; /* hints, small print */
   --leading-body: 1.5; /* descriptions */
+  --leading-auto: 1.32; /* a text the design gives no line height: Geist's own ascent and descent, as Pencil sets it */
   --tracking-title: -0.2px; /* `cApGk`, `MGrMj` */
   --tracking-tag: 0.6px; /* `YOV1U` */
   --tracking-secret: 1px; /* password value `C6NsE2` */
+  --tracking-code-field: 2px; /* a code typed in a field, `H8RW-2NCF` in `j8WujU` */
 
   /* Spacing between the variables' steps. */
   --space-hairline: 2px; /* notice title and body `wDfBm`; chip padding `r1RbhI` */
@@ -78,6 +80,49 @@
   --opacity-busy: 0.6; /* `Sa0WY` */
   --duration-spin: 1s;
 
+  /* Server admin components (layer `sJK6L`, components `xVuYn`), shared with the Cloud where they fit. */
+  --text-page-title: 22px; /* page titles `zlvvr` */
+  --text-code: 28px; /* a code shown once `GHjuZ` */
+  --text-step: 10.5px; /* a step number `k5ymI` */
+  --tracking-page-title: -0.3px; /* `zlvvr` */
+  --tracking-head: 0.4px; /* table heads `U8pQyO` */
+  --tracking-code: 3px; /* `GHjuZ` */
+  --leading-callout: 1.4; /* callout titles `yQ5PT` */
+  --leading-row: 1.45; /* table cells `JeBPl` */
+  --leading-tight: 1.3; /* a name over its username, 17 and 15 px lines (`fnCdL`, `gu33w`) */
+  --space-callout-y: 14px; /* callouts `u7p3uL` */
+  --space-tab: 2px; /* page tab side padding `loUWZ` */
+  --space-tabs: 20px; /* between page tabs `h6bI9O` */
+  --space-cert: 18px; /* certificate check `nNRnL` */
+  --space-identity: 1px; /* name over role in the header `N7jGY` */
+  --size-avatar-row: 28px; /* member and person rows `V4mxlR` */
+  --size-select-row: 30px; /* a role select in a member row `M8hrM` */
+  --size-tab: 34px; /* page tabs `loUWZ` */
+  --size-step-dot: 18px; /* `IQf9Z` */
+  --size-step-line: 28px; /* `slBd7` */
+  /* A list row's lines (`tIvsQ`); an app's own rows may space them as its frames do. */
+  --row-line-gap: var(--space-line);
+  --row-text-leading: normal;
+  --row-line-leading: var(--leading-small);
+  --row-wide-leading: var(--leading-body);
+  --field-label-leading: normal;
+  --steps-gap: var(--space-tight);
+  --size-step-icon: 11px; /* `PKRRn` */
+  --size-switch-w: 28px; /* `XC5zU` */
+  --size-switch-h: 16px;
+  --size-switch-knob: 12px;
+  --size-checkbox: 16px; /* `ZZTTi` */
+  --size-header: 64px; /* `NNrob` */
+  --size-header-compact: 60px; /* `nxYvC` */
+  --size-header-row: 36px; /* a table's head row `mnZHf` */
+  --size-divider: 24px; /* `SpFiM` */
+  --size-fact-label: 130px; /* `j7X1i` */
+  --size-code-card: 560px; /* `bdPlP` */
+  --size-cert-card: 400px; /* the certificate check beside a sign-in card `LYpQM` */
+  --size-cert-label: 90px; /* `FHISB` */
+  --size-nav-item: 30px; /* `xWDPH` */
+  --icon-note: 13px; /* notes under a list, select chevrons `Fe6Gt`, `EFlm4` */
+
   /* Layout that changes on a phone (`Ahged`, `afqip`). */
   --page-padding-y: var(--space-page-y);
   --page-padding-x: 0px;
@@ -92,6 +137,8 @@
   --footer-spacer: block;
   --footer-links-gap: var(--space-footer-links);
   --footer-leading: normal;
+  /* An app may leave out its promise on a phone (the server admin's `mYBka` footer shows only the version). */
+  --footer-promise: block;
 
   /* List rows: glyph, text and actions side by side; on a phone the actions go under the text (`F9QYD`). */
   --row-columns: auto minmax(0, 1fr) auto;
@@ -102,6 +149,16 @@
   --row-button-width: auto;
   --setting-columns: var(--size-setting-label) minmax(0, 1fr);
   --setting-gap: var(--space-row);
+
+  /* A site header (`NNrob`): everything on a wide page; on a phone the mark, the context and a menu (`nxYvC`). */
+  --header-height: var(--size-header);
+  --header-padding: 0 var(--space-section);
+  --header-gap: var(--space-lg);
+  --header-wide: flex;
+  --header-compact: none;
+  --table-head: grid;
+  --table-end-justify: flex-end;
+  --table-end-wrap: nowrap;
 }
 
 /* Phones: `Ahged` and `afqip` are 390 wide; the card needs its 400 plus 16 at each side. */
@@ -120,6 +177,9 @@
     --footer-spacer: none;
     --footer-links-gap: var(--space-lg);
     --footer-leading: var(--leading-small);
+    /* The three setup steps stay on one line at 390 (no phone frame draws them). */
+    --size-step-line: 12px;
+    --steps-gap: var(--space-sm);
   }
 }
 
@@ -134,5 +194,13 @@
     --row-button-width: 100%;
     --setting-columns: minmax(0, 1fr);
     --setting-gap: var(--space-tight);
+    --header-height: var(--size-header-compact);
+    --header-padding: 0 var(--space-lg);
+    --header-gap: var(--space-tight);
+    --header-wide: none;
+    --header-compact: flex;
+    --table-head: none;
+    --table-end-justify: flex-start;
+    --table-end-wrap: wrap;
   }
 }

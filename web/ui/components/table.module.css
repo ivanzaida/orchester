@@ -1,0 +1,51 @@
+.head,
+.row {
+  display: grid;
+  align-items: center;
+  column-gap: var(--space-row);
+  row-gap: var(--space-sm);
+  padding: 0 var(--space-row-x);
+}
+
+.head {
+  display: var(--table-head);
+  min-height: var(--size-header-row);
+  box-shadow: inset 0 calc(-1 * var(--border-sm)) 0 var(--color-border);
+}
+
+.headCell {
+  font-size: var(--text-tag);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-row);
+  letter-spacing: var(--tracking-head);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.row {
+  padding-top: var(--space-tight);
+  padding-bottom: var(--space-tight);
+}
+
+.row:not(:last-child) {
+  box-shadow: inset 0 calc(-1 * var(--border-sm)) 0 var(--color-border);
+}
+
+.active {
+  background: var(--color-hover);
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  font-size: var(--text-row);
+  line-height: var(--leading-row);
+  color: var(--color-text-secondary);
+}
+
+.end {
+  flex-wrap: var(--table-end-wrap);
+  justify-content: var(--table-end-justify);
+}

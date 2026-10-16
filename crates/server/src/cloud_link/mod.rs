@@ -3,11 +3,12 @@
 //! verified here, without the internet; the owner can turn the cloud off, re-pin its root or unlink it at once.
 
 use orchester_api::{
-  CloudLink, CloudStatus, ErrorCode,
+  CloudLink, CloudStatus, ErrorCode, UserRef,
+  cloud::TokenPurpose,
   identity::{CLOCK_SKEW_SECS, IdentityError, PublicKey, VerifiedKeySet, VerifiedToken},
+  statements::{LINK_STATEMENT_TYPE, LinkStatement},
 };
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::Serialize;
 
 use crate::{error::ServerError, server_keys::ServerKeys};
 
@@ -21,6 +22,8 @@ pub(crate) struct Claims {
   pub name: String,
   /// The invite the token was issued for, when it came from accepting one.
   pub invite: Option<String>,
+  /// `None` to join with a device; otherwise the one use the cloud issued the token for.
+  pub purpose: Option<TokenPurpose>,
   pub jti: String,
   pub exp: i64,
   pub kid: String,
@@ -30,6 +33,14 @@ pub(crate) struct Claims {
 const MAX_NAME_CHARS: usize = 256;
 
 impl Claims {
+  /// A token issued for another use than `purpose` is refused like any token the server cannot use.
+  pub fn require(&self, purpose: Option<TokenPurpose>) -> Result<(), ServerError> {
+    if self.purpose != purpose {
+      return Err(ErrorCode::InvalidIdentity.into());
+    }
+    Ok(())
+  }
+
   /// The claims of a verified token; a blank or overlong name is refused like any token the server cannot use.
   fn of(verified: VerifiedToken) -> Result<Self, ServerError> {
     let VerifiedToken { claims, kid } = verified;
@@ -41,6 +52,7 @@ impl Claims {
       email: claims.email,
       name: claims.name,
       invite: claims.invite,
+      purpose: claims.purpose,
       jti: claims.jti,
       exp: claims.exp,
       kid,
@@ -56,42 +68,49 @@ pub(crate) struct Link {
   key_set_expires_at: Option<i64>,
   accepting: bool,
   linked_at: i64,
+  linked_by: Option<UserRef>,
 }
 
 impl Link {
   pub fn load(db: &Connection) -> Result<Option<Self>, ServerError> {
     let row = db
       .query_row(
-        "SELECT root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at FROM cloud_link WHERE id=1",
+        "SELECT root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at,linked_by FROM cloud_link
+          WHERE id=1",
         [],
         |row| {
           Ok((
-            row.get::<_, String>(0)?,
-            row.get(1)?,
-            row.get(2)?,
-            row.get(3)?,
-            row.get(4)?,
-            row.get(5)?,
+            (row.get::<_, String>(0)?, row.get(1)?, row.get(2)?, row.get(3)?),
+            (row.get(4)?, row.get(5)?, row.get::<_, Option<String>>(6)?),
           ))
         },
       )
       .optional()?;
     row
-      .map(|(root, key_set, issued, expires, accepting, linked_at)| {
-        Ok(Self {
-          root_key: PublicKey::parse(&root).map_err(|_| ServerError::StoredData)?,
-          key_set,
-          key_set_issued_at: issued,
-          key_set_expires_at: expires,
-          accepting,
-          linked_at,
-        })
-      })
+      .map(
+        |((root, key_set, issued, expires), (accepting, linked_at, linked_by))| {
+          let linked_by = linked_by
+            .map(|id| id.parse().map_err(|_| ServerError::StoredData))
+            .transpose()?
+            .map(|id| crate::sharing::access::user_ref(db, id))
+            .transpose()?;
+          Ok(Self {
+            root_key: PublicKey::parse(&root).map_err(|_| ServerError::StoredData)?,
+            key_set,
+            key_set_issued_at: issued,
+            key_set_expires_at: expires,
+            accepting,
+            linked_at,
+            linked_by,
+          })
+        },
+      )
       .transpose()
   }
 
-  pub fn status(&self) -> CloudStatus {
+  pub fn status(&self, keys: &ServerKeys) -> CloudStatus {
     CloudStatus {
+      server: keys.id.to_string(),
       root_fingerprint: self.root_key.fingerprint(),
       accepting: self.accepting,
     }
@@ -170,21 +189,33 @@ impl Link {
       key_set_expires_at: link
         .and_then(|link| link.key_set_expires_at)
         .map(|seconds| seconds * 1000),
+      key_set_issued_at: link
+        .and_then(|link| link.key_set_issued_at)
+        .map(|seconds| seconds * 1000),
       linked_at: link.map(|link| link.linked_at),
+      linked_by: link.and_then(|link| link.linked_by.clone()),
     }
   }
 }
 
-/// Pins `root_key` (base64url) and caches `key_set`, which that root must have signed: the end of linking.
-pub(crate) fn link(db: &Connection, root_key: &str, key_set: &str, now_ms: i64) -> Result<Link, ServerError> {
+/// Pins `root_key` (base64url) and caches `key_set`, which that root must have signed: the end of linking, by the admin
+/// `by`.
+pub(crate) fn link(
+  db: &Connection,
+  root_key: &str,
+  key_set: &str,
+  by: orchester_core::id::UserId,
+  now_ms: i64,
+) -> Result<Link, ServerError> {
   let root = PublicKey::parse(root_key).map_err(|_| ErrorCode::Invalid)?;
   let set = VerifiedKeySet::verify(key_set, &root, now_ms.div_euclid(1000)).map_err(|_| ErrorCode::Invalid)?;
   let (issued_at, expires_at) = (set.statement().issued_at, set.statement().expires_at);
   db.execute(
-    "INSERT INTO cloud_link(id,root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at)
-      VALUES (1,?1,?2,?3,?4,1,?5)
-      ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=?2,key_set_issued_at=?3,key_set_expires_at=?4,accepting=1",
-    params![root.encoded(), key_set, issued_at, expires_at, now_ms],
+    "INSERT INTO cloud_link(id,root_key,key_set,key_set_issued_at,key_set_expires_at,accepting,linked_at,linked_by)
+      VALUES (1,?1,?2,?3,?4,1,?5,?6)
+      ON CONFLICT(id) DO UPDATE SET root_key=?1,key_set=?2,key_set_issued_at=?3,key_set_expires_at=?4,accepting=1,
+        linked_at=?5,linked_by=?6",
+    params![root.encoded(), key_set, issued_at, expires_at, now_ms, by.to_string()],
   )?;
   Link::load(db)?.ok_or(ServerError::StoredData)
 }
@@ -218,16 +249,6 @@ pub(crate) fn unlink(db: &Connection) -> Result<(), ServerError> {
 
 /// What the server signs at setup for the cloud to register it: its id, name, address, key, and the fingerprint of
 /// its own certificate (the SHA-256 of its DER in hex, which apps pin; `None` without one).
-#[derive(Serialize)]
-struct LinkStatement<'a> {
-  server: String,
-  name: &'a str,
-  address: &'a str,
-  public_key: String,
-  fingerprint: Option<String>,
-  issued_at: i64,
-}
-
 pub(crate) fn statement(
   keys: &ServerKeys,
   name: &str,
@@ -236,11 +257,15 @@ pub(crate) fn statement(
   now_ms: i64,
 ) -> Result<String, ServerError> {
   keys.sign(
-    "orchester-link+jws",
+    LINK_STATEMENT_TYPE,
     &LinkStatement {
-      server: keys.id.to_string(),
-      name,
-      address,
+      server: keys.id,
+      nonce: crate::server_keys::random::<16>()?
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect(),
+      name: name.to_owned(),
+      address: address.to_owned(),
       public_key: keys.public_key(),
       fingerprint,
       issued_at: now_ms.div_euclid(1000),

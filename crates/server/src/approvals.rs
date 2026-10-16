@@ -4,15 +4,19 @@
 
 use std::net::IpAddr;
 
-use orchester_api::{Approval, ApprovalState, ErrorCode, User};
+use orchester_api::{Approval, ApprovalState, DeviceKind, ErrorCode};
 use orchester_core::id::{ApprovalId, UserId};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use crate::{db, error::ServerError, sharing::access};
+use crate::{
+  db::{self, Authenticated},
+  error::ServerError,
+  sharing::access,
+};
 
 /// How long a join waits for approval.
 const LIFETIME_MS: i64 = 60 * 60 * 1000;
-const COLUMNS: &str = "id,user_id,device,state,requested_at,expires_at";
+const COLUMNS: &str = "id,user_id,device,state,requested_at,expires_at,address";
 
 pub(crate) fn enabled(db: &Connection) -> Result<bool, ServerError> {
   Ok(db.query_row("SELECT join_approval FROM settings WHERE id=1", [], |row| row.get(0))?)
@@ -115,41 +119,48 @@ pub(crate) fn finish(
   }
 }
 
-/// The waiting approvals `viewer` may answer: their own account's, or every one for an admin.
-pub(crate) fn waiting(db: &Connection, viewer: &User, now: i64) -> Result<Vec<Approval>, ServerError> {
+/// The waiting approvals `viewer` may answer: their own account's, or every one for an admin. A browser signed in to
+/// the admin never answers its own account's (security review 1, B2): only one of the account's own computers, or
+/// another admin, approves a computer joining as that account.
+pub(crate) fn waiting(db: &Connection, viewer: &Authenticated, now: i64) -> Result<Vec<Approval>, ServerError> {
+  let own = viewer.kind == DeviceKind::App;
   let mut query = db.prepare(&format!(
-    "SELECT {COLUMNS} FROM approvals WHERE state='waiting' AND expires_at>?1 AND (?2 OR user_id=?3) ORDER BY requested_at,id"
+    "SELECT {COLUMNS} FROM approvals WHERE state='waiting' AND expires_at>?1
+      AND ((?2 AND user_id<>?3) OR (?4 AND user_id=?3)) ORDER BY requested_at,id"
   ))?;
   let rows = query
-    .query_map(params![now, viewer.admin, viewer.id.to_string()], row)?
+    .query_map(params![now, viewer.user.admin, viewer.user.id.to_string(), own], row)?
     .collect::<Result<Vec<_>, _>>()?;
   rows.into_iter().map(|row| row.approval(db)).collect()
 }
 
-/// The answer of `viewer`, one of the account's devices or an admin, to a waiting approval.
+/// The answer of `viewer`, one of the account's own computers or another admin, to a waiting approval. A browser
+/// signed in to the admin never answers its own account's approvals (`404`, as for any it may not answer).
 pub(crate) fn decide(
   db: &Connection,
-  viewer: &User,
+  viewer: &Authenticated,
   id: ApprovalId,
   approve: bool,
   now: i64,
 ) -> Result<Approval, ServerError> {
+  let own = viewer.kind == DeviceKind::App;
   let changed = db.execute(
     "UPDATE approvals SET state=?1,decided_by=?2,decided_at=?3
-      WHERE id=?4 AND state='waiting' AND expires_at>?3 AND (?5 OR user_id=?2)",
+      WHERE id=?4 AND state='waiting' AND expires_at>?3 AND ((?5 AND user_id<>?2) OR (?6 AND user_id=?2))",
     params![
       if approve { "approved" } else { "refused" },
-      viewer.id.to_string(),
+      viewer.user.id.to_string(),
       now,
       id.to_string(),
-      viewer.admin
+      viewer.user.admin,
+      own
     ],
   )?;
   if changed == 0 {
     return Err(ErrorCode::NotFound.into());
   }
   let action = if approve { "join_approved" } else { "join_refused" };
-  db::audit(db, Some(viewer.id), action, &id.to_string(), None, now)?;
+  db::audit(db, Some(viewer.user.id), action, &id.to_string(), None, now)?;
   load(db, id)?.ok_or(ServerError::StoredData)
 }
 
@@ -160,6 +171,7 @@ struct Stored {
   state: ApprovalState,
   requested_at: i64,
   expires_at: i64,
+  address: String,
 }
 
 impl Stored {
@@ -168,6 +180,7 @@ impl Stored {
       id: self.id,
       user: access::user_ref(db, self.user)?,
       device: self.device,
+      address: self.address,
       state: self.state,
       requested_at: self.requested_at,
       expires_at: self.expires_at,
@@ -201,5 +214,6 @@ fn row(row: &Row<'_>) -> rusqlite::Result<Stored> {
     state,
     requested_at: row.get(4)?,
     expires_at: row.get(5)?,
+    address: row.get(6)?,
   })
 }

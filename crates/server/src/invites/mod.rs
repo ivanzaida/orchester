@@ -1,15 +1,17 @@
 //! Invites (`docs/architecture/server.md`, "Invites"): to the server, to one project with a role, or for an existing
 //! account, delivered by email through Orchester Cloud or as a code. An invite's email is kept only while it is open.
 
-use std::str::FromStr;
+mod rows;
+mod signed;
 
 use orchester_api::{
-  ErrorCode, Invite, InviteCreate, InviteCreated, InviteDelivery, InviteKind, JoinedProject, MemberRole, User,
-  UserChanges,
+  ErrorCode, Invite, InviteCreate, InviteCreated, InviteDelivery, InviteKind, InviteRevoked, JoinedProject, MemberRole,
+  User, UserChanges,
 };
 use orchester_core::id::{InviteId, ProjectId, UserId};
-use rusqlite::{Connection, OptionalExtension, Row, params};
-use serde::Serialize;
+pub(crate) use rows::Stored;
+use rows::{COLUMNS, delivery_name, kind_name, load, stored};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::{
   codes::{self, CodeKind, NewCode},
@@ -19,29 +21,18 @@ use crate::{
   sharing::{access, members},
 };
 
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 /// An invite by email is open for 7 days.
-const CLOUD_LIFETIME_MS: i64 = 7 * 24 * 60 * 60 * 1000;
-const COLUMNS: &str = "id,kind,delivery,email,project,role,user_id,admin,made_by,expires_at";
+const CLOUD_LIFETIME_MS: i64 = 7 * DAY_MS;
+/// Invites by email one person may send in 24 hours: each one is an email the cloud sends to someone.
+const EMAILS_PER_DAY: i64 = 30;
+/// How long ended invites stay in the server admin's *Open and recent invites*.
+const RECENT_MS: i64 = 30 * DAY_MS;
 
-/// What the server signs for the cloud to route an invite; the server admin's page carries it when the server cannot
-/// reach the cloud.
-#[derive(Serialize)]
-struct SignedInvite<'a> {
-  id: InviteId,
-  server: String,
-  kind: InviteKind,
-  email: &'a str,
-  project: Option<SignedProject>,
-  role: Option<MemberRole>,
-  inviter: &'a str,
-  expires_at: i64,
-  issued_at: i64,
-}
-
-#[derive(Serialize)]
-struct SignedProject {
-  address: String,
-  name: String,
+/// Which invites a list shows: one project's or all the viewer manages, and the recently ended ones too.
+pub(crate) struct Listing {
+  pub project: Option<ProjectId>,
+  pub recent: bool,
 }
 
 pub(crate) fn create(
@@ -53,6 +44,9 @@ pub(crate) fn create(
   now: i64,
 ) -> Result<InviteCreated, ServerError> {
   check(db, actor, input)?;
+  if input.delivery == InviteDelivery::Cloud {
+    daily_limit(db, actor.id, now)?;
+  }
   let id = InviteId::generate();
   let code_kind = if input.kind == InviteKind::Account {
     CodeKind::Account
@@ -65,7 +59,8 @@ pub(crate) fn create(
   };
   let email = input.email.as_deref().map(str::to_ascii_lowercase);
   db.execute(
-    &format!("INSERT INTO invites({COLUMNS},created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)"),
+    "INSERT INTO invites(id,kind,delivery,email,project,role,user_id,admin,made_by,expires_at,created_at)
+      VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
     params![
       id.to_string(),
       kind_name(input.kind),
@@ -81,7 +76,7 @@ pub(crate) fn create(
     ],
   )?;
   db::audit(db, Some(actor.id), "invite_made", &id.to_string(), None, now)?;
-  let invite = load(db, id)?.ok_or(ServerError::StoredData)?;
+  let invite = load(db, id, now)?.ok_or(ServerError::StoredData)?;
   let (code, signed) = match input.delivery {
     InviteDelivery::Code => {
       let new = NewCode {
@@ -92,9 +87,28 @@ pub(crate) fn create(
       };
       (Some(codes::create(db, keys, &new, now)?.0), None)
     }
-    InviteDelivery::Cloud => (None, Some(sign(db, keys, &invite, base_address, now)?)),
+    InviteDelivery::Cloud => (None, Some(signed::invite(db, keys, &invite, base_address, now)?)),
   };
   Ok(InviteCreated { invite, code, signed })
+}
+
+/// `429` once `inviter` sent [`EMAILS_PER_DAY`] invites by email in the last 24 hours, until the oldest of them is a
+/// day old.
+fn daily_limit(db: &Connection, inviter: UserId, now: i64) -> Result<(), ServerError> {
+  let (sent, oldest): (i64, Option<i64>) = db.query_row(
+    "SELECT COUNT(*),MIN(created_at) FROM invites WHERE made_by=?1 AND delivery='cloud' AND created_at>?2",
+    params![inviter.to_string(), now - DAY_MS],
+    |row| Ok((row.get(0)?, row.get(1)?)),
+  )?;
+  match oldest {
+    Some(oldest) if sent >= EMAILS_PER_DAY => {
+      let wait = (oldest + DAY_MS - now).max(1000);
+      Err(ServerError::RateLimited(
+        u64::try_from(wait.div_euclid(1000)).unwrap_or(1),
+      ))
+    }
+    _ => Ok(()),
+  }
 }
 
 /// Who may make which invite, and the fields each kind needs.
@@ -145,58 +159,46 @@ fn project_owner(db: &Connection, actor: &User, project: ProjectId) -> Result<()
   }
 }
 
-fn sign(
-  db: &Connection,
-  keys: &ServerKeys,
-  invite: &Invite,
-  base_address: &str,
-  now: i64,
-) -> Result<String, ServerError> {
-  let project = invite
-    .project
-    .map(|project| {
-      db.query_row(
-        "SELECT slug,name FROM projects WHERE id=?1",
-        [project.to_string()],
-        |row| {
-          Ok(SignedProject {
-            address: format!("{base_address}/{}", row.get::<_, String>(0)?),
-            name: row.get(1)?,
-          })
-        },
-      )
-    })
-    .transpose()?;
-  let statement = SignedInvite {
-    id: invite.id,
-    server: keys.id.to_string(),
-    kind: invite.kind,
-    email: invite.email.as_deref().ok_or(ServerError::StoredData)?,
-    project,
-    role: invite.role,
-    inviter: &invite.by.display_name,
-    expires_at: invite.expires_at,
-    issued_at: now,
-  };
-  keys.sign("orchester-invite+jws", &statement)
-}
-
-/// The open invites `viewer` manages: every one for an admin, their projects' for an owner. Never a code.
-pub(crate) fn list(db: &Connection, viewer: &User, now: i64) -> Result<Vec<Invite>, ServerError> {
+/// The invites `viewer` manages: every one for an admin, their projects' for an owner; the open ones, and with
+/// `recent` those that ended in the last 30 days, newest first. Never a code; an ended invite has no email.
+pub(crate) fn list(db: &Connection, viewer: &User, listing: &Listing, now: i64) -> Result<Vec<Invite>, ServerError> {
   forget_ended(db, now)?;
+  if let Some(project) = listing.project {
+    project_owner(db, viewer, project)?;
+  }
   let mut query = db.prepare(&format!(
-    "SELECT {COLUMNS} FROM invites WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?1
-      AND (?2 OR project IN (SELECT project FROM memberships WHERE user_id=?3 AND role='owner'))
-      ORDER BY created_at,id"
+    "SELECT {COLUMNS} FROM invites
+      WHERE (?2 OR project IN (SELECT project FROM memberships WHERE user_id=?3 AND role='owner'))
+        AND (?4 IS NULL OR project=?4)
+        AND ((accepted_at IS NULL AND revoked_at IS NULL AND expires_at>?1)
+          OR (?5 AND COALESCE(accepted_at,revoked_at,expires_at)>?1-?6))
+      ORDER BY created_at DESC,id"
   ))?;
   let rows = query
-    .query_map(params![now, viewer.admin, viewer.id.to_string()], stored)?
+    .query_map(
+      params![
+        now,
+        viewer.admin,
+        viewer.id.to_string(),
+        listing.project.map(|project| project.to_string()),
+        listing.recent,
+        RECENT_MS
+      ],
+      stored,
+    )?
     .collect::<Result<Vec<_>, _>>()?;
-  rows.into_iter().map(|row| row.invite(db)).collect()
+  rows.into_iter().map(|row| row.invite(db, now)).collect()
 }
 
-/// Ends an open invite; its code stops working.
-pub(crate) fn revoke(db: &Connection, viewer: &User, id: InviteId, now: i64) -> Result<(), ServerError> {
+/// Ends an open invite; its code stops working. For an invite by email, the answer carries the revocation the
+/// server signed for the cloud.
+pub(crate) fn revoke(
+  db: &Connection,
+  keys: &ServerKeys,
+  viewer: &User,
+  id: InviteId,
+  now: i64,
+) -> Result<InviteRevoked, ServerError> {
   let invite = open(db, id, now)?.ok_or(ErrorCode::NotFound)?;
   let allowed = viewer.admin
     || invite.made_by == viewer.id
@@ -210,11 +212,15 @@ pub(crate) fn revoke(db: &Connection, viewer: &User, id: InviteId, now: i64) -> 
     return Err(ErrorCode::NotFound.into());
   }
   db.execute(
-    "UPDATE invites SET revoked_at=?1, email=NULL WHERE id=?2",
-    params![now, id.to_string()],
+    "UPDATE invites SET revoked_at=?1, revoked_by=?2, email=NULL WHERE id=?3",
+    params![now, viewer.id.to_string(), id.to_string()],
   )?;
   codes::end_invite(db, id)?;
-  db::audit(db, Some(viewer.id), "invite_revoked", &id.to_string(), None, now)
+  db::audit(db, Some(viewer.id), "invite_revoked", &id.to_string(), None, now)?;
+  let revocation = (invite.delivery == InviteDelivery::Cloud)
+    .then(|| signed::revocation(keys, id, now))
+    .transpose()?;
+  Ok(InviteRevoked { revocation })
 }
 
 /// An invite still open at `now`, as stored.
@@ -289,108 +295,6 @@ fn forget_ended(db: &Connection, now: i64) -> Result<(), ServerError> {
     [now],
   )?;
   Ok(())
-}
-
-/// An invite row.
-pub(crate) struct Stored {
-  pub id: InviteId,
-  pub kind: InviteKind,
-  pub delivery: InviteDelivery,
-  pub email: Option<String>,
-  pub project: Option<ProjectId>,
-  pub role: Option<MemberRole>,
-  pub user: Option<UserId>,
-  pub admin: bool,
-  pub made_by: UserId,
-  expires_at: i64,
-}
-
-impl Stored {
-  fn invite(self, db: &Connection) -> Result<Invite, ServerError> {
-    Ok(Invite {
-      id: self.id,
-      kind: self.kind,
-      email: self.email,
-      project: self.project,
-      role: self.role,
-      user: self.user.map(|user| access::user_ref(db, user)).transpose()?,
-      admin: self.admin,
-      by: access::user_ref(db, self.made_by)?,
-      delivery: self.delivery,
-      expires_at: self.expires_at,
-    })
-  }
-}
-
-fn load(db: &Connection, id: InviteId) -> Result<Option<Invite>, ServerError> {
-  db.query_row(
-    &format!("SELECT {COLUMNS} FROM invites WHERE id=?1"),
-    [id.to_string()],
-    stored,
-  )
-  .optional()?
-  .map(|row| row.invite(db))
-  .transpose()
-}
-
-fn stored(row: &Row<'_>) -> rusqlite::Result<Stored> {
-  Ok(Stored {
-    id: required(row, 0)?,
-    kind: parse_kind(&row.get::<_, String>(1)?).ok_or_else(|| conversion(1))?,
-    delivery: parse_delivery(&row.get::<_, String>(2)?).ok_or_else(|| conversion(2))?,
-    email: row.get(3)?,
-    project: parsed(row, 4)?,
-    role: row
-      .get::<_, Option<String>>(5)?
-      .map(|role| access::parse_role(&role).ok_or_else(|| conversion(5)))
-      .transpose()?,
-    user: parsed(row, 6)?,
-    admin: row.get(7)?,
-    made_by: required(row, 8)?,
-    expires_at: row.get(9)?,
-  })
-}
-
-fn parsed<T: FromStr>(row: &Row<'_>, index: usize) -> rusqlite::Result<Option<T>> {
-  row
-    .get::<_, Option<String>>(index)?
-    .map(|value| value.parse().map_err(|_| conversion(index)))
-    .transpose()
-}
-
-fn required<T: FromStr>(row: &Row<'_>, index: usize) -> rusqlite::Result<T> {
-  parsed(row, index)?.ok_or_else(|| conversion(index))
-}
-
-fn conversion(index: usize) -> rusqlite::Error {
-  rusqlite::Error::InvalidColumnType(index, "invite".into(), rusqlite::types::Type::Text)
-}
-
-const fn kind_name(kind: InviteKind) -> &'static str {
-  match kind {
-    InviteKind::Server => "server",
-    InviteKind::Project => "project",
-    InviteKind::Account => "account",
-  }
-}
-
-fn parse_kind(value: &str) -> Option<InviteKind> {
-  [InviteKind::Server, InviteKind::Project, InviteKind::Account]
-    .into_iter()
-    .find(|kind| kind_name(*kind) == value)
-}
-
-const fn delivery_name(delivery: InviteDelivery) -> &'static str {
-  match delivery {
-    InviteDelivery::Cloud => "cloud",
-    InviteDelivery::Code => "code",
-  }
-}
-
-fn parse_delivery(value: &str) -> Option<InviteDelivery> {
-  [InviteDelivery::Cloud, InviteDelivery::Code]
-    .into_iter()
-    .find(|delivery| delivery_name(*delivery) == value)
 }
 
 fn valid_email(email: &str) -> bool {

@@ -192,6 +192,11 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
       "This server does not accept Orchester Cloud identities",
     ),
     ErrorCode::ApprovalRefused => (StatusCode::FORBIDDEN, "The join was not approved"),
+    ErrorCode::ApprovalRequired => (
+      StatusCode::FORBIDDEN,
+      "Join approval is on: sign in to the admin with a code from one of your computers",
+    ),
+    ErrorCode::NothingToManage => (StatusCode::FORBIDDEN, "The account is not an admin and owns no project"),
     ErrorCode::KeySetStale => (
       StatusCode::CONFLICT,
       "The server's copy of Orchester Cloud's keys is out of date",

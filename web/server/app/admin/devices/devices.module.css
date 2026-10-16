@@ -1,0 +1,89 @@
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: var(--admin-search);
+  height: var(--size-row-control);
+  padding: 0 var(--space-tight);
+  background: var(--color-surface-input);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+}
+
+.search:focus-within {
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border-focus);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-small);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-row);
+}
+
+.joined {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: var(--admin-cell-when);
+}
+
+.used {
+  width: var(--admin-cell-when);
+  font-size: var(--text-row);
+  line-height: var(--leading-row);
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  width: var(--admin-cell-actions);
+}
+
+.under {
+  padding: 0 var(--space-row-x) var(--space-row);
+}
+
+.waiting {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-panel);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.decided {
+  display: flex;
+  flex-direction: column;
+}
+
+.decidedText {
+  padding: 0 var(--space-row-x) var(--space-row);
+  font-size: var(--text-row);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}

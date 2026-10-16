@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use orchester_api::{
   Credential,
-  identity::{PrivateKey, RootKey},
+  identity::{PrivateKey, RootKey, SigningKey},
 };
 use orchester_cloud::{Cloud, LATEST_SCHEMA, error::CloudError, mail::SmtpMailer};
 use serde_json::json;
@@ -41,6 +41,61 @@ pub async fn migrations_apply_once_and_a_newer_database_is_refused() {
     Err(CloudError::SchemaTooNew(version)) => assert_eq!(version, LATEST_SCHEMA + 1),
     other => panic!("a newer database must be refused, got {:?}", other.map(|_| ())),
   }
+  drop(admin);
+  postgres().drop_database(&database).await;
+}
+
+/// Security review 2, 3: a database linked under migration 3 may hold a server whose id is not its key's. Migration 4
+/// removes it, so the key that id belongs to can link, and keeps the servers whose id is their own.
+pub async fn migration_4_removes_servers_whose_id_is_not_their_keys() {
+  let database = postgres().create_database().await;
+  let admin = postgres().database(&database).await;
+  admin
+    .batch_execute(concat!(
+      include_str!("../../migrations/0001_accounts.sql"),
+      include_str!("../../migrations/0002_pending_sign_up.sql"),
+      include_str!("../../migrations/0003_servers_invites.sql"),
+      "CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL);
+       INSERT INTO schema_migrations VALUES (1, now()), (2, now()), (3, now());
+       INSERT INTO accounts VALUES ('0199f0a0-0000-7000-8000-000000000001', 'ivan@example.test', 'Ivan', 'x', now(),
+         now(), now());"
+    ))
+    .await
+    .expect("a database at migration 3");
+  let key = || {
+    SigningKey::new(&PrivateKey::generate().expect("key"))
+      .expect("signing key")
+      .public_key()
+  };
+  let (own, squatter) = (key(), key());
+  let own_id = own.server_id().as_uuid();
+  let foreign_id = uuid::Uuid::new_v4();
+  for (id, public_key) in [(own_id, own.encoded()), (foreign_id, squatter.encoded())] {
+    admin
+      .execute(
+        "INSERT INTO servers (id, owner, name, address, public_key, linked_at)
+         VALUES ($1, '0199f0a0-0000-7000-8000-000000000001', 'Kontur team', 'https://kontur.test', $2, now())",
+        &[&id, &public_key],
+      )
+      .await
+      .expect("a migration 3 server");
+  }
+  let root = RootKey::new(&PrivateKey::generate().expect("key")).expect("root");
+  Cloud::open(
+    config(&database, &root, Vec::new()),
+    Arc::new(TestClock::at(1_791_000_000_000)),
+    Arc::new(RecordingMailer::default()),
+  )
+  .await
+  .expect("migration 4 applies");
+  let left: Vec<uuid::Uuid> = admin
+    .query("SELECT id FROM servers", &[])
+    .await
+    .expect("servers")
+    .iter()
+    .map(|row| row.get(0))
+    .collect();
+  assert_eq!(left, [own_id]);
   drop(admin);
   postgres().drop_database(&database).await;
 }

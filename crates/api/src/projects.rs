@@ -32,8 +32,32 @@ pub struct SharedProject {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Member {
   pub user: UserRef,
+  #[serde(default)]
+  pub username: String,
   pub role: MemberRole,
   pub added_at: i64,
+}
+
+/// A project as the server admin manages it: admins see every project, owners theirs.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ManagedProject {
+  #[serde(flatten)]
+  pub project: SharedProject,
+  pub members: u32,
+  pub open_invites: u32,
+  pub owners: Vec<UserRef>,
+  pub created_at: i64,
+  pub created_by: UserRef,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ManagedProjects {
+  pub projects: Vec<ManagedProject>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ManagedProjectResponse {
+  pub project: ManagedProject,
 }
 
 /// API 2's project creation by repository, replaced in API 3 by [`NewProject`]: the server refuses it. Kept while the
@@ -56,9 +80,12 @@ pub struct NewProject {
   pub idempotency_key: IdempotencyKey,
   pub name: String,
   pub slug: String,
-  pub key: String,
+  /// The task key; without one the server suggests it from the name.
+  #[serde(default)]
+  pub key: Option<String>,
   /// Untrusted identity or fetch URL; may contain credentials. This request has no Debug.
   pub remote_hint: Option<String>,
+  #[serde(default)]
   pub tasks: Vec<UploadTask>,
 }
 
@@ -67,7 +94,7 @@ pub struct NewProject {
 pub struct ProjectChanges {
   pub name: Option<String>,
   pub key: Option<String>,
-  /// Untrusted identity or fetch URL; may contain credentials.
+  /// Untrusted identity or fetch URL; may contain credentials. An empty one clears the hint.
   pub remote_hint: Option<String>,
 }
 

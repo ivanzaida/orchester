@@ -39,7 +39,17 @@ pub struct InviteCreate {
   pub admin: bool,
 }
 
-/// An open invite. Never carries its code.
+/// Where an invite stands. Its email is forgotten once it is not `open`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InviteState {
+  Open,
+  Accepted,
+  Expired,
+  Revoked,
+}
+
+/// An invite. Never carries its code.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Invite {
   pub id: InviteId,
@@ -52,6 +62,27 @@ pub struct Invite {
   pub by: UserRef,
   pub delivery: InviteDelivery,
   pub expires_at: i64,
+  #[serde(default)]
+  pub created_at: i64,
+  #[serde(default = "open")]
+  pub state: InviteState,
+  /// When it was accepted or revoked; an expired invite ended at `expires_at`.
+  #[serde(default)]
+  pub ended_at: Option<i64>,
+  /// Who accepted or revoked it.
+  #[serde(default)]
+  pub ended_by: Option<UserRef>,
+}
+
+const fn open() -> InviteState {
+  InviteState::Open
+}
+
+/// `200` of `DELETE /invites/{id}`: for an invite by email, the revocation the server signed for the cloud, which the
+/// server admin's page delivers.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InviteRevoked {
+  pub revocation: Option<String>,
 }
 
 /// `201` of `POST /invites`. `code` only for `delivery: code` and `signed` only for `delivery: cloud`, each shown

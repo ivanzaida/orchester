@@ -256,5 +256,43 @@
   "device": {
     "webName": "{{browser}} on {{system}}",
     "unknownBrowser": "Web browser"
+  },
+  "authorize": {
+    "pageTitle": "Confirm",
+    "adminTitle": "Sign in to {{server}}'s admin as {{email}}?",
+    "adminDescription": "{{server}}'s admin page asked Orchester Cloud who you are. Confirming sends it your account and name for this one sign-in; it gets no password.",
+    "linkTitle": "Link {{server}} to your account?",
+    "linkDescription": "You're setting up this server. Linked, it takes invites by email and lets people join with their Orchester account. Orchester Cloud records it as yours; it never sees its projects.",
+    "notYou": "Not you?",
+    "backTo": "Back to {{place}}",
+    "checkCode": "Check code",
+    "checkCodeSame": "The same as on the server's console and its setup page.",
+    "adminSubmit": "Sign in to the admin",
+    "linkSubmit": "Link {{server}}",
+    "submitting": "Confirming…",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "refusedTitle": "This request can't be answered",
+    "invalid": "The link that brought you here is incomplete or changed. Go back to the server's admin page and start again.",
+    "outOfDate": "This page is out of date, open the link again.",
+    "notLinked": "This team server isn't linked to Orchester Cloud. Its admins can link it in its Settings, or sign in there with a code.",
+    "wrongReturn": "The page that sent you here isn't this team server's own admin, so Orchester Cloud doesn't answer it.",
+    "linkedElsewhere": "This server is already linked to another Orchester account. Its owner can unlink it first.",
+    "statementRefused": "The server's link didn't check out, or is more than 10 minutes old. Go back to its setup page and start again.",
+    "keysUnavailable": "Orchester Cloud can't sign right now. Try again in a few minutes.",
+    "signedOut": "Your session ended. Sign in again, then confirm.",
+    "tooMany": "Too many requests. Try again in {{minutes}} min, at {{time}}."
+  },
+  "invites": {
+    "deliver": {
+      "pageTitle": "Invite",
+      "sentTitle": "Invite delivered",
+      "sentText": "Orchester Cloud has the invite. It reaches the person in Orchester if they have an account, and by email either way.",
+      "refusedTitle": "Orchester Cloud didn't take this invite",
+      "refusedText": "It wasn't signed by a server linked to Orchester Cloud, it expired, or it was sent too often. Make a new invite in the server's admin, or invite with a code.",
+      "unavailableTitle": "Orchester Cloud isn't answering",
+      "unavailableText": "The invite wasn't delivered. Try again in a few minutes, or invite with a code.",
+      "back": "Back to {{place}}"
+    }
   }
 }

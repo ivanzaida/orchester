@@ -13,6 +13,7 @@
 .label {
   font-size: var(--text-small);
   font-weight: var(--weight-medium);
+  line-height: var(--field-label-leading);
   color: var(--color-text-secondary);
 }
 
@@ -72,6 +73,23 @@
 
 .input::placeholder {
   color: var(--color-text-muted);
+}
+
+.prefix {
+  flex: none;
+  margin-right: calc(-1 * var(--space-sm));
+  font-family: var(--font-mono);
+  font-size: var(--text-body);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.code {
+  letter-spacing: var(--tracking-code-field);
 }
 
 .secret {

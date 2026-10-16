@@ -143,6 +143,11 @@ fn status_message(code: CloudErrorCode) -> (StatusCode, &'static str) {
     CloudErrorCode::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "Try again later"),
     CloudErrorCode::KeysUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "Signing keys unavailable"),
     CloudErrorCode::Busy => (StatusCode::SERVICE_UNAVAILABLE, "Busy, try again shortly"),
+    CloudErrorCode::Conflict => (
+      StatusCode::CONFLICT,
+      "The server is linked by a newer statement, or this one was used",
+    ),
+    CloudErrorCode::TooManyServers => (StatusCode::CONFLICT, "The account owns as many servers as it may"),
     CloudErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Cloud operation failed"),
   }
 }

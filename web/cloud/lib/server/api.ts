@@ -23,6 +23,7 @@ export type CloudErrorCode =
   | "rate_limited"
   | "keys_unavailable"
   | "busy"
+  | "conflict"
   | "internal";
 
 export type ApiFailure =
@@ -46,7 +47,7 @@ const TIMEOUT_MS = 10_000;
 const CODES = new Set<string>([
   "bad_request", "payload_too_large", "method_not_allowed", "request_timeout", "unsupported_media_type", "not_found",
   "unauthorized", "invalid_credentials", "confirm_failed", "email_unconfirmed", "invalid_link", "invalid", "rate_limited",
-  "keys_unavailable", "busy", "internal",
+  "keys_unavailable", "busy", "conflict", "internal",
 ]);
 
 function headers(options: CallOptions, body: boolean): Headers {
@@ -118,7 +119,8 @@ export async function call<T>(
     return { ok: false, error: await failure(response) };
   }
   // A body that is not JSON reads as `null`, which `read` refuses and which makes the answer `unexpected`.
-  const json: unknown = response.status === 204 || response.status === 202 ? null : await response.json().catch(() => null);
+  // A `202` may come with a body (`POST /invites` names the server) or without one (sign-up).
+  const json: unknown = response.status === 204 ? null : await response.json().catch(() => null);
   const value = request.read(json);
   return value === null ? { ok: false, error: { kind: "unexpected", status: response.status } } : { ok: true, value };
 }

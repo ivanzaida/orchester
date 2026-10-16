@@ -3,7 +3,10 @@ use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 
 use super::{CLOCK_SKEW_SECS, IdentityError, ListedKey, SigningKey, jws};
-use crate::{Credential, cloud::DeviceInfo};
+use crate::{
+  Credential,
+  cloud::{DeviceInfo, TokenPurpose},
+};
 
 /// An identity token is valid for five minutes after it was issued.
 pub const TOKEN_LIFETIME_SECS: i64 = 5 * 60;
@@ -23,6 +26,10 @@ pub struct IdentityClaims {
   /// keys"); the team server then admits the verified email to that invite.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub invite: Option<String>,
+  /// What the token is for besides joining with a device: signing in to the server admin, or linking the server.
+  /// A team server accepts a token only for the use it was issued for.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub purpose: Option<TokenPurpose>,
   /// Unique per token; a team server accepts each once.
   pub jti: String,
   pub iat: i64,
@@ -38,6 +45,7 @@ pub struct TokenSubject {
   pub name: String,
   pub device: DeviceInfo,
   pub invite: Option<String>,
+  pub purpose: Option<TokenPurpose>,
 }
 
 impl IdentityClaims {
@@ -54,6 +62,7 @@ impl IdentityClaims {
       name: subject.name,
       device: subject.device,
       invite: subject.invite,
+      purpose: subject.purpose,
       jti: jws::encode(&jti),
       iat: now,
       exp: now + TOKEN_LIFETIME_SECS,

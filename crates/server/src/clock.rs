@@ -18,3 +18,5 @@ impl Clock for SystemClock {
 
 /// A device token expires after 90 days without use (row 56).
 pub const DEVICE_IDLE_MS: i64 = 90 * 24 * 60 * 60 * 1000;
+/// A browser's sign-in to the server admin ends 12 hours after it began, used or not.
+pub const ADMIN_WEB_MS: i64 = 12 * 60 * 60 * 1000;

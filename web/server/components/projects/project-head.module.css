@@ -1,0 +1,26 @@
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--admin-project-gap);
+}
+
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-row);
+  color: var(--color-text-muted);
+}
+
+.url {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}

@@ -1,0 +1,29 @@
+# The team server's web admin (docs/architecture/server.md, "The server admin"). Build from web/, the npm workspace,
+# so the UI kit and the one lockfile come along:
+#   docker build -f web/Dockerfile.server -t orchester-server-admin web
+# The team server reverse-proxies every path but /api/* to it (`admin_url`, default http://127.0.0.1:3100); publish
+# only the team server. Configuration comes only from the environment at run time: ORCHESTER_ADMIN_SERVER_URL (the
+# server's private API listener), ORCHESTER_ADMIN_SECRET (32 random bytes in base64) and, optionally,
+# ORCHESTER_ADMIN_CLOUD_URL. Nothing is fetched at run time: fonts and scripts are in the image.
+# Pinned by digest (the multi-platform index of node:24-alpine, 2026-10-15); update the digest on purpose.
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS build
+WORKDIR /web
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY ui/package.json ui/
+COPY cloud/package.json cloud/
+COPY server/package.json server/
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY ui ui
+COPY server server
+RUN npm run build --workspace server
+
+FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3100
+# Next's standalone output keeps the workspace layout: the server is server/server.js.
+COPY --from=build /web/server/.next/standalone ./
+COPY --from=build /web/server/.next/static ./server/.next/static
+USER node
+EXPOSE 3100
+CMD ["node", "server/server.js"]

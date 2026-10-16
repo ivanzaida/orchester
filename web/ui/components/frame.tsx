@@ -9,16 +9,23 @@ import styles from "./frame.module.css";
 export function Brand({ name, product }: { name: string; product: string }) {
   return (
     <div className={styles.brand}>
-      <span className={styles.mark} aria-hidden="true">
-        <span className={styles.logo}>
-          <span className={styles.bar1} />
-          <span className={styles.bar2} />
-          <span className={styles.bar3} />
-        </span>
-      </span>
+      <Mark />
       <span className={styles.wordmark}>{name}</span>
       <span className={styles.tag}>{product}</span>
     </div>
+  );
+}
+
+/** The brand's mark alone, its logo in the raised tile (`yTI2t`), as a phone's header shows it (`GZ2Kc`). */
+export function Mark() {
+  return (
+    <span className={styles.mark} aria-hidden="true">
+      <span className={styles.logo}>
+        <span className={styles.bar1} />
+        <span className={styles.bar2} />
+        <span className={styles.bar3} />
+      </span>
+    </span>
   );
 }
 
@@ -26,7 +33,7 @@ export function Brand({ name, product }: { name: string; product: string }) {
 export function Footer({ promise, aside }: { promise: string; aside: ReactNode }) {
   return (
     <footer className={styles.footer}>
-      <p>{promise}</p>
+      <p className={styles.promise}>{promise}</p>
       <span className={styles.spacer} />
       <span className={styles.links}>{aside}</span>
     </footer>

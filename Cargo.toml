@@ -79,8 +79,9 @@ embed-resource = "3"
 # clipboard (arboard), so it adds no crate to the build.
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
-# HTTP/1 connection builder exposes header/idle deadlines that axum::serve cannot configure.
-hyper = { version = "1", default-features = false, features = ["http1", "server"] }
+# HTTP/1 connection builder exposes header/idle deadlines that axum::serve cannot configure; its HTTP/1 client
+# connection forwards the team server's non-API paths to the server admin app on a private address.
+hyper = { version = "1", default-features = false, features = ["client", "http1", "server"] }
 # Tokio IO/timer and the axum-to-hyper service adapter for the bounded server transport.
 hyper-util = { version = "0.1", default-features = false, features = ["tokio", "service"] }
 # The common API of the keyring crates' OS keychain stores, which `orchester-vault` uses on Windows

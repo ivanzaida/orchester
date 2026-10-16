@@ -1,0 +1,56 @@
+.head {
+  display: flex;
+  flex-direction: var(--admin-head-direction);
+  align-items: var(--admin-head-align);
+  gap: var(--space-xl);
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-inline);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-page-title);
+  line-height: var(--leading-auto);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-page-title);
+  color: var(--color-text-primary);
+}
+
+.description {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* On a phone the page's action fills the width at the full button height (`p5PNRS` in `mYBka`, 36). */
+.actions > * {
+  flex: var(--admin-head-action-grow);
+  height: var(--admin-head-action-height);
+}
+
+.note {
+  display: flex;
+  gap: var(--space-sm);
+  font-size: var(--text-small);
+  line-height: var(--leading-body);
+  color: var(--color-text-muted);
+}
+
+.noteIcon {
+  display: flex;
+  flex: none;
+  padding-top: var(--space-hairline);
+}

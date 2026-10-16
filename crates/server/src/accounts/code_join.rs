@@ -2,14 +2,14 @@
 
 use std::net::IpAddr;
 
-use orchester_api::{CodeJoin, ErrorCode, Joined, JoinedVia, PairingCode, User};
+use orchester_api::{CodeJoin, DeviceKind, ErrorCode, Joined, JoinedVia, PairingCode, User};
 use rusqlite::Connection;
 
-use super::Server;
+use super::{Server, admin_sign_in};
 use crate::{
   codes::{self, CodeKind, NewCode, OpenCode},
   db::{self, Authenticated, NewUser},
-  devices,
+  devices::{self, Issued},
   error::ServerError,
   invites,
   rate_limit::JoinKind,
@@ -22,24 +22,43 @@ impl Server {
     let state = self.inner.clone();
     let result = self
       .account_write(move |db, now| {
-        let code = codes::find(db, &state.keys, input.code.expose(), now)?.ok_or(ErrorCode::InvalidCode)?;
+        let code = codes::find(db, &state.keys, input.code.expose(), now)?
+          .filter(|code| input.kind == DeviceKind::App || admin_sign_in::code_signs_in(code.kind))
+          .ok_or(ErrorCode::InvalidCode)?;
         let (user, joined) = redeemed_account(db, &code, &input, now)?;
+        let joined = match input.kind {
+          DeviceKind::AdminWeb => admin_sign_in::admin_session(db, user, &input.device, JoinedVia::Code, None, now)?,
+          DeviceKind::App => {
+            let issued = Issued {
+              device: &input.device,
+              kind: DeviceKind::App,
+              via: JoinedVia::Code,
+              kid: None,
+            };
+            let (token, session) = devices::issue(db, &user, &issued, now)?;
+            Joined {
+              token,
+              session,
+              user,
+              joined,
+            }
+          }
+        };
         codes::redeem(db, &code, now)?;
-        let (token, session) = devices::issue(db, &user, &input.device, JoinedVia::Code, None, now)?;
+        let action = if input.kind == DeviceKind::AdminWeb {
+          "admin_signed_in"
+        } else {
+          "joined"
+        };
         db::audit(
           db,
-          Some(user.id),
-          "joined",
+          Some(joined.user.id),
+          action,
           &format!("code:{}", code.kind.as_str()),
           Some(address),
           now,
         )?;
-        Ok(Joined {
-          token,
-          session,
-          user,
-          joined,
-        })
+        Ok(joined)
       })
       .await;
     match result {

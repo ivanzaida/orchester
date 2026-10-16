@@ -17,10 +17,11 @@ mod initial_read;
 mod invites;
 mod rate_limit;
 mod server_keys;
+mod settings;
 mod sharing;
 mod tls;
 mod transport;
 
 pub use accounts::Server;
 pub use db::backup_existing;
-pub use transport::serve;
+pub use transport::{serve, serve_admin_api};

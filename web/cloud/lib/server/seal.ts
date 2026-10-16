@@ -4,7 +4,7 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes, ti
  * Signing and sealing of cookie values with keys derived from `ORCHESTER_CLOUD_WEB_SECRET`, one key per purpose so a
  * value made for one cookie is never accepted as another.
  */
-export type KeyPurpose = "csrf" | "session" | "flow";
+export type KeyPurpose = "csrf" | "session" | "flow" | "authorize";
 
 const IV_BYTES = 12;
 const TAG_BYTES = 16;

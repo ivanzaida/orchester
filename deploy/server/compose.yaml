@@ -1,3 +1,8 @@
+# The team server and its admin, on a host with no public domain: the server presents its own certificate
+# (tls = "self_signed") on port 8740, and forwards every path outside /api to the admin on the private network.
+# For a public domain with Caddy in front, use compose.caddy.yaml instead (docs/server-hosting.md, "Docker").
+#   ORCHESTER_ADMIN_SECRET=$(openssl rand -base64 32) docker compose up -d --build
+# The setup code is in the server's console output: docker compose logs server.
 services:
   server:
     build:
@@ -6,38 +11,34 @@ services:
     restart: unless-stopped
     environment:
       ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
-      # Caddy holds the public certificate; the server speaks plain HTTP on this network only.
-      ORCHESTER_SERVER_TLS: "off"
-      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
-      ORCHESTER_SERVER_TRUSTED_PROXIES: 172.29.0.2
+      # Names and addresses people reach this host by, for the generated certificate (comma-separated).
+      ORCHESTER_SERVER_TLS_NAMES: ${ORCHESTER_SERVER_TLS_NAMES:-}
+      ORCHESTER_SERVER_ADMIN_URL: http://admin:3100
+      # The admin calls the API here, on the private network only; this port is never published. The server warns at
+      # start that it listens on every interface of its container: that is this network, as long as 8741 stays
+      # unpublished.
+      ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741
+    ports:
+      - "8740:8080"
     volumes:
       - server_data:/data
     networks:
-      backend:
-        ipv4_address: 172.29.0.3
-  caddy:
-    image: caddy:2
+      - backend
+  admin:
+    build:
+      context: ../../web
+      dockerfile: Dockerfile.server
     restart: unless-stopped
     environment:
-      ORCHESTER_HOST: ${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server DNS name}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      ORCHESTER_ADMIN_SERVER_URL: http://server:8741
+      # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).
+      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}
+      # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.
+      # Empty on an air-gapped network: the admin then offers codes only.
+      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}
     networks:
-      backend:
-        ipv4_address: 172.29.0.2
-    depends_on:
-      - server
+      - backend
 networks:
   backend:
-    ipam:
-      config:
-        - subnet: 172.29.0.0/24
 volumes:
   server_data:
-  caddy_data:
-  caddy_config:

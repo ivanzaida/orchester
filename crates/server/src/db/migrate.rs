@@ -1,5 +1,5 @@
 //! Forward-only migrations of `orchester-server.db`: 1 (S1a accounts), 2 (S1b sharing), 3 (API 3: no passwords,
-//! codes, invites, the cloud link, projects by slug).
+//! codes, invites, the cloud link, projects by slug), 4 (the server admin).
 
 use orchester_core::{name::Name, repository::RepositoryIdentity, resource::Slug};
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
@@ -29,7 +29,7 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
     transaction.execute_batch(include_str!("schema.sql"))?;
     1
   };
-  if !(1..=3).contains(&version) {
+  if !(1..=4).contains(&version) {
     return Err(ServerError::Configuration("unsupported server database schema"));
   }
   if version == 1 {
@@ -40,6 +40,11 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
   if version < 3 {
     api3(&transaction, now)?;
   }
+  if version < 4 {
+    transaction.execute_batch(include_str!("admin.sql"))?;
+  }
+  ServerKeys::own_id(&transaction)?;
+  free_reserved_slugs(&transaction)?;
   let broken: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM pragma_foreign_key_check)", [], |row| {
     row.get(0)
   })?;
@@ -76,10 +81,7 @@ fn projects_by_slug(transaction: &Transaction<'_>) -> Result<(), ServerError> {
   let projects = query
     .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
     .collect::<Result<Vec<_>, _>>()?;
-  let mut taken: Vec<Slug> = RESERVED_SLUGS
-    .iter()
-    .map(|slug| Slug::new(slug).expect("reserved slugs are slugs"))
-    .collect();
+  let mut taken = reserved_slugs();
   for (id, remote) in projects {
     let slug = slug_for(&remote, &taken);
     transaction.execute(
@@ -91,6 +93,39 @@ fn projects_by_slug(transaction: &Transaction<'_>) -> Result<(), ServerError> {
   }
   transaction.execute_batch("DROP TABLE projects; ALTER TABLE projects_api3 RENAME TO projects;")?;
   Ok(())
+}
+
+/// The admin answers `/admin`, the API `/api` and `/auth`: a project an older server let take one of those slugs gets
+/// the next free one by the rule above (`admin` → `admin-2`), and the host's log says so (security review 1, minor 6).
+/// Checked at every open, so it holds however the database came to have one.
+fn free_reserved_slugs(transaction: &Transaction<'_>) -> Result<(), ServerError> {
+  let mut query = transaction.prepare("SELECT id,slug FROM projects ORDER BY created_at,id")?;
+  let projects = query
+    .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+    .collect::<Result<Vec<_>, _>>()?;
+  let mut taken = reserved_slugs();
+  for (_, slug) in &projects {
+    taken.push(Slug::new(slug).map_err(|_| ServerError::StoredData)?);
+  }
+  let fallback = Slug::new("project").expect("`project` is a slug");
+  for (id, slug) in projects {
+    if !RESERVED_SLUGS.contains(&slug.as_str()) {
+      continue;
+    }
+    let name = Name::new(&slug).map_err(|_| ServerError::StoredData)?;
+    let renamed = Slug::unique_for(&name, &fallback, &taken);
+    transaction.execute("UPDATE projects SET slug=?2 WHERE id=?1", params![id, renamed.as_str()])?;
+    tracing::warn!(project = %id, from = %slug, to = %renamed.as_str(), "a project's slug is reserved for the server's own paths; renamed");
+    taken.push(renamed);
+  }
+  Ok(())
+}
+
+fn reserved_slugs() -> Vec<Slug> {
+  RESERVED_SLUGS
+    .iter()
+    .map(|slug| Slug::new(slug).expect("reserved slugs are slugs"))
+    .collect()
 }
 
 fn slug_for(remote: &str, taken: &[Slug]) -> Slug {

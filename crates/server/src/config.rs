@@ -1,11 +1,17 @@
 use std::{
-  net::SocketAddr,
+  net::{IpAddr, SocketAddr},
   path::{Path, PathBuf},
 };
 
 use serde::Deserialize;
 
 use crate::{addresses::TrustedProxy, error::ServerError};
+
+/// What the host's log says at start when [`Config::admin_api_exposed`].
+pub const ADMIN_API_EXPOSED: &str = concat!(
+  "ADMIN_API_LISTEN is not a loopback or private address: the admin API trusts the forwarded headers it is sent, ",
+  "so nothing but the admin may reach it (keep its port unpublished)"
+);
 
 /// How the server's connections are secured (`docs/architecture/server.md`, "Transport and certificates").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -48,6 +54,10 @@ pub struct Config {
   pub tls_cert: Option<PathBuf>,
   pub tls_key: Option<PathBuf>,
   pub trusted_proxies: Vec<TrustedProxy>,
+  /// The server admin app on a private address (`http://host:port`); every path outside `/api` is forwarded to it.
+  pub admin_url: String,
+  /// The private plain-HTTP listener only the admin app's own server side calls the API on; `None` turns it off.
+  pub admin_api_listen: Option<SocketAddr>,
 }
 
 impl Default for Config {
@@ -62,6 +72,8 @@ impl Default for Config {
       tls_cert: None,
       tls_key: None,
       trusted_proxies: Vec::new(),
+      admin_url: "http://127.0.0.1:3100".into(),
+      admin_api_listen: Some(SocketAddr::from(([127, 0, 0, 1], 8741))),
     }
   }
 }
@@ -107,6 +119,19 @@ impl Config {
     if let Some(value) = environment("TLS_KEY")? {
       self.tls_key = Some(value.into());
     }
+    if let Some(value) = environment("ADMIN_URL")? {
+      self.admin_url = value;
+    }
+    if let Some(value) = environment("ADMIN_API_LISTEN")? {
+      self.admin_api_listen = match value.trim() {
+        "off" => None,
+        address => Some(
+          address
+            .parse()
+            .map_err(|_| ServerError::Configuration("invalid ADMIN_API_LISTEN"))?,
+        ),
+      };
+    }
     if let Some(value) = environment("TRUSTED_PROXIES")? {
       self.trusted_proxies = list(&value)
         .map(str::parse)
@@ -139,7 +164,35 @@ impl Config {
         "ADDRESS must be an http:// or https:// base address without a path",
       ));
     }
+    if !valid_admin_url(&self.admin_url) {
+      return Err(ServerError::Configuration(
+        "ADMIN_URL must be an http:// address with a host and port and no path",
+      ));
+    }
+    if self.admin_api_listen.is_some_and(|admin| admin == self.listen) {
+      return Err(ServerError::Configuration("ADMIN_API_LISTEN must differ from LISTEN"));
+    }
     Ok(())
+  }
+
+  /// Whether the private admin API listener may be reachable from beyond this host and its private networks: an
+  /// address that is not loopback, private or link-local, or every interface (security review 1, minor 6). The listener
+  /// takes the browser's address and host from forwarded headers on trust, so the host's log warns about it.
+  pub fn admin_api_exposed(&self) -> bool {
+    self
+      .admin_api_listen
+      .is_some_and(|address| !private(address.ip().to_canonical()))
+  }
+}
+
+fn private(address: IpAddr) -> bool {
+  match address {
+    IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+    IpAddr::V6(v6) => {
+      let first = v6.segments()[0];
+      // Unique local (fc00::/7) and link-local (fe80::/10).
+      v6.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
+    }
   }
 }
 
@@ -149,6 +202,14 @@ fn valid_address(address: &str) -> bool {
     .or_else(|| address.strip_prefix("http://"));
   rest
     .is_some_and(|host| !host.is_empty() && !host.contains(['/', '?', '#', '@']) && !host.contains(char::is_whitespace))
+}
+
+/// The admin app is reached over plain HTTP on a private address: `http://host:port`, nothing more.
+fn valid_admin_url(url: &str) -> bool {
+  url
+    .strip_prefix("http://")
+    .and_then(|authority| authority.parse::<hyper::http::uri::Authority>().ok())
+    .is_some_and(|authority| authority.port_u16().is_some() && !authority.as_str().contains('@'))
 }
 
 fn list(value: &str) -> impl Iterator<Item = &str> {

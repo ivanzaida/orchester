@@ -1,22 +1,19 @@
-//! The server's settings for its admins: the cloud link (`/server/cloud`) and join approval (`/server/settings`).
+//! The server's link to Orchester Cloud for its admins (`/server/cloud`).
 
-use axum::{Json, extract::State, http::HeaderMap};
+use axum::{Json, extract::State};
 use orchester_api::{
-  CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, ServerSettings, SettingsChanges,
-  SettingsResponse,
+  CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, cloud::TokenPurpose,
 };
 use rusqlite::Connection;
 
-use super::{
-  base_address,
-  extract::{Auth, SafeJson},
-};
+use super::extract::{Auth, Base, SafeJson};
 use crate::{
-  Server, approvals,
+  Server,
   cloud_link::{self, Link},
   db::{self, Authenticated},
   error::ServerError,
   server_keys::ServerKeys,
+  settings,
 };
 
 pub(super) async fn show_cloud(
@@ -37,28 +34,22 @@ pub(super) async fn show_cloud(
 pub(super) async fn change_cloud(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   SafeJson(input): SafeJson<CloudLinkChanges>,
 ) -> Result<Json<CloudLinkResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let state = server.inner.clone();
   let fingerprint = state.tls.as_ref().map(|tls| tls.pin.to_hex());
   let response = server
     .account_write(move |db, now| {
       let current = db::checked(db, &auth, now, true)?;
+      let name = settings::name(db, &state.config.name)?;
       let statement = match input {
         CloudLinkChanges {
           link: Some(CloudLinkStep::Start(_)),
           accepting: None,
           unlink: false,
           pin: None,
-        } => Some(cloud_link::statement(
-          &state.keys,
-          &state.config.name,
-          &base,
-          fingerprint,
-          now,
-        )?),
+        } => Some(cloud_link::statement(&state.keys, &name, &base, fingerprint, now)?),
         other => {
           change(db, &state.keys, &current, other, now)?;
           None
@@ -128,52 +119,15 @@ fn finish_link(
   finish: &CloudLinkFinish,
   now: i64,
 ) -> Result<(), ServerError> {
-  let mut link = cloud_link::link(db, &finish.root_key, &finish.key_set, now)?;
+  let mut link = cloud_link::link(db, &finish.root_key, &finish.key_set, current.user.id, now)?;
   let Some(token) = &finish.identity_token else {
     return Ok(());
   };
   let claims = link.verify(db, keys, token.expose(), None, now)?;
+  claims.require(Some(TokenPurpose::Link))?;
   if current.user.cloud || db::user_by_subject(db, &claims.sub)?.is_some() {
     return Err(ErrorCode::Conflict.into());
   }
   db::link_subject(db, current.user.id, &claims.sub, now)?;
   cloud_link::consume(db, &claims)
-}
-
-pub(super) async fn settings(
-  State(server): State<Server>,
-  Auth(auth): Auth,
-) -> Result<Json<SettingsResponse>, ServerError> {
-  let check_code = server.check_code();
-  let join_approval = server
-    .snapshot(move |db, now| {
-      db::checked(db, &auth, now, true)?;
-      approvals::enabled(db)
-    })
-    .await?;
-  Ok(Json(SettingsResponse {
-    settings: ServerSettings { join_approval },
-    check_code,
-  }))
-}
-
-pub(super) async fn change_settings(
-  State(server): State<Server>,
-  Auth(auth): Auth,
-  SafeJson(input): SafeJson<SettingsChanges>,
-) -> Result<Json<SettingsResponse>, ServerError> {
-  let check_code = server.check_code();
-  let join_approval = server
-    .account_write(move |db, now| {
-      let current = db::checked(db, &auth, now, true)?;
-      if let Some(enabled) = input.join_approval {
-        approvals::set_enabled(db, enabled, current.user.id, now)?;
-      }
-      approvals::enabled(db)
-    })
-    .await?;
-  Ok(Json(SettingsResponse {
-    settings: ServerSettings { join_approval },
-    check_code,
-  }))
 }
