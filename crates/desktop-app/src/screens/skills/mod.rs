@@ -19,11 +19,11 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{background, messages::Message, skills::editor::EditorData};
+use orchester_workspace::{background, messages::Message, skills::editor::EditorData, tasks::outside::Outside};
 use state::{Panel, View};
 
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, own::OwnChanges},
   ui::{
     message::message_text,
     state::{load_error, loading},
@@ -50,6 +50,7 @@ impl Component for SkillsScreen {
           navigation: crate::navigation::Navigation::of(ctx),
         },
         revision: ctx.signal(0),
+        skills: OwnChanges::new(ctx, Outside::Skills),
         reset: ctx.signal(0),
         reload_requested: ctx.signal(false),
       },
@@ -149,7 +150,7 @@ impl SkillsScreen {
           outside.pipelines,
           outside.project_settings,
           outside.runs,
-          outside.skills,
+          self.view.skills.count(&project.feed),
           // The skills' active uses: the runs that hold them start and end, and their worktrees go.
           project.feed.states.get(),
           project.feed.job_state.get(),

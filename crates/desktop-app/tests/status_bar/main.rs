@@ -43,6 +43,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 mod activity;
+mod fresh;
 mod give_way;
 mod items;
 #[path = "../../examples/seed/kontur/mod.rs"]

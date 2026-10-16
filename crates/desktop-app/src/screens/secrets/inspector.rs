@@ -15,6 +15,7 @@ use orchester_core::secret::Secret;
 use orchester_workspace::{
   activity::operations,
   secrets::data::{ProjectSecrets, SecretUseKind},
+  tasks::outside::Outside,
 };
 
 use super::{
@@ -67,10 +68,17 @@ impl Component for Inspector {
   fn create(ctx: &mut Ctx) -> Self {
     let action = work::action(ctx);
     let view = ctx.props::<Props>().view.clone();
+    let changes = Services::of(ctx).changes;
+    let project = ctx.props::<Props>().project.open.project.id();
     ctx.watch(&action.state(), move |state| {
       if state.is_fulfilled() {
         view.panel.set(Panel::Inspect);
-        view.revision.update(|revision| *revision += 1);
+        if matches!(state.data, Some(work::Outcome::Saved(_))) {
+          // Every screen that shows the project's secrets and connections reads them again, this one too.
+          changes.record(project, Outside::Connections);
+        } else {
+          view.revision.update(|revision| *revision += 1);
+        }
       }
     });
     Self { action }

@@ -3,6 +3,7 @@ mod actions;
 mod active;
 mod harness;
 mod models;
+mod reads;
 mod regressions;
 mod states;
 #[path = "../support/mod.rs"]

@@ -3,14 +3,17 @@
 
 use std::sync::Arc;
 
-use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
+use lurq::app::{
+  component::DevtoolsInspectable,
+  ctx::{Ctx, StreamEmitter},
+};
 use orchester_core::{
   account::{AccountState, AgentAccount, same_sign_in},
   connection::{AgentProvider, ConnectionAccount, invocation::Platform, plan_limits::LimitReading},
   id::AgentAccountId,
   time::Timestamp,
 };
-use orchester_workspace::{background, messages};
+use orchester_workspace::{background, messages, workspace::Workspace};
 
 use super::Services;
 
@@ -47,11 +50,12 @@ pub fn plan_name(plan: &str) -> String {
     .unwrap_or_default()
 }
 
-/// The accounts, read when the calling screen shows.
+/// The accounts, read when the calling screen shows and again whenever one changed ([`changes`]).
 pub fn listed(ctx: &mut Ctx) -> Accounts {
   let workspace = Services::of(ctx).workspace;
+  let changed = changes(ctx, &workspace);
   ctx
-    .future((), move |()| {
+    .future(changed, move |_| {
       tracing::trace!(target: crate::app_log::READ_LOG, read = "accounts");
       let workspace = workspace.clone();
       async move {
@@ -68,6 +72,24 @@ pub fn listed(ctx: &mut Ctx) -> Accounts {
     .get()
     .data
     .unwrap_or_default()
+}
+
+/// How often an account was added, renamed, checked, moved or removed, through Settings, a screen or automation.
+/// Reading it in a render renders again when one was.
+pub fn changes(ctx: &mut Ctx, workspace: &Workspace) -> u64 {
+  let changes = ctx.stream(
+    workspace.clone(),
+    |workspace, emitter: StreamEmitter<u64, ()>| async move {
+      let mut updates = workspace.account_changes();
+      loop {
+        let count = *updates.borrow_and_update();
+        if !emitter.emit(count) || updates.changed().await.is_err() {
+          return;
+        }
+      }
+    },
+  );
+  changes.state().get().data.unwrap_or(0)
 }
 
 /// A week, in minutes: the window an account's use is read from.

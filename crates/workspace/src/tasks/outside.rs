@@ -115,6 +115,11 @@ impl OutsideChanges {
       .send_modify(|counts| counts.entry(project).or_default().count(change));
   }
 
+  /// How often each kind of `project`'s data changed so far.
+  pub fn counts(&self, project: ProjectId) -> OutsideCounts {
+    self.0.borrow().get(&project).copied().unwrap_or_default()
+  }
+
   pub fn subscribe(&self) -> watch::Receiver<HashMap<ProjectId, OutsideCounts>> {
     self.0.subscribe()
   }

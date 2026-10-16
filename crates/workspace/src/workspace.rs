@@ -142,6 +142,8 @@ pub struct Workspace {
   publish_consent: Arc<Mutex<Consent>>,
   /// Whether All projects listed a project in this session (`project_list`).
   pub(crate) listed: Arc<AtomicBool>,
+  /// Counts the changes to the agent accounts made through this workspace ([`Workspace::account_changes`]).
+  pub(crate) account_changes: Arc<tokio::sync::watch::Sender<u64>>,
 }
 
 impl PartialEq for Workspace {
@@ -160,6 +162,7 @@ impl Workspace {
       approval_consent: Arc::default(),
       publish_consent: Arc::default(),
       listed: Arc::default(),
+      account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
     }
   }
 

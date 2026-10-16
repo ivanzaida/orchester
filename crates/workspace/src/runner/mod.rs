@@ -347,6 +347,17 @@ impl Runners {
     counters.changes.send_modify(|revision| *revision += 1);
   }
 
+  /// Hands `reading` on as a project's runner would. For tests of what shows plan limits, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn observe_plan_limits_for_test(&self, reading: orchester_core::connection::plan_limits::LimitReading) {
+    self
+      .inner
+      .shared
+      .limits
+      .send_if_modified(|readings| readings.observe(reading));
+  }
+
   /// Changes whenever any runner reports that a run changed.
   pub fn run_changes(&self) -> watch::Receiver<u64> {
     self.inner.shared.runs.subscribe()

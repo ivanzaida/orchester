@@ -56,6 +56,16 @@ pub struct NewAccount {
 }
 
 impl Workspace {
+  /// Changes whenever an account was added, renamed, checked, moved to another folder or removed through this
+  /// workspace or a clone of it: the screens and the status bar that name accounts read them again.
+  pub fn account_changes(&self) -> tokio::sync::watch::Receiver<u64> {
+    self.account_changes.subscribe()
+  }
+
+  fn accounts_changed(&self) {
+    self.account_changes.send_modify(|count| *count += 1);
+  }
+
   /// The accounts, by CLI, Default first.
   pub fn agent_accounts(&self) -> Result<Vec<AgentAccount>, StoreError> {
     self.db.lock().agent_accounts()
@@ -137,6 +147,7 @@ impl Workspace {
       }
       return Err(error.into());
     }
+    self.accounts_changed();
     Ok(account)
   }
 
@@ -146,6 +157,8 @@ impl Workspace {
     let mut account = db.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     account.rename(name);
     db.save_agent_account(&account)?;
+    drop(db);
+    self.accounts_changed();
     Ok(account)
   }
 
@@ -159,6 +172,8 @@ impl Workspace {
     let mut account = db.agent_account(id)?.ok_or(StoreError::AgentAccountNotFound(id))?;
     account.record_check(check);
     db.save_agent_account(&account)?;
+    drop(db);
+    self.accounts_changed();
     Ok(account)
   }
 
@@ -202,6 +217,7 @@ impl Workspace {
       MoveTo::NoAccount => None,
     };
     self.db.lock().remove_agent_account(id, moved_to, Timestamp::now())?;
+    self.accounts_changed();
     // The account is removed by now: a refusal says so and where its folder stays.
     if let Some(folder) = trash
       && let Err(error) = self.trash.take(folder)
@@ -257,6 +273,7 @@ impl Workspace {
       .move_to_folder(folders::found(folder))
       .map_err(AccountsError::Account)?;
     self.db.lock().save_agent_account_folder(&account)?;
+    self.accounts_changed();
     uses::move_connections(&account, &ConnectionAccount::of(&account), &projects)?;
     self.check_agent_account(id)
   }

@@ -18,6 +18,7 @@ use orchester_workspace::{
 use super::{View, editor::Props};
 use crate::{
   screens::connections::widen::{WidenConfirm, WidenProps},
+  services::Services,
   ui::message::message_text,
 };
 
@@ -43,6 +44,7 @@ pub fn work(ctx: &mut Ctx) -> Work {
 }
 pub fn follow(ctx: &mut Ctx, work: &Work, pending: Signal<Pending>, busy: Signal<bool>) {
   let props = ctx.props::<Props>().clone();
+  let changes = Services::of(ctx).changes;
   ctx.watch(&work.state(), move |state| {
     if state.is_pending() {
       return;
@@ -53,6 +55,8 @@ pub fn follow(ctx: &mut Ctx, work: &Work, pending: Signal<Pending>, busy: Signal
         Outcome::Saved(id) => {
           pending.set(Pending(None));
           props.view.set(View::Edit(id));
+          // Every other screen that shows the profiles reads them again; this one reads them again once.
+          props.profiles.record(&changes, props.project.open.project.id());
           props.revision.update(|revision| *revision += 1);
         }
         Outcome::Confirm(reasons) => pending.set(Pending(Some(Request {

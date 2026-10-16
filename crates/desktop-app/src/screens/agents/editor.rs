@@ -22,7 +22,7 @@ use super::{
   words,
 };
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, own::OwnChanges},
   theme::{ExtraSpacing, IconSize, agents::page_spacing},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
@@ -42,6 +42,8 @@ pub struct Props {
   pub view: Signal<View>,
   pub revision: Signal<u64>,
   pub retry: Signal<u64>,
+  /// Where a save records its change of the profiles.
+  pub profiles: OwnChanges,
   pub load_error: Option<orchester_workspace::messages::Message>,
   pub reading: bool,
 }

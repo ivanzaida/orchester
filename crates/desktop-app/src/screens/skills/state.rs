@@ -4,6 +4,7 @@ use orchester_core::id::{ProjectId, ResourceId};
 
 use crate::{
   navigation::Navigation,
+  project::own::OwnChanges,
   routes::{ProjectPage, Route},
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,6 +52,8 @@ impl PanelNav {
 pub struct View {
   pub panel: PanelNav,
   pub revision: Signal<u64>,
+  /// The skill changes, the screen's own too.
+  pub skills: OwnChanges,
   pub reset: Signal<u64>,
   pub reload_requested: Signal<bool>,
 }

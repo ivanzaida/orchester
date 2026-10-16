@@ -215,6 +215,7 @@ impl EditConnection {
         );
         save.on_click(move || {
           work.run(Start {
+            project: open.project.id(),
             repo_root: open.repo_root.clone(),
             id,
             work: Work::SetAccount(account),

@@ -33,6 +33,7 @@ use orchester_workspace::{
     probe,
   },
   messages::{self, Message},
+  tasks::outside::Outside,
 };
 
 use self::check::{Checked, check_row, program_row};
@@ -126,10 +127,14 @@ impl Component for AddAgent {
     let save = page.save.clone();
     let project = ctx.props::<AddAgentProps>().project.open.project.id();
     let navigation = Navigation::of(ctx);
+    let changes = Services::of(ctx).changes;
     ctx.watch(&save.state(), move |state| {
       if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
         let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(id);
         navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
+        // After the form leaves: every screen that shows the project's connections reads them again, the
+        // status bar's accounts too.
+        changes.record(project, Outside::Connections);
       }
     });
     page

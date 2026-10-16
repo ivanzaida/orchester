@@ -25,7 +25,7 @@ use orchester_core::id::ResourceId;
 use orchester_workspace::{agents::data::ProjectAgents, background, messages, tasks::outside::Outside};
 
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, own::OwnChanges},
   ui::{
     message::message_text,
     state::{load_error, loading},
@@ -51,6 +51,8 @@ pub struct AgentsScreen {
   view: Signal<View>,
   revision: Signal<u64>,
   retry: Signal<u64>,
+  /// The profile changes, the screen's own too.
+  profiles: OwnChanges,
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, selected: Option<ResourceId>) -> Element {
   ctx.mount_keyed::<AgentsScreen>(
@@ -69,6 +71,7 @@ impl Component for AgentsScreen {
       view: ctx.signal(ctx.props::<Props>().selected.map_or(View::List, View::Edit)),
       revision: ctx.signal(0),
       retry: ctx.signal(0),
+      profiles: OwnChanges::new(ctx, Outside::Profiles),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -80,7 +83,7 @@ impl Component for AgentsScreen {
       self.retry.get(),
       outside.of(Outside::Connections),
       outside.of(Outside::Pipelines),
-      outside.of(Outside::Profiles),
+      self.profiles.count(&project.feed),
       // The profiles' active uses: the runs that run them start and end.
       project.feed.states.get(),
     );
@@ -155,6 +158,7 @@ impl AgentsScreen {
             view: self.view.clone(),
             revision: self.revision.clone(),
             retry: self.retry.clone(),
+            profiles: self.profiles.clone(),
             load_error,
             reading,
           },

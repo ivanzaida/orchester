@@ -28,6 +28,7 @@ use orchester_workspace::{
     mcp::{Allowed, McpServerDraft, McpServerErrors, McpServerText, store_in, widenings},
   },
   messages::Message,
+  tasks::outside::Outside,
 };
 
 use super::fields::Fields;
@@ -95,10 +96,14 @@ impl Component for McpEditor {
     let save = editor.save.clone();
     let project = ctx.props::<EditorProps>().project.open.project.id();
     let navigation = Navigation::of(ctx);
+    let changes = Services::of(ctx).changes;
     ctx.watch(&save.state(), move |state| {
       if let Some(Saved(id)) = state.data.filter(|_| state.is_fulfilled()) {
         let view = ConnectionsView::new(ConnectionsTab::McpServers).with_selected(id);
         navigation.replace(Route::Project(project, ProjectPage::Connections(view)));
+        // After the form leaves: every screen that shows the project's connections reads them again, the
+        // status bar's accounts too.
+        changes.record(project, Outside::Connections);
       }
     });
     editor
