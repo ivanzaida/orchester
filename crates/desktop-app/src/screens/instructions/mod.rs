@@ -48,6 +48,9 @@ impl DevtoolsInspectable for Props {}
 pub struct InstructionsScreen {
   selection: Selection,
   retry: Signal<u64>,
+  /// Counts the person's reloads of an instruction: each reads the list again too, for a change nothing
+  /// recorded.
+  reloads: Signal<u64>,
   leave: crate::navigation::guard::LeaveGuard,
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
@@ -73,6 +76,7 @@ impl Component for InstructionsScreen {
         full: ctx.signal(false),
       },
       retry: ctx.signal(0),
+      reloads: ctx.signal(0),
       leave,
     }
   }
@@ -81,7 +85,7 @@ impl Component for InstructionsScreen {
     let outside = project.feed.outside.get();
     let deps = (
       project.open.repo_root.clone(),
-      self.retry.get(),
+      self.retry.get() + self.reloads.get(),
       outside.of(Outside::Instructions),
       outside.of(Outside::Profiles),
       outside.of(Outside::Pipelines),
@@ -171,6 +175,7 @@ impl InstructionsScreen {
             entry,
             tab,
             selection: self.selection.clone(),
+            reloads: self.reloads.clone(),
             reading,
           },
         )

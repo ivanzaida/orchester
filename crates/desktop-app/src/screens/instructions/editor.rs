@@ -51,6 +51,8 @@ pub struct Props {
   pub entry: Option<InstructionEntry>,
   pub tab: Tab,
   pub selection: Selection,
+  /// Counts the reloads, each of which reads the list again.
+  pub reloads: Signal<u64>,
   pub reading: bool,
 }
 impl PartialEq for Props {
@@ -95,7 +97,7 @@ impl Component for Editor {
       }),
       published: published.clone(),
     };
-    let selection = props.selection.clone();
+    let (selection, reloads) = (props.selection.clone(), props.reloads.clone());
     let fields = editor.fields.clone();
     ctx.watch(&editor.work.action.state(), move |result| {
       selection.busy.set(result.is_pending());
@@ -106,6 +108,7 @@ impl Component for Editor {
         saved.set(Saved(Some(done.entry.clone())));
         if let Some(requested) = &done.reload {
           fields.reload(&done.entry, requested);
+          reloads.update(|count| *count += 1);
         }
         if done.published {
           published.set(done.entry.state.published().map(|v| v.get()));
