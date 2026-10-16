@@ -16,14 +16,20 @@ mod transcript;
 
 use std::{
   collections::BTreeMap,
-  path::PathBuf,
+  path::{Path, PathBuf},
   thread,
   time::{Duration, Instant},
 };
 
 use kontur::{SeedRequest, Seeded, scenarios};
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::time::Timestamp;
+use orchester_core::{
+  id::IdempotencyKey,
+  name::Name,
+  task::{TaskDetails, TaskLimits},
+  time::Timestamp,
+};
+use orchester_workspace::tasks::data::{SaveTarget, save_draft_in};
 use support::{Data, Window, reads::Reads};
 
 /// A read that starts later than this after the last one belongs to no change of the test.
@@ -101,3 +107,14 @@ impl Counted {
   }
 }
 
+/// Saves a new draft task in the project at `repo`, as New task does.
+fn draft(repo: &Path) {
+  let details = TaskDetails {
+    title: Name::new("A new draft").expect("a title"),
+    brief: String::new(),
+    acceptance_criteria: Vec::new(),
+    pipeline: None,
+    limits: TaskLimits::NONE,
+  };
+  save_draft_in(repo, SaveTarget::New(IdempotencyKey::generate()), &details).expect("the draft is saved");
+}

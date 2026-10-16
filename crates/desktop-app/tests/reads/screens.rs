@@ -1,9 +1,10 @@
-//! Screens that show a project's runs read again when a run changes state, not on a transcript's lines.
+//! Screens that show a project's runs read again when a run changes state, not on a transcript's lines; Skills
+//! not when tasks are saved.
 
 use orchester_app::routes::ProjectPage;
 use orchester_workspace::tasks::outside::Outside;
 
-use super::Counted;
+use super::{Counted, draft};
 
 /// What `pairs` count, as `Reads::take` gives it.
 fn counts(pairs: &[(&str, usize)]) -> std::collections::BTreeMap<String, usize> {
@@ -36,4 +37,18 @@ fn reads_the_code_index_again_on_its_own_changes_not_on_lines() {
   index.report(true);
   let state = index.settle();
   assert_eq!(state.get("code index"), Some(&1), "a run's state reads what uses an index: {state:?}");
+}
+
+#[test]
+fn reads_skills_again_when_a_run_changes_state_not_when_tasks_are_saved() {
+  let mut skills = Counted::open("tasks");
+  skills.show(ProjectPage::Skills, "screen-skills");
+  draft(&skills.root());
+  skills.window.projects().feed(skills.seeded.project).saved();
+  let saved = skills.settle();
+  assert_eq!(saved.get("skills"), None, "a task saved reads no skills: {saved:?}");
+  assert_eq!(saved.get("project tasks"), Some(&1), "the tasks are read: {saved:?}");
+  skills.report(true);
+  let state = skills.settle();
+  assert_eq!(state.get("skills"), Some(&1), "a run's state reads the skills' uses: {state:?}");
 }

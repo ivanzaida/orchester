@@ -150,7 +150,9 @@ impl SkillsScreen {
           outside.project_settings,
           outside.runs,
           outside.skills,
-          project.feed.tasks.get(),
+          // The skills' active uses: the runs that hold them start and end, and their worktrees go.
+          project.feed.states.get(),
+          project.feed.job_state.get(),
         ),
         move |(root, _, reset, ..)| {
           tracing::trace!(target: crate::app_log::READ_LOG, read = "skills");
