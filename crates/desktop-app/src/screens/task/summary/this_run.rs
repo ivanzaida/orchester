@@ -342,6 +342,12 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
 /// *This task* of a task without a run: the pipeline and limits its first run would use.
 pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice]) -> Element {
   let details = detail.task.details();
+  let missing = detail.missing_pipeline.as_ref().map(|slug| {
+    let label = orchester_workspace::tasks::list::PipelineLabel::Missing {
+      slug: std::sync::Arc::from(slug.as_str()),
+    };
+    crate::ui::message::message_text(ctx, &label.message())
+  });
   let pipeline = details
     .pipeline
     .and_then(|chosen| pipelines.iter().find(|pipeline| pipeline.id == chosen))
@@ -357,6 +363,7 @@ pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice
         )
       },
     );
+  let pipeline = missing.unwrap_or(pipeline);
   let mut rows = vec![row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text)];
   rows.extend(limit_rows(ctx, details.limits));
   panel("task-this-task", &ctx.t("summary.thisTask.title"), rows, None)
