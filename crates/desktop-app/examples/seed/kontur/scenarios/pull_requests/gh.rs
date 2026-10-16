@@ -218,7 +218,8 @@ mod program {
        if \"%~1 %~2\"==\"pr view\" goto view\r\nif \"%~2\"==\"--allow-escape-sequences\" goto compare\r\n\
        if \"%~1 %~2\"==\"api graphql\" goto checks\r\nif \"%~1\"==\"api\" (type \"%A%rate.json\" & exit /b 0)\r\n\
        exit /b 1\r\n\
-       :view\r\nif \"%MODE%\"==\"unreachable\" (type \"%A%network.err\" 1>&2 & exit /b 1)\r\n\
+       :view\r\nif \"%MODE%\"==\"slow\" ping -n 4 127.0.0.1 >nul\r\n\
+       if \"%MODE%\"==\"unreachable\" (type \"%A%network.err\" 1>&2 & exit /b 1)\r\n\
        if \"%MODE%\"==\"server-error\" (type \"%A%server.err\" 1>&2 & exit /b 1)\r\n\
        if \"%MODE%\"==\"rate-limited\" (type \"%A%rate-limited.err\" 1>&2 & exit /b 1)\r\n\
        if exist \"%A%view-%~3.json\" (type \"%A%view-%~3.json\" & exit /b 0)\r\n\
@@ -274,6 +275,7 @@ mod program {
        esac\n\
        if [ \"$6\" = closed ]; then cat \"$a/closed.json\"; else cat \"$a/open.json\"; fi; exit 0;;\n\
        \"pr view\") case \"$mode\" in\n\
+         slow) sleep 3;;\n\
          unreachable) cat \"$a/network.err\" >&2; exit 1;;\n\
          server-error) cat \"$a/server.err\" >&2; exit 1;;\n\
          rate-limited) cat \"$a/rate-limited.err\" >&2; exit 1;;\n\

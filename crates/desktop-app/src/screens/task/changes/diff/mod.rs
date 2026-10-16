@@ -30,6 +30,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+pub use self::line::{CutAction, CutNote};
 use self::{
   cache::{ContentKey, Highlights, ShownRows},
   line::{DiffRowView, RowProps},
@@ -66,6 +67,8 @@ pub struct DiffViewProps {
   /// *Viewed*, which is not built yet: its box faded with a lock at the head's end, and why in the
   /// tooltip (`Viewed` in `bVPuW`).
   pub viewed: Option<Arc<str>>,
+  /// What the note under a file cut short says and offers.
+  pub cut: CutNote,
 }
 
 impl PartialEq for DiffViewProps {
@@ -76,6 +79,7 @@ impl PartialEq for DiffViewProps {
       && self.file == other.file
       && self.source == other.source
       && self.viewed == other.viewed
+      && self.cut == other.cut
   }
 }
 
@@ -135,6 +139,7 @@ impl Component for DiffView {
       shown
     };
     let width = shown.width.max(self.width.get());
+    let cut = props.cut.clone();
     let list: Element = VirtualizedList::new_shared(ctx, shown.rows)
       .list_key(format!("changes-diff-rows-{}", props.file))
       .width(Dimension::Pct(100.0))
@@ -143,6 +148,7 @@ impl Component for DiffView {
       .mount_keyed::<DiffRowView, _, _, _>(DiffRow::index, move |row| RowProps {
         row: row.clone(),
         width,
+        cut: cut.clone(),
       });
     column
       .describe("highlighted", tokens.is_some().to_string())

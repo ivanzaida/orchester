@@ -43,7 +43,7 @@ use parking_lot::Mutex;
 
 pub use self::load::{ChangesReads, FileCount, Follow, tab_label};
 use self::{
-  diff::{DiffView, DiffViewProps},
+  diff::{CutNote, DiffView, DiffViewProps},
   files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, WorktreeNote},
   listed::{FileListing, ListKeys, Listed},
   load::CheckpointedRead,
@@ -273,6 +273,10 @@ impl ChangesTab {
         file: format!("{}:{}", selected.source.name(), selected.path).into(),
         source,
         viewed: None,
+        cut: CutNote {
+          key: "changes.diff.omitted",
+          action: None,
+        },
       },
     );
     Row::new()

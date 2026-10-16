@@ -197,6 +197,7 @@
         "clear": "Clear"
       },
       "viewedPlanned": "Marking a file viewed is planned.",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them.",
       "reading": {
         "title": "Reading the pull request",
         "detail": "Orchester reads the pull request and its diff from GitHub through gh."

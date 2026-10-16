@@ -104,7 +104,7 @@ impl FileSummary {
     ]
     .into_iter()
     .filter(|(count, ..)| *count > 0)
-    .map(|(count, key, color)| (ctx.t_args(key, [("count", count.to_string())]), color))
+    .map(|(count, key, color)| (ctx.t_args(key, [("count", super::grouped(ctx, count))]), color))
     .collect()
   }
 }

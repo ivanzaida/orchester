@@ -1,7 +1,10 @@
 //! A pull request's page: its header, tabs and toolbar, the changed files beside the selected file's diff, and
 //! what stands in their place (`c07NAC`): no changes, too large, a diff Orchester cannot read, and GitHub not
-//! answering with the diff read before kept under a notice.
+//! answering with the diff read before kept under a notice. A long title is cut before its number; the
+//! reading state stands centered in the body; a long file's cut row sends the rest to GitHub; the counts have
+//! their digits grouped.
 
+use lurq::app::events::ScrollPhase;
 use orchester_app::routes::{ProjectPage, Route};
 
 use crate::harness::{Seeded, nonzero};
@@ -9,11 +12,29 @@ use crate::harness::{Seeded, nonzero};
 impl Seeded {
   /// Pull request `number`'s page, once its read ended.
   fn pull_request(&mut self, number: u64) {
+    self.go_to(number);
+    self.read_ended();
+  }
+
+  /// Opens pull request `number`'s page without waiting for its read.
+  fn go_to(&mut self, number: u64) {
     self
       .window
       .navigation()
       .go(Route::Project(self.project, ProjectPage::PullRequest(nonzero(number))));
-    self.read_ended();
+    self.window.pass();
+  }
+
+  /// Turns the wheel over the diff toward its end until its last row shows.
+  fn scroll_to_diff_end(&mut self) {
+    let (x, y, width, height) = self.bounds("changes-diff");
+    let (x, y) = (x + width / 2.0, y + height / 2.0);
+    self.window.until("the diff's last row", |window| {
+      window.tree.mouse_move(x, y);
+      window.tree.scroll(x, y, 0.0, -20_000.0, ScrollPhase::Scroll);
+      window.pass();
+      window.tree.get_element_by_id("changes-diff-note").is_some()
+    });
   }
 
   fn read_ended(&mut self) {
@@ -108,4 +129,90 @@ fn pull_request_page_crumbs_and_task_lead_back() {
     seeded.window.navigation().route_now(),
     Route::Project(_, ProjectPage::Task(..))
   ));
+}
+
+#[test]
+fn pull_request_page_cuts_a_long_title_before_its_number() {
+  let mut seeded = Seeded::answering("ok");
+  seeded.pull_request(136);
+  let (title, _, title_width, _) = seeded.bounds("pull-request-title");
+  let (number, _, number_width, _) = seeded.bounds("pull-request-number");
+  let (refresh, ..) = seeded.bounds("pull-request-refresh");
+  let (github, _, github_width, _) = seeded.bounds("pull-request-github");
+  assert!(
+    title + title_width <= number,
+    "the title ends at {} past #136 at {number}",
+    title + title_width
+  );
+  assert!(number + number_width <= refresh, "#136 stays left of Refresh");
+  assert!(github + github_width <= 1440.0, "Open in GitHub stays whole");
+  assert_eq!(seeded.text("pull-request-number"), "#136");
+}
+
+#[test]
+fn pull_request_page_header_leaves_18_over_its_tabs_and_10_inside_the_files_head() {
+  let mut seeded = Seeded::answering("ok");
+  seeded.pull_request(142);
+  let (_, top, _, height) = seeded.bounds("pull-request-organization");
+  let (_, tabs, ..) = seeded.bounds("pull-request-tabs");
+  assert!(
+    (tabs - (top + height) - 18.0).abs() < 0.5,
+    "{} between",
+    tabs - top - height
+  );
+  let (list, _, list_width, _) = seeded.bounds("pull-request-files");
+  let (heading, ..) = seeded.bounds("pull-request-files-heading");
+  let (field, _, field_width, _) = seeded.bounds("pull-request-find-file-box");
+  assert!(
+    (heading - list - 18.0).abs() < 0.5,
+    "FILES starts {} in",
+    heading - list
+  );
+  assert!(
+    (field - list - 18.0).abs() < 0.5,
+    "Find a file starts {} in",
+    field - list
+  );
+  assert!(
+    (list_width - field_width - 36.0).abs() < 0.5,
+    "Find a file spans {field_width}"
+  );
+}
+
+#[test]
+fn pull_request_page_reading_stands_centered_in_the_body() {
+  let mut seeded = Seeded::answering("slow");
+  seeded.go_to(133);
+  seeded.window.until("the reading state", |window| {
+    window.tree.get_element_by_id("pull-request-reading-glyph").is_some()
+  });
+  let (body, _, width, _) = seeded.bounds("pull-request-reading");
+  let middle = body + width / 2.0;
+  for id in ["pull-request-reading-glyph", "pull-request-reading-title"] {
+    let (x, _, part, _) = seeded.bounds(id);
+    assert!((x + part / 2.0 - middle).abs() < 1.0, "{id} is centered");
+  }
+  seeded.read_ended();
+}
+
+#[test]
+fn pull_request_page_long_file_cut_sends_the_rest_to_github() {
+  let mut seeded = Seeded::answering("ok");
+  seeded.pull_request(137);
+  assert!(
+    seeded.text("changes-diff-head").contains("+6,248"),
+    "{}",
+    seeded.text("changes-diff-head")
+  );
+  seeded.scroll_to_diff_end();
+  let note = seeded.text("changes-diff-note");
+  assert!(
+    note.contains(
+      "1,248 more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them."
+    ),
+    "{note}"
+  );
+  assert!(seeded.shows("pull-request-cut-github"));
+  seeded.pull_request(125);
+  assert_eq!(seeded.text("pull-request-total"), "412 files · +38,214 / −9,870");
 }

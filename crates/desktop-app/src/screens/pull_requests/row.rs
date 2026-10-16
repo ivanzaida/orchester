@@ -114,9 +114,9 @@ fn identity(ctx: &mut Ctx, props: &RowProps) -> Column {
   let changes = ctx.t_args(
     key,
     [
-      ("files", changes.files.to_string()),
-      ("additions", changes.additions.to_string()),
-      ("deletions", changes.deletions.to_string()),
+      ("files", labels::grouped(ctx, changes.files)),
+      ("additions", labels::grouped(ctx, changes.additions)),
+      ("deletions", labels::grouped(ctx, changes.deletions)),
       ("ago", message_text(ctx, &display::ago(props.now, at)).to_string()),
     ],
   );

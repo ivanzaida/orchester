@@ -9,14 +9,14 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{pull_request::PullRequest, tokens::grouped};
+use orchester_core::pull_request::PullRequest;
 use orchester_workspace::{
   display::short_revision,
   messages::Message,
@@ -27,17 +27,18 @@ use orchester_workspace::{
   tasks::changes::ReadChanges,
 };
 
-use super::super::notice::detail_notice;
+use super::super::{labels::grouped, notice::detail_notice};
 use crate::{
   routes::ChangeSource,
   screens::task::changes::{
     arrow_keys,
-    diff::{DiffView, DiffViewProps},
+    diff::{CutAction, CutNote, DiffView, DiffViewProps},
     files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary},
     listed::{FileListing, Listed},
   },
   theme::{
-    ControlHeight, DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing, PullRequestsText,
+    ControlHeight, DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing,
+    PullRequestsText,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -52,10 +53,12 @@ use crate::{
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
-/// The toolbar's height (`C4AKw`), the range's width (`jHagN`) and the widest a state's card is.
+/// The toolbar's height (`C4AKw`), the range's width (`jHagN`), the widest a state's card is and the side
+/// of the reading glyph's tile (`aqHH2`).
 const TOOLBAR_HEIGHT: f32 = 44.0;
 const RANGE_WIDTH: f32 = 248.0;
 const CARD_WIDTH: f32 = 600.0;
+const READING_TILE: f32 = 36.0;
 
 /// What the body is shown with.
 pub(super) struct Shown {
@@ -192,9 +195,9 @@ fn toolbar(ctx: &Ctx, view: &PullRequestView, pull_request: &PullRequest) -> Row
   let total = ctx.t_args(
     key,
     [
-      ("files", changes.files.to_string()),
-      ("additions", changes.additions.to_string()),
-      ("deletions", changes.deletions.to_string()),
+      ("files", grouped(ctx, changes.files)),
+      ("additions", grouped(ctx, changes.additions)),
+      ("deletions", grouped(ctx, changes.deletions)),
     ],
   );
   Row::new()
@@ -213,7 +216,7 @@ fn toolbar(ctx: &Ctx, view: &PullRequestView, pull_request: &PullRequest) -> Row
     .child(
       Text::new(&total)
         .id("pull-request-total")
-        .variant(lurq::app::theme::TypographyStyle::Mono)
+        .variant(TypographyStyle::Mono)
         .color(PaletteColor::TextMuted)
         .nowrap(),
     )
@@ -282,6 +285,7 @@ fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
         file: format!("{}:{}", ChangeSource::Checkpoint.name(), listed.path).into(),
         source: Arc::from(""),
         viewed: Some(ctx.t("pull_requests.detail.viewedPlanned")),
+        cut: cut_note(ctx, shown.open.clone()),
       },
     )
   });
@@ -296,7 +300,21 @@ fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
     .into()
 }
 
-/// FILES and their count over Find a file (`Files head` `WOZwy`).
+/// The note under a file cut short: the rest is read in GitHub, with Open in GitHub once the address is
+/// known (`Long file cut` `F5MYhZ`).
+fn cut_note(ctx: &Ctx, open: Option<Handler>) -> CutNote {
+  CutNote {
+    key: "pull_requests.detail.omitted",
+    action: open.map(|run| CutAction {
+      id: Arc::from("pull-request-cut-github"),
+      icon: Icon::ExternalLink,
+      label: ctx.t("pull_requests.row.openInGitHub"),
+      run,
+    }),
+  }
+}
+
+/// FILES and their count over Find a file (`Files head` `WOZwy`), 10 inside the list's own 8 at the sides.
 fn files_head(ctx: &mut Ctx, count: usize, find: &Signal<String>) -> Column {
   let field = FieldInput::new(
     "pull-request-find-file",
@@ -307,6 +325,20 @@ fn files_head(ctx: &mut Ctx, count: usize, find: &Signal<String>) -> Column {
   .clearable(ctx.t("pull_requests.detail.files.clear"))
   .placeholder(ctx.t("pull_requests.detail.files.findPlaceholder"))
   .render(ctx);
+  let head = Column::new()
+    .id("pull-request-files-head")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+    .spacing(SpacingSize::Sm)
+    .child(
+      Row::new()
+        .id("pull-request-files-heading")
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(Text::new(&ctx.t("pull_requests.detail.files.heading")).variant(ExtraTypography::ColumnHeading.role()))
+        .child(Text::new(&count.to_string()).variant(PullRequestsText::FileCount.role())),
+    )
+    .child(field);
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding(
@@ -316,35 +348,45 @@ fn files_head(ctx: &mut Ctx, count: usize, find: &Signal<String>) -> Column {
         .left(SpacingSize::Sm)
         .right(SpacingSize::Sm),
     )
-    .spacing(SpacingSize::Sm)
-    .child(
-      Row::new()
-        .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t("pull_requests.detail.files.heading")).variant(ExtraTypography::ColumnHeading.role()))
-        .child(Text::new(&count.to_string()).variant(PullRequestsText::FileCount.role())),
-    )
-    .child(field)
+    .child(head)
 }
 
-/// The pull request is read: the turning loader on its tile and what is read.
+/// The pull request is read: the turning loader on its tile, what is read and how, centered in the body
+/// (`Reading` `aqHH2`).
 fn reading(ctx: &Ctx) -> Element {
+  let tile = Row::new()
+    .id("pull-request-reading-glyph")
+    .width(Dimension::Px(READING_TILE))
+    .height(Dimension::Px(READING_TILE))
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .rounded(ExtraRadius::Tile.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(icon(Icon::LoaderCircle, IconSize::Xl, PaletteColor::TextSecondary));
   Column::new()
     .id("pull-request-reading")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
+    .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
+    .describe("state", "loading")
+    .child(tile)
     .child(
-      EmptyState::new(
-        "pull-request-reading-state",
-        Icon::LoaderCircle,
-        ctx.t("pull_requests.detail.reading.title"),
-        ctx.t("pull_requests.detail.reading.detail"),
-      )
-      .compact()
-      .unframed(),
+      Column::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(
+          Text::new(&ctx.t("pull_requests.detail.reading.title"))
+            .id("pull-request-reading-title")
+            .variant(ExtraTypography::Strong.role()),
+        )
+        .child(
+          Text::new(&ctx.t("pull_requests.detail.reading.detail"))
+            .variant(TypographyStyle::Description)
+            .color(PaletteColor::TextSecondary),
+        ),
     )
     .into()
 }
@@ -381,15 +423,13 @@ fn too_large(ctx: &Ctx, pull_request: Option<&PullRequest>) -> Arc<str> {
   let Some(pull_request) = pull_request else {
     return ctx.t("pull_requests.detail.tooLarge.unknown");
   };
-  let separator = ctx.t("pull_requests.detail.groupSeparator");
   let changes = pull_request.changes();
-  let group = |value: u32| grouped(u64::from(value), &separator);
   ctx.t_args(
     "pull_requests.detail.tooLarge.detail",
     [
-      ("files", group(changes.files)),
-      ("additions", group(changes.additions)),
-      ("deletions", group(changes.deletions)),
+      ("files", grouped(ctx, changes.files)),
+      ("additions", grouped(ctx, changes.additions)),
+      ("deletions", grouped(ctx, changes.deletions)),
     ],
   )
 }

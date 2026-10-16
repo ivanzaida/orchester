@@ -51,6 +51,7 @@
       "newTask": "New task",
       "editTask": "Edit task",
       "editTaskOf": "Edit {{key}}",
+      "pullRequestOf": "#{{number}}",
       "task": "Task",
       "mergeQueue": "Merge queue",
       "pullRequests": "Pull requests",

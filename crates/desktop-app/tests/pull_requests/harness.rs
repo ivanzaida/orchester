@@ -88,6 +88,17 @@ impl Seeded {
       .to_owned()
   }
 
+  /// Where element `id` was laid out: its left, top, width and height.
+  pub fn bounds(&mut self, id: &str) -> (f32, f32, f32, f32) {
+    let bounds = self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    (bounds.x, bounds.y, bounds.width, bounds.height)
+  }
+
   pub fn shows(&mut self, id: &str) -> bool {
     self.window.tree.get_element_by_id(id).is_some()
   }

@@ -12,6 +12,14 @@ fn pull_requests_without_a_linked_repository_are_unavailable() {
   let mut seeded = Seeded::new("tasks");
   seeded.open(PullRequestTab::Open);
   assert_eq!(seeded.text("pull-requests-sync-status"), "GitHub not connected");
+  // 6 under the empty row of buttons (`y97UZW` in `nG8p5`).
+  let (_, header, ..) = seeded.bounds("pull-requests-header");
+  let (_, top, ..) = seeded.bounds("pull-requests-sync-status");
+  assert!(
+    (top - header - 6.0).abs() < 0.5,
+    "the status is {} under the header's top",
+    top - header
+  );
   assert!(
     seeded
       .text("pull-requests-unavailable")

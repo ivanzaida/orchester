@@ -1,8 +1,8 @@
 //! The top of the page (`Header` `w3Z3Cp`): the title and what the page shows, and at its end the
 //! repository (`Repository label` `mhbBg`), Refresh and the sync status under them. Refresh waits while a
 //! sync runs and until a rate limit resets, and says so under itself (`Reason · Refresh` in `uuaob`).
-//! Without a linked repository there is nothing to refresh: only the status says GitHub is not connected
-//! (`Actions` `y97UZW` in 08.D).
+//! Without a linked repository there is nothing to refresh: only the status says GitHub is not connected,
+//! 6 under the empty row of buttons (`Actions` `y97UZW` in 08.D, `nG8p5`).
 
 use lurq::{
   app::{
@@ -17,7 +17,7 @@ use orchester_core::{repository::GitHubRepo, time::Timestamp};
 
 use super::status::{Shown, status_line};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     github_mark::github_mark,
@@ -56,22 +56,31 @@ pub(super) fn header(ctx: &mut Ctx, linked: Option<Linked<'_>>, shown: &Shown, n
         .variant(TypographyStyle::Body)
         .color(PaletteColor::TextSecondary),
     );
-  let mut actions = Column::new()
+  let actions = Column::new()
     .id("pull-requests-actions")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::End);
-  if let Some(linked) = linked {
-    let reason = reason(ctx, &linked.refresh);
-    actions = actions
-      .child(
-        Row::new()
-          .spacing(SpacingSize::Md)
-          .align_items(Alignment::Center)
-          .child(repository(ctx, linked.repo))
-          .child(refresh(ctx, linked.refresh)),
-      )
-      .with_children(reason);
-  }
+  let Some(linked) = linked else {
+    let status = Row::new()
+      .padding(Padding::new().top(ExtraSpacing::Snug.role()))
+      .child(status_line(ctx, shown, now));
+    return frame(title, actions.child(status));
+  };
+  let reason = reason(ctx, &linked.refresh);
+  let actions = actions
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Md)
+        .align_items(Alignment::Center)
+        .child(repository(ctx, linked.repo))
+        .child(refresh(ctx, linked.refresh)),
+    )
+    .with_children(reason)
+    .child(status_line(ctx, shown, now));
+  frame(title, actions)
+}
+
+fn frame(title: Column, actions: Column) -> Row {
   Row::new()
     .id("pull-requests-header")
     .width(Dimension::Pct(100.0))
@@ -79,7 +88,7 @@ pub(super) fn header(ctx: &mut Ctx, linked: Option<Linked<'_>>, shown: &Shown, n
     .spacing(SpacingSize::Lg)
     .align_items(Alignment::Start)
     .child(title)
-    .child(actions.child(status_line(ctx, shown, now)))
+    .child(actions)
 }
 
 /// The linked repository, read only.
@@ -90,7 +99,7 @@ fn repository(ctx: &Ctx, repo: &GitHubRepo) -> Row {
   );
   Row::new()
     .id("pull-requests-repository")
-    .height(Dimension::Px(crate::theme::ControlHeight::Md.value()))
+    .height(Dimension::Px(ControlHeight::Md.value()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(github_mark(ctx, IconSize::Base, PaletteColor::TextMuted))

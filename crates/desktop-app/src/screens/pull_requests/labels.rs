@@ -1,5 +1,5 @@
 //! What a pull request's row and its page both say of it: its state (`State` in `aFRGq`, `Status · Open` in
-//! `mVTVX`), what reviews decided, and its GitHub checks by outcome.
+//! `mVTVX`), what reviews decided, its GitHub checks by outcome, and its counts with their digits grouped.
 
 use lurq::{
   app::{
@@ -9,12 +9,20 @@ use lurq::{
   components::{Row, Text},
   layout::Alignment,
 };
-use orchester_core::pull_request::{PullRequest, PullRequestState, ReviewDecision};
+use orchester_core::{
+  pull_request::{PullRequest, PullRequestState, ReviewDecision},
+  tokens::grouped as group_digits,
+};
 
 use crate::{
   theme::{ExtraSpacing, IconSize},
   ui::icon::{Icon, icon},
 };
+
+/// `value` with its digits grouped as the locale groups them ("38,214"), as Task › Changes writes counts.
+pub(super) fn grouped(ctx: &Ctx, value: u32) -> String {
+  group_digits(u64::from(value), &ctx.t("pull_requests.detail.groupSeparator"))
+}
 
 /// The state's 13 icon and its word in 12/500, 5 apart.
 pub(super) fn state(ctx: &Ctx, pull_request: &PullRequest) -> Row {

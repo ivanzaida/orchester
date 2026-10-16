@@ -36,6 +36,7 @@ use crate::{
     icon::{Icon, icon},
     pressable::pressable,
     tabs::{PageTab, counted, page_tabs},
+    tooltip::Truncated,
     unavailable::reason_line,
   },
 };
@@ -47,9 +48,10 @@ pub(super) struct Actions {
   pub open: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
-/// The organization row's height (`Organization` `pp4Q0`), a separator's (`Sep` `uKnbH`) and the tab row's
-/// (`Page tabs` `UMBLT`).
+/// The organization row's height (`Organization` `pp4Q0`), a separator's (`Sep` `uKnbH`), the gap under the
+/// organization row besides the header's own (`Gap` in `nQXR1`) and the tab row's height (`Page tabs` `UMBLT`).
 const ORGANIZATION_HEIGHT: f32 = 28.0;
+const ORGANIZATION_GAP: f32 = 2.0;
 const SEPARATOR_HEIGHT: f32 = 14.0;
 const TABS_HEIGHT: f32 = 34.0;
 
@@ -92,6 +94,7 @@ pub(super) fn header(
     .child(crumbs(ctx, project, view.number))
     .child(title_row(ctx, pull_request, actions))
     .child(organization)
+    .child(Row::new().height(Dimension::Px(ORGANIZATION_GAP)))
     .child(tabs(ctx, view.file_count()))
 }
 
@@ -130,7 +133,9 @@ fn crumbs(ctx: &mut Ctx, project: &ShownProject, number: u64) -> Element {
   .into()
 }
 
-fn title_row(ctx: &Ctx, pull_request: &PullRequest, actions: &Actions) -> Row {
+/// The title, cut with an ellipsis where it would run under its number, and the number, Refresh and Open in
+/// GitHub whole.
+fn title_row(ctx: &mut Ctx, pull_request: &PullRequest, actions: &Actions) -> Row {
   let refresh = ActionButton::new(
     "pull-request-refresh",
     ButtonKind::Ghost,
@@ -151,24 +156,31 @@ fn title_row(ctx: &Ctx, pull_request: &PullRequest, actions: &Actions) -> Row {
     Some(run) => github.on_click(move || run()),
     None => github.disabled(),
   };
+  let title = Truncated::new(
+    "pull-request-title",
+    Arc::<str>::from(pull_request.title()),
+    TypographyStyle::Heading,
+  )
+  .render(ctx);
   Row::new()
+    .id("pull-request-title-row")
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
-      Text::new(pull_request.title())
-        .id("pull-request-title")
-        .variant(TypographyStyle::Heading)
+      Column::new()
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0))
-        .nowrap(),
+        .child(title),
     )
     .child(
       Text::new(&ctx.t_args(
         "pull_requests.row.number",
         [("number", pull_request.number().to_string())],
       ))
+      .id("pull-request-number")
       .variant(PullRequestsText::TitleNumber.role())
+      .flex_shrink(0.0)
       .nowrap(),
     )
     .child(Row::new().flex(1.0))
