@@ -21,6 +21,7 @@ async fn sa_admin_paths_are_forwarded_with_the_servers_own_forwarded_headers() {
       &[
         ("X-Forwarded-For", "203.0.113.9"),
         ("X-Forwarded-Host", "evil.example"),
+        ("X-Forwarded-Proto", "https"),
         ("Forwarded", "for=203.0.113.9"),
         ("Cookie", "__Host-orchester_admin=sealed"),
       ],
@@ -38,7 +39,10 @@ async fn sa_admin_paths_are_forwarded_with_the_servers_own_forwarded_headers() {
   let head = heads[0].to_ascii_lowercase();
   assert!(head.starts_with("get /admin/projects?tab=members http/1.1"), "{head}");
   assert!(head.contains("x-forwarded-for: 127.0.0.1\r\n"), "{head}");
-  assert!(head.contains("x-forwarded-proto: http\r\n"), "{head}");
+  assert!(
+    head.contains("x-forwarded-proto: http\r\n"),
+    "a client that is no trusted proxy cannot say https: {head}"
+  );
   assert!(head.contains("x-forwarded-host: localhost\r\n"), "{head}");
   assert!(head.contains("cookie: __host-orchester_admin=sealed"), "{head}");
   assert!(
@@ -145,4 +149,55 @@ async fn sa_the_admin_api_listener_takes_the_browsers_address_and_host_from_the_
   .await;
   assert_eq!(other.status, 401, "another browser is not");
   server.finish().await;
+}
+
+/// The scheme the admin app is told, from one request through the server's front door.
+async fn forwarded_proto(configure: impl FnOnce(&mut orchester_server::config::Config), proto: Option<&str>) -> String {
+  let admin = AdminApp::start().await;
+  let url = admin.url.clone();
+  let server = TestServer::start(move |config| {
+    config.admin_url = url;
+    configure(config);
+  })
+  .await;
+  let headers: Vec<(&str, &str)> = proto.map(|proto| ("X-Forwarded-Proto", proto)).into_iter().collect();
+  assert_eq!(server.page("GET", "/admin", &headers).await.status, 200);
+  let head = admin.heads().pop().expect("a forwarded request").to_ascii_lowercase();
+  server.finish().await;
+  head
+    .lines()
+    .find_map(|line| line.strip_prefix("x-forwarded-proto: "))
+    .expect("the forwarded scheme")
+    .trim()
+    .to_owned()
+}
+
+/// Security review 1, M1: behind Caddy (`tls = "off"`), the admin learns the browser used https from the trusted proxy,
+/// or from the configured address, so its pages do not say *This page needs HTTPS*.
+#[tokio::test]
+async fn sa_behind_a_trusted_proxy_the_admin_is_told_the_browsers_scheme() {
+  let trusted = |config: &mut orchester_server::config::Config| {
+    config.trusted_proxies = vec!["127.0.0.1".parse().expect("loopback")];
+  };
+  assert_eq!(forwarded_proto(trusted, Some("https")).await, "https");
+  assert_eq!(forwarded_proto(trusted, Some("HTTP")).await, "http");
+  assert_eq!(
+    forwarded_proto(trusted, Some("javascript")).await,
+    "http",
+    "only http or https"
+  );
+  assert_eq!(forwarded_proto(trusted, None).await, "http");
+  assert_eq!(
+    forwarded_proto(|_| {}, Some("https")).await,
+    "http",
+    "an untrusted peer is not believed"
+  );
+  let addressed = |config: &mut orchester_server::config::Config| {
+    config.address = Some("https://orchester.example.test".into());
+  };
+  assert_eq!(
+    forwarded_proto(addressed, None).await,
+    "https",
+    "the configured address's scheme"
+  );
 }

@@ -1099,7 +1099,10 @@ certificate in every setup:
   redirects to `/admin`; a project's own address (`/<slug>`) shows a page that names nothing and says to open it in
   Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs. The server sets
   `X-Forwarded-For`, `-Proto` and `-Host` on what it forwards, replacing any the client sent; the admin listens only
-  on the private address and trusts them (its own origin for the `Origin` check is their proto and host).
+  on the private address and trusts them (its own origin for the `Origin` check is their proto and host). The proto
+  is `https` when the server presents its own certificate; behind a proxy that holds it (`tls = "off"`, Caddy) it is
+  what a trusted proxy said in `X-Forwarded-Proto` (one value, `http` or `https`), else the scheme of `address`, else
+  `http` (security review 1, M1).
 - **The admin's server side calls the API** on a second, private plain-HTTP listener of the server
   (`admin_api_listen`, default `127.0.0.1:8741`, never published): the public port presents the server's own
   certificate, which the admin's Node would otherwise have to pin. That listener takes the browser's address and host

@@ -131,6 +131,9 @@ Every admin action is in the server's own web app (`web/server`, `docs/architect
 at `https://<server>/admin`: first setup, projects, members and roles, invites, people, devices and settings. The
 server stays the front door: it answers `/api/*` itself, sends `/` to `/admin`, and forwards every other path to the
 admin app at `admin_url` (default `http://127.0.0.1:3100`), setting `X-Forwarded-For`, `-Proto` and `-Host` itself.
+Behind a proxy that holds the certificate (`tls = "off"`), the scheme is the one a proxy in `trusted_proxies` says in
+`X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `compose.caddy.yaml` does, or the admin
+answers every page with *This page needs HTTPS*.
 The admin app's server side calls the API on a second, private listener, `admin_api_listen` (default
 `127.0.0.1:8741`, plain HTTP, `off` to turn it off), which takes the browser's address and host from the headers the
 admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. Without the admin app, admin
