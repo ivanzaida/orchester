@@ -9,6 +9,8 @@
 //! - A server no project links to goes to the account signing in, unless that account has an entry at its address
 //!   already. Such a duplicate is removed with its device token: kept, it would go to the next account to sign in, and
 //!   nothing on this computer uses it. The server ends that unused session by itself after 90 days.
+//! - While a known project's folder is missing or its link cannot be read, no server counts as linked to nothing: one
+//!   no readable project links to stays nobody's and hidden, and none is removed, until a sign-in reads every project.
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -20,32 +22,46 @@ use orchester_store::{AppDb, ProjectDb, StoreError};
 
 use crate::{secrets::Vault, workspace::Workspace};
 
-/// The accounts whose projects link to each server, read before a sign-in writes; `None`: projects no account took
-/// yet, which the account signing in takes in the same write.
-pub(super) struct Links(HashMap<ServerId, BTreeSet<Option<CloudAccountId>>>);
+/// The accounts whose projects link to each server, read before a sign-in writes (`None`: projects no account took
+/// yet, which the account signing in takes in the same write), and whether every known project could be read.
+pub(super) struct Links {
+  owners: HashMap<ServerId, BTreeSet<Option<CloudAccountId>>>,
+  complete: bool,
+}
 
 impl Links {
-  /// Reads the link of every project on this computer whose folder is there. A project whose link cannot be read
-  /// counts for no server. Blocking.
+  /// Reads the link of every project on this computer. A project whose folder is missing or whose link cannot be read
+  /// leaves the links incomplete. Blocking.
   pub(super) fn read(workspace: &Workspace) -> Result<Self, StoreError> {
     let projects = workspace.db.lock().owned_projects()?;
-    let mut links: HashMap<ServerId, BTreeSet<Option<CloudAccountId>>> = HashMap::new();
-    for (owner, project) in projects.into_iter().filter(|(_, project)| project.repo_root.is_dir()) {
+    let mut links = Self {
+      owners: HashMap::new(),
+      complete: true,
+    };
+    for (owner, project) in projects {
+      // By id: the project may be another account's, whose folders the signed-in account's logs do not name.
+      if !project.repo_root.is_dir() {
+        tracing::debug!(project = %project.id, "a project's folder is missing: servers nobody owns wait");
+        links.complete = false;
+        continue;
+      }
       match ProjectDb::open(&project.repo_root).and_then(|db| db.sharing()) {
         Ok(Some(link)) => {
-          links.entry(link.server).or_default().insert(owner);
+          links.owners.entry(link.server).or_default().insert(owner);
         }
         Ok(None) => {}
-        // By id: the project may be another account's, whose folders the signed-in account's logs do not name.
-        Err(error) => tracing::debug!(%error, project = %project.id, "cannot read whether a project is shared"),
+        Err(error) => {
+          tracing::debug!(%error, project = %project.id, "cannot read whether a project is shared: servers nobody owns wait");
+          links.complete = false;
+        }
       }
     }
-    Ok(Self(links))
+    Ok(links)
   }
 
   /// The accounts whose projects link to `server`, with those no account took yet counted as `account`'s.
   fn owners(&self, server: ServerId, account: &CloudAccountId) -> BTreeSet<CloudAccountId> {
-    self.0.get(&server).map_or_else(BTreeSet::new, |owners| {
+    self.owners.get(&server).map_or_else(BTreeSet::new, |owners| {
       owners.iter().map(|owner| owner.unwrap_or(*account)).collect()
     })
   }
@@ -63,6 +79,8 @@ pub(super) fn claim_servers(
     let owners = links.owners(server.id, account);
     let mut owners = owners.iter();
     match (owners.next(), owners.next()) {
+      // A project that could not be read may link to it: it waits for a sign-in that reads them all.
+      (None, _) if !links.complete => {}
       (None, _) => {
         if !db.give_unowned_server(server.id, account)? && db.forget_unowned_server(server.id)? {
           removed.push(server.id);

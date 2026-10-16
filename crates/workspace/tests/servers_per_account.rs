@@ -441,3 +441,45 @@ fn per_account_a_server_nobody_owns_goes_to_the_account_whose_projects_link_to_i
   desktop.block_on(project.sync()).expect("Kontur syncs");
   assert_eq!(title(&kontur), "Fix reconnect after sleep");
 }
+
+#[test]
+fn per_account_a_server_nobody_owns_waits_while_a_project_cannot_be_read() {
+  let (cloud, server, repos) = (
+    AccountCloud::start(),
+    team_server(),
+    TempDir::new().expect("repositories"),
+  );
+  let desktop = Desktop::signed_in(&cloud);
+  let kontur_server = join(&desktop, &server, "bohdan");
+  server.create_project("kontur", Some(REMOTE));
+  let (_, kontur) = add(&desktop, &repos, "Kontur");
+  desktop
+    .block_on(desktop.servers.link_first(&entries(&desktop)[0], &kontur, link_first()))
+    .expect("Bohdan links Kontur");
+  desktop.block_on(desktop.cloud.sign_out()).expect("signed out");
+  desktop.disown_servers_of(ACCOUNT);
+  // Kontur's folder is away (an unplugged drive) when Olena signs in for the first time.
+  let away = repos.path().join("Kontur-away");
+  fs::rename(&kontur, &away).expect("the folder is away");
+
+  desktop
+    .block_on(
+      desktop
+        .cloud
+        .sign_in(OTHER_EMAIL.into(), Credential::new(PASSWORD.into())),
+    )
+    .expect("Olena signs in first");
+  assert!(entries(&desktop).is_empty(), "Olena does not get Bohdan's server");
+  assert!(
+    desktop.vault.read(&VaultKey::server_token(kontur_server)).is_ok(),
+    "its token stays"
+  );
+
+  fs::rename(&away, &kontur).expect("the folder is back");
+  switch_to(&desktop, EMAIL);
+  let bohdans: Vec<ServerId> = entries(&desktop).iter().map(|entry| entry.stored.id).collect();
+  assert_eq!(bohdans, [kontur_server], "Bohdan gets his server once Kontur reads");
+  ProjectServer::open(&desktop.servers, &kontur)
+    .expect("Kontur's server is found")
+    .expect("shared");
+}
