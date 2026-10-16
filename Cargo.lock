@@ -3361,6 +3361,7 @@ dependencies = [
  "orchester-store",
  "orchester-workspace",
  "parking_lot",
+ "pulldown-cmark",
  "rfd",
  "rmcp",
  "rusqlite",

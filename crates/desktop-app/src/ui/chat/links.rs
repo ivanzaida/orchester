@@ -1,10 +1,12 @@
 //! Links in what an agent writes in a chat (`docs/design/orchestrator-toolset.md`, "Links"). An `orchester:` link
-//! names a place in the app by its route path and a press goes there in the active tab; an `https:` link shows its
-//! host after it and a person's press opens it in the default browser; synthetic input (an MCP client driving the
-//! window) may follow a link in the app but never opens the browser. A link to anything else, to a route the app
-//! does not know, or to a place outside a project (Add project, Settings: what an agent may never open for the
-//! person) is shown as text with its address and cannot be pressed. How every Markdown draws each kind is
-//! `presentation`'s; the window follows them with one handler, [`ChatLinks`].
+//! names a place in the app by its route path and a press opens it as a browser opens a link: in the active tab, or
+//! in a new tab with Ctrl (Cmd on macOS) or the middle button (`navigation::press`); an `https:` link shows its host
+//! after it and a person's press opens it in the default browser, whatever the button or keys; synthetic input (an
+//! MCP client driving the window) may follow a link in the app but never opens the browser. A link to anything
+//! else, to a route the app does not know, or to a place outside a project (Add project, Settings: what an agent may
+//! never open for the person) is shown as text with its address and cannot be pressed. How every Markdown draws
+//! each kind is `presentation`'s; the window follows them with one handler, [`ChatLinks`]. What an agent writes as
+//! plain text that names a place becomes such a link first (`references`).
 
 use std::sync::Arc;
 
@@ -12,10 +14,17 @@ use lurq::app::{ctx::Ctx, events::is_synthetic_input};
 use orchester_exec::external;
 use url::Url;
 
-use crate::{navigation::Navigation, routes::Route, ui::markdown::LinkHandler};
+use crate::{
+  navigation::{
+    Navigation,
+    press::{LinkPress, OpenIn},
+  },
+  routes::Route,
+  ui::markdown::LinkHandler,
+};
 
 /// The scheme of a link to a place in the app.
-const APP_SCHEME: &str = "orchester:";
+pub(super) const APP_SCHEME: &str = "orchester:";
 
 /// Where a link leads, by its destination.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,8 +69,10 @@ fn strip_scheme<'a>(destination: &'a str, scheme: &str) -> Option<&'a str> {
 /// What happened to a press on a link.
 #[derive(Debug)]
 pub enum Followed {
-  /// The active tab went to the place.
-  Went,
+  /// The place opened where the press asked.
+  Went(OpenIn),
+  /// The press was of a button that opens nothing in the app (the right one, a side one).
+  NotFollowed,
   /// The default browser was asked to open the page.
   Opened,
   /// Synthetic input pressed a link to the web, which only a person opens.
@@ -72,13 +83,16 @@ pub enum Followed {
   NotALink,
 }
 
-/// Follows a press on the link to `destination`.
-pub fn follow(navigation: &Navigation, destination: &str) -> Followed {
+/// Follows `press` on the link to `destination`.
+pub fn follow(navigation: &Navigation, destination: &str, press: LinkPress) -> Followed {
   match ChatLink::of(destination) {
-    ChatLink::App(route) => {
-      navigation.go(route);
-      Followed::Went
-    }
+    ChatLink::App(route) => match press.open_in() {
+      Some(open) => {
+        navigation.open(route, open);
+        Followed::Went(open)
+      }
+      None => Followed::NotFollowed,
+    },
     ChatLink::Web { .. } if is_synthetic_input() => Followed::NotOpened,
     ChatLink::Web { url, .. } => match external::open_url(url.as_str()) {
       Ok(()) => Followed::Opened,
@@ -88,17 +102,19 @@ pub fn follow(navigation: &Navigation, destination: &str) -> Followed {
   }
 }
 
-/// What a press on a link in a chat does: [`follow`] in `navigation`. A screen makes it once and keeps it, so a
-/// message is laid out again only when what it says changes.
+/// What a press on a link in a chat does: [`follow`] in `navigation`, with the button and keys the window saw
+/// press it. A screen makes it once and keeps it, so a message is laid out again only when what it says changes.
 pub fn handler(navigation: Navigation) -> LinkHandler {
-  Arc::new(move |destination: &str| match follow(&navigation, destination) {
-    Followed::Went | Followed::Opened => {}
-    Followed::NotOpened => {
-      tracing::warn!("synthetic input pressed a link to the web; it opens only on a person's press")
-    }
-    Followed::Failed(error) => tracing::warn!(%error, "the message's link was not opened"),
-    Followed::NotALink => tracing::warn!("a press reached a link that is shown as text; nothing followed"),
-  })
+  Arc::new(
+    move |destination: &str| match follow(&navigation, destination, navigation.link_press()) {
+      Followed::Went(_) | Followed::NotFollowed | Followed::Opened => {}
+      Followed::NotOpened => {
+        tracing::warn!("synthetic input pressed a link to the web; it opens only on a person's press")
+      }
+      Followed::Failed(error) => tracing::warn!(%error, "the message's link was not opened"),
+      Followed::NotALink => tracing::warn!("a press reached a link that is shown as text; nothing followed"),
+    },
+  )
 }
 
 /// The window's link handler, which every Markdown of the window follows its links with: made once, so a message is

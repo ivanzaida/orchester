@@ -1,5 +1,6 @@
-//! Links in what an agent writes in a chat (`ui::chat::links`): which ones the chat follows; and which lists of
-//! links a reply draws as labelled links (`ui::chat::labelled`).
+//! Links in what an agent writes in a chat (`ui::chat::links`): which ones the chat follows; which places it names
+//! as plain text are links (`ui::chat::references`); and which lists of links a reply draws as labelled links
+//! (`ui::chat::labelled`).
 
 use lurq::{
   app::{App, theme::TypographyStyle},
@@ -8,15 +9,81 @@ use lurq::{
 };
 use orchester_app::{
   i18n,
+  navigation::press::{LinkPress, OpenIn},
   routes::Route,
   theme::{self, ChatLinkLooks, Mode},
   ui::chat::{
     labelled::labelled_links,
     links::ChatLink,
     presentation::{LinkWords, presentation},
+    references::linked,
   },
 };
-use orchester_core::id::ProjectId;
+use orchester_core::{id::ProjectId, project::TaskKey};
+
+/// `text` as the chat of `project` shows it, KON-1 and KON-2 its only tasks.
+fn references(text: &str, project: ProjectId) -> String {
+  let exists = |key: &TaskKey| matches!(key.to_string().as_str(), "KON-1" | "KON-2");
+  linked(text, project, &exists).into_owned()
+}
+
+#[test]
+fn chat_links_make_task_keys_and_routes_written_as_text_links() {
+  let project = ProjectId::generate();
+  let task = |key: &str| format!("orchester:/project/{project}/tasks/{key}/summary");
+  let path = format!("/project/{project}/tasks/KON-2/changes?file=src%2Flib.rs");
+  assert_eq!(
+    references("KON-1 is done; KON-2, then KON-3.", project),
+    format!("[KON\\-1]({}) is done; [KON\\-2]({}), then KON-3.", task("KON-1"), task("KON-2")),
+    "a key of the project's tasks is a link, an unknown one text"
+  );
+  let linked = references(&format!("See {path}."), project);
+  let destination = format!("orchester:{}", Route::parse(&path).expect("a route").path());
+  assert!(
+    linked.starts_with("See [\\/project\\/") && linked.ends_with(&format!("]({destination}).")),
+    "a route path is a link to its route, what ends the sentence left out: {linked}"
+  );
+  let other = ProjectId::generate();
+  assert!(
+    references(&format!("(/project/{other}/tasks)"), project).starts_with("([\\/project"),
+    "a place in another project is a link too"
+  );
+}
+
+#[test]
+fn chat_links_leave_code_links_words_and_places_outside_a_project_as_text() {
+  let project = ProjectId::generate();
+  let path = format!("/project/{project}/tasks/KON-1/summary");
+  for text in [
+    "`KON-1`".to_owned(),
+    format!("```\n{path}\nKON-1\n```"),
+    format!("    {path}"),
+    format!("[KON-1](https://example.com/{path})"),
+    format!("<https://example.com{path}>"),
+    "$KON-1$".to_owned(),
+    "XKON-1, KON-1X, KON-1-2, kon-1, KON-01x".to_owned(),
+    "/settings, /add-project?folder=x, /, /usage".to_owned(),
+    format!("/project/{project}/nowhere and /project/not-an-id/tasks"),
+    format!("https://example.com{path} and a{path}"),
+    "\\KON-1 &amp;KON-1".to_owned(),
+  ] {
+    assert_eq!(references(&text, project), text, "{text:?} stays as it is");
+  }
+}
+
+#[test]
+fn chat_links_open_by_a_browsers_rules() {
+  use lurq::app::events::MouseButton::{Left, Middle, Other, Right};
+  let press = |button, command, shift| LinkPress { button, shift, command }.open_in();
+  assert_eq!(press(Left, false, false), Some(OpenIn::ActiveTab));
+  assert_eq!(press(Left, false, true), Some(OpenIn::ActiveTab), "Shift opens no window");
+  assert_eq!(press(Left, true, false), Some(OpenIn::BackgroundTab));
+  assert_eq!(press(Middle, false, false), Some(OpenIn::BackgroundTab));
+  assert_eq!(press(Left, true, true), Some(OpenIn::NewTab));
+  assert_eq!(press(Right, false, false), None);
+  assert_eq!(press(Other(4), false, false), None);
+  assert_eq!(LinkPress::PLAIN.open_in(), Some(OpenIn::ActiveTab));
+}
 
 #[test]
 fn chat_links_name_a_place_in_the_app_a_web_page_or_nothing() {

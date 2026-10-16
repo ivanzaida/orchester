@@ -1,7 +1,8 @@
 //! An Orchestrator's reply (`Orchestrator · reply with links` `w262B`, `Orchestrator · links · states` `agv8r`):
-//! lurq's Markdown with every link presented as the chat follows it (`present`) and a list of labelled links drawn
-//! as their grid (`grid`). Every reply goes through the presentation, which lurq runs on the exact destination a
-//! press opens: no link shows words from one destination and opens another.
+//! lurq's Markdown, the places it names as text linked (`ui::chat::references`), with every link presented as the
+//! chat follows it (`present`) and a list of labelled links drawn as their grid (`grid`). Every reply goes through
+//! the presentation, which lurq runs on the exact destination a press opens: no link shows words from one
+//! destination and opens another.
 
 mod grid;
 mod place;
@@ -22,7 +23,10 @@ use orchester_core::id::ProjectId;
 
 use self::present::Words;
 use super::data::ProjectNames;
-use crate::{theme::ChatLinkLooks, ui::markdown::LinkHandler};
+use crate::{
+  theme::ChatLinkLooks,
+  ui::{chat::references, markdown::LinkHandler},
+};
 
 /// The reply `text`, its links followed by `links`; `project` is the conversation's, `names` the projects' names.
 /// `id` names it.
@@ -90,7 +94,8 @@ impl Component for Reply {
     };
     let words = Words::new(ctx.i18n().clone(), (props.project, props.names.clone()));
     let on_link = props.links.clone();
-    let markdown = MarkdownProps::styled(props.text.clone(), style)
+    let text = references::shown(ctx, &props.text, props.project);
+    let markdown = MarkdownProps::styled(text, style)
       .width(Dimension::Pct(100.0))
       .selectable(true)
       .on_link_click(move |link: &MarkdownLink| on_link(link.destination()))

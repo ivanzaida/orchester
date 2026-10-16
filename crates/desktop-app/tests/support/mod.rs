@@ -38,6 +38,7 @@ use orchester_workspace::{
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
+pub mod link_press;
 pub mod reads;
 pub mod signed_in;
 pub mod stand_ins;
