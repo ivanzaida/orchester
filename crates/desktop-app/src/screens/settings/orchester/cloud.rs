@@ -15,7 +15,7 @@ use orchester_workspace::sharing::cloud::CloudAddress;
 
 use super::{
   Invites, Said, advanced, invites,
-  parts::{body, frame, header, paragraph, section, section_title, tabs},
+  parts::{Fact, body, frame, header, paragraph, section, section_title, tabs},
   sign_in,
   words::{Look, cloud_error, counted, day_and_time},
 };
@@ -76,7 +76,10 @@ impl Component for CloudPanel {
       color: lurq::app::theme::PaletteColor::TextSecondary,
       name: "signed-in",
     };
-    let facts = [ctx.t("cloud.list.cloud").to_string(), account.email.clone()];
+    let facts = [
+      Fact::Plain(ctx.t("cloud.list.cloud").to_string()),
+      Fact::Mono(account.email.clone()),
+    ];
     let sign_out = {
       let action = self.sign_out.clone();
       let button = ActionButton::new(

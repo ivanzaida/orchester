@@ -7,6 +7,7 @@
       "lead": "Your team's own Orchester server, by its address. This computer connects to it once; then each of your projects on it is linked to a checkout here.",
       "cancel": "Cancel",
       "continue": "Continue",
+      "tryAgain": "Try again",
       "change": "Change",
       "theServer": "the server",
       "address": {
@@ -39,8 +40,7 @@
       },
       "already": {
         "title": "You're already connected to {{server}}",
-        "body": "To work on another of its projects, link that project's checkout from Project settings › Sharing, or accept its invite.",
-        "open": "Open its entry"
+        "body": "To work on another of its projects, link that project's checkout from Project settings › Sharing, or accept its invite."
       },
       "compare": {
         "title": "Compare the check code",
@@ -86,6 +86,8 @@
       "joined": {
         "title": "Connected to {{server}} as {{username}}",
         "body": "Link your project's checkout from its Project settings › Sharing.",
+        "review": "Open the join review",
+        "reviewLater": "The join review isn't in this version of the app yet; link the checkout from Project settings › Sharing.",
         "open": "Open its entry"
       },
       "notInvitedTitle": "{{server}} has no place for {{email}} yet",
@@ -109,7 +111,10 @@
       "serverHint": "Connected · another server: Settings › Orchester",
       "noServer": "This computer isn't connected to a team server yet.",
       "project": "Project",
-      "projectDescription": "Projects you're a member of there. An empty one takes {{project}}'s {{count}} tasks with their numbers; one with tasks opens the join review first.",
+      "projectDescription": "Projects on {{server}} you're a member of. An empty one takes {{project}}'s {{count}} tasks with their numbers; one with tasks opens the join review first.",
+      "projectLine": "{{tasks}} · {{hint}}",
+      "empty": "Empty",
+      "withTasks": "Has tasks",
       "reading": "Reading your projects there…",
       "noProjects": "You aren't a member of a project there yet.",
       "setUpFor": "set up for {{hint}}",
@@ -123,7 +128,9 @@
       "remote": {
         "same": "This checkout's origin, {{origin}}, matches {{project}}'s hint.",
         "different": "This checkout's origin is {{origin}}; {{project}} was set up for {{hint}}.",
-        "noOrigin": "This checkout has no origin remote. Orchester can't compare it with the project's hint; you can still link it.",
+        "noOrigin": "This checkout has no origin remote",
+        "noOriginHint": "Orchester can't compare it with {{project}}'s hint, {{hint}}. You can still link it.",
+        "noOriginBody": "Orchester can't compare it with a project's repository hint. You can still link it.",
         "noHint": "The project names no repository; nothing to compare.",
         "choose": "Choose a project to compare its repository hint."
       },
@@ -141,6 +148,7 @@
       "upload": {
         "title": "Link to {{project}}?",
         "body": "{{count}} tasks go up to {{address}} with their numbers, and {{key}} stays their key. Runs, conversations, code and secrets stay on this computer.",
+        "bodyRekeyed": "{{count}} tasks go up to {{address}} with their numbers and take its key: {{local}}-1 becomes {{key}}-1. Runs, conversations, code and secrets stay on this computer.",
         "confirm": "Link and upload {{count}} tasks",
         "cancel": "Cancel"
       },
@@ -172,7 +180,7 @@
     },
     "linked": {
       "sharedOn": "Shared on {{server}}",
-      "detail": "{{key}} · linked {{day}} · {{role}}",
+      "detail": "{{key}} · linked {{day}} · {{role}} · synced {{synced}}",
       "owner": "you're an owner",
       "member": "you're a member",
       "noRole": "you're an admin there",
@@ -181,6 +189,31 @@
       "addressDescription": "The project this checkout is linked to. Its address is its identity and never changes.",
       "noAddress": "Not read from the server yet",
       "unknownServer": "a server no longer in Settings › Orchester",
+      "serverState": "{{server}} · {{state}} · {{certificate}}",
+      "state": {
+        "connected": "connected",
+        "connecting": "connecting",
+        "offline": "offline",
+        "signedOut": "signed out",
+        "certificateChanged": "presents a different certificate"
+      },
+      "certificate": {
+        "checked": "certificate checked",
+        "system": "certificate trusted by your system",
+        "plain": "not encrypted"
+      },
+      "repository": {
+        "description": "{{project}} on {{server}} was set up for this remote. Orchester compares it with this checkout's origin.",
+        "reading": "Reading the project's repository hint…",
+        "noHint": "No repository hint",
+        "same": "This checkout's origin matches · checked {{time}}",
+        "different": "This checkout's origin is {{origin}} · it doesn't match · checked {{time}}",
+        "noOrigin": "This checkout has no origin remote; nothing to compare.",
+        "nothingToCompare": "The project names no repository; nothing to compare.",
+        "unread": "{{server}} can't be reached now; the hint is compared once it can.",
+        "unknownServer": "The project's server is no longer in Settings › Orchester.",
+        "notListed": "The server no longer lists this project for you."
+      },
       "notLinked": "This project isn't linked to a server project.",
       "removed": {
         "title": "You're no longer a member of {{project}}",
@@ -188,7 +221,7 @@
       },
       "leaveSection": "Leave or make local",
       "makeLocal": "Make local",
-      "makeLocalDescription": "Stop using the server on this computer. Every task becomes a local task of {{project}} here.",
+      "makeLocalDescription": "Stop using the server on this computer. Every task becomes a local task of {{project}} here; {{key}} stays the same for everyone else.",
       "makeLocalButton": "Make local…",
       "makeLocalNotBuilt": "Not in this version of the app yet",
       "leave": "Leave {{project}}",

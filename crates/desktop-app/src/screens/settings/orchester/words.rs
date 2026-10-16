@@ -203,6 +203,15 @@ pub fn day_and_time(ctx: &Ctx, at: Timestamp) -> String {
     .to_string()
 }
 
+/// When something happened: its clock time today (`14:32`), else its day and time (`Oct 14, 09:12`).
+pub fn moment(ctx: &Ctx, at: Timestamp) -> String {
+  if at.local_day_start() == Timestamp::now().local_day_start() {
+    display::clock(at)
+  } else {
+    day_and_time(ctx, at)
+  }
+}
+
 /// `count` of a thing, with the key for one or for more.
 pub fn counted(ctx: &Ctx, (one, other): (&str, &str), count: usize) -> String {
   if count == 1 {

@@ -9,7 +9,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -29,10 +29,10 @@ use crate::{
   ui::{
     avatar::{initials, person_avatar},
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::field_error,
     icon::{Icon, icon},
     inspector,
-    notice::{Notice, NoticeTone},
   },
 };
 
@@ -73,6 +73,8 @@ pub(super) struct Answers {
   decline: FutureAction<InviteId, (), Said>,
   /// The invite the last accept was for.
   pub(super) accepting: Signal<Asked>,
+  /// The person pressed *Cancel* while the last accept was connecting.
+  stopped: Signal<bool>,
 }
 
 impl Answers {
@@ -96,6 +98,36 @@ impl Answers {
         async move { cloud.decline(invite).await.map_err(|error| cloud_error(&error)) }
       }),
       accepting: ctx.signal(Asked(None)),
+      stopped: ctx.signal(false),
+    }
+  }
+
+  /// Whether an accept is connecting and nobody stopped it.
+  pub(super) fn connecting(&self) -> bool {
+    self.accept.state().get().is_pending() && !self.stopped.get()
+  }
+
+  /// Accepts `invite`, connecting to its server.
+  pub(super) fn accept(&self, invite: InviteId) {
+    self.accepting.set(Asked(Some(invite)));
+    self.stopped.set(false);
+    self.accept.run(invite);
+  }
+
+  /// Stops waiting for the accept under way: its connection is dropped where it stands.
+  fn stop(&self) {
+    self.accept.cancel();
+    self.stopped.set(true);
+  }
+
+  /// A handle that answers from a button's handler.
+  pub(super) fn handle(&self) -> Self {
+    Self {
+      declining: self.declining.clone(),
+      accept: self.accept.clone(),
+      decline: self.decline.clone(),
+      accepting: self.accepting.clone(),
+      stopped: self.stopped.clone(),
     }
   }
 }
@@ -147,6 +179,17 @@ pub(super) fn waiting(ctx: &mut Ctx, invites: &Invites, answers: &Answers) -> El
 pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
   let mut parts = Vec::new();
   let accepted = answers.accept.state().get();
+  if answers.stopped.get() {
+    parts.push(
+      Callout::new(
+        "orchester-invite-stopped",
+        CalloutTone::Neutral,
+        ctx.t("cloud.invites.stopped.title"),
+      )
+      .body(ctx.t("cloud.invites.stopped.body"))
+      .into(),
+    );
+  }
   if let Some(reason) = accepted.error.clone().filter(|_| !accepted.is_pending()) {
     parts.push(field_error("orchester-invite-accept-failed", &reason.text(ctx)).into());
   }
@@ -157,9 +200,9 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
         None => ctx.t("cloud.invites.joined.server"),
       };
       parts.push(
-        Notice::new(
+        Callout::new(
           "orchester-invite-joined",
-          NoticeTone::Success,
+          CalloutTone::Success,
           ctx.t_args("cloud.invites.joined.title", [("server", server.as_str())]),
         )
         .body(body)
@@ -167,9 +210,9 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
       );
     }
     Some(Outcome::Waiting { server }) => parts.push(
-      Notice::new(
+      Callout::new(
         "orchester-invite-waiting",
-        NoticeTone::Warning,
+        CalloutTone::Warning,
         ctx.t("cloud.invites.approval.title"),
       )
       .icon(Icon::Hourglass)
@@ -183,6 +226,23 @@ pub(super) fn outcome(ctx: &Ctx, answers: &Answers) -> Vec<Element> {
     parts.push(field_error("orchester-invite-decline-failed", &reason.text(ctx)).into());
   }
   parts
+}
+
+/// What an invite is to, without the role, for the All projects notice whose second line names it.
+pub(super) fn notice_title(ctx: &Ctx, invite: &CloudInvite) -> String {
+  match &invite.project {
+    Some(project) => ctx
+      .t_args(
+        "cloud.notice.toProject",
+        [
+          ("inviter", invite.inviter.as_str()),
+          ("project", project.name.as_str()),
+          ("server", invite.server.name.as_str()),
+        ],
+      )
+      .to_string(),
+    None => title(ctx, invite),
+  }
 }
 
 /// What an invite is to, in one sentence.
@@ -253,15 +313,15 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
         .child(Text::new(&ctx.t("cloud.factSeparator")).variant(ExtraTypography::Note.role()))
         .child(Text::new(&dates).variant(ExtraTypography::Note.role()).nowrap()),
     );
-  let accept = answers.accept.state().get();
-  let accepting = accept.is_pending() && answers.accepting.get().0 == Some(invite.id);
+  let accepting = answers.connecting() && answers.accepting.get().0 == Some(invite.id);
+  let declining = answers.declining.get().0 == Some(invite.id);
   let top = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(person_avatar(&format!("{id}-avatar"), &initials(&invite.inviter)))
     .child(text)
-    .with_children((!accepting).then(|| buttons(ctx, &id, invite.id, answers)));
+    .with_children((!accepting && !declining).then(|| buttons(ctx, &id, invite.id, answers)));
   let mut card = Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
@@ -275,24 +335,43 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
     .rounded(ExtraRadius::Tile.role())
     .child(top);
   if accepting {
-    card = card.child(
+    card = card.child(connecting(ctx, &id, invite, answers));
+  }
+  if !declining {
+    return card.into();
+  }
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Section.role())
+    .child(card)
+    .child(decline_question(ctx, &id, invite, answers))
+    .into()
+}
+
+/// *Connecting to Kontur team…* with *Cancel* under it (`Accepting` in `jUMAF`).
+fn connecting(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Column {
+  let answers = answers.handle();
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Start)
+    .child(
       Row::new()
         .id(format!("{id}-connecting"))
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextSecondary))
         .child(
           Text::new(&ctx.t_args("cloud.invites.connecting", [("server", invite.server.name.as_str())]))
-            .variant(ExtraTypography::Prose.role())
+            .variant(ExtraTypography::Lead.role())
             .flex(1.0),
         ),
-    );
-  }
-  if answers.declining.get().0 == Some(invite.id) {
-    card = card.child(decline_question(ctx, &id, invite, answers));
-  }
-  card.into()
+    )
+    .child(
+      ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, ctx.t("cloud.invites.cancel"))
+        .on_click(move || answers.stop()),
+    )
 }
 
 fn buttons(ctx: &Ctx, id: &str, invite: InviteId, answers: &Answers) -> Row {
@@ -303,8 +382,7 @@ fn buttons(ctx: &Ctx, id: &str, invite: InviteId, answers: &Answers) -> Row {
     ctx.t("cloud.invites.decline"),
   )
   .on_click(move || declining.set(Asked(Some(invite))));
-  let (accept, accepting) = (answers.accept.clone(), answers.accepting.clone());
-  let busy = answers.accept.state().get().is_pending();
+  let busy = answers.connecting();
   let accept_button = ActionButton::new(
     format!("{id}-accept"),
     ButtonKind::Primary,
@@ -314,10 +392,8 @@ fn buttons(ctx: &Ctx, id: &str, invite: InviteId, answers: &Answers) -> Row {
   let accept_button = if busy {
     accept_button.disabled()
   } else {
-    accept_button.on_click(move || {
-      accepting.set(Asked(Some(invite)));
-      accept.run(invite);
-    })
+    let answers = answers.handle();
+    accept_button.on_click(move || answers.accept(invite))
   };
   Row::new()
     .flex_shrink(0.0)
@@ -352,16 +428,19 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
   Column::new()
     .id(format!("{id}-decline-question"))
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Md))
+    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Sm)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .rounded(ExtraRadius::Tile.role())
     .child(
       Text::new(&ctx.t_args("cloud.invites.declineQuestion", [("target", target)]))
-        .variant(ExtraTypography::Strong.role()),
+        .variant(ExtraTypography::FormSection.role())
+        .width(Dimension::Pct(100.0)),
     )
     .child(
       Text::new(&ctx.t_args("cloud.invites.declineBody", [("inviter", invite.inviter.as_str())]))
-        .variant(ExtraTypography::Prose.role())
+        .variant(ExtraTypography::Lead.role())
         .width(Dimension::Pct(100.0)),
     )
     .child(
@@ -370,6 +449,5 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
           .on_click(move || keep.set(Asked(None))),
       ),
     )
-    .child(Spacer::new())
     .into()
 }

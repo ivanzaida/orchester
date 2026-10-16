@@ -28,10 +28,10 @@ use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::field_error,
     icon::Icon,
     inspector::{self, PropertyValue},
-    notice::{Notice, NoticeTone},
   },
 };
 
@@ -85,9 +85,9 @@ fn certificate_changed(
   } else {
     ctx.t_args("cloud.server.certificate.body", [("projects", projects.as_str())])
   };
-  let notice = Notice::new(
+  let notice = Callout::new(
     "orchester-server-certificate-changed",
-    NoticeTone::Danger,
+    CalloutTone::Danger,
     ctx.t_args(
       "cloud.server.certificate.title",
       [("server", entry.stored.name.as_str())],
@@ -194,9 +194,9 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .child(
-      Notice::new(
+      Callout::new(
         "orchester-server-signed-out-notice",
-        NoticeTone::Warning,
+        CalloutTone::Warning,
         ctx.t_args(
           if entry.in_use() {
             "cloud.server.signedOut.title"
@@ -297,13 +297,22 @@ pub(super) fn sign_out_question(ctx: &Ctx, panel: &ServerPanel, props: &Props) -
 }
 
 /// Address, certificate, the account there, how and when this computer joined, and this computer.
+/// How this computer trusts the server's certificate; a pinned one's check code reads in mono (`Checked · 3F7A-…` in
+/// `SFaAp`).
+fn certificate_fact(ctx: &Ctx, entry: &ServerEntry) -> (String, PropertyValue) {
+  match entry.stored.certificate_pin.as_deref().and_then(check_code) {
+    Some(code) => (
+      ctx.t_args("cloud.server.facts.checked", [("code", code)]).to_string(),
+      PropertyValue::Mono,
+    ),
+    None if entry.address.is_https() => (ctx.t("cloud.server.facts.system").to_string(), PropertyValue::Plain),
+    None => (ctx.t("cloud.server.facts.plain").to_string(), PropertyValue::Plain),
+  }
+}
+
 pub(super) fn facts(ctx: &Ctx, entry: &ServerEntry) -> Element {
   let stored = &entry.stored;
-  let certificate = match stored.certificate_pin.as_deref().and_then(check_code) {
-    Some(code) => ctx.t_args("cloud.server.facts.checked", [("code", code)]).to_string(),
-    None if entry.address.is_https() => ctx.t("cloud.server.facts.system").to_string(),
-    None => ctx.t("cloud.server.facts.plain").to_string(),
-  };
+  let (certificate, certificate_look) = certificate_fact(ctx, entry);
   let you = stored.account.as_ref().map_or_else(
     || ctx.t("cloud.server.facts.nobody").to_string(),
     |account| {
@@ -357,7 +366,7 @@ pub(super) fn facts(ctx: &Ctx, entry: &ServerEntry) -> Element {
       "orchester-server-certificate",
       &ctx.t("cloud.server.facts.certificate"),
       &certificate,
-      PropertyValue::Plain,
+      certificate_look,
     ))
     .child(inspector::property(
       "orchester-server-you",
@@ -468,10 +477,14 @@ pub(super) fn admin(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> 
 
 /// Where this computer's token for the server is kept.
 pub(super) fn token_note(ctx: &Ctx, entry: &ServerEntry) -> Element {
-  let key = if cfg!(target_os = "macos") {
-    "cloud.server.tokenNote.macos"
-  } else {
-    "cloud.server.tokenNote.windows"
+  let mac = cfg!(target_os = "macos");
+  let key = match (entry.in_use(), entry.connection) {
+    // Signed out from here: the token was deleted with the sign-in.
+    (false, _) if mac => "cloud.server.tokenNote.noneMacos",
+    (false, _) => "cloud.server.tokenNote.noneWindows",
+    (true, Some(Connection::SignedOut)) => "cloud.server.tokenNote.refused",
+    (true, _) if mac => "cloud.server.tokenNote.macos",
+    (true, _) => "cloud.server.tokenNote.windows",
   };
   inspector::note(
     "orchester-server-token-note",

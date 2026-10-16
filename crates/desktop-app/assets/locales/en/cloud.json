@@ -95,6 +95,11 @@
       "accept": "Accept",
       "decline": "Decline",
       "keep": "Keep it",
+      "cancel": "Cancel",
+      "stopped": {
+        "title": "Stopped connecting",
+        "body": "If the server had already let this computer in, it shows under Team servers. Otherwise accept the invite again."
+      },
       "declineQuestion": "Decline the invite to {{target}}?",
       "declineBody": "The invite ends. {{inviter}} sees it was declined; nothing else is told.",
       "connecting": "Connecting to {{server}}… its certificate comes with the invite, so there's nothing to compare.",
@@ -192,7 +197,10 @@
         "notHere": "not on this computer",
         "open": "Open",
         "explanation": "Each project is linked to one checkout on this computer. A project of yours without a checkout here: clone it yourself, add the folder in All projects, then link it in its Project settings › Sharing.",
-        "signedOut": "Join again to read your projects there; the ones linked here are listed below."
+        "signedOut": "Join again to read your projects there; the ones linked here are listed below.",
+        "offline": "{{server}} can't be reached, so your projects there can't be read now. The ones linked on this computer are listed below.",
+        "link": "Link a checkout…",
+        "linkLater": "Linking from here isn't in this version of the app yet: clone the project yourself, add the folder in All projects, then link it in its Project settings › Sharing."
       },
       "computers": {
         "title": "Your other computers",
@@ -239,7 +247,10 @@
       },
       "tokenNote": {
         "windows": "This computer's token for {{server}} is kept in Windows Credential Manager. Orchester never shows it; Sign out deletes it.",
-        "macos": "This computer's token for {{server}} is kept in your login Keychain. Orchester never shows it; Sign out deletes it."
+        "macos": "This computer's token for {{server}} is kept in your login Keychain. Orchester never shows it; Sign out deletes it.",
+        "refused": "{{server}} no longer accepts this computer's token. Joining again replaces it.",
+        "noneWindows": "This computer holds no token for {{server}}: signing out deleted it from Windows Credential Manager. Joining again stores a new one.",
+        "noneMacos": "This computer holds no token for {{server}}: signing out deleted it from your login Keychain. Joining again stores a new one."
       }
     },
     "pairing": {
@@ -270,6 +281,7 @@
     },
     "notice": {
       "body": "{{role}} · {{address}} · expires {{expires}}",
+      "toProject": "{{inviter}} invited you to {{project}} on {{server}}",
       "many": "{{count}} invites wait for you",
       "manyBody": "Invites to projects and servers, through Orchester Cloud.",
       "review": "Review",

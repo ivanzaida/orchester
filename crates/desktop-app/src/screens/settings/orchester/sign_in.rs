@@ -7,7 +7,7 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
@@ -19,7 +19,7 @@ use orchester_workspace::sharing::cloud::{CloudAddress, CloudError, WebPage};
 
 use super::{
   Said, advanced,
-  parts::{frame, header, hint, paragraph},
+  parts::{Fact, frame, header, hint, paragraph},
   words::{Look, cloud_error},
 };
 use crate::{
@@ -29,15 +29,18 @@ use crate::{
   theme::{AccountsSpacing, ExtraTypography, OrchesterSpacing, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
     icon::{Icon, icon},
-    notice::{Notice, NoticeTone},
     pressable::pressable,
   },
 };
 
 /// The form's width (`Ay4fx`).
 const FORM_WIDTH: f32 = 420.0;
+
+/// A divider's thickness.
+const DIVIDER: f32 = 1.0;
 
 /// Why the cloud did not sign this computer in, as the form says it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,7 +103,10 @@ impl Form {
         let (cloud, clear) = (cloud.clone(), clear.clone());
         async move {
           let signed_in = cloud.sign_in(email.trim().to_owned(), Credential::new(password)).await;
-          clear.set(String::new());
+          // A refused password stays in its field, masked, to be corrected (`Wrong email or password` in `Aowlk`).
+          if signed_in.is_ok() {
+            clear.set(String::new());
+          }
           signed_in.map(drop).map_err(|error| {
             tracing::info!(%error, "Orchester Cloud did not sign this computer in");
             Refusal::of(&error)
@@ -121,7 +127,7 @@ pub(super) fn panel(ctx: &mut Ctx, address: &CloudAddress, form: &Form, advanced
     color: PaletteColor::TextMuted,
     name: "signed-out",
   };
-  let facts = [address.address.authority()];
+  let facts = [Fact::Plain(address.address.authority())];
   let head = header(
     ctx,
     "orchester-cloud-header",
@@ -140,9 +146,12 @@ pub(super) fn panel(ctx: &mut Ctx, address: &CloudAddress, form: &Form, advanced
         .left(OrchesterSpacing::FormSide.role()),
     )
     .spacing(AccountsSpacing::Panel.role())
+    // At least the panel's height, so *Advanced* sits at its bottom (`Spacer` `lZ4eI` in `DUWM5`).
+    .min_height(Dimension::Pct(100.0))
     .child(sign_in_form(ctx, form, &address.address.authority()))
     .child(divider())
     .child(without_internet(ctx, &navigation))
+    .child(Spacer::new().flex(1.0))
     .child(advanced::section(ctx, address, advanced));
   frame("orchester-cloud-details")
     .child(head)
@@ -174,7 +183,7 @@ fn sign_in_form(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Xs)
+        .spacing(crate::theme::ExtraSpacing::Snug.role())
         .child(Text::new(&ctx.t("cloud.signIn.title")).variant(OrchesterText::FormTitle.role()))
         .child(paragraph("orchester-sign-in-lead", &ctx.t("cloud.signIn.lead"))),
     )
@@ -202,7 +211,8 @@ fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
     ctx.t("cloud.signIn.password"),
     form.password.clone(),
   )
-  .masked();
+  .masked()
+  .no_trailing();
   if wrong {
     email = email.invalid();
     password = password.invalid();
@@ -256,9 +266,9 @@ fn refusal_part(ctx: &mut Ctx, form: &Form, refusal: &Refusal) -> Element {
     Refusal::Wrong => field_error("orchester-sign-in-wrong", &ctx.t("cloud.signIn.wrong")).into(),
     Refusal::Unconfirmed => {
       let email = form.email.get();
-      Notice::new(
+      Callout::new(
         "orchester-sign-in-unconfirmed",
-        NoticeTone::Warning,
+        CalloutTone::Warning,
         ctx.t("cloud.signIn.unconfirmed.title"),
       )
       .icon(Icon::Mail)
@@ -271,17 +281,17 @@ fn refusal_part(ctx: &mut Ctx, form: &Form, refusal: &Refusal) -> Element {
       ))
       .into()
     }
-    Refusal::Paused(minutes) => Notice::new(
+    Refusal::Paused(minutes) => Callout::new(
       "orchester-sign-in-paused",
-      NoticeTone::Danger,
+      CalloutTone::Danger,
       ctx.t("cloud.signIn.paused.title"),
     )
     .icon(Icon::CircleHelp)
     .body(ctx.t_args("cloud.signIn.paused.body", [("minutes", minutes.to_string())]))
     .into(),
-    Refusal::Unreachable => Notice::new(
+    Refusal::Unreachable => Callout::new(
       "orchester-sign-in-unreachable",
-      NoticeTone::Info,
+      CalloutTone::Neutral,
       ctx.t("cloud.signIn.unreachable.title"),
     )
     .icon(Icon::WifiOff)
@@ -296,10 +306,14 @@ fn opened_part(ctx: &Ctx, opened: &Opened) -> Option<Element> {
   match opened {
     Opened::None => None,
     Opened::Page(url) => Some(
-      Notice::new("orchester-opened", NoticeTone::Info, ctx.t("cloud.signIn.opened.title"))
-        .icon(Icon::ExternalLink)
-        .body(ctx.t_args("cloud.signIn.opened.body", [("page", url.as_str())]))
-        .into(),
+      Callout::new(
+        "orchester-opened",
+        CalloutTone::Info,
+        ctx.t("cloud.signIn.opened.title"),
+      )
+      .icon(Icon::ExternalLink)
+      .body(ctx.t_args("cloud.signIn.opened.body", [("page", url.as_str())]))
+      .into(),
     ),
     Opened::Failed(url) => Some(
       field_error(
@@ -360,11 +374,13 @@ fn page_link(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -> 
     .into()
 }
 
+/// A hairline between the form's parts (`Divider` in `DUWM5`).
 fn divider() -> Element {
   Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(0.0))
-    .border_top(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .width(Dimension::Px(FORM_WIDTH))
+    .height(Dimension::Px(DIVIDER))
+    .flex_shrink(0.0)
+    .background(PaletteColor::Border)
     .into()
 }
 

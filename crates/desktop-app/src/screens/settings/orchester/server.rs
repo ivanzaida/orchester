@@ -20,7 +20,7 @@ use orchester_workspace::sharing::{
 use super::{
   Said,
   code::{Purpose, Secret, Shown, shown_code},
-  parts::{body, frame, header},
+  parts::{Fact, body, frame, header},
   server_parts, server_projects,
   words::{cloud_error, server_look, sharing_error},
 };
@@ -163,7 +163,7 @@ impl Component for ServerPanel {
     let presented = presented(ctx, &props.entry);
     let entry = &props.entry;
     let look = server_look(entry);
-    let facts = [entry.address.authority()];
+    let facts = [Fact::Plain(entry.address.authority())];
     let mut head = header(
       ctx,
       "orchester-server-header",
@@ -207,16 +207,38 @@ impl Component for ServerPanel {
   }
 }
 
-/// The person's projects on the server, read while it is connected.
+/// The person's projects on the server, read while it is connected. An offline server is not asked: its entry changes
+/// with every attempt to reach it, and the projects linked here show without it.
 fn projects(ctx: &mut Ctx, props: &Props) -> Option<Result<Projects, Said>> {
-  if !props.entry.in_use() {
+  let entry = &props.entry;
+  if !entry.in_use() || matches!(entry.connection, Some(Connection::SignedOut)) {
     return Some(Err(Said::new("cloud.server.projects.signedOut")));
+  }
+  if entry.certificate_changed {
+    return Some(Err(Said::new("cloud.errors.certificateChanged")));
+  }
+  match entry.connection {
+    Some(Connection::Reconnecting { .. } | Connection::Offline { .. }) => {
+      return Some(Err(
+        Said::new("cloud.server.projects.offline").with("server", entry.stored.name.clone()),
+      ));
+    }
+    Some(Connection::Checking) | None => return None,
+    Some(Connection::Connected | Connection::SignedOut) => {}
   }
   let servers = Services::of(ctx).servers;
   let state = ctx
     .future(
-      (props.revision, props.entry.clone(), servers),
-      |(_, entry, servers)| async move {
+      (props.revision, entry.stored.id, servers),
+      |(_, server, servers)| async move {
+        let entries = servers.clone();
+        let entry = orchester_workspace::background::run(move || entries.entries())
+          .await
+          .map_err(|_| Said::new("cloud.errors.local"))?
+          .map_err(|error| sharing_error(&error))?
+          .into_iter()
+          .find(|entry| entry.stored.id == server)
+          .ok_or_else(|| Said::new("cloud.errors.local"))?;
         servers
           .server_projects(&entry)
           .await

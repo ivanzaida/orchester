@@ -10,6 +10,7 @@ use lurq::{
   },
   components::{Column, Row},
   core::Signal,
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_api::{
@@ -31,11 +32,12 @@ use crate::{
     words::{cloud_error, sharing_error},
   },
   services::Services,
+  theme::OrchesterSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
     icon::Icon,
-    notice::{Notice, NoticeTone},
     option_card::OptionCard,
   },
 };
@@ -100,12 +102,13 @@ impl Join {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let (servers, cloud) = (services.servers, services.cloud);
+    let (username, name) = suggested(&cloud);
     Self {
       confirmed: ctx.signal(Confirmed(None)),
       method: ctx.signal(Method::Code),
       code: ctx.signal(String::new()),
-      username: ctx.signal(String::new()),
-      name: ctx.signal(String::new()),
+      username: ctx.signal(username),
+      name: ctx.signal(name),
       run: ctx.future_action(move |request: Request| {
         let (servers, cloud) = (servers.clone(), cloud.clone());
         async move {
@@ -141,6 +144,31 @@ impl Join {
     self.confirmed.set(Confirmed(Some(trust)));
   }
 }
+
+/// The username and the name to start from: the signed-in account's (`ivan` and *Ivan Zaida* in `bIwte`), the
+/// username taken from the email's local part with only the characters a server accepts.
+fn suggested(cloud: &orchester_workspace::sharing::cloud::Cloud) -> (String, String) {
+  let account = match cloud.account() {
+    Ok(account) => account,
+    Err(error) => {
+      tracing::warn!(%error, "the cloud account could not be read to suggest a username");
+      None
+    }
+  };
+  account.map_or_else(Default::default, |account| {
+    let local = account.email.split('@').next().unwrap_or_default();
+    let username = local
+      .chars()
+      .filter(|char| char.is_ascii_alphanumeric() || "._-".contains(*char))
+      .take(USERNAME_MAX)
+      .collect::<String>()
+      .to_ascii_lowercase();
+    (username, account.display_name)
+  })
+}
+
+/// The longest username a server accepts.
+const USERNAME_MAX: usize = 64;
 
 /// The server joined, with the name and the username it has there now.
 async fn joined(servers: &orchester_workspace::sharing::Servers, server: ServerId) -> Result<Outcome, Said> {
@@ -318,29 +346,46 @@ fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {
       username,
     } => {
       let id = *id;
-      Notice::new(
-        "orchester-connect-joined",
-        NoticeTone::Success,
-        ctx.t_args(
-          "sharing.connect.joined.title",
-          [("server", name.as_str()), ("username", username.as_str())],
-        ),
+      // The join review the design opens next is N3's; until then it stays in place, unavailable with why.
+      let review = ActionButton::new(
+        "orchester-connect-join-review",
+        ButtonKind::Primary,
+        ctx.t("sharing.connect.joined.review"),
       )
-      .body(ctx.t("sharing.connect.joined.body"))
-      .action(
-        ActionButton::new(
-          "orchester-connect-open-joined",
-          ButtonKind::Secondary,
-          ctx.t("sharing.connect.joined.open"),
+      .icon(Icon::ArrowRight)
+      .unavailable(ctx.t("sharing.connect.joined.reviewLater"));
+      let entry = ActionButton::new(
+        "orchester-connect-open-joined",
+        ButtonKind::Secondary,
+        ctx.t("sharing.connect.joined.open"),
+      )
+      .on_click(move || navigation.replace(Route::Orchester(OrchesterView::server(id))));
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(OrchesterSpacing::FormGap.role())
+        .child(
+          Callout::new(
+            "orchester-connect-joined",
+            CalloutTone::Success,
+            ctx.t_args(
+              "sharing.connect.joined.title",
+              [("server", name.as_str()), ("username", username.as_str())],
+            ),
+          )
+          .body(ctx.t("sharing.connect.joined.body")),
         )
-        .icon(Icon::ArrowRight)
-        .on_click(move || navigation.replace(Route::Orchester(OrchesterView::server(id)))),
-      )
-      .into()
+        .child(
+          Row::new()
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Start)
+            .child(review)
+            .child(entry),
+        )
+        .into()
     }
-    Outcome::Waiting => Notice::new(
+    Outcome::Waiting => Callout::new(
       "orchester-connect-waiting",
-      NoticeTone::Warning,
+      CalloutTone::Warning,
       ctx.t("cloud.invites.approval.title"),
     )
     .icon(Icon::Hourglass)
@@ -354,9 +399,9 @@ fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {
         .flatten()
         .map(|account| account.email)
         .unwrap_or_default();
-      Notice::new(
+      Callout::new(
         "orchester-connect-not-invited",
-        NoticeTone::Warning,
+        CalloutTone::Warning,
         ctx.t_args(
           "sharing.connect.notInvitedTitle",
           [("server", server), ("email", email.as_str())],

@@ -134,16 +134,26 @@ fn project_row(ctx: &Ctx, shown: &Shown<'_>, navigation: &Navigation) -> Element
     "orchester-server-project-{}",
     shown.address.rsplit('/').next().unwrap_or_default()
   );
-  let open = shown.checkout.map(|checkout| {
-    let (navigation, project) = (navigation.clone(), checkout.id);
-    ActionButton::new(
-      format!("{id}-open"),
-      ButtonKind::Ghost,
-      ctx.t("cloud.server.projects.open"),
+  let action = match shown.checkout {
+    Some(checkout) => {
+      let (navigation, project) = (navigation.clone(), checkout.id);
+      ActionButton::new(
+        format!("{id}-open"),
+        ButtonKind::Ghost,
+        ctx.t("cloud.server.projects.open"),
+      )
+      .icon(Icon::ArrowUpRight)
+      .on_click(move || navigation.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default()))))
+    }
+    // Cloning and linking from here is a later phase's; the button stays, unavailable with what to do instead.
+    None => ActionButton::new(
+      format!("{id}-link"),
+      ButtonKind::Secondary,
+      ctx.t("cloud.server.projects.link"),
     )
-    .icon(Icon::ArrowUpRight)
-    .on_click(move || navigation.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default()))))
-  });
+    .icon(Icon::FolderPlus)
+    .unavailable(ctx.t("cloud.server.projects.linkLater")),
+  };
   let glyph = if shown.checkout.is_some() {
     Icon::FolderGit2
   } else {
@@ -161,7 +171,7 @@ fn project_row(ctx: &Ctx, shown: &Shown<'_>, navigation: &Navigation) -> Element
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(tile(glyph))
     .child(lines(ctx, &id, shown))
-    .with_children(open)
+    .child(action)
     .into()
 }
 

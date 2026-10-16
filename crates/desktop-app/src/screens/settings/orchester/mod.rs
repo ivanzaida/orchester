@@ -45,7 +45,7 @@ use orchester_workspace::{
 
 pub use self::{
   notice::InvitesNotice,
-  words::{Said, day as day_of, sharing_error as sharing_said, shown_address},
+  words::{Said, day as day_of, moment, sharing_error as sharing_said, shown_address},
 };
 
 /// The cloud account as read, for a future's answer.

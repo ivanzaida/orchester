@@ -22,9 +22,9 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
     icon::{Icon, icon},
-    notice::{Notice, NoticeTone},
     pressable::pressable,
   },
 };
@@ -111,9 +111,9 @@ pub(super) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
   }
   if !address.default {
     column = column.child(
-      Notice::new(
+      Callout::new(
         "orchester-test-cloud",
-        NoticeTone::Warning,
+        CalloutTone::Warning,
         ctx.t("cloud.advanced.testCloud.title"),
       )
       .icon(Icon::FlaskConical)

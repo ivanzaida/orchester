@@ -18,15 +18,13 @@ use orchester_workspace::sharing::{Reaching, ServerEntry};
 use super::{ConnectPage, Found, Stage, join};
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  navigation::Navigation,
-  routes::{OrchesterView, Route},
   services::Services,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
     icon::{Icon, icon},
-    notice::{Notice, NoticeTone},
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -67,14 +65,19 @@ pub(super) fn steps(ctx: &mut Ctx, page: &ConnectPage, entries: &[ServerEntry]) 
   };
   let address_title = ctx.t("sharing.connect.address.title").to_string();
   let address_content = address(ctx, page, (found.as_ref(), entries));
+  // A server this computer is already signed in to ends the flow at its address: there is nothing to trust or join.
+  let already = found.as_ref().is_some_and(|found| already_in(found, entries).is_some());
   let mut column = Column::new()
     .id("orchester-connect-steps")
     .width(Dimension::Pct(100.0))
     .child(step(
       ("orchester-connect-step-address", address_mark, &address_title),
       address_content,
-      true,
+      !already,
     ));
+  if already {
+    return column.into();
+  }
   if own || found.is_none() {
     let content = match (&found, stage.clone()) {
       (Some(found), Stage::Compare | Stage::Mismatch) => compare(ctx, page, found),
@@ -245,12 +248,22 @@ fn address(ctx: &mut Ctx, page: &ConnectPage, (found, entries): (Option<&Found>,
   }
   let allowed = page.allow_plain.get();
   let (reach, address, allow) = (page.reach.clone(), page.address.clone(), page.allow_plain.clone());
-  let mut go = ActionButton::new(
-    "orchester-connect-continue",
-    ButtonKind::Primary,
-    ctx.t("sharing.connect.continue"),
-  )
-  .icon(Icon::ArrowRight);
+  // Once nothing answered, the button tries again (`Address · nothing answers` in `ZJytn`).
+  let mut go = if failed.is_some() {
+    ActionButton::new(
+      "orchester-connect-continue",
+      ButtonKind::Secondary,
+      ctx.t("sharing.connect.tryAgain"),
+    )
+    .icon(Icon::RefreshCw)
+  } else {
+    ActionButton::new(
+      "orchester-connect-continue",
+      ButtonKind::Primary,
+      ctx.t("sharing.connect.continue"),
+    )
+    .icon(Icon::ArrowRight)
+  };
   go = if pending {
     go.loading()
   } else if needs_opt_in && !allowed {
@@ -281,13 +294,15 @@ fn address(ctx: &mut Ctx, page: &ConnectPage, (found, entries): (Option<&Found>,
   {
     column = column.child(not_set_up(ctx, &found));
   }
-  column
-    .child(
+  if failed.is_none() {
+    column = column.child(
       Text::new(&ctx.t("sharing.connect.address.hint"))
+        .id("orchester-connect-address-hint")
         .variant(ExtraTypography::Note.role())
         .width(Dimension::Pct(100.0)),
-    )
-    .into()
+    );
+  }
+  column.into()
 }
 
 /// *This address isn't encrypted* with the explicit allow (`Plain HTTP · allowed only on purpose` in `ZJytn`).
@@ -298,9 +313,9 @@ fn plain_http(ctx: &Ctx, page: &ConnectPage, address: Option<&ServerAddress>) ->
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .child(
-      Notice::new(
+      Callout::new(
         "orchester-connect-plain",
-        NoticeTone::Warning,
+        CalloutTone::Warning,
         ctx.t("sharing.connect.plain.title"),
       )
       .icon(Icon::LockKeyhole)
@@ -324,9 +339,9 @@ fn not_set_up(ctx: &mut Ctx, found: &Found) -> Element {
   let url = format!("{}/admin", found.address.as_str());
   let links = services.links;
   let label = ctx.t_args("sharing.connect.setup.open", [("host", found.address.authority())]);
-  Notice::new(
+  Callout::new(
     "orchester-connect-not-set-up",
-    NoticeTone::Warning,
+    CalloutTone::Warning,
     ctx.t("sharing.connect.setup.title"),
   )
   .icon(Icon::Settings)
@@ -343,58 +358,18 @@ fn not_set_up(ctx: &mut Ctx, found: &Found) -> Element {
   .into()
 }
 
-/// The server found (`Server found` `avDuF`): its name, address and API, and *Change*.
+/// The server found with what its trust says, and *You're already connected* where this computer is signed in.
 fn server_found(ctx: &mut Ctx, page: &ConnectPage, (found, entries): (&Found, &[ServerEntry])) -> Element {
-  let change = {
-    let stage = page.stage.clone();
-    ActionButton::new(
-      "orchester-connect-change",
-      ButtonKind::Ghost,
-      ctx.t("sharing.connect.change"),
-    )
-    .on_click(move || stage.set(Stage::Address))
-  };
-  let line = ctx.t_args(
-    "sharing.connect.found.line",
-    [
-      ("address", found.address.as_str().to_owned()),
-      ("api", found.reached.info.api_version.to_string()),
-    ],
-  );
   let mut column = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
-    .child(
-      Row::new()
-        .id("orchester-connect-found")
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inline.role()))
-        .spacing(ExtraSpacing::Inline.role())
-        .align_items(Alignment::Center)
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .rounded(RadiusSize::Md)
-        .child(icon(Icon::Server, IconSize::Md, PaletteColor::TextSecondary))
-        .child(
-          Column::new()
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .spacing(ExtraSpacing::Hair.role())
-            .child(
-              Text::new(&found.reached.info.name)
-                .id("orchester-connect-found-name")
-                .variant(ExtraTypography::Strong.role()),
-            )
-            .child(Text::new(&line).variant(ExtraTypography::Note.role()).nowrap()),
-        )
-        .child(change),
-    );
+    .child(found_row(ctx, page, found));
   match found.reached.trust {
     Reaching::System => {
       column = column.child(
-        Notice::new(
+        Callout::new(
           "orchester-connect-system-trust",
-          NoticeTone::Success,
+          CalloutTone::Success,
           ctx.t_args(
             "sharing.connect.system.title",
             [("server", found.reached.info.name.as_str())],
@@ -416,37 +391,70 @@ fn server_found(ctx: &mut Ctx, page: &ConnectPage, (found, entries): (&Found, &[
     }
     Reaching::Plain(PlainHttp::NotAllowed) | Reaching::OwnCertificate(_) => {}
   }
-  column = column.with_children(already_connected(ctx, found, entries));
+  if let Some(entry) = already_in(found, entries) {
+    column = column.child(
+      Callout::new(
+        "orchester-connect-already",
+        CalloutTone::Info,
+        ctx.t_args(
+          "sharing.connect.already.title",
+          [("server", entry.stored.name.as_str())],
+        ),
+      )
+      .body(ctx.t("sharing.connect.already.body")),
+    );
+  }
   column.into()
 }
 
-/// *You're already connected to Kontur team*, when this computer is signed in there.
-fn already_connected(ctx: &mut Ctx, found: &Found, entries: &[ServerEntry]) -> Option<Element> {
-  let entry = entries
+/// The server found (`Server found` `avDuF`): its name, address and API, and *Change*.
+fn found_row(ctx: &Ctx, page: &ConnectPage, found: &Found) -> Row {
+  let change = {
+    let stage = page.stage.clone();
+    ActionButton::new(
+      "orchester-connect-change",
+      ButtonKind::Ghost,
+      ctx.t("sharing.connect.change"),
+    )
+    .on_click(move || stage.set(Stage::Address))
+  };
+  let line = ctx.t_args(
+    "sharing.connect.found.line",
+    [
+      ("address", found.address.as_str().to_owned()),
+      ("api", found.reached.info.api_version.to_string()),
+    ],
+  );
+  Row::new()
+    .id("orchester-connect-found")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inline.role()))
+    .spacing(ExtraSpacing::Inline.role())
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .child(icon(Icon::Server, IconSize::Md, PaletteColor::TextSecondary))
+    .child(
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Hair.role())
+        .child(
+          Text::new(&found.reached.info.name)
+            .id("orchester-connect-found-name")
+            .variant(ExtraTypography::Strong.role()),
+        )
+        .child(Text::new(&line).variant(ExtraTypography::Note.role()).nowrap()),
+    )
+    .child(change)
+}
+
+/// The server in the list at `found`'s address that this computer is signed in to (`Already connected` in `ZJytn`).
+fn already_in<'a>(found: &Found, entries: &'a [ServerEntry]) -> Option<&'a ServerEntry> {
+  entries
     .iter()
-    .find(|entry| entry.address == found.address && entry.in_use())?;
-  let navigation = Navigation::of(ctx);
-  let id = entry.stored.id;
-  Some(
-    Notice::new(
-      "orchester-connect-already",
-      NoticeTone::Info,
-      ctx.t_args(
-        "sharing.connect.already.title",
-        [("server", entry.stored.name.as_str())],
-      ),
-    )
-    .body(ctx.t("sharing.connect.already.body"))
-    .action(
-      ActionButton::new(
-        "orchester-connect-open-entry",
-        ButtonKind::Secondary,
-        ctx.t("sharing.connect.already.open"),
-      )
-      .on_click(move || navigation.replace(Route::Orchester(OrchesterView::server(id)))),
-    )
-    .into(),
-  )
+    .find(|entry| entry.address == found.address && entry.in_use())
 }
 
 /// *Compare the check code*: the code, *It matches* (a person only) and *It doesn't match*.
@@ -469,9 +477,9 @@ fn compare(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Element {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Md)
       .child(
-        Notice::new(
+        Callout::new(
           "orchester-connect-mismatch",
-          NoticeTone::Danger,
+          CalloutTone::Danger,
           ctx.t("sharing.connect.compare.notConnected"),
         )
         .icon(Icon::ShieldAlert)

@@ -37,7 +37,13 @@ pub(super) fn frame(id: &str) -> Column {
 }
 
 /// The header (`S4iAdc`): the glyph, the title with its state and facts, and the actions at the end.
-pub(super) fn header(ctx: &Ctx, id: &str, (glyph, title, look): (Icon, &str, &Look), facts: &[String]) -> Row {
+/// A fact in a header's line: words, or an address or an email in mono (`TKeDb` in `Cu20b`).
+pub(super) enum Fact {
+  Plain(String),
+  Mono(String),
+}
+
+pub(super) fn header(ctx: &Ctx, id: &str, (glyph, title, look): (Icon, &str, &Look), facts: &[Fact]) -> Row {
   let separator = ctx.t("cloud.factSeparator");
   let mut line = Row::new()
     .id(format!("{id}-facts"))
@@ -47,7 +53,10 @@ pub(super) fn header(ctx: &Ctx, id: &str, (glyph, title, look): (Icon, &str, &Lo
     if index > 0 {
       line = line.child(Text::new(&separator).variant(ExtraTypography::Note.role()));
     }
-    line = line.child(Text::new(fact).variant(ExtraTypography::Note.role()).nowrap());
+    line = line.child(match fact {
+      Fact::Plain(text) => Text::new(text).variant(ExtraTypography::Note.role()).nowrap(),
+      Fact::Mono(text) => Text::new(text).variant(ExtraTypography::MonoKey.role()).nowrap(),
+    });
   }
   let text = Column::new()
     .flex(1.0)
