@@ -31,7 +31,8 @@ interface RowProps {
 
 /**
  * The role select sends its form as soon as it changes; without script its *Change* button does. It stays the
- * browser's own select, and what the chosen role means is under it, as the role menu says it (`KagFB`).
+ * browser's own select; what the chosen role means, as the role menu says it (`KagFB`), is its accessible
+ * description only: a `hidden` line it names with `aria-describedby`, so the row keeps its drawn height (`Mhudf`).
  */
 function RoleForm({ props, action }: { props: RowProps; action: (form: FormData) => void }) {
   const { member } = props;
@@ -45,27 +46,25 @@ function RoleForm({ props, action }: { props: RowProps; action: (form: FormData)
   const hint = `role-hint-${member.user.id}`;
   const words = { project: props.project.name };
   return (
-    <div className={styles.roleCell}>
-      <form action={action} onSubmit={submit} className={styles.roleForm}>
-        <CsrfField token={props.csrf} />
-        <Hidden name="op" value="role" />
-        <Hidden name="project" value={props.project.id} />
-        <Hidden name="user" value={member.user.id} />
-        <Select name="role" size="row" hideLabel label={t("members.roleOf", { name: member.user.displayName })}
-          value={role} describedBy={hint}
-          options={[{ value: "owner", label: t("common.owner") }, { value: "member", label: t("common.member") }]}
-          onChange={(event) => {
-            setRole(event.currentTarget.value);
-            event.currentTarget.form?.requestSubmit();
-          }} />
-        <noscript>
-          <Submit kind="ghost" row label={t("members.change")} busyLabel={t("members.changing")} />
-        </noscript>
-      </form>
-      <span id={hint} className={styles.roleHint}>
+    <form action={action} onSubmit={submit} className={styles.roleForm}>
+      <CsrfField token={props.csrf} />
+      <Hidden name="op" value="role" />
+      <Hidden name="project" value={props.project.id} />
+      <Hidden name="user" value={member.user.id} />
+      <Select name="role" size="row" hideLabel label={t("members.roleOf", { name: member.user.displayName })}
+        value={role} describedBy={hint}
+        options={[{ value: "owner", label: t("common.owner") }, { value: "member", label: t("common.member") }]}
+        onChange={(event) => {
+          setRole(event.currentTarget.value);
+          event.currentTarget.form?.requestSubmit();
+        }} />
+      <span id={hint} hidden>
         {role === "owner" ? t("members.ownerMeans", words) : t("members.memberMeans", words)}
       </span>
-    </div>
+      <noscript>
+        <Submit kind="ghost" row label={t("members.change")} busyLabel={t("members.changing")} />
+      </noscript>
+    </form>
   );
 }
 
