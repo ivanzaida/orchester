@@ -85,7 +85,8 @@
         "description": "Runs the task step by step. Only published pipelines are listed.",
         "placeholder": "Choose a pipeline",
         "none": "No published pipelines in this project",
-        "open": "Open Pipelines ↗"
+        "open": "Open Pipelines ↗",
+        "missingKept": "Saving keeps it as the task's pipeline; choosing one here replaces it for every member."
       },
       "budget": {
         "label": "Run budget",

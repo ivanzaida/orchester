@@ -1,5 +1,5 @@
-//! *Link to Kontur…* and its questions in place (`N9NFio`): the mismatch warning with *Choose another project* and
-//! *Link anyway…*, then what goes up with *Link and upload*, and why a link did not go ahead.
+//! *Link to Kontur…* and its question in place (`N9NFio`): the mismatch warning with *Choose another project* and
+//! *Link anyway…*, which opens what goes up on its page (`KSnOW`), and why a link did not go ahead.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -14,7 +14,7 @@ use crate::{
   routes::{OrchesterView, Route},
   screens::{
     project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::{Said, shown_address},
+    settings::orchester::Said,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -25,15 +25,13 @@ use crate::{
   },
 };
 
-/// *Link to Kontur…* and *Link and upload*, which only a person presses.
+/// *Link to Kontur…*, which only a person presses.
 const LINK: &str = "sharing-link-button";
-const CONFIRM: &str = "sharing-link-confirm";
 
 impl Link {
   /// *Link to Kontur…* and, once pressed, the questions in place and what came of them.
   pub(super) fn link_row(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
     let resolving = self.resolve.state().get();
-    let linking = self.link.state().get();
     let target = resolving
       .data
       .clone()
@@ -42,18 +40,11 @@ impl Link {
       .width(Dimension::Px(CONTROL_WIDTH))
       .spacing(SpacingSize::Sm);
     control = match (self.asking.get(), &target) {
-      (Asking::Mismatch, Some(target)) => control.child(self.mismatch(ctx, target)),
-      (Asking::Upload, Some(target)) => control.child(self.upload(ctx, target, props, linking.is_pending())),
+      (Asking::Mismatch, Some(target)) => control.child(self.mismatch(ctx, target, props)),
       _ => control.child(self.link_button(ctx, self.choice(props, listed), resolving.is_pending())),
     };
-    control = control
-      .with_children(self.person.reason(ctx, LINK))
-      .with_children(self.person.reason(ctx, CONFIRM));
-    let problem = resolving
-      .error
-      .clone()
-      .filter(|_| !resolving.is_pending())
-      .or_else(|| linking.error.clone().filter(|_| !linking.is_pending()));
+    control = control.with_children(self.person.reason(ctx, LINK));
+    let problem = resolving.error.clone().filter(|_| !resolving.is_pending());
     if let Some(problem) = problem {
       control = control.child(problem_part(ctx, &problem));
     }
@@ -102,7 +93,7 @@ impl Link {
   }
 
   /// *This checkout's origin is github.com/acme/kontur* with *Choose another project* and *Link anyway…*.
-  fn mismatch(&self, ctx: &Ctx, target: &Target) -> Element {
+  fn mismatch(&self, ctx: &Ctx, target: &Target, props: &Props) -> Element {
     let RemoteMatch::Different { checkout, hint } = &target.0.remote else {
       return Column::new().into();
     };
@@ -116,13 +107,16 @@ impl Link {
       asking.set(Asking::Nothing);
       picked.set(Picked(None));
     });
-    let asking = self.asking.clone();
+    let (asking, page, upload) = (self.asking.clone(), props.page.clone(), target.clone());
     let anyway = ActionButton::new(
       "sharing-link-anyway",
       ButtonKind::Ghost,
       ctx.t("sharing.link.mismatch.anyway"),
     )
-    .on_click(move || asking.set(Asking::Upload));
+    .on_click(move || {
+      asking.set(Asking::Nothing);
+      page.set(upload.upload());
+    });
     let body = ctx.t_args(
       "sharing.link.mismatch.body",
       [
@@ -140,63 +134,6 @@ impl Link {
     .body(body)
     .action(another)
     .action(anyway)
-    .into()
-  }
-
-  /// What goes up, with *Link and upload N tasks* and *Cancel*.
-  fn upload(&self, ctx: &Ctx, target: &Target, props: &Props, pending: bool) -> Element {
-    let count = props.facts.tasks.to_string();
-    // The linked project takes the server project's key (`docs/architecture/server.md`, *Upload and numbers*).
-    let (local, key) = (props.project.open.project.key().as_str(), target.0.project.key.as_str());
-    let body = ctx.t_args(
-      if local == key {
-        "sharing.link.upload.body"
-      } else {
-        "sharing.link.upload.bodyRekeyed"
-      },
-      [
-        ("count", count.clone()),
-        ("key", key.to_owned()),
-        ("local", local.to_owned()),
-        ("address", shown_address(&target.0.project.address).to_owned()),
-      ],
-    );
-    let (link, chosen, key) = (self.link.clone(), target.clone(), self.key.get());
-    let person = self.person.clone();
-    let confirm = ActionButton::new(
-      CONFIRM,
-      ButtonKind::Primary,
-      ctx.t_args("sharing.link.upload.confirm", [("count", count)]),
-    )
-    .icon(Icon::Upload);
-    let confirm = if pending {
-      confirm.loading()
-    } else {
-      confirm.on_click(move || {
-        if person.allows(CONFIRM) {
-          link.run((chosen.clone(), key.clone()));
-        }
-      })
-    };
-    let asking = self.asking.clone();
-    let cancel = ActionButton::new(
-      "sharing-link-cancel",
-      ButtonKind::Ghost,
-      ctx.t("sharing.link.upload.cancel"),
-    )
-    .on_click(move || asking.set(Asking::Nothing));
-    Callout::new(
-      "sharing-upload",
-      CalloutTone::Info,
-      ctx.t_args(
-        "sharing.link.upload.title",
-        [("project", target.0.project.name.as_str())],
-      ),
-    )
-    .icon(Icon::Link)
-    .body(body)
-    .action(confirm)
-    .action(cancel)
     .into()
   }
 }

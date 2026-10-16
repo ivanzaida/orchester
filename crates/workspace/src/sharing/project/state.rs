@@ -2,13 +2,13 @@
 //! (design 10.42, 10.44, decision 16): local, shared and writable, or shared and read-only because
 //! the server cannot be reached, nobody is signed in to it, or the person is no longer a member.
 
-use std::time::Instant;
+use std::{path::Path, time::Instant};
 
 use orchester_api::client::ServerAddress;
 use orchester_core::{id::UserId, time::Timestamp};
-use orchester_store::SharingLink;
+use orchester_store::{ProjectDb, SharingLink};
 
-use crate::sharing::{Connection, ServerEntry};
+use crate::sharing::{Connection, ServerEntry, Servers, SharingError};
 
 /// A shared project's link with what the desktop knows of its server now.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,6 +22,8 @@ pub struct ProjectSharing {
   /// The person's username there, for asking an owner to add them again.
   pub username: Option<String>,
   pub admin: bool,
+  /// The server presents a certificate this computer does not trust: nothing is sent until a person compares it.
+  pub certificate_changed: bool,
 }
 
 /// Whether the task list takes changes, and why not.
@@ -59,6 +61,7 @@ impl ProjectSharing {
       admin: entry
         .and_then(|entry| entry.stored.account.as_ref())
         .is_some_and(|account| account.admin),
+      certificate_changed: entry.is_some_and(|entry| entry.certificate_changed),
       link,
     }
   }
@@ -92,4 +95,17 @@ impl ProjectSharing {
 /// The access of a project with `sharing`: a local project's list always takes changes.
 pub fn access(sharing: Option<&ProjectSharing>) -> TaskListAccess {
   sharing.map_or(TaskListAccess::Writable, ProjectSharing::access)
+}
+
+impl Servers {
+  /// How the task list of the project at `repo_root` stands with its server; `None` while the project is local.
+  /// Blocking.
+  pub fn project_sharing(&self, repo_root: &Path) -> Result<Option<ProjectSharing>, SharingError> {
+    let Some(link) = ProjectDb::open(repo_root)?.sharing()? else {
+      return Ok(None);
+    };
+    let entries = self.entries()?;
+    let entry = entries.iter().find(|entry| entry.stored.id == link.server);
+    Ok(Some(ProjectSharing::new(link, entry)))
+  }
 }

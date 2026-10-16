@@ -2,11 +2,16 @@
 //! project's task list lives. A local project links to a project on a connected team server, chosen from the
 //! person's projects there or by its address, typed or prefilled from `orchester.toml` and contacted only after the
 //! person confirms; its checkout's `origin` is compared with the project's repository hint, and a mismatch warns and
-//! lets the person go on ([`link`]). A linked project shows where it lives and offers *Leave* ([`linked`]); its
-//! members, *Make local* and the discovery file are N2's.
+//! lets the person go on ([`link`]). What the link uploads is confirmed on a page of its own (`KSnOW`, [`upload`]). A
+//! linked project shows where it lives, its discovery file, its members read-only with *Manage members and invites*
+//! (the server admin, in the browser), *Make local* and *Leave* ([`linked`]).
 
+mod confirm;
 mod link;
 mod linked;
+mod make_local;
+mod members;
+mod upload;
 
 use lurq::{
   app::{
@@ -15,6 +20,7 @@ use lurq::{
   },
   components::Column,
   core::Signal,
+  layout::layout_kind::ScrollState,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{repository::RepositoryIdentity, store::TaskStore};
@@ -24,15 +30,16 @@ use orchester_workspace::{
   sharing::{
     ServerEntry, Servers,
     project::{
-      discovery::{self, ProjectDiscovery},
+      discovery::{self, LinkedDiscovery, ProjectDiscovery},
       link::checkout_origin,
     },
   },
 };
 
+pub(super) use self::upload::{LinkPage, link_page};
 use super::{TabProps, page};
 use crate::{
-  screens::settings::orchester::{Said, follow},
+  screens::settings::orchester::{Said, follow, follow_shared},
   services::Services,
   ui::state::{load_error, loading},
 };
@@ -48,6 +55,12 @@ pub(super) struct Facts {
   pub discovery: ProjectDiscovery,
   /// The local tasks, which a link to an empty project uploads with their numbers.
   pub tasks: usize,
+  /// A linked project's `orchester.toml` against its address.
+  pub linked_discovery: Option<LinkedDiscovery>,
+  /// A linked project's server as the list holds it, signed in to or not; `None` once it left the list.
+  pub linked: Option<ServerEntry>,
+  /// A linked project's repository hint as last read, and when, for while the server doesn't say.
+  pub cached_hint: Option<(Option<RepositoryIdentity>, orchester_core::time::Timestamp)>,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -55,29 +68,45 @@ impl DevtoolsInspectable for Facts {}
 impl Facts {
   /// The linked project's server, when it is still in the list.
   pub fn linked_server(&self) -> Option<&ServerEntry> {
-    let link = self.link.as_ref()?;
-    self.servers.iter().find(|entry| entry.stored.id == link.server)
+    self.linked.as_ref()
   }
 }
 
 pub(super) struct Sharing {
   /// Counts *Try again*, a link and a leave, each of which reads the tab again.
   revision: Signal<u64>,
+  /// What *Make local* did, said over the local page until the person dismisses it.
+  made_local: Signal<make_local::Made>,
+  /// Opened for *Make local*'s question, the page scrolls to it once it shows.
+  scroll: ScrollState,
+  scrolled: Signal<bool>,
 }
 
 impl Component for Sharing {
   type Props = TabProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let (made_local, scroll) = (ctx.signal(make_local::Made::default()), ScrollState::new());
+    // What Make local did is said at the top of the page, which its question had scrolled to the bottom of.
+    let top = scroll.clone();
+    ctx.watch(&made_local, move |made| {
+      if made.0.is_some() {
+        top.scroll_to_top_pending();
+      }
+    });
     Self {
       revision: ctx.signal(0),
+      made_local,
+      scroll,
+      scrolled: ctx.signal(false),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let services = Services::of(ctx);
-    let revision = follow(ctx, (&services.servers, &services.cloud)) + self.revision.get();
+    let revision =
+      follow(ctx, (&services.servers, &services.cloud)) + follow_shared(ctx, &services.servers) + self.revision.get();
     let root = props.project.open.repo_root.clone();
     let state = ctx
       .future(
@@ -91,20 +120,30 @@ impl Component for Sharing {
       .state()
       .get();
     let content = match (state.data, state.error) {
-      (Some(facts), _) if facts.link.is_some() => ctx.mount_keyed::<linked::Linked>(
-        "project-settings-sharing-linked",
-        linked::Props {
-          project: props.project,
-          facts,
-          revision: self.revision.clone(),
-        },
-      ),
+      (Some(facts), _) if facts.link.is_some() => {
+        if props.make_local && !self.scrolled.get() {
+          // Make local is the page's last part: its question is at the bottom.
+          self.scrolled.set(true);
+          self.scroll.scroll_to_bottom_pending();
+        }
+        ctx.mount_keyed::<linked::Linked>(
+          "project-settings-sharing-linked",
+          linked::Props {
+            project: props.project,
+            facts,
+            revision: self.revision.clone(),
+            made_local: self.made_local.clone(),
+            ask_make_local: props.make_local,
+          },
+        )
+      }
       (Some(facts), _) => ctx.mount_keyed::<link::Link>(
         "project-settings-sharing-link",
         link::Props {
           project: props.project,
           facts,
-          revision: self.revision.clone(),
+          page: props.link_page,
+          made_local: self.made_local.clone(),
         },
       ),
       (None, Some(reason)) => {
@@ -118,7 +157,7 @@ impl Component for Sharing {
       }
       (None, None) => loading("project-settings-sharing-loading", &ctx.t("sharing.reading")).into(),
     };
-    page::scroll(Column::new().width(Dimension::Pct(100.0)).child(content))
+    page::scroll_with(Column::new().width(Dimension::Pct(100.0)).child(content), &self.scroll)
   }
 }
 
@@ -131,17 +170,28 @@ fn read(
   let db = ProjectDb::open(root).map_err(local)?;
   let link = db.sharing().map_err(local)?;
   let tasks = db.tasks().map_err(local)?.len();
-  let servers = servers
-    .entries()
-    .map_err(|_| Said::new("cloud.errors.local"))?
-    .into_iter()
-    .filter(ServerEntry::in_use)
-    .collect();
+  // A hint that no longer parses is left out; the row then waits for the server's.
+  let cached_hint = db
+    .remote_hint()
+    .map_err(local)?
+    .map(|(hint, checked)| (hint.and_then(|hint| RepositoryIdentity::parse(&hint).ok()), checked));
+  let linked_discovery = link
+    .as_ref()
+    .and_then(|link| link.address.as_deref())
+    .map(|address| discovery::inspect_linked(programs, root, address));
+  let entries = servers.entries().map_err(|_| Said::new("cloud.errors.local"))?;
+  let linked = link
+    .as_ref()
+    .and_then(|link| entries.iter().find(|entry| entry.stored.id == link.server).cloned());
+  let servers = entries.into_iter().filter(ServerEntry::in_use).collect();
   Ok(Facts {
     link,
     servers,
     origin: checkout_origin(programs, root),
     discovery: discovery::project(root),
     tasks,
+    linked_discovery,
+    linked,
+    cached_hint,
   })
 }

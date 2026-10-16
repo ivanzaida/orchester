@@ -14,6 +14,11 @@ use super::{
   query::{Params, with_query},
 };
 
+/// Project settings' Sharing tab, and what it asks once open.
+const SHARING: &str = "sharing";
+const ASK: &str = "ask";
+const MAKE_LOCAL: &str = "make-local";
+
 /// A screen of one project, with what its path names besides the project.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ProjectPage {
@@ -52,6 +57,11 @@ pub enum ProjectPage {
   /// Edit MCP server, the server's id.
   EditConnection(ConnectionId),
   Settings,
+  /// Project settings on its Sharing tab; `make_local` opens *Make local*'s question there (the task list's
+  /// *no longer a member* notice).
+  Sharing {
+    make_local: bool,
+  },
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
 }
@@ -113,7 +123,7 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings => Screen::ProjectSettings,
+      Self::Settings | Self::Sharing { .. } => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
     }
   }
@@ -154,6 +164,10 @@ impl ProjectPage {
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
+      Self::Sharing { make_local } => with_query(
+        format!("{project_root}/{SETTINGS}/{SHARING}"),
+        &[(ASK, make_local.then_some(MAKE_LOCAL))],
+      ),
       page => project_screen_path(project_root, page.screen()),
     }
   }
@@ -164,6 +178,14 @@ impl ProjectPage {
       [] => Ok(Self::Overview(params.take_or_default(TAB, OverviewTab::from_name)?)),
       [ORCHESTRATOR] => OrchestratorChat::take(params).map(Self::Orchestrator),
       [ORCHESTRATOR, SETTINGS] => Ok(Self::OrchestratorSettings),
+      [SETTINGS, SHARING] => match params.take(ASK)?.as_deref() {
+        None => Ok(Self::Sharing { make_local: false }),
+        Some(MAKE_LOCAL) => Ok(Self::Sharing { make_local: true }),
+        Some(value) => Err(RouteError::InvalidParam {
+          param: ASK.to_owned(),
+          value: value.to_owned(),
+        }),
+      },
       [TASKS] => TaskList::take(params).map(Self::Tasks),
       [TASKS, NEW] => Ok(Self::NewTask),
       [TASKS, key, rest @ ..] => {

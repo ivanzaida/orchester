@@ -89,6 +89,8 @@ const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 /// A file of the code viewer: its path is the rest of the address, however many segments it has.
 const FILE_PATTERN: &str = "/project/:project/files/**path";
 const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
+/// Project settings open on Sharing.
+const SHARING_PATTERN: &str = "/project/:project/settings/sharing";
 /// A task's path without its tab, which reads as its Summary.
 const TASK_SUMMARY_PATTERN: &str = "/project/:project/tasks/:key";
 /// All projects' *Usage* tab, a path of its own under the home screen.
@@ -139,6 +141,7 @@ impl Route {
       Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Sharing { .. }) => SHARING_PATTERN.to_owned(),
       Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }

@@ -152,3 +152,64 @@ pub fn write(repo_root: &Path, address: &str) -> Result<(), DiscoveryError> {
     _ => DiscoveryError::Write(error.to_string()),
   })
 }
+
+/// What the repository's `orchester.toml` says against the project linked to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiscoveryState {
+  /// There is none: linking can write one naming the project.
+  Absent,
+  /// It names this project already.
+  Names,
+  /// It names something else, cannot be read or is a link: it is left as it is.
+  Other,
+}
+
+/// What the `orchester.toml` of the repository at `repo_root` says against the project at `address`. Blocking;
+/// nothing is contacted.
+pub fn discovery_state(repo_root: &Path, address: &str) -> DiscoveryState {
+  let path = repo_root.join(FILE);
+  if std::fs::symlink_metadata(&path).is_ok_and(|found| found.file_type().is_symlink()) {
+    return DiscoveryState::Other;
+  }
+  let this = ProjectAddress::parse(address).map(|address| address.to_text()).ok();
+  match project(repo_root) {
+    ProjectDiscovery::Project(found) if Some(found.to_text()) == this => DiscoveryState::Names,
+    ProjectDiscovery::Absent if !path.exists() => DiscoveryState::Absent,
+    _ => DiscoveryState::Other,
+  }
+}
+
+/// The discovery file of a linked project, as Sharing shows it (`Discovery file` in `L5o9Xy`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LinkedDiscovery {
+  pub state: DiscoveryState,
+  /// When the file was last written.
+  pub written_at: Option<Timestamp>,
+  /// Whether git has the file as committed; `None` when git could not say.
+  pub committed: Option<bool>,
+  /// When it was last committed, as git's log says.
+  pub committed_at: Option<Timestamp>,
+}
+
+/// The discovery file of the repository at `repo_root` against the linked project at `address`. Blocking; nothing is
+/// contacted.
+pub fn inspect_linked(programs: &Programs, repo_root: &Path, address: &str) -> LinkedDiscovery {
+  let file = inspect(programs, repo_root);
+  let log = Command::new(Path::new("git"), ["log", "-1", "--format=%ct", "--", FILE])
+    .with_current_dir(repo_root)
+    .with_env("LC_ALL", "C");
+  // A log git cannot give leaves the commit's time unknown; the row then says only whether it is committed.
+  let committed_at = programs
+    .runner()
+    .run(&log)
+    .ok()
+    .filter(|output| output.success())
+    .and_then(|output| output.stdout.trim().parse::<i64>().ok())
+    .map(|seconds| Timestamp::from_unix_millis(seconds.saturating_mul(1000)));
+  LinkedDiscovery {
+    state: discovery_state(repo_root, address),
+    written_at: file.written_at,
+    committed: file.committed.map(|clean| clean && committed_at.is_some()),
+    committed_at,
+  }
+}
