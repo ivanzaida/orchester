@@ -90,6 +90,11 @@ impl CloudError {
     )
   }
 
+  /// Whether the cloud took the password but asks for a two-factor code, which the app does not ask for yet.
+  pub fn two_factor_required(&self) -> bool {
+    matches!(self, Self::Client(ClientError::TwoFactorRequired))
+  }
+
   /// Why the cloud ended this computer's token, and when (milliseconds), when it refused it saying so.
   pub fn ended(&self) -> Option<(orchester_api::cloud::SessionEnd, Option<i64>)> {
     match self {

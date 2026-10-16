@@ -53,6 +53,10 @@ pub enum ClientError {
     retry_after: Option<u64>,
     ended: Option<(SessionEnd, Option<i64>)>,
   },
+  /// Orchester Cloud took the password, but the account has two-factor authentication on: the sign-in needs a code
+  /// (`202` with a challenge, `docs/cloud-api.md`), which this client does not ask for yet.
+  #[error("the account uses two-factor authentication")]
+  TwoFactorRequired,
   /// The HTTP client could not be set up, e.g. the operating system's certificate store failed.
   #[error("the HTTP client cannot be set up")]
   Setup,

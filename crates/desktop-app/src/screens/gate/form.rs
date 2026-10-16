@@ -64,6 +64,8 @@ pub(super) enum Refusal {
   },
   /// *Signing in needs the internet once*: the cloud did not answer then.
   Unreachable(Timestamp),
+  /// The account has two-factor authentication on, and the app cannot ask for its code yet.
+  TwoFactor,
   Other(Said),
 }
 
@@ -83,6 +85,7 @@ impl Refusal {
           until: Timestamp::from_unix_millis(now.unix_millis().saturating_add(millis)),
         }
       }
+      _ if error.two_factor_required() => Self::TwoFactor,
       _ if error.unanswered() => Self::Unreachable(now),
       _ => Self::Other(cloud_said(error)),
     }
@@ -318,6 +321,10 @@ fn refusal_part(ctx: &mut Ctx, form: &Form, (refusal, host): (&Refusal, &str)) -
       [("host", host.to_owned()), ("time", display::clock(*at))],
     ))
     .into(),
+    Refusal::TwoFactor => Callout::new("gate-two-factor", CalloutTone::Warning, ctx.t("gate.twoFactor.title"))
+      .icon(Icon::ShieldAlert)
+      .body(ctx.t("gate.twoFactor.body"))
+      .into(),
     Refusal::Other(said) => field_error("gate-failed", &said.text(ctx)).into(),
   }
 }

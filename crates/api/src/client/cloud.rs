@@ -45,9 +45,14 @@ impl CloudClient {
   }
 
   /// `POST /auth/sessions`: signs this computer in with the person's email and password; the device token in the
-  /// answer is shown once.
+  /// answer is shown once. An account with two-factor authentication answers a challenge (`202`) instead, which is
+  /// [`ClientError::TwoFactorRequired`]: the code step is not built here yet.
   pub async fn sign_in(&self, request: &CloudSignIn) -> Result<CloudSignedIn, ClientError> {
-    call(self.json(Method::POST, "/auth/sessions", request)?).await
+    let response = answered(self.json(Method::POST, "/auth/sessions", request)?).await?;
+    if response.status() == StatusCode::ACCEPTED {
+      return Err(ClientError::TwoFactorRequired);
+    }
+    read(response).await
   }
 
   /// `DELETE /auth/sessions/current`: ends the device token `device`.
@@ -144,7 +149,11 @@ async fn send(request: RequestBuilder) -> Result<(), ClientError> {
 
 /// Sends `request` and reads the cloud's JSON answer, or its refusal.
 async fn call<T: DeserializeOwned>(request: RequestBuilder) -> Result<T, ClientError> {
-  let response = answered(request).await?;
+  read(answered(request).await?).await
+}
+
+/// The cloud's JSON answer of a success.
+async fn read<T: DeserializeOwned>(response: reqwest::Response) -> Result<T, ClientError> {
   let code = response.status().as_u16();
   let bytes = response.bytes().await.map_err(|error| ClientError::transport(&error))?;
   // An answer that is not the contract is not Orchester Cloud; nothing of it is kept.

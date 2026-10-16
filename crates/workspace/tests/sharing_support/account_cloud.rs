@@ -39,6 +39,8 @@ pub const UNCONFIRMED: &str = "unconfirmed@example.com";
 /// Signs in as an email whose sign-in is paused: `429 rate_limited`, for [`PAUSED_SECONDS`].
 pub const PAUSED: &str = "paused@example.com";
 pub const PAUSED_SECONDS: u64 = 900;
+/// Signs in with any password as an account with two-factor authentication: `202` with a challenge.
+pub const TWO_FACTOR: &str = "two.factor@example.com";
 
 /// How the check of a sign-in (`GET /me`) is answered instead of the account.
 #[derive(Clone, Copy, Debug)]
@@ -426,6 +428,10 @@ fn sign_in(body: &str) -> Answer {
   }
   if request["email"] == PAUSED {
     return ("429 Too Many Requests", Some(error("rate_limited")));
+  }
+  if request["email"] == TWO_FACTOR {
+    let challenge = json!({"challenge": format!("orcm_{}", "0".repeat(64)), "expires_at": now() * 1000 + 300_000});
+    return ("202 Accepted", Some(challenge));
   }
   let found = ACCOUNTS.iter().find(|account| request["email"] == account.email);
   let Some(account) = found.filter(|_| request["password"] == PASSWORD) else {

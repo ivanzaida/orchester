@@ -1,10 +1,11 @@
 //! The desktop's calls to Orchester Cloud (N1: `orchester-api`'s `CloudClient`, which `orchester-workspace`'s
 //! `sharing::cloud` and so Settings › Orchester use) against this cloud on loopback: an account confirmed through the
 //! API signs a desktop in, a wrong password is refused, a new account has no invites and no servers, and signing out
-//! ends the token. Accepting an invite with a token that names it is in `accept.rs`; the whole flow, through the app,
-//! in `crates/desktop-app/tests/orchester_cloud`. The desktop's own handling (the keychain, the account row)
-//! is tested in `crates/workspace/tests/cloud_account.rs`; neither the workspace nor the app can be built into this
-//! binary without breaking clippy's runs (`tools/check.ps1`).
+//! ends the token. An account with two-factor authentication is told apart (`ClientError::TwoFactorRequired`).
+//! Accepting an invite with a token that names it is in `accept.rs`; the whole flow through the app is in
+//! `crates/desktop-app/tests/orchester_cloud`. The desktop's own handling (the keychain, the account row) is tested in
+//! `crates/workspace/tests/cloud_account.rs`; neither the workspace nor the app can be built into this binary without
+//! breaking clippy's runs (`tools/check.ps1`).
 
 use orchester_api::{
   Credential,
@@ -55,6 +56,13 @@ pub async fn desktop_signs_in_and_out_with_a_confirmed_account() {
 
   assert!(client.invites(&token).await.expect("invites").is_empty());
   assert!(client.servers(&token).await.expect("servers").is_empty());
+
+  cloud.enable_two_factor(signed.token.expose()).await;
+  let challenged = client.sign_in(&sign_in(email, PASSWORD)).await;
+  assert!(
+    matches!(challenged, Err(ClientError::TwoFactorRequired)),
+    "a challenge is said as such, not as another server: {challenged:?}"
+  );
 
   client.sign_out(&token).await.expect("sign out");
   let after = client.me(&token).await;

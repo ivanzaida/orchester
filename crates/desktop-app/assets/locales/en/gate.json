@@ -34,6 +34,10 @@
       "body": "Orchester Cloud can't be reached from this computer. Connect to the internet, then sign in. After this first sign-in, Orchester works offline.",
       "when": "{{host}} didn't answer · {{time}}"
     },
+    "twoFactor": {
+      "title": "This account uses two-factor authentication",
+      "body": "The password is right, but this account also asks for a code, and Orchester can't ask for it yet: the code step is coming. Until then, sign in with an account without two-factor authentication."
+    },
     "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
     "footer": {
       "offline": "Signing in needs the internet once. After that, Orchester works offline and checks your sign-in when it can reach Orchester Cloud.",

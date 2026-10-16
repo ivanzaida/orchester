@@ -53,6 +53,19 @@ fn gate_asks_to_confirm_the_email_first() {
 }
 
 #[test]
+fn gate_says_an_account_with_two_factor_cannot_sign_in_here_yet() {
+  let mut window = signed_out();
+  use_stand_in(&mut window);
+  sign_in(&mut window, (account_cloud::TWO_FACTOR, "any password at all"));
+  shows(&mut window, "gate-two-factor");
+  assert_eq!(
+    window.text("gate-two-factor-title"),
+    "This account uses two-factor authentication"
+  );
+  assert!(has(&mut window, "screen-sign-in-gate"), "still signed out");
+}
+
+#[test]
 fn gate_pauses_an_email_with_too_many_attempts() {
   let mut window = signed_out();
   use_stand_in(&mut window);

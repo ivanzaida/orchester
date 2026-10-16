@@ -304,7 +304,8 @@ confirms it: `POST /me/two-factor/confirm { code }` turns it on, answers the rec
 that confirmed it a two-factor session. Other devices stay signed in as they were, without it.
 
 **Turning it off** takes the password and a code from the app or a recovery code (`DELETE /me/two-factor`). It deletes
-the authenticator with its recovery codes, and every device stops being a two-factor session. **New recovery codes**
+the authenticator with its recovery codes, and every device stops being a two-factor session. No token ends with it,
+so it records no `reason` ([Why a token ended](#why-a-token-ended)): the devices stay signed in, without two-factor. **New recovery codes**
 take a code (`POST /me/two-factor/recovery-codes`) and end every earlier one. The account's email gets a notice when
 two-factor authentication is turned on or off and when a recovery code is used (purposes `two_factor_on`,
 `two_factor_off`, `recovery_code_used`, each with a link to `<public URL>/account#security`).

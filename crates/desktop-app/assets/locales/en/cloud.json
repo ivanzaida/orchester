@@ -271,6 +271,7 @@
       "busy": "Orchester Cloud is busy. Try again in a moment.",
       "keys": "Orchester Cloud can't sign right now. Try again later.",
       "refused": "Orchester Cloud refused this.",
+      "twoFactor": "This account uses two-factor authentication, and Orchester can't ask for its code yet.",
       "unreachable": "Orchester Cloud can't be reached.",
       "certificate": "Your system doesn't trust Orchester Cloud's certificate.",
       "serverRefused": "The server refused this.",

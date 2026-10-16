@@ -131,6 +131,7 @@ fn cloud_client(error: &ClientError) -> Said {
     },
     error if error.is_connection() => Said::new("cloud.errors.unreachable"),
     ClientError::UntrustedCertificate => Said::new("cloud.errors.certificate"),
+    ClientError::TwoFactorRequired => Said::new("cloud.errors.twoFactor"),
     _ => Said::new("cloud.errors.refused"),
   }
 }
@@ -163,7 +164,7 @@ pub fn server_client(error: &ClientError) -> Said {
       ErrorCode::InvalidIdentity => Said::new("sharing.connect.invalidIdentity"),
       _ => Said::new("cloud.errors.serverRefused"),
     },
-    ClientError::Cloud { .. } => cloud_client(error),
+    ClientError::Cloud { .. } | ClientError::TwoFactorRequired => cloud_client(error),
     ClientError::UntrustedCertificate => Said::new("cloud.errors.certificateChanged"),
     ClientError::PlainHttpRefused => Said::new("sharing.connect.address.plain"),
     ClientError::NotOrchester { .. } | ClientError::Redirect { .. } => {
