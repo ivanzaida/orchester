@@ -2,6 +2,8 @@
 //! resolves to its screen; a path that names nothing reads as a typed error that says why, and falls back
 //! in the table.
 
+use std::num::NonZeroU64;
+
 use orchester_app::routes::{
   ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OverviewTab, ProjectPage,
   Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
@@ -11,7 +13,10 @@ use orchester_core::{
   project::TaskKey,
   revision::Revision,
 };
-use orchester_workspace::files::{LineRange, Version};
+use orchester_workspace::{
+  files::{LineRange, Version},
+  pull_requests::list::PullRequestTab,
+};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -24,6 +29,10 @@ fn project() -> ProjectId {
 
 fn connection() -> ConnectionId {
   CONNECTION.parse().expect("a connection id")
+}
+
+fn pull_request() -> NonZeroU64 {
+  NonZeroU64::new(142).expect("a pull request number")
 }
 
 fn key(key: &str) -> TaskKey {
@@ -75,6 +84,8 @@ fn every_route() -> Vec<Route> {
   all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
   all.extend(files_routes());
+  all.extend(PullRequestTab::ALL.map(|tab| at(ProjectPage::PullRequests(tab))));
+  all.push(at(ProjectPage::PullRequest(pull_request())));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -225,7 +236,18 @@ fn paths_are_the_documented_ones() {
       )),
       format!("{root}/tasks/KON-12/changes?file=src/a%26b.rs&from=worktree"),
     ),
-    (at(ProjectPage::PullRequests), format!("{root}/pull-requests")),
+    (
+      at(ProjectPage::PullRequests(PullRequestTab::Open)),
+      format!("{root}/pull-requests"),
+    ),
+    (
+      at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
+      format!("{root}/pull-requests?tab=needs_review"),
+    ),
+    (
+      at(ProjectPage::PullRequest(pull_request())),
+      format!("{root}/pull-requests/142"),
+    ),
     (at(ProjectPage::Settings), format!("{root}/settings")),
   ];
   for (route, path) in paths {

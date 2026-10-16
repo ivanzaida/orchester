@@ -185,7 +185,8 @@ fn seed_names_every_scenario_once() {
       "connections",
       "pipelines",
       "pipelines-empty",
-      "accounts"
+      "accounts",
+      "pull-requests"
     ]
   );
   for name in names {

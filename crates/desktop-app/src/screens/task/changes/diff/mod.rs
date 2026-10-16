@@ -15,7 +15,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, VirtualizedList},
   core::{ElementRef, Signal},
@@ -30,6 +30,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+pub use self::line::{CutAction, CutNote};
 use self::{
   cache::{ContentKey, Highlights, ShownRows},
   line::{DiffRowView, RowProps},
@@ -39,10 +40,11 @@ use super::files::{FileSummary, change_letter};
 use crate::{
   navigation::Navigation,
   routes::Route,
-  theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
+  theme::{CodeText, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::Icon,
+    icon::{Icon, icon},
+    tooltip::Tooltip,
   },
 };
 
@@ -63,10 +65,15 @@ pub struct DiffViewProps {
   pub index: usize,
   /// Which file of the list it is, whatever its content: its source and path.
   pub file: Arc<str>,
-  /// Where the change was read, at the head's end ("checkpointed at 7c1e9f2").
+  /// Where the change was read, at the head's end ("checkpointed at 7c1e9f2"); empty for none.
   pub source: Arc<str>,
-  /// Where *Open file* takes the file: the code viewer at the version the change shows.
-  pub open: Route,
+  /// Where *Open file* takes the file: the code viewer at the version the change shows; none hides it.
+  pub open: Option<Route>,
+  /// *Viewed*, which is not built yet: its box faded with a lock at the head's end, and why in the
+  /// tooltip (`Viewed` in `bVPuW`).
+  pub viewed: Option<Arc<str>>,
+  /// What the note under a file cut short says and offers.
+  pub cut: CutNote,
 }
 
 impl PartialEq for DiffViewProps {
@@ -77,6 +84,8 @@ impl PartialEq for DiffViewProps {
       && self.file == other.file
       && self.source == other.source
       && self.open == other.open
+      && self.viewed == other.viewed
+      && self.cut == other.cut
   }
 }
 
@@ -136,6 +145,7 @@ impl Component for DiffView {
       shown
     };
     let width = shown.width.max(self.width.get());
+    let cut = props.cut.clone();
     let list: Element = VirtualizedList::new_shared(ctx, shown.rows)
       .list_key(format!("changes-diff-rows-{}", props.file))
       .width(Dimension::Pct(100.0))
@@ -144,10 +154,11 @@ impl Component for DiffView {
       .mount_keyed::<DiffRowView, _, _, _>(DiffRow::index, move |row| RowProps {
         row: row.clone(),
         width,
+        cut: cut.clone(),
       });
     column
       .describe("highlighted", tokens.is_some().to_string())
-      .child(head(ctx, file, (&props.source, &props.open)))
+      .child(head(ctx, file, &props))
       .child(list)
   }
 }
@@ -198,15 +209,16 @@ impl DiffView {
 
 /// The file's change, path and counts, where its change was read (`rIRdw`), and *Open file*, which opens the
 /// file in the code viewer in a new tab.
-fn head(ctx: &mut Ctx, file: &FileDiff, (source, open): (&str, &Route)) -> Element {
-  let navigation = Navigation::of(ctx);
-  let route = open.clone();
-  let open = ActionButton::new("changes-open-file", ButtonKind::Ghost, ctx.t("changes.diff.openFile"))
-    .icon(Icon::SquareArrowOutUpRight)
-    .on_click(move || {
-      navigation.open_tab();
-      navigation.replace(route.clone());
-    });
+fn head(ctx: &mut Ctx, file: &FileDiff, props: &DiffViewProps) -> Element {
+  let open = props.open.clone().map(|route| {
+    let navigation = Navigation::of(ctx);
+    ActionButton::new("changes-open-file", ButtonKind::Ghost, ctx.t("changes.diff.openFile"))
+      .icon(Icon::SquareArrowOutUpRight)
+      .on_click(move || {
+        navigation.open_tab();
+        navigation.replace(route.clone());
+      })
+  });
   let (letter, color) = change_letter(ctx, file.change());
   Row::new()
     .id("changes-diff-head")
@@ -231,14 +243,43 @@ fn head(ctx: &mut Ctx, file: &FileDiff, (source, open): (&str, &Route)) -> Eleme
     .with_children(moved_from(ctx, file))
     .with_children(FileSummary::of(file).counts(ctx, ExtraTypography::MonoKey.role()))
     .child(Row::new().flex(1.0))
-    .child(
-      Text::new(source)
+    .with_children((!props.source.is_empty()).then(|| {
+      Text::new(&props.source)
         .id("changes-diff-source")
         .variant(ExtraTypography::Note.role())
+        .nowrap()
+    }))
+    .with_children(props.viewed.as_ref().map(|reason| viewed(ctx, reason)))
+    .with_children(open)
+    .into()
+}
+
+/// *Viewed*, not built yet: an empty box, the word and a lock, faded, with why in the tooltip.
+fn viewed(ctx: &mut Ctx, reason: &Arc<str>) -> Element {
+  let box_side = Dimension::Px(IconSize::Base.size());
+  let viewed = Row::new()
+    .id("changes-diff-viewed")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .opacity(DISABLED_OPACITY)
+    .describe("state", "unavailable")
+    .describe("reason", reason.clone())
+    .child(
+      Row::new()
+        .width(box_side)
+        .height(box_side)
+        .background(PaletteColor::SurfaceInput)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .rounded(RadiusSize::Sm),
+    )
+    .child(
+      Text::new(&ctx.t("changes.diff.viewed"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
         .nowrap(),
     )
-    .child(open)
-    .into()
+    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted));
+  Tooltip::new("changes-diff-viewed", reason.clone()).wrap(ctx, viewed)
 }
 
 /// Where a renamed or copied file came from ("from old/path"), after its path.

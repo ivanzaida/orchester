@@ -37,6 +37,9 @@ pub struct Tooltip {
   cut: Option<CutText>,
   /// It shows nothing now.
   silent: bool,
+  /// Its right edge lines up with its anchor's, for an anchor at the end of a row (`Tooltip · Resets at …` in
+  /// `uuaob`); else its left edge does.
+  end: bool,
 }
 
 /// How a cut text is set, and what its tooltip says.
@@ -94,7 +97,14 @@ impl Tooltip {
       mono: false,
       cut: None,
       silent: false,
+      end: false,
     }
+  }
+
+  /// It lines up with its anchor's right edge.
+  pub fn end(mut self) -> Self {
+    self.end = true;
+    self
   }
 
   /// The words are a path or a command: in Geist Mono.
@@ -225,7 +235,11 @@ impl Component for TooltipHost {
       anchor = anchor.child(
         Popup::new(self.anchor.clone(), tooltip.panel(words))
           .open_when(true)
-          .placement(Placement::BottomStart)
+          .placement(if tooltip.end {
+            Placement::BottomEnd
+          } else {
+            Placement::BottomStart
+          })
           .offset(0.0, ExtraSpacing::Snug.value())
           .hit_test(HitTestBehavior::None)
           .dismiss_on_outside_click(false)

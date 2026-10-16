@@ -23,6 +23,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod pipeline_permissions;
+mod pull_requests;
 mod reads;
 mod reads_setup;
 mod skills_window;

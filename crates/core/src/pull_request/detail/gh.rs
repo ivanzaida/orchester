@@ -12,10 +12,7 @@ use super::PullRequestHead;
 use crate::{
   command::{Command, CommandOutput},
   connection::gh_command,
-  pull_request::{
-    PR_LIST_FIELDS,
-    gh::{Listed, pull_request},
-  },
+  pull_request::gh::{Fields, Listed, pull_request},
   repository::{GitHubRepo, RepositoryError, classify_failure, unrecognized},
   revision::Revision,
 };
@@ -23,9 +20,9 @@ use crate::{
 /// The media type that makes GitHub answer a compare with a unified diff.
 const DIFF_MEDIA_TYPE: &str = "Accept: application/vnd.github.diff";
 
-/// Reads pull request `number` of `repo` with the fields of the list plus its checks (one pull
-/// request's are few enough) and its base revision.
-pub fn gh_pr_view_command(executable: &Path, repo: &GitHubRepo, number: u64) -> Command {
+/// Reads pull request `number` of `repo` with `fields` plus its checks (one pull request's are few
+/// enough) and its base revision.
+pub fn gh_pr_view_command(executable: &Path, repo: &GitHubRepo, number: u64, fields: Fields) -> Command {
   let args = [
     "pr".to_owned(),
     "view".to_owned(),
@@ -33,7 +30,7 @@ pub fn gh_pr_view_command(executable: &Path, repo: &GitHubRepo, number: u64) -> 
     "-R".to_owned(),
     repo.to_string(),
     "--json".to_owned(),
-    format!("{PR_LIST_FIELDS},statusCheckRollup,baseRefOid"),
+    format!("{},statusCheckRollup,baseRefOid", fields.as_str()),
   ];
   gh_command(executable, args.to_vec())
 }

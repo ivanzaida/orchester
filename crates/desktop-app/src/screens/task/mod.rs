@@ -11,7 +11,7 @@
 //! repository is read beside it, for *Remove worktree* and Run again.
 
 pub(crate) mod cards;
-mod changes;
+pub(crate) mod changes;
 mod context;
 mod conversation;
 mod header;

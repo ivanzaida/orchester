@@ -7,7 +7,10 @@ use orchester_core::{id::ResourceId, resource::ResourceBody, store::ResourceStor
 use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, RegisteredProject};
 
-use super::error::{Missing, ToolError};
+use super::{
+  error::{Missing, ToolError},
+  tools::RecentReads,
+};
 use crate::{
   activity::Activity,
   messages::Message,
@@ -31,6 +34,8 @@ pub struct Services {
   pub(super) activity: Activity,
   /// The projects' merge and removal operations, shared with the task pages.
   pub(super) jobs: ProjectJobs,
+  /// What `get_pull_request` read of pull requests outside the synced lists in the last 30 s.
+  pub(super) pull_request_reads: RecentReads,
   /// A person decided the publication the tools are called for (they applied a proposal of the Orchestrator chat):
   /// what it widens is theirs to decide, as in the window, not *Let automation change agent permissions*, but only
   /// for the draft they decided on and what they were shown it widens.
@@ -63,6 +68,7 @@ impl Services {
       changes,
       activity,
       jobs,
+      pull_request_reads: RecentReads::default(),
       person: None,
     }
   }

@@ -11,9 +11,9 @@
 //! mounts [`tab`], both what was read last, so the count is of the files listed here and nothing is read
 //! twice.
 
-mod diff;
-mod files;
-mod listed;
+pub(crate) mod diff;
+pub(crate) mod files;
+pub(crate) mod listed;
 mod load;
 mod open_file;
 mod states;
@@ -44,7 +44,7 @@ use parking_lot::Mutex;
 
 pub use self::load::{ChangesReads, FileCount, Follow, tab_label};
 use self::{
-  diff::{DiffView, DiffViewProps},
+  diff::{CutNote, DiffView, DiffViewProps},
   files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, WorktreeNote},
   listed::{FileListing, ListKeys, Listed},
   load::CheckpointedRead,
@@ -284,7 +284,12 @@ impl ChangesTab {
         index: selected.index,
         file: format!("{}:{}", selected.source.name(), selected.path).into(),
         source,
-        open,
+        open: Some(open),
+        viewed: None,
+        cut: CutNote {
+          key: "changes.diff.omitted",
+          action: None,
+        },
       },
     );
     Row::new()
@@ -361,7 +366,11 @@ impl ChangesTab {
 
 /// ArrowDown and ArrowUp choose the next and the previous file of the list, unless a text field has the
 /// keys or a modifier is held.
-fn arrow_keys(listing: &FileListing, position: usize, select: files::SelectFile) -> impl Fn(KeyboardEvent) + use<> {
+pub(crate) fn arrow_keys(
+  listing: &FileListing,
+  position: usize,
+  select: files::SelectFile,
+) -> impl Fn(KeyboardEvent) + use<> {
   let files = listing.files.clone();
   move |event: KeyboardEvent| {
     let plain = !(event.ctrl || event.alt || event.meta || event.shift);

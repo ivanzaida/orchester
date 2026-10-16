@@ -13,7 +13,8 @@
 //! connection `/project/<id>/connections/new` (`?kind=mcp_server` adds an MCP server) and
 //! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
-//! [`FilesView`]). A tab, source or kind left out of the query is the one the screen opens on.
+//! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
+//! `/project/<id>/pull-requests/<number>`. A tab, source or kind left out of the query is the one the screen opens on.
 //!
 //! Another screen or another tab (`tab`, a task's `<tab>`) is a new entry of the tab's history
 //! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
@@ -66,8 +67,8 @@ const ADD_PROJECT: &str = "add-project";
 const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
-const ORCHESTRATOR: &str = "orchestrator";
 const PULL_REQUESTS: &str = "pull-requests";
+const ORCHESTRATOR: &str = "orchestrator";
 const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.

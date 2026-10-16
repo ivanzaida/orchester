@@ -1,5 +1,5 @@
 //! The read-only `gh` commands behind the pull request list: `gh pr list -R <host/owner/name>
-//! --state open --limit <n> --json …` and, after a rate limit, `gh api --hostname <host>
+//! --state <open|closed> --limit <n> --json …` and, after a rate limit, `gh api --hostname <host>
 //! rate_limit` (reading the limit does not count against it).
 
 use std::path::Path;
@@ -22,20 +22,65 @@ use crate::{
 /// request (`checks`).
 pub const PR_LIST_FIELDS: &str = "number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,\
                                   additions,deletions,changedFiles,updatedAt,reviewDecision";
+/// [`PR_LIST_FIELDS`] with when a pull request was merged or closed and whether a fork opened it.
+pub const PR_PAGE_FIELDS: &str = "number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,\
+                                  additions,deletions,changedFiles,updatedAt,reviewDecision,mergedAt,closedAt,\
+                                  isCrossRepository";
 
-/// Lists at most `limit` open pull requests of `repo`.
-pub fn gh_pr_list_command(executable: &Path, repo: &GitHubRepo, limit: u32) -> Command {
+/// Which fields a list or a view of pull requests asks `gh` for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fields {
+  /// [`PR_LIST_FIELDS`], what the deprecated desktop's inbox has always asked for.
+  Inbox,
+  /// [`PR_PAGE_FIELDS`], for the Pull requests page.
+  Page,
+}
+
+impl Fields {
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Inbox => PR_LIST_FIELDS,
+      Self::Page => PR_PAGE_FIELDS,
+    }
+  }
+}
+
+/// Which pull requests one `gh pr list` asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListedStates {
+  /// Open ones, drafts included.
+  Open,
+  /// Closed and merged ones: `gh` counts a merged pull request as closed.
+  Closed,
+}
+
+impl ListedStates {
+  const fn as_str(self) -> &'static str {
+    match self {
+      Self::Open => "open",
+      Self::Closed => "closed",
+    }
+  }
+}
+
+/// Lists at most `limit` pull requests of `repo` in `states`, with `fields`.
+pub fn gh_pr_list_command(
+  executable: &Path,
+  repo: &GitHubRepo,
+  (states, fields): (ListedStates, Fields),
+  limit: u32,
+) -> Command {
   let args = [
     "pr".to_owned(),
     "list".to_owned(),
     "-R".to_owned(),
     repo.to_string(),
     "--state".to_owned(),
-    "open".to_owned(),
+    states.as_str().to_owned(),
     "--limit".to_owned(),
     limit.to_string(),
     "--json".to_owned(),
-    PR_LIST_FIELDS.to_owned(),
+    fields.as_str().to_owned(),
   ];
   gh_command(executable, args.to_vec())
 }
@@ -62,6 +107,13 @@ pub(super) struct Listed {
   changed_files: u32,
   updated_at: String,
   review_decision: Option<String>,
+  /// Empty or absent until it was merged or closed.
+  #[serde(default)]
+  merged_at: Option<String>,
+  #[serde(default)]
+  closed_at: Option<String>,
+  #[serde(default)]
+  is_cross_repository: bool,
   status_check_rollup: Option<Vec<Check>>,
 }
 
@@ -124,8 +176,20 @@ pub(super) fn pull_request(repo: &GitHubRepo, listed: Listed) -> Result<PullRequ
     },
     review_decision,
     updated_at: Timestamp::parse_utc(&listed.updated_at).ok_or_else(|| unrecognized(&listed.updated_at))?,
+    merged_at: time(listed.merged_at.as_deref())?,
+    closed_at: time(listed.closed_at.as_deref())?,
+    cross_repository: listed.is_cross_repository,
   };
   PullRequest::new(repo, parts).map_err(|error| unrecognized(&error.to_string()))
+}
+
+/// A time `gh` gave, `None` when it gave none: GitHub writes an empty or zero time for a pull request not
+/// merged or closed yet.
+fn time(value: Option<&str>) -> Result<Option<Timestamp>, RepositoryError> {
+  match value {
+    None | Some("" | "0001-01-01T00:00:00Z") => Ok(None),
+    Some(value) => Timestamp::parse_utc(value).map(Some).ok_or_else(|| unrecognized(value)),
+  }
 }
 
 #[derive(Clone, Copy)]

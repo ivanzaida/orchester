@@ -1,7 +1,7 @@
 //! Every kind of link `orchester_workspace::links` makes, the links the domain tools return
 //! (`docs/design/orchestrator-toolset.md`, "Links"), reads as the route of its place, writes back as the same
 //! path and resolves in the router's table to that route's screen, so a link a tool returns opens its place.
-//! A page that is not built yet (a pull request) has its route too.
+//! A page that is not built yet has its route too.
 
 use std::num::NonZeroU64;
 
@@ -13,13 +13,14 @@ use orchester_core::{id::ProjectId, project::TaskKey, revision::Revision};
 use orchester_workspace::{
   files::{FilePath, LineRange, Version},
   links::{Link, TaskPage},
+  pull_requests::list::PullRequestTab,
 };
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 12;
+const KINDS: usize = 13;
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
@@ -57,6 +58,7 @@ const fn kind(link: &Link) -> usize {
     Link::Account(_) => 9,
     Link::PullRequest(..) => 10,
     Link::File { .. } => 11,
+    Link::PullRequests(..) => 12,
   }
 }
 
@@ -100,6 +102,14 @@ fn every_link() -> Vec<(Link, Route)> {
     (
       Link::PullRequest(project, number(42)),
       at(ProjectPage::PullRequest(number(42))),
+    ),
+    (
+      Link::PullRequests(project, PullRequestTab::Open),
+      at(ProjectPage::PullRequests(PullRequestTab::Open)),
+    ),
+    (
+      Link::PullRequests(project, PullRequestTab::NeedsReview),
+      at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
     ),
   ]
   .into_iter()
@@ -183,6 +193,14 @@ fn links_have_the_documented_paths() {
     (
       Link::PullRequest(project(), number(7)),
       format!("{root}/pull-requests/7"),
+    ),
+    (
+      Link::PullRequests(project(), PullRequestTab::Open),
+      format!("{root}/pull-requests"),
+    ),
+    (
+      Link::PullRequests(project(), PullRequestTab::Merged),
+      format!("{root}/pull-requests?tab=merged"),
     ),
     (Link::Account(id()), format!("/settings?tab=accounts&account={ID}")),
     (

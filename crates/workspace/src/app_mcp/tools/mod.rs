@@ -12,6 +12,9 @@ mod pipeline_copy;
 mod plan_read;
 mod plans;
 mod projects;
+mod pull_request_reads;
+mod pull_request_wire;
+mod pull_requests;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
@@ -34,6 +37,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 pub(crate) use self::pipeline_copy::duplicate_pipeline_draft;
+pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
 pub use self::{
   run_task::{Proposal, propose_run, run_proposed},
@@ -245,6 +249,18 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "list_pull_requests",
+    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, when it was merged or closed, whether it comes from a fork, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last successful sync read (open ones and the 50 most recently updated closed ones). Each repository says how its latest sync went (sync: synced, rate_limited, github_unreachable, paused_other_account, gh_unavailable…), when the list was read (synced_at), when the latest sync ran (attempted_at) and, during a rate limit, until when syncs wait (paused_until); unreadable_projects lists the projects that could not be read, with why. refresh syncs one project (needs project) first through gh, unless a sync ran in the last 30 s or a rate limit holds: then the stored list answers. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key.",
+    schema: schema_for_type::<pull_requests::ListPullRequests>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_pull_request",
+    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request.",
+    schema: schema_for_type::<pull_requests::GetPullRequest>,
+    read_only: true,
+  },
+  Spec {
     name: "list_pipelines",
     description: "A project's pipelines that have a published version, which tasks run with: name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
     schema: schema_for_type::<across::InProjects>,
@@ -308,7 +324,7 @@ async fn dispatch(
   }
 }
 
-/// The tools that answer what agents wait for, and auto mode's settings.
+/// The tools that answer what agents wait for, auto mode's settings, and the pull requests.
 async fn dispatch_answers(
   services: &Services,
   translate: &Translate,
@@ -325,6 +341,8 @@ async fn dispatch_answers(
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
+    "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
+    "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }

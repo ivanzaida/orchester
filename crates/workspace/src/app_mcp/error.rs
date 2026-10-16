@@ -28,6 +28,7 @@ pub enum Missing {
   Tool,
   McpServer,
   Account,
+  PullRequest,
 }
 
 impl Missing {
@@ -48,6 +49,7 @@ impl Missing {
       Self::Tool => "tool_not_found",
       Self::McpServer => "mcp_server_not_found",
       Self::Account => "account_not_found",
+      Self::PullRequest => "pull_request_not_found",
     }
   }
 }

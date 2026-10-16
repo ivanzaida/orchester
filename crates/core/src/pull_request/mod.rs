@@ -15,8 +15,11 @@ pub use self::{
     DetailRefresh, DiffRead, PullRequestHead, RefreshedDetail, gh_compare_diff_command, gh_pr_view_command,
     parse_gh_compare_diff, parse_gh_pr_view, refresh_pull_request,
   },
-  gh::{PR_LIST_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list, parse_gh_rate_limit},
-  sync::{SYNC_LIMIT, SyncFailure, SyncResult, sync_pull_requests},
+  gh::{
+    Fields, ListedStates, PR_LIST_FIELDS, PR_PAGE_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list,
+    parse_gh_rate_limit,
+  },
+  sync::{SYNC_LIMIT, SyncAttempt, SyncFailure, SyncResult, SyncScope, sync_pull_requests},
 };
 use crate::{diff::Changes, repository::GitHubRepo, revision::Revision, run::BranchName, time::Timestamp};
 
@@ -132,6 +135,12 @@ pub struct PullRequestParts {
   pub checks: CheckRollup,
   pub review_decision: Option<ReviewDecision>,
   pub updated_at: Timestamp,
+  /// When it was merged; `None` unless it was.
+  pub merged_at: Option<Timestamp>,
+  /// When it was closed, merged or not; `None` while it is open.
+  pub closed_at: Option<Timestamp>,
+  /// Its head branch is in another repository, a fork: no run of this project made it.
+  pub cross_repository: bool,
 }
 
 /// A pull request of a repository.
@@ -225,6 +234,18 @@ impl PullRequest {
 
   pub const fn updated_at(&self) -> Timestamp {
     self.parts.updated_at
+  }
+
+  pub const fn merged_at(&self) -> Option<Timestamp> {
+    self.parts.merged_at
+  }
+
+  pub const fn closed_at(&self) -> Option<Timestamp> {
+    self.parts.closed_at
+  }
+
+  pub const fn is_cross_repository(&self) -> bool {
+    self.parts.cross_repository
   }
 
   /// Whether a search for `query` finds the pull request: by its number (`42`, `#42`), a part

@@ -23,7 +23,7 @@ use crate::{
   limits::ProjectLimits,
   name::Name,
   permission::LaunchPermissions,
-  pull_request::{PullRequest, SyncedPullRequests},
+  pull_request::{PullRequest, SyncAttempt, SyncedPullRequests},
   repository::{GitHubRepo, RepositoryLink},
   resource::{
     CommandEnvironment, Draft, DraftSaved, ModelId, Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber,
@@ -320,6 +320,13 @@ pub trait PullRequestStore {
   /// The pull requests of `repo` as last read, most recently updated first; `None` before the
   /// first sync of `repo`.
   fn pull_requests(&self, repo: &GitHubRepo) -> Result<Option<SyncedPullRequests>, Self::Error>;
+
+  /// Records how the latest sync of `repo` went, in place of the one before. A failure's details that
+  /// only a log needs (an error's text, a program's output) are not kept.
+  fn record_pull_request_sync(&mut self, repo: &GitHubRepo, attempt: &SyncAttempt) -> Result<(), Self::Error>;
+
+  /// How the latest recorded sync of `repo` went; `None` before the first.
+  fn pull_request_sync(&self, repo: &GitHubRepo) -> Result<Option<SyncAttempt>, Self::Error>;
 }
 
 /// Pull request diffs, one per head revision (`pr_revisions` with content-addressed blobs). GitHub

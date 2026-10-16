@@ -624,6 +624,36 @@
   "pullRequests": {
     "detail": {
       "diffUnreadable": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
+    },
+    "sync": {
+      "notSynced": "Pull requests not synced"
+    },
+    "openFailed": "The browser could not open the pull request.",
+    "notSynced": "Pull request #{{number}} is not among the pull requests the last sync read. Ask with refresh to read it from GitHub.",
+    "notRead": {
+      "rateLimited": "GitHub's rate limit holds requests back: pull request #{{number}} was not read. Ask again after the limit resets (paused_until).",
+      "unreachable": "GitHub could not be reached: pull request #{{number}} was not read. Ask again once GitHub can be reached.",
+      "failed": "Pull request #{{number}} could not be read from GitHub: check the project's GitHub connection in Connections."
+    },
+    "footer": {
+      "open": {
+        "one": "1 open pull request · From this project’s repository",
+        "other": "{{count}} open pull requests · From this project’s repository",
+        "part": "{{shown}} of {{count}} open pull requests · From this project’s repository",
+        "limited": "The {{count}} most recently updated open pull requests · From this project’s repository"
+      },
+      "merged": {
+        "one": "1 merged pull request · From this project’s repository",
+        "other": "{{count}} merged pull requests · From this project’s repository",
+        "part": "{{shown}} of {{count}} merged pull requests · From this project’s repository",
+        "limited": "{{count}} merged among the {{limit}} most recently updated closed pull requests · From this project’s repository"
+      },
+      "closed": {
+        "one": "1 closed pull request · From this project’s repository",
+        "other": "{{count}} closed pull requests · From this project’s repository",
+        "part": "{{shown}} of {{count}} closed pull requests · From this project’s repository",
+        "limited": "{{count}} closed among the {{limit}} most recently updated closed pull requests · From this project’s repository"
+      }
     }
   },
   "agents": {
@@ -801,6 +831,12 @@
     "hours": "{{count}} h",
     "days": "{{count}} d",
     "underMinute": "under a minute",
+    "ago": {
+      "justNow": "just now",
+      "minutes": "{{count}} min ago",
+      "hours": "{{count}} h ago",
+      "days": "{{count}} d ago"
+    },
     "month": {
       "jan": "Jan",
       "feb": "Feb",

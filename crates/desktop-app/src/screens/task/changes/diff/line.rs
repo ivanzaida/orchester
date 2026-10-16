@@ -5,7 +5,10 @@
 //! its code in Geist Mono 12, a removed line on `diff_remove` and an added one on `diff_add`; tokens take
 //! their colors from `theme::token_color`. A line cut short says so after its code; a note
 //! about what the diff does not show reads like the cut row of a pull request's diff (`Diff cut row`
-//! `S2U6g`). Rows are read-only.
+//! `S2U6g`), the lines left out of a very large file in the words of the page showing it, with its action
+//! at the row's end when it has one (`Long file cut` `F5MYhZ`: Open in GitHub). Rows are read-only.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -23,7 +26,10 @@ use orchester_workspace::highlight::TokenKind;
 use super::rows::{DiffRow, FileNote, LineRow};
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, token_color},
-  ui::icon::{Icon, icon},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::{Icon, icon},
+  },
 };
 
 /// Heights of a diff line and a hunk heading (`L5WYtA`, `sphVU`).
@@ -40,12 +46,42 @@ const HUNK_PADDING: f32 = 12.0;
 /// Room for what follows a line's code ("Line shortened", "No newline at end of file").
 const MARKER_WIDTH: f32 = 200.0;
 
+/// What the note under a file cut short says, its key's `{{count}}` the lines left out, and what it offers.
+#[derive(Clone)]
+pub struct CutNote {
+  pub key: &'static str,
+  pub action: Option<CutAction>,
+}
+
+/// A button at the end of the note under a file cut short.
+#[derive(Clone)]
+pub struct CutAction {
+  pub id: Arc<str>,
+  pub icon: Icon,
+  pub label: Arc<str>,
+  pub run: Arc<dyn Fn() + Send + Sync>,
+}
+
+/// Notes are compared by what they show; an action does what its words say.
+impl PartialEq for CutNote {
+  fn eq(&self, other: &Self) -> bool {
+    let shown = |note: &Self| {
+      note
+        .action
+        .as_ref()
+        .map(|action| (action.id.clone(), action.icon, action.label.clone()))
+    };
+    self.key == other.key && shown(self) == shown(other)
+  }
+}
+
 /// A row, drawn `width` wide: the widest row of the file or the pane, whichever is wider, so every row's
 /// background reaches across while long lines scroll sideways.
 #[derive(Clone, PartialEq)]
 pub struct RowProps {
   pub row: DiffRow,
   pub width: f32,
+  pub cut: CutNote,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RowProps {}
@@ -60,12 +96,12 @@ impl Component for DiffRowView {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RowProps { row, width } = ctx.props::<RowProps>().clone();
+    let RowProps { row, width, cut } = ctx.props::<RowProps>().clone();
     let width = Dimension::Px(width);
     match row {
       DiffRow::Hunk { old, new, section, .. } => hunk(ctx, (&old, &new, &section), width),
       DiffRow::Line(line) => line_row(ctx, &line, width),
-      DiffRow::Note { note, .. } => note_row(ctx, &note, width),
+      DiffRow::Note { note, .. } => note_row(ctx, &note, &cut, width),
       DiffRow::ScrollbarGap { .. } => {
         let scrollbar = ctx.theme().scrollbar().clone();
         let height = scrollbar.width + 2.0 * scrollbar.resolved_edge_inset();
@@ -198,7 +234,7 @@ fn marker(ctx: &Ctx, id: &str, glyph: Icon, key: &str) -> Element {
     .into()
 }
 
-fn note_row(ctx: &Ctx, note: &FileNote, width: Dimension) -> Element {
+fn note_row(ctx: &Ctx, note: &FileNote, cut: &CutNote, width: Dimension) -> Element {
   let (glyph, text) = match note {
     FileNote::Binary => (Icon::Info, ctx.t("changes.diff.binary")),
     FileNote::Mode { old, new } => (
@@ -209,9 +245,25 @@ fn note_row(ctx: &Ctx, note: &FileNote, width: Dimension) -> Element {
     FileNote::Empty => (Icon::Info, ctx.t("changes.diff.empty")),
     FileNote::Omitted(lines) => (
       Icon::Scissors,
-      ctx.t_args("changes.diff.omitted", [("count", super::super::grouped(ctx, *lines))]),
+      ctx.t_args(cut.key, [("count", super::super::grouped(ctx, *lines))]),
     ),
   };
+  let action = match (note, &cut.action) {
+    (FileNote::Omitted(_), Some(action)) => Some(action),
+    _ => None,
+  };
+  let text = Text::new(&text).variant(ExtraTypography::Prose.role());
+  // With an action the words wrap beside it, as `F5MYhZ` draws them; alone they stay on one line.
+  let text = match action {
+    Some(_) => text.flex(1.0).min_width(Dimension::Px(0.0)),
+    None => text.nowrap(),
+  };
+  let action = action.map(|action| {
+    let run = action.run.clone();
+    ActionButton::new(action.id.clone(), ButtonKind::Secondary, action.label.clone())
+      .icon(action.icon)
+      .on_click(move || run())
+  });
   Row::new()
     .id("changes-diff-note")
     .width(width)
@@ -222,7 +274,8 @@ fn note_row(ctx: &Ctx, note: &FileNote, width: Dimension) -> Element {
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
-    .child(Text::new(&text).variant(ExtraTypography::Prose.role()).nowrap())
+    .child(text)
+    .with_children(action)
     .into()
 }
 

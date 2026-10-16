@@ -95,7 +95,8 @@ pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 }
 
 /// The page a tab shows: its screen's name, a task by its key and its Edit task as `Edit <key>`
-/// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`).
+/// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`), a pull request by
+/// its number (`#142`, `e3Wty`).
 pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
@@ -115,6 +116,9 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
       || ctx.t(route.screen().title_key()).to_string(),
       |file| file.rsplit('/').next().unwrap_or(file).to_owned(),
     ),
+    Route::Project(_, ProjectPage::PullRequest(number)) => ctx
+      .t_args("shell.screens.pullRequestOf", [("number", number.to_string())])
+      .to_string(),
     route => ctx.t(route.screen().title_key()).to_string(),
   }
 }

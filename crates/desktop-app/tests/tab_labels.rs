@@ -73,6 +73,21 @@ fn tab_labels_mark_a_project_that_needs_you() {
 }
 
 #[test]
+fn tab_labels_name_a_pull_request_by_its_number() {
+  let mut window = seeded_window(None);
+  let project = match window.navigation().route_now() {
+    Route::Project(project, _) => project,
+    route => panic!("the window opens on Kontur, not {route:?}"),
+  };
+  let number = std::num::NonZeroU64::new(142).expect("a pull request number");
+  window
+    .navigation()
+    .go(Route::Project(project, ProjectPage::PullRequest(number)));
+  window.pass();
+  assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · #142".to_owned()]));
+}
+
+#[test]
 fn tab_labels_pill_stays_at_zero_and_opens_the_needs_you_panel() {
   let mut window = Window::open();
   let navigation = window.navigation();

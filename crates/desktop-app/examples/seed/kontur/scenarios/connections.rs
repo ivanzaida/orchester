@@ -82,7 +82,8 @@ pub(super) fn cli(
   Ok(connection.id())
 }
 
-fn github(kontur: &mut Kontur, program: PathBuf, at: Timestamp) -> Result<(), SeedError> {
+/// GitHub through `gh` at `program`, signed in as ivanzaida with the `repo` scope; its id.
+pub(super) fn github(kontur: &mut Kontur, program: PathBuf, at: Timestamp) -> Result<ConnectionId, SeedError> {
   let invalid = |error: &dyn std::fmt::Display| SeedError::Invalid(error.to_string());
   let mut connection = GitHubConnection::new(
     ConnectionId::generate(),
@@ -100,8 +101,9 @@ fn github(kontur: &mut Kontur, program: PathBuf, at: Timestamp) -> Result<(), Se
       sign_in: SignIn::SignedIn,
     },
   });
-  kontur.db.create_connection(&connection.into_connection())?;
-  Ok(())
+  let connection = connection.into_connection();
+  kontur.db.create_connection(&connection)?;
+  Ok(connection.id())
 }
 
 /// kontur-docs (on), postgres-dev (off) and sentry (remote, with a bearer secret); kontur-docs' id.

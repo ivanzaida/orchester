@@ -1,0 +1,237 @@
+{
+  "pull_requests": {
+    "title": "Pull requests",
+    "description": "Pull requests from this project’s GitHub repository. Asking agents about the code and sending work back for a fix are planned.",
+    "repository": "{{owner}} / {{name}}",
+    "refresh": "Refresh",
+    "refreshAfterSync": "Refresh is available when this sync ends.",
+    "refreshAfterReset": "Refresh is available again after the reset.",
+    "reading": "Reading pull requests from GitHub…",
+    "syncFailed": "Pull requests could not be synced",
+    "loadFailed": {
+      "title": "Pull requests could not be read",
+      "body": "The pull requests stored for this project could not be read: {{reason}}"
+    },
+    "tabs": {
+      "open": "Open",
+      "needsReview": "Needs your review",
+      "agentWorking": "Agent working",
+      "merged": "Merged",
+      "closed": "Closed",
+      "unknownCount": "—"
+    },
+    "query": {
+      "search": "Search pull requests",
+      "searchPlaceholder": "Search title, PR number or branch…",
+      "clearSearch": "Clear search",
+      "sort": "Sort",
+      "syncNote": "Sync runs on open, on Refresh and every minute while this screen is open."
+    },
+    "sort": {
+      "recentlyUpdated": "Recently updated",
+      "leastRecentlyUpdated": "Least recently updated",
+      "number": "Newest first"
+    },
+    "columns": {
+      "pullRequest": "PULL REQUEST / LINKED TASK",
+      "state": "STATE & REVIEW",
+      "checks": "GITHUB CHECKS"
+    },
+    "row": {
+      "number": "#{{number}}",
+      "separator": "·",
+      "noTask": "No linked task",
+      "branches": "{{head}} → {{base}}",
+      "changes": {
+        "updated": {
+          "one": "{{files}} file · +{{additions}} / −{{deletions}} · Updated {{ago}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}} · Updated {{ago}}"
+        },
+        "merged": {
+          "one": "{{files}} file · +{{additions}} / −{{deletions}} · Merged {{ago}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}} · Merged {{ago}}"
+        },
+        "closed": {
+          "one": "{{files}} file · +{{additions}} / −{{deletions}} · Closed {{ago}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}} · Closed {{ago}}"
+        }
+      },
+      "openInGitHub": "Open in GitHub"
+    },
+    "state": {
+      "open": "Open",
+      "draft": "Draft",
+      "merged": "Merged",
+      "closed": "Closed"
+    },
+    "review": {
+      "required": "Review required",
+      "approved": "Approved",
+      "changesRequested": "Changes requested",
+      "none": "No review required"
+    },
+    "checks": {
+      "passed": "{{count}} passed",
+      "running": "{{count}} running",
+      "failed": "{{count}} failed",
+      "skipped": "{{count}} skipped",
+      "none": "No checks",
+      "on": "on {{revision}}"
+    },
+    "sync": {
+      "syncing": "Syncing…",
+      "notConnected": "GitHub not connected",
+      "notSynced": "Not synced yet",
+      "synced": "Synced {{ago}}",
+      "unreachable": "Last synced {{time}} · GitHub unreachable",
+      "neverUnreachable": "Not synced · GitHub unreachable",
+      "troubled": "Last synced {{time}} · GitHub is having trouble",
+      "neverTroubled": "Not synced · GitHub is having trouble",
+      "failed": "Last synced {{time}} · Sync failed",
+      "neverFailed": "Not synced · Sync failed",
+      "rateLimited": "Rate limited · resets in {{minutes}} min",
+      "rateLimitedUnknown": "Rate limited",
+      "resetsAt": "Resets at {{time}} (local time)",
+      "paused": "Paused · gh signed in as {{account}}"
+    },
+    "account": {
+      "notChecked": "gh not checked",
+      "signedIn": "Signed in",
+      "notSignedIn": "gh not signed in",
+      "signInUnknown": "Sign-in unknown",
+      "wrongAccount": "Wrong account",
+      "missingScope": "Missing scope: {{scope}}",
+      "programMissing": "gh not found",
+      "unrecognized": "gh not recognized",
+      "couldNotRun": "gh could not run"
+    },
+    "hint": {
+      "notChecked": "The GitHub connection has not been checked yet. Check again to see which account gh is signed in to.",
+      "signInUnknown": "gh answers, but whether it is signed in could not be read. Check again; sync waits until it is.",
+      "programMissing": "Install the GitHub CLI or choose its program file in Connections, then check again. Sync waits until gh is found.",
+      "unrecognized": "The program did not answer as the GitHub CLI. Update gh or choose its program file in Connections, then check again.",
+      "couldNotRun": "gh could not be started or did not answer in time. Check again, or edit the GitHub connection."
+    },
+    "notice": {
+      "listFrom": "Showing pull requests from {{time}}",
+      "notSynced": "Pull requests could not be read",
+      "unreachable": "Couldn’t reach GitHub. The list may be out of date. Orchester retries every 60 s while this screen is open; Refresh tries now.",
+      "unreachableNoList": "Couldn’t reach GitHub. Orchester retries every 60 s while this screen is open; Refresh tries now.",
+      "serverError": "GitHub is having trouble ({{status}}). Try again in a moment: Orchester retries every 60 s while this screen is open, and Refresh tries now.",
+      "serverErrorUnknown": "GitHub is having trouble and did not finish its answer. Try again in a moment: Orchester retries every 60 s while this screen is open, and Refresh tries now.",
+      "noAccessTitle": "{{account}} can’t read {{owner}} / {{name}}",
+      "noAccess": "GitHub found no repository this account can read. Ask the owner for access, or switch accounts in gh, then check again.",
+      "unrecognized": "gh answered in a format Orchester doesn’t recognise. Update gh, then refresh.",
+      "couldNotRun": "gh could not be started or did not answer in time. Refresh, or check the connection.",
+      "failed": "GitHub did not return the list. Refresh tries again; the log has the details.",
+      "rateLimitedTitle": "GitHub rate limit reached",
+      "rateLimited": "gh reports no requests left for {{account}}; the limit resets in {{minutes}} min. The list is from {{time}}, and sync resumes on its own after the reset.",
+      "rateLimitedNoList": "gh reports no requests left for {{account}}; the limit resets in {{minutes}} min. Sync resumes on its own after the reset.",
+      "rateLimitedUnknown": "gh reports no requests left for {{account}} and did not say when the limit resets. Refresh tries again.",
+      "wrongAccountTitle": "Signed in as {{active}}, expected {{expected}}",
+      "wrongAccount": "The list is from {{time}}. Sync and creating pull requests are paused until gh uses {{expected}} again, or until {{project}} expects {{active}}. Orchester never switches gh accounts.",
+      "wrongAccountNoList": "Sync and creating pull requests are paused until gh uses {{expected}} again, or until {{project}} expects {{active}}. Orchester never switches gh accounts.",
+      "missingScope": "gh is signed in as {{account}} without the {{scope}} scope, so Orchester can’t read or create pull requests. The list is from {{time}}. Add the scope in a terminal, then check again.",
+      "missingScopeNoList": "gh is signed in as {{account}} without the {{scope}} scope, so Orchester can’t read or create pull requests. Add the scope in a terminal, then check again.",
+      "notSignedInTitle": "gh is not signed in to {{host}}",
+      "notSignedIn": "Run this in a terminal, then check again. Sync waits until gh is signed in.",
+      "checkAgain": "Check again",
+      "useAccount": "Use this account ({{account}})"
+    },
+    "unavailable": {
+      "title": "Pull requests are unavailable",
+      "detail": "{{project}} isn’t linked to a GitHub repository. Pull requests come from the repository detected in the project folder’s origin remote, read through the GitHub CLI (gh). Tasks and runs keep working locally.",
+      "openConnections": "Open Connections"
+    },
+    "empty": {
+      "open": {
+        "title": "No open pull requests",
+        "detail": "{{owner}} / {{name}} has no open pull requests on GitHub. New ones appear here after the next sync."
+      },
+      "needsReview": {
+        "title": "Nothing needs your review",
+        "detail": "No open pull request in {{owner}} / {{name}} asks for your review. Review requests from GitHub appear here after the next sync."
+      },
+      "agentWorking": {
+        "title": "No agent is working on a pull request",
+        "detail": "No run of this project’s tasks is working on the branch of an open pull request in {{owner}} / {{name}}."
+      },
+      "merged": {
+        "title": "No merged pull requests",
+        "detail": "None of the recently updated closed pull requests of {{owner}} / {{name}} was merged."
+      },
+      "closed": {
+        "title": "No closed pull requests",
+        "detail": "None of the recently updated pull requests of {{owner}} / {{name}} was closed without merging."
+      }
+    },
+    "noMatches": {
+      "title": "No pull request matches",
+      "detail": "Nothing in this tab matches “{{query}}”. Search finds a title, a number, a branch or a task’s key.",
+      "clear": "Clear search"
+    },
+    "detail": {
+      "title": "Pull request #{{number}}",
+      "groupSeparator": ",",
+      "task": "Task",
+      "context": "Head {{revision}} · {{status}}",
+      "loadFailed": "The pull request could not be read",
+      "tabs": {
+        "files": "Files changed",
+        "feedback": "Agent feedback",
+        "checks": "Agent checks",
+        "overview": "Overview",
+        "planned": "Agent feedback, Agent checks and Overview are planned."
+      },
+      "range": "Full PR · {{base}} → {{head}}",
+      "rangeHead": "Full PR · {{head}}",
+      "rangePlanned": "Choosing another revision range is planned.",
+      "total": {
+        "one": "{{files}} file · +{{additions}} / −{{deletions}}",
+        "other": "{{files}} files · +{{additions}} / −{{deletions}}"
+      },
+      "files": {
+        "heading": "FILES",
+        "find": "Find a file",
+        "findPlaceholder": "Find a file…",
+        "clear": "Clear"
+      },
+      "viewedPlanned": "Marking a file viewed is planned.",
+      "omitted": "{{count}} more changed lines are not shown; the file is too large. Open the pull request in GitHub to see them.",
+      "reading": {
+        "title": "Reading the pull request",
+        "detail": "Orchester reads the pull request and its diff from GitHub through gh."
+      },
+      "notRead": {
+        "title": "The pull request has not been read",
+        "detail": "The last sync did not list it and GitHub did not give it. The notice above says why; Refresh tries again."
+      },
+      "noChanges": {
+        "title": "No changes",
+        "detail": "The head revision has no changes against the base branch."
+      },
+      "tooLarge": {
+        "title": "Too large to show here",
+        "detail": "This pull request changes {{files}} files, +{{additions}} / −{{deletions}}. Orchester shows diffs of up to 300 files and 20,000 changed lines; review this one in GitHub.",
+        "unknown": "This pull request changes more than Orchester shows: diffs of up to 300 files and 20,000 changed lines. Review it in GitHub."
+      },
+      "unreadable": {
+        "title": "The diff could not be read",
+        "detail": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
+      },
+      "notice": {
+        "unreachable": "Couldn’t reach GitHub",
+        "troubled": "GitHub is having trouble",
+        "mayHaveChanged": "The pull request may have changed since it was last read. Refresh tries again.",
+        "rateLimited": "GitHub accepts requests again in {{minutes}} min; until then this is what was read before.",
+        "rateLimitedUnknown": "GitHub did not say when the limit resets; until then this is what was read before.",
+        "account": "Reading waits until gh acts as the account this project expects; Pull requests shows the command to run.",
+        "notFound": "GitHub has no such pull request",
+        "notFoundDetail": "It was deleted, or the account gh uses cannot see it.",
+        "failed": "The pull request could not be read",
+        "failedFrom": "What shows was read at {{time}}. Refresh tries again; the log has the details.",
+        "failedNothing": "Refresh tries again; the log has the details."
+      }
+    }
+  }
+}

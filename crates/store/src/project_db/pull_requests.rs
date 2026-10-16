@@ -1,9 +1,11 @@
-//! The `pull_requests` cache: the open pull requests of a repository as the last sync read
-//! them, and `pull_request_syncs`: when that was.
+//! The `pull_requests` cache: the pull requests of a repository as the last sync read them, and
+//! `pull_request_syncs`: when that was. How the latest sync went is `pull_request_attempts`.
 
 use orchester_core::{
   diff::Changes,
-  pull_request::{CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision, SyncedPullRequests},
+  pull_request::{
+    CheckRollup, PullRequest, PullRequestParts, PullRequestState, ReviewDecision, SyncAttempt, SyncedPullRequests,
+  },
   repository::GitHubRepo,
   revision::Revision,
   run::BranchName,
@@ -17,7 +19,7 @@ use crate::{StoreError, rows::corrupt};
 
 const COLUMNS: &str = "number, title, url, state, head_branch, base_branch, head_sha, author, changed_files, \
                        additions, deletions, checks_passed, checks_failed, checks_pending, checks_skipped, \
-                       review_decision, updated_at";
+                       review_decision, updated_at, merged_at, closed_at, cross_repository";
 
 impl PullRequestStore for ProjectDb {
   type Error = StoreError;
@@ -75,6 +77,14 @@ impl PullRequestStore for ProjectDb {
       pull_requests,
     }))
   }
+
+  fn record_pull_request_sync(&mut self, repo: &GitHubRepo, attempt: &SyncAttempt) -> Result<(), StoreError> {
+    super::pull_request_attempts::record(&self.connection, repo, attempt)
+  }
+
+  fn pull_request_sync(&self, repo: &GitHubRepo) -> Result<Option<SyncAttempt>, StoreError> {
+    super::pull_request_attempts::latest(&self.connection, repo)
+  }
 }
 
 fn insert(transaction: &Transaction<'_>, repo: &GitHubRepo, pull_request: &PullRequest) -> Result<(), StoreError> {
@@ -83,7 +93,8 @@ fn insert(transaction: &Transaction<'_>, repo: &GitHubRepo, pull_request: &PullR
   transaction.execute(
     &format!(
       "INSERT INTO pull_requests (host, owner, name, {COLUMNS}) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)"
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, \
+       ?22, ?23)"
     ),
     params![
       repo.host().as_str(),
@@ -106,6 +117,9 @@ fn insert(transaction: &Transaction<'_>, repo: &GitHubRepo, pull_request: &PullR
       checks.skipped,
       pull_request.review_decision().map(ReviewDecision::as_str),
       pull_request.updated_at().unix_millis(),
+      pull_request.merged_at().map(Timestamp::unix_millis),
+      pull_request.closed_at().map(Timestamp::unix_millis),
+      pull_request.is_cross_repository(),
     ],
   )?;
   Ok(())
@@ -124,6 +138,9 @@ struct StoredPullRequest {
   checks: [u32; 4],
   review_decision: Option<String>,
   updated_at: i64,
+  merged_at: Option<i64>,
+  closed_at: Option<i64>,
+  cross_repository: bool,
 }
 
 impl StoredPullRequest {
@@ -141,6 +158,9 @@ impl StoredPullRequest {
       checks: [row.get(11)?, row.get(12)?, row.get(13)?, row.get(14)?],
       review_decision: row.get(15)?,
       updated_at: row.get(16)?,
+      merged_at: row.get(17)?,
+      closed_at: row.get(18)?,
+      cross_repository: row.get(19)?,
     })
   }
 
@@ -176,6 +196,9 @@ impl StoredPullRequest {
       },
       review_decision,
       updated_at: Timestamp::from_unix_millis(self.updated_at),
+      merged_at: self.merged_at.map(Timestamp::from_unix_millis),
+      closed_at: self.closed_at.map(Timestamp::from_unix_millis),
+      cross_repository: self.cross_repository,
     };
     PullRequest::new(repo, parts).map_err(|error| corrupt("pull request", error))
   }

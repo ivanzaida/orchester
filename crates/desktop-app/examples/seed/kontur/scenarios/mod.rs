@@ -13,6 +13,7 @@ mod interrupted;
 mod lifecycle;
 mod live;
 mod pipelines;
+mod pull_requests;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -62,7 +63,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 22] = [
+pub const ALL: [Scenario; 23] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -85,6 +86,7 @@ pub const ALL: [Scenario; 22] = [
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("accounts", accounts::seed),
+  Scenario::of("pull-requests", pull_requests::seed),
 ];
 
 /// The scenario called `name`.

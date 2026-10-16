@@ -8,7 +8,7 @@
 
 mod support;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{num::NonZeroU64, path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -40,7 +40,9 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
 };
-use orchester_workspace::{files::Version, tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
+use orchester_workspace::{
+  files::Version, pull_requests::list::PullRequestTab, tasks::integration_jobs::ProjectJobs, workspace::OpenProject,
+};
 use parking_lot::Mutex;
 use support::Data;
 
@@ -67,6 +69,7 @@ const BUILT: &[Screen] = &[
   Screen::Overview,
   Screen::Pipelines,
   Screen::ProjectSettings,
+  Screen::PullRequests,
   Screen::Secrets,
   Screen::Skills,
   Screen::Tasks,
@@ -248,7 +251,16 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), vec![READING_TASK]),
     (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
-    (at(ProjectPage::PullRequests), placeholder("Pull requests")),
+    (
+      at(ProjectPage::PullRequests(PullRequestTab::Merged)),
+      placeholder("Pull requests"),
+    ),
+    (
+      at(ProjectPage::PullRequest(
+        NonZeroU64::new(142).expect("a pull request number"),
+      )),
+      Vec::new(),
+    ),
     (at(ProjectPage::Usage), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),

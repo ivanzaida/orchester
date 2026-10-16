@@ -62,6 +62,14 @@ fn gh_auth_status_not_signed_in() {
   assert_eq!(status.sign_in, SignIn::SignedOut);
   assert_eq!(status.account, None);
   assert!(status.scopes.is_empty());
+  // Signed out of every host, gh exits with 1 and still writes the status.
+  let failed = orchester_core::command::CommandOutput {
+    code: Some(1),
+    ..output
+  };
+  let status = parse_gh_auth_status(&GitHubHost::github_com(), &failed).expect("readable status");
+  assert_eq!(status.sign_in, SignIn::SignedOut);
+  assert!(parse_gh_auth_status(&GitHubHost::github_com(), &failed_with_text()).is_none());
   // Signed in on github.com says nothing about another host.
   let elsewhere = parse_gh_auth_status(&host("ghe.example.com"), &ok(SIGNED_IN)).expect("readable status");
   assert_eq!(elsewhere.sign_in, SignIn::SignedOut);
@@ -242,4 +250,13 @@ fn connections_are_typed_by_kind() {
     GitHubConnection::try_from(codex.into_connection()),
     Err(ConnectionError::NotGitHub(codex_id))
   );
+}
+
+/// A failed status command that wrote no status.
+fn failed_with_text() -> orchester_core::command::CommandOutput {
+  orchester_core::command::CommandOutput {
+    code: Some(1),
+    stdout: String::new(),
+    stderr: "error connecting to api.github.com".to_owned(),
+  }
 }

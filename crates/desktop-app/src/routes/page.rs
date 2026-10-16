@@ -4,6 +4,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
+use orchester_workspace::pull_requests::list::PullRequestTab;
 
 use super::{
   CONNECTIONS, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
@@ -24,7 +25,8 @@ pub enum ProjectPage {
   EditTask(TaskKey),
   Task(TaskKey, TaskView),
   MergeQueue,
-  PullRequests,
+  /// The Pull requests page on its tab.
+  PullRequests(PullRequestTab),
   /// A pull request of the project's repository, by its number.
   PullRequest(NonZeroU64),
   Usage,
@@ -72,7 +74,7 @@ impl ProjectPage {
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
       Screen::MergeQueue => Self::MergeQueue,
-      Screen::PullRequests => Self::PullRequests,
+      Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
       Screen::Usage => Self::Usage,
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
@@ -98,7 +100,7 @@ impl ProjectPage {
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
-      Self::PullRequests | Self::PullRequest(_) => Screen::PullRequests,
+      Self::PullRequests(_) | Self::PullRequest(_) => Screen::PullRequests,
       Self::Usage => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
@@ -140,8 +142,12 @@ impl ProjectPage {
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
-      Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
       Self::Agent(id) => format!("{project_root}/agents/{id}"),
+      Self::PullRequests(tab) => {
+        let tab = (*tab != PullRequestTab::default()).then(|| tab.name());
+        with_query(format!("{project_root}/{PULL_REQUESTS}"), &[(TAB, tab)])
+      }
+      Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -190,6 +196,9 @@ impl ProjectPage {
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
+      [PULL_REQUESTS] => Ok(Self::PullRequests(
+        params.take_or_default(TAB, PullRequestTab::from_name)?,
+      )),
       [PULL_REQUESTS, number] => number
         .parse::<NonZeroU64>()
         .map(Self::PullRequest)

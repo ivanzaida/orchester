@@ -14,9 +14,9 @@ use orchester_core::{
   github::GhCli,
   id::ConnectionId,
   pull_request::{
-    CheckRollup, PullRequest, PullRequestError, PullRequestParts, PullRequestState, ReviewDecision, SYNC_LIMIT,
-    SyncFailure, gh_check_rollups_command, gh_pr_list_command, parse_gh_check_rollups, parse_gh_pr_list,
-    parse_gh_rate_limit, sort_by_update, sync_pull_requests,
+    CheckRollup, Fields, ListedStates, PullRequest, PullRequestError, PullRequestParts, PullRequestState,
+    ReviewDecision, SYNC_LIMIT, SyncFailure, SyncScope, gh_check_rollups_command, gh_pr_list_command,
+    parse_gh_check_rollups, parse_gh_pr_list, parse_gh_rate_limit, sort_by_update, sync_pull_requests,
   },
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryError, RepositoryLink, RepositoryView},
   revision::Revision,
@@ -34,6 +34,15 @@ const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
 const LIST_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 50 --json \
                            number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,\
                            deletions,changedFiles,updatedAt,reviewDecision";
+/// The page's lists: the open ones and the closed ones, with when they were merged or closed and their forks.
+const OPEN_PAGE_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state open --limit 50 --json \
+                                number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,\
+                                additions,deletions,changedFiles,updatedAt,reviewDecision,mergedAt,closedAt,\
+                                isCrossRepository";
+const CLOSED_KONTUR: &str = "pr list -R github.com/ivanzaida/kontur --state closed --limit 50 --json \
+                             number,title,url,state,isDraft,headRefName,baseRefName,headRefOid,author,additions,\
+                             deletions,changedFiles,updatedAt,reviewDecision,mergedAt,closedAt,isCrossRepository";
+const CHECKS: &str = "api graphql --hostname github.com --input -";
 const RATE_LIMIT: &str = "api --hostname github.com rate_limit";
 
 fn repo(owner: &str, name: &str) -> GitHubRepo {
@@ -69,8 +78,20 @@ fn synthetic() -> Vec<PullRequest> {
 
 #[test]
 fn pr_list_asks_for_open_pull_requests_of_one_repository() {
-  let command = gh_pr_list_command(&gh(), &repo("ivanzaida", "kontur"), SYNC_LIMIT);
+  let command = gh_pr_list_command(
+    &gh(),
+    &repo("ivanzaida", "kontur"),
+    (ListedStates::Open, Fields::Inbox),
+    SYNC_LIMIT,
+  );
   assert_eq!(command.args().join(" "), LIST_KONTUR);
+  let closed = gh_pr_list_command(
+    &gh(),
+    &repo("ivanzaida", "kontur"),
+    (ListedStates::Closed, Fields::Page),
+    SYNC_LIMIT,
+  );
+  assert_eq!(closed.args().join(" "), CLOSED_KONTUR);
   assert!(
     command
       .env()
@@ -192,6 +213,9 @@ fn parts(url: &str) -> PullRequestParts {
     changes: Changes::default(),
     review_decision: None,
     updated_at: now(),
+    merged_at: None,
+    closed_at: None,
+    cross_repository: false,
   }
 }
 
@@ -272,9 +296,20 @@ fn sync_with(
   )>,
   expected: &str,
 ) -> (Replay, orchester_core::pull_request::SyncResult) {
+  sync_scope(answers, expected, SyncScope::Open)
+}
+
+fn sync_scope(
+  answers: Vec<(
+    &'static str,
+    Result<orchester_core::command::CommandOutput, CommandError>,
+  )>,
+  expected: &str,
+  scope: SyncScope,
+) -> (Replay, orchester_core::pull_request::SyncResult) {
   let runner = Replay::new(answers);
   let connection = github_connection();
-  let result = sync_pull_requests(&GhCli::new(&runner, &connection), &link(expected), now());
+  let result = sync_pull_requests(&GhCli::new(&runner, &connection), &link(expected), scope, now());
   (runner, result)
 }
 
@@ -341,6 +376,77 @@ fn sync_reads_the_list_as_the_expected_account() {
     4,
     "gh --version, auth status, the list and the checks"
   );
+}
+
+#[test]
+fn sync_with_closed_reads_closed_and_merged_pull_requests_too() {
+  let closed = parse_gh_pr_list(
+    &repo("ivanzaida", "kontur"),
+    &ok(fixture!("gh_pr_list_lurq_all.stdout")),
+  )
+  .expect("a readable list");
+  // GitHub knows none of the heads' checks.
+  let commits: Vec<String> = (0..closed.len()).map(|index| format!(r#""c{index}":null"#)).collect();
+  let no_checks = format!(r#"{{"data":{{"repository":{{{}}}}}}}"#, commits.join(","));
+  let mut answers = signed_in();
+  answers.push((OPEN_PAGE_KONTUR, Ok(ok(fixture!("gh_pr_list_orchester_open.stdout")))));
+  answers.push((CLOSED_KONTUR, Ok(ok(fixture!("gh_pr_list_lurq_all.stdout")))));
+  answers.push((CHECKS, Ok(ok(&no_checks))));
+  let (runner, result) = sync_scope(answers, "ivanzaida", SyncScope::OpenAndClosed);
+  let listed = result.outcome.expect("the list");
+  assert_eq!(listed.len(), closed.len());
+  assert!(
+    listed
+      .iter()
+      .any(|pull_request| pull_request.state() == PullRequestState::Merged)
+  );
+  assert!(
+    listed
+      .windows(2)
+      .all(|pair| pair[0].updated_at() >= pair[1].updated_at())
+  );
+  let lists: Vec<String> = runner
+    .ran()
+    .iter()
+    .map(|command| command.args().join(" "))
+    .filter(|args| args.starts_with("pr list"))
+    .collect();
+  assert_eq!(lists, [OPEN_PAGE_KONTUR, CLOSED_KONTUR]);
+}
+
+#[test]
+fn sync_keeps_a_pull_request_closed_between_its_lists_once_as_closed() {
+  let closed = fixture!("gh_pr_list_lurq_all.stdout");
+  // #28, the first, was still open when the open list was read.
+  let open = closed.replacen("\"state\":\"MERGED\"", "\"state\":\"OPEN\"", 1);
+  let count = parse_gh_pr_list(&repo("ivanzaida", "kontur"), &ok(closed))
+    .expect("a readable list")
+    .len();
+  let commits: Vec<String> = (0..count).map(|index| format!(r#""c{index}":null"#)).collect();
+  let no_checks = format!(r#"{{"data":{{"repository":{{{}}}}}}}"#, commits.join(","));
+  let mut answers = signed_in();
+  answers.push((OPEN_PAGE_KONTUR, Ok(ok(&open))));
+  answers.push((CLOSED_KONTUR, Ok(ok(closed))));
+  answers.push((CHECKS, Ok(ok(&no_checks))));
+  let (_, result) = sync_scope(answers, "ivanzaida", SyncScope::OpenAndClosed);
+  let listed = result.outcome.expect("the list");
+  assert_eq!(listed.len(), count, "each pull request once");
+  let first = listed
+    .iter()
+    .find(|pull_request| pull_request.number() == 28)
+    .expect("#28");
+  assert_eq!(first.state(), PullRequestState::Merged);
+}
+
+#[test]
+fn pr_list_reads_when_a_pull_request_was_merged_or_closed_and_whether_it_is_a_forks() {
+  let listed = r#"[{"number":7,"title":"Fork work","url":"https://github.com/ivanzaida/kontur/pull/7","state":"MERGED","isDraft":false,"headRefName":"orchester/kon-1-run-1","baseRefName":"main","headRefOid":"8f3a2c1d4e5f60718293a4b5c6d7e8f901234567","author":{"login":"someone"},"additions":1,"deletions":0,"changedFiles":1,"updatedAt":"2026-10-01T10:00:00Z","reviewDecision":"","mergedAt":"2026-10-01T09:00:00Z","closedAt":"2026-10-01T09:00:00Z","isCrossRepository":true},{"number":8,"title":"Open work","url":"https://github.com/ivanzaida/kontur/pull/8","state":"OPEN","isDraft":false,"headRefName":"work","baseRefName":"main","headRefOid":"8f3a2c1d4e5f60718293a4b5c6d7e8f901234567","author":{"login":"someone"},"additions":1,"deletions":0,"changedFiles":1,"updatedAt":"2026-10-01T10:00:00Z","reviewDecision":"","mergedAt":null,"closedAt":null,"isCrossRepository":false}]"#;
+  let listed = parse_gh_pr_list(&repo("ivanzaida", "kontur"), &ok(listed)).expect("a readable list");
+  let merged = Timestamp::parse_utc("2026-10-01T09:00:00Z");
+  assert_eq!((listed[0].merged_at(), listed[0].closed_at()), (merged, merged));
+  assert!(listed[0].is_cross_repository());
+  assert_eq!((listed[1].merged_at(), listed[1].closed_at()), (None, None));
+  assert!(!listed[1].is_cross_repository());
 }
 
 #[test]

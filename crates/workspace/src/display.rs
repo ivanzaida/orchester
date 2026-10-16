@@ -92,6 +92,22 @@ pub fn elapsed(now: Timestamp, then: Timestamp) -> Message {
   Message::new(key).with("count", count.to_string())
 }
 
+/// How long ago `then` was, to follow a verb (`Updated 8 min ago`, `Synced just now`): its largest whole unit,
+/// and just now under a minute or for a clock that went backwards.
+pub fn ago(now: Timestamp, then: Timestamp) -> Message {
+  let millis = now.unix_millis() - then.unix_millis();
+  let (key, count) = if millis >= DAY_MILLIS {
+    ("time.ago.days", millis / DAY_MILLIS)
+  } else if millis >= HOUR_MILLIS {
+    ("time.ago.hours", millis / HOUR_MILLIS)
+  } else if millis >= MINUTE_MILLIS {
+    ("time.ago.minutes", millis / MINUTE_MILLIS)
+  } else {
+    return Message::new("time.ago.justNow");
+  };
+  Message::new(key).with("count", count.to_string())
+}
+
 /// A running operation's elapsed time: whole seconds under a minute (`4 s`), whole minutes
 /// after that (`3 min`).
 pub fn duration(elapsed: Duration) -> Message {

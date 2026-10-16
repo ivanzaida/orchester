@@ -72,6 +72,8 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::PullRequests(tab) => insert("tab", tab.name()),
+    ProjectPage::PullRequest(number) => insert("number", &number.to_string()),
     ProjectPage::Connections(view) => {
       insert("tab", view.tab().name());
       if let Some(connection) = view.selected() {
