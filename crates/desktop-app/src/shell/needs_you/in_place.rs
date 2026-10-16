@@ -105,7 +105,9 @@ impl Component for InPlaceCard {
     let deps = (
       open.repo_root,
       props.task,
-      (feed.changes.get(), feed.revision.get()),
+      // A request is asked, answered or reviewed as a change of its run's state; the transcript's lines
+      // change nothing a card shows.
+      (feed.states.get(), feed.revision.get()),
       props.waiting.clone(),
     );
     let read = ctx.future(deps, move |(root, task, ..): (PathBuf, TaskId, _, _)| {

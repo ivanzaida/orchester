@@ -99,3 +99,4 @@ impl Counted {
     services.runners.count_change_for_test(&self.root(), state);
   }
 }
+

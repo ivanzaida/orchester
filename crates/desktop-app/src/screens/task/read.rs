@@ -8,7 +8,7 @@ use lurq::app::ctx::Ctx;
 use orchester_core::{
   id::{RunId, TaskId},
   integration::Leftovers,
-  run::Run,
+  run::{Run, RunStatus},
 };
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
@@ -38,13 +38,22 @@ pub enum TaskRead {
   Failed(Message),
 }
 
-/// What makes the task page read the task again: the runner changed a run or its transcript, a screen
-/// or automation saved tasks, or the person asked to try again.
+/// What makes the task page read the task again: the runner changed a run, or the transcript of the
+/// task's run while it runs (`ProjectFeed::run_changes`), a screen or automation saved tasks, or the person
+/// asked to try again.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ReadAgain {
   pub changes: u64,
   pub saves: u64,
   pub retries: u64,
+}
+
+/// Whether the task's latest run runs, as `detail` read it.
+pub fn runs(detail: &TaskDetail) -> bool {
+  detail
+    .run
+    .as_ref()
+    .is_some_and(|run| run.run.status() == &RunStatus::Running)
 }
 
 /// Reads `task` of the project at `root`, again whenever `again` changes.

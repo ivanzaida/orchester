@@ -11,6 +11,7 @@
 use std::{
   path::{Path, PathBuf},
   sync::Arc,
+  time::Duration,
 };
 
 use lurq::{
@@ -52,8 +53,12 @@ pub struct ProjectFeed {
   pub usage: Signal<Option<ProjectUsage>>,
   /// The project's runner; `None` while it has none in this session.
   pub status: Signal<Option<RunnerStatus>>,
-  /// Counts changes of runs and transcripts while a tab of the project is active.
+  /// Counts changes of runs and transcripts while a tab of the project is active, at most once per
+  /// [`TRANSCRIPT_PACE`].
   pub changes: Signal<u64>,
+  /// Counts changes of the state of the project's runs: a run started, waits, recorded what it used or
+  /// ended. A transcript's lines do not count.
+  pub states: Signal<u64>,
   /// Counts saves of the project's tasks a screen made; the tasks are read again after each
   /// ([`ProjectFeed::saved`]).
   pub revision: Signal<u64>,
@@ -142,6 +147,7 @@ impl ProjectFeed {
       usage: Signal::new(None),
       status: Signal::new(None),
       changes: Signal::new(0),
+      states: Signal::new(0),
       revision: Signal::new(0),
       outside: Signal::new(OutsideCounts::default()),
       job_state: Signal::new(jobs.state()),
@@ -155,6 +161,13 @@ impl ProjectFeed {
   /// A screen saved the project's tasks: they are read again, in every tab of the project.
   pub fn saved(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// The count of the project's run changes a view of runs follows: while one of its runs runs (`live`)
+  /// every change, its transcript's lines too; otherwise a run's change of state only, as nothing else of
+  /// the runs it shows changes. Reading it in a render re-renders it when that count moves.
+  pub fn run_changes(&self, live: bool) -> u64 {
+    if live { self.changes.get() } else { self.states.get() }
   }
 
   /// Whether a runner serves the project at `repo_root` now. Reading it in a render re-renders it when
@@ -250,6 +263,7 @@ impl Component for FeedLoader {
     let changes = counter(ctx, (runners.clone(), root.clone(), Counter::Changes(active)));
     publish(&self.feed.status, status(ctx, &runners, &root));
     publish(&self.feed.changes, changes);
+    publish(&self.feed.states, states);
     let outside = outside(ctx, (services.changes.clone(), project));
     publish(&self.feed.outside, outside);
     if let Some(state) = jobs(ctx, self.feed.jobs.clone()) {
@@ -264,8 +278,9 @@ impl Component for FeedLoader {
       publish(&self.feed.stale, stale);
     }
     let day_start = Timestamp::now().local_day_start();
-    // Limits automation changed count too: the status bar and New task show them.
-    let deps = (root, saved + outside.limits, (states, changes), day_start);
+    // Limits automation changed count too: the status bar and New task show them. A run records what it
+    // used as a change of its state, so its transcript's lines change nothing here.
+    let deps = (root, saved + outside.limits, states, day_start);
     if let Some(usage) = usage(ctx, deps, &hold) {
       publish(&self.feed.usage, Some(usage));
     }
@@ -279,6 +294,10 @@ fn publish<T: Clone + PartialEq + Send + Sync + lurq::core::SignalValue + 'stati
     signal.set(value);
   }
 }
+
+/// How long the count of a project's run changes stays put after it moved: an agent writing lines faster
+/// than that reads what shows its transcript again once per pace, with all the lines since.
+pub const TRANSCRIPT_PACE: Duration = Duration::from_millis(100);
 
 /// Which of a project's change counts a loader follows.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -299,7 +318,13 @@ fn counter(ctx: &mut Ctx, deps: (Runners, PathBuf, Counter)) -> u64 {
       };
       loop {
         let revision = *updates.borrow_and_update();
-        if !emitter.emit(revision) || updates.changed().await.is_err() {
+        if !emitter.emit(revision) {
+          return;
+        }
+        if matches!(counter, Counter::Changes(_)) {
+          tokio::time::sleep(TRANSCRIPT_PACE).await;
+        }
+        if updates.changed().await.is_err() {
           return;
         }
       }
@@ -409,7 +434,7 @@ fn tasks(
 
 /// The project's limits and today's usage, read again whenever settings or runs changed. `None` until
 /// read; a failed reading is logged and leaves the last one.
-fn usage(ctx: &mut Ctx, deps: (PathBuf, u64, (u64, u64), Timestamp), hold: &ReadHold) -> Option<ProjectUsage> {
+fn usage(ctx: &mut Ctx, deps: (PathBuf, u64, u64, Timestamp), hold: &ReadHold) -> Option<ProjectUsage> {
   let hold = hold.clone();
   let load = ctx.future(deps, move |(repo_root, _, _, day_start)| {
     tracing::trace!(target: crate::app_log::READ_LOG, read = "project usage");
