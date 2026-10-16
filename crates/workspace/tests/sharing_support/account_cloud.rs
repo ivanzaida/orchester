@@ -160,7 +160,7 @@ fn route(
         .invites
         .iter()
         .filter(|invite| invite.get("answer").is_none())
-        .map(|invite| invite.clone())
+        .cloned()
         .collect();
       ("200 OK", Some(json!({"invites": open})))
     }

@@ -315,6 +315,16 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
   if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
     column = column.child(field_error("orchester-connect-join-error", &reason.text(ctx)));
   }
+  column
+    .child(join_button(ctx, page, found))
+    .with_children(page.person.reason(ctx, JOIN))
+    .into()
+}
+
+/// *Join Kontur team*, with what was asked; unavailable until the check code is compared.
+fn join_button(ctx: &Ctx, page: &ConnectPage, found: &Found) -> Row {
+  let join = &page.join;
+  let state = join.run.state().get();
   let trust = trust_of(join, found);
   let linked = found
     .reached
@@ -334,7 +344,10 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
   let mut go = ActionButton::new(
     JOIN,
     ButtonKind::Primary,
-    ctx.t_args("sharing.connect.join.submit", [("server", server)]),
+    ctx.t_args(
+      "sharing.connect.join.submit",
+      [("server", found.reached.info.name.as_str())],
+    ),
   )
   .icon(Icon::LogIn);
   go = match request {
@@ -349,10 +362,7 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
     }
     None => go.disabled(),
   };
-  column
-    .child(Row::new().child(go))
-    .with_children(page.person.reason(ctx, JOIN))
-    .into()
+  Row::new().child(go)
 }
 
 fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {

@@ -335,5 +335,13 @@ pub(crate) async fn accept_for(
   if accepted == 0 {
     return Err(CloudErrorCode::NotFound.into());
   }
-  audit(client, Some(auth.account), "invite_accepted", &id.to_string(), None, now).await
+  audit(
+    client,
+    Some(auth.account),
+    "invite_accepted",
+    &id.to_string(),
+    None,
+    now,
+  )
+  .await
 }

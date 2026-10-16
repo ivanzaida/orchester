@@ -54,7 +54,9 @@ fn orchester_accept_retries_a_join_that_failed_after_its_token() {
       .expect("kept")
       .is_empty()
   );
-  assert!(window.tree.get_element_by_id(&kept).is_none(), "nothing left to finish");
+  window.until("nothing left to finish", |window| {
+    window.tree.get_element_by_id(&kept).is_none()
+  });
 }
 
 #[test]

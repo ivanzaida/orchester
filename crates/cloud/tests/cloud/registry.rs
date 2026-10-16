@@ -388,15 +388,7 @@ pub async fn invites_are_declined_by_the_invitee() {
   let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
   assert!(listed.invites.is_empty());
   assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 404);
-  // N1 security review 1, minor 1: the answer stays with the invite, so delivering it again brings nothing back,
-  // and a declined invite issues no token.
-  let again = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
-  assert_eq!(cloud.request("POST", "/invites", None, Some(again)).await.status, 202);
-  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
-  assert!(listed.invites.is_empty(), "declined stays declined");
-  let accept = json!({"audience": server.id, "invite": id});
-  let token = cloud.request("POST", "/identity-tokens", Some(&dana), Some(accept)).await;
-  assert_eq!(token.status, 404, "a declined invite issues no token");
+  declined_stays_declined(&cloud, &dana, (&server, id)).await;
   let malformed = cloud
     .request("POST", "/invites/not-an-id/decline", Some(&dana), None)
     .await;
@@ -404,6 +396,20 @@ pub async fn invites_are_declined_by_the_invitee() {
   let anonymous = cloud.request("POST", &decline, None, None).await;
   assert_eq!(anonymous.status, 401);
   cloud.finish().await;
+}
+
+/// N1 security review 1, minor 1: the answer stays with the invite, so delivering it again brings nothing back, and a
+/// declined invite issues no token.
+async fn declined_stays_declined(cloud: &TestCloud, dana: &str, (server, id): (&TeamServer, InviteId)) {
+  let again = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
+  assert_eq!(cloud.request("POST", "/invites", None, Some(again)).await.status, 202);
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(dana), None).await.json();
+  assert!(listed.invites.is_empty(), "declined stays declined");
+  let accept = json!({"audience": server.id, "invite": id});
+  let token = cloud
+    .request("POST", "/identity-tokens", Some(dana), Some(accept))
+    .await;
+  assert_eq!(token.status, 404, "a declined invite issues no token");
 }
 
 async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
