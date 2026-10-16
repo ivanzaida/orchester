@@ -104,11 +104,16 @@ fn account_changes_tell_of_a_new_folder_once_the_connections_followed_it() {
     "not told while the connection is still on the old folder"
   );
   held.execute_batch("ROLLBACK").expect("released");
-  choosing.join().expect("the choice ends").expect("chosen");
+  let chosen = choosing.join().expect("the choice ends").expect("chosen");
   assert!(
     changes.has_changed().expect("the workspace lives"),
     "told once it followed"
   );
+  let stored = workspace
+    .agent_account(chosen.id())
+    .expect("read")
+    .expect("still listed");
+  assert_eq!(stored.folder(), chosen.folder(), "the new folder is the account's");
 }
 
 #[test]
