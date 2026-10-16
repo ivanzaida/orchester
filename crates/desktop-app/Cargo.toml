@@ -100,6 +100,11 @@ embed-resource.workspace = true
 # (`tests/orchester`, `examples/n1_backends`), with the cloud's identity keys their stand-in cloud signs with.
 orchester-server.workspace = true
 orchester-api = { workspace = true, features = ["client", "identity"] }
+# Set-up requests to a test server that presents its own certificate (`workspace/tests/server_support/tls.rs`).
+tokio-rustls.workspace = true
+# Orchester Cloud from this tree on a PostgreSQL of the test's own, for N1 end to end (`tests/orchester_cloud`).
+orchester-cloud.workspace = true
+tokio-postgres.workspace = true
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
