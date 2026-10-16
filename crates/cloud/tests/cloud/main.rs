@@ -110,6 +110,7 @@ const TESTS: &[(&str, Test)] = tests![
   two_factor_sign_in::an_operator_turns_it_off_with_the_documented_statement,
   two_factor_sign_in::tokens_for_codes_name_their_use,
   two_factor_guards::wrong_codes_are_capped_a_day_and_the_tenth_is_mailed,
+  two_factor_guards::a_device_without_two_factor_counts_its_own_wrong_codes,
   two_factor_guards::a_code_is_spent_once_by_requests_that_race,
   two_factor_guards::a_password_alone_changes_nothing_sensitive_while_it_is_on,
 ];

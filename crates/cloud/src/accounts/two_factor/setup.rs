@@ -92,7 +92,9 @@ impl Cloud {
       .await?
       .filter(|authenticator| !authenticator.confirmed && authenticator.created_at > self.now() - SETUP_MS)
       .ok_or(CloudErrorCode::NotFound)?;
-    self.check_code(&client, &pending, &input.code, false).await?;
+    self
+      .check_code(&client, (&pending, auth.device), &input.code, false)
+      .await?;
     let codes = new_recovery_codes()?;
     let now = self.now();
     let transaction = client.transaction().await?;
@@ -138,7 +140,9 @@ impl Cloud {
     let row = self.confirm_password(auth, input.password, address).await?;
     let client = self.client().await?;
     let authenticator = self.confirmed(&client, auth.account).await?;
-    self.check_code(&client, &authenticator, &input.code, true).await?;
+    self
+      .check_code(&client, (&authenticator, auth.device), &input.code, true)
+      .await?;
     client
       .execute("DELETE FROM two_factor WHERE id = $1", &[&authenticator.id])
       .await?;
@@ -168,7 +172,9 @@ impl Cloud {
   ) -> Result<RecoveryCodes, CloudError> {
     let mut client = self.client().await?;
     let authenticator = self.confirmed(&client, auth.account).await?;
-    self.check_code(&client, &authenticator, &input.code, true).await?;
+    self
+      .check_code(&client, (&authenticator, auth.device), &input.code, true)
+      .await?;
     let codes = new_recovery_codes()?;
     let transaction = client.transaction().await?;
     transaction

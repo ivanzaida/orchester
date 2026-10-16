@@ -329,11 +329,21 @@ no new token. The web front's Account page uses it.
 
 **Code limits.** Every code check of an account counts against two limits, whichever endpoint and challenge it came
 to: 5 wrong codes in 15 minutes per account, in memory (`429` with `Retry-After` until the oldest leaves the window),
-and 20 wrong codes a day per account, counted from the first of them and kept with the authenticator, so a restart
-does not reset it (`429` with `Retry-After` until that day ends). Each check reserves its place in the first before it
-runs, so parallel guesses cannot pass it, and a right code takes its place back. At most 20 guesses a day at 3 codes in
-a million keep a guesser's chance under one in ten thousand a year. The tenth wrong code of a day mails the account's
-email (purpose `two_factor_failures`): whoever entered it had the password or a signed-in device. These limits are
+and 20 wrong codes a day, counted from the first of them and kept in the database, so a restart does not reset it
+(`429` with `Retry-After` until that day ends). The day's count is the authenticator's for a sign-in's second step and
+for a device that is a two-factor session; a device signed in without a code (before two-factor authentication was
+on) counts its own, so its wrong step-ups, or any other code it enters, spend only its own day. Each check reserves
+its place in the first before it runs, so parallel guesses cannot pass it, and a right code takes its place back. At
+most 20 guesses a day at 3 codes in a million keep a guesser's chance under one in ten thousand a year. The tenth wrong
+code of a day mails the account's email (purpose `two_factor_failures`): whoever entered it had the password or a
+signed-in device.
+
+**The cap locks out.** Whoever has the password can spend the account's day with wrong codes at the second step of a
+sign-in, and then its owner cannot finish a sign-in with a code either, a recovery code included, until that day ends:
+the cap trades a day of lockout for a bound on guessing. Devices already signed in stay signed in. A password reset
+does not clear the count: a reset proves only the mailbox, and clearing on it would give whoever reads the mail twenty
+guesses more each time; the owner changes the password (the intruder had it) and waits out the day, or the operator
+clears the count (`docs/cloud-hosting.md`, "Two-factor authentication for an account that lost its phone"). These limits are
 apart from the password limits: wrong codes do not block passwords, and a right password with two-factor
 authentication counts as a successful password check. A challenge also ends after 5 codes, right or wrong. Failed
 codes are audited (`two_factor_failed`). A sign-in takes its challenge in the same transaction that spends the code,

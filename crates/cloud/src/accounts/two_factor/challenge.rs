@@ -17,7 +17,7 @@ use orchester_core::id::{CloudAccountId, CloudDeviceId};
 use tokio_postgres::Row;
 use uuid::Uuid;
 
-use super::{Authenticator, codes::recovery_codes_left};
+use super::{Authenticator, budget::Tally, codes::recovery_codes_left};
 use crate::{
   Cloud,
   accounts::{
@@ -127,7 +127,7 @@ impl Cloud {
       .await?
       .filter(|authenticator| authenticator.id == pending.two_factor)
       .ok_or_else(expired)?;
-    let attempt = self.attempt_code(&client, &authenticator).await?;
+    let attempt = self.attempt_code(&client, &authenticator, Tally::Account).await?;
     let token = random_token(crate::tokens::DEVICE_PREFIX)?;
     let id = CloudDeviceId::generate();
     let now = self.now();
@@ -145,7 +145,7 @@ impl Cloud {
     }
     let Some(used) = self.spend_code(&transaction, &authenticator, &input.code, true).await? else {
       transaction.rollback().await?;
-      return Err(self.code_failed(&client, &authenticator).await?);
+      return Err(self.code_failed(&client, &authenticator, &attempt).await?);
     };
     if !add_device(&transaction, (&pending, &hash), (id, &token), now).await? {
       return Err(expired());
@@ -191,7 +191,9 @@ impl Cloud {
       .confirmed_authenticator(&client, auth.account)
       .await?
       .ok_or(CloudErrorCode::MfaRequired)?;
-    self.check_code(&client, &authenticator, &input.code, true).await?;
+    self
+      .check_code(&client, (&authenticator, auth.device), &input.code, true)
+      .await?;
     client
       .execute(
         "UPDATE devices SET two_factor = $1 WHERE id = $2 AND revoked_at IS NULL",
