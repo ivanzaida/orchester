@@ -10,8 +10,8 @@ use orchester_core::{
   usage::limits::WarningThreshold,
 };
 use orchester_store::{
-  AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredCloudAccount,
-  StoredServer,
+  AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd,
+  StoreError, StoredCloudAccount, StoredServer,
 };
 
 fn at(millis: i64) -> Timestamp {
@@ -536,7 +536,8 @@ fn why_the_last_cloud_sign_in_ended_is_one_row() {
     reason: CloudSignInEnd::PasswordReset,
     ..revoked
   };
-  db.set_cloud_sign_in_ended(Some(&reset)).expect("the newer one replaces it");
+  db.set_cloud_sign_in_ended(Some(&reset))
+    .expect("the newer one replaces it");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(reset));
   db.set_cloud_sign_in_ended(None).expect("signed in again");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);

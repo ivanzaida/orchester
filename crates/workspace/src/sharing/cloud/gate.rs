@@ -42,7 +42,9 @@ pub enum Reach {
   Unknown,
   Reached,
   /// No answer since `since`.
-  Unreachable { since: Timestamp },
+  Unreachable {
+    since: Timestamp,
+  },
 }
 
 impl Reach {

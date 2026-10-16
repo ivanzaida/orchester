@@ -59,7 +59,10 @@ fn cloud_gate_is_closed_until_a_sign_in_and_after_signing_out_here() {
   let Some(Some(signed_out)) = ended(&desktop) else {
     panic!("signed out with a reason: {:?}", desktop.cloud.sign_in_state());
   };
-  assert_eq!((signed_out.email.as_str(), signed_out.reason), (EMAIL, CloudSignInEnd::SignedOut));
+  assert_eq!(
+    (signed_out.email.as_str(), signed_out.reason),
+    (EMAIL, CloudSignInEnd::SignedOut)
+  );
   let SignIn::SignedOut { ended: kept, .. } = restarted(&desktop).sign_in_state() else {
     panic!("the next start is signed out");
   };
@@ -79,14 +82,21 @@ fn cloud_gate_stays_open_while_the_cloud_cannot_be_reached() {
   let before = Timestamp::now();
   let offline = desktop.block_on(desktop.cloud.check_sign_in());
   assert!(matches!(&offline, Err(error) if error.unanswered()), "{offline:?}");
-  assert!(desktop.cloud.is_signed_in(), "offline-first: the stored sign-in keeps the app open");
+  assert!(
+    desktop.cloud.is_signed_in(),
+    "offline-first: the stored sign-in keeps the app open"
+  );
   let Reach::Unreachable { since } = desktop.cloud.reach() else {
     panic!("unreachable: {:?}", desktop.cloud.reach());
   };
   assert!(since >= before);
   let again = desktop.block_on(desktop.cloud.check_sign_in());
   assert!(again.is_err());
-  assert_eq!(desktop.cloud.reach(), Reach::Unreachable { since }, "since the first failure");
+  assert_eq!(
+    desktop.cloud.reach(),
+    Reach::Unreachable { since },
+    "since the first failure"
+  );
 
   cloud.set_down(false);
   desktop.block_on(desktop.cloud.check_sign_in()).expect("checked");
@@ -117,8 +127,14 @@ fn cloud_gate_closes_with_each_reason_the_cloud_gives() {
       assert_eq!(ended.ended_at, Timestamp::from_unix_millis(1_792_147_957_042));
     }
     assert!(desktop.cloud.account().expect("account").is_none());
-    assert!(desktop.vault.read(&desktop.device_key()).is_err(), "the token left the keychain");
-    assert!(!restarted(&desktop).is_signed_in(), "{reason:?}: the next start shows the gate");
+    assert!(
+      desktop.vault.read(&desktop.device_key()).is_err(),
+      "the token left the keychain"
+    );
+    assert!(
+      !restarted(&desktop).is_signed_in(),
+      "{reason:?}: the next start shows the gate"
+    );
   }
 }
 
@@ -148,7 +164,10 @@ fn cloud_gate_check_runs_at_once_and_after_each_sign_in() {
       changes.changed().await.expect("the cloud is kept");
     }
   });
-  assert_eq!(ended(&desktop).flatten().map(|ended| ended.reason), Some(CloudSignInEnd::Revoked));
+  assert_eq!(
+    ended(&desktop).flatten().map(|ended| ended.reason),
+    Some(CloudSignInEnd::Revoked)
+  );
 
   desktop
     .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))

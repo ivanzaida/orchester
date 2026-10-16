@@ -59,7 +59,13 @@ pub async fn a_refused_token_says_why_it_ended() {
     refusal(&cloud, tablet.token.expose()).await,
     Some((SessionEnd::PasswordReset, now))
   );
-  assert_eq!(cloud.request("GET", "/me", Some(laptop.token.expose()), None).await.status, 200);
+  assert_eq!(
+    cloud
+      .request("GET", "/me", Some(laptop.token.expose()), None)
+      .await
+      .status,
+    200
+  );
 
   cloud.clock.advance(1000);
   reset(&cloud, email).await;
