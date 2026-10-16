@@ -1,17 +1,18 @@
 //! The loader (`loader-circle`) turns while it is shown: [`icon`](super::icon::icon) gives every loader
 //! icon this turn, so running work never looks stuck. lurq plays the turn and asks for frames only while
-//! a turning node is in the window's tree, so a window without a loader on screen stays idle.
+//! a turning node is in the window's tree, so a window without a loader on screen stays idle. The turn
+//! steps through [`LOADER_STEPS`] poses, and lurq draws a frame only when the pose changes.
 
 use std::f32::consts::TAU;
 
 use lurq::{
-  animation::{AnimatableProperty, Animation, Keyframes, KeyframesId},
+  animation::{AnimatableProperty, Animation, Easing, Keyframes, KeyframesId, StepPosition},
   app::Tree,
   components::Text,
   node::transform::Decomposed,
 };
 
-use crate::theme::LOADER_TURN;
+use crate::theme::{LOADER_STEPS, LOADER_TURN};
 
 /// The turn's keyframes, registered once per window tree by [`install`].
 const TURN: KeyframesId = KeyframesId::new(1);
@@ -31,7 +32,9 @@ pub fn install(tree: &mut Tree) {
   );
 }
 
-/// The loader `glyph`, turning about its centre at a constant speed for as long as it is shown.
+/// The loader `glyph`, turning about its centre in even steps for as long as it is shown. `JumpEnd`
+/// starts on the still pose and stops one step short of the full turn, so no pose is drawn twice.
 pub(crate) fn turning(glyph: Text) -> Text {
-  glyph.animation(Animation::new(TURN).duration(LOADER_TURN).linear().infinite())
+  let steps = Easing::Steps { count: LOADER_STEPS, position: StepPosition::JumpEnd };
+  glyph.animation(Animation::new(TURN).duration(LOADER_TURN).easing(steps).infinite())
 }
