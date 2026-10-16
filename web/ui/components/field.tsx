@@ -63,13 +63,18 @@ function describedBy(props: FieldProps, id: string): string | undefined {
   return props.hint ? `${id}-hint` : undefined;
 }
 
-export function TextField(props: FieldProps & { type: "email" | "text"; placeholder?: string }) {
+/**
+ * `mono`: codes and usernames, in the mono face (`H8RW-2NCE` in `ulIoG`). `prefix`: fixed text in the box before the
+ * value, like a project address before its slug (`gv7xE`).
+ */
+export function TextField(props: FieldProps & { type: "email" | "text"; placeholder?: string; mono?: boolean; prefix?: string }) {
   const id = `field-${props.name}`;
   return (
     <Frame {...props} id={id}>
+      {props.prefix !== undefined && <span className={styles.prefix} aria-hidden="true">{props.prefix}</span>}
       <input
         id={id}
-        className={styles.input}
+        className={`${styles.input}${props.mono ? ` ${styles.mono}` : ""}`}
         name={props.name}
         type={props.type}
         value={props.value}

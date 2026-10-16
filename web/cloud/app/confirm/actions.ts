@@ -8,19 +8,19 @@ import { anonymous, formIsGenuine } from "@/lib/server/visitor";
 
 /**
  * The confirmation landing's views: the password asked (`Bdcjx`), a wrong answer (`CVRpO`), confirmed (`oFMIA`), and
- * the link gone (`X2Cij0`), which the page knows only when it can inspect the link before anything is typed.
+ * the link gone (`X2Cij0`), which the page knows by inspecting the link before anything is typed.
  */
 export type ConfirmState =
   | {
       readonly view: "confirm";
-      readonly email: string | null;
+      readonly email: string;
       /** Counts the answers, so the password field comes back empty after each one. */
       readonly answer: number;
       /** The one answer for any failure (`401 confirm_failed`): it offers *Send a new link*. */
       readonly failed: boolean;
       readonly error?: Message;
     }
-  | { readonly view: "confirmed"; readonly email: string | null }
+  | { readonly view: "confirmed"; readonly email: string }
   | { readonly view: "expired" };
 
 /**

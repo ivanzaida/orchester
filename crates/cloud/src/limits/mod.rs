@@ -55,6 +55,12 @@ impl Limits {
     self.email_per_email.take(email.to_owned(), now)
   }
 
+  /// An invite's email: 5 an hour per email, the same count as confirmation and reset emails, wherever the team
+  /// server or the inviter's browser delivers it from.
+  pub fn invite_email(&self, email: &str, now: i64) -> Result<(), CloudError> {
+    self.email_per_email.take(email.to_owned(), now)
+  }
+
   /// 60 identity tokens an hour per device.
   pub fn identity_token(&self, device: CloudDeviceId, now: i64) -> Result<(), CloudError> {
     self.identity_tokens.take(device, now)
@@ -63,16 +69,22 @@ impl Limits {
   /// Failed confirmation or reset finishes: 20 per address and 100 per IPv6 /48 in 15 minutes, and 5 an hour per
   /// link (`link` is its token's hash), whichever addresses they come from (review 2, N1).
   pub fn link_finish(&self, address: IpAddr, link: &[u8], now: i64) -> Result<(), CloudError> {
-    self.link_failures.check(&rate_address(address), now)?;
-    if let Some(network) = rate_network(address) {
-      self.link_failures_per_network.check(&network, now)?;
-    }
+    self.link_inspect(address, now)?;
     // Reserved before the password check, as sign-in reserves its place, so parallel guesses cannot pass a link's 5
     // (review 3); `link_succeeded` takes the reservation back.
     self.link_failures_per_link.take(link.to_vec(), now)
   }
 
-  /// A failed finish; the link's own count already holds it from `link_finish`.
+  /// Looking up a link without using it: refused while the address or its IPv6 /48 has too many failed links.
+  pub fn link_inspect(&self, address: IpAddr, now: i64) -> Result<(), CloudError> {
+    self.link_failures.check(&rate_address(address), now)?;
+    if let Some(network) = rate_network(address) {
+      self.link_failures_per_network.check(&network, now)?;
+    }
+    Ok(())
+  }
+
+  /// A failed finish or inspection; a finish's link count already holds it from `link_finish`.
   pub fn link_failed(&self, address: IpAddr, now: i64) {
     self.link_failures.record(rate_address(address), now);
     if let Some(network) = rate_network(address) {

@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { nextAfterSignIn } from "@/lib/authorize";
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import type { ApiFailure } from "@/lib/server/api";
@@ -17,7 +18,9 @@ export type SignInOutcome =
   | { readonly kind: "wrong" }
   | { readonly kind: "unconfirmed"; readonly email: string }
   | { readonly kind: "limited"; readonly error: Message; readonly reason: Message; readonly ms: number }
-  | { readonly kind: "failed"; readonly error: Message };
+  | { readonly kind: "failed"; readonly error: Message }
+  /** Signed in, and back to `/authorize` with a whole page load: its own CSP lets it post to the server admin. */
+  | { readonly kind: "next"; readonly href: string };
 
 export interface SignInState {
   readonly email: string;
@@ -70,5 +73,9 @@ export async function signInAction(previous: SignInState, form: FormData): Promi
   }
   await endPreviousSession();
   await startSession(result.value.token);
+  const next = nextAfterSignIn(field(form, "next"));
+  if (next !== null) {
+    return { email, attempt, outcome: { kind: "next", href: next } };
+  }
   redirect("/account");
 }

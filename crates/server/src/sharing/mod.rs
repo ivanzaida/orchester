@@ -3,6 +3,7 @@ pub(crate) mod batches;
 pub(crate) mod claims;
 pub(crate) mod events;
 pub(crate) mod limits;
+pub(crate) mod managed;
 pub(crate) mod members;
 pub(crate) mod organization;
 pub(crate) mod projects;

@@ -8,7 +8,7 @@ mod support;
 
 use std::{io, sync::Arc};
 
-use orchester_api::{CodeJoin, Credential};
+use orchester_api::{CodeJoin, Credential, DeviceKind};
 use parking_lot::Mutex;
 use support::{TestServer, token};
 use tracing_subscriber::fmt::MakeWriter;
@@ -63,6 +63,7 @@ async fn client_never_shows_a_token_or_code_in_debug_output_or_logs() {
     device: "Bohdan's laptop".into(),
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
+    kind: DeviceKind::App,
   };
   let request_debug = format!("{request:?}");
   let signed = client.join_with_code(&request).await.expect("join");

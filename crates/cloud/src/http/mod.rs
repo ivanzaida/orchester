@@ -3,6 +3,7 @@
 
 mod extract;
 mod handlers;
+mod registry;
 
 use std::{
   future::Future,
@@ -58,6 +59,8 @@ fn routes(config: &mut web::ServiceConfig) {
   config
     .service(resource("/auth/signup").route(web::post().to(h::sign_up)))
     .service(resource("/auth/confirm").route(web::post().to(h::confirm)))
+    .service(resource("/auth/confirm/resend").route(web::post().to(h::resend_confirmation)))
+    .service(resource("/auth/links/inspect").route(web::post().to(h::inspect_link)))
     .service(resource("/auth/sessions").route(web::post().to(h::sign_in)))
     .service(resource("/auth/sessions/current").route(web::delete().to(h::sign_out)))
     .service(resource("/auth/reset").route(web::post().to(h::request_reset)))
@@ -66,12 +69,26 @@ fn routes(config: &mut web::ServiceConfig) {
     .service(
       resource("/me")
         .route(web::get().to(h::me))
-        .route(web::patch().to(h::change_me)),
+        .route(web::patch().to(h::change_me))
+        .route(web::delete().to(h::delete_me)),
     )
     .service(resource("/devices").route(web::get().to(h::devices)))
     .service(resource("/devices/{id}").route(web::delete().to(h::revoke_device)))
     .service(resource("/keys").route(web::get().to(h::keys)))
-    .service(resource("/identity-tokens").route(web::post().to(h::identity_token)));
+    .service(resource("/identity-tokens").route(web::post().to(h::identity_token)))
+    .service(
+      resource("/servers")
+        .route(web::get().to(registry::servers))
+        .route(web::post().to(registry::link)),
+    )
+    .service(resource("/servers/{id}").route(web::get().to(registry::server)))
+    .service(
+      resource("/invites")
+        .route(web::get().to(registry::invites))
+        .route(web::post().to(registry::receive_invite)),
+    )
+    .service(resource("/invites/{id}").route(web::delete().to(registry::withdraw_invite)))
+    .service(resource("/invites/{id}/decline").route(web::post().to(registry::decline_invite)));
 }
 
 fn resource(path: &str) -> Resource {

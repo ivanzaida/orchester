@@ -73,7 +73,8 @@ export function Devices(props: { devices: readonly Device[]; csrf: string; now: 
       markSection("devices");
     }
   }, [signedOut.length]);
-  const count = props.devices.length - signedOut.length;
+  // Counted from the list as loaded: a reload (after a password change) no longer has the devices signed out here.
+  const count = props.devices.filter((device) => !signedOut.includes(device.id)).length;
   return (
     <Section
       id="devices"

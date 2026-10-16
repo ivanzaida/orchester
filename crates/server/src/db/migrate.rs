@@ -1,5 +1,5 @@
 //! Forward-only migrations of `orchester-server.db`: 1 (S1a accounts), 2 (S1b sharing), 3 (API 3: no passwords,
-//! codes, invites, the cloud link, projects by slug).
+//! codes, invites, the cloud link, projects by slug), 4 (the server admin).
 
 use orchester_core::{name::Name, repository::RepositoryIdentity, resource::Slug};
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
@@ -29,7 +29,7 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
     transaction.execute_batch(include_str!("schema.sql"))?;
     1
   };
-  if !(1..=3).contains(&version) {
+  if !(1..=4).contains(&version) {
     return Err(ServerError::Configuration("unsupported server database schema"));
   }
   if version == 1 {
@@ -39,6 +39,9 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
   transaction.execute_batch("CREATE INDEX IF NOT EXISTS events_project_retention ON events(project,at)")?;
   if version < 3 {
     api3(&transaction, now)?;
+  }
+  if version < 4 {
+    transaction.execute_batch(include_str!("admin.sql"))?;
   }
   let broken: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM pragma_foreign_key_check)", [], |row| {
     row.get(0)

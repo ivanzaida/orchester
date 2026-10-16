@@ -38,12 +38,19 @@ a.primary:hover {
 }
 
 .ghost {
-  background: transparent;
-  color: var(--color-text-secondary);
+  background: var(--button-ghost-fill, transparent);
+  box-shadow: var(--button-ghost-ring, none);
+  color: var(--button-ghost-text, var(--color-text-secondary));
+}
+
+.danger {
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
 }
 
 .secondary:hover:enabled,
 a.secondary:hover,
+.danger:hover:enabled,
 .ghost:hover:enabled,
 a.ghost:hover {
   background-image: linear-gradient(var(--color-hover), var(--color-hover));

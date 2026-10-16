@@ -12,7 +12,7 @@ use crate::{db, error::ServerError, sharing::access};
 
 /// How long a join waits for approval.
 const LIFETIME_MS: i64 = 60 * 60 * 1000;
-const COLUMNS: &str = "id,user_id,device,state,requested_at,expires_at";
+const COLUMNS: &str = "id,user_id,device,state,requested_at,expires_at,address";
 
 pub(crate) fn enabled(db: &Connection) -> Result<bool, ServerError> {
   Ok(db.query_row("SELECT join_approval FROM settings WHERE id=1", [], |row| row.get(0))?)
@@ -160,6 +160,7 @@ struct Stored {
   state: ApprovalState,
   requested_at: i64,
   expires_at: i64,
+  address: String,
 }
 
 impl Stored {
@@ -168,6 +169,7 @@ impl Stored {
       id: self.id,
       user: access::user_ref(db, self.user)?,
       device: self.device,
+      address: self.address,
       state: self.state,
       requested_at: self.requested_at,
       expires_at: self.expires_at,
@@ -201,5 +203,6 @@ fn row(row: &Row<'_>) -> rusqlite::Result<Stored> {
     state,
     requested_at: row.get(4)?,
     expires_at: row.get(5)?,
+    address: row.get(6)?,
   })
 }

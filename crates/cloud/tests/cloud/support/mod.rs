@@ -208,10 +208,11 @@ impl TestCloud {
       .await
   }
 
-  /// Signs up and confirms through the emailed link, as the web front's confirmation page does.
+  /// Signs up and confirms through the link this sign-up emailed, as the web front's confirmation page does.
   pub async fn register(&self, email: &str) {
+    let before = self.mail.count(email);
     assert_eq!(self.sign_up(email, PASSWORD).await.status, 202);
-    let token = self.mail.nth(email, 1).await.link_token();
+    let token = self.mail.nth(email, before + 1).await.link_token();
     assert_eq!(self.confirm(&token, PASSWORD).await.status, 204);
   }
 

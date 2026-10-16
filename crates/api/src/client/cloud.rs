@@ -115,6 +115,7 @@ impl CloudClient {
   ) -> Result<IdentityTokenIssued, ClientError> {
     let body = serde_json::to_vec(&IdentityTokenRequest {
       audience: audience.to_string(),
+      purpose: None,
     })
     .map_err(|_| ClientError::Setup)?;
     let request = self

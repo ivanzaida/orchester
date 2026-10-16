@@ -1,6 +1,7 @@
 # Orchester Cloud API
 
-The JSON API of `orchester-cloud` (`crates/cloud`), as built in C1's first part (accounts, devices, identity tokens).
+The JSON API of `orchester-cloud` (`crates/cloud`): accounts, devices, identity tokens, the team server registry and
+invites in flight (C1a, with SA's linking and admin sign-in).
 The design is in [architecture/server.md](architecture/server.md), "Orchester Cloud" and "Identity tokens and keys";
 running it is in [cloud-hosting.md](cloud-hosting.md). The wire types are in `orchester-api`'s `cloud` module, and
 the token and key set checks team servers use are in its `identity` feature.
@@ -9,7 +10,7 @@ Two kinds of client call it:
 
 - **The desktop app.** It signs in with the person's email and password and keeps the device token it gets back in
   the OS keychain (`orchester-cloud` / `device`).
-- **The web front** (Next.js, built later). It shows sign-up, sign-in, the confirmation landing and forgot/reset
+- **The web front** (Next.js, `web/cloud`). It shows sign-up, sign-in, the confirmation landing and forgot/reset
   password pages. Its **server** calls this API; browsers never call it directly, so the API sends no CORS headers.
   It signs in with platform `web` and keeps the token in the `__Host-orchester_session` cookie (`HttpOnly`, `Secure`,
   `SameSite=Lax`), never in script-readable storage. The web front's server must forward the browser's address in `X-Forwarded-For` and be
@@ -45,6 +46,7 @@ Two kinds of client call it:
 | `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
+| `conflict` | 409 | The team server is linked to another account |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
 | `busy` | 503 | No password hashing slot freed within 10 seconds |
@@ -64,6 +66,8 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | --- | --- | --- | --- | --- |
 | `POST /auth/signup` | none | `{ email, password, display_name }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/confirm` | none | `{ link_token, password }` | `204` | `422 invalid_link`, `429` |
+| `POST /auth/confirm/resend` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
+| `POST /auth/links/inspect` | none | `{ link_token, purpose: "confirm"\|"reset" }` | `200 { email }` | `422 invalid_link`, `429` |
 | `POST /auth/sessions` | none | `{ email, password, device: DeviceInfo }` | `201 { token, device: Device, account: Account }` | `401 invalid_credentials`, `403 email_unconfirmed`, `422 invalid` (device), `429` |
 | `POST /auth/reset` | none | `{ email }` | `202`, empty | `422 invalid`, `429` |
 | `POST /auth/reset/finish` | none | `{ link_token, new_password }` | `204` | `422 invalid`, `422 invalid_link`, `429` |
@@ -71,10 +75,18 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `DELETE /auth/sessions/current` | device | | `204` | |
 | `GET /me` | device | | `{ account: Account }` | |
 | `PATCH /me` | device | `{ display_name? }` | `{ account: Account }` | `422 invalid` |
+| `DELETE /me` | device | `{ password }` | `204` | `401 invalid_credentials`, `429` |
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience }`: the team server's id (a UUID) | `201 { identity_token, expires_at }` (seconds) | `422 invalid`, `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here), `422 invalid` (also purpose `link`), `429`, `503 keys_unavailable` |
+| `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict`, `422 invalid`, `429`, `503 keys_unavailable` |
+| `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
+| `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
+| `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202`, empty | `422 invalid`, `429` |
+| `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at }] }` | |
+| `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204` | `422 invalid` |
+| `POST /invites/{id}/decline` | device | | `204` | `404` |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
@@ -97,6 +109,17 @@ side, so mail scanners that fetch the link do not use it up. The server side sen
 sign-in. On `invalid_link` it offers to try the password again or to sign up again. After 5 wrong passwords a link
 answers `429` for an hour; signing up again sends a new one. Confirming does not sign anyone in.
 
+**Resend.** `POST /auth/confirm/resend { email }` answers `202` for any email, before it touches the database, and
+counts against the email limits like a sign-up. In the background an unconfirmed account gets one more confirmation
+link. It carries the password and display name of the account's newest open link, so it is confirmed with that
+sign-up's password, like any link. A confirmed account gets the *you already have an account* note. An unknown email,
+or an account whose links have all expired, gets nothing.
+
+**Inspecting a link.** `POST /auth/links/inspect { link_token, purpose }` gives the email a live link was sent to,
+without using the link, so the confirmation and reset pages can show the address before anything is pressed. An
+unknown, used or expired link, or one for the other purpose, answers `422 invalid_link` after the same one query, and
+counts as a failed link finish against the client's address.
+
 **Sign-in.** A wrong password and an unknown email answer alike (`401 invalid_credentials`). `403 email_unconfirmed`
 comes only after the right password. The token in `201` is shown once; the cloud keeps only its SHA-256. `device`
 names the computer (the desktop) or the browser (the web front, platform `web`).
@@ -113,11 +136,40 @@ other reset link ends.
 **Password change** (signed in). It needs the current password. It signs out the account's other devices and ends
 open reset links; the device that asked stays signed in.
 
-**Identity tokens.** `POST /identity-tokens { audience }` returns a token for one team server, valid for 5 minutes.
+**Identity tokens.** `POST /identity-tokens { audience, purpose? }` returns a token for one team server, valid for 5
+minutes.
 The desktop hands it to that team server, which checks it with `orchester_api::identity::VerifiedKeySet` against
 the key set from `GET /keys`, itself checked with the root key the team server pinned, and accepts each `jti` once.
 Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, `device { name, platform }`,
-`jti`, `iat`, `exp`.
+`purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server),
+`jti`, `iat`, `exp`. A team server accepts a token only for the use it was issued for.
+
+**Linking a team server** (`POST /servers { link }`, from the cloud's `/authorize` page, purpose `link`). The link
+statement is a compact JWS of type `orchester-link+jws` that the server signed with its own Ed25519 key:
+`{ server, name, address, public_key, fingerprint, issued_at }` (`orchester_api::statements::LinkStatement`). The cloud
+verifies it with the `public_key` inside, refuses one issued more than 10 minutes ago, and links the server to the
+signed-in account; a server linked to another account answers `409 conflict`, and its own owner may link it again
+(a new name or address) as long as the key is the same. The answer carries what the server pins: the cloud's root key
+(`root_key`, base64url) and the newest key set it signed, and an identity token with purpose `link` that links the
+admin's account on the server. A token with purpose `admin` is issued only for a linked server.
+
+**Invites in flight.** A team server signs each invite by email (`orchester-invite+jws`:
+`{ id, server, kind, email, project?, role?, inviter, expires_at, issued_at }`, times in milliseconds) and its server
+admin delivers it, from the host or from the inviter's browser through the web front's `/invites/deliver`. The cloud
+checks the signature with the key the server linked with, keeps the invite once (a second delivery changes nothing),
+and emails the invitee in its own words only (nothing the server chose: an account gets *open Orchester*, an address
+with no account `/signup?invite=<id>`). At most 200 invites a day per server and 5 emails an hour per address.
+`GET /invites` lists them to the account with that email; a revocation (`orchester-invite-revocation+jws`,
+`{ id, server, issued_at }`) deletes one; expired invites are deleted by the minute's sweep.
+
+**Declining an invite.** `POST /invites/{id}/decline` deletes an open invite to the account's email (`404` for any
+other). The team server keeps its own copy until it expires or is revoked; nothing joins with it, since a join needs
+the invitee's own identity token.
+
+**Deleting the account.** `DELETE /me { password }` asks for the password again (failures count as a password
+change's do). It deletes the account, its devices, links and joins, the servers it linked (with their invites and
+other accounts' joins of them), and the open invites to its email. The audit keeps the account's id with the actions it
+took.
 
 ## Rate limits
 
@@ -125,8 +177,10 @@ Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, 
 | --- | --- |
 | Sign-in failures | 5 per email in 15 minutes block that email for 15 minutes; 20 per client address and 100 per IPv6 /48 block that address or network |
 | Failed current passwords (`/auth/password`) | 5 per account in 15 minutes |
-| Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
-| Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link, each try counted before its password check |
+| Emails (sign-up, resend, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
+| Invite emails | 5 an hour per email (the same count); 200 invites a day per server |
+| Failed `confirm`, `reset/finish` and `links/inspect` | 20 per client address and 100 per IPv6 /48 in 15 minutes; for `confirm` and `reset/finish`, 5 an hour per link, each try counted before its password check |
+| Wrong passwords for `DELETE /me` | Counted with the failed current passwords of `/auth/password` |
 | Identity tokens | 60 an hour per device |
 
 The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
@@ -137,6 +191,11 @@ early. The address and network limits bound how fast a flood can add counts.
 
 ## Not built yet
 
-Invites (`/invites`) and the team server registry (`/servers`) answer `404`; account deletion (`DELETE /me`) answers
-`405`, and a new email in `PATCH /me` is refused as an unknown field (`400`). Magic link, Google and GitHub sign-in come later. `audience` is not checked against registered team servers
-until the registry exists.
+- Accepting an invite at the cloud (`POST /invites/{id}/accept`, a token bound to the invite) comes with the app's
+  invite flow (N1); today a join token for a linked server records the join.
+- Unlinking a server from the cloud's side.
+- A new email in `PATCH /me` is refused as an unknown field (`400`); the Account page shows *Changing your email is
+  not available yet*, as designed.
+- Magic link, Google and GitHub sign-in come later.
+- `audience` is not checked against registered team servers for joins; a server not linked here may still be joined
+  with a token.

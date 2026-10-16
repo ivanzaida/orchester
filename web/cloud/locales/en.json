@@ -29,8 +29,7 @@
     "unavailable": "Orchester Cloud is not answering right now. Try again in a minute.",
     "formExpired": "This form has expired. Reload the page and try again.",
     "tooManyEmails": "Too many emails were sent. Try again in {{minutes}} min, at {{time}}.",
-    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}.",
-    "resendNotYet": "Sending a new link is not available yet. Sign up again with the same email to get a new one."
+    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}."
   },
   "signup": {
     "pageTitle": "Create an account",
@@ -77,8 +76,6 @@
     "send": "Send a new link",
     "sending": "Sending…",
     "signIn": "Sign in",
-    "descriptionNoAddress": "Confirm the email of your Orchester account.",
-    "confirmedDescriptionNoAddress": "Your Orchester account is ready. Sign in with its email and password.",
     "failed": "This link and password don't match. Check the password, or send a new link.",
     "tooMany": "Too many wrong passwords for this link. Try again in {{minutes}} min, at {{time}}, or send a new link."
   },
@@ -129,8 +126,7 @@
     "expiredTitle": "This reset link no longer works",
     "expiredDescription": "Reset links work once, for 1 hour. Enter your email and we send you a new one.",
     "send": "Send a new link",
-    "sending": "Sending…",
-    "descriptionNoAddress": "For your Orchester account."
+    "sending": "Sending…"
   },
   "failure": {
     "pageTitle": "Orchester Cloud is not answering",
@@ -175,19 +171,20 @@
       "waiting": "{{count}} waiting",
       "description": "Projects and servers you were invited to. Accepting opens Orchester, which connects to the server and shows the project's join review.",
       "kindProject": "Project · {{role}}",
-      "kindServer": "Server · {{role}}",
+      "kindServer": "Server",
       "fromProject": "{{inviter}} invited you to a project on {{server}}.",
       "fromServer": "{{inviter}} invited you to the server, with no project yet.",
       "when": "{{sent}} · expires {{expires}}",
       "decline": "Decline",
       "declining": "Declining…",
-      "declineNotYet": "Declining is not available yet. The invite stays until it expires.",
       "emptyTitle": "No invites yet",
       "emptyText": "When someone invites {{email}} to a project or a server, it shows here and in Orchester.",
-      "notYetTitle": "Invites are not available yet",
-      "notYetText": "Orchester Cloud does not list invites yet. When it does, invites to {{email}} show here.",
       "failedTitle": "Invites could not be loaded",
-      "failedText": "Orchester Cloud did not answer. Reload the page to try again."
+      "failedText": "Orchester Cloud did not answer. Reload the page to try again.",
+      "roles": {
+        "owner": "Owner",
+        "member": "Member"
+      }
     },
     "servers": {
       "title": "Your servers",
@@ -201,8 +198,6 @@
       "note": "Orchester Cloud knows which servers you own or joined, not your projects or roles on them. Orchester asks each server for those.",
       "emptyTitle": "No servers yet",
       "emptyText": "Servers you join through an invite, and servers you connect in Orchester, are listed here.",
-      "notYetTitle": "Servers are not available yet",
-      "notYetText": "Orchester Cloud does not keep its list of team servers yet. When it does, the servers you own or joined show here.",
       "failedTitle": "Servers could not be loaded",
       "failedText": "Orchester Cloud did not answer. Reload the page to try again."
     },
@@ -249,12 +244,59 @@
       "passwordChanged": "Your password is changed. Your other devices are signed out; their projects on team servers keep working.",
       "signOut": "Sign out",
       "signOutBrowser": "Sign out of this browser",
-      "signOutHint": "Orchester on your computers stays signed in."
+      "signOutHint": "Orchester on your computers stays signed in.",
+      "deleteAccount": "Delete account",
+      "deleteHint": "Deletes your account from Orchester Cloud. Your accounts on team servers stay.",
+      "deleteTitle": "Delete your Orchester account?",
+      "deleteText": "Your account, its devices and the invites to {{email}} are deleted at once, and every computer and browser is signed out of it. Your accounts on team servers and their projects keep working.",
+      "deletePassword": "Password",
+      "deletePasswordHint": "Your account's password, to confirm it is you.",
+      "deleteEmpty": "Enter your password.",
+      "deleteWrong": "The password is not right.",
+      "keep": "Keep",
+      "deleting": "Deleting…"
     },
     "today": "Today, {{time}}"
   },
   "device": {
     "webName": "{{browser}} on {{system}}",
     "unknownBrowser": "Web browser"
+  },
+  "authorize": {
+    "pageTitle": "Confirm",
+    "adminTitle": "Sign in to {{server}}'s admin as {{email}}?",
+    "adminDescription": "{{server}}'s admin page asked Orchester Cloud who you are. Confirming sends it your account and name for this one sign-in; it gets no password.",
+    "linkTitle": "Link {{server}} to your account?",
+    "linkDescription": "You're setting up this server. Linked, it takes invites by email and lets people join with their Orchester account. Orchester Cloud records it as yours; it never sees its projects.",
+    "notYou": "Not you?",
+    "backTo": "Back to {{place}}",
+    "checkCode": "Check code",
+    "checkCodeSame": "The same as on the server's console and its setup page.",
+    "adminSubmit": "Sign in to the admin",
+    "linkSubmit": "Link {{server}}",
+    "submitting": "Confirming…",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "refusedTitle": "This request can't be answered",
+    "invalid": "The link that brought you here is incomplete or changed. Go back to the server's admin page and start again.",
+    "notLinked": "This team server isn't linked to Orchester Cloud. Its admins can link it in its Settings, or sign in there with a code.",
+    "wrongReturn": "The page that sent you here isn't this team server's own admin, so Orchester Cloud doesn't answer it.",
+    "linkedElsewhere": "This server is already linked to another Orchester account. Its owner can unlink it first.",
+    "statementRefused": "The server's link didn't check out, or is more than 10 minutes old. Go back to its setup page and start again.",
+    "keysUnavailable": "Orchester Cloud can't sign right now. Try again in a few minutes.",
+    "signedOut": "Your session ended. Sign in again, then confirm.",
+    "tooMany": "Too many requests. Try again in {{minutes}} min, at {{time}}."
+  },
+  "invites": {
+    "deliver": {
+      "pageTitle": "Invite",
+      "sentTitle": "Invite delivered",
+      "sentText": "Orchester Cloud has the invite. It reaches the person in Orchester if they have an account, and by email either way.",
+      "refusedTitle": "Orchester Cloud didn't take this invite",
+      "refusedText": "It wasn't signed by a server linked to Orchester Cloud, it expired, or it was sent too often. Make a new invite in the server's admin, or invite with a code.",
+      "unavailableTitle": "Orchester Cloud isn't answering",
+      "unavailableText": "The invite wasn't delivered. Try again in a few minutes, or invite with a code.",
+      "back": "Back to {{place}}"
+    }
   }
 }

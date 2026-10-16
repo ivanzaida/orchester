@@ -36,6 +36,18 @@ pub async fn serve(
   Ok(())
 }
 
+/// Serves the private listener the server admin app's own server side calls the API on (`admin_api_listen`): plain
+/// HTTP on a private address, the API only, the browser's address and host taken from the admin's forwarded headers.
+pub async fn serve_admin_api(
+  server: Server,
+  listener: TcpListener,
+  shutdown: impl Future<Output = ()> + Send + 'static,
+) -> Result<(), ServerError> {
+  let limits = ConnectionLimit::new(256, 256, Vec::new());
+  serve_listener(listener, crate::http::internal_router(server), shutdown, limits).await;
+  Ok(())
+}
+
 async fn serve_listener<L: Listener<Addr = SocketAddr>>(
   mut listener: L,
   app: Router,

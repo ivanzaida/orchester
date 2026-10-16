@@ -800,6 +800,18 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
 - **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
+### SA · Server admin (web/server) · implemented 2026-10-16, waiting for design verification and review
+
+Branch `claude/server-admin`, worktree `.tmp/worktrees/claude-server-admin`, from master `ab88f7c4`; the scope is
+[server-new-app-plan.md](architecture/server-new-app-plan.md), *SA*, the frames the *Server admin* layer `sJK6L` of
+`data/orchester2.pen`. Built: the team server's front door (non-API paths forwarded to the admin, reserved slugs, a
+private API listener for the admin), `admin_web` browser sign-ins, the admin endpoints (`/admin/projects`,
+`/admin/sessions`, `/server/settings` with the name, invite history and revocations), Orchester Cloud's server
+registry, invites in flight and token purposes, web/cloud's `/authorize` and `/invites/deliver`, the `web/server`
+admin app, `deploy/server` (compose with `server` and `admin`, Caddy variant, systemd units), and an end-to-end run
+against the real binaries (`web/server/tests/e2e`). Report: `.tmp/sa-run/report.md`. **Done when** an independent
+verifier reports no blocking or major mismatches against the frames, an independent review passes, and it is merged.
+
 ## P · Product decisions waiting for the user
 
 - **Secrets:** fixed Development / Staging / Production environments; archive a secret instead of deleting it.

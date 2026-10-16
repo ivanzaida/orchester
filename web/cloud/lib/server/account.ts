@@ -1,12 +1,10 @@
-import type { Device, Invite, Listing, Platform, Server } from "@/lib/account";
+import type { Device, Invite, InviteRole, Listing, Platform, Server } from "@/lib/account";
 import { call, nothing, type ApiResult, type CallOptions } from "@/lib/server/api";
 import { readAccount, record, type Account } from "@/lib/server/cloud";
 
 /**
- * The signed-in account's endpoints (`docs/cloud-api.md`): `/devices`, `PATCH /me`, `POST /auth/password`. Invites and
- * the server registry are not in the cloud yet; their shapes here are assumed from `server.md` ("Orchester Cloud") and
- * listed for the backend in `.tmp/cloud-web-run/report.md`: `GET /invites`, `GET /servers`,
- * `POST /invites/{id}/decline`.
+ * The signed-in account's endpoints (`docs/cloud-api.md`): `/devices`, `PATCH /me`, `DELETE /me`, `POST /auth/password`,
+ * `GET /invites`, `POST /invites/{id}/decline` and `GET /servers`.
  */
 
 const PLATFORMS = new Set<string>(["windows", "macos", "linux", "web"]);
@@ -22,12 +20,18 @@ function text(value: unknown): value is string {
   return typeof value === "string";
 }
 
-function list<T>(json: unknown, field: string, read: (item: unknown) => T | null): T[] | null {
+/** The items of `json[field]` that `keep` keeps, each read; `null` when the list or any kept item is not as expected. */
+function list<T>(
+  json: unknown,
+  field: string,
+  read: (item: unknown) => T | null,
+  keep: (item: unknown) => boolean = () => true,
+): T[] | null {
   const items = record(json)?.[field];
   if (!Array.isArray(items)) {
     return null;
   }
-  const parsed = items.map(read);
+  const parsed = items.filter((item) => keep(item)).map(read);
   return parsed.every((item) => item !== null) ? (parsed) : null;
 }
 
@@ -50,11 +54,24 @@ function readProject(json: unknown): Invite["project"] | undefined {
   return text(name) && text(address) ? { name, address } : undefined;
 }
 
+/** A project invite's role (`owner` or `member`); a server invite carries none. `undefined` when it is not one. */
+function readRole(kind: "project" | "server", role: unknown): InviteRole | null | undefined {
+  if (kind === "server") {
+    return role === null ? null : undefined;
+  }
+  return role === "owner" || role === "member" ? role : undefined;
+}
+
 function readInvite(json: unknown): Invite | null {
-  const { id, kind, role, inviter_display_name: inviterName, expires_at: expiresAt, server, project } = record(json) ?? {};
+  const { id, kind, role: wireRole, inviter_display_name: inviterName, expires_at: expiresAt, server, project } =
+    record(json) ?? {};
   const { name: serverName, address: serverAddress } = record(server) ?? {};
   const invitedTo = readProject(project);
-  if (!text(id) || (kind !== "project" && kind !== "server") || !text(role) || !text(inviterName)) {
+  if (!text(id) || (kind !== "project" && kind !== "server") || !text(inviterName)) {
+    return null;
+  }
+  const role = readRole(kind, wireRole);
+  if (role === undefined) {
     return null;
   }
   if (!text(serverName) || !text(serverAddress) || invitedTo === undefined || typeof expiresAt !== "number") {
@@ -92,26 +109,32 @@ export function changePassword(current: string, next: string, options: CallOptio
   return call("POST", "/auth/password", { body, expected: 204, read: nothing }, options);
 }
 
-async function listing<T>(path: string, field: string, read: (item: unknown) => T | null, options: CallOptions) {
-  const result = await call("GET", path, { expected: 200, read: (json) => list(json, field, read) }, options);
-  if (result.ok) {
-    return { kind: "list", items: result.value } satisfies Listing<T>;
-  }
-  const missing = result.error.kind === "refused" && result.error.code === "not_found";
-  return (missing ? { kind: "notYet" } : { kind: "failed" }) satisfies Listing<T>;
+async function listing<T>(path: string, read: (json: unknown) => T[] | null, options: CallOptions): Promise<Listing<T>> {
+  const result = await call("GET", path, { expected: 200, read }, options);
+  return result.ok ? { kind: "list", items: result.value } : { kind: "failed" };
 }
 
-/** Assumed: `GET /invites` → `{ invites: [Invite] }`, the open invites to this account's email. */
+/**
+ * `GET /invites` → `{ invites: [Invite] }`, the open invites to this account's email. An invite of kind `account`
+ * (a team server linking an account it already has to this cloud identity) has no row in the Cloud frames, so the
+ * page does not list it; it is accepted in the Orchester app.
+ */
 export function invites(options: CallOptions): Promise<Listing<Invite>> {
-  return listing("/invites", "invites", readInvite, options);
+  const drawn = (item: unknown) => record(item)?.kind !== "account";
+  return listing("/invites", (json) => list(json, "invites", readInvite, drawn), options);
 }
 
-/** Assumed: `GET /servers` → `{ servers: [Server] }`, the team servers the account owns or joined. */
+/** `GET /servers` → `{ servers: [Server] }`, the team servers the account owns or joined. */
 export function servers(options: CallOptions): Promise<Listing<Server>> {
-  return listing("/servers", "servers", readServer, options);
+  return listing("/servers", (json) => list(json, "servers", readServer), options);
 }
 
-/** Assumed: `POST /invites/{id}/decline` → `204`; the cloud tells the team server. */
+/** `DELETE /me { password }` → `204`: the account and everything the cloud holds about it. */
+export function deleteAccount(password: string, options: CallOptions): Promise<ApiResult<true>> {
+  return call("DELETE", "/me", { body: { password }, expected: 204, read: nothing }, options);
+}
+
+/** `POST /invites/{id}/decline` → `204`. The team server keeps its copy until it expires; nothing joins with it. */
 export function declineInvite(id: string, options: CallOptions): Promise<ApiResult<true>> {
   if (!UUID.test(id)) {
     return Promise.resolve(NOT_AN_ID);

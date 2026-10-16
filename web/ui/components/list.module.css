@@ -58,6 +58,14 @@
   box-shadow: inset 0 calc(-1 * var(--border-sm)) 0 var(--color-border);
 }
 
+.compact {
+  padding: var(--space-row) var(--space-row-x);
+}
+
+.active {
+  background: var(--color-hover);
+}
+
 .center {
   align-items: center;
 }
@@ -115,7 +123,16 @@
   gap: var(--space-sm);
 }
 
-/* Actions that fill the row's width on a phone, like an invite's buttons (`v0PUn` in `F9QYD`). */
+/*
+ * Actions that fill the row's width on a phone, like an invite's buttons (`v0PUn` in `F9QYD`). There a ghost button
+ * (an invite's *Decline*, ghost at full width in `N5imr`) becomes the bordered secondary `Dswcx`, as `F9QYD` draws it.
+ */
+.fill {
+  --button-ghost-fill: var(--row-ghost-fill);
+  --button-ghost-ring: var(--row-ghost-ring);
+  --button-ghost-text: var(--row-ghost-text);
+}
+
 .fill button {
   width: var(--row-button-width);
 }
@@ -174,18 +191,43 @@
   align-items: center;
   gap: var(--space-inline);
   padding: var(--space-line) var(--space-sm);
-  background: var(--color-success-muted);
   border-radius: var(--radius-full);
   font-size: var(--text-tag);
   font-weight: var(--weight-medium);
-  color: var(--color-success);
+  white-space: nowrap;
 }
 
 .dot {
+  flex: none;
   width: var(--size-dot);
   height: var(--size-dot);
-  background: var(--color-success);
+  background: currentColor;
   border-radius: var(--radius-full);
+}
+
+.badge-success {
+  background: var(--color-success-muted);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background: var(--color-warning-muted);
+  color: var(--color-warning);
+}
+
+.badge-danger {
+  background: var(--color-danger-muted);
+  color: var(--color-danger);
+}
+
+.badge-info {
+  background: var(--color-info-muted);
+  color: var(--color-info);
+}
+
+.badge-neutral {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
 }
 
 .empty {

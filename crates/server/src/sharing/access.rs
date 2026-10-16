@@ -56,6 +56,20 @@ pub fn member(
   Ok(current)
 }
 
+/// A member of `project`, or an admin: who may read its members.
+pub fn viewer(
+  db: &Connection,
+  auth: &Authenticated,
+  project: ProjectId,
+  now: i64,
+) -> Result<Authenticated, ServerError> {
+  let current = db::checked(db, auth, now, false)?;
+  if current.user.admin {
+    return owner(db, auth, project, now);
+  }
+  member(db, auth, project, now)
+}
+
 pub fn owner(
   db: &Connection,
   auth: &Authenticated,

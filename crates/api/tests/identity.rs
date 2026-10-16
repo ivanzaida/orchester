@@ -53,6 +53,7 @@ fn token(key: &SigningKey, audience: &str, now: i64) -> String {
         platform: CloudPlatform::Macos,
       },
       invite: None,
+      purpose: None,
     },
     now,
   )
@@ -293,4 +294,37 @@ fn identity_key_set_with_extreme_times_is_refused() {
     let compact = signed_by_hand(&private, &statement);
     assert!(VerifiedKeySet::verify(&compact, &root.public_key(), NOW).is_err());
   }
+}
+
+/// A team server's statement verifies with the key that signed it and with no other; its type must match, and reading
+/// it unverified is only for finding the key a link statement names.
+#[test]
+fn identity_server_statements_verify_with_their_key_and_type() {
+  use orchester_api::{
+    identity::{read_statement, verify_statement},
+    statements::{LINK_STATEMENT_TYPE, LinkStatement, SIGNED_INVITE_TYPE},
+  };
+  let server = signing_key();
+  let statement = LinkStatement {
+    server: SERVER.parse().expect("a server id"),
+    name: "Kontur team".into(),
+    address: "https://team.example.test".into(),
+    public_key: server.public_key().encoded(),
+    fingerprint: None,
+    issued_at: NOW,
+  };
+  let signed = server.sign_statement(LINK_STATEMENT_TYPE, &statement).expect("sign");
+  let named: LinkStatement = read_statement(&signed, LINK_STATEMENT_TYPE).expect("readable");
+  assert_eq!(named, statement);
+  let verified: LinkStatement = verify_statement(&signed, LINK_STATEMENT_TYPE, &server.public_key()).expect("verifies");
+  assert_eq!(verified, statement);
+  let other = signing_key().public_key();
+  assert_eq!(
+    verify_statement::<LinkStatement>(&signed, LINK_STATEMENT_TYPE, &other),
+    Err(IdentityError::UnknownKey)
+  );
+  assert_eq!(
+    verify_statement::<LinkStatement>(&signed, SIGNED_INVITE_TYPE, &server.public_key()),
+    Err(IdentityError::Malformed)
+  );
 }

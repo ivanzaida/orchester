@@ -45,18 +45,16 @@ export function ExpiredLink(props: {
   );
 }
 
-function Confirmed({ email }: { email: string | null }) {
+function Confirmed({ email }: { email: string }) {
   useEffect(() => {
-    if (email !== null) {
-      rememberSignInEmail(email);
-    }
+    rememberSignInEmail(email);
   }, [email]);
-  const description = email === null ? t("confirm.confirmedDescriptionNoAddress") : t("confirm.confirmedDescription");
   return (
     <Card>
       <Top>
-        <Head title={t("confirm.confirmedTitle")} description={description} tile={{ icon: "circle-check", tone: "success" }} />
-        {email !== null && <Address email={email} />}
+        <Head title={t("confirm.confirmedTitle")} description={t("confirm.confirmedDescription")}
+          tile={{ icon: "circle-check", tone: "success" }} />
+        <Address email={email} />
       </Top>
       <Text>{t("confirm.confirmedNext")}</Text>
       <Actions>
@@ -70,18 +68,8 @@ function Confirmed({ email }: { email: string | null }) {
 
 type AskState = Extract<ConfirmState, { view: "confirm" }>;
 
-/**
- * *Send a new link* after a failed try (`CVRpO`), to the address shown. Without the address (a cloud that cannot
- * inspect links yet) it leads to sign-up, which sends a new link to an unconfirmed address.
- */
-function SendNewLink({ email, sending }: { email: string | null; sending: boolean }) {
-  if (email === null) {
-    return (
-      <ButtonLink kind="secondary" icon="send" href="/signup">
-        {t("confirm.send")}
-      </ButtonLink>
-    );
-  }
+/** *Send a new link* after a failed try (`CVRpO`), to the address shown. */
+function SendNewLink({ sending }: { sending: boolean }) {
   return (
     <Submit kind="secondary" icon="send" form="resend-form" label={t("confirm.send")} busyLabel={t("confirm.sending")}
       pending={sending} />
@@ -103,10 +91,10 @@ function Ask({ csrf, token, state, action, confirming }: {
       <Top>
         <Head
           title={t("confirm.title")}
-          description={state.email === null ? t("confirm.descriptionNoAddress") : t("confirm.description")}
+          description={t("confirm.description")}
           tile={{ icon: "mail-check", tone: "neutral" }}
         />
-        {state.email !== null && <Address email={state.email} />}
+        <Address email={state.email} />
       </Top>
       <CardForm id="confirm-form" action={action}>
         <CsrfField token={csrf} />
@@ -117,17 +105,15 @@ function Ask({ csrf, token, state, action, confirming }: {
           {state.error && <ErrorLine message={state.error} />}
         </Stack>
       </CardForm>
-      {state.email !== null && (
-        <form id="resend-form" action={resend} hidden>
-          <CsrfField token={csrf} />
-          <Hidden name="email" value={state.email} />
-        </form>
-      )}
+      <form id="resend-form" action={resend} hidden>
+        <CsrfField token={csrf} />
+        <Hidden name="email" value={state.email} />
+      </form>
       <Small>{t("confirm.notYou")}</Small>
       <Actions>
         <Submit kind="primary" icon="check" form="confirm-form" label={t("confirm.submit")}
           busyLabel={t("confirm.submitting")} pending={confirming} />
-        {state.failed && <SendNewLink email={state.email} sending={sending} />}
+        {state.failed && <SendNewLink sending={sending} />}
         {resent.error && <ErrorLine message={resent.error} />}
       </Actions>
     </Card>

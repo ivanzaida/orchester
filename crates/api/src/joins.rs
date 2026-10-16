@@ -5,7 +5,7 @@
 use orchester_core::id::{ApprovalId, ProjectId};
 use serde::{Deserialize, Serialize};
 
-use crate::{Credential, MemberRole, Session, User, UserRef};
+use crate::{Credential, DeviceKind, MemberRole, Session, User, UserRef};
 
 /// `POST /auth/cloud`.
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,6 +17,9 @@ pub struct CloudJoin {
   pub device: String,
   /// The join approval this request finishes, once it was approved.
   pub approval: Option<ApprovalId>,
+  /// `admin_web` for a sign-in to the server admin, with a token issued for that purpose.
+  #[serde(default)]
+  pub kind: DeviceKind,
 }
 
 /// `POST /auth/code`. `username` and `display_name` only when the code creates an account.
@@ -27,6 +30,17 @@ pub struct CodeJoin {
   pub device: String,
   pub username: Option<String>,
   pub display_name: Option<String>,
+  /// `admin_web` for a sign-in to the server admin: with a setup, pairing or account code.
+  #[serde(default)]
+  pub kind: DeviceKind,
+}
+
+/// `POST /auth/setup`: whether `code` is the server's open setup code, without using it up. The server admin asks
+/// before it asks for the first admin's name.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetupCheck {
+  pub code: Credential,
 }
 
 /// The project a join made the person a member of.
@@ -60,6 +74,9 @@ pub struct Approval {
   pub id: ApprovalId,
   pub user: UserRef,
   pub device: String,
+  /// The address the join came from.
+  #[serde(default)]
+  pub address: String,
   pub state: ApprovalState,
   pub requested_at: i64,
   pub expires_at: i64,

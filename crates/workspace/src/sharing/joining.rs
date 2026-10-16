@@ -5,7 +5,7 @@
 //! no code and no token.
 
 use orchester_api::{
-  Approval, CloudJoin, CloudJoinAnswer, CodeJoin, Credential, Joined, PairingCode,
+  Approval, CloudJoin, CloudJoinAnswer, CodeJoin, Credential, DeviceKind, Joined, PairingCode,
   client::{Client, ClientError, CloudClient, ServerAddress},
   cloud::CloudServer,
 };
@@ -60,6 +60,7 @@ impl Servers {
         device: device::this_computer(),
         username: request.username,
         display_name: request.display_name,
+        kind: DeviceKind::App,
       })
       .await?;
     self.keep_join(address, (trust, JoinedWith::Code), name, joined).await
@@ -83,6 +84,7 @@ impl Servers {
       key_set: Some(key_set),
       device: device::this_computer(),
       approval,
+      kind: DeviceKind::App,
     };
     self
       .finish_cloud_join(server, (&address, trust, &client, name), &request)
@@ -103,6 +105,7 @@ impl Servers {
       key_set: Some(key_set),
       device: device::this_computer(),
       approval: None,
+      kind: DeviceKind::App,
     };
     self
       .finish_cloud_join(server, (&address, trust, &client, name), &request)

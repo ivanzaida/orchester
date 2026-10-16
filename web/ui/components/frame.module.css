@@ -105,6 +105,10 @@
   color: var(--color-text-muted);
 }
 
+.promise {
+  display: var(--footer-promise);
+}
+
 .spacer {
   display: var(--footer-spacer);
   flex: 1;

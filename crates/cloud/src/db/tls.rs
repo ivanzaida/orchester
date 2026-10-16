@@ -28,10 +28,10 @@ pub(super) fn check_transport(config: &Config) -> Result<(), CloudError> {
     SslMode::Require => Ok(()),
     SslMode::Disable if config.get_hosts().iter().all(local) && config.get_hostaddrs().iter().all(local_ip) => Ok(()),
     SslMode::Disable => Err(CloudError::Configuration(
-      "DATABASE_URL has sslmode=disable for a host outside the local network; use sslmode=require",
+      "ORCHESTER_CLOUD_DATABASE_URL has sslmode=disable for a host outside the local network; use sslmode=require",
     )),
     _ => Err(CloudError::Configuration(
-      "DATABASE_URL must say sslmode=require (or sslmode=disable for a database on the local network)",
+      "ORCHESTER_CLOUD_DATABASE_URL must say sslmode=require (or sslmode=disable for a database on the local network)",
     )),
   }
 }

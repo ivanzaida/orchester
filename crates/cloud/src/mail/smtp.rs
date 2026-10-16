@@ -20,10 +20,10 @@ impl SmtpMailer {
   pub fn new(url: &Credential, from: &str) -> Result<Self, CloudError> {
     let from = from
       .parse()
-      .map_err(|_| CloudError::Configuration("SMTP_FROM is not an email address"))?;
+      .map_err(|_| CloudError::Configuration("ORCHESTER_CLOUD_SMTP_FROM is not an email address"))?;
     // The parser's error can quote the URL, which holds the relay's password.
     let transport = AsyncSmtpTransport::<Tokio1Executor>::from_url(url.expose())
-      .map_err(|_| CloudError::Configuration("SMTP_URL is not an smtp:// or smtps:// URL"))?
+      .map_err(|_| CloudError::Configuration("ORCHESTER_CLOUD_SMTP_URL is not an smtp:// or smtps:// URL"))?
       .timeout(Some(Duration::from_secs(30)))
       .build();
     Ok(Self { transport, from })

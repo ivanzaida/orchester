@@ -8,10 +8,13 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 mod accounts;
+mod deletion;
 mod desktop;
 mod hosting;
 mod identity;
 mod limits;
+mod links;
+mod registry;
 mod sessions;
 mod support;
 
@@ -35,10 +38,17 @@ const TESTS: &[(&str, Test)] = tests![
   accounts::concurrent_confirm_sign_up_and_reset_never_fail,
   accounts::confirm_locks_the_account_before_its_links,
   accounts::a_reset_request_answers_before_any_database_work,
+  links::a_resent_link_confirms_with_the_sign_up_password,
+  links::resend_answers_alike_for_any_email,
+  links::resend_answers_before_the_database_and_is_limited,
+  links::inspect_names_the_email_without_using_the_link,
+  links::inspect_failures_are_limited_per_address,
   limits::sign_in_is_rate_limited_per_email_and_address,
   limits::emails_and_link_finishes_are_rate_limited,
   limits::confirm_is_rate_limited_per_link,
   limits::parallel_confirm_guesses_stay_within_the_link_limit,
+  deletion::deleting_the_account_removes_what_the_cloud_holds,
+  deletion::deleting_with_wrong_passwords_is_limited,
   sessions::reset_signs_out_every_device,
   sessions::password_change_signs_out_the_other_devices,
   sessions::devices_are_listed_and_revoked,
@@ -52,6 +62,10 @@ const TESTS: &[(&str, Test)] = tests![
   hosting::requests_follow_the_contract,
   desktop::desktop_signs_in_and_out_with_a_confirmed_account,
   hosting::unsafe_configuration_is_refused,
+  registry::servers_link_from_the_statement_they_signed,
+  registry::admin_tokens_are_issued_only_for_linked_servers,
+  registry::invites_reach_the_invitee_once_and_end_when_revoked,
+  registry::invites_are_declined_by_the_invitee,
 ];
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.

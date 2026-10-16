@@ -38,6 +38,9 @@ the person who owns them.
 | S2a · Servers and sign-in | Merged; **screens only in the deprecated app**; its password sign-in and Settings › Servers are superseded by rows 39–46 | service: `crates/workspace/src/sharing/`; screens: `crates/desktop/src/screens/project/servers/` |
 | S2b · Share, members, Make local, read-only offline, conflict | Merged; **screens only in the deprecated app** | service: `crates/workspace/src/sharing/project/`; screens: `crates/desktop/src/screens/project/settings/sharing/`, `tasks/shared.rs` |
 | S2c · Join | Merged 2026-10-05; **screens only in the deprecated app** | service: `sharing/project/join.rs`; screens: `crates/desktop/src/screens/project/join/`, `tasks/not_shared.rs` |
+| S1c · Certificate, codes, devices, invites, cloud link, projects by slug | Merged | `crates/server`, `crates/api`, `crates/workspace/src/sharing/` |
+| C1a, C1b · Orchester Cloud backend and web front | Merged | `crates/cloud`, `web/cloud`, `web/ui` |
+| SA · Server admin | On branch `claude/server-admin`, not merged | `web/server`, `crates/server/src/http/{admin_proxy,internal,settings,managed}.rs`, `crates/cloud/src/{servers,invites}.rs`, `web/cloud/app/authorize/`, `deploy/server/` |
 | S2d, S3, S4, S5 | Not built | this document; [server-new-app-plan.md](server-new-app-plan.md) |
 
 The new app (`crates/desktop-app`) already uses the S2 service where it writes tasks and starts work: its task form
@@ -1083,7 +1086,21 @@ certificate in every setup:
 - `orchester-server` answers `/api/*` itself and reverse-proxies every other path to the admin app on a private
   address (`admin_url`, default `http://127.0.0.1:3100`), with `hyper-util`'s client (already a dependency). `/`
   redirects to `/admin`; a project's own address (`/<slug>`) shows a page that names nothing and says to open it in
-  Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs.
+  Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs. The server sets
+  `X-Forwarded-For`, `-Proto` and `-Host` on what it forwards, replacing any the client sent; the admin listens only
+  on the private address and trusts them (its own origin for the `Origin` check is their proto and host).
+- **The admin's server side calls the API** on a second, private plain-HTTP listener of the server
+  (`admin_api_listen`, default `127.0.0.1:8741`, never published): the public port presents the server's own
+  certificate, which the admin's Node would otherwise have to pin. That listener takes the browser's address and host
+  from the forwarded headers the admin passes on, so the per-address limits count the browser and project addresses
+  carry the host it used.
+- **Browser sign-ins** are device tokens of the kind `admin_web`: 12 hours from sign-in, refused on what only the app
+  does (tasks, claims, events, linking, pairing), not listed among the account's computers, and issued only to admins
+  and project owners (`403 nothing_to_manage` otherwise). Identity tokens carry a `purpose` (`admin`, `link`, or none
+  to join), and a team server takes each only for its own use.
+- **Invites by email** are delivered to the cloud by the admin's own server side when the host has the internet, or
+  posted from the inviter's browser to the cloud's web front (`/invites/deliver`) when it has not; the team server
+  itself never reaches the cloud.
 - **Docker:** two containers in `deploy/server/compose.yaml`, `server` (Rust) and `admin` (the Next.js standalone
   build on Node 22), on a private network; only `server` is published, or Caddy in front of it for a public domain
   (`tls = "off"`, as before). Caddy routes everything to `server`.
