@@ -41,7 +41,7 @@ impl Cloud {
       if request.purpose.is_some() {
         return Err(CloudErrorCode::Invalid.into());
       }
-      crate::invites::open_to(&client, auth, invite, audience, self.now()).await?;
+      crate::invites::accept_for(&client, auth, (invite, audience), self.now()).await?;
     }
     let linked = crate::servers::linked(&client, audience).await?.is_some();
     match request.purpose {
@@ -53,13 +53,9 @@ impl Cloud {
       _ => {}
     }
     drop(client);
-    let issued = self
+    self
       .issue_for(auth, audience.to_string(), (request.purpose, request.invite))
-      .await?;
-    if let Some(invite) = request.invite {
-      self.accepted_invite(auth, invite).await?;
-    }
-    Ok(issued)
+      .await
   }
 
   /// A five-minute token for one team server, about the device's account, for `purpose` and accepting `invite`, signed

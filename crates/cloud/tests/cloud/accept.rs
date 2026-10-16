@@ -1,5 +1,7 @@
 //! Accepting an invite (N1): the invitee's app asks for a join token that names the invite, which only the invitee
-//! gets, only from the invite's server and only while the invite is open; the cloud's copy then ends.
+//! gets, only from the invite's server and only while the invite is open. The invite is then accepted: it leaves the
+//! list, and the same account can ask again (a join that failed is retried) until it expires; nobody else can, a
+//! decline cannot follow, and delivering it again brings nothing back (N1 security review 1, M2 and minor 1).
 
 use orchester_api::{
   cloud::{CloudInvites, IdentityTokenIssued, KeySetResponse, ServersResponse},
@@ -24,7 +26,7 @@ pub async fn invites_are_accepted_with_a_token_that_names_them() {
   link(&cloud, &owner, &other).await;
   let id = InviteId::generate();
   let body = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
-  assert_eq!(cloud.request("POST", "/invites", None, Some(body)).await.status, 202);
+  assert_eq!(cloud.request("POST", "/invites", None, Some(body.clone())).await.status, 202);
   let accept = json!({"audience": server.id(), "invite": id});
   refused_unless_open_to_the_invitee(&cloud, (&owner, &dana), (&other, id)).await;
 
@@ -45,13 +47,22 @@ pub async fn invites_are_accepted_with_a_token_that_names_them() {
   assert_eq!(claims.purpose, None, "a join token");
 
   let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
-  assert!(listed.invites.is_empty(), "the cloud's copy ended");
+  assert!(listed.invites.is_empty(), "an accepted invite leaves the list");
   let servers: ServersResponse = cloud.request("GET", "/servers", Some(&dana), None).await.json();
   assert_eq!(servers.servers.len(), 1, "the join is recorded");
   let again = cloud
-    .request("POST", "/identity-tokens", Some(&dana), Some(accept))
+    .request("POST", "/identity-tokens", Some(&dana), Some(accept.clone()))
     .await;
-  assert_eq!(again.status, 404, "an invite is accepted once");
+  assert_eq!(again.status, 201, "a join that failed is retried with a new token");
+  remember(again.json::<IdentityTokenIssued>().identity_token.expose());
+  let decline = format!("/invites/{id}/decline");
+  assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 404, "accepted, not open");
+  assert_eq!(cloud.request("POST", "/invites", None, Some(body)).await.status, 202);
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
+  assert!(listed.invites.is_empty(), "delivering it again brings nothing back");
+  cloud.clock.advance(8 * crate::support::DAY);
+  let expired = cloud.request("POST", "/identity-tokens", Some(&dana), Some(accept)).await;
+  assert_eq!(expired.status, 404, "until it expires");
   cloud.finish().await;
 }
 

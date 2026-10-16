@@ -128,35 +128,16 @@ impl Cloud {
     audit(&client, None, "invite_withdrawn", &id.to_string(), None, now).await
   }
 
-  /// The invitee accepted `id` through an invite-bound identity token: the cloud's copy ends, as a declined one does.
-  /// The team server ends its own when the token joins.
-  pub(crate) async fn accepted_invite(&self, auth: Authenticated, id: InviteId) -> Result<(), CloudError> {
-    let client = self.client().await?;
-    client
-      .execute(
-        "DELETE FROM invites i USING accounts a WHERE i.id = $1 AND a.id = $2 AND i.email = a.email",
-        &[&id.as_uuid(), &auth.account.as_uuid()],
-      )
-      .await?;
-    audit(
-      &client,
-      Some(auth.account),
-      "invite_accepted",
-      &id.to_string(),
-      None,
-      self.now(),
-    )
-    .await
-  }
-
-  /// `POST /invites/{id}/decline`: the invitee deletes an open invite to the account's email. The team server keeps
-  /// its own copy until it expires or is revoked; nothing joins with it, since a join needs the invitee's own token.
+  /// `POST /invites/{id}/decline`: the invitee answers an open invite to the account's email with no. It leaves the
+  /// list and issues no token; the row stays until the invite expires, so delivering it again changes nothing. The
+  /// team server keeps its own copy until it expires or is revoked; nothing joins with it, since a join needs a token.
   pub(crate) async fn decline_invite(&self, auth: Authenticated, id: InviteId) -> Result<(), CloudError> {
     let client = self.client().await?;
     let declined = client
       .execute(
-        "DELETE FROM invites i USING accounts a WHERE i.id = $1 AND a.id = $2 AND i.email = a.email",
-        &[&id.as_uuid(), &auth.account.as_uuid()],
+        "UPDATE invites i SET answer = 'declined', answered_by = a.id, answered_at = $3 FROM accounts a
+         WHERE i.id = $1 AND a.id = $2 AND i.email = a.email AND i.answer IS NULL AND i.expires_at > $3",
+        &[&id.as_uuid(), &auth.account.as_uuid(), &time(self.now())],
       )
       .await?;
     if declined == 0 {
@@ -173,7 +154,8 @@ impl Cloud {
     .await
   }
 
-  /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first.
+  /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first; answered
+  /// ones are not listed.
   pub(crate) async fn invites(&self, auth: Authenticated) -> Result<Vec<CloudInvite>, CloudError> {
     let rows = self
       .client()
@@ -182,7 +164,7 @@ impl Cloud {
         "SELECT i.id, i.kind, i.role, s.id, s.name, s.address, i.project_address, i.project_name,
            i.inviter_display_name, i.expires_at
          FROM invites i JOIN servers s ON s.id = i.server JOIN accounts a ON a.email = i.email
-         WHERE a.id = $1 AND s.unlinked_at IS NULL AND i.expires_at > $2
+         WHERE a.id = $1 AND s.unlinked_at IS NULL AND i.expires_at > $2 AND i.answer IS NULL
          ORDER BY i.expires_at, i.id",
         &[&auth.account.as_uuid(), &time(self.now())],
       )
@@ -332,22 +314,26 @@ fn parse_role(value: &str) -> Result<MemberRole, CloudError> {
     .ok_or(CloudError::StoredData)
 }
 
-/// `id` is an open invite from the server `server` to the email of `auth`'s account, for a token that accepts it; any
-/// other is `404`, as `decline` answers.
-pub(crate) async fn open_to(
+/// Accepts `id` for a token that names it: an unexpired invite from `server` to the email of `auth`'s account that is
+/// open, or that this account accepted before (its join may have failed). It leaves `GET /invites`. Any other is
+/// `404`, as `decline` answers: declined, accepted by another account, revoked, expired, or another server's.
+pub(crate) async fn accept_for(
   client: &impl GenericClient,
   auth: Authenticated,
-  id: InviteId,
-  server: uuid::Uuid,
+  (id, server): (InviteId, uuid::Uuid),
   now: i64,
 ) -> Result<(), CloudError> {
-  client
-    .query_opt(
-      "SELECT 1 FROM invites i JOIN accounts a ON a.email = i.email
-       WHERE i.id = $1 AND a.id = $2 AND i.server = $3 AND i.expires_at > $4",
+  let accepted = client
+    .execute(
+      "UPDATE invites i SET answer = 'accepted', answered_by = a.id, answered_at = coalesce(i.answered_at, $4)
+       FROM accounts a
+       WHERE i.id = $1 AND a.id = $2 AND a.email = i.email AND i.server = $3 AND i.expires_at > $4
+         AND (i.answer IS NULL OR (i.answer = 'accepted' AND i.answered_by = a.id))",
       &[&id.as_uuid(), &auth.account.as_uuid(), &server, &time(now)],
     )
-    .await?
-    .ok_or(CloudErrorCode::NotFound)?;
-  Ok(())
+    .await?;
+  if accepted == 0 {
+    return Err(CloudErrorCode::NotFound.into());
+  }
+  audit(client, Some(auth.account), "invite_accepted", &id.to_string(), None, now).await
 }

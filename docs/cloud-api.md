@@ -80,7 +80,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin; `invite`: an open invite from that server to the account's email, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is not open, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
@@ -148,10 +148,19 @@ was issued for.
 
 **Accepting an invite** (the desktop, N1). The app reads the invite's server from the registry (`GET /servers/{id}`:
 the address and the certificate fingerprint it pins), then asks `POST /identity-tokens { audience, invite }`. The
-cloud checks that the invite is open, to the account's email and from that server, issues a join token whose `invite`
-claim names it, records the join, and deletes its copy of the invite, as a decline does. The team server admits the
-verified email to that invite with the token; without the claim it admits only an account it already knows. A token
-that is never used leaves the server's copy open until it expires or is revoked.
+cloud checks that the invite is unexpired, to the account's email and from that server, and either open or accepted
+by this same account. It marks the invite accepted by the account, issues a join token whose `invite` claim names it,
+and records the join. The team server admits the verified email to that invite with the token; without the claim it
+admits only an account it already knows.
+
+The rule for an answered invite (N1 security review 1, M2 and minor 1): the cloud keeps the row with its answer
+(`accepted` and by whom, or `declined`) until the invite expires. An answered invite is not in `GET /invites`. An
+accepted one still issues tokens that accept it, to the account that accepted it only, until it expires or the server
+revokes it: a join that failed after its token (the server unreachable, a token lost) is simply asked again, and the
+team server, which accepts each token once and ends its own invite at the first join, admits it once. A declined one
+issues none, and cannot then be accepted; an accepted one cannot then be declined. Because the row stays, delivering
+the same signed invite again changes nothing. The cloud has no word from the server that the join happened; the row
+goes with the invite's expiry (the minute's sweep) or a revocation.
 
 **Linking a team server** (`POST /servers { link }`, from the cloud's `/authorize` page, purpose `link`). The link
 statement is a compact JWS of type `orchester-link+jws` that the server signed with its own Ed25519 key:
@@ -207,9 +216,9 @@ answer in a signed cookie for `/invites/delivered`, which leads back only to the
 registered for that server (`<address>/admin`): nothing in the post or the page's address names where to go
 (security review 1, minor 2).
 
-**Declining an invite.** `POST /invites/{id}/decline` deletes an open invite to the account's email (`404` for any
-other). The team server keeps its own copy until it expires or is revoked; nothing joins with it, since a join needs
-the invitee's own identity token.
+**Declining an invite.** `POST /invites/{id}/decline` answers an open invite to the account's email with no (`404`
+for any other, also one already answered). It leaves the list and issues no token. The team server keeps its own copy
+until it expires or is revoked; nothing joins with it, since a join needs an identity token that names it.
 
 **Deleting the account.** `DELETE /me { password }` asks for the password again (failures count as a password
 change's do). It deletes the account, its devices, links and joins, the servers it linked (with their invites and
