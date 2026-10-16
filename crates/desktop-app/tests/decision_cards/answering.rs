@@ -206,7 +206,7 @@ fn card_that_waits_when_the_chat_opens_takes_the_focus_once() {
   click(&mut window, &own);
   // The run changes and the chat renders again: the focus stays where the person put it.
   for _ in 0..3 {
-    window.projects().feed(project).changes.update(|count| *count += 1);
+    window.projects().feed(project).states.update(|count| *count += 1);
     window.tree.tick_futures();
     window.pass();
   }
