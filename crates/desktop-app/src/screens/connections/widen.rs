@@ -143,13 +143,16 @@ fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -
   })
 }
 
+/// Asked for in every render, with or without the services: lurq keeps a component's futures by the order it
+/// asks for them, and `armed` after it has the same type, so a skipped call would hand it this one's state.
 fn consent(ctx: &mut Ctx, gate: &Option<InputGate>) {
-  let Some(services) = ctx.use_context::<crate::services::Services>() else {
-    return;
-  };
+  let services = ctx.use_context::<crate::services::Services>();
   let read = ctx.future((), move |()| {
-    let workspace = services.workspace.clone();
+    let workspace = services.as_ref().map(|services| services.workspace.clone());
     async move {
+      let Some(workspace) = workspace else {
+        return Ok(());
+      };
       let read = workspace.clone();
       let result = orchester_workspace::background::run(move || {
         workspace.automation_changes_permissions()?;
