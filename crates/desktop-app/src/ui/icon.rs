@@ -15,8 +15,9 @@ use crate::{routes::Screen, theme::IconSize};
 /// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
 /// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
 /// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`,
-/// `square-arrow-out-up-right` its `external-link`, `square-plus` its `plus-square`, `shield-x` its `shield-close`,
-/// `triangle-alert` its `alert-triangle`, `user-round-check` its `user-check` and `user-round-cog` its `user-cog`.
+/// `square-arrow-out-up-right` its `external-link` ([`Icon::ExternalLink`]), `square-plus` its `plus-square`,
+/// `shield-x` its `shield-close`, `triangle-alert` its `alert-triangle`, `user-round-check` its `user-check` and
+/// `user-round-cog` its `user-cog`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,7 +222,6 @@ icons! {
   SlidersHorizontal => '\u{e29a}',
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
-  SquareArrowOutUpRight => '\u{e0b9}',
   SquarePlus => '\u{e173}',
   SquareTerminal => '\u{e20a}',
   Table => '\u{e17d}',

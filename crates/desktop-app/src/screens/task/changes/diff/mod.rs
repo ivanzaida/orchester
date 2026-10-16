@@ -213,7 +213,7 @@ fn head(ctx: &mut Ctx, file: &FileDiff, props: &DiffViewProps) -> Element {
   let open = props.open.clone().map(|route| {
     let navigation = Navigation::of(ctx);
     ActionButton::new("changes-open-file", ButtonKind::Ghost, ctx.t("changes.diff.openFile"))
-      .icon(Icon::SquareArrowOutUpRight)
+      .icon(Icon::ExternalLink)
       .on_click(move || {
         navigation.open_tab();
         navigation.replace(route.clone());

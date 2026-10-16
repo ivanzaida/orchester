@@ -436,8 +436,8 @@ fn open(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   if !shows_open(page, gone) {
     return None;
   }
-  let button = ActionButton::new("files-open", ButtonKind::Secondary, ctx.t("files.openInEditor"))
-    .icon(Icon::SquareArrowOutUpRight);
+  let button =
+    ActionButton::new("files-open", ButtonKind::Secondary, ctx.t("files.openInEditor")).icon(Icon::ExternalLink);
   if let Some(reason) = open_unavailable(page, &file) {
     return Some(button.unavailable(ctx.t(reason)).into());
   }
