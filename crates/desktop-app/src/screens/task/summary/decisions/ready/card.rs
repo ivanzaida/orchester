@@ -1,10 +1,10 @@
 //! Where the run's work stands and what can be done with it. The Ready card (`Ready card` `hyzq2`): ready
-//! for review, *Merge into main*, *Ask agent* and *Review PR*, and why the ones that cannot be used are
-//! unavailable (`Unavailable reason` `QR1ER`). *Merged into main* (`nqp68`): where the work went and what
-//! was cleared after it. *Not merged into main* (`D3kggY`): why, the files that conflicted (`Conflicts`
-//! `IBx7h`), and the same actions to merge again.
+//! for review, *Merge into main*, *Create pull request* ([`super::pull_request`]), *Ask agent* and *Review PR*,
+//! and why the ones that cannot be used are unavailable (`Unavailable reason` `QR1ER`). *Merged into main*
+//! (`nqp68`): where the work went and what was cleared after it. *Not merged into main* (`D3kggY`): why, the
+//! files that conflicted (`Conflicts` `IBx7h`), and the same actions to merge again.
 
-use std::sync::Arc;
+use std::{num::NonZeroU64, sync::Arc};
 
 use lurq::{
   app::{
@@ -22,7 +22,10 @@ use orchester_workspace::{
   tasks::{detail::RunView, integration_jobs::JobState},
 };
 
-use super::super::{super::section_head, TaskContext};
+use super::{
+  super::{super::section_head, TaskContext},
+  pull_request::{self, PullRequestRead},
+};
 use crate::{
   theme::{DecisionSpacing, DecisionText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -39,8 +42,8 @@ use crate::{
 const FILE_ROW_HEIGHT: f32 = 30.0;
 
 /// The Ready card of a run that is not merged.
-pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
-  let (actions, reasons) = actions(ctx, task, run);
+pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> Element {
+  let (actions, reasons) = actions(ctx, task, run, pull);
   let text = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Fine.role())
@@ -139,7 +142,7 @@ pub fn not_merged(
   task: &TaskContext,
   run: &RunView,
   (problem, made): (&Message, Option<&RunMerge>),
-  conflicts: &[String],
+  (conflicts, pull): (&[String], &PullRequestRead),
 ) -> Vec<Element> {
   let title = match (made, run.run.base_branch()) {
     (Some(made), _) => ctx.t_args("decisions.ready.notRecordedTitle", [("branch", made.into.as_str())]),
@@ -150,7 +153,7 @@ pub fn not_merged(
     .icon(Icon::TriangleAlert)
     .body(message_text(ctx, problem));
   let files = (!conflicts.is_empty()).then(|| conflicting(ctx, conflicts));
-  let (actions, reasons) = actions(ctx, task, run);
+  let (actions, reasons) = actions(ctx, task, run, pull);
   let actions = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
@@ -190,44 +193,57 @@ fn conflicting(ctx: &mut Ctx, files: &[String]) -> Element {
     .into()
 }
 
-/// *Merge into main*, *Ask agent* and *Review PR* (`XKJdW`), and why the ones that cannot be used now
-/// are unavailable.
-fn actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (Element, Vec<Element>) {
+/// *Merge into main*, *Create pull request* with *Open as draft*, *Ask agent* and *Review PR* (`XKJdW`); what
+/// came of creating a pull request; and why the actions that cannot be used now are unavailable.
+fn actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> (Element, Vec<Element>) {
   let (merge, merge_reason) = merge_button(ctx, task, run);
+  let pull = pull_request::parts(ctx, task, run, pull);
   let ask_reason = ctx.t("decisions.ready.askUnavailable");
-  let review_reason = ctx.t("decisions.ready.reviewUnavailable");
   let ask = ActionButton::new("task-ask-agent", ButtonKind::Secondary, ctx.t("decisions.ready.ask"))
     .icon(Icon::MessageSquareText)
     .unavailable(ask_reason.clone());
-  let review = ActionButton::new(
-    "task-review-pull-request",
-    ButtonKind::Secondary,
-    ctx.t("decisions.ready.review"),
-  )
-  .icon(Icon::GitPullRequest)
-  .unavailable(review_reason.clone());
+  let (review, review_reason) = review_button(ctx, task, pull.review);
   let row = Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(merge)
+    .with_children(pull.actions)
     .child(ask)
     .child(review);
   let reasons = merge_reason
     .map(|reason| ("task-merge-reason", reason))
     .into_iter()
-    .chain([
-      ("task-ask-agent-reason", ask_reason),
-      ("task-review-pull-request-reason", review_reason),
-    ])
-    .map(|(id, reason)| reason_line(id, &reason).into())
-    .collect();
-  (row.into(), reasons)
+    .chain(pull.reason.map(|reason| ("task-create-pull-request-reason", reason)))
+    .chain([("task-ask-agent-reason", ask_reason)])
+    .chain(review_reason.map(|reason| ("task-review-pull-request-reason", reason)))
+    .map(|(id, reason)| reason_line(id, &reason).into());
+  (row.into(), pull.outcome.into_iter().chain(reasons).collect())
 }
 
-/// *Merge into main*: under way while git merges, waiting while the run's worktree is removed or another
-/// run of the project merges, and unavailable with why when the run did not record the branch it started
-/// from.
+/// *Review PR*: opens the run's pull request, unavailable until it has one.
+fn review_button(ctx: &mut Ctx, task: &TaskContext, number: Option<NonZeroU64>) -> (ActionButton, Option<Arc<str>>) {
+  let review = ActionButton::new(
+    "task-review-pull-request",
+    ButtonKind::Secondary,
+    ctx.t("decisions.ready.review"),
+  )
+  .icon(Icon::GitPullRequest);
+  let Some(number) = number else {
+    let reason = ctx.t("decisions.ready.reviewUnavailable");
+    return (review.unavailable(reason.clone()), Some(reason));
+  };
+  let navigation = crate::navigation::Navigation::of(ctx);
+  let route = crate::routes::Route::Project(
+    task.project.open.project.id(),
+    crate::routes::ProjectPage::PullRequest(number),
+  );
+  (review.on_click(move || navigation.go(route.clone())), None)
+}
+
+/// *Merge into main*: under way while git merges, waiting while the run's worktree is removed, its pull request
+/// is created or another run of the project merges, and unavailable with why when the run did not record the
+/// branch it started from.
 fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButton, Option<Arc<str>>) {
   let Some(branch) = run.run.base_branch() else {
     let reason = ctx.t("decisions.ready.mergeNoBranch");
@@ -244,6 +260,9 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   }
   if task.jobs.merging().is_some_and(|other| other != run.id()) {
     return (button.disabled(), Some(ctx.t("decisions.ready.anotherMerge")));
+  }
+  if job.creating_pull_request() {
+    return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaitsPullRequest")));
   }
   if job.busy() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));

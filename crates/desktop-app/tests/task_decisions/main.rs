@@ -2,9 +2,9 @@
 //! `decisions` scenarios: the plan review with its versions and the note Request changes needs, raising
 //! the limit with its read-back, a daily budget's stop that only Resume continues, the decision after a
 //! step's retries, and Ready for review with Merge into main merging, refused at a conflict, unavailable
-//! without a branch to merge into, and merged, or settled without Orchester ([`merge`]). No runner is connected here
-//! (its program does not exist): each decision the runner carries out comes back refused, in so many words. Needs
-//! `git`.
+//! without a branch to merge into, and merged, or settled without Orchester ([`merge`]), and Create pull request
+//! beside it through a fake `gh` and `git push` ([`pull_request`]). No runner is connected here (its program does
+//! not exist): each decision the runner carries out comes back refused, in so many words. Needs `git`.
 
 mod accounts;
 #[path = "../../examples/seed/kontur/mod.rs"]
@@ -12,6 +12,7 @@ mod accounts;
 mod kontur;
 mod links;
 mod merge;
+mod pull_request;
 #[path = "../support/mod.rs"]
 mod support;
 mod unverified;
@@ -23,6 +24,7 @@ use orchester_app::{
   ui::icon::Icon,
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_exec::programs::Programs;
 use support::{Data, Window};
 use tokio::runtime::Runtime;
 
@@ -46,6 +48,19 @@ impl Page {
   /// Seeds `scenario`; `prepare` is called with the temporary folder before seeding (no repository yet), and
   /// returns the fake Codex program to seed with, then again with the repository once seeded.
   fn seeded_with(scenario: &str, prepare: impl Fn(&Path, Option<&Path>) -> Option<PathBuf>) -> Self {
+    Self::seeded_running(scenario, prepare, None)
+  }
+
+  /// [`Self::seeded`] whose window runs git and `gh` with `programs`.
+  fn seeded_with_programs(scenario: &str, programs: Programs) -> Self {
+    Self::seeded_running(scenario, |_, _| None, Some(programs))
+  }
+
+  fn seeded_running(
+    scenario: &str,
+    prepare: impl Fn(&Path, Option<&Path>) -> Option<PathBuf>,
+    programs: Option<Programs>,
+  ) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     std::fs::create_dir_all(&scratch).expect("scratch");
     let dir = tempfile::tempdir_in(scratch).expect("a temporary folder");
@@ -59,7 +74,10 @@ impl Page {
     let seeded = kontur::seed(&request).expect("the scenario seeds");
     prepare(dir.path(), Some(&seeded.repo));
     let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
-    let launch = data.launch();
+    let launch = match programs {
+      Some(programs) => data.launch().with_programs(programs),
+      None => data.launch(),
+    };
     let window = Window::of(data, launch);
     let tasks = seeded.tasks.into_iter().map(|task| (task.key, task.state)).collect();
     Self {

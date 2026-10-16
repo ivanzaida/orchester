@@ -13,7 +13,7 @@ use orchester_store::ProjectDb;
 use super::{Page, key_of};
 
 /// The latest run of the task seeded in `state`.
-fn latest_run(page: &Page, state: &str) -> Run {
+pub(super) fn latest_run(page: &Page, state: &str) -> Run {
   let key = key_of(page, state);
   let db = ProjectDb::open(&page.repo).expect("the project database");
   let task = db
@@ -30,7 +30,7 @@ fn latest_run(page: &Page, state: &str) -> Run {
 }
 
 /// `git <args>` in the seeded repository, which must succeed.
-fn git(page: &Page, args: &[&str]) {
+pub(super) fn git(page: &Page, args: &[&str]) {
   let output = process::Command::new("git")
     .arg("-C")
     .arg(&page.repo)
@@ -52,7 +52,7 @@ fn decision_ready_for_review_opens_local_integration_before_any_merge() {
   assert!(page.locked("task-review-pull-request"));
   assert_eq!(
     page.text("task-review-pull-request-reason"),
-    "Review PR needs a pull request, which no pipeline step opens yet."
+    "Review PR needs a pull request: create one for this run first."
   );
   assert!(page.locked("task-ask-agent"), "Ask agent waits for the composer");
   page.until_says("task-ready-changes-figure", "1 file");

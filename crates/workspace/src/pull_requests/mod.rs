@@ -1,11 +1,13 @@
 //! The project's pull request inbox on this computer (`docs/design/orchester-workspace.md`,
 //! "Pull requests" and "GitHub", rule 9): the list stored by the last sync, and syncing it
 //! through the linked GitHub connection. Every function blocks on SQLite or `gh`; the UI calls
-//! them off the UI thread. Only read-only `gh` commands run.
+//! them off the UI thread. Only read-only `gh` commands run, except where a person creates a pull
+//! request from a run ([`create`]).
 //!
 //! The deprecated desktop's inbox ([`load_in`], [`sync_in`]) holds the open pull requests; the new
 //! app's page ([`list`]) syncs the closed and merged ones too, into the same stored list.
 
+pub mod create;
 pub mod detail;
 pub mod linked;
 pub mod list;

@@ -1,28 +1,32 @@
-//! One project's merge and worktree-removal operations, shared by all of its task pages and tabs and
-//! by Orchester's MCP server. Git work continues after a page unmounts; its state and result must
-//! have the same lifetime. Each project's state is published to subscribers
+//! One project's merge, worktree-removal and pull request operations, shared by all of its task pages
+//! and tabs and by Orchester's MCP server. Git work continues after a page unmounts; its state and result
+//! must have the same lifetime. Each project's state is published to subscribers
 //! ([`IntegrationJobs::subscribe`]); what a window adds to it (a dialog, a button's width) is the
 //! app's.
 
 mod local;
+mod pull_request;
+mod remove;
 use std::{
   collections::HashMap,
   panic::{AssertUnwindSafe, catch_unwind},
-  sync::{Arc, mpsc},
+  sync::Arc,
   thread,
 };
 
 pub use local::LocalDecision;
 use orchester_core::{
   id::{ProjectId, RunId},
-  integration::{Leftovers, MergeError, RunMerge},
+  integration::{MergeError, RunMerge},
   revision::Revision,
 };
 use orchester_exec::programs::Programs;
 use parking_lot::Mutex;
+pub use pull_request::{PullRequestArgs, PullRequestJob};
+pub use remove::{RemoveArgs, Remover};
 use tokio::sync::watch;
 
-use super::integration::{IntegrationProblem, RemovalRefused, merge_in, remove_in};
+use super::integration::{IntegrationProblem, merge_in};
 use crate::{
   activity::{Activity, OperationSpec, operations},
   messages::{self, Message},
@@ -44,6 +48,7 @@ enum Active {
   Merge,
   Local,
   Remove,
+  PullRequest,
 }
 
 /// What git does for a run while the window closes: closing waits for it, or the person quits with it
@@ -71,6 +76,8 @@ pub struct RunJobState {
   /// What the last merge made of the run's work in git, also when it could not be recorded: the task
   /// page shows it while the task is not read again with it.
   pub merged: Option<RunMerge>,
+  /// Creating a pull request from the run's branch.
+  pub pull_request: PullRequestJob,
 }
 
 impl Default for RunJobState {
@@ -83,12 +90,13 @@ impl Default for RunJobState {
       remove: JobState::Idle,
       conflicts: Vec::new(),
       merged: None,
+      pull_request: PullRequestJob::Idle,
     }
   }
 }
 
 impl RunJobState {
-  /// Git merges the run or removes its worktrees.
+  /// Git merges the run, removes its worktrees or pushes its branch for a pull request.
   pub fn busy(&self) -> bool {
     self.active != Active::Idle
   }
@@ -100,6 +108,11 @@ impl RunJobState {
   /// Git removes the run's worktrees, whoever asked: a person, or automation.
   pub fn removing(&self) -> bool {
     self.active == Active::Remove
+  }
+
+  /// The run's branch is pushed and a pull request opened from it now.
+  pub fn creating_pull_request(&self) -> bool {
+    self.active == Active::PullRequest
   }
 }
 
@@ -268,7 +281,8 @@ impl RunJobs {
       let managed = operation == Active::Merge && project.local_decision_pending();
       let state = project.runs.entry(self.run).or_default();
       let completed = (operation == Active::Merge && state.merge == JobState::Succeeded)
-        || (operation == Active::Remove && state.remove == JobState::Succeeded);
+        || (operation == Active::Remove && state.remove == JobState::Succeeded)
+        || (operation == Active::PullRequest && matches!(state.pull_request, PullRequestJob::Created(_)));
       if state.active != Active::Idle || completed || managed {
         return;
       }
@@ -427,126 +441,6 @@ impl RunJobs {
     self.finish();
     changed();
   }
-
-  /// Removes what `args` lists on a thread of its own. A person's removal shows in the run's dialog
-  /// and row: [`Remover::Person`]'s hook closes the dialog when it is done, and a failure stays under
-  /// the row and in the status bar. A removal automation asked for ([`Remover::Automation`]) answers
-  /// only its caller: the person's dialog stays open and shows the worktree removed, and a failure
-  /// touches neither what the person sees nor the status bar's failures.
-  pub fn start_remove(&self, args: RemoveArgs) {
-    if !self.begin(Active::Remove) {
-      return;
-    }
-    let what = operations::run_cleanup(&args.open, args.task, (&args.key, args.number));
-    self.name(&args.open, &what, false);
-    let automation = match &args.by {
-      Remover::Person(_) => {
-        self.update(|state| state.remove = JobState::Running);
-        None
-      }
-      Remover::Automation(answer) => Some(answer.clone()),
-    };
-    let job = self.clone();
-    if let Err(error) = thread::Builder::new()
-      .name("run-cleanup".into())
-      .spawn(move || job.remove_now(args))
-    {
-      tracing::error!(%error, "cannot start run cleanup thread");
-      match automation {
-        Some(answer) => answer_automation(&answer, Err(messages::interrupted().into())),
-        None => self.update(|state| state.remove = JobState::Failed(messages::interrupted())),
-      }
-      self.finish();
-    }
-  }
-
-  fn remove_now(&self, args: RemoveArgs) {
-    let RemoveArgs {
-      open,
-      task,
-      key,
-      number,
-      run,
-      confirmed,
-      programs,
-      activity,
-      separator,
-      changed,
-      by,
-    } = args;
-    let running = activity.start(operations::run_cleanup(&open, task, (&key, number)));
-    let not_done = Message::new("statusBar.operations.runCleanup.notDone")
-      .with("task", key)
-      .with("run", number.to_string());
-    let result = catch_unwind(AssertUnwindSafe(|| {
-      remove_in(&open.repo_root, &programs, &run, &confirmed)
-    }));
-    let run_changed = matches!(result, Ok(Err(IntegrationProblem::RunChanged)));
-    let outcome = match (result, &by) {
-      (Ok(Ok(())), _) => {
-        running.finish();
-        Ok(())
-      }
-      (Ok(Err(problem)), Remover::Person(_)) => {
-        let message = problem.message(&separator);
-        problem.end(running, not_done);
-        Err(message)
-      }
-      // A tool's failure is only in its result: the operation leaves the status bar without an event.
-      (Ok(Err(problem)), Remover::Automation(_)) => {
-        drop(running);
-        Err(problem.message(&separator))
-      }
-      (Err(_), remover) => {
-        tracing::error!(
-          automation = matches!(remover, Remover::Automation(_)),
-          "run cleanup thread panicked"
-        );
-        match remover {
-          Remover::Person(_) => running.fail(messages::interrupted()),
-          Remover::Automation(_) => drop(running),
-        }
-        Err(messages::interrupted())
-      }
-    };
-    self.publish_removal(&outcome, &by);
-    self.finish();
-    changed();
-    if let Remover::Automation(answer) = by {
-      answer_automation(
-        &answer,
-        outcome.map_err(|message| RemovalRefused { message, run_changed }),
-      );
-    }
-  }
-
-  fn publish_removal(&self, outcome: &Result<(), Message>, by: &Remover) {
-    match (outcome, by) {
-      (Ok(()), Remover::Person(removed)) => {
-        removed();
-        self.update(|state| state.remove = JobState::Succeeded);
-      }
-      // The person's dialog, if open, now shows the worktree removed.
-      (Ok(()), Remover::Automation(_)) => self.update(|state| state.remove = JobState::Succeeded),
-      (Err(message), Remover::Person(_)) => self.update(|state| state.remove = JobState::Failed(message.clone())),
-      (Err(_), Remover::Automation(_)) => {}
-    }
-  }
-
-  /// Forgets a removal that failed, which stayed to be shown under the run's row: the person asks
-  /// for the removal anew.
-  pub fn clear_failed_removal(&self) {
-    self
-      .jobs
-      .0
-      .send_if_modified(|state| match state.runs.get_mut(&self.run) {
-        Some(run) if matches!(run.remove, JobState::Failed(_)) => {
-          run.remove = JobState::Idle;
-          true
-        }
-        _ => false,
-      });
-  }
 }
 
 #[derive(Clone)]
@@ -561,37 +455,4 @@ pub struct MergeArgs {
   pub activity: Activity,
   pub separator: Arc<str>,
   pub changed: Arc<dyn Fn() + Send + Sync>,
-}
-
-#[derive(Clone)]
-pub struct RemoveArgs {
-  pub open: OpenProject,
-  pub task: orchester_core::id::TaskId,
-  pub key: String,
-  pub number: u32,
-  pub run: orchester_core::run::Run,
-  pub confirmed: Leftovers,
-  pub programs: Programs,
-  pub activity: Activity,
-  pub separator: Arc<str>,
-  pub changed: Arc<dyn Fn() + Send + Sync>,
-  pub by: Remover,
-}
-
-/// Tells the automation that asked for a removal how it ended. A caller that stopped waiting no longer
-/// needs it: the removal stands either way, as the status bar and the run's page show.
-fn answer_automation(answer: &mpsc::Sender<Result<(), RemovalRefused>>, outcome: Result<(), RemovalRefused>) {
-  if answer.send(outcome).is_err() {
-    tracing::debug!("the automation that asked for a worktree removal stopped waiting for it");
-  }
-}
-
-/// Who asked for a removal.
-#[derive(Clone)]
-pub enum Remover {
-  /// A person, in the run's dialog; the hook runs once the worktrees are gone, before the removal
-  /// is published as done, and closes that dialog.
-  Person(Arc<dyn Fn() + Send + Sync>),
-  /// Automation through Orchester's MCP server, which waits for the outcome on this channel.
-  Automation(mpsc::Sender<Result<(), RemovalRefused>>),
 }
