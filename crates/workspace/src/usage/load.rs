@@ -22,6 +22,8 @@ pub struct UsageData {
   pub projects: Arc<[ProjectFacts]>,
   /// Listed projects whose usage could not be read, by name; their share is missing.
   pub unread: Arc<[Arc<str>]>,
+  /// How many runs of the projects read have a damaged record; their usage is left out, the rest counted.
+  pub unread_runs: usize,
   /// Every listed project's plan limits reports of the last 90 days.
   pub snapshots: Arc<[LimitSnapshot]>,
   pub threshold: WarningThreshold,
@@ -43,9 +45,9 @@ impl UsageData {
   /// The usage of `scope` from `since` on, as it stands at `now`.
   pub fn read(workspace: &Workspace, scope: Scope<'_>, since: Timestamp, now: Timestamp) -> Result<Self, StoreError> {
     let mut projects = Vec::new();
-    let (mut unread, mut snapshots) = (Vec::new(), Vec::new());
+    let (mut unread, mut snapshots, mut unread_runs) = (Vec::new(), Vec::new(), 0);
     if let Scope::Project(root) = scope {
-      projects.push(facts(&ProjectDb::open_read_only(root)?, since, now)?);
+      projects.push(facts(&ProjectDb::open_read_only(root)?, since, now, &mut unread_runs)?);
     }
     for registered in workspace.projects()? {
       let db = match ProjectDb::open_read_only(&registered.repo_root) {
@@ -58,7 +60,7 @@ impl UsageData {
         }
       };
       if matches!(scope, Scope::All) {
-        match facts(&db, since, now) {
+        match facts(&db, since, now, &mut unread_runs) {
           Ok(read) => projects.push(read),
           Err(error) => {
             tracing::error!(%error, repo_root = %registered.repo_root.display(), "cannot read a listed project's usage");
@@ -81,6 +83,7 @@ impl UsageData {
     Ok(Self {
       projects: projects.into(),
       unread: unread.into(),
+      unread_runs,
       snapshots: snapshots.into(),
       threshold: workspace.usage_warning_threshold()?,
       accounts: workspace.agent_accounts()?.into(),
@@ -89,7 +92,18 @@ impl UsageData {
   }
 }
 
-fn facts(db: &ReadOnlyProjectDb, since: Timestamp, now: Timestamp) -> Result<ProjectFacts, StoreError> {
+/// The project's usage facts from `since` on, adding to `unread_runs` its runs whose record is damaged, which are
+/// logged by id, never by what they hold.
+fn facts(
+  db: &ReadOnlyProjectDb,
+  since: Timestamp,
+  now: Timestamp,
+  unread_runs: &mut usize,
+) -> Result<ProjectFacts, StoreError> {
+  for run in db.unreadable_runs_since(since)? {
+    tracing::warn!(%run, project = %db.project().id(), "a run's record is damaged; its usage is left out");
+    *unread_runs += 1;
+  }
   Ok(ProjectFacts {
     project: db.project().id(),
     name: db.project().name().as_str().into(),

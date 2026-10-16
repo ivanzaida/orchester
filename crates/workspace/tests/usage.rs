@@ -247,6 +247,7 @@ fn data(now: Timestamp) -> (UsageData, ResourceId, ResourceId) {
   let data = UsageData {
     projects: Arc::from([facts]),
     unread: Arc::from([]),
+    unread_runs: 0,
     snapshots: Arc::from([]),
     threshold: WarningThreshold::DEFAULT,
     accounts: Arc::from([]),

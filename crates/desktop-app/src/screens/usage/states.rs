@@ -25,10 +25,30 @@ use super::{
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
+  callout::{Callout, CalloutTone},
   icon::Icon,
   icon_button::IconButton,
   message::message_text,
 };
+
+/// That `dashboard` left out runs whose record is damaged, when it did: how many, and that the rest is counted.
+pub fn unread_runs(ctx: &Ctx, dashboard: &Dashboard) -> Option<Element> {
+  let count = dashboard.unread_runs;
+  (count > 0).then(|| {
+    let title = if count == 1 {
+      "usage.unreadRuns.one"
+    } else {
+      "usage.unreadRuns.other"
+    };
+    Callout::new(
+      "usage-unread-runs",
+      CalloutTone::Warning,
+      ctx.t_args(title, [("count", count.to_string())]),
+    )
+    .body(ctx.t("usage.unreadRunsDetail"))
+    .into()
+  })
+}
 
 /// The least height of the page's body when the usage could not be read (`Load failed` in `cK32U`).
 const FAILED_HEIGHT: f32 = 350.0;

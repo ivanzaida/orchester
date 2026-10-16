@@ -26,6 +26,11 @@
       "day": "By day",
       "hourUnavailable": "For ranges up to 7 days"
     },
+    "unreadRuns": {
+      "one": "{{count}} run record could not be read",
+      "other": "{{count}} run records could not be read"
+    },
+    "unreadRunsDetail": "Their usage is left out; everything else is counted. The log names the runs.",
     "readback": {
       "compared": "{{range}} · compared with {{previous}}",
       "today": "Today, {{day}} until {{time}}",

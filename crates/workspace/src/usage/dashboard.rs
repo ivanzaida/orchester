@@ -50,6 +50,8 @@ pub struct Dashboard {
   pub projects: usize,
   /// The listed projects that could not be read, by name.
   pub unread: Arc<[Arc<str>]>,
+  /// How many runs have a damaged record; their usage is left out.
+  pub unread_runs: usize,
   pub query: UsageQuery,
   pub range: DayRange,
   pub grouping: Grouping,
@@ -112,6 +114,7 @@ impl Dashboard {
       project,
       projects: data.projects.len(),
       unread: data.unread.clone(),
+      unread_runs: data.unread_runs,
       query: query.clone(),
       range,
       grouping,

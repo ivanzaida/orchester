@@ -225,3 +225,26 @@ fn usage_every_projects_page_names_each_runs_project() {
     "the failed runs are Kontur's, whose Overview lists them"
   );
 }
+
+/// The `tasks` seed damages one run's record (`Shape::Unreadable`): the page leaves that run out, says so, and
+/// counts the others instead of failing as a whole.
+#[test]
+fn usage_page_counts_the_runs_beside_a_damaged_one() {
+  let mut page = Seeded::prepared("tasks", false, |_| {});
+  page.go(UsageQuery {
+    period: Period::Month,
+    ..UsageQuery::default()
+  });
+  page.until("the usage", |page| {
+    page.shows("usage-summary-runs-value") && page.text("usage-summary-runs-value") != DASH
+      || page.shows("usage-load-failed")
+  });
+  assert!(!page.shows("usage-load-failed"), "one damaged run fails the page");
+  let note = page.text("usage-unread-runs");
+  assert!(note.starts_with("1 run record could not be read"), "{note}");
+  let runs = page.text("usage-summary-runs-value");
+  assert!(
+    runs.parse::<u32>().is_ok_and(|runs| runs > 0),
+    "the other runs count: {runs}"
+  );
+}

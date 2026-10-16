@@ -187,11 +187,13 @@ impl UsageScreen {
   /// The sections, or, when there is nothing to chart, why and the plan limits last reported.
   fn sections(&self, ctx: &mut Ctx, dashboard: &Arc<Dashboard>, requery: &Requery) -> Vec<Element> {
     let saved = self.saved.clone();
-    let summary = summary::summary(ctx, Some(dashboard));
+    let mut sections: Vec<Element> = states::unread_runs(ctx, dashboard).into_iter().collect();
+    sections.push(summary::summary(ctx, Some(dashboard)));
     if let Some(empty) = states::empty(ctx, dashboard, requery) {
       let menu = threshold::menu(ctx, dashboard, &saved);
       let compact = limits_legend::compact(ctx, dashboard, menu);
-      return vec![summary, states::beside(empty, compact)];
+      sections.push(states::beside(empty, compact));
+      return sections;
     }
     let tokens = tokens::card(ctx, dashboard, &self.views);
     let limits = limits::card(ctx, dashboard, &self.views, &saved);
@@ -204,7 +206,6 @@ impl UsageScreen {
     } else {
       vec![card::card_row("usage-charts", vec![tokens, limits])]
     };
-    let mut sections = vec![summary];
     sections.extend(charts);
     sections.extend([
       breakdown::card(ctx, dashboard, &self.views, requery),

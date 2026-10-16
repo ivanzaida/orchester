@@ -33,6 +33,7 @@ fn data(now: Timestamp, projects: Vec<ProjectFacts>, snapshots: Vec<LimitSnapsho
   UsageData {
     projects: Arc::from(projects),
     unread: Arc::from([]),
+    unread_runs: 0,
     snapshots: Arc::from(snapshots),
     threshold: WarningThreshold::DEFAULT,
     accounts: Arc::from([]),

@@ -1,12 +1,14 @@
 //! What the Usage dashboard reads of a project: the usage of every completed turn and of every review
 //! of auto mode's reviewer from a time on, with the invocations and runs they belong to, in a few
-//! queries.
+//! queries. A run whose record is damaged (its snapshot is not JSON) is left out with its invocations, so
+//! the rest still reads; [`ProjectDb::unreadable_runs_since`] names the runs left out.
 
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_core::{
   code_index::CodeIndexUse,
   connection::stream::AgentEvent,
+  id::RunId,
   run::InvocationTiming,
   time::Timestamp,
   usage::{IndexGiven, InvocationFacts, RunFacts, RunOutcome, TurnUsage, UsageFacts},
@@ -23,6 +25,9 @@ use crate::{
 /// review judged then.
 const RAN_SINCE: &str = "invocations.started_at >= ?1 OR invocations.ended_at >= ?1 OR invocations.ended_at IS NULL \
                          OR invocations.id IN (SELECT invocation_id FROM reviewer_usage WHERE ended_at >= ?1)";
+
+/// The runs whose record reads: SQLite's JSON functions fail the whole query on one snapshot that is not JSON.
+const READABLE_RUNS: &str = "(SELECT * FROM runs WHERE json_valid(snapshot))";
 
 impl ProjectDb {
   /// The usage of the turns that completed from `since` on, the invocations that ran from then on
@@ -44,6 +49,18 @@ impl ProjectDb {
         .flatten()
         .map(Timestamp::from_unix_millis),
     })
+  }
+
+  /// The runs with invocations from `since` on whose record is damaged, which [`Self::usage_facts`] leaves out.
+  pub fn unreadable_runs_since(&self, since: Timestamp) -> Result<Vec<RunId>, StoreError> {
+    let mut statement = self.connection.prepare(&format!(
+      "SELECT id FROM runs WHERE NOT json_valid(snapshot) \
+       AND id IN (SELECT run_id FROM invocations WHERE {RAN_SINCE}) ORDER BY number"
+    ))?;
+    let ids = statement
+      .query_map([since.unix_millis()], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    ids.iter().map(|id| parse("run id", id)).collect()
   }
 
   fn turns_since(&self, since: Timestamp) -> Result<Vec<TurnUsage>, StoreError> {
@@ -86,7 +103,7 @@ impl ProjectDb {
          profiles.name, connections.provider, invocations.started_at, invocations.ended_at, invocations.inactive_ms, \
          invocations.waiting_since, index_use.body, edits.body, profiles.id, accounts.account_id \
        FROM invocations \
-       JOIN runs ON runs.id = invocations.run_id \
+       JOIN {READABLE_RUNS} AS runs ON runs.id = invocations.run_id \
        JOIN step_executions AS executions ON executions.id = invocations.step_execution_id \
        LEFT JOIN resource_versions AS versions ON versions.id = executions.profile_version_id \
        LEFT JOIN resources AS profiles ON profiles.id = versions.resource_id \
@@ -107,7 +124,7 @@ impl ProjectDb {
     let mut statement = self.connection.prepare(&format!(
       "SELECT runs.id, runs.number, runs.task_id, runs.status, tasks.number, tasks.title, pipelines.name, pipelines.id, \
        json_extract(runs.snapshot, '$.body.pipeline.number') \
-       FROM runs JOIN tasks ON tasks.id = runs.task_id \
+       FROM {READABLE_RUNS} AS runs JOIN tasks ON tasks.id = runs.task_id \
        LEFT JOIN resources AS pipelines ON pipelines.id = json_extract(runs.snapshot, '$.body.pipeline.resource') \
        WHERE runs.id IN (SELECT run_id FROM invocations WHERE {RAN_SINCE}) ORDER BY runs.number"
     ))?;

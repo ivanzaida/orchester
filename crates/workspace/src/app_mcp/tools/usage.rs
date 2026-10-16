@@ -265,6 +265,7 @@ fn answer(project: Option<ProjectId>, query: &UsageQuery, data: &UsageData, now:
     "project": project.map(|project| project.to_string()),
     "projects": data.projects.iter().map(project_json).collect::<Vec<_>>(),
     "unread_projects": data.unread.iter().map(|name| &**name).collect::<Vec<_>>(),
+    "unread_runs": data.unread_runs,
     "from": range.first().to_string(),
     "to": range.last().to_string(),
     "group": group_name(query.group),
