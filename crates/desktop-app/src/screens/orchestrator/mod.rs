@@ -87,8 +87,6 @@ struct View {
   focus: Signal<bool>,
   /// The message field has the focus.
   focused: Signal<bool>,
-  /// The newest turn when the person last scrolled the turns ([`timeline::list`]).
-  scrolled: Signal<Option<String>>,
   input: ElementRef,
   send: SendAction,
   stop: StopAction,
@@ -111,7 +109,6 @@ impl Component for OrchestratorScreen {
       search: ctx.signal(String::new()),
       focus: ctx.signal(false),
       focused: ctx.signal(false),
-      scrolled: ctx.signal(None),
       input: ElementRef::new(),
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
