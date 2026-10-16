@@ -34,7 +34,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use crate::{routes::Screen, services::Services};
+use crate::{routes::Screen, screens::settings::orchester::InvitesNotice, services::Services};
 
 /// The element of the screen, as every screen has one (`screen-<name>`).
 fn screen_id() -> String {
@@ -82,6 +82,8 @@ struct AllProjects {
   read: Arc<Mutex<(Reported, ListedData)>>,
   /// What the runners reported of the listed projects so far, kept across the list's changes.
   seen: Arc<Mutex<Seen>>,
+  /// The answers of the invites notice, which outlive the notice.
+  invites: InvitesNotice,
 }
 
 impl Component for AllProjects {
@@ -96,6 +98,7 @@ impl Component for AllProjects {
       followed: Mutex::new(false),
       read: Arc::default(),
       seen: Arc::default(),
+      invites: InvitesNotice::new(ctx),
     }
   }
 
@@ -121,14 +124,18 @@ impl Component for AllProjects {
     let work = reports.total();
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
+    let invites = InvitesNotice::read(ctx);
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
     let tab = ctx.props::<Tab>().clone();
     match (listing.data, failed) {
-      (_, Some(error)) => page::page(ctx, &open, page::Body::Failed(&error)),
+      (_, Some(error)) => {
+        let notice = self.invites.notice(ctx, &invites);
+        page::page(ctx, &open, page::Body::Failed(&error), notice)
+      }
       (Some(Listing::Welcome), None) => welcome::welcome(ctx, &open),
       (Some(Listing::Projects(_)), None) if let Tab::Usage(query) = tab => {
         let usage = crate::screens::usage::everywhere(ctx, &query, work);
-        page::page(ctx, &open, page::Body::Usage(usage))
+        page::page(ctx, &open, page::Body::Usage(usage), None)
       }
       (Some(Listing::Projects(_)), None) => {
         let rows = project_list::listed(&entries, &data, &services.runners);
@@ -140,7 +147,8 @@ impl Component for AllProjects {
             ask: &self.ask,
           }
         };
-        page::page(ctx, &open, body)
+        let notice = self.invites.notice(ctx, &invites);
+        page::page(ctx, &open, body, notice)
       }
       // Reading the list takes a moment; the screen stays empty meanwhile.
       (None, None) => lurq::components::Column::new().id(screen_id()).into(),

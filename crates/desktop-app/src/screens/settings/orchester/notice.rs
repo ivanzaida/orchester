@@ -1,10 +1,11 @@
 //! The notice in All projects for waiting invites (`Invite arriving · the notice in All projects` in `jUMAF`): who
 //! invited the person to what, with *Decline* (asked in place) and *Accept*, the same answers as Settings ›
-//! Orchester › Invites; more than one invite says how many and opens that tab.
+//! Orchester › Invites; more than one invite says how many and opens that tab. All projects keeps the notice's reads
+//! and answers and puts the notice in its page only while it has something to show, so an empty notice takes no
+//! room in the page's spaced column (`S5HDKf`) and an answer under way outlives the notice.
 
 use lurq::{
   app::{
-    component::Component,
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
@@ -28,42 +29,49 @@ use crate::{
   },
 };
 
+/// The notice's answers, which the page that shows it keeps.
 pub struct InvitesNotice {
   answers: invites::Answers,
 }
 
-impl Component for InvitesNotice {
-  type Props = ();
-
-  fn create(ctx: &mut Ctx) -> Self {
+impl InvitesNotice {
+  pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       answers: invites::Answers::new(ctx),
     }
   }
 
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+  /// The invites waiting for the cloud account, read again when a server's connection or the account changes. The
+  /// page asks for them in every render, before what it asks only sometimes: lurq keeps a component's futures by the
+  /// order it asks for them.
+  pub fn read(ctx: &mut Ctx) -> Invites {
     let services = Services::of(ctx);
     let revision = follow(ctx, (&services.servers, &services.cloud));
     let account = account(ctx, revision);
-    let listed = super::invites(ctx, revision, &services.cloud, account.as_ref());
-    let mut column = Column::new()
-      .id("all-projects-invites")
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm);
-    column = column.with_children(invites::outcome(ctx, &self.answers, true));
-    let Invites::Listed(waiting) = listed else {
-      return column;
-    };
-    match waiting.as_slice() {
-      [] => {}
-      [invite] => column = column.child(self.one(ctx, invite)),
-      several => column = column.child(many(ctx, several.len())),
-    }
-    column
+    super::invites(ctx, revision, &services.cloud, account.as_ref())
   }
-}
 
-impl InvitesNotice {
+  /// The notice for `listed`: what answering an invite came to, then the waiting invite or how many wait; `None` when
+  /// there is nothing to show.
+  pub fn notice(&self, ctx: &mut Ctx, listed: &Invites) -> Option<Element> {
+    let mut parts = invites::outcome(ctx, &self.answers, true);
+    if let Invites::Listed(waiting) = listed {
+      match waiting.as_slice() {
+        [] => {}
+        [invite] => parts.push(self.one(ctx, invite)),
+        several => parts.push(many(ctx, several.len())),
+      }
+    }
+    (!parts.is_empty()).then(|| {
+      Column::new()
+        .id("all-projects-invites")
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .with_children(parts)
+        .into()
+    })
+  }
+
   /// The notice (`All projects notice` `p4WXZT`): a 16 `info` mail icon centred beside who invited the person to
   /// what in 13/600 and, 3 under it, the role, the address and the expiry in 12.5 `text_secondary`, with *Decline*
   /// and *Accept* at the end; `info_muted`, radius 10, 12 over and under and 14 at its sides, no stroke.

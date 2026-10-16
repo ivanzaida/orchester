@@ -53,7 +53,8 @@ pub(super) enum Body<'a> {
   Usage(Element),
 }
 
-pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>) -> Element {
+/// The page with `body` under its tabs, and the invites notice between them while it shows something.
+pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>, notice: Option<Element>) -> Element {
   let failure = folder::failure(ctx, open);
   let (state, content) = match body {
     Body::Failed(error) => ("failed", failed(ctx, error)),
@@ -66,7 +67,7 @@ pub(super) fn page(ctx: &mut Ctx, open: &OpenAction, body: Body<'_>) -> Element 
     .spacing(ProjectsSpacing::Page.role())
     .child(heading(ctx, open))
     .child(tabs(ctx, false))
-    .child(ctx.mount_keyed::<crate::screens::settings::orchester::InvitesNotice>("all-projects-invites", ()))
+    .with_children(notice)
     .with_children(failure.map(|failure| error_line(&failure)))
     .child(content);
   let scrolled = Column::new()

@@ -93,6 +93,31 @@ fn all_projects_lists_projects_with_where_they_stand() {
   usage_tab(&mut window);
 }
 
+/// Without invites the notice is not in the page at all, so the list is the page's 20 under the tabs (`S5HDKf`),
+/// not one more gap lower.
+#[test]
+fn all_projects_puts_the_list_20_under_its_tabs_without_invites() {
+  let data = Data::new();
+  let launch = data.launch();
+  data.add_kontur(launch.workspace().expect("the session started"));
+  let mut window = Window::of(data, launch);
+  all_projects(&mut window);
+  let mut bounds = |id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (tabs, list) = (bounds("all-projects-tabs"), bounds("project-list"));
+  let gap = list.y - (tabs.y + tabs.height);
+  assert!((gap - 20.0).abs() < 0.5, "the list is {gap} under the tabs");
+  assert!(
+    window.tree.get_element_by_id("all-projects-invites").is_none(),
+    "no notice"
+  );
+}
+
 /// The *Usage* tab: every project's usage across the whole content panel, its top pinned, and back.
 fn usage_tab(window: &mut Window) {
   window.press("all-projects-tab-usage");
