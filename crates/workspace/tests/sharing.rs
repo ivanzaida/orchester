@@ -350,6 +350,7 @@ fn sharing_a_cloud_identity_joins_through_an_email_invite_with_the_key_set_the_a
   let identity = CloudIdentity {
     cloud: &client,
     device: &device,
+    invite: None,
   };
   // The cloud's record of a server with a CA's certificate, or here plain HTTP on loopback: no fingerprint.
   let record = CloudServer {

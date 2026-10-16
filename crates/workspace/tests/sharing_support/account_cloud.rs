@@ -1,7 +1,7 @@
-//! A stand-in for Orchester Cloud's account API on loopback, as `docs/architecture/server.md` names it: sign-in and
-//! sign-out of a device, the account's invites (list, accept with a one-time identity token, decline) and team
-//! servers, the key set and identity tokens, all signed with `orchester-api`'s identity keys. With `offers` off it
-//! answers the invite and server endpoints `404`, as today's cloud does.
+//! A stand-in for Orchester Cloud's account API on loopback, in `docs/cloud-api.md`'s shapes: sign-in and sign-out of
+//! a device, the account's invites (list, decline, and an identity token that accepts one) and team servers (the
+//! account's list and the registry's entry), the key set and identity tokens, all signed with `orchester-api`'s
+//! identity keys. The real cloud on PostgreSQL is in `crates/desktop-app/tests/orchester_cloud`.
 
 #![allow(
   dead_code,
@@ -46,8 +46,7 @@ pub struct AccountCloud {
 }
 
 impl AccountCloud {
-  /// A cloud whose invite and server endpoints answer when `offers` holds.
-  pub fn start(offers: bool) -> Self {
+  pub fn start() -> Self {
     let root = RootKey::new(&PrivateKey::generate().expect("root")).expect("root key");
     let signing = Arc::new(SigningKey::new(&PrivateKey::generate().expect("key")).expect("signing key"));
     let now = now();
@@ -66,7 +65,7 @@ impl AccountCloud {
     let serving = (state.clone(), key_set.clone());
     thread::spawn(move || {
       for stream in listener.incoming().flatten() {
-        serve(stream, &serving.0, &serving.1, &signing, offers);
+        serve(stream, &serving.0, &serving.1, &signing);
       }
     });
     Self {
@@ -96,10 +95,11 @@ impl AccountCloud {
     let server = state.server.clone().expect("the server is named first");
     let now = now() * 1000;
     let project = project.map(|(name, address)| json!({"address": address, "name": name}));
+    let server = json!({"id": server["id"], "name": server["name"], "address": server["address"]});
     state.invites.push(json!({
       "id": invite, "server": server, "kind": if project.is_some() { "project" } else { "server" },
-      "project": project, "role": project.as_ref().map(|_| "member"), "inviter": "Alice Moreau",
-      "created_at": now, "expires_at": now + 7 * DAY * 1000,
+      "project": project, "role": project.as_ref().map(|_| "member"), "inviter_display_name": "Alice Moreau",
+      "expires_at": now + 7 * DAY * 1000,
     }));
   }
 
@@ -112,13 +112,13 @@ impl AccountCloud {
   }
 }
 
-fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &SigningKey, offers: bool) {
+fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &SigningKey) {
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
   let authorized = headers.contains(&format!("authorization: bearer {TOKEN}"));
   let path = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
-  let (status, answer) = route(&path, (authorized, offers, &body), state, (key_set, signing));
+  let (status, answer) = route(&path, (authorized, &body), state, (key_set, signing));
   let answer = answer.map(|value| value.to_string()).unwrap_or_default();
   let reply = format!(
     "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
@@ -132,7 +132,7 @@ type Answer = (&'static str, Option<Value>);
 
 fn route(
   path: &str,
-  (authorized, offers, body): (bool, bool, &str),
+  (authorized, body): (bool, &str),
   state: &Mutex<State>,
   (key_set, signing): (&str, &SigningKey),
 ) -> Answer {
@@ -142,27 +142,59 @@ fn route(
     "GET /api/v1/keys" => ("200 OK", Some(json!({"key_set": key_set}))),
     "POST /api/v1/auth/sessions" => sign_in(body),
     _ if !authorized => unauthorized,
-    "POST /api/v1/identity-tokens" => {
-      let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
-      let audience = request["audience"].as_str().unwrap_or_default();
-      let token = identity_token(signing, audience, None);
-      (
-        "201 Created",
-        Some(json!({"identity_token": token, "expires_at": now() + 300})),
-      )
-    }
+    "POST /api/v1/identity-tokens" => issue(body, state, signing).unwrap_or(not_found),
     "DELETE /api/v1/auth/sessions/current" => {
       state.lock().signed_out = true;
       ("204 No Content", None)
     }
-    _ if !offers => not_found,
     "GET /api/v1/invites" => ("200 OK", Some(json!({"invites": state.lock().invites}))),
     "GET /api/v1/servers" => {
-      let servers: Vec<Value> = state.lock().server.iter().cloned().collect();
+      let servers: Vec<Value> = state
+        .lock()
+        .server
+        .iter()
+        .map(|server| {
+          let mut listed = server.clone();
+          listed["owner"] = json!(false);
+          listed["joined_at"] = json!(now() * 1000);
+          listed
+        })
+        .collect();
       ("200 OK", Some(json!({"servers": servers})))
     }
-    _ => invite_action(path, state, signing).unwrap_or(not_found),
+    _ => registered(path, state)
+      .or_else(|| decline(path, state))
+      .unwrap_or(not_found),
   }
+}
+
+/// `POST /api/v1/identity-tokens`: a join token; with `invite`, one that accepts that open invite from the audience,
+/// whose copy here then ends. `None` for an invite that is not open.
+fn issue(body: &str, state: &Mutex<State>, signing: &SigningKey) -> Option<Answer> {
+  let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
+  let audience = request["audience"].as_str().unwrap_or_default().to_owned();
+  let invite = request["invite"].as_str();
+  if let Some(id) = invite {
+    let mut state = state.lock();
+    let position = state
+      .invites
+      .iter()
+      .position(|open| open["id"] == id && open["server"]["id"] == audience.as_str())?;
+    state.invites.remove(position);
+  }
+  let token = identity_token(signing, &audience, invite);
+  Some((
+    "201 Created",
+    Some(json!({"identity_token": token, "expires_at": now() + 300})),
+  ))
+}
+
+/// `GET /api/v1/servers/{id}`: the registry's entry of the named server.
+fn registered(path: &str, state: &Mutex<State>) -> Option<Answer> {
+  let id = path.strip_prefix("GET /api/v1/servers/")?;
+  let mut server = state.lock().server.clone().filter(|server| server["id"] == id)?;
+  server["check_code"] = Value::Null;
+  Some(("200 OK", Some(json!({"server": server}))))
 }
 
 fn sign_in(body: &str) -> Answer {
@@ -179,27 +211,14 @@ fn sign_in(body: &str) -> Answer {
   )
 }
 
-/// `POST /api/v1/invites/{id}/accept` and `…/decline`; `None` for any other path or an invite not open.
-fn invite_action(path: &str, state: &Mutex<State>, signing: &SigningKey) -> Option<Answer> {
-  let rest = path.strip_prefix("POST /api/v1/invites/")?;
-  let (id, action) = rest.split_once('/')?;
+/// `POST /api/v1/invites/{id}/decline`; `None` for any other path or an invite not open.
+fn decline(path: &str, state: &Mutex<State>) -> Option<Answer> {
+  let id = path.strip_prefix("POST /api/v1/invites/")?.strip_suffix("/decline")?;
   let mut state = state.lock();
   let position = state.invites.iter().position(|invite| invite["id"] == id)?;
-  let invite = state.invites.remove(position);
-  match action {
-    "decline" => {
-      state.declined.push(id.to_owned());
-      Some(("204 No Content", None))
-    }
-    "accept" => {
-      let server = invite["server"].clone();
-      let audience = server["id"].as_str()?.to_owned();
-      let token = identity_token(signing, &audience, Some(id));
-      let answer = json!({"server": server, "project": invite["project"], "identity_token": token});
-      Some(("200 OK", Some(answer)))
-    }
-    _ => None,
-  }
+  state.invites.remove(position);
+  state.declined.push(id.to_owned());
+  Some(("204 No Content", None))
 }
 
 fn identity_token(signing: &SigningKey, audience: &str, invite: Option<&str>) -> String {
@@ -215,6 +234,7 @@ fn identity_token(signing: &SigningKey, audience: &str, invite: Option<&str>) ->
       platform: orchester_api::cloud::CloudPlatform::Windows,
     },
     invite: invite.map(str::to_owned),
+    purpose: None,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

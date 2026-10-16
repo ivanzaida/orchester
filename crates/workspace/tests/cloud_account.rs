@@ -96,7 +96,7 @@ fn linked_server(cloud: &AccountCloud) -> (TestServer, String) {
 
 #[test]
 fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let desktop = Desktop::new(&cloud.url());
   let wrong = desktop.block_on(
     desktop
@@ -129,7 +129,7 @@ fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
 
 #[test]
 fn cloud_account_web_pages_and_address_follow_the_advanced_setting() {
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let desktop = Desktop::signed_in(&cloud);
   assert_eq!(
     desktop.cloud.web_page(WebPage::SignUp).expect("page"),
@@ -151,16 +151,8 @@ fn cloud_account_web_pages_and_address_follow_the_advanced_setting() {
 }
 
 #[test]
-fn cloud_account_says_when_the_cloud_does_not_deliver_invites_yet() {
-  let cloud = AccountCloud::start(false);
-  let desktop = Desktop::signed_in(&cloud);
-  let invites = desktop.block_on(desktop.cloud.invites());
-  assert!(matches!(invites, Err(CloudError::NotOffered)), "{invites:?}");
-}
-
-#[test]
 fn cloud_account_accepting_an_invite_connects_with_the_pin_it_carries() {
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let (mut server, audience) = linked_server(&cloud);
   let invite = server.email_invite(EMAIL);
   server.serve_self_signed();
@@ -180,7 +172,7 @@ fn cloud_account_accepting_an_invite_connects_with_the_pin_it_carries() {
   assert_eq!(
     entry.stored.certificate_pin,
     Some(pin.to_hex()),
-    "pinned from the invite"
+    "pinned from the cloud's registry"
   );
   assert_eq!(
     entry.stored.joined_with,
@@ -191,7 +183,7 @@ fn cloud_account_accepting_an_invite_connects_with_the_pin_it_carries() {
 
 #[test]
 fn cloud_account_declining_an_invite_ends_it() {
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let (server, audience) = linked_server(&cloud);
   let invite = server.email_invite(EMAIL);
   cloud.name_server(&audience, &server.url(), None);
@@ -210,16 +202,31 @@ fn cloud_account_declining_an_invite_ends_it() {
 
 #[test]
 fn cloud_account_joins_a_server_only_with_a_place_there() {
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let (server, audience) = linked_server(&cloud);
   cloud.name_server(&audience, &server.url(), None);
   let desktop = Desktop::signed_in(&cloud);
   let address = ServerAddress::parse(&server.url()).expect("address");
-  let nothing = desktop.block_on(desktop.cloud.join_server(&address)).expect("asked");
+  let nothing = desktop
+    .block_on(desktop.cloud.join_server(&address, None))
+    .expect("asked");
   assert!(matches!(nothing, ServerJoin::NotInvited), "{nothing:?}");
+  let by_id = Some(audience.parse().expect("id"));
+  let named = desktop
+    .block_on(desktop.cloud.join_server(&address, by_id))
+    .expect("asked");
+  assert!(
+    matches!(named, ServerJoin::NotInvited),
+    "the id the server names: {named:?}"
+  );
   let elsewhere = ServerAddress::parse("https://orchester.elsewhere.example").expect("address");
-  let unknown = desktop.block_on(desktop.cloud.join_server(&elsewhere));
+  let unknown = desktop.block_on(desktop.cloud.join_server(&elsewhere, None));
   assert!(matches!(unknown, Err(CloudError::NoServer)), "{unknown:?}");
+  let moved = desktop.block_on(desktop.cloud.join_server(&elsewhere, by_id));
+  assert!(
+    matches!(moved, Err(CloudError::NoServer)),
+    "the registry has it elsewhere: {moved:?}"
+  );
 }
 
 #[test]

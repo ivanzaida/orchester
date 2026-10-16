@@ -28,9 +28,6 @@ pub enum CloudError {
   /// No cloud account is signed in from this computer, or the cloud no longer accepts its token.
   #[error("not signed in to Orchester Cloud")]
   SignedOut,
-  /// This cloud does not serve the endpoint yet (`docs/cloud-api.md`, *Not built yet*): it answered `404`.
-  #[error("this Orchester Cloud does not offer it yet")]
-  NotOffered,
   /// The invite ended before it was answered: accepted elsewhere, expired or revoked.
   #[error("the invite has ended")]
   InviteEnded,
@@ -70,15 +67,4 @@ impl CloudError {
   pub fn unreachable(&self) -> bool {
     matches!(self, Self::Client(error) if error.is_connection())
   }
-}
-
-/// `answer` of an endpoint the cloud may not serve yet: its `404` is [`CloudError::NotOffered`].
-pub(super) fn offered<T>(answer: Result<T, ClientError>) -> Result<T, CloudError> {
-  answer.map_err(|error| match error {
-    ClientError::Cloud {
-      code: CloudErrorCode::NotFound,
-      ..
-    } => CloudError::NotOffered,
-    error => error.into(),
-  })
 }

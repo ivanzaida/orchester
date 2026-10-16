@@ -32,6 +32,12 @@ pub struct ServerProject {
 }
 
 impl Servers {
+  /// What the server in `entry` says it is (`GET /server`): its name, API and version, over the trust stored with it.
+  pub async fn info(&self, entry: &ServerEntry) -> Result<orchester_api::ServerInfo, SharingError> {
+    let (client, trust) = Self::client(entry)?;
+    client.server_info().await.map_err(|error| trust.refusal(error))
+  }
+
   /// The local projects linked to a project on `server`, in the order they were added. A project whose folder cannot
   /// be read is left out and logged. Blocking.
   pub fn linked_projects(&self, server: ServerId) -> Result<Vec<LinkedProject>, SharingError> {

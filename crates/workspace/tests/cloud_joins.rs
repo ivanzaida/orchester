@@ -62,6 +62,7 @@ fn cloud_join_sends_nothing_to_an_address_without_the_certificate_the_cloud_name
   let identity = || CloudIdentity {
     cloud: &client,
     device: &device,
+    invite: None,
   };
   let stale = CloudServer {
     id: audience.parse().expect("server id"),
@@ -109,6 +110,7 @@ fn cloud_join_reaches_a_self_signed_server_by_the_fingerprint_the_cloud_has() {
   let identity = CloudIdentity {
     cloud: &client,
     device: &device,
+    invite: None,
   };
   let joined = server
     .block_on(servers.join_with_cloud(&record, identity, None))

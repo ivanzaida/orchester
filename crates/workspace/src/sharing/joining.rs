@@ -10,7 +10,7 @@ use orchester_api::{
   cloud::CloudServer,
 };
 use orchester_core::{
-  id::{ApprovalId, ServerId},
+  id::{ApprovalId, InviteId, ServerId},
   secret::SecretValue,
   time::Timestamp,
 };
@@ -36,10 +36,12 @@ pub enum CloudJoined {
   Waiting(Approval),
 }
 
-/// What a cloud join needs from Orchester Cloud: its client and this computer's cloud device token.
+/// What a cloud join needs from Orchester Cloud: its client, this computer's cloud device token, and the invite the
+/// identity token accepts, when the join answers one.
 pub struct CloudIdentity<'a> {
   pub cloud: &'a CloudClient,
   pub device: &'a SecretValue,
+  pub invite: Option<InviteId>,
 }
 
 impl Servers {
@@ -78,33 +80,15 @@ impl Servers {
   ) -> Result<CloudJoined, SharingError> {
     let (address, trust, client, name) = Self::reach_named(server).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
-    let issued = identity.cloud.identity_token(identity.device, server.id).await?;
+    let issued = identity
+      .cloud
+      .identity_token(identity.device, server.id, identity.invite)
+      .await?;
     let request = CloudJoin {
       identity_token: issued.identity_token,
       key_set: Some(key_set),
       device: device::this_computer(),
       approval,
-      kind: DeviceKind::App,
-    };
-    self
-      .finish_cloud_join(server, (&address, trust, &client, name), &request)
-      .await
-  }
-
-  /// Joins `server` with the identity token Orchester Cloud gave when the person accepted an invite to it (row 43):
-  /// at the address the invite names and trusting only the certificate it names, with the cloud's current key set.
-  pub async fn join_with_invite_token(
-    &self,
-    server: &CloudServer,
-    identity_token: Credential,
-    key_set: String,
-  ) -> Result<CloudJoined, SharingError> {
-    let (address, trust, client, name) = Self::reach_named(server).await?;
-    let request = CloudJoin {
-      identity_token,
-      key_set: Some(key_set),
-      device: device::this_computer(),
-      approval: None,
       kind: DeviceKind::App,
     };
     self
