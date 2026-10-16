@@ -58,8 +58,9 @@ fn linked() -> (RealCloud, TestServer, orchester_api::SharedProject, String) {
   (cloud, server, billing, id)
 }
 
-/// The window signed in to `cloud` as Bohdan, at Settings › Orchester.
-fn signed_in(cloud: &RealCloud) -> support::Window {
+/// The window signed in to `cloud` as Bohdan, at Settings › Orchester; with `secret`, the secret of Bohdan's
+/// authenticator app, the gate's code step takes the code it shows after the password.
+fn signed_in(cloud: &RealCloud, secret: Option<&[u8]>) -> support::Window {
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
   let address = ServerAddress::parse(&cloud.url()).expect("cloud address");
@@ -69,6 +70,20 @@ fn signed_in(cloud: &RealCloud) -> support::Window {
   window.set("gate-email", BOHDAN);
   window.set("gate-password", PASSWORD);
   press(&mut window, "gate-sign-in");
+  if let Some(secret) = secret {
+    shows(&mut window, "gate-code");
+    // The setup took the code of now; the next step's is the first one left.
+    let now = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .expect("after 1970")
+      .as_secs();
+    let next = i64::try_from(now).expect("seconds fit") + orchester_api::totp::STEP_SECS;
+    window.set(
+      "gate-code",
+      &orchester_api::totp::code(secret, orchester_api::totp::step(next)),
+    );
+    press(&mut window, "gate-verify");
+  }
   // Another account signing in gets tabs of its own: going anywhere before its sign-in finished would go in the last
   // account's tabs, which then wait for it.
   shows(&mut window, "content");
@@ -86,8 +101,8 @@ fn orchester_cloud_accepts_an_invite_and_joins_again_with_the_account() {
   let (cloud, server, billing, server_id) = linked();
   let (invite, signed) = server.signed_email_invite(BOHDAN, Some(&billing));
   cloud.deliver(&signed);
-  let mut window = signed_in(&cloud);
-  cloud.two_factor_sessions(BOHDAN, PASSWORD);
+  let secret = cloud.turn_on_two_factor(BOHDAN, PASSWORD);
+  let mut window = signed_in(&cloud, Some(&secret));
   let services = window.launch.services().expect("services").clone();
   let accept = format!("orchester-invite-{invite}-accept");
   shows(&mut window, &accept);
@@ -151,7 +166,7 @@ fn orchester_cloud_declines_an_invite_in_place() {
   let (cloud, server, _billing, _server_id) = linked();
   let (invite, signed) = server.signed_email_invite(BOHDAN, None);
   cloud.deliver(&signed);
-  let mut window = signed_in(&cloud);
+  let mut window = signed_in(&cloud, None);
   let services = window.launch.services().expect("services").clone();
   let decline = format!("orchester-invite-{invite}-decline");
   shows(&mut window, &decline);

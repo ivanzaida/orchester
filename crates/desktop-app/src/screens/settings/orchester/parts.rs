@@ -36,14 +36,20 @@ pub(super) fn frame(id: &str) -> Column {
     .clip()
 }
 
-/// The header (`S4iAdc`): the glyph, the title with its state and facts, and the actions at the end.
 /// A fact in a header's line: words, or an address or an email in mono (`TKeDb` in `Cu20b`).
 pub(super) enum Fact {
   Plain(String),
   Mono(String),
 }
 
-pub(super) fn header(ctx: &Ctx, id: &str, (glyph, title, look): (Icon, &str, &Look), facts: &[Fact]) -> Row {
+/// The header (`S4iAdc`): the glyph, the title with its state, what follows the state (the account's two-factor
+/// authentication, `WH6nX`) and the facts under them, and the actions at the end.
+pub(super) fn header(
+  ctx: &Ctx,
+  id: &str,
+  (glyph, title, look): (Icon, &str, &Look),
+  (after, facts): (Vec<Element>, &[Fact]),
+) -> Row {
   let separator = ctx.t("cloud.factSeparator");
   let mut line = Row::new()
     .id(format!("{id}-facts"))
@@ -72,7 +78,8 @@ pub(super) fn header(ctx: &Ctx, id: &str, (glyph, title, look): (Icon, &str, &Lo
             .variant(AccountsText::Title.role())
             .nowrap(),
         )
-        .child(state_line(ctx, &format!("{id}-state"), look)),
+        .child(state_line(ctx, &format!("{id}-state"), look))
+        .with_children(after),
     )
     .child(line);
   Row::new()

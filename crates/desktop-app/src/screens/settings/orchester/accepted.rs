@@ -192,8 +192,9 @@ pub(super) fn check(ctx: &mut Ctx, tick: u64, (cloud, answers): (&Cloud, &Answer
         .await
         .map_err(|error| tracing::warn!(%error, "the invites accepted here could not be checked"))?;
       for one in checked {
-        match Outcome::asked(one.outcome, &one.server_name) {
-          Ok(Outcome::Waiting { .. }) => {}
+        match Outcome::asked(one.outcome, (one.invite, &one.server_name)) {
+          // A refusal for want of two-factor authentication leaves the invite listed, which says what is needed.
+          Ok(Outcome::Waiting { .. } | Outcome::TwoFactorOff { .. } | Outcome::NeedsCode { .. }) => {}
           Ok(outcome) => ended.update(|ended| ended.0.push((one.invite, outcome))),
           Err(reason) => tracing::info!(reason = reason.key, "a join that waits for approval did not finish yet"),
         }

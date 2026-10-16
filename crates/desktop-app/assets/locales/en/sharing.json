@@ -98,8 +98,8 @@
       "keySetStale": "The server's copy of Orchester Cloud's keys is out of date. Try again, or join with a code.",
       "approvalRefused": "The server refused this computer. If you didn't expect this, ask an admin of the server.",
       "invalidIdentity": "The server didn't accept your Orchester Cloud identity. Try again.",
-      "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account. Turn it on under Security on the cloud's Account page; signing in here with its code is coming to Orchester.",
-      "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication. Signing in here with a code is coming to Orchester; until then a code can't be entered on this computer.",
+      "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account. Turn it on under Security on the cloud's Account page, then sign out here and sign in again with your code.",
+      "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with your two-factor code. Sign out in Settings › Orchester and sign in again with your code.",
       "twoFactorUnverifiable": "This server can't check two-factor authentication. Its admin links it to Orchester Cloud, or pins Orchester Cloud's root key on a server that holds its own certificate (orchester-server cloud pin).",
       "notRegisteredServer": "Orchester Cloud has this server at another address or with another certificate, so your sign-in wasn't shown to it. Connect at the address Orchester Cloud lists for it, or ask its admin.",
       "codeUnbound": "This server isn't linked to Orchester Cloud and is reached over plain HTTP, so your sign-in can't be shown to it safely. Connect to it over HTTPS, or ask its admin to link it to Orchester Cloud."

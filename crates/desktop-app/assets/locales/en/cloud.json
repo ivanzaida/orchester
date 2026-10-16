@@ -80,6 +80,11 @@
         "local": "Your projects and tasks stay on this computer, and runs that are going keep going. Team servers keep this computer's own sign-in, so nothing needs joining again.",
         "confirm": "Sign out and lock",
         "stay": "Stay signed in"
+      },
+      "twoFactor": {
+        "on": "Two-factor: on",
+        "off": "Two-factor: off",
+        "turnOn": "Turn on…"
       }
     },
     "invites": {
@@ -140,7 +145,19 @@
         "tryAgain": "Try again",
         "later": "Later"
       },
-      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected."
+      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected.",
+      "twoFactor": {
+        "off": "Accepting needs two-factor authentication on your account.",
+        "session": "Accepting needs a sign-in with your code. This computer signed in before you turned on two-factor.",
+        "turnOn": "Turn on two-factor authentication",
+        "turnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
+        "signInAgain": "Sign in again",
+        "notNow": "Not now",
+        "refusedTitle": "Sign in again to accept",
+        "refusedBody": "This computer signed in before you turned on two-factor. Accepting needs a sign-in with your code.",
+        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here.",
+        "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser."
+      }
     },
     "signIn": {
       "wrong": "Wrong email or password."
@@ -271,7 +288,6 @@
       "busy": "Orchester Cloud is busy. Try again in a moment.",
       "keys": "Orchester Cloud can't sign right now. Try again later.",
       "refused": "Orchester Cloud refused this.",
-      "twoFactor": "This account uses two-factor authentication, and Orchester can't ask for its code yet.",
       "unreachable": "Orchester Cloud can't be reached.",
       "certificate": "Your system doesn't trust Orchester Cloud's certificate.",
       "serverRefused": "The server refused this.",
@@ -293,7 +309,19 @@
         "owner": "As an owner",
         "member": "As a member",
         "server": "To the server"
+      },
+      "twoFactor": {
+        "turnOnNote": "Turn on two-factor authentication opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
+        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here and in Settings › Orchester."
       }
+    },
+    "recovery": {
+      "left": {
+        "one": "1 recovery code left",
+        "other": "{{count}} recovery codes left"
+      },
+      "body": "You signed in with a recovery code. Make new ones on your account's security page before they run out: they're how you sign in if you lose your phone.",
+      "open": "Open security page"
     }
   }
 }

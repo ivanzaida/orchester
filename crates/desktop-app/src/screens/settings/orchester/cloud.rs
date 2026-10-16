@@ -1,8 +1,10 @@
 //! The Orchester Cloud account (`Account details` `S9wde` in `Cu20b`): the header with *Sign out*; the tabs *Account*,
 //! *Invites* and *Devices* (not built in this app yet, and says so); the account's facts, the waiting invites, what
-//! signing out does and the advanced cloud address. *Sign out* asks in place under *Signing out* (`In-place
-//! confirmation` `FeM5F` in `p2VeL`); *Sign out and lock* is a person's, and the sign-in gate takes the window after
-//! it. Signed out, the app shows only the gate (`crate::screens::gate`), so this panel always has an account.
+//! signing out does and the advanced cloud address. The header says whether two-factor authentication is on
+//! ([`super::two_factor`]), and the body starts with few recovery codes left, after a sign-in with one. *Sign out* asks
+//! in place under *Signing out* (`In-place confirmation` `FeM5F` in `p2VeL`); *Sign out and lock* is a person's, and
+//! the sign-in gate takes the window after it. Signed out, the app shows only the gate (`crate::screens::gate`), so
+//! this panel always has an account.
 
 use lurq::{
   app::{
@@ -14,6 +16,7 @@ use lurq::{
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_api::cloud::TwoFactorStatus;
 use orchester_store::StoredCloudAccount;
 use orchester_workspace::sharing::cloud::CloudAddress;
 
@@ -45,6 +48,8 @@ pub(super) struct Props {
   pub invites: Invites,
   /// The invites accepted here whose join did not finish.
   pub accepted: super::Kept,
+  /// The account's two-factor authentication, once the cloud said.
+  pub two_factor: Option<TwoFactorStatus>,
   pub panel: OrchesterPanel,
 }
 
@@ -117,16 +122,21 @@ impl Component for CloudPanel {
         .held(self.asking.get())
         .on_click(move || asking.set(true))
     };
+    let after = super::two_factor::header(ctx, props.two_factor.as_ref(), &self.invites);
     let head = header(
       ctx,
       "orchester-cloud-header",
       (Icon::User, &account.display_name, &look),
-      &facts,
+      (after, &facts),
     )
     .child(sign_out);
     let mut parts: Vec<Element> = Vec::new();
     parts.extend(match props.panel {
-      OrchesterPanel::Invites => vec![invites::waiting(ctx, (&props.invites, &props.accepted), &self.invites)],
+      OrchesterPanel::Invites => vec![invites::waiting(
+        ctx,
+        (&props.invites, &props.accepted, props.two_factor.as_ref()),
+        &self.invites,
+      )],
       _ => self.account_parts(ctx, account, &props),
     });
     frame("orchester-cloud-details")
@@ -204,8 +214,17 @@ impl CloudPanel {
       }],
     );
     let mut parts: Vec<Element> = failed.into_iter().collect();
+    parts.extend(super::two_factor::recovery_warning(
+      ctx,
+      "orchester-cloud-recovery",
+      &self.invites,
+    ));
     parts.push(facts.into());
-    parts.push(invites::waiting(ctx, (&props.invites, &props.accepted), &self.invites));
+    parts.push(invites::waiting(
+      ctx,
+      (&props.invites, &props.accepted, props.two_factor.as_ref()),
+      &self.invites,
+    ));
     parts.push(signing_out.into());
     parts.push(advanced::section(ctx, &props.address, &self.advanced, Place::Settings));
     parts.push(inspector::note("orchester-cloud-token-note", Icon::KeyRound, &ctx.t(token_note())).into());

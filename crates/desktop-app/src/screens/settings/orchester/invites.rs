@@ -1,7 +1,8 @@
 //! *Waiting invites* (`Invites` `s25gc8` in `Cu20b`; accepting and declining in `jUMAF`): the invites accepted here
 //! whose join did not finish ([`super::accepted`]), then who invited the person to what, with *Decline* and *Accept*.
 //! Accepting connects this computer to the invite's server, trusting exactly the certificate the cloud's registry
-//! names, so there is no check code to compare; *Decline* asks in place first.
+//! names, so there is no check code to compare; *Decline* asks in place first. An invite that needs two-factor
+//! authentication first says so under its top line, with the step that fixes it ([`super::two_factor`]).
 
 use lurq::{
   app::{
@@ -13,13 +14,17 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_api::{InviteKind, MemberRole, cloud::CloudInvite};
+use orchester_api::{
+  InviteKind, MemberRole,
+  cloud::{CloudInvite, TwoFactorStatus},
+};
 use orchester_core::time::Timestamp;
 
 pub(super) use super::answers::{Answers, Asked, Outcome};
 use super::{
   Invites, Kept, Said, accepted,
   parts::{paragraph, section as part, section_title},
+  two_factor::{self, Need},
   words::{counted, day, shown_address},
 };
 use crate::{
@@ -34,8 +39,12 @@ use crate::{
   },
 };
 
-/// The section, as `invites` stand.
-pub(super) fn waiting(ctx: &mut Ctx, (invites, kept): (&Invites, &Kept), answers: &Answers) -> Element {
+/// The section, as `invites` stand, for an account whose two-factor authentication is `status`.
+pub(super) fn waiting(
+  ctx: &mut Ctx,
+  (invites, kept, status): (&Invites, &Kept, Option<&TwoFactorStatus>),
+  answers: &Answers,
+) -> Element {
   let meta = (invites.waiting() > 0).then(|| {
     counted(
       ctx,
@@ -55,7 +64,7 @@ pub(super) fn waiting(ctx: &mut Ctx, (invites, kept): (&Invites, &Kept), answers
     }
     Invites::Listed(listed) => {
       for invite in listed.iter() {
-        parts.push(card(ctx, invite, answers));
+        parts.push(card(ctx, invite, (status, answers)));
       }
     }
   }
@@ -92,6 +101,7 @@ pub(super) fn outcome(ctx: &mut Ctx, answers: &Answers, waiting: bool) -> Vec<El
     ("orchester-invite-finish", answers.finish.state()),
     waiting,
   ));
+  parts.extend(two_factor::failed(ctx, "orchester-invite", answers));
   for (id, state) in [
     ("orchester-invite-decline-failed", answers.decline.state().get()),
     ("orchester-invite-set-aside-failed", answers.set_aside.state().get()),
@@ -139,7 +149,8 @@ fn answered(ctx: &mut Ctx, (id, shown): (&str, Signal<FutureState<Outcome, Said>
     Some(Outcome::Refused { server }) => parts.push(super::ended::refused(ctx, id, &server, move || {
       shown.set(FutureState::idle());
     })),
-    Some(Outcome::Waiting { .. }) | None => {}
+    // The invite's card says what two-factor authentication needs.
+    Some(Outcome::Waiting { .. } | Outcome::TwoFactorOff { .. } | Outcome::NeedsCode { .. }) | None => {}
   }
   parts
 }
@@ -193,8 +204,9 @@ const fn role_key(role: MemberRole) -> &'static str {
 }
 
 /// An invite (`Invite · Billing` `JgJbd`): the inviter's initials, what it is to, its address and expiry, and the
-/// answers; *Decline the invite?* in place under it while asked; *Connecting…* while it is accepted.
-fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
+/// answers; *Decline the invite?* in place under it while asked; *Connecting…* while it is accepted. While it needs
+/// two-factor authentication, its answers are under its top line (`i679x9`, `d3OtB`, `JwJIL`).
+fn card(ctx: &mut Ctx, invite: &CloudInvite, (status, answers): (Option<&TwoFactorStatus>, &Answers)) -> Element {
   let id = format!("orchester-invite-{}", invite.id);
   let address = invite
     .project
@@ -229,6 +241,7 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
     );
   let accepting = answers.connecting() && answers.accepting.get().0 == Some(invite.id);
   let declining = answers.declining.get().0 == Some(invite.id);
+  let need = two_factor::need(invite, status, answers);
   let top = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -238,7 +251,7 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
       &initials(&invite.inviter_display_name),
     ))
     .child(text)
-    .with_children((!accepting && !declining).then(|| buttons(ctx, &id, invite, answers)));
+    .with_children((!accepting && !declining && need == Need::Accept).then(|| buttons(ctx, &id, invite, answers)));
   let mut card = Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
@@ -253,6 +266,9 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
     .child(top);
   if accepting {
     card = card.child(connecting(ctx, &id, invite, answers));
+  }
+  if !accepting && !declining {
+    card = card.with_children(two_factor::below(ctx, &id, invite, (need, answers)));
   }
   card = card.with_children(answers.person.reason(ctx, &format!("{id}-accept")));
   if !declining {
@@ -293,13 +309,7 @@ fn connecting(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> C
 }
 
 fn buttons(ctx: &Ctx, id: &str, invite: &CloudInvite, answers: &Answers) -> Row {
-  let (declining, invite_id) = (answers.declining.clone(), invite.id);
-  let decline = ActionButton::new(
-    format!("{id}-decline"),
-    ButtonKind::Ghost,
-    ctx.t("cloud.invites.decline"),
-  )
-  .on_click(move || declining.set(Asked(Some(invite_id))));
+  let decline = two_factor::decline(ctx, id, invite, answers);
   let busy = answers.connecting();
   let accept_button = ActionButton::new(
     format!("{id}-accept"),

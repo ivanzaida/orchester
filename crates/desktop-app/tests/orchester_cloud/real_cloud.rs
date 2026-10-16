@@ -14,7 +14,7 @@ use std::{
 
 use orchester_api::{
   Credential,
-  client::{CloudClient, ServerAddress},
+  client::{CloudClient, ServerAddress, SignInAnswer},
   cloud::{CloudPlatform, CloudSignIn, DeviceInfo, ServerLinked},
   totp,
 };
@@ -112,18 +112,16 @@ impl RealCloud {
         platform: CloudPlatform::Windows,
       },
     };
-    self
-      .runtime
-      .block_on(client.sign_in(&request))
-      .expect("signed in")
-      .token
+    match self.runtime.block_on(client.sign_in(&request)).expect("signed in") {
+      SignInAnswer::SignedIn(signed_in) => signed_in.token,
+      SignInAnswer::Challenged(_) => panic!("a test device signs in before two-factor authentication is on"),
+    }
   }
 
-  /// Two-factor authentication for the account of `email`, which accepting an invite needs, and every device it has
-  /// signed in made a two-factor session. The app's own two-factor sign-in is not built yet (its design is being
-  /// drawn), so its device is marked in the cloud's database as that sign-in would make it; the setup itself goes
-  /// through the API from a device of the test's own, with the codes an authenticator app would show.
-  pub fn two_factor_sessions(&self, email: &str, password: &str) {
+  /// Turns two-factor authentication on for the account of `email`, which accepting an invite needs, through the API
+  /// from a device of the test's own, with the code an authenticator app would show; the app's secret, from which the
+  /// app's sign-in takes its code at the gate.
+  pub fn turn_on_two_factor(&self, email: &str, password: &str) -> Vec<u8> {
     let device = self.device(email, password);
     let start = json!({"password": password});
     let (status, setup) = self.request("POST", "/me/two-factor", Some(device.expose()), &start);
@@ -141,25 +139,7 @@ impl RealCloud {
       &json!({"code": code}),
     );
     assert_eq!(status, 200, "{answer}");
-    let url = format!("{}/{}?sslmode=disable", self.server, self.database);
-    self.runtime.block_on(async {
-      let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-        .await
-        .expect("connect to the cloud's database");
-      tokio::spawn(async move {
-        if connection.await.is_err() {
-          eprintln!("a connection to the cloud's test database ended with an error");
-        }
-      });
-      client
-        .execute(
-          "UPDATE devices d SET two_factor = t.id FROM two_factor t, accounts a
-           WHERE t.account = d.account AND a.id = d.account AND a.email = $1 AND d.revoked_at IS NULL",
-          &[&email],
-        )
-        .await
-        .expect("the account's devices");
-    });
+    secret
   }
 
   /// Registers the team server that signed `statement`, for the account of `device`: what the server pins.

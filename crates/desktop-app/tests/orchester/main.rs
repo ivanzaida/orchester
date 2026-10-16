@@ -16,6 +16,7 @@ mod person_only;
 mod server_support;
 #[path = "../support/mod.rs"]
 mod support;
+mod two_factor;
 
 use harness::{Recorder, administrative, block_on, go, press, shows, window};
 use orchester_api::{

@@ -116,6 +116,8 @@ pub fn cloud_error(error: &CloudError) -> Said {
     CloudError::TooManyAsks => Said::new("cloud.errors.tooManyAsks"),
     CloudError::InviteEnded => Said::new("cloud.invites.ended"),
     CloudError::NoServer => Said::new("cloud.errors.noServer"),
+    CloudError::TwoFactorOff => Said::new("cloud.invites.twoFactor.off"),
+    CloudError::TwoFactorSession => Said::new("cloud.invites.twoFactor.session"),
     CloudError::Join(error) => sharing_error(error),
   }
 }
@@ -131,7 +133,6 @@ fn cloud_client(error: &ClientError) -> Said {
     },
     error if error.is_connection() => Said::new("cloud.errors.unreachable"),
     ClientError::UntrustedCertificate => Said::new("cloud.errors.certificate"),
-    ClientError::TwoFactorRequired => Said::new("cloud.errors.twoFactor"),
     _ => Said::new("cloud.errors.refused"),
   }
 }
@@ -172,7 +173,7 @@ pub fn server_client(error: &ClientError) -> Said {
       ErrorCode::MfaUnverifiable => Said::new("sharing.connect.twoFactorUnverifiable"),
       _ => Said::new("cloud.errors.serverRefused"),
     },
-    ClientError::Cloud { .. } | ClientError::TwoFactorRequired => cloud_client(error),
+    ClientError::Cloud { .. } => cloud_client(error),
     ClientError::UntrustedCertificate => Said::new("cloud.errors.certificateChanged"),
     ClientError::PlainHttpRefused => Said::new("sharing.connect.address.plain"),
     ClientError::NotOrchester { .. } | ClientError::Redirect { .. } => {
