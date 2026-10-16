@@ -89,7 +89,12 @@ pub fn changes(ctx: &mut Ctx, workspace: &Workspace) -> u64 {
       }
     },
   );
-  changes.state().get().data.unwrap_or(0)
+  // Until the stream's first value: the count now, so a screen that mounts after a change reads once.
+  changes
+    .state()
+    .get()
+    .data
+    .unwrap_or_else(|| *workspace.account_changes().borrow())
 }
 
 /// A week, in minutes: the window an account's use is read from.

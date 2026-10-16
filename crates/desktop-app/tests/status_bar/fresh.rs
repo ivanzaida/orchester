@@ -118,3 +118,37 @@ fn status_plan_limits_follow_the_accounts_and_the_connections() {
     "the rename and the connection's move read what the project uses: {renamed:?}"
   );
 }
+
+#[test]
+fn status_accounts_changed_before_the_window_opened_are_read_once() {
+  let reads = Reads::count();
+  let data = Data::new();
+  let launch = data.launch();
+  let workspace = launch.workspace().expect("the session started").clone();
+  let folder = data.dir.path().join("codex-client");
+  std::fs::create_dir_all(&folder).expect("the account's folder");
+  let client = AgentAccount::new(
+    AgentAccountId::generate(),
+    AccountCli::Codex,
+    Name::new("Client").expect("a name"),
+    AccountFolder::Created(folder),
+    Timestamp::now(),
+  )
+  .expect("an account");
+  AppDb::open(&data.database())
+    .expect("the application database")
+    .add_agent_account(&client)
+    .expect("added");
+  workspace
+    .rename_agent_account(client.id(), Name::new("Work").expect("a name"))
+    .expect("renamed");
+  let mut window = Window::of(data, launch);
+  let until = std::time::Instant::now() + std::time::Duration::from_millis(500);
+  while std::time::Instant::now() < until {
+    window.tree.tick_futures();
+    window.pass();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+  }
+  let opened = reads.take();
+  assert_eq!(opened.get("accounts"), Some(&1), "{opened:?}");
+}
