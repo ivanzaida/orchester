@@ -115,15 +115,16 @@ impl Component for ScreensRoot {
     let router = ctx.router(routes());
     let navigation = Navigation::new(ctx.signal(TabSet::default()), router.clone());
     *ctx.props::<RouterSlot>().0.lock() = Some(router.clone());
+    let links = ChatLinks::new(navigation.clone());
     Self {
       router,
-      navigation: navigation.clone(),
+      navigation,
       projects: Projects::new(
         Some((project, ProjectState::Open(kontur(project)))),
         ProjectJobs::default(),
       ),
       needs_you: PanelOpen::new(ctx.signal(false)),
-      links: ChatLinks::new(navigation.clone()),
+      links,
     }
   }
 
