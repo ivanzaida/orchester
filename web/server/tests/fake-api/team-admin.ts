@@ -142,6 +142,15 @@ function updateUser(world: World, request: Request, userId: string): Answer {
   return ok({ user: userJson(user) });
 }
 
+function unlinkUser(world: World, userId: string): Answer {
+  const user = world.state.users.find((u) => u.id === userId);
+  if (user === undefined) {
+    return refuse(404, "not_found");
+  }
+  user.cloud = false;
+  return ok({ user: userJson(user) });
+}
+
 function sessions(world: World): Answer {
   const list = [...world.state.devices]
     .sort((a, b) => b.last_used_at - a.last_used_at)
@@ -212,6 +221,7 @@ const ROUTES: Route[] = [
   ["DELETE", /^\/api\/v1\/invites\/([^/]+)$/, (w, _r, me, m) => revoke(w, m[1] ?? "", me), false],
   ["GET", /^\/api\/v1\/admin\/users$/, (w) => users(w), true],
   ["PATCH", /^\/api\/v1\/admin\/users\/([^/]+)$/, (w, r, _, m) => updateUser(w, r, m[1] ?? ""), true],
+  ["DELETE", /^\/api\/v1\/admin\/users\/([^/]+)\/cloud$/, (w, _r, _me, m) => unlinkUser(w, m[1] ?? ""), true],
   ["GET", /^\/api\/v1\/admin\/sessions$/, (w) => sessions(w), true],
   ["DELETE", /^\/api\/v1\/admin\/sessions\/([^/]+)$/, (w, _r, _me, m) => {
     w.state.devices = w.state.devices.filter((d) => d.id !== m[1]);

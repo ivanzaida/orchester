@@ -123,6 +123,40 @@ pub(crate) fn cloud_subject(connection: &Connection, user: UserId) -> Result<Opt
   )
 }
 
+/// Links `user` to the cloud account `subject` with an account code, in place of the one before when `replacing`.
+pub(crate) fn relink_subject(
+  connection: &Connection,
+  user: UserId,
+  subject: &str,
+  replacing: bool,
+  now: i64,
+) -> Result<(), ServerError> {
+  connection.execute(
+    "UPDATE users SET cloud_subject=?1 WHERE id=?2",
+    params![subject, user.to_string()],
+  )?;
+  let action = if replacing { "cloud_relinked" } else { "cloud_linked" };
+  audit(connection, Some(user), action, &format!("{user}:code"), None, now)
+}
+
+/// Ends `user`'s link to a cloud account, by the admin `actor` or the host (`None`); `false` when it had none.
+pub(crate) fn unlink_subject(
+  connection: &Connection,
+  user: UserId,
+  actor: Option<UserId>,
+  now: i64,
+) -> Result<bool, ServerError> {
+  let changed = connection.execute(
+    "UPDATE users SET cloud_subject=NULL WHERE id=?1 AND cloud_subject IS NOT NULL",
+    [user.to_string()],
+  )?;
+  if changed == 0 {
+    return Ok(false);
+  }
+  audit(connection, actor, "cloud_unlinked", &user.to_string(), None, now)?;
+  Ok(true)
+}
+
 /// Links an account to the cloud account `subject`.
 pub(crate) fn link_subject(connection: &Connection, user: UserId, subject: &str, now: i64) -> Result<(), ServerError> {
   connection.execute(

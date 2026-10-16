@@ -254,7 +254,11 @@ private admin API listener on `127.0.0.1:8741`. An admin may rename the server i
 `server.toml` is then only the default. Host commands accept the same `--config` and
 environment settings and can run while the server is running, against the same data directory:
 `serve`, `backup <path>`, `tls show`, `tls regenerate`, `setup-code`, `account-code <username>`,
-`cloud show|on|off|unlink`, `cloud pin <root public key>`. Codes are printed only to the command's own output.
+`account-cloud <username>`, `account-unlink <username>`, `cloud show|on|off|unlink`, `cloud pin <root public key>`.
+Codes are printed only to the command's own output. `account-cloud` prints the Orchester Cloud account an account is
+linked to; `account-unlink` ends that link (the account's computers stay joined), as *Unlink Orchester Cloud* on the
+admin's People page does. An account code links the account to the cloud account it is entered with, in place of the
+one before: the way back for someone whose cloud account was deleted and made again.
 Commands that write need the database's write lock, including during the schema check. If another writer holds it for
 the five-second busy timeout, the command exits unsuccessfully, prints no code, and reports
 `server database is busy or locked; retry after the writer releases the lock`.

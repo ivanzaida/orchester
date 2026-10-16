@@ -95,7 +95,7 @@ or turned two-factor authentication on itself.
 | `GET /devices` | device | | `{ devices: [Device] }`, oldest first | |
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the cloud's root key signed. The cloud makes its root at its first start and publishes a key set before it listens, so a running cloud always has one | `503 keys_unavailable` |
-| `POST /identity-tokens` | device | `{ audience, purpose?, invite?, certificate? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts; `certificate`: with purpose `code` only, the SHA-256 fingerprint (64 lower-case hex) of the certificate the app pinned for a server not linked here | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, `invite` with a purpose, or a `certificate` without purpose `code` or not 64 lower-case hex), `429`, `503 keys_unavailable` |
+| `POST /identity-tokens` | device | `{ audience, purpose?, invite? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin, `"code"` to show with a code entered in the app; `invite`: an invite from that server to the account's email, open or accepted by this account, which the token accepts | `201 { identity_token, expires_at }` (seconds) | `403 mfa_required`, `403 session_without_mfa` (an `invite` from a device that is not a two-factor session; the invite stays open), `404 not_found` (purpose `admin` for a server not linked here; an `invite` that is expired, declined, accepted by another account, not to the account's email or not from `audience`), `422 invalid` (also purpose `link`, or `invite` with a purpose), `429`, `503 keys_unavailable` |
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
@@ -184,7 +184,7 @@ Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, 
 `purpose` (absent to join with a device; `admin` for a sign-in to the server admin; `link` for linking the server;
 `code` to show with a code), `invite` (when the token accepts an invite), `mfa` (`true` when the device it was issued
 to is a two-factor session; absent otherwise, and in every token from a cloud before two-factor authentication),
-`certificate` (a `code` token's certificate fingerprint, when the app asked for one), `jti`, `iat`, `exp`. A team server
+`jti`, `iat`, `exp`. A team server
 accepts a token only for the use it was issued for: a `code` token is taken with a code and nowhere else, so a server
 that passes on a token an app got for a code there cannot join or sign in with it anywhere.
 
@@ -347,12 +347,9 @@ is a two-factor session (claim `mfa`). Team servers take an invite's join token 
 or with a code) only from a device token issued for an identity token with it, and take every code but the setup code
 from an app only with a token for codes (purpose `code`, the server's id as `aud`) that says `mfa`
 ([architecture/server.md](architecture/server.md), "Invites", "Codes"). So the desktop asks for a token for the server it
-enters a code for, from a two-factor session, and carries the key set with it. It never takes that server's id on the
-server's word alone: a server linked here must be the one this registry has under that id (`GET /servers/{id}`: the
-address the person connected to and, when the registry has one, the certificate fingerprint it presents), and a server
-not linked here gets a token bound to the certificate the person confirmed with its check code (`certificate`), which
-the server takes only while it presents that certificate itself. Over plain HTTP a server not linked here gets no token
-and so takes no code but its setup code. Invites made before and delivered later are not held to it: delivering
+enters a code for, from a two-factor session, and carries the key set with it. It asks only after the server proved
+it holds the key whose id it gives itself (a team server's id is its public key's; `POST /server/key-proof` on the team
+server), so the token's audience names that key and no other server can take it, linked here or not. Invites made before and delivered later are not held to it: delivering
 (`POST /invites`) checks the server's signature only. A team server keeps whether a device joined with `mfa` for as
 long as that device token lives: turning two-factor authentication off at the cloud does not reach team servers, and
 a device keeps sending invites there until an admin signs it out or the person joins it again.

@@ -41,6 +41,20 @@ pub struct CertificateInfo {
   pub mode: CertificateMode,
 }
 
+/// `POST /server/key-proof`: a nonce of the app's, 16 to 64 base64url characters.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyProofRequest {
+  pub nonce: String,
+}
+
+/// The server's public key (base64url, whose id is the server's) and its signed [`crate::statements::KeyProof`].
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KeyProofResponse {
+  pub public_key: String,
+  pub proof: String,
+}
+
 /// What `GET /server` says about the cloud link, before anyone signs in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CloudStatus {

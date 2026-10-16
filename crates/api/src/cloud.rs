@@ -253,11 +253,6 @@ pub struct IdentityTokenRequest {
   /// team server admits the verified email to it. Only for a join (no purpose). The cloud's copy of the invite ends.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub invite: Option<InviteId>,
-  /// Only with purpose `code`, for a server not linked to the cloud: the SHA-256 fingerprint (64 lower-case hex) of
-  /// the certificate the app pinned for it after the person compared its check code. The token names it, and the
-  /// server takes the token only while it presents that certificate (`docs/architecture/server.md`, "Codes").
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub certificate: Option<String>,
 }
 
 /// What an identity token is for besides joining a team server with a device (`docs/architecture/server.md`, "The

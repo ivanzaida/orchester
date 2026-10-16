@@ -1538,8 +1538,7 @@
       "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was changed. If {{own}} is how your team reaches this server, connect to it by that address.",
       "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account; nothing was sent.",
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
-      "notRegisteredServer": "Orchester Cloud has this server at another address or with another certificate; nothing was sent.",
-      "codeUnbound": "A code can't be entered for a server that isn't linked to Orchester Cloud over plain HTTP; nothing was sent."
+      "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

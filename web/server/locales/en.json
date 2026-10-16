@@ -280,6 +280,9 @@
     "makeAdminTitle": "Make {{name}} an admin of {{server}}?",
     "makeAdminText": "They can then see and change every project, person, device and setting here.",
     "keepAsIs": "Keep as is",
+    "unlink": "Unlink Orchester Cloud",
+    "unlinkTitle": "Unlink {{name}}'s Orchester Cloud account?",
+    "unlinkText": "Their Orchester Cloud account then signs in to nothing on {{server}}, and their computers stay joined. They link it again from one of their computers, or an account code links the account to the cloud account they enter it with.",
     "lastAdminTitle": "{{server}} needs an admin",
     "lastAdminText": "You're its only admin, so your account can't be disabled or lose admin. Make someone else an admin first.",
     "sentTitle": "Invite sent to {{email}}",
@@ -288,7 +291,7 @@
     "chipServer": "Server",
     "chipServerAdmin": "Server · Admin",
     "chipAccount": "Account code",
-    "note": "An account code gives a computer to someone who lost all of theirs: it works once, for 24 hours. Admins get their next computer from their own computers or the server's console. Disabling signs out every computer of that account at once; their tasks and history stay.",
+    "note": "An account code gives a computer to someone who lost all of theirs: it works once, for 24 hours, and links the account to the Orchester Cloud account it's entered with. Admins get their next computer from their own computers or the server's console. Disabling signs out every computer of that account at once; their tasks and history stay.",
     "adminsOnlyTitle": "People is for admins",
     "adminsOnlyText": "Admins of {{server}} manage its accounts. You see the projects you own."
   },

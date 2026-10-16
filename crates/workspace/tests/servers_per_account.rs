@@ -405,9 +405,9 @@ fn per_account_a_code_join_overtaken_by_another_sign_in_stays_the_joining_accoun
     proof: None,
   };
 
-  // Bohdan enters a code; Olena signs in while the cloud's registry answers the lookup for the code's proof.
-  cloud.hold_registry();
-  let asked = cloud.registry_arrived();
+  // Bohdan enters a code; Olena signs in while the cloud answers the check of his sign-in for the code's proof.
+  cloud.hold_checks();
+  let asked = cloud.checks_arrived();
   let address = ServerAddress::parse(&server.url()).expect("address");
   let joining = {
     let cloud = desktop.cloud.clone();
@@ -419,13 +419,13 @@ fn per_account_a_code_join_overtaken_by_another_sign_in_stays_the_joining_accoun
   };
   desktop.block_on(async {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
-    while cloud.registry_arrived() == asked {
-      assert!(tokio::time::Instant::now() < deadline, "the proof reached the registry");
+    while cloud.checks_arrived() == asked {
+      assert!(tokio::time::Instant::now() < deadline, "the proof reached the cloud");
       tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
   });
   switch_to(&desktop, OTHER_EMAIL);
-  cloud.let_registry_go();
+  cloud.let_checks_go();
   let joined = desktop.block_on(joining).expect("the join ran").expect("joined");
   assert!(entries(&desktop).is_empty(), "nothing of Bohdan's code join is Olena's");
 

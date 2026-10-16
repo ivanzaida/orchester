@@ -384,7 +384,7 @@ impl TestServer {
     invite["invite"]["id"].as_str().expect("invite id").to_owned()
   }
 
-  fn client(&self) -> Client {
+  pub fn client(&self) -> Client {
     if let Some(pin) = self.pin {
       return Client::pinned(ServerAddress::parse(&self.url()).expect("address"), pin).expect("client");
     }

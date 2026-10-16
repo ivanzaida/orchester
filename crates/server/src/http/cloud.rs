@@ -2,7 +2,9 @@
 
 use axum::{Json, extract::State};
 use orchester_api::{
-  CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, cloud::TokenPurpose,
+  CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, KeyProofRequest, KeyProofResponse,
+  cloud::TokenPurpose,
+  statements::{KEY_PROOF_TYPE, KeyProof},
 };
 use rusqlite::Connection;
 
@@ -15,6 +17,33 @@ use crate::{
   server_keys::ServerKeys,
   settings,
 };
+
+/// `POST /server/key-proof`: the server's public key and its signature of the app's nonce, with the id of that key,
+/// which is the server's: what an app checks before it asks Orchester Cloud for a code's token for this id
+/// (`docs/architecture/server.md`, "Codes"). Nothing is stored.
+pub(super) async fn key_proof(
+  State(server): State<Server>,
+  SafeJson(input): SafeJson<KeyProofRequest>,
+) -> Result<Json<KeyProofResponse>, ServerError> {
+  let nonce = input.nonce;
+  let shaped = (16..=64).contains(&nonce.len())
+    && nonce
+      .bytes()
+      .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
+  if !shaped {
+    return Err(ErrorCode::Invalid.into());
+  }
+  let keys = &server.inner.keys;
+  let proof = KeyProof {
+    server: keys.id,
+    nonce,
+    issued_at: server.now().div_euclid(1000),
+  };
+  Ok(Json(KeyProofResponse {
+    public_key: keys.public_key(),
+    proof: keys.sign(KEY_PROOF_TYPE, &proof)?,
+  }))
+}
 
 pub(super) async fn show_cloud(
   State(server): State<Server>,

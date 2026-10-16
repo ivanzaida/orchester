@@ -130,7 +130,6 @@ fn token(signing: &SigningKey, audience: &str, person: &Person) -> String {
     purpose: None,
     // The person's device signed in with two-factor authentication, which accepting an invite needs.
     mfa: true,
-    certificate: None,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

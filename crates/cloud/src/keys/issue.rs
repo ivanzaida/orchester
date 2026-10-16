@@ -116,7 +116,6 @@ impl Cloud {
       invite: used.invite.map(|invite| invite.to_string()),
       purpose: used.purpose,
       mfa: two_factor_session(client, auth.device).await?,
-      certificate: used.certificate,
     })
   }
 
@@ -153,11 +152,10 @@ impl Cloud {
   }
 }
 
-/// What one identity token is for: its purpose, the invite it accepts, and the certificate it is bound to.
+/// What one identity token is for: its purpose and the invite it accepts.
 pub(crate) struct TokenUse {
   purpose: Option<TokenPurpose>,
   invite: Option<InviteId>,
-  certificate: Option<String>,
 }
 
 impl TokenUse {
@@ -166,28 +164,20 @@ impl TokenUse {
     Self {
       purpose: Some(TokenPurpose::Link),
       invite: None,
-      certificate: None,
     }
   }
 
-  /// The use a request asks for: an invite only to join, a certificate only with a code, as 64 lower-case hex
-  /// characters, and never a link token, which only `POST /servers` gives.
+  /// The use a request asks for: an invite only to join, and never a link token, which only `POST /servers` gives. A
+  /// code's token needs no more: its audience is the id of the server's key, which the app had the server prove it
+  /// holds before asking.
   fn requested(request: &IdentityTokenRequest) -> Result<Self, CloudError> {
     let invite_allowed = request.invite.is_none() || request.purpose.is_none();
-    let certificate_allowed = request.certificate.as_deref().is_none_or(|hex| {
-      request.purpose == Some(TokenPurpose::Code)
-        && hex.len() == 64
-        && hex
-          .bytes()
-          .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    });
-    if request.purpose == Some(TokenPurpose::Link) || !invite_allowed || !certificate_allowed {
+    if request.purpose == Some(TokenPurpose::Link) || !invite_allowed {
       return Err(CloudErrorCode::Invalid.into());
     }
     Ok(Self {
       purpose: request.purpose,
       invite: request.invite,
-      certificate: request.certificate.clone(),
     })
   }
 }
