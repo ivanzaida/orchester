@@ -60,6 +60,10 @@ export function ActionButton(props: {
   inline?: boolean;
   unavailable?: boolean;
   describedBy?: string;
+  /** A row's button whose question is open under the row (`GsAoB`): it stays plain, as drawn, and says so. */
+  expanded?: boolean;
+  /** The first button of a question asked in place takes the focus when it opens. */
+  autoFocus?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }) {
@@ -69,6 +73,8 @@ export function ActionButton(props: {
       className={buttonClass(props.kind, { row: props.row ?? false, inline: props.inline ?? false })}
       disabled={props.unavailable ?? false}
       aria-describedby={props.describedBy}
+      aria-expanded={props.expanded}
+      autoFocus={props.autoFocus}
       onClick={props.onClick}
     >
       <ButtonContent icon={props.icon}>{props.children}</ButtonContent>

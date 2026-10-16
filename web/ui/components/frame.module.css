@@ -79,11 +79,16 @@
   color: var(--color-text-secondary);
 }
 
+/* Plain at rest, as drawn (`U8ZF4` in `ulIoG`, the Cloud's switch links); underlined under the pointer. */
 .link {
   font-weight: var(--weight-medium);
-  color: var(--color-accent-text);
-  text-decoration: underline;
+  color: var(--color-text-primary);
+  text-decoration: none;
   text-underline-offset: var(--space-hairline);
+}
+
+.link:hover {
+  text-decoration: underline;
 }
 
 .link:focus-visible {

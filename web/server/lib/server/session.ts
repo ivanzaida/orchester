@@ -1,4 +1,4 @@
-import { NOTHING_SECONDS, SESSION_SECONDS, SETUP_SECONDS, STATE_SECONDS } from "@/lib/server/cookie-options";
+import { HANDOFF_SECONDS, NOTHING_SECONDS, SESSION_SECONDS, SETUP_SECONDS, STATE_SECONDS } from "@/lib/server/cookie-options";
 import { open, sameText, seal, sign, verify } from "@/lib/server/seal";
 
 /**
@@ -113,6 +113,32 @@ export function openTrip(key: Buffer, value: string | undefined, now: number): T
  */
 export function tripMatches(trip: Trip, submitted: unknown): boolean {
   return typeof submitted === "string" && sameText(trip.state, submitted);
+}
+
+/** A trip's form to the cloud: where it goes and its fields. */
+export interface Handoff {
+  readonly action: string;
+  readonly fields: readonly (readonly [string, string])[];
+}
+
+export function sealHandoff(key: Buffer, handoff: Handoff, now: number): string {
+  return seal(key, JSON.stringify({ ...handoff, expires: now + HANDOFF_SECONDS * 1000 }));
+}
+
+function pairs(value: unknown): [string, string][] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const fields = value.filter(
+    (item): item is [string, string] => Array.isArray(item) && item.length === 2 && item.every((part) => typeof part === "string"),
+  );
+  return fields.length === value.length ? fields : null;
+}
+
+export function openHandoff(key: Buffer, value: string | undefined, now: number): Handoff | null {
+  const handoff = sealed(key, value, now);
+  const fields = pairs(handoff?.fields);
+  return typeof handoff?.action === "string" && fields !== null ? { action: handoff.action, fields } : null;
 }
 
 /** Whom the cloud named when the account has nothing to manage here; shown on that page only. */

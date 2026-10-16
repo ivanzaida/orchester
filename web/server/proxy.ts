@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { config as adminConfig } from "@/lib/server/config";
 import { PRESESSION_COOKIE, PRESESSION_SECONDS, cookieOptions } from "@/lib/server/cookie-options";
-import { needsHttps, originOf, placeOf } from "@/lib/server/place";
+import { HTTPS_ORIGIN_HEADER, needsHttps, originOf, placeOf } from "@/lib/server/place";
 import { newPresession, presessionLive } from "@/lib/server/presession";
+import { deriveKey, sign } from "@/lib/server/seal";
 
 /**
  * Runs before every page: a fresh CSP nonce (Next.js puts it on its own scripts), the security headers, a pre-session
@@ -40,18 +41,18 @@ const HTTPS_PAGE = "/admin/https";
 
 /**
  * The HTTPS page for an admin path reached over plain HTTP. It names the address the browser used: a rewrite renders
- * with Next's own forwarded headers, so the place travels in the internal address, which the browser never sees.
+ * with Next's own forwarded headers (Next reaches itself again through `localhost`), so the place travels in a
+ * request header this proxy signs ([`HTTPS_ORIGIN_HEADER`]), never in an address a link could carry (security
+ * review 1, minor 2).
  */
-function target(request: NextRequest): URL | null {
+function target(request: NextRequest): { url: URL; origin: string } | null {
   const { pathname } = request.nextUrl;
   const admin = pathname === "/admin" || pathname.startsWith("/admin/");
   const place = placeOf(request.headers);
   if (!admin || pathname === HTTPS_PAGE || !needsHttps(place)) {
     return null;
   }
-  const url = new URL(HTTPS_PAGE, request.url);
-  url.searchParams.set("origin", originOf(place));
-  return url;
+  return { url: new URL(HTTPS_PAGE, request.url), origin: originOf(place) };
 }
 
 export function proxy(request: NextRequest): NextResponse {
@@ -68,9 +69,13 @@ export function proxy(request: NextRequest): NextResponse {
   requestHeaders.set("content-security-policy", policy);
   requestHeaders.set("x-nonce", nonce);
   const rewrite = target(request);
+  if (rewrite !== null) {
+    // Signed, so the page tells this proxy's word from a client's own header of that name.
+    requestHeaders.set(HTTPS_ORIGIN_HEADER, sign(deriveKey(adminConfig().secret, "place"), rewrite.origin));
+  }
   const response = rewrite === null
     ? NextResponse.next({ request: { headers: requestHeaders } })
-    : NextResponse.rewrite(rewrite, { request: { headers: requestHeaders } });
+    : NextResponse.rewrite(rewrite.url, { request: { headers: requestHeaders } });
   response.headers.set("content-security-policy", policy);
   response.headers.set("cache-control", "no-store");
   // Set once and not renewed: a form older than the cookie answers *This form has expired*, honestly.

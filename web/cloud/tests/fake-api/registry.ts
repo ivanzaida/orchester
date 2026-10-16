@@ -27,7 +27,7 @@ export function routeRegistry(method: string, path: string, body: Record<string,
     case "GET /api/v1/keys":
       return { status: 200, body: { key_set: "fake-key-set" } };
     case "POST /api/v1/invites":
-      return { status: 202 };
+      return { status: 202, body: { server: { id: SERVER_ID, name: server.name, address: SERVER_ADDRESS } } };
     case "POST /admin/auth/callback":
       return { status: 200, body: { received: true } };
     default:

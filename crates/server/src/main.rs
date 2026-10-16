@@ -8,7 +8,7 @@ use std::{
 use orchester_server::{
   Server,
   clock::{Clock, SystemClock},
-  config::Config,
+  config::{self, Config},
   error::ServerError,
   host::{self, CloudCommand},
 };
@@ -94,6 +94,9 @@ SHA-256 fingerprint: {}",
 /// setup code: to the console only, never to the log.
 async fn serve(config: Config) -> Result<(), ServerError> {
   let listen = config.listen;
+  if config.admin_api_exposed() {
+    tracing::warn!(address = ?config.admin_api_listen, "{}", config::ADMIN_API_EXPOSED);
+  }
   let server = Server::open(config, Arc::new(SystemClock)).await?;
   if let Some(code) = server.check_code() {
     console(&format!("Certificate check code: {code}"))?;

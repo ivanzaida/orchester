@@ -36,7 +36,7 @@ export function SetupCodeForm({ csrf, notice }: { csrf: string; notice: Message 
       <Fields>
         {notice !== null && state.attempt === 0 && <ErrorLine message={notice} />}
         <TextField name="code" type="text" size="row" label={t("setup.field")} value={code} onChange={setCode} hint={t("setup.hint")}
-          error={outcome.kind === "wrong" ? outcome.error : undefined} autoComplete="one-time-code" mono />
+          error={outcome.kind === "wrong" ? outcome.error : undefined} autoComplete="one-time-code" code />
         {limited && (
           <Callout tone="danger" icon="circle-alert" title={t("setup.tooManyTitle")} role="alert"
             body={<Say message={message("setup.tooManyText", {}, outcome.until)} />} />

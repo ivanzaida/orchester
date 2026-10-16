@@ -106,6 +106,15 @@ export interface Device {
   readonly expiresAt: number;
 }
 
+/** A browser signed in to the admin, which ends 12 hours after its sign-in. */
+export interface AdminBrowser {
+  readonly id: string;
+  readonly user: { readonly id: string; readonly username: string; readonly displayName: string };
+  readonly createdAt: number;
+  readonly expiresAt: number;
+  readonly current: boolean;
+}
+
 /** A computer waiting for join approval. */
 export interface Approval {
   readonly id: string;

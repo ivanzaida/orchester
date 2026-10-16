@@ -749,6 +749,7 @@ changes; the rest is built (S1a, S1b).
 | `GET /server/cloud`, `PATCH /server/cloud` | admin | `{ accepting?, link?, unlink?, pin? }` | `{ cloud }` | `422 invalid` | new in 3 (rows 47, 62) |
 | `GET /server/settings`, `PATCH /server/settings` | admin | `{ join_approval? }` | `{ settings, check_code }` | `422 invalid` | new in 3 (rows 57, 62) |
 | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` | admin | | `{ sessions: [Session with user] }`; `204` | `404` | new in 3 (row 62) |
+| `GET /admin/browsers`, `DELETE /admin/browsers/{id}` | admin | | `{ browsers: [{ id, user, via, created_at, last_used_at, expires_at, current }] }`, the live `admin_web` sign-ins, newest first; `204` | `404` (also a computer's id) | new in 3 (security review 1, minor 5) |
 | `GET /projects` | user | | `{ projects: [Project] }` the user is a member of | | `?remote=` removed in 3 (row 49) |
 | `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `404` when there is no such project or the user is not a member of it: one answer for both, so a lookup tells a non-member nothing of the project (its name and owners included) | new in 3 (row 49) |
 | `POST /projects` | admin | `{ idempotency_key, name, slug, key, remote_hint?, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is the project's owner; `tasks` may be empty | `409 slug_taken`, `409 conflict`, `422 invalid` | changed in 3: admins only, by slug; `remote_taken` removed |
@@ -965,10 +966,10 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 | `GET /servers` | device | The team servers the account owns or joined, with address and fingerprint |
 | `POST /servers` | device | Links a team server: `{ link }`, the statement the team server signed at setup; `201 { server }` |
 | `PATCH /servers/{id}`, `DELETE /servers/{id}` | owner device, or the server's key | Address or name changed; unlink |
-| `POST /invites` | the team server's key | `{ invite }`, signed by the team server (sent by the server, or carried by the inviter's browser from the server admin) |
+| `POST /invites` | the team server's key | `{ invite }`, signed by the team server (sent by the server, or carried by the inviter's browser from the server admin); `202 { server }`, the server as registered. Limited per client address, 100 new invites a day per owning account, and invite emails in buckets of their own (1 a day per server and address, 3 a day per address; security review 1, M2) |
 | `GET /invites` | device | Invites waiting for this account |
 | `POST /invites/{id}/accept` | device | `{ server: { id, name, address, fingerprint }, project: { address, name }\|null, identity_token }` |
-| `DELETE /invites/{id}` | the team server's key | Revoked by the team server |
+| `DELETE /invites/{id}` | the team server's key | Revoked by the team server; the id stays revoked for that server (`revoked_invites`, keyed by id and server) until the invite would have expired (security review 1, minor 1). A delivery is matched to a delivered or revoked invite by id and server, never by id alone (security review 2) |
 
 **Data** (PostgreSQL, row 54; ids `uuid`, times `timestamptz` written from the cloud's clock, payloads `jsonb`):
 `accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created; a
@@ -976,10 +977,11 @@ row exists only once an email is confirmed), `email_links` (hash, email, purpose
 reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
 name, address, fingerprint, public key, linked / unlinked), `server_accounts` (server, account, first joined),
 `invites` (id, server, project address, kind, email, inviter display name, project name, role, expires),
-`used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
+`revoked_invites` (id, server, until the invite would have expired), `used_link_statements` (a link statement's nonce
+until it is too old to be taken), `used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
 from the host's environment, not before / not after), `audit_events`, `schema_migrations`. Later: `providers`
-(account, provider, subject). Expired `email_links`, `used_tokens` and ended invites are deleted by a sweep every
-minute.
+(account, provider, subject). Expired `email_links`, `used_tokens`, `used_link_statements`, `revoked_invites` and
+ended invites are deleted by a sweep every minute.
 
 **How a team server reaches it.** A team server with the internet sends its invites and fetches `GET /keys` itself.
 A team server without it relies on its people: the inviter's browser carries the server-signed invite from the server
@@ -1051,27 +1053,39 @@ like the cloud's web front, on the shared `web/ui` package ([The web workspace](
 | Members and roles | owners, admins | Per project: members, roles, the last-owner refusal, removing | `…/members` |
 | Invites | owners (their projects), admins | By email through the cloud, or with a code without the internet; open invites, revoke | `/invites` |
 | People | admins | Accounts, disable or enable, account codes, admin flag | `/admin/users`, `/invites { kind: "account" }` |
-| Devices | admins | Every device joined to the server, with account, how it joined and last use; revoke | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` |
+| Devices | admins | Every device joined to the server, with account, how it joined and last use; revoke. Under them, the browsers signed in to the admin; revoke (not drawn: the Joined section's frame) | `GET /admin/sessions`, `DELETE /admin/sessions/{id}`, `GET /admin/browsers`, `DELETE /admin/browsers/{id}` |
 | Settings | admins | Join approval (row 57), the cloud link and its root key fingerprint (on, off, re-pin, unlink), the certificate's check code | `/server/settings`, `/server/cloud` |
 
 A project owner who is not an admin sees only Projects (their own, rename and hint), Members and Invites for those.
 
 **Signing in to the admin.**
 
-- **Through Orchester Cloud.** *Sign in with Orchester Cloud* sends the browser to the cloud's web front
-  (`/authorize?server=<id>&state=…&return=<admin URL>/auth/callback`). The cloud shows *Sign in to Kontur team's
+- **Through Orchester Cloud.** *Sign in with Orchester Cloud* sends the browser to the cloud's web front with a
+  form `POST` to `/authorize/start` (`purpose=admin`, `server=<id>`, `state`, `return=<admin URL>/admin/auth/callback`;
+  never in a URL, security review 1). The cloud shows *Sign in to Kontur team's
   admin as alice@acme.dev?*; on confirmation it returns an identity token for that server (purpose `admin`, 5
   minutes, one use) by a form `POST` to the admin's callback, checked against `state`. The admin's server side sends
   it to the team server (`POST /auth/cloud { identity_token, device: { kind: "admin_web" } }`), which answers with a
   short-lived admin web token if the account is an admin or a project owner. Only the browser talks to the cloud; the
-  team server needs no internet.
+  team server needs no internet. **While join approval is on** (row 57) the team server refuses a cloud sign-in to
+  the admin with `403 approval_required`, and the sign-in page says to make a code in Orchester on one of the
+  person's computers (Settings › Orchester, the server's entry, *Sign in to the admin*): a cloud identity alone opens
+  no more than it could join with. A browser signed in to the admin never answers its own account's approvals; one of
+  the account's own computers, or another admin, does (security review 1, B2). The refusal is not drawn: it is
+  `j8WujU`'s *code* path with its own sentence under the sign-in title.
 - **With a code, offline.** *Sign in with a code*: a pairing code made in the desktop (Settings › Orchester, the
   server's entry, *Sign in to the admin*) or an account code from the host (`orchester-server account-code <username>`),
   redeemed with `POST /auth/code` as an `admin_web` device.
 - **Linking the server to the cloud** at setup or later goes the same way: the admin's server side gets the server's
-  signed link statement (`PATCH /server/cloud { link: start }`), the browser carries it to the cloud's `/authorize`
-  (purpose `link`), the cloud registers the server for the signed-in owner and returns its key set with an identity
-  token, and the admin hands both to the team server, which pins the cloud's root.
+  signed link statement (`PATCH /server/cloud { link: start }`), the browser carries it in a form's body to the cloud's
+  `/authorize/start` (purpose `link`), the cloud registers the server for the signed-in owner and returns its key set
+  with an identity token, and the admin hands both to the team server, which pins the cloud's root.
+- **A server's id is its own key's** (security review 1, B1): the team server's id is a hash of its Ed25519 public key
+  (`PublicKey::server_id`), the server replaces a stored id that is not its key's with its key's at every start
+  (logged; an earlier admin build's database, security review 2), and the cloud registers an id only from a statement
+  that key signed, and drops migration 3 registrations whose id is not their key's. A statement works once (its `nonce`), and the newest one
+  owns the server, so the server's admins can always take it back. Squatting a server's id with another key, and with
+  it getting identity tokens whose audience is that server, is not possible.
 
 **Sessions and CSRF**, the cloud web front's model: the admin web token (kind `admin_web`, 12 hours, revocable like a
 device) lives only in the `__Host-orchester_admin` cookie, `Secure`, `HttpOnly`, `SameSite=Lax`, no `Domain`; every
@@ -1086,27 +1100,48 @@ certificate in every setup:
 - `orchester-server` answers `/api/*` itself and reverse-proxies every other path to the admin app on a private
   address (`admin_url`, default `http://127.0.0.1:3100`), with `hyper-util`'s client (already a dependency). `/`
   redirects to `/admin`; a project's own address (`/<slug>`) shows a page that names nothing and says to open it in
-  Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs. The server sets
+  Orchester. `admin`, `api`, `auth` and names starting with `_` or `.` are reserved slugs; a project an older server
+  let take one gets the next free slug when the server opens (`admin` → `admin-2`, the S1c rule), logged as a warning
+  (security review 1, minor 6). The server sets
   `X-Forwarded-For`, `-Proto` and `-Host` on what it forwards, replacing any the client sent; the admin listens only
-  on the private address and trusts them (its own origin for the `Origin` check is their proto and host).
+  on the private address and trusts them (its own origin for the `Origin` check is their proto and host). The proto
+  is `https` when the server presents its own certificate; behind a proxy that holds it (`tls = "off"`, Caddy) it is
+  what a trusted proxy said in `X-Forwarded-Proto` (one value, `http` or `https`), else the scheme of `address`, else
+  `http` (security review 1, M1). The listener settles that scheme once per request, and without `address` a project's
+  address is that scheme and the host the request named: on the public listener for apps, and on the private one from
+  what the admin passes on (found behind Caddy in the review's end-to-end run). Hop-by-hop headers and every header `Connection` names stay on their connection,
+  both ways, and a client's `Forwarded`, `X-Forwarded-*`, `X-Real-IP` and `X-Middleware-Subrequest` (which would let
+  a request skip the admin's own Next.js middleware) never reach the admin (minor 4).
 - **The admin's server side calls the API** on a second, private plain-HTTP listener of the server
   (`admin_api_listen`, default `127.0.0.1:8741`, never published): the public port presents the server's own
   certificate, which the admin's Node would otherwise have to pin. That listener takes the browser's address and host
   from the forwarded headers the admin passes on, so the per-address limits count the browser and project addresses
-  carry the host it used.
+  carry the host it used. The server warns at start when that address is not loopback or private (minor 6); the
+  Caddy compose file binds it to the server's own address on its network.
 - **Browser sign-ins** are device tokens of the kind `admin_web`: 12 hours from sign-in, refused on what only the app
   does (tasks, claims, events, linking, pairing), not listed among the account's computers, and issued only to admins
-  and project owners (`403 nothing_to_manage` otherwise). Identity tokens carry a `purpose` (`admin`, `link`, or none
+  and project owners (`403 nothing_to_manage` otherwise). Admins see them apart, in Devices › *Signed in to this
+  admin* (`GET /admin/browsers`), and sign any one out (security review 1, minor 5). Identity tokens carry a `purpose` (`admin`, `link`, or none
   to join), and a team server takes each only for its own use.
 - **Invites by email** are delivered to the cloud by the admin's own server side when the host has the internet, or
   posted from the inviter's browser to the cloud's web front (`/invites/deliver`) when it has not; the team server
-  itself never reaches the cloud.
+  itself never reaches the cloud. The browser's form carries only the signed invite: the cloud's page leads back to
+  the admin at the address it registered for the server, never to one the form or a link named (security review 1,
+  minor 2).
+- **The HTTPS page** (*This page needs HTTPS*) names the address the browser used, which `proxy.ts` passes to the page
+  in a request header it signs with the admin's secret (Next reaches itself again for the rewrite, so the forwarded
+  headers are its own by then); no `?origin=` or unsigned header puts words on it (security review 1, minor 2).
+- **The cloud sign-in's state** cookie (`__Host-orchester_admin_state`) ends only with the answer that carries its
+  `state`: a post to the callback with another state, which any site can send, leaves the trip as it was (security
+  review 1, minor 3).
 - **Docker:** two containers in `deploy/server/compose.yaml`, `server` (Rust) and `admin` (the Next.js standalone
   build on Node 22), on a private network; only `server` is published, or Caddy in front of it for a public domain
   (`tls = "off"`, as before). Caddy routes everything to `server`.
 - **Without Docker:** the admin is a Node standalone folder started beside the binary (a service unit example ships
   with it); a server without it serves the API and answers admin paths with *the admin app is not running*, and the
-  host commands remain for recovery.
+  host commands remain for recovery. That page is in the design's face, Geist, carried inside the page under a CSP of
+  `default-src 'none'; style-src 'unsafe-inline'; font-src data:` (the fonts and their OFL licence are in
+  `crates/server/assets/fonts`).
 - **Air-gapped:** both images (or the binary and the admin folder) are built elsewhere and copied in; nothing is
   fetched at runtime (no npm, no fonts or scripts from the internet: the fonts are bundled). The browser meets the
   server's own certificate: the admin's first page and the console both show its check code, and the team trusts the
@@ -1176,9 +1211,9 @@ Row 42; the rules here are the architect's.
 **Linking a team server at setup.** The server starts with an empty data directory and prints its check code and a
 one-time **setup code** to its console (row 45). The owner opens the server admin (row 62), enters the setup code and
 chooses a username; the server makes that account its first admin. *Link to Orchester Cloud* then carries the
-server's signed link statement (server id, public key, address, `fingerprint`: the certificate's SHA-256 in hex, the
-value apps pin, never the shorter check code) through the browser to the cloud's
-`/authorize`, where the owner is signed in; the cloud registers the server for that account (`POST /servers`) and the
+server's signed link statement (server id, which is its public key's, a nonce, public key, address, `fingerprint`:
+the certificate's SHA-256 in hex, the value apps pin, never the shorter check code) through the browser, in a form's
+body, to the cloud's `/authorize/start`, where the owner is signed in; the cloud registers the server for that account (`POST /servers`) and the
 browser brings back the cloud's key set, whose root the server pins ([The server admin](#the-server-admin)). Without
 the internet the setup stops after the first step: the server is simply not linked, and can be linked later. The owner
 then creates projects by name and slug and invites people, all in the server admin, and connects their own desktop

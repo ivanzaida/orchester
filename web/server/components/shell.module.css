@@ -33,9 +33,16 @@
   gap: var(--admin-settings-gap);
 }
 
+/* A project's pages: its head, the cards and the lists 20 apart (`iLFy5`). */
+.project {
+  gap: var(--admin-project-gap);
+}
+
 .tabs {
   display: var(--admin-tabs);
   flex-direction: column;
+  margin-top: var(--admin-tabs-lift);
+  margin-bottom: var(--admin-tabs-after);
 }
 
 .menu {

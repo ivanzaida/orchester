@@ -7,7 +7,8 @@ import {
   nextAfterSignIn,
   readRequest,
   readStatement,
-  requestQuery,
+  pageFor,
+  requestParams,
   returnsToServer,
 } from "@/lib/authorize";
 
@@ -42,7 +43,7 @@ describe("an authorize request", () => {
     }
   });
 
-  it("is a sign-in with a server id or a link with a statement, and survives the trip through sign-in", () => {
+  it("is a sign-in with a server id or a link with a statement, kept whole, its address naming only the callback", () => {
     const admin = readRequest({ purpose: "admin", server: SERVER, state: STATE, return: RETURN });
     expect(admin?.purpose).toBe("admin");
     const link = readRequest({ purpose: "link", statement: "a.b.c", state: STATE, return: RETURN });
@@ -50,8 +51,15 @@ describe("an authorize request", () => {
     if (admin === null) {
       throw new Error("a sign-in request");
     }
-    const again = readRequest(Object.fromEntries(new URLSearchParams(requestQuery(admin))));
+    const again = readRequest(requestParams(admin));
     expect(again).toEqual(admin);
+    if (link === null) {
+      throw new Error("a link request");
+    }
+    expect(readRequest(requestParams(link))).toEqual(link);
+    // Security review 1, B1: the page's address names the callback, never the statement.
+    expect(pageFor(link)).toBe(`/authorize?${new URLSearchParams({ return: RETURN }).toString()}`);
+    expect(pageFor(link)).not.toContain("a.b.c");
   });
 
   it("refuses what is missing or malformed", () => {

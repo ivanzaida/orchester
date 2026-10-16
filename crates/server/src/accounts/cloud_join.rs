@@ -91,7 +91,7 @@ impl Server {
     self
       .snapshot(move |db, now| {
         let current = db::checked(db, &auth, now, false)?;
-        approvals::waiting(db, &current.user, now)
+        approvals::waiting(db, &current, now)
       })
       .await
   }
@@ -105,7 +105,7 @@ impl Server {
     self
       .account_write(move |db, now| {
         let current = db::checked(db, &auth, now, false)?;
-        approvals::decide(db, &current.user, id, approve, now)
+        approvals::decide(db, &current, id, approve, now)
       })
       .await
   }

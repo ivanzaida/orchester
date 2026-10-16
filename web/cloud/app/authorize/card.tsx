@@ -17,9 +17,9 @@ import styles from "./authorize.module.css";
 
 export interface AuthorizeProps {
   readonly csrf: string;
+  /** The digest of the request this page shows, which confirming must still find in the cookie. */
+  readonly request: string;
   readonly purpose: "admin" | "link";
-  /** The request's own fields, sent again with the confirmation and checked again there. */
-  readonly request: readonly (readonly [string, string])[];
   readonly person: { readonly name: string; readonly email: string; readonly initials: string };
   readonly server: ServerView;
   /** The server's host, as the page names it (`orchester.kontur.dev`). */
@@ -108,9 +108,7 @@ export function AuthorizeCard(props: AuthorizeProps) {
           ) : (
             <CardForm action={action}>
               <CsrfField token={props.csrf} />
-              {props.request.map(([name, value]) => (
-                <Hidden key={name} name={name} value={value} />
-              ))}
+              <Hidden name="request" value={props.request} />
               <div className={styles.buttons}>
                 {state.kind === "failed" && <ErrorLine message={state.error} />}
                 <Submit kind="primary" icon={admin ? undefined : "link"}

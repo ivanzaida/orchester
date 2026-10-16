@@ -50,6 +50,10 @@ function Sent({ invite, now }: { invite: Invite; now: number }) {
   );
 }
 
+function firstName(displayName: string): string {
+  return displayName.trim().split(/\s+/)[0] ?? displayName;
+}
+
 /** When it expires, or how it ended and who ended it (`EmAU7`). */
 function When({ invite, now }: { invite: Invite; now: number }) {
   const name = invite.endedBy?.displayName ?? invite.by.displayName;
@@ -60,7 +64,8 @@ function When({ invite, now }: { invite: Invite; now: number }) {
     case "expired":
       return <Phrase k="invites.expiredOn" dates={{ when: { at: invite.expiresAt, format: "dateTime" } }} now={now} />;
     case "revoked":
-      return <Phrase k="invites.revokedBy" params={{ name }} dates={{ date: ended }} now={now} />;
+      // The first name, as drawn (`iLFy5`: *Revoked by Alice, Oct 11*), so the line keeps to its column.
+      return <Phrase k="invites.revokedBy" params={{ name: firstName(name) }} dates={{ date: ended }} now={now} />;
     case "accepted":
       return <Phrase k="invites.acceptedBy" params={{ name }} dates={{ date: ended }} now={now} />;
   }
@@ -73,13 +78,13 @@ function Revoke({ invite, csrf, action, close }: { invite: Invite; csrf: string;
       title={code ? t("invites.revokeTitleCode", { name: invite.by.displayName }) : t("invites.revokeTitle", { email: title(invite) })}
       text={code ? t("invites.revokeTextCode") : t("invites.revokeText")}
     >
-      <ActionButton kind="secondary" row onClick={close}>
+      <ActionButton kind="secondary" row autoFocus onClick={close}>
         {t("invites.keepIt")}
       </ActionButton>
       <form action={action}>
         <CsrfField token={csrf} />
         <Hidden name="invite" value={invite.id} />
-        <Submit kind="danger" row icon="x" label={t("invites.revoke")} busyLabel={t("invites.revoking")} />
+        <Submit kind="danger" row icon="trash-2" label={t("invites.revoke")} busyLabel={t("invites.revoking")} />
       </form>
     </InPlaceConfirm>
   );
@@ -104,7 +109,7 @@ export function InviteRow({ invite, csrf, server, now }: { invite: Invite; csrf:
       </span>
       <span className={styles.actions}>
         {invite.state === "open" && (
-          <ActionButton kind="ghost" row onClick={() => { setAsking(true); }}>
+          <ActionButton kind="ghost" row expanded={asking} onClick={() => { setAsking(true); }}>
             {t("invites.revoke")}
           </ActionButton>
         )}

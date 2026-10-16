@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, apiRequests, reset, signIn } from "./support";
+import { ADMIN, authorizePosts, apiRequests, reset, signIn } from "./support";
 
 test.beforeEach(async () => {
   await reset();
@@ -37,7 +37,8 @@ test.describe("settings", () => {
     await page.getByRole("group", { name: "Unlink Kontur team from Orchester Cloud?" }).getByRole("button", { name: "Unlink" }).click();
     await expect(page.getByText("Not linked", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Link to Orchester Cloud" }).click();
-    await expect(page).toHaveURL(/127\.0\.0\.1:4220\/authorize\?purpose=link/);
+    await expect(page).toHaveURL("http://127.0.0.1:4220/authorize/start");
+    expect((await authorizePosts()).at(-1)?.purpose).toBe("link");
     await page.getByRole("button", { name: "Continue as ivan@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin/settings?link=done`);
     await expect(page.getByText("Kontur team is linked to Orchester Cloud.")).toBeVisible();

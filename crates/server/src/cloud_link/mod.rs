@@ -260,6 +260,10 @@ pub(crate) fn statement(
     LINK_STATEMENT_TYPE,
     &LinkStatement {
       server: keys.id,
+      nonce: crate::server_keys::random::<16>()?
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect(),
       name: name.to_owned(),
       address: address.to_owned(),
       public_key: keys.public_key(),

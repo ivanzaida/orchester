@@ -60,6 +60,13 @@ export interface FakeDevice {
   expires_at: number;
 }
 
+/** A browser signed in to the admin; the asking browser itself is added when the list is read. */
+export interface FakeBrowser {
+  id: string;
+  user: string;
+  created_at: number;
+}
+
 export interface FakeApproval {
   id: string;
   user: string;
@@ -90,6 +97,7 @@ export interface FakeState {
   projects: FakeProject[];
   invites: FakeInvite[];
   devices: FakeDevice[];
+  browsers: FakeBrowser[];
   approvals: FakeApproval[];
 }
 
@@ -208,6 +216,7 @@ export function fullState(now: number): FakeState {
     projects: projects(now),
     invites: invites(now),
     devices: devices(now),
+    browsers: [{ id: id(51), user: MARIA, created_at: now - 40 * 60 * 1000 }, { id: id(52), user: ALICE, created_at: now - 3 * HOUR }],
     approvals: [{ id: id(41), user: OLEH, device: "oleh-pc", address: "10.0.4.31", requested_at: now - 20 * 60 * 1000, expires_at: now + 10 * DAY }],
   };
 }
@@ -217,7 +226,7 @@ export function scenario(name: string, now: number): FakeState {
   const state = fullState(now);
   switch (name) {
     case "setup":
-      return { ...state, needs_setup: true, name: "Orchester server", cloud: null, users: [], projects: [], invites: [], devices: [], approvals: [] };
+      return { ...state, needs_setup: true, name: "Orchester server", cloud: null, users: [], projects: [], invites: [], devices: [], browsers: [], approvals: [] };
     case "empty":
       return { ...state, projects: [], invites: [], approvals: [] };
     case "unlinked":

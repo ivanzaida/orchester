@@ -1,11 +1,17 @@
 use std::{
-  net::SocketAddr,
+  net::{IpAddr, SocketAddr},
   path::{Path, PathBuf},
 };
 
 use serde::Deserialize;
 
 use crate::{addresses::TrustedProxy, error::ServerError};
+
+/// What the host's log says at start when [`Config::admin_api_exposed`].
+pub const ADMIN_API_EXPOSED: &str = concat!(
+  "ADMIN_API_LISTEN is not a loopback or private address: the admin API trusts the forwarded headers it is sent, ",
+  "so nothing but the admin may reach it (keep its port unpublished)"
+);
 
 /// How the server's connections are secured (`docs/architecture/server.md`, "Transport and certificates").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -167,6 +173,26 @@ impl Config {
       return Err(ServerError::Configuration("ADMIN_API_LISTEN must differ from LISTEN"));
     }
     Ok(())
+  }
+
+  /// Whether the private admin API listener may be reachable from beyond this host and its private networks: an
+  /// address that is not loopback, private or link-local, or every interface (security review 1, minor 6). The listener
+  /// takes the browser's address and host from forwarded headers on trust, so the host's log warns about it.
+  pub fn admin_api_exposed(&self) -> bool {
+    self
+      .admin_api_listen
+      .is_some_and(|address| !private(address.ip().to_canonical()))
+  }
+}
+
+fn private(address: IpAddr) -> bool {
+  match address {
+    IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+    IpAddr::V6(v6) => {
+      let first = v6.segments()[0];
+      // Unique local (fc00::/7) and link-local (fe80::/10).
+      v6.is_loopback() || first & 0xfe00 == 0xfc00 || first & 0xffc0 == 0xfe80
+    }
   }
 }
 

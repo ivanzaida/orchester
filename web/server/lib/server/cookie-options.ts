@@ -11,6 +11,11 @@ export const STATE_COOKIE = "__Host-orchester_admin_state";
 export const SETUP_COOKIE = "__Host-orchester_admin_setup";
 /** Who signed in with the cloud but has nothing to manage here, for that page's sentence. */
 export const NOTHING_COOKIE = "__Host-orchester_admin_nothing";
+/**
+ * What a trip posts to the cloud's `/authorize/start` (the link statement among it), sealed, between the trip route and
+ * the page that posts it: it never goes into a URL.
+ */
+export const HANDOFF_COOKIE = "__Host-orchester_admin_handoff";
 
 const MINUTE = 60;
 const HOUR = 60 * MINUTE;
@@ -22,6 +27,7 @@ export const PRESESSION_SECONDS = 2 * HOUR;
 export const STATE_SECONDS = 10 * MINUTE;
 export const SETUP_SECONDS = 15 * MINUTE;
 export const NOTHING_SECONDS = 10 * MINUTE;
+export const HANDOFF_SECONDS = 5 * MINUTE;
 
 export interface CookieOptions {
   readonly httpOnly: true;

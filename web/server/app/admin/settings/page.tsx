@@ -16,7 +16,7 @@ import { config } from "@/lib/server/config";
 import { cloudLink, settings } from "@/lib/server/team/settings";
 import { formToken } from "@/lib/server/visitor";
 
-import { CloudKeyActions, SwitchForm } from "./forms";
+import { CloudKeyRow, SwitchForm } from "./forms";
 import styles from "./settings.module.css";
 
 export const metadata: Metadata = { title: t("settings.pageTitle") };
@@ -69,11 +69,8 @@ function Stale({ link, server, now }: { link: CloudLink; server: string; now: nu
       {t("settings.staleText", { server })} <Phrase k="settings.staleLine" dates={dates} />
     </>
   );
-  return (
-    <span className={styles.callout}>
-      <Callout tone="warning" icon="triangle-alert" title={t("settings.staleTitle")} body={body} />
-    </span>
-  );
+  // A block of its own above the cloud's settings (`WV4AT`).
+  return <Callout tone="warning" icon="triangle-alert" title={t("settings.staleTitle")} body={body} />;
 }
 
 function LinkLine({ link }: { link: CloudLink }) {
@@ -110,12 +107,10 @@ function Linked({ link, server, csrf }: { link: CloudLink; server: string; csrf:
           </span>
         )}
       </SettingRow>
-      <SettingRow label={t("settings.cloudKey")}>
-        <Stale link={link} server={server} now={now} />
+      <CloudKeyRow csrf={csrf} server={server} label={t("settings.cloudKey")}>
         <span className={styles.key}>{link.rootFingerprint ?? t("settings.noKey")}</span>
         <KeyHint link={link} now={now} />
-        <CloudKeyActions csrf={csrf} server={server} />
-      </SettingRow>
+      </CloudKeyRow>
     </>
   );
 }
@@ -168,6 +163,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <LinkOutcome outcome={outcome} server={server.name} />
       <Joining current={current} csrf={csrf} />
       <Section id="cloud" title={t("settings.cloud")} description={t("settings.cloudText")}>
+        {link !== null && <Stale link={link} server={server.name} now={Date.now()} />}
         <SettingsPanel>
           {link === null ? <NotLinked server={server.name} csrf={csrf} /> : <Linked link={link} server={server.name} csrf={csrf} />}
         </SettingsPanel>

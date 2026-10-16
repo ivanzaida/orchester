@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authorizeUrl, backPath, withOutcome } from "@/lib/server/authorize";
+import { authorizeFields, authorizeStart, backPath, withOutcome } from "@/lib/server/authorize";
 import { ConfigError, readConfig } from "@/lib/server/config";
 import { browserDevice } from "@/lib/server/device";
 import { namedIn } from "@/lib/server/identity";
@@ -44,18 +44,18 @@ describe("configuration", () => {
 });
 
 describe("the trip to the cloud", () => {
-  it("names the purpose, the server or statement, the state and the admin's callback", () => {
-    const admin = new URL(authorizeUrl("https://cloud.example", "https://orchester.kontur.dev", "st", { purpose: "admin", server: "srv" }));
-    expect(admin.origin + admin.pathname).toBe("https://cloud.example/authorize");
-    expect(Object.fromEntries(admin.searchParams)).toEqual({
+  it("posts the purpose, the server or statement, the state and the admin's callback, never in a URL", () => {
+    expect(authorizeStart("https://cloud.example")).toBe("https://cloud.example/authorize/start");
+    const admin = authorizeFields("https://orchester.kontur.dev", "st", { purpose: "admin", server: "srv" });
+    expect(Object.fromEntries(admin)).toEqual({
       purpose: "admin",
       server: "srv",
       state: "st",
       return: "https://orchester.kontur.dev/admin/auth/callback",
     });
-    const link = new URL(authorizeUrl("https://cloud.example", "https://o.example", "st", { purpose: "link", statement: "a.b.c" }));
-    expect(link.searchParams.get("statement")).toBe("a.b.c");
-    expect(link.searchParams.has("server")).toBe(false);
+    const link = Object.fromEntries(authorizeFields("https://o.example", "st", { purpose: "link", statement: "a.b.c" }));
+    expect(link.statement).toBe("a.b.c");
+    expect(link.server).toBeUndefined();
   });
 
   it("comes back to sign-in, the setup or Settings, with a fixed word", () => {

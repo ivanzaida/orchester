@@ -1,15 +1,12 @@
 //! The server's link to Orchester Cloud for its admins (`/server/cloud`).
 
-use axum::{Json, extract::State, http::HeaderMap};
+use axum::{Json, extract::State};
 use orchester_api::{
   CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, cloud::TokenPurpose,
 };
 use rusqlite::Connection;
 
-use super::{
-  base_address,
-  extract::{Auth, SafeJson},
-};
+use super::extract::{Auth, Base, SafeJson};
 use crate::{
   Server,
   cloud_link::{self, Link},
@@ -37,10 +34,9 @@ pub(super) async fn show_cloud(
 pub(super) async fn change_cloud(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   SafeJson(input): SafeJson<CloudLinkChanges>,
 ) -> Result<Json<CloudLinkResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let state = server.inner.clone();
   let fingerprint = state.tls.as_ref().map(|tls| tls.pin.to_hex());
   let response = server

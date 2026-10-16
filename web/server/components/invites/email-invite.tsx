@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Callout } from "@orchester/ui/components/callout";
 import { Submit } from "@orchester/ui/components/submit";
@@ -16,13 +16,10 @@ import type { EmailReach } from "@/lib/model";
 
 import styles from "./invites.module.css";
 
-
 export interface EmailInviteProps {
   readonly csrf: string;
   readonly server: string;
   readonly reach: EmailReach;
-  /** This page's own address, for the cloud's *back to the admin* link after an invite sent through the browser. */
-  readonly back: string;
   /** The hidden fields that say who the invite is for (`kind`, `project`). */
   readonly scope: Readonly<Record<string, string>>;
   /** The fields beside the email: the role select, or *As an admin*. */
@@ -32,6 +29,8 @@ export interface EmailInviteProps {
   /** `sent` words: a project invite or one to the server. */
   readonly sentTitle: (email: string, admin: boolean) => string;
   readonly sentText: "invites.sentText" | "people.sentText";
+  /** Each invite made: the form's other fields clear for the next one too (*As an admin*, `Gs9Vu`). Keep it stable. */
+  readonly onSent?: () => void;
 }
 
 /** What happened to the last invite, above the form (`KagFB`: sent, sent through the browser, daily limit). */
@@ -47,7 +46,6 @@ function Answer({ state, props }: { state: EmailState; props: EmailInviteProps }
     const send = (
       <form action={`${props.reach.cloud}/invites/deliver`} method="post">
         <Hidden name="invite" value={state.signed} />
-        <Hidden name="return" value={props.back} />
         <Submit kind="primary" row icon="send" label={t("invites.browserSend")} busyLabel={t("invites.sending")} />
       </form>
     );
@@ -84,6 +82,13 @@ export function EmailInvite(props: EmailInviteProps) {
     // The form clears for the next one once an invite is made (`KagFB`, *Invite by email · sent*).
     setEmail(state.view === "form" ? state.email : "");
   }
+  const made = state.view === "form" ? null : state.answer;
+  const { onSent } = props;
+  useEffect(() => {
+    if (made !== null) {
+      onSent?.();
+    }
+  }, [made, onSent]);
   if (props.reach.kind !== "ready") {
     return <Unavailable reach={props.reach} server={props.server} />;
   }

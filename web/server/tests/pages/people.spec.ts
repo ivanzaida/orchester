@@ -91,9 +91,25 @@ test.describe("devices", () => {
   test("revoking asks in place and signs the computer out", async ({ page }) => {
     await signIn(page);
     await page.goto("/admin/devices");
-    await page.getByRole("button", { name: "Revoke" }).last().click();
+    await page.getByRole("region", { name: "Joined" }).getByRole("button", { name: "Revoke" }).last().click();
     await page.getByRole("group", { name: "Revoke Orchester on build-02?" }).getByRole("button", { name: "Revoke" }).click();
     await expect(page.getByText("Orchester on build-02 is signed out")).toBeVisible();
+  });
+
+  test("browsers signed in to the admin are listed, and one is signed out after a question", async ({ page }) => {
+    // Security review 1, minor 5.
+    await signIn(page);
+    await page.goto("/admin/devices");
+    const browsers = page.getByRole("region", { name: "Signed in to this admin" });
+    await expect(browsers.getByText("3 browsers")).toBeVisible();
+    await expect(browsers.getByText("This browser")).toBeVisible();
+    await expect(browsers.getByRole("button", { name: "Revoke" })).toHaveCount(2);
+    await browsers.getByRole("button", { name: "Revoke" }).last().click();
+    await browsers.getByRole("group", { name: "Sign Alice Moreau out of the admin in that browser?" }).getByRole("button", { name: "Revoke" }).click();
+    await expect(page.getByText("Alice Moreau's browser is signed out of the admin")).toBeVisible();
+    expect((await apiRequests()).some((r) => r.method === "DELETE" && r.path === "/api/v1/admin/browsers/0199f0a0-0000-7000-8000-000000000052")).toBe(true);
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Signed in to this admin" }).getByText("2 browsers")).toBeVisible();
   });
 
   test("search narrows the list by person or computer", async ({ page }) => {

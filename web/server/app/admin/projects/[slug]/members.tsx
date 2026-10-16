@@ -29,7 +29,10 @@ interface RowProps {
   readonly now: number;
 }
 
-/** The role select sends its form as soon as it changes; without script its *Change* button does. */
+/**
+ * The role select sends its form as soon as it changes; without script its *Change* button does. It stays the
+ * browser's own select, and what the chosen role means is under it, as the role menu says it (`KagFB`).
+ */
 function RoleForm({ props, action }: { props: RowProps; action: (form: FormData) => void }) {
   const { member } = props;
   const [role, setRole] = useState<string>(member.role);
@@ -39,23 +42,30 @@ function RoleForm({ props, action }: { props: RowProps; action: (form: FormData)
     const data = new FormData(event.currentTarget);
     startTransition(() => { action(data); });
   };
+  const hint = `role-hint-${member.user.id}`;
+  const words = { project: props.project.name };
   return (
-    <form action={action} onSubmit={submit} className={styles.roleForm}>
-      <CsrfField token={props.csrf} />
-      <Hidden name="op" value="role" />
-      <Hidden name="project" value={props.project.id} />
-      <Hidden name="user" value={member.user.id} />
-      <Select name="role" size="row" hideLabel label={t("members.roleOf", { name: member.user.displayName })}
-        value={role}
-        options={[{ value: "owner", label: t("common.owner") }, { value: "member", label: t("common.member") }]}
-        onChange={(event) => {
-          setRole(event.currentTarget.value);
-          event.currentTarget.form?.requestSubmit();
-        }} />
-      <noscript>
-        <Submit kind="ghost" row label={t("members.change")} busyLabel={t("members.changing")} />
-      </noscript>
-    </form>
+    <div className={styles.roleCell}>
+      <form action={action} onSubmit={submit} className={styles.roleForm}>
+        <CsrfField token={props.csrf} />
+        <Hidden name="op" value="role" />
+        <Hidden name="project" value={props.project.id} />
+        <Hidden name="user" value={member.user.id} />
+        <Select name="role" size="row" hideLabel label={t("members.roleOf", { name: member.user.displayName })}
+          value={role} describedBy={hint}
+          options={[{ value: "owner", label: t("common.owner") }, { value: "member", label: t("common.member") }]}
+          onChange={(event) => {
+            setRole(event.currentTarget.value);
+            event.currentTarget.form?.requestSubmit();
+          }} />
+        <noscript>
+          <Submit kind="ghost" row label={t("members.change")} busyLabel={t("members.changing")} />
+        </noscript>
+      </form>
+      <span id={hint} className={styles.roleHint}>
+        {role === "owner" ? t("members.ownerMeans", words) : t("members.memberMeans", words)}
+      </span>
+    </div>
   );
 }
 
@@ -66,7 +76,7 @@ function Confirm(props: { row: RowProps; self: boolean; action: (form: FormData)
   return (
     <InPlaceConfirm title={self ? t("members.leaveTitle", words) : t("members.removeTitle", words)}
       text={self ? t("members.leaveText", words) : t("members.removeText", words)}>
-      <ActionButton kind="secondary" row onClick={props.close}>
+      <ActionButton kind="secondary" row autoFocus onClick={props.close}>
         {t("common.keep")}
       </ActionButton>
       <form action={props.action}>
@@ -101,6 +111,11 @@ function MemberRow(props: RowProps) {
   const { member } = props;
   const [state, action] = useActionState<MemberState, FormData>(memberAction, {});
   const [asking, setAsking] = useState(false);
+  const [seen, setSeen] = useState(state);
+  if (seen !== state) {
+    setSeen(state);
+    setAsking(false);
+  }
   const self = member.user.id === props.me;
   const words = { name: member.user.displayName, project: props.project.name, server: props.server };
   if (state.removed === true) {
@@ -119,7 +134,7 @@ function MemberRow(props: RowProps) {
           <Phrase k="members.joinedOn" dates={{ date: { at: member.addedAt, format: "date" } }} now={props.now} />
         </Cell>
         <Cell end area={styles.actions}>
-          <ActionButton kind="ghost" row onClick={() => { setAsking(true); }}>
+          <ActionButton kind="ghost" row expanded={asking} onClick={() => { setAsking(true); }}>
             {self ? t("members.leave") : t("members.remove")}
           </ActionButton>
         </Cell>

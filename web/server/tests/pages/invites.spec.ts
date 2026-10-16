@@ -30,8 +30,10 @@ test.describe("invites", () => {
     await expect(page).toHaveURL(`${CLOUD}/invites/deliver`);
     await expect(page.getByText("Invite delivered.")).toBeVisible();
     expect(await deliveries()).toContainEqual({ how: "browser", email: "offline.person@example.com" });
+    // Security review 1, minor 2: the form names no address to come back to; the cloud leads to the one it registered.
+    await expect(page.locator("[data-fields]")).toHaveAttribute("data-fields", "invite");
     await page.getByRole("link", { name: "Back" }).click();
-    await expect(page).toHaveURL(`${ADMIN}/admin/projects/kontur/invites`);
+    await expect(page).toHaveURL(`${ADMIN}/admin`);
   });
 
   test("the daily limit stops the button and says until when", async ({ page }) => {

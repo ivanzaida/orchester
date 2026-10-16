@@ -75,6 +75,13 @@
   flex-direction: column;
 }
 
+.decidedText {
+  padding: 0 var(--space-row-x) var(--space-row);
+  font-size: var(--text-row);
+  line-height: var(--leading-body);
+  color: var(--color-text-secondary);
+}
+
 .stack {
   display: flex;
   flex-direction: column;

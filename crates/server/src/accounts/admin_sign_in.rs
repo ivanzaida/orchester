@@ -10,6 +10,7 @@ use rusqlite::Connection;
 
 use super::Server;
 use crate::{
+  approvals,
   cloud_link::{self, Claims},
   codes::{self, CodeKind},
   db,
@@ -83,6 +84,9 @@ pub(crate) fn admin_session(
 }
 
 /// A cloud sign-in to the admin: the account linked to the token's cloud identity, with a token issued for the admin.
+/// While join approval is on (row 57) it is refused with `403 approval_required`, before anything is used up: a
+/// cloud identity alone must not open the admin when it cannot add a computer without approval. A pairing code made
+/// on one of the account's own computers, or an account code from the host, signs the browser in instead.
 pub(crate) fn with_cloud(
   db: &Connection,
   input: &CloudJoin,
@@ -93,6 +97,9 @@ pub(crate) fn with_cloud(
   let user = db::user_by_subject(db, &claims.sub)?.ok_or(ErrorCode::NotInvited)?;
   if user.disabled {
     return Err(ErrorCode::Forbidden.into());
+  }
+  if approvals::enabled(db)? {
+    return Err(ErrorCode::ApprovalRequired.into());
   }
   let joined = admin_session(db, user, &input.device, JoinedVia::Cloud, Some(&claims.kid), now)?;
   cloud_link::consume(db, claims)?;

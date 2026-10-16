@@ -51,7 +51,12 @@ function RoleBadge({ person }: { person: Account }) {
 }
 
 /** The actions a row offers: an account code for someone who is not an admin, admin, disable, enable. */
-function Actions({ props, ask, action }: { props: RowProps; ask: (what: Asking) => void; action: (form: FormData) => void }) {
+function Actions({ props, asking, ask, action }: {
+  props: RowProps;
+  asking: Asking;
+  ask: (what: Asking) => void;
+  action: (form: FormData) => void;
+}) {
   const { person } = props;
   const self = person.id === props.me;
   if (person.disabled) {
@@ -66,17 +71,17 @@ function Actions({ props, ask, action }: { props: RowProps; ask: (what: Asking) 
   return (
     <>
       {!person.admin && (
-        <ActionButton kind="ghost" row onClick={() => { ask("code"); }}>
+        <ActionButton kind="ghost" row expanded={asking === "code"} onClick={() => { ask("code"); }}>
           {t("people.accountCode")}
         </ActionButton>
       )}
       {!person.admin && (
-        <ActionButton kind="ghost" row onClick={() => { ask("admin"); }}>
+        <ActionButton kind="ghost" row expanded={asking === "admin"} onClick={() => { ask("admin"); }}>
           {t("people.makeAdmin")}
         </ActionButton>
       )}
       {!self && (
-        <ActionButton kind="ghost" row onClick={() => { ask("disable"); }}>
+        <ActionButton kind="ghost" row expanded={asking === "disable"} onClick={() => { ask("disable"); }}>
           {t("people.disable")}
         </ActionButton>
       )}
@@ -90,7 +95,7 @@ function Confirm({ props, asking, action, close }: { props: RowProps; asking: "a
   return (
     <InPlaceConfirm title={admin ? t("people.makeAdminTitle", words) : t("people.disableTitle", words)}
       text={admin ? t("people.makeAdminText") : t("people.disableText", words)}>
-      <ActionButton kind="secondary" row onClick={close}>
+      <ActionButton kind="secondary" row autoFocus onClick={close}>
         {admin ? t("people.keepAsIs") : t("common.keep")}
       </ActionButton>
       <form action={action}>
@@ -158,7 +163,7 @@ function PersonRow(props: RowProps) {
           <RoleBadge person={person} />
         </Cell>
         <Cell end area={styles.actions}>
-          <Actions props={props} ask={setAsking} action={action} />
+          <Actions props={props} asking={asking} ask={setAsking} action={action} />
         </Cell>
       </TableRow>
       <Under props={props} asking={asking} state={state} action={action} close={() => { setAsking("none"); }} />

@@ -25,6 +25,8 @@ export function Select(props: {
   hideLabel?: boolean;
   size?: "row" | "form";
   disabled?: boolean;
+  /** The id of a line that says what the chosen option means. */
+  describedBy?: string;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
   const id = props.id ?? `select-${props.name}`;
@@ -38,6 +40,7 @@ export function Select(props: {
         defaultValue={props.defaultValue}
         disabled={props.disabled}
         aria-label={props.hideLabel ? props.label : undefined}
+        aria-describedby={props.describedBy}
         onChange={props.onChange}
       >
         {props.options.map((option) => (

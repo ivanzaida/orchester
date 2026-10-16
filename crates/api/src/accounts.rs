@@ -163,6 +163,26 @@ pub struct AdminSessions {
   pub sessions: Vec<AdminSession>,
 }
 
+/// A browser signed in to the server admin (an `admin_web` device token), for admins to sign out one by one.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdminBrowser {
+  pub id: SessionId,
+  pub user: SessionOwner,
+  pub via: JoinedVia,
+  pub created_at: i64,
+  pub last_used_at: i64,
+  /// 12 hours after the sign-in, however it is used.
+  pub expires_at: i64,
+  /// The browser asking.
+  pub current: bool,
+}
+
+/// `GET /admin/browsers`: newest sign-in first.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdminBrowsers {
+  pub browsers: Vec<AdminBrowser>,
+}
+
 /// API 2's `POST /admin/users`, removed in API 3 (accounts come from invites and codes). Kept while the frozen
 /// `crates/desktop` names it through the workspace's refusing `create_user`.
 #[derive(Debug, Serialize, Deserialize)]

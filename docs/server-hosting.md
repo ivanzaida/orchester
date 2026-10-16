@@ -65,7 +65,9 @@ Failed joins are counted per address and hour in `failed_joins`, kept 90 days.
 
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
 the server admin to carry to Orchester Cloud. One person sends at most 30 invites by email in 24 hours (`429` with
-`Retry-After`). Invites list without their codes (`GET /invites`, `?project=<id>` for one project, `&recent=true` with
+`Retry-After`). Orchester Cloud adds its own limits: 100 new invites a day for all the servers one account owns, and
+at most one email a day per server and invitee, three a day per invitee; an invite over an email limit still reaches
+the invitee's app ([cloud-api.md](cloud-api.md#rate-limits)). Invites list without their codes (`GET /invites`, `?project=<id>` for one project, `&recent=true` with
 those that ended in the last 30 days and their `state`, `ended_at` and `ended_by`) and are revoked with
 `DELETE /invites/{id}`, which answers `{ revocation }`: for an invite by email, the revocation the server signed for the
 cloud. An ended invite forgets its email.
@@ -74,7 +76,8 @@ Device tokens are `orc_` and 64 hex characters, stored as SHA-256, and expire af
 itself out with `DELETE /auth/sessions/current`; an admin lists every joined computer with `GET /admin/sessions`,
 signs one out with `DELETE /admin/sessions/{id}` and all of a person's with `DELETE /admin/users/{id}/sessions`, and
 disabling an account signs it out too. A browser signed in to the server admin holds a token of the kind `admin_web`:
-it ends 12 hours after the sign-in, reaches only what the admin pages call, and is not listed among the computers.
+it ends 12 hours after the sign-in, reaches only what the admin pages call, and is not listed among the computers;
+an admin lists those with `GET /admin/browsers` and signs one out with `DELETE /admin/browsers/{id}`.
 
 ## Orchester Cloud
 
@@ -103,6 +106,10 @@ orchester-server cloud unlink
 account then answers `202 { approval }`. One of that account's devices or an admin approves or refuses it
 (`GET /auth/approvals`, `POST /auth/approvals/{id} { approve }`); the joining app asks again with `approval: <id>` and
 gets its device token once approved (`403 approval_refused` when refused, used or expired; approvals wait an hour).
+While join approval is on, a sign-in to the server admin through Orchester Cloud is refused with
+`403 approval_required` (nothing is used up): a pairing code from one of the account's own computers, or an account code
+from the host, signs the browser in instead. A browser signed in to the admin never lists or answers its own
+account's approvals; one of the account's own computers, or another admin, does (security review 1, B2).
 
 The server itself never reaches the cloud: it neither fetches key sets nor sends or revokes invites. The server
 admin's own server side delivers invites and revocations to the cloud when the host has the internet, or the
@@ -127,9 +134,17 @@ Every admin action is in the server's own web app (`web/server`, `docs/architect
 at `https://<server>/admin`: first setup, projects, members and roles, invites, people, devices and settings. The
 server stays the front door: it answers `/api/*` itself, sends `/` to `/admin`, and forwards every other path to the
 admin app at `admin_url` (default `http://127.0.0.1:3100`), setting `X-Forwarded-For`, `-Proto` and `-Host` itself.
+Behind a proxy that holds the certificate (`tls = "off"`), the scheme is the one a proxy in `trusted_proxies` says in
+`X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `compose.caddy.yaml` does, or the admin
+answers every page with *This page needs HTTPS*. Without `address`, project addresses take that same scheme and the
+host the request named.
 The admin app's server side calls the API on a second, private listener, `admin_api_listen` (default
 `127.0.0.1:8741`, plain HTTP, `off` to turn it off), which takes the browser's address and host from the headers the
-admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. Without the admin app, admin
+admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. The server warns at start when
+`admin_api_listen` is not a loopback or private address (every interface, `0.0.0.0`, included: inside the Docker
+network of `compose.yaml` that is expected, as long as the port stays unpublished). Projects whose slug is `admin`,
+`api` or `auth` (an older server allowed them) get the next free slug when the server opens (`admin` → `admin-2`),
+and the server's log names each. Without the admin app, admin
 paths answer *The admin app is not running* and the host commands remain for recovery.
 
 The admin app reads its configuration from the environment:
@@ -188,6 +203,11 @@ and keep the repository as their hint and their id. A server that already has an
 who has no signed-in device left gets an account code: `orchester-server account-code <username>`.
 
 The old desktop app's password sign-in no longer works against this server, by design.
+
+Schema 4 (the server admin) gives a server made by S1c its key's id (`PublicKey::server_id`, security review 1): the
+server's id is a hash of its own Ed25519 key. At every start a stored id that is not (an earlier server admin build's
+database) becomes the key's, and the log says so. A server linked to Orchester Cloud before that must be linked again
+from the admin's Settings.
 
 What else changes for an existing installation:
 

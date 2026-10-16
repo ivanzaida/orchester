@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, apiRequests, expectNoApiAddress, reset, signIn, watchBrowserRequests } from "./support";
+import { ADMIN, authorizePosts, apiRequests, expectNoApiAddress, reset, signIn, watchBrowserRequests } from "./support";
 
 test.beforeEach(async () => {
   await reset();
@@ -75,12 +75,12 @@ test.describe("sign in with Orchester Cloud", () => {
   test("goes to the cloud's /authorize with a state and comes back signed in", async ({ page, context }) => {
     await page.goto("/admin/signin");
     await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
-    await expect(page).toHaveURL(/127\.0\.0\.1:4220\/authorize\?purpose=admin&server=/);
-    const url = new URL(page.url());
-    expect(url.searchParams.get("return")).toBe(`${ADMIN}/admin/auth/callback`);
+    await expect(page).toHaveURL("http://127.0.0.1:4220/authorize/start");
+    const trip = (await authorizePosts()).at(-1);
+    expect(trip).toMatchObject({ purpose: "admin", return: `${ADMIN}/admin/auth/callback` });
     const state = (await context.cookies()).find((cookie) => cookie.name === "__Host-orchester_admin_state");
     expect(state).toMatchObject({ httpOnly: true, secure: true, sameSite: "None", path: "/" });
-    expect(state?.value).not.toContain(url.searchParams.get("state") ?? "-");
+    expect(state?.value).not.toContain(trip?.state ?? "-");
 
     await page.getByRole("button", { name: "Continue as ivan@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin`);
@@ -95,7 +95,20 @@ test.describe("sign in with Orchester Cloud", () => {
     await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
     await page.getByRole("button", { name: "Continue as stranger@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin/signin?failed=not_invited`);
-    await expect(page.getByText("There's no account on Kontur team for that Orchester account.", { exact: false })).toBeVisible();
+    // Design 1, M1: a page-level failure is a callout in the card (`j8WujU`), never a field error with no field.
+    const callout = page.getByRole("alert").filter({ hasText: "No account on Kontur team" });
+    await expect(callout.getByText("No account on Kontur team", { exact: true })).toBeVisible();
+    await expect(callout.getByText("That Orchester account has no account here. An admin can invite you.")).toBeVisible();
+  });
+
+  test("with join approval on, a cloud sign-in asks for a code from one of the person's computers", async ({ page }) => {
+    await page.goto("/admin/signin");
+    await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
+    await page.getByRole("button", { name: "Continue as approval@example.com" }).click();
+    await expect(page).toHaveURL(`${ADMIN}/admin/signin?failed=approval_required`);
+    const callout = page.getByRole("status").filter({ hasText: "Join approval is on" });
+    await expect(callout.getByText("Join approval is on", { exact: true })).toBeVisible();
+    await expect(callout.getByText("Signing in through Orchester Cloud needs one of your computers", { exact: false })).toBeVisible();
   });
 
   test("nothing to manage names who the cloud vouched for", async ({ page }) => {
@@ -106,14 +119,33 @@ test.describe("sign in with Orchester Cloud", () => {
     await expect(page.getByText("You're signed in as Dana Ruiz (dana@example.com).", { exact: false })).toBeVisible();
   });
 
+});
+
+test.describe("the cloud sign-in's state", () => {
+  test("a post with another state does not cancel this browser's trip", async ({ page, context }) => {
+    // Security review 1, minor 3: a cross-site post to the callback leaves the trip as it was.
+    await page.goto("/admin/signin");
+    await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
+    await expect(page).toHaveURL("http://127.0.0.1:4220/authorize/start");
+    const forged = await page.request.post("/admin/auth/callback", { form: { state: "forged" }, maxRedirects: 0 });
+    expect(forged.status()).toBe(303);
+    expect((await context.cookies()).some((cookie) => cookie.name === "__Host-orchester_admin_state")).toBe(true);
+    await page.getByRole("button", { name: "Continue as ivan@example.com" }).click();
+    await expect(page).toHaveURL(`${ADMIN}/admin`);
+  });
+
   test("a callback whose state is not this browser's is refused", async ({ page, request }) => {
     const answer = await request.post("/admin/auth/callback", { form: { state: "forged", identity_token: "x.y.z" }, maxRedirects: 0 });
     expect(answer.status()).toBe(303);
     expect(answer.headers().location).toContain("/admin/signin?failed=trip");
     expect((await apiRequests()).some((r) => r.path === "/api/v1/auth/cloud")).toBe(false);
     await page.goto("/admin/signin?failed=trip");
-    await expect(page.getByText("That sign-in took too long or came back to another browser.", { exact: false })).toBeVisible();
+    const callout = page.getByRole("alert").filter({ hasText: "That sign-in didn't come back" });
+    await expect(callout.getByText("It took too long, or came back to another browser. Start again.")).toBeVisible();
   });
+});
+
+test.describe("the sign-in page", () => {
 
   test("cloud sign-ins turned off are said, and the code is offered", async ({ page }) => {
     await reset("cloud-off");

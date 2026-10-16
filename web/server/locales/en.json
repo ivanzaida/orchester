@@ -77,6 +77,7 @@
     "pageTitle": "Projects",
     "title": "Projects",
     "description": "Each project has its own address on this server. People link their checkout to that address in Orchester; everyone clones the code themselves, the server never touches it.",
+    "descriptionPhone": "Each project has its own address on this server. People link their checkout to it in Orchester.",
     "descriptionOwner": "You own these projects, so you see them with their Members and Invites. People, Devices and Settings are for admins.",
     "new": "New project",
     "owned": "You own it",
@@ -95,6 +96,8 @@
     "waitingTitleMany": "{{count}} computers are waiting for approval",
     "waitingText": "Orchester on {{device}} wants to join as {{name}}. Join approval is on, so it waits for one of their computers or an admin.",
     "waitingTextMany": "Join approval is on, so they wait for one of their person's computers or an admin.",
+    "waitingTextPhone": "Orchester on {{device}}, as {{name}}.",
+    "notePhone": "Tasks and runs are in Orchester on your computer; these pages run the server.",
     "review": "Review in Devices"
   },
   "project": {
@@ -110,6 +113,8 @@
     "back": "Back to projects"
   },
   "members": {
+    "ownerMeans": "Manages members and invites of {{project}}.",
+    "memberMeans": "Works on {{project}}'s tasks and configuration.",
     "pageTitle": "{{project}} · Members",
     "description": "Members see {{project}}'s tasks and its shared configuration in Orchester. Owners manage members and invites; a new role applies at once on every member's computer.",
     "person": "Person",
@@ -225,7 +230,7 @@
     "create": "Create project",
     "creating": "Creating…",
     "note": "Already working on it in Orchester, with local tasks? Create the project here, then link your local project to its address in Orchester (Project settings › Sharing). Its tasks are uploaded with their numbers.",
-    "slugTaken": "Another project on this server has this address, or the server keeps it for itself. Choose another slug.",
+    "slugTaken": "Another project on {{server}} has this address. Choose another slug.",
     "slugReserved": "{{slug}} is kept for the server itself. Choose another slug.",
     "slugShape": "Use small letters, digits and hyphens.",
     "slugShapeLike": "Use small letters, digits and hyphens, like {{slug}}.",
@@ -276,8 +281,6 @@
     "sentTitle": "Invite sent to {{email}}",
     "sentTitleAdmin": "Invite sent to {{email}}, as an admin",
     "sentText": "They get an account on {{server}} with no project. It's open until {{when}}; revoke it from the list below the form.",
-    "serverInvites": "Invites to the server",
-    "serverInvitesText": "Invites without a project: an account on {{server}}, as a member or an admin.",
     "chipServer": "Server",
     "chipServerAdmin": "Server · Admin",
     "chipAccount": "Account code",
@@ -312,7 +315,7 @@
     "joinedTitle": "Joined",
     "deviceName": "Orchester on {{device}}",
     "who": "{{name}} · {{username}}",
-    "whoYou": "{{name}} · {{username}} · this is you",
+    "whoYou": "{{name}} · {{username}} · yours",
     "viaCloud": "Orchester Cloud",
     "viaCode": "A code",
     "viaBefore": "Before API 3",
@@ -332,7 +335,19 @@
     "noMatchTitle": "No computer matches {{query}}",
     "noMatchText": "Search by a person's name or username, or by the computer's name.",
     "adminsOnlyTitle": "Devices is for admins",
-    "adminsOnlyText": "Admins of {{server}} see every joined computer. You see the projects you own."
+    "adminsOnlyText": "Admins of {{server}} see every joined computer. You see the projects you own.",
+    "browsersTitle": "Signed in to this admin",
+    "browsersOne": "1 browser",
+    "browsers": "{{count}} browsers",
+    "browsersText": "Browsers where someone is signed in to the admin of {{server}}. A sign-in ends by itself 12 hours after it began; revoke one to end it now.",
+    "browserWho": "{{username}} · in a browser",
+    "browserSignedIn": "Signed in {{when}}",
+    "browserEnds": "Ends at {{end}}",
+    "thisBrowser": "This browser",
+    "browserRevokeTitle": "Sign {{name}} out of the admin in that browser?",
+    "browserRevokeText": "That browser is signed out of the admin at once. Their computers stay joined.",
+    "browserRevokedTitle": "{{name}}'s browser is signed out of the admin",
+    "browserRevokedText": "Signing in again takes Orchester Cloud or a code."
   },
   "settings": {
     "pageTitle": "Settings",
@@ -409,13 +424,23 @@
     "unlinkedText": "Admins sign in here with a code until it is linked.",
     "noCloudTitle": "This admin has no address for Orchester Cloud",
     "noCloudText": "Sign in with a code. Whoever runs the server sets ORCHESTER_ADMIN_CLOUD_URL to use Orchester Cloud.",
-    "notInvited": "There's no account on {{server}} for that Orchester account. An admin can invite you.",
-    "invalidIdentity": "{{server}} could not check Orchester Cloud's answer. Start again.",
-    "keySetStale": "{{server}}'s copy of Orchester Cloud's keys is out of date. Sign in with a code.",
-    "cloudOff": "Sign-ins through Orchester Cloud were turned off on this server. Sign in with a code.",
-    "tripLost": "That sign-in took too long or came back to another browser. Start again.",
-    "tooMany": "Too many sign-in attempts from your network. Try again in a few minutes.",
-    "failed": "The sign-in did not finish: the server is not answering. Try again in a minute."
+    "approvalRequiredTitle": "Join approval is on",
+    "approvalRequiredText": "Signing in through Orchester Cloud needs one of your computers: in Orchester, Settings › Orchester › {{server}} › Sign in to the admin, then sign in here with that code.",
+    "notInvitedTitle": "No account on {{server}}",
+    "notInvitedText": "That Orchester account has no account here. An admin can invite you.",
+    "invalidIdentityTitle": "Orchester Cloud's answer didn't check out",
+    "invalidIdentityText": "{{server}} could not check who Orchester Cloud vouched for. Start again.",
+    "keySetStaleTitle": "{{server}}'s keys are out of date",
+    "keySetStaleText": "Its copy of Orchester Cloud's keys is too old to check the sign-in. Sign in with a code.",
+    "cloudOffNow": "They were turned off on this server while you signed in. Sign in with a code.",
+    "tooManyTitle": "Too many sign-in attempts",
+    "tooManyText": "Your network tried too often. Try again in a few minutes.",
+    "tripLostTitle": "That sign-in didn't come back",
+    "tripLostText": "It took too long, or came back to another browser. Start again.",
+    "expiredTitle": "This sign-in form has expired",
+    "expiredText": "Reload the page and start again.",
+    "failedTitle": "The sign-in didn't finish",
+    "failedText": "The server isn't answering. Try again in a minute."
   },
   "code": {
     "pageTitle": "Sign in with a code",
@@ -442,7 +467,7 @@
     "pageTitle": "This page needs HTTPS",
     "title": "This page needs HTTPS",
     "text": "The admin keeps you signed in with a cookie that only travels over HTTPS, so it doesn't work at {{origin}}.",
-    "open": "Open {{secure}}, or, on the server itself, http://127.0.0.1 with the server's port."
+    "open": "Open {{secure}}, or, on the server itself, {{local}}."
   },
   "address": {
     "pageTitle": "Open this in Orchester",
@@ -521,5 +546,11 @@
     "unavailable": "Linking did not finish: the server is not answering. Try again in a minute.",
     "trip": "That trip to Orchester Cloud took too long or came back to another browser. Start again.",
     "expired": "This form has expired. Reload the page and try again."
+  },
+  "trip": {
+    "pageTitle": "Orchester Cloud",
+    "title": "Going to Orchester Cloud",
+    "text": "Your browser goes to Orchester Cloud to confirm it's you, then comes back here.",
+    "continue": "Continue"
   }
 }
