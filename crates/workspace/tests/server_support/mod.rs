@@ -169,11 +169,16 @@ impl TestServer {
 
   /// Another device of `username`, joined with an account code from the host: that device's token.
   pub fn device_of(&self, username: &str) -> SecretValue {
+    let joined = self.join_device_of(username);
+    SecretValue::new(joined.token.expose().to_owned()).expect("a token")
+  }
+
+  fn join_device_of(&self, username: &str) -> orchester_api::Joined {
     let code = self
       .block_on(self.server.host_account_code(username.into()))
       .expect("account code");
     let client = self.client();
-    let joined = self
+    self
       .block_on(client.join_with_code(&CodeJoin {
         code,
         device: "BUILD-02 · Windows".into(),
@@ -181,7 +186,19 @@ impl TestServer {
         display_name: None,
         kind: orchester_api::DeviceKind::App,
       }))
-      .expect("join with an account code");
+      .expect("join with an account code")
+  }
+
+  /// The first admin's set-up device. It stands for one that joined through Orchester Cloud with two-factor
+  /// authentication, which the server admin needs to send invites by email: its session is marked so in the server's
+  /// database, as such a join would have recorded it (`crates/server/tests/accounts/two_factor.rs` joins that way).
+  fn two_factor_admin_device(&self, username: &str) -> SecretValue {
+    let joined = self.join_device_of(username);
+    let database = rusqlite::Connection::open(self._directory.path().join("orchester-server.db")).expect("database");
+    let marked = database
+      .execute("UPDATE sessions SET mfa=1 WHERE id=?1", [joined.session.id.to_string()])
+      .expect("mark the session");
+    assert_eq!(marked, 1, "the set-up device's session");
     SecretValue::new(joined.token.expose().to_owned()).expect("a token")
   }
 
@@ -377,7 +394,7 @@ impl TestServer {
       match token {
         Some(token) => token,
         None => {
-          let token = self.device_of(&username.expect("the first admin joined"));
+          let token = self.two_factor_admin_device(&username.expect("the first admin joined"));
           self.admin.lock().1 = Some(token.expose().to_owned());
           token.expose().to_owned()
         }

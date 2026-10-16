@@ -9,6 +9,8 @@ use crate::support::{
 async fn linked_with_bob() -> (TestServer, Joined, Joined, TestCloud, String) {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
+  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&admin.token);
   let cloud = TestCloud::generate();
   let now = server.seconds();
   let linked = server

@@ -16,6 +16,7 @@ use orchester_api::{
   Credential,
   client::{CloudClient, ServerAddress},
   cloud::{CloudPlatform, CloudSignIn, DeviceInfo, ServerLinked},
+  totp,
 };
 use orchester_core::id::IdempotencyKey;
 use parking_lot::Mutex;
@@ -116,6 +117,49 @@ impl RealCloud {
       .block_on(client.sign_in(&request))
       .expect("signed in")
       .token
+  }
+
+  /// Two-factor authentication for the account of `email`, which accepting an invite needs, and every device it has
+  /// signed in made a two-factor session. The app's own two-factor sign-in is not built yet (its design is being
+  /// drawn), so its device is marked in the cloud's database as that sign-in would make it; the setup itself goes
+  /// through the API from a device of the test's own, with the codes an authenticator app would show.
+  pub fn two_factor_sessions(&self, email: &str, password: &str) {
+    let device = self.device(email, password);
+    let start = json!({"password": password});
+    let (status, setup) = self.request("POST", "/me/two-factor", Some(device.expose()), &start);
+    assert_eq!(status, 201, "{setup}");
+    let secret = totp::decode_secret(setup["secret"].as_str().expect("secret")).expect("a base32 secret");
+    let now = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .expect("after 1970")
+      .as_secs();
+    let code = totp::code(&secret, totp::step(i64::try_from(now).expect("seconds fit")));
+    let (status, answer) = self.request(
+      "POST",
+      "/me/two-factor/confirm",
+      Some(device.expose()),
+      &json!({"code": code}),
+    );
+    assert_eq!(status, 200, "{answer}");
+    let url = format!("{}/{}?sslmode=disable", self.server, self.database);
+    self.runtime.block_on(async {
+      let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+        .await
+        .expect("connect to the cloud's database");
+      tokio::spawn(async move {
+        if connection.await.is_err() {
+          eprintln!("a connection to the cloud's test database ended with an error");
+        }
+      });
+      client
+        .execute(
+          "UPDATE devices d SET two_factor = t.id FROM two_factor t, accounts a
+           WHERE t.account = d.account AND a.id = d.account AND a.email = $1 AND d.revoked_at IS NULL",
+          &[&email],
+        )
+        .await
+        .expect("the account's devices");
+    });
   }
 
   /// Registers the team server that signed `statement`, for the account of `device`: what the server pins.

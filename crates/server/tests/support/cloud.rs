@@ -85,17 +85,28 @@ impl TestCloud {
     Self::key_set_by(&self.root, &[&self.signing], issued_at)
   }
 
-  /// An identity token signed by `key`, issued at `iat` (seconds), valid five minutes.
+  /// An identity token signed by `key`, issued at `iat` (seconds), valid five minutes. One that accepts an invite says
+  /// its device signed in with two-factor authentication, as the cloud issues no other.
   pub fn token_by(key: &Key, identity: &Identity<'_>, iat: i64) -> String {
-    Self::token_with(key, identity, None, iat)
+    Self::token_with(key, identity, (None, identity.invite.is_some()), iat)
   }
 
   /// An identity token for one use besides joining: the server admin, or linking.
   pub fn purposed_token(&self, identity: &Identity<'_>, purpose: TokenPurpose, iat: i64) -> String {
-    Self::token_with(&self.signing, identity, Some(purpose), iat)
+    Self::token_with(&self.signing, identity, (Some(purpose), false), iat)
   }
 
-  fn token_with(key: &Key, identity: &Identity<'_>, purpose: Option<TokenPurpose>, iat: i64) -> String {
+  /// A token for the server admin from a cloud device that signed in with two-factor authentication.
+  pub fn two_factor_admin_token(&self, identity: &Identity<'_>, iat: i64) -> String {
+    Self::token_with(&self.signing, identity, (Some(TokenPurpose::Admin), true), iat)
+  }
+
+  /// A join token whose two-factor claim says `mfa`, whatever it accepts.
+  pub fn token_mfa(&self, identity: &Identity<'_>, mfa: bool, iat: i64) -> String {
+    Self::token_with(&self.signing, identity, (None, mfa), iat)
+  }
+
+  fn token_with(key: &Key, identity: &Identity<'_>, (purpose, mfa): (Option<TokenPurpose>, bool), iat: i64) -> String {
     let claims = IdentityClaims {
       iss: ISSUER.into(),
       aud: identity.audience.into(),
@@ -108,6 +119,7 @@ impl TestCloud {
       },
       invite: identity.invite.map(Into::into),
       purpose,
+      mfa,
       jti: IdempotencyKey::generate().to_string(),
       iat,
       exp: iat + 300,

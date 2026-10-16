@@ -65,6 +65,8 @@ impl Write for Capture {
 async fn joins(server: &TestServer) -> Vec<String> {
   let setup = server.server.host_setup_code().await.expect("setup").expect("no admin");
   let admin = server.join(&setup, Some("alice"), "laptop").await;
+  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&admin.token);
   let invite: InviteCreated = server
     .request(
       "POST",

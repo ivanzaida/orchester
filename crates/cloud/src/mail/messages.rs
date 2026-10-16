@@ -26,6 +26,9 @@ struct Emails {
   reset: Template,
   invite: Template,
   invite_sign_up: Template,
+  two_factor_on: Template,
+  two_factor_off: Template,
+  recovery_code_used: Template,
 }
 
 #[derive(Deserialize)]
@@ -52,6 +55,9 @@ impl Messages {
       (&emails.reset, "{link}"),
       (&emails.invite, "{url}"),
       (&emails.invite_sign_up, "{url}"),
+      (&emails.two_factor_on, "{url}"),
+      (&emails.two_factor_off, "{url}"),
+      (&emails.recovery_code_used, "{url}"),
     ];
     if placeholders
       .iter()
@@ -87,6 +93,18 @@ impl Messages {
   pub fn invite_sign_up(&self, to: String, invite: InviteId) -> Email {
     let url = format!("{}/signup?invite={invite}", self.base_url);
     email(EmailPurpose::Invite, to, &self.emails.invite_sign_up, "{url}", &url)
+  }
+
+  /// A notice about the account's two-factor authentication, with a link to the account's security section. It names
+  /// nothing but what happened, so it tells a reader of the mailbox nothing they could use.
+  pub fn two_factor(&self, to: String, purpose: EmailPurpose) -> Email {
+    let template = match purpose {
+      EmailPurpose::TwoFactorOff => &self.emails.two_factor_off,
+      EmailPurpose::RecoveryCodeUsed => &self.emails.recovery_code_used,
+      _ => &self.emails.two_factor_on,
+    };
+    let url = format!("{}/account#security", self.base_url);
+    email(purpose, to, template, "{url}", &url)
   }
 
   pub fn reset(&self, to: String, token: &Credential) -> Email {

@@ -4,13 +4,14 @@ use actix_web::{HttpMessage, HttpRequest, HttpResponse, web};
 use orchester_api::{
   PasswordChange,
   cloud::{
-    AccountChanges, AccountDeletion, AccountResponse, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse,
-    IdentityTokenRequest, KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest, SignUp,
+    AccountChanges, AccountDeletion, CloudErrorCode, CloudSignIn, ConfirmEmail, DevicesResponse, IdentityTokenRequest,
+    KeySetResponse, LinkInspect, ResendConfirmation, ResetFinish, ResetRequest, SignUp, TwoFactorCode, TwoFactorOff,
+    TwoFactorSignIn, TwoFactorStart,
   },
 };
 
 use super::extract::{ClientAddress, Device, SafeJson};
-use crate::{Cloud, error::CloudError};
+use crate::{Cloud, accounts::SignInAnswer, error::CloudError};
 
 type Answer = Result<HttpResponse, CloudError>;
 
@@ -48,9 +49,66 @@ pub(super) async fn sign_in(
   address: ClientAddress,
   input: SafeJson<CloudSignIn>,
 ) -> Answer {
-  let signed_in = cloud.sign_in(input.0, address.0).await?;
-  request.extensions_mut().insert(signed_in.account.id);
+  let (account, answer) = cloud.sign_in(input.0, address.0).await?;
+  request.extensions_mut().insert(account);
+  Ok(match answer {
+    SignInAnswer::SignedIn(signed_in) => HttpResponse::Created().json(signed_in),
+    SignInAnswer::Challenged(challenge) => HttpResponse::Accepted().json(challenge),
+  })
+}
+
+pub(super) async fn finish_sign_in(
+  cloud: web::Data<Cloud>,
+  request: HttpRequest,
+  address: ClientAddress,
+  input: SafeJson<TwoFactorSignIn>,
+) -> Answer {
+  let signed_in = cloud.finish_sign_in(input.0, address.0).await?;
+  request.extensions_mut().insert(signed_in.signed_in.account.id);
   Ok(HttpResponse::Created().json(signed_in))
+}
+
+pub(super) async fn step_up(cloud: web::Data<Cloud>, device: Device, input: SafeJson<TwoFactorCode>) -> Answer {
+  let stepped = cloud.step_up(device.0, input.0).await?;
+  Ok(HttpResponse::Ok().json(stepped))
+}
+
+pub(super) async fn start_two_factor(
+  cloud: web::Data<Cloud>,
+  device: Device,
+  address: ClientAddress,
+  input: SafeJson<TwoFactorStart>,
+) -> Answer {
+  let setup = cloud.start_two_factor(device.0, input.0, address.0).await?;
+  Ok(HttpResponse::Created().json(setup))
+}
+
+pub(super) async fn confirm_two_factor(
+  cloud: web::Data<Cloud>,
+  device: Device,
+  input: SafeJson<TwoFactorCode>,
+) -> Answer {
+  let codes = cloud.confirm_two_factor(device.0, input.0).await?;
+  Ok(HttpResponse::Ok().json(codes))
+}
+
+pub(super) async fn turn_off_two_factor(
+  cloud: web::Data<Cloud>,
+  device: Device,
+  address: ClientAddress,
+  input: SafeJson<TwoFactorOff>,
+) -> Answer {
+  cloud.turn_off_two_factor(device.0, input.0, address.0).await?;
+  Ok(HttpResponse::NoContent().finish())
+}
+
+pub(super) async fn new_recovery_codes(
+  cloud: web::Data<Cloud>,
+  device: Device,
+  input: SafeJson<TwoFactorCode>,
+) -> Answer {
+  let codes = cloud.new_recovery_codes(device.0, input.0).await?;
+  Ok(HttpResponse::Ok().json(codes))
 }
 
 pub(super) async fn request_reset(
@@ -87,13 +145,11 @@ pub(super) async fn sign_out(cloud: web::Data<Cloud>, device: Device) -> Answer 
 }
 
 pub(super) async fn me(cloud: web::Data<Cloud>, device: Device) -> Answer {
-  let account = cloud.me(device.0).await?;
-  Ok(HttpResponse::Ok().json(AccountResponse { account }))
+  Ok(HttpResponse::Ok().json(cloud.me(device.0).await?))
 }
 
 pub(super) async fn change_me(cloud: web::Data<Cloud>, device: Device, input: SafeJson<AccountChanges>) -> Answer {
-  let account = cloud.change_account(device.0, input.0).await?;
-  Ok(HttpResponse::Ok().json(AccountResponse { account }))
+  Ok(HttpResponse::Ok().json(cloud.change_account(device.0, input.0).await?))
 }
 
 pub(super) async fn devices(cloud: web::Data<Cloud>, device: Device) -> Answer {

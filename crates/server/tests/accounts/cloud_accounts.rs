@@ -128,6 +128,8 @@ async fn s1c_an_admin_invite_by_an_inviter_who_lost_admin_gives_nothing() {
   let (server, admin, cloud, audience) = linked().await;
   let known = bob_joined(&server, &admin, &cloud, &audience).await;
   let olena = server.invited("olena", true).await;
+  // Olena sends an invite by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&olena.token);
   let body = json!({"kind":"server","delivery":"cloud","email":"bob@example.com","admin":true});
   let invite = email_invite(&server, &olena.token, body).await;
   let invite_id = invite.invite.id.to_string();

@@ -1,9 +1,10 @@
-use orchester_api::cloud::{AccountChanges, CloudAccount, CloudDevice, CloudErrorCode};
+use orchester_api::cloud::{AccountChanges, AccountResponse, CloudDevice, CloudErrorCode};
 use orchester_core::id::CloudDeviceId;
 
 use super::{
   Authenticated, Cloud, input,
   rows::{ACTIVE, DEVICE_COLUMNS, account, active_since, device_row},
+  two_factor,
 };
 use crate::{
   db::{audit, time},
@@ -11,8 +12,13 @@ use crate::{
 };
 
 impl Cloud {
-  pub(crate) async fn me(&self, auth: Authenticated) -> Result<CloudAccount, CloudError> {
-    Ok(account(&self.inner.db.client().await?, auth.account).await?.account)
+  /// The account, with its two-factor authentication as the asking device sees it.
+  pub(crate) async fn me(&self, auth: Authenticated) -> Result<AccountResponse, CloudError> {
+    let client = self.inner.db.client().await?;
+    Ok(AccountResponse {
+      account: account(&client, auth.account).await?.account,
+      two_factor: two_factor::status(&client, auth).await?,
+    })
   }
 
   /// Only the display name changes here; a new email (confirmed first) is not built yet and is refused as an
@@ -21,7 +27,7 @@ impl Cloud {
     &self,
     auth: Authenticated,
     changes: AccountChanges,
-  ) -> Result<CloudAccount, CloudError> {
+  ) -> Result<AccountResponse, CloudError> {
     let client = self.inner.db.client().await?;
     if let Some(name) = changes.display_name {
       let name = input::display_name(&name)?;
@@ -32,7 +38,8 @@ impl Cloud {
         )
         .await?;
     }
-    Ok(account(&client, auth.account).await?.account)
+    drop(client);
+    self.me(auth).await
   }
 
   /// The account's signed-in devices, oldest first; `current` marks the one asking.

@@ -19,6 +19,18 @@
     "inviteSignUp": {
       "subject": "You have an Orchester invite",
       "body": "Someone invited this email to a team server in Orchester. To accept, create an Orchester account with this email first:\n\n{url}\n\nThen sign in to Orchester on your computer (Settings › Orchester): the invite is there, with who sent it and what it is for. It is open for 7 days. If you don't know anyone who uses Orchester, ignore this email; nothing happens without you.\n"
+    },
+    "twoFactorOn": {
+      "subject": "Two-factor authentication is on",
+      "body": "Two-factor authentication was turned on for your Orchester account. Signing in now also asks for a code from your authenticator app, or one of your recovery codes.\n\nIf you did not do this, change your password and check your account's security at once:\n\n{url}\n"
+    },
+    "twoFactorOff": {
+      "subject": "Two-factor authentication is off",
+      "body": "Two-factor authentication was turned off for your Orchester account. Signing in now asks only for your password, and you cannot accept invites to team servers until you turn it on again.\n\nIf you did not do this, change your password and turn two-factor authentication on again at once:\n\n{url}\n"
+    },
+    "recoveryCodeUsed": {
+      "subject": "A recovery code was used",
+      "body": "One of your Orchester recovery codes was just used to sign in. Each code works once; you can make new ones in your account's security settings.\n\nIf you did not do this, change your password and make new recovery codes at once:\n\n{url}\n"
     }
   }
 }

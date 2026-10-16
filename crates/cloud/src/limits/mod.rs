@@ -7,7 +7,7 @@ mod sign_in;
 
 use std::net::IpAddr;
 
-use orchester_core::id::{CloudDeviceId, TeamServerId};
+use orchester_core::id::{CloudAccountId, CloudDeviceId, TeamServerId};
 pub use quota::Quota;
 pub use sign_in::{Attempt, SignInLimit};
 use uuid::Uuid;
@@ -35,6 +35,7 @@ pub(crate) struct Limits {
   link_failures: Quota<IpAddr>,
   link_failures_per_network: Quota<IpAddr>,
   link_failures_per_link: Quota<Vec<u8>>,
+  two_factor_codes: Quota<CloudAccountId>,
 }
 
 impl Limits {
@@ -53,6 +54,7 @@ impl Limits {
       link_failures: Quota::new(20, 15 * MINUTE_MS, MAX_KEYS),
       link_failures_per_network: Quota::new(100, 15 * MINUTE_MS, MAX_KEYS),
       link_failures_per_link: Quota::new(5, HOUR_MS, MAX_KEYS),
+      two_factor_codes: Quota::new(5, 15 * MINUTE_MS, MAX_KEYS),
     }
   }
 
@@ -121,6 +123,18 @@ impl Limits {
     if let Some(network) = rate_network(address) {
       self.link_failures_per_network.record(network, now);
     }
+  }
+
+  /// A two-factor code checked for `account` (the sign-in's second step, a step-up, the setup's confirmation, turning
+  /// it off, new recovery codes): 5 wrong ones in 15 minutes, apart from the password limits. Reserved before the
+  /// check, so parallel guesses cannot pass it; `two_factor_passed` takes a right code's reservation back. Answers when
+  /// it was reserved.
+  pub fn two_factor_code(&self, account: CloudAccountId, now: i64) -> Result<i64, CloudError> {
+    self.two_factor_codes.take(account, now).map(|()| now)
+  }
+
+  pub fn two_factor_passed(&self, account: CloudAccountId, reserved_at: i64) {
+    self.two_factor_codes.forgive(&account, reserved_at);
   }
 
   /// A finish that succeeded: its reservation, made at `reserved_at`, does not count against the link.

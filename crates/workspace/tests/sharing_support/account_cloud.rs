@@ -254,6 +254,8 @@ fn identity_token(signing: &SigningKey, audience: &str, invite: Option<&str>) ->
     },
     invite: invite.map(str::to_owned),
     purpose: None,
+    // The person's device signed in with two-factor authentication, which accepting an invite needs.
+    mfa: true,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

@@ -15,7 +15,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::{
   codes::{self, CodeKind, NewCode},
-  db,
+  db::{self, Authenticated},
   error::ServerError,
   server_keys::ServerKeys,
   sharing::{access, members},
@@ -35,16 +35,23 @@ pub(crate) struct Listing {
   pub recent: bool,
 }
 
+/// A new invite by `actor`'s device token. One by email needs a token issued for a cloud identity that signed in with
+/// two-factor authentication (`403 mfa_required`), checked after who may make it; invites already made are delivered
+/// as before. A code needs no cloud and is not held to it.
 pub(crate) fn create(
   db: &Connection,
   keys: &ServerKeys,
-  actor: &User,
+  actor: &Authenticated,
   input: &InviteCreate,
   base_address: &str,
   now: i64,
 ) -> Result<InviteCreated, ServerError> {
+  let (session, actor) = (actor, &actor.user);
   check(db, actor, input)?;
   if input.delivery == InviteDelivery::Cloud {
+    if !session.mfa {
+      return Err(ErrorCode::MfaRequired.into());
+    }
     daily_limit(db, actor.id, now)?;
   }
   let id = InviteId::generate();

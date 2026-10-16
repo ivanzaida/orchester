@@ -284,6 +284,19 @@ impl TestServer {
     self.clock.now_ms() / 1000
   }
 
+  /// Marks the device token `token` as issued for a cloud identity that signed in with two-factor authentication,
+  /// which the server admin needs to send invites by email. It stands in for the cloud sign-in that makes one, which
+  /// `accounts/two_factor.rs` goes through itself, in tests about something else.
+  pub fn two_factor(&self, token: &Credential) {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(token.expose().as_bytes()).to_vec();
+    let marked = self
+      .database()
+      .execute("UPDATE sessions SET mfa=1 WHERE token_hash=?1", [hash])
+      .expect("mark the session");
+    assert_eq!(marked, 1, "the token is a session of the server");
+  }
+
   pub fn database(&self) -> rusqlite::Connection {
     rusqlite::Connection::open(self.directory.path().join("orchester-server.db")).expect("inspect database")
   }

@@ -54,6 +54,9 @@ pub enum ErrorCode {
   /// API 3: join approval is on, so a sign-in to the server admin through Orchester Cloud is refused: sign in with a
   /// code made on one of the account's own computers (a pairing code), or an account code from the host.
   ApprovalRequired,
+  /// API 3: sending an invite by email needs a browser that signed in to the admin through Orchester Cloud with
+  /// two-factor authentication; an invite's join token must say so too.
+  MfaRequired,
   RateLimited,
   Internal,
 }

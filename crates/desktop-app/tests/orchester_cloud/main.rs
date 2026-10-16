@@ -83,6 +83,7 @@ fn orchester_cloud_accepts_an_invite_and_joins_again_with_the_account() {
   let (invite, signed) = server.signed_email_invite(BOHDAN, Some(&billing));
   cloud.deliver(&signed);
   let mut window = signed_in(&cloud);
+  cloud.two_factor_sessions(BOHDAN, PASSWORD);
   let services = window.launch.services().expect("services").clone();
   let accept = format!("orchester-invite-{invite}-accept");
   shows(&mut window, &accept);

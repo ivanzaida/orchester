@@ -1,5 +1,5 @@
 //! The shared server's and Orchester Cloud's versioned JSON contract, with the `client` feature the HTTP client the
-//! desktop uses, and with the `identity` feature the cloud's identity tokens and key sets.
+//! desktop uses, and with the `identity` feature the cloud's identity tokens and key sets and its two-factor codes.
 
 mod accounts;
 pub mod certificate;
@@ -17,6 +17,8 @@ mod projects;
 mod server_admin;
 pub mod statements;
 mod tasks;
+#[cfg(feature = "identity")]
+pub mod totp;
 pub mod wire;
 
 pub use accounts::*;

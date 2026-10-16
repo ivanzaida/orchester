@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::CLOCK_SKEW_MS;
 use crate::{
   Cloud,
-  accounts::Authenticated,
+  accounts::{Authenticated, require_two_factor_session, two_factor_session},
   clock::seconds,
   db::{audit, time},
   error::CloudError,
@@ -43,6 +43,8 @@ impl Cloud {
       if request.purpose.is_some() {
         return Err(CloudErrorCode::Invalid.into());
       }
+      // Before the invite is looked at, so a refusal leaves it open (docs/cloud-api.md, "Two-factor authentication").
+      require_two_factor_session(&client, auth.device).await?;
       crate::invites::accept_for(&client, auth, (invite, audience), self.now()).await?;
     }
     let linked = crate::servers::linked(&client, audience).await?.is_some();
@@ -117,6 +119,7 @@ impl Cloud {
       },
       invite: invite.map(|invite| invite.to_string()),
       purpose,
+      mfa: two_factor_session(client, auth.device).await?,
     })
   }
 

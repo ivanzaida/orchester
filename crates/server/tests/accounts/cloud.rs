@@ -14,6 +14,8 @@ use crate::support::{
 pub(crate) async fn linked() -> (TestServer, Joined, TestCloud, String) {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
+  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&admin.token);
   let cloud = TestCloud::generate();
   let started: CloudLinkResponse = server
     .request(

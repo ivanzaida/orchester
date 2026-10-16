@@ -166,6 +166,10 @@ fn status_message(code: CloudErrorCode) -> (StatusCode, &'static str) {
       "The server is linked by a newer statement, or this one was used",
     ),
     CloudErrorCode::TooManyServers => (StatusCode::CONFLICT, "The account owns as many servers as it may"),
+    CloudErrorCode::MfaRequired => (StatusCode::FORBIDDEN, "Two-factor authentication required"),
+    CloudErrorCode::SessionWithoutMfa => (StatusCode::FORBIDDEN, "This session signed in without two-factor"),
+    CloudErrorCode::InvalidCode => (StatusCode::UNAUTHORIZED, "Invalid code"),
+    CloudErrorCode::ChallengeExpired => (StatusCode::UNAUTHORIZED, "Sign in again"),
     CloudErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Cloud operation failed"),
   }
 }

@@ -202,6 +202,8 @@ async fn sa_the_repository_hint_is_set_and_cleared() {
 async fn sa_invites_list_their_recent_history_and_revoking_one_by_email_signs_its_revocation() {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
+  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&admin.token);
   let kontur = project(&server, &admin.token, "kontur", None).await;
   let by_email = json!({"kind":"project","project":kontur.project.id,"role":"member","delivery":"cloud",
     "email":"dana@example.com"});
@@ -283,6 +285,8 @@ async fn sa_invites_list_their_recent_history_and_revoking_one_by_email_signs_it
 async fn sa_one_person_sends_at_most_30_invites_by_email_a_day() {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
+  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&admin.token);
   let invite = |index: usize| json!({"kind":"server","delivery":"cloud","email":format!("person{index}@example.com")});
   for index in 0..30 {
     let response = server

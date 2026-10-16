@@ -27,13 +27,14 @@ impl Server {
           .ok_or(ErrorCode::InvalidCode)?;
         let (user, joined) = redeemed_account(db, &code, &input, now)?;
         let joined = match input.kind {
-          DeviceKind::AdminWeb => admin_sign_in::admin_session(db, user, &input.device, JoinedVia::Code, None, now)?,
+          DeviceKind::AdminWeb => admin_sign_in::admin_session(db, user, &input.device, None, now)?,
           DeviceKind::App => {
             let issued = Issued {
               device: &input.device,
               kind: DeviceKind::App,
               via: JoinedVia::Code,
               kid: None,
+              mfa: false,
             };
             let (token, session) = devices::issue(db, &user, &issued, now)?;
             Joined {
