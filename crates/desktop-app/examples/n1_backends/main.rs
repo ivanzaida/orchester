@@ -3,10 +3,13 @@
 //! projects Kontur, Billing and Mobile app; and a stand-in for the cloud's account API that names that server and
 //! holds an invite to Billing for its one account. Everything is fixture data for QA, never shipped.
 //!
-//!   cargo run -p orchester-app --example n1_backends -- <file> [plain]
+//!   cargo run -p orchester-app --example n1_backends -- <file> [plain] [approval|refuse]
 //!
 //! With `plain` the server stays on plain HTTP to this computer, which needs no check code: the way to the join step
-//! for a QA copy, whose MCP clients cannot confirm a check code.
+//! for a QA copy, whose MCP clients cannot confirm a check code. With `approval` the server asks for approval of a
+//! join of the cloud's account, which joined it once from another computer (*Waiting for approval*); with `refuse` it
+//! asks too, and its admin refuses each join that waits, a second or so after it asks (*refused this computer*).
+//! Without a person to sign in and accept in the QA copy, `examples/n1_qa` opens these states seeded.
 //!
 //! writes the addresses, the server's check code, an invite code to Kontur and the cloud's account to `<file>` as
 //! JSON, then serves until it is stopped (by its pid).
@@ -15,56 +18,52 @@
 
 #[path = "../../../workspace/tests/sharing_support/account_cloud.rs"]
 mod account_cloud;
+#[path = "../n1_qa/backends.rs"]
+mod backends;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
+#[path = "../secrets_qa/vault.rs"]
+#[allow(dead_code, reason = "the secrets QA's delays and failures are not used here")]
+mod vault;
 
 use std::{path::PathBuf, thread, time::Duration};
 
-use account_cloud::{AccountCloud, EMAIL, PASSWORD};
-use orchester_api::client::{Client, ServerAddress};
+use account_cloud::{EMAIL, PASSWORD};
+use backends::Backends;
 use serde_json::json;
-use server_support::TestServer;
 
 fn main() {
-  let out = PathBuf::from(std::env::args().nth(1).expect("the file to write the backends to"));
-  let cloud = AccountCloud::start();
-  let mut server = TestServer::start();
-  server.create_user("alice", "Alice Moreau", true);
-  let audience = server.link_cloud(&cloud.root_key, &cloud.key_set);
-  let kontur = server.create_named_project(("Kontur", "KTR"), "kontur", Some("https://github.com/acme/kontur.git"));
-  let billing = server.create_named_project(
-    ("Billing", "BIL"),
-    "billing",
-    Some("https://github.com/acme/billing.git"),
-  );
-  server.create_named_project(("Mobile app", "MOB"), "mobile-app", None);
-  let code = server.project_code(&kontur);
-  let invite = server.project_email_invite(EMAIL, &billing);
-  let plain = std::env::args().nth(2).as_deref() == Some("plain");
-  let pin = if plain {
-    None
-  } else {
-    server.serve_self_signed();
-    let address = ServerAddress::parse(&server.url()).expect("address");
-    Some(
-      server
-        .block_on(Client::presented_certificate(&address))
-        .expect("the server's certificate"),
-    )
-  };
-  cloud.name_server(&audience, &server.url(), pin.map(|pin| pin.to_hex()).as_deref());
-  cloud.invite(&invite, Some(("Billing", &format!("{}/billing", server.url()))));
-  let backends = json!({
-    "server": server.url(),
-    "check_code": pin.map(|pin| pin.check_code()),
+  let mut args = std::env::args().skip(1);
+  let out = PathBuf::from(args.next().expect("the file to write the backends to"));
+  let options: Vec<String> = args.collect();
+  let has = |option: &str| options.iter().any(|given| given == option);
+  let backends = Backends::start(has("plain"));
+  let code = backends.server.project_code(&backends.kontur);
+  // The other computer's data, beside the file; it stays for as long as this runs.
+  let other = tempfile::Builder::new()
+    .prefix("n1-other-computer-")
+    .tempdir_in(out.parent().unwrap_or(&PathBuf::from(".")))
+    .expect("the other computer's folder");
+  let approval = has("approval") || has("refuse");
+  if approval {
+    backends.ask_for_approval(other.path());
+  }
+  backends.invite_to_billing();
+  let backends_file = json!({
+    "server": backends.server.url(),
+    "check_code": backends.pin.map(|pin| pin.check_code()),
     "invite_code": code.expose(),
-    "cloud": cloud.url(),
+    "cloud": backends.cloud.url(),
     "email": EMAIL,
     "password": PASSWORD,
+    "approval": if has("refuse") { "refused" } else if approval { "asked" } else { "off" },
   });
-  std::fs::write(&out, serde_json::to_string_pretty(&backends).expect("JSON")).expect("write the backends");
+  std::fs::write(&out, serde_json::to_string_pretty(&backends_file).expect("JSON")).expect("write the backends");
   println!("backends written to {}", out.display());
   loop {
-    thread::sleep(Duration::from_secs(3600));
+    thread::sleep(Duration::from_secs(1));
+    if has("refuse") {
+      backends.server.refuse_waiting();
+    }
   }
 }
