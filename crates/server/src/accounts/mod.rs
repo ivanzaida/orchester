@@ -1,4 +1,5 @@
 mod admin;
+mod admin_browsers;
 mod admin_sign_in;
 mod auth;
 mod cloud_join;

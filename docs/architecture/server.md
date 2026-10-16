@@ -749,6 +749,7 @@ changes; the rest is built (S1a, S1b).
 | `GET /server/cloud`, `PATCH /server/cloud` | admin | `{ accepting?, link?, unlink?, pin? }` | `{ cloud }` | `422 invalid` | new in 3 (rows 47, 62) |
 | `GET /server/settings`, `PATCH /server/settings` | admin | `{ join_approval? }` | `{ settings, check_code }` | `422 invalid` | new in 3 (rows 57, 62) |
 | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` | admin | | `{ sessions: [Session with user] }`; `204` | `404` | new in 3 (row 62) |
+| `GET /admin/browsers`, `DELETE /admin/browsers/{id}` | admin | | `{ browsers: [{ id, user, via, created_at, last_used_at, expires_at, current }] }`, the live `admin_web` sign-ins, newest first; `204` | `404` (also a computer's id) | new in 3 (security review 1, minor 5) |
 | `GET /projects` | user | | `{ projects: [Project] }` the user is a member of | | `?remote=` removed in 3 (row 49) |
 | `GET /projects?slug=<slug>` | user | | `{ project }` when the user is a member | `404` when there is no such project or the user is not a member of it: one answer for both, so a lookup tells a non-member nothing of the project (its name and owners included) | new in 3 (row 49) |
 | `POST /projects` | admin | `{ idempotency_key, name, slug, key, remote_hint?, tasks: [UploadTask] }` | `201 { project, tasks: [Task], cursor }`; the caller is the project's owner; `tasks` may be empty | `409 slug_taken`, `409 conflict`, `422 invalid` | changed in 3: admins only, by slug; `remote_taken` removed |
@@ -1052,7 +1053,7 @@ like the cloud's web front, on the shared `web/ui` package ([The web workspace](
 | Members and roles | owners, admins | Per project: members, roles, the last-owner refusal, removing | `…/members` |
 | Invites | owners (their projects), admins | By email through the cloud, or with a code without the internet; open invites, revoke | `/invites` |
 | People | admins | Accounts, disable or enable, account codes, admin flag | `/admin/users`, `/invites { kind: "account" }` |
-| Devices | admins | Every device joined to the server, with account, how it joined and last use; revoke | `GET /admin/sessions`, `DELETE /admin/sessions/{id}` |
+| Devices | admins | Every device joined to the server, with account, how it joined and last use; revoke. Under them, the browsers signed in to the admin; revoke (not drawn: the Joined section's frame) | `GET /admin/sessions`, `DELETE /admin/sessions/{id}`, `GET /admin/browsers`, `DELETE /admin/browsers/{id}` |
 | Settings | admins | Join approval (row 57), the cloud link and its root key fingerprint (on, off, re-pin, unlink), the certificate's check code | `/server/settings`, `/server/cloud` |
 
 A project owner who is not an admin sees only Projects (their own, rename and hint), Members and Invites for those.
@@ -1113,7 +1114,8 @@ certificate in every setup:
   carry the host it used.
 - **Browser sign-ins** are device tokens of the kind `admin_web`: 12 hours from sign-in, refused on what only the app
   does (tasks, claims, events, linking, pairing), not listed among the account's computers, and issued only to admins
-  and project owners (`403 nothing_to_manage` otherwise). Identity tokens carry a `purpose` (`admin`, `link`, or none
+  and project owners (`403 nothing_to_manage` otherwise). Admins see them apart, in Devices › *Signed in to this
+  admin* (`GET /admin/browsers`), and sign any one out (security review 1, minor 5). Identity tokens carry a `purpose` (`admin`, `link`, or none
   to join), and a team server takes each only for its own use.
 - **Invites by email** are delivered to the cloud by the admin's own server side when the host has the internet, or
   posted from the inviter's browser to the cloud's web front (`/invites/deliver`) when it has not; the team server

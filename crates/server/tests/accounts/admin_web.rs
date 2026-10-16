@@ -1,9 +1,10 @@
 //! Signing in to the server admin in a browser: setup, pairing, account and cloud sign-ins as `admin_web` device
 //! tokens that live 12 hours, reach only what the admin pages call, and exist only for accounts with something to
-//! manage. `GET /admin/sessions` lists the computers, `DELETE` signs one out.
+//! manage. `GET /admin/sessions` lists the computers and `GET /admin/browsers` the browsers; `DELETE` signs one out.
 
 use orchester_api::{
-  AdminSessions, Credential, ErrorCode, Joined, JoinedVia, PairingCode, ProjectCreated, cloud::TokenPurpose,
+  AdminBrowsers, AdminSessions, Credential, ErrorCode, Joined, JoinedVia, PairingCode, ProjectCreated,
+  cloud::TokenPurpose,
 };
 use serde_json::{Value, json};
 
@@ -299,6 +300,67 @@ async fn sa_admins_list_every_computer_and_sign_any_one_out() {
     404,
     ErrorCode::NotFound,
   );
+  server.finish().await;
+}
+
+/// Security review 1, minor 5: browsers signed in to the admin are listed apart from the computers, and an admin signs
+/// any one of them out.
+#[tokio::test]
+async fn sa_admins_list_the_browsers_signed_in_to_the_admin_and_sign_one_out() {
+  let server = TestServer::start(|_| {}).await;
+  let admin = server.bootstrap().await;
+  let bob = server.invited("bob", false).await;
+  let first = browser_with_pairing(&server, &admin.token).await;
+  server.clock.advance(5 * 60 * 1000);
+  let second = browser_with_pairing(&server, &admin.token).await;
+  let listed: AdminBrowsers = server
+    .request("GET", "/admin/browsers", Some(&first.token), None)
+    .await
+    .json();
+  let ids: Vec<_> = listed
+    .browsers
+    .iter()
+    .map(|browser| (browser.id, browser.current))
+    .collect();
+  assert_eq!(
+    ids,
+    [(second.session.id, false), (first.session.id, true)],
+    "newest sign-in first"
+  );
+  let newest = &listed.browsers[0];
+  assert_eq!((newest.user.username.as_str(), newest.via), ("alice", JoinedVia::Code));
+  assert_eq!(newest.expires_at, newest.created_at + 12 * HOUR_MS);
+  refused(
+    &server.request("GET", "/admin/browsers", Some(&bob.token), None).await,
+    403,
+    ErrorCode::Forbidden,
+  );
+  let computer = format!("/admin/browsers/{}", admin.session.id);
+  refused(
+    &server.request("DELETE", &computer, Some(&first.token), None).await,
+    404,
+    ErrorCode::NotFound,
+  );
+  let path = format!("/admin/browsers/{}", second.session.id);
+  assert_eq!(
+    server.request("DELETE", &path, Some(&first.token), None).await.status,
+    204
+  );
+  refused(
+    &server.request("GET", "/auth/me", Some(&second.token), None).await,
+    401,
+    ErrorCode::Unauthorized,
+  );
+  refused(
+    &server.request("DELETE", &path, Some(&first.token), None).await,
+    404,
+    ErrorCode::NotFound,
+  );
+  let left: AdminBrowsers = server
+    .request("GET", "/admin/browsers", Some(&first.token), None)
+    .await
+    .json();
+  assert_eq!(left.browsers.len(), 1);
   server.finish().await;
 }
 

@@ -4,7 +4,7 @@ import { field } from "@/lib/form";
 import type { Message } from "@/lib/i18n";
 import { actor, failed, isMessage } from "@/lib/server/act";
 import { decideApproval } from "@/lib/server/team/auth";
-import { revokeDevice } from "@/lib/server/team/people";
+import { revokeBrowser, revokeDevice } from "@/lib/server/team/people";
 
 export interface ApprovalState {
   readonly decided?: "approved" | "refused";
@@ -43,5 +43,19 @@ export async function revokeDeviceAction(_: RevokeDeviceState, form: FormData): 
     return { error: await failed(result.error) };
   }
   // The row stays, replaced by what happened to it; the list is read again on the next visit.
+  return { revoked: true };
+}
+
+/** *Revoke* a browser signed in to the admin, confirmed in place: it is signed out of the admin at once. */
+export async function revokeBrowserAction(_: RevokeDeviceState, form: FormData): Promise<RevokeDeviceState> {
+  const options = await actor(form);
+  if (isMessage(options)) {
+    return { error: options };
+  }
+  const result = await revokeBrowser(field(form, "browser"), options);
+  // `404`: the browser was already signed out, or its 12 hours ended, which is what was asked for.
+  if (!result.ok && !(result.error.kind === "refused" && result.error.code === "not_found")) {
+    return { error: await failed(result.error) };
+  }
   return { revoked: true };
 }

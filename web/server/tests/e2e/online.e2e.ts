@@ -92,10 +92,12 @@ test("inviting by code, and changing the new member's role", async () => {
 test("revoking a device", async () => {
   expect(await tokenWorks(olehToken)).toBe(true);
   await admin.goto(`${SERVER}/admin/devices`);
-  // Oleh's is the only computer: the browsers signed in to the admin are not listed.
-  await expect(admin.getByText("Orchester on oleh-pc")).toBeVisible();
-  await admin.getByRole("button", { name: "Revoke" }).click();
-  await admin.getByRole("button", { name: "Revoke" }).last().click();
+  // Oleh's is the only computer; the browsers signed in to the admin are listed apart (security review 1, minor 5).
+  const joined = admin.getByRole("region", { name: "Joined" });
+  await expect(joined.getByText("Orchester on oleh-pc")).toBeVisible();
+  await expect(admin.getByRole("region", { name: "Signed in to this admin" }).getByText("This browser")).toBeVisible();
+  await joined.getByRole("button", { name: "Revoke" }).click();
+  await joined.getByRole("button", { name: "Revoke" }).last().click();
   await expect(admin.getByText("Orchester on oleh-pc is signed out")).toBeVisible();
   expect(await tokenWorks(olehToken)).toBe(false);
 });

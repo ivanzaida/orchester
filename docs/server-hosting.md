@@ -76,7 +76,8 @@ Device tokens are `orc_` and 64 hex characters, stored as SHA-256, and expire af
 itself out with `DELETE /auth/sessions/current`; an admin lists every joined computer with `GET /admin/sessions`,
 signs one out with `DELETE /admin/sessions/{id}` and all of a person's with `DELETE /admin/users/{id}/sessions`, and
 disabling an account signs it out too. A browser signed in to the server admin holds a token of the kind `admin_web`:
-it ends 12 hours after the sign-in, reaches only what the admin pages call, and is not listed among the computers.
+it ends 12 hours after the sign-in, reaches only what the admin pages call, and is not listed among the computers;
+an admin lists those with `GET /admin/browsers` and signs one out with `DELETE /admin/browsers/{id}`.
 
 ## Orchester Cloud
 

@@ -148,6 +148,19 @@ function sessions(world: World): Answer {
   return ok({ sessions: list });
 }
 
+/** The fixture's browsers and the asking one, newest sign-in first; the fake has one session per sign-in. */
+function browsers(world: World, me: string): Answer {
+  const asking = { id: id(50), user: me, created_at: Date.now() - 5 * 60 * 1000, current: true };
+  const list = [...world.state.browsers.map((b) => ({ ...b, current: false })), asking]
+    .sort((a, b) => b.created_at - a.created_at)
+    .map((b) => {
+      const user = world.state.users.find((u) => u.id === b.user);
+      return { id: b.id, user: { id: b.user, username: user?.username ?? "", display_name: user?.display_name ?? "" }, via: "cloud",
+        created_at: b.created_at, last_used_at: b.created_at, expires_at: b.created_at + 12 * 60 * 60 * 1000, current: b.current };
+    });
+  return ok({ browsers: list });
+}
+
 function changeCloud(world: World, body: Record<string, unknown>, me: string): Answer {
   const now = Date.now();
   if (body.link === "start") {
@@ -199,6 +212,12 @@ const ROUTES: Route[] = [
   ["DELETE", /^\/api\/v1\/admin\/sessions\/([^/]+)$/, (w, _r, _me, m) => {
     w.state.devices = w.state.devices.filter((d) => d.id !== m[1]);
     return { status: 204 };
+  }, true],
+  ["GET", /^\/api\/v1\/admin\/browsers$/, (w, _r, me) => browsers(w, me), true],
+  ["DELETE", /^\/api\/v1\/admin\/browsers\/([^/]+)$/, (w, _r, _me, m) => {
+    const before = w.state.browsers.length;
+    w.state.browsers = w.state.browsers.filter((b) => b.id !== m[1]);
+    return w.state.browsers.length === before ? refuse(404, "not_found") : { status: 204 };
   }, true],
   ["GET", /^\/api\/v1\/server\/settings$/, (w) => ok(settingsJson(w.state)), true],
   ["PATCH", /^\/api\/v1\/server\/settings$/, (w, r) => updateSettings(w, r.body), true],

@@ -332,7 +332,18 @@
     "noMatchTitle": "No computer matches {{query}}",
     "noMatchText": "Search by a person's name or username, or by the computer's name.",
     "adminsOnlyTitle": "Devices is for admins",
-    "adminsOnlyText": "Admins of {{server}} see every joined computer. You see the projects you own."
+    "adminsOnlyText": "Admins of {{server}} see every joined computer. You see the projects you own.",
+    "browsersTitle": "Signed in to this admin",
+    "browsersOne": "1 browser",
+    "browsers": "{{count}} browsers",
+    "browsersText": "Browsers where someone is signed in to the admin of {{server}}. A sign-in ends by itself 12 hours after it began; revoke one to end it now.",
+    "browserWho": "{{username}} · in a browser",
+    "browserSince": "Signed in {{when}} · ends at {{end}}",
+    "thisBrowser": "This browser",
+    "browserRevokeTitle": "Sign {{name}} out of the admin in that browser?",
+    "browserRevokeText": "That browser is signed out of the admin at once. Their computers stay joined.",
+    "browserRevokedTitle": "{{name}}'s browser is signed out of the admin",
+    "browserRevokedText": "Signing in again takes Orchester Cloud or a code."
   },
   "settings": {
     "pageTitle": "Settings",

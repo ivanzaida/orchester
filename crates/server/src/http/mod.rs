@@ -75,6 +75,8 @@ fn api(server: &Server) -> Router<Server> {
     .route("/admin/users/{id}/sessions", delete(admin::revoke))
     .route("/admin/sessions", get(admin::sessions))
     .route("/admin/sessions/{id}", delete(admin::revoke_session))
+    .route("/admin/browsers", get(admin::browsers))
+    .route("/admin/browsers/{id}", delete(admin::revoke_browser))
     .route("/admin/projects", get(managed::list))
     .route("/admin/projects/{project}", get(managed::show))
     .route("/invites", get(invites::list).post(invites::create))
