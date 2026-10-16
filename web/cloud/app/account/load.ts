@@ -3,12 +3,15 @@ import { redirect } from "next/navigation";
 
 import type { Device, Invite, Listing, Server } from "@/lib/account";
 import { devices, invites, servers } from "@/lib/server/account";
-import { me, type Account } from "@/lib/server/cloud";
+import type { Account } from "@/lib/server/cloud";
 import { CloudUnavailableError } from "@/lib/server/failures";
+import { account as me } from "@/lib/server/two-factor";
 import { sessionEnded, signedIn } from "@/lib/server/visitor";
+import type { TwoFactorStatus } from "@/lib/two-factor";
 
 export interface AccountData {
   readonly account: Account;
+  readonly twoFactor: TwoFactorStatus;
   readonly devices: readonly Device[];
   readonly invites: Listing<Invite>;
   readonly servers: Listing<Server>;
@@ -45,5 +48,6 @@ export async function loadAccount(): Promise<AccountData> {
   }
   const agent = (await headers()).get("user-agent") ?? "";
   const system = /Mac OS X|Macintosh/.test(agent) ? "macos" : "windows";
-  return { account: account.value, devices: deviceList.value, invites: inviteList, servers: serverList, system };
+  const { account: found, twoFactor } = account.value;
+  return { account: found, twoFactor, devices: deviceList.value, invites: inviteList, servers: serverList, system };
 }

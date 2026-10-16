@@ -27,6 +27,8 @@ export interface Invite {
   readonly project: { readonly name: string; readonly address: string } | null;
   readonly inviterName: string;
   readonly expiresAt: number;
+  /** This browser cannot accept it yet: accepting needs two-factor authentication and a session signed in with it. */
+  readonly needsTwoFactor: boolean;
 }
 
 export interface Server {

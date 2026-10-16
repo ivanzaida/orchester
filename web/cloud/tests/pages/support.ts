@@ -24,6 +24,11 @@ export async function resetFake(): Promise<void> {
   await fetch(`${API}/__fake/reset`, { method: "POST" });
 }
 
+/** Turns two-factor authentication on for `email` from another device, leaving this browser's session as it was. */
+export async function twoFactorElsewhere(email: string): Promise<void> {
+  await fetch(`${API}/__fake/two-factor-on?email=${encodeURIComponent(email)}`, { method: "POST" });
+}
+
 /** Every request the browser made goes to the site itself, never to the API. */
 export function watchBrowserRequests(page: Page): string[] {
   const seen: string[] = [];

@@ -65,6 +65,8 @@ function readRole(kind: "project" | "server", role: unknown): InviteRole | null 
 function readInvite(json: unknown): Invite | null {
   const { id, kind, role: wireRole, inviter_display_name: inviterName, expires_at: expiresAt, server, project } =
     record(json) ?? {};
+  // Absent from a cloud before two-factor authentication, which asked for none.
+  const needsTwoFactor = record(json)?.needs_two_factor === true;
   const { name: serverName, address: serverAddress } = record(server) ?? {};
   const invitedTo = readProject(project);
   if (!text(id) || (kind !== "project" && kind !== "server") || !text(inviterName)) {
@@ -77,7 +79,7 @@ function readInvite(json: unknown): Invite | null {
   if (!text(serverName) || !text(serverAddress) || invitedTo === undefined || typeof expiresAt !== "number") {
     return null;
   }
-  return { id, kind, role, serverName, serverAddress, project: invitedTo, inviterName, expiresAt };
+  return { id, kind, role, serverName, serverAddress, project: invitedTo, inviterName, expiresAt, needsTwoFactor };
 }
 
 function readServer(json: unknown): Server | null {

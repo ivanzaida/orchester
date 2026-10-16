@@ -11,6 +11,7 @@ import { AccountHeader } from "./header";
 import { loadAccount } from "./load";
 import { AccountNav } from "./nav";
 import { Invites, Servers } from "./registry";
+import { Security } from "./security";
 import { Settings } from "./settings";
 import styles from "./account.module.css";
 
@@ -39,6 +40,7 @@ export default async function AccountPage() {
             <Invites listing={data.invites} email={account.email} csrf={csrf} now={now} />
             <Servers listing={data.servers} email={account.email} />
             <Devices devices={data.devices} csrf={csrf} now={now} />
+            <Security status={data.twoFactor} csrf={csrf} />
             <Settings name={account.displayName} email={account.email} csrf={csrf} owned={owned} />
           </main>
         </div>

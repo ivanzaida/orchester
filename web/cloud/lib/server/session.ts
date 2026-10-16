@@ -1,4 +1,4 @@
-import { SESSION_SECONDS } from "@/lib/server/cookie-options";
+import { CHALLENGE_SECONDS, SESSION_SECONDS } from "@/lib/server/cookie-options";
 import { open, seal, sign, verify } from "@/lib/server/seal";
 
 /**
@@ -65,4 +65,32 @@ export function readSignupFlow(key: Buffer, value: string | undefined, now: numb
 export function readForgotFlow(key: Buffer, value: string | undefined, now: number): ForgotFlow | null {
   const flow = readJson(key, value, now);
   return typeof flow?.email === "string" ? { email: flow.email } : null;
+}
+
+/**
+ * The sign-in waiting for its code (`/signin/code`): the cloud's challenge from the password step, sealed in this
+ * browser's cookie for the five minutes the cloud gives it, with the email it is for and where to go after.
+ */
+export interface Challenge {
+  readonly challenge: string;
+  readonly email: string;
+  /** `/authorize` when a team server's admin asked who this is, as the password step was given it. */
+  readonly next: string | null;
+}
+
+export function sealChallenge(key: Buffer, challenge: Challenge, now: number): string {
+  return seal(key, JSON.stringify({ ...challenge, expires: now + CHALLENGE_SECONDS * 1000 }));
+}
+
+export function openChallenge(key: Buffer, value: string | undefined, now: number): Challenge | null {
+  const plaintext = value === undefined ? null : open(key, value);
+  if (plaintext === null) {
+    return null;
+  }
+  const kept = JSON.parse(plaintext) as Record<string, unknown>;
+  const { challenge, email, next, expires } = kept;
+  if (typeof expires !== "number" || expires <= now || typeof challenge !== "string" || typeof email !== "string") {
+    return null;
+  }
+  return { challenge, email, next: typeof next === "string" ? next : null };
 }

@@ -16,6 +16,14 @@ export interface SignedIn {
   readonly account: Account;
 }
 
+/**
+ * What the password step of a sign-in answers: signed in, or, for an account with two-factor authentication, a
+ * challenge that a code finishes (`POST /auth/sessions/two-factor`) before `expiresAt`.
+ */
+export type SignInAnswer =
+  | ({ readonly kind: "signedIn" } & SignedIn)
+  | { readonly kind: "challenged"; readonly challenge: string; readonly expiresAt: number };
+
 export type LinkPurpose = "confirm" | "reset";
 
 export interface DeviceInfo {
@@ -34,11 +42,20 @@ export function readAccount(json: unknown): Account | null {
   return typeof email === "string" && typeof displayName === "string" ? { email, displayName } : null;
 }
 
-function readSignedIn(json: unknown): SignedIn | null {
+export function readSignedIn(json: unknown): SignedIn | null {
   const body = record(json);
   const token = body?.token;
   const account = readAccount(body?.account);
   return typeof token === "string" && account !== null ? { token, account } : null;
+}
+
+function readSignInAnswer(json: unknown, status: number): SignInAnswer | null {
+  if (status === 201) {
+    const signedIn = readSignedIn(json);
+    return signedIn === null ? null : { kind: "signedIn", ...signedIn };
+  }
+  const { challenge, expires_at: expiresAt } = record(json) ?? {};
+  return typeof challenge === "string" && typeof expiresAt === "number" ? { kind: "challenged", challenge, expiresAt } : null;
 }
 
 function readEmail(json: unknown): string | null {
@@ -80,8 +97,8 @@ export function confirmEmail(token: string, password: string, options: CallOptio
 export function signIn(
   input: { email: string; password: string; device: DeviceInfo },
   options: CallOptions,
-): Promise<ApiResult<SignedIn>> {
-  return call("POST", "/auth/sessions", { body: input, expected: 201, read: readSignedIn }, options);
+): Promise<ApiResult<SignInAnswer>> {
+  return call("POST", "/auth/sessions", { body: input, expected: [201, 202], read: readSignInAnswer }, options);
 }
 
 export function signOut(options: CallOptions): Promise<ApiResult<true>> {
