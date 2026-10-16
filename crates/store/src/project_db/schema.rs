@@ -555,4 +555,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   pull_request_syncs::MIGRATION,
   worktree_not_created::MIGRATION,
   shared_members::MIGRATION,
+  shared_members::READ_AS_MIGRATION,
 ];

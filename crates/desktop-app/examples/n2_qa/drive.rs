@@ -1,9 +1,8 @@
 //! The example's own presses before the window shows, where a state follows a person's press in the app: *Link to
 //! this project…* with the project's address typed (`upload`, `download`, `review`, `link-foreign`), then *Link and
-//! upload* after a task was added (`upload-changed`); an edit saved over a newer version (`conflict`); *Write
-//! orchester.toml* (`no-server`, `discovery-foreign`); and *Make local* confirmed as the server goes away
-//! (`made-local-stale`). These are the example's input, not an MCP client's, except the one press made as an MCP
-//! client's would be (`upload-person-only`); no app code path was added for them.
+//! upload* after a task was added (`upload-changed`); an edit saved over a newer version (`conflict`); and *Make local*
+//! confirmed as the server goes away (`made-local-stale`). These are the example's input, not an MCP client's, except
+//! the one press made as an MCP client's would be (`upload-person-only`); no app code path was added for them.
 
 use std::{
   error::Error,
@@ -48,11 +47,7 @@ pub fn before_showing(app: &mut App, tree: &mut Tree, (state, seeded): (State, &
       with_synthetic_input(|| press(app, tree, "sharing-upload-discovery-switch"))?;
       until(app, tree, "sharing-upload-discovery-switch-person-only")
     }
-    State::NoServer | State::DiscoveryForeign => {
-      until(app, tree, "sharing-discovery-write")?;
-      press(app, tree, "sharing-discovery-write")?;
-      until(app, tree, "sharing-discovery-error")
-    }
+    State::NoServer | State::DiscoveryForeign => until(app, tree, "sharing-discovery-unavailable"),
     State::MadeLocalStale => {
       until(app, tree, "sharing-make-local-confirm")?;
       seeded.port.down();

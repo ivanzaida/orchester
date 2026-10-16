@@ -8,7 +8,7 @@
 //! an empty one can end in the key cap of the shortcut that reaches it (`Kbd` in `nsdST`).
 //! It types each key once: the input writes into the value itself. A locked field shows its value in
 //! `text_secondary` on `surface_panel` and takes no input or focus (`Bzakf` in New task · queued
-//! `H8GYVZ`).
+//! `H8GYVZ`); a cut one ends in an ellipsis where it is longer than the box.
 
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ use lurq::{
     events::{TextInputEvent, mouse_event::MouseEvent},
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, Text, TextInput},
+  components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
@@ -78,6 +78,8 @@ pub struct FieldInput {
   /// The `border_strong` stroke at rest, where a design draws the field so.
   strong: bool,
   locked: bool,
+  /// A locked value shown as a text that ends in an ellipsis where the box is narrower.
+  cut: bool,
   /// A 14 `text_muted` glyph at the box's end, e.g. the lock of a locked select (`H8GYVZ`).
   trailing: Option<Icon>,
   /// The value is not accepted, and something else says why: only the stroke turns `danger`.
@@ -114,6 +116,7 @@ impl PartialEq for FieldInput {
       && self.box_height == other.box_height
       && self.strong == other.strong
       && self.locked == other.locked
+      && self.cut == other.cut
       && self.trailing == other.trailing
       && self.invalid == other.invalid
       && self.masked == other.masked
@@ -146,6 +149,7 @@ impl FieldInput {
       box_height: ControlHeight::Md.value(),
       strong: false,
       locked: false,
+      cut: false,
       trailing: None,
       invalid: false,
       masked: false,
@@ -279,6 +283,14 @@ impl FieldInput {
     self
   }
 
+  /// Locked, and a value longer than the box ends in an ellipsis instead of running past it (a project's address in
+  /// `L5o9Xy`): the value is a text then, not an input.
+  pub fn cut(mut self) -> Self {
+    self.locked = true;
+    self.cut = true;
+    self
+  }
+
   /// A glyph at the box's end.
   pub fn trailing(mut self, glyph: Icon) -> Self {
     self.trailing = Some(glyph);
@@ -338,7 +350,11 @@ impl Component for FieldBox {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<FieldInput>().clone();
-    let input = self.input(ctx, &props);
+    let input: Element = if props.cut && props.lines == Lines::One {
+      cut_value(&props).into()
+    } else {
+      self.input(ctx, &props).into()
+    };
     let refused = props.error.is_some() || props.invalid;
     let stroke = if refused {
       PaletteColor::Danger
@@ -496,6 +512,30 @@ impl FieldBox {
         )),
     }
   }
+}
+
+/// A locked value as a text that ends in an ellipsis where the box is narrower, with the input's element id; the
+/// placeholder while it is empty.
+fn cut_value(props: &FieldInput) -> Text {
+  let value = props.value.get();
+  let style = props.text_style.unwrap_or(if props.mono {
+    TypographyStyle::Mono
+  } else {
+    TypographyStyle::Description
+  });
+  let (text, color) = match props.placeholder.as_deref().filter(|_| value.is_empty()) {
+    Some(placeholder) => (placeholder.to_owned(), PaletteColor::TextMuted),
+    None => (value, PaletteColor::TextSecondary),
+  };
+  Text::new(&text)
+    .id(props.id.to_string())
+    .describe("a11y_name", props.name.clone())
+    .variant(style)
+    .color(color)
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .width(Dimension::Px(0.0))
+    .flex(1.0)
 }
 
 /// The cross that clears `props`' value, while it holds text and the field is clearable. A press clears the

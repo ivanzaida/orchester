@@ -917,6 +917,16 @@ team's network, `https://10.0.4.20:8740`). It holds several projects, each at it
 - **Leave** a project is in that project's Sharing and keeps the device connected.
 - **Discovery.** `orchester.toml` names the project's address (`project = "https://…/kontur"`, no secrets); the app
   prefills it when the person links the checkout, and contacts it only after the person confirms (row 11).
+- **An address only on the server that reported it.** The app keeps, writes into `orchester.toml` or opens in the
+  browser a project address the server reported only when it is on the address this computer connected to
+  (`ProjectAddress::reported`); anything else is `SharingError::ForeignAddress`, which names the address the server
+  gave itself. **Limitation:** a server configured with its own `address` names its projects there whatever address
+  a device reached it by, so a device connected by another one (a LAN address or a port forward while `address` is
+  the public name) cannot link, write the file or open the admin for its projects, and *Write orchester.toml* and
+  *Manage members and invites* say so with that address in advance: the person connects to the server by the address
+  it names itself by. A server without `address` names its projects at the host each request used, so this does not
+  arise. A link made before the check keeps syncing and leaves its address unrecorded; the sync notes that at debug
+  level, since it runs every minute.
 
 ### Orchester Cloud
 

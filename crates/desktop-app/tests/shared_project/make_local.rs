@@ -44,6 +44,20 @@ fn shared_project_make_local_keeps_every_task() {
   shows(&mut window, "sharing-made-local");
   shows(&mut window, "sharing-local");
   assert_eq!(local_keys(&window), ["KON-1", "KON-2", "KON-3"]);
+  // A notice, as after joining (`YdKuq`): Dismiss at its end, beside what it says.
+  let bounds = |window: &mut crate::support::Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (text, dismiss) = (
+    bounds(&mut window, "sharing-made-local-text"),
+    bounds(&mut window, "sharing-made-local-dismiss"),
+  );
+  assert!(dismiss.x >= text.x + text.width, "Dismiss is on the right");
+  assert!(dismiss.y < text.y + text.height, "beside the text, not under it");
   assert_eq!(server.task_keys(&kontur).len(), 3, "the server project is unchanged");
   press(&mut window, "sharing-made-local-dismiss");
   window.until("the notice put away", |window| {

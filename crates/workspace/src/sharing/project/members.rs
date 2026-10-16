@@ -30,6 +30,8 @@ pub struct ProjectMembers {
   pub members: Vec<SharedMember>,
   pub read_at: Timestamp,
   pub read: MembersRead,
+  /// The person among them, as this computer was signed in when it read them: still known once it signed out.
+  pub me: Option<UserId>,
 }
 
 /// Whether the members were read from the server now, and why not.
@@ -88,12 +90,13 @@ impl ProjectServer {
         let mut members: Vec<SharedMember> = members.into_iter().map(shared_member).collect();
         // Owners first, then by when they were added, as the cache keeps them.
         members.sort_by_key(|member| (member.role != MemberRole::Owner, member.added_at));
-        let (kept, read_at) = (members.clone(), Timestamp::now());
-        background::run(move || ProjectDb::open(&root)?.record_shared_members(&kept, read_at)).await??;
+        let (kept, read_at, me) = (members.clone(), Timestamp::now(), self.me());
+        background::run(move || ProjectDb::open(&root)?.record_shared_members(&kept, read_at, me)).await??;
         return Ok(ProjectMembers {
           members,
           read_at,
           read: MembersRead::Live,
+          me,
         });
       }
       Err(error) => error,
@@ -177,8 +180,18 @@ fn as_last_read(error: &SharingError) -> Option<MembersRead> {
 /// The members of the project at `root` as last read, `read` for why; `None` when they never were.
 async fn last_read(root: &Path, read: MembersRead) -> Result<Option<ProjectMembers>, SharingError> {
   let root = root.to_owned();
-  let cached = background::run(move || ProjectDb::open(&root)?.shared_members()).await??;
-  Ok(cached.map(|(read_at, members)| ProjectMembers { members, read_at, read }))
+  let cached = background::run(move || {
+    let db = ProjectDb::open(&root)?;
+    let me = db.members_read_as()?;
+    Ok::<_, StoreError>(db.shared_members()?.map(|read| (read, me)))
+  })
+  .await??;
+  Ok(cached.map(|((read_at, members), me)| ProjectMembers {
+    members,
+    read_at,
+    read,
+    me,
+  }))
 }
 
 fn shared_member(member: Member) -> SharedMember {
