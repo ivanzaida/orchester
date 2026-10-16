@@ -1,21 +1,17 @@
 //! `GET /admin/projects`: the projects the server admin's caller manages.
 
-use axum::{Json, extract::State, http::HeaderMap};
+use axum::{Json, extract::State};
 use orchester_api::{ManagedProjectResponse, ManagedProjects};
 use orchester_core::id::ProjectId;
 
-use super::{
-  base_address,
-  extract::{Auth, Id},
-};
+use super::extract::{Auth, Base, Id};
 use crate::{Server, db, error::ServerError, sharing::managed};
 
 pub(super) async fn list(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
 ) -> Result<Json<ManagedProjects>, ServerError> {
-  let base = base_address(&server, &headers);
   let projects = server
     .snapshot(move |db, now| {
       let current = db::checked(db, &auth, now, false)?;
@@ -28,10 +24,9 @@ pub(super) async fn list(
 pub(super) async fn show(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   Id(project): Id<ProjectId>,
 ) -> Result<Json<ManagedProjectResponse>, ServerError> {
-  let base = base_address(&server, &headers);
   let project = server
     .snapshot(move |db, now| {
       let current = db::checked(db, &auth, now, false)?;

@@ -1,25 +1,21 @@
 use axum::{
   Json,
   extract::{Query, State},
-  http::{HeaderMap, StatusCode},
+  http::StatusCode,
 };
 use orchester_api::{ErrorCode, InviteCreate, InviteCreated, InviteRevoked, Invites};
 use orchester_core::id::{InviteId, ProjectId};
 use serde::Deserialize;
 
-use super::{
-  base_address,
-  extract::{Auth, Id, SafeJson},
-};
+use super::extract::{Auth, Base, Id, SafeJson};
 use crate::{Server, db, error::ServerError, invites};
 
 pub(super) async fn create(
   State(server): State<Server>,
   Auth(auth): Auth,
-  headers: HeaderMap,
+  Base(base): Base,
   SafeJson(input): SafeJson<InviteCreate>,
 ) -> Result<(StatusCode, Json<InviteCreated>), ServerError> {
-  let base = base_address(&server, &headers);
   let state = server.inner.clone();
   let created = server
     .account_write(move |db, now| {

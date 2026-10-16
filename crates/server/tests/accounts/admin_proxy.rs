@@ -126,7 +126,10 @@ async fn sa_the_admin_api_listener_takes_the_browsers_address_and_host_from_the_
     .as_str()
     .expect("address")
     .to_owned();
-  assert_eq!(address, "http://orchester.example.test/kontur");
+  assert_eq!(
+    address, "https://orchester.example.test/kontur",
+    "the scheme the server's proxy told the admin (security review 1, M1)"
+  );
   for _ in 0..10 {
     let wrong = json!({"code": "ZZZZ-ZZZZ", "device": "browser", "kind": "admin_web"});
     let response = admin_api(api, "POST", "/auth/code", None, Some(wrong), &headers).await;
@@ -237,4 +240,52 @@ async fn sa_connection_named_and_proxy_headers_from_the_client_are_dropped() {
   }
   assert!(head.contains("x-kept: kept-value"), "{head}");
   server.finish().await;
+}
+
+/// Creates a project through the public listener with `headers` and answers its address.
+async fn project_address(
+  server: &TestServer,
+  token: &orchester_api::Credential,
+  slug: &str,
+  headers: &[(&str, &str)],
+) -> String {
+  let body = json!({"idempotency_key": orchester_core::id::IdempotencyKey::generate(), "name": slug, "slug": slug});
+  let created = server
+    .request_headers("POST", "/projects", Some(token), Some(body), headers)
+    .await;
+  assert_eq!(created.status, 201);
+  created.json::<serde_json::Value>()["project"]["address"]
+    .as_str()
+    .expect("address")
+    .to_owned()
+}
+
+/// Security review 1, M1, found behind Caddy: without `address`, a project's address carries the scheme a trusted
+/// proxy said the app or browser used, not the plain HTTP the proxy speaks to the server; nobody else can say it.
+#[tokio::test]
+async fn sa_behind_a_trusted_proxy_project_addresses_carry_the_browsers_scheme() {
+  let server = TestServer::start(|config| {
+    config.trusted_proxies = vec!["127.0.0.1".parse().expect("loopback")];
+  })
+  .await;
+  let admin = server.bootstrap().await;
+  let https = [("X-Forwarded-Proto", "https")];
+  assert_eq!(
+    project_address(&server, &admin.token, "kontur", &https).await,
+    "https://localhost/kontur"
+  );
+  let plain: [(&str, &str); 0] = [];
+  assert_eq!(
+    project_address(&server, &admin.token, "mobile", &plain).await,
+    "http://localhost/mobile"
+  );
+  server.finish().await;
+  let untrusted = TestServer::start(|_| {}).await;
+  let admin = untrusted.bootstrap().await;
+  assert_eq!(
+    project_address(&untrusted, &admin.token, "kontur", &https).await,
+    "http://localhost/kontur",
+    "a client that is not a trusted proxy cannot say it"
+  );
+  untrusted.finish().await;
 }

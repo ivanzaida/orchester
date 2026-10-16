@@ -9,6 +9,7 @@ mod internal;
 mod invites;
 mod managed;
 mod projects;
+mod scheme;
 mod settings;
 mod tasks;
 
@@ -37,6 +38,7 @@ pub(crate) fn router(server: Server) -> Router {
     .method_not_allowed_fallback(|| async { ServerError::from(ErrorCode::MethodNotAllowed) })
     .layer(middleware::from_fn(body_limit))
     .layer(middleware::from_fn_with_state(server.clone(), request_log))
+    .layer(middleware::from_fn_with_state(server.clone(), scheme::public))
     .with_state(server)
 }
 
@@ -49,7 +51,7 @@ pub(crate) fn internal_router(server: Server) -> Router {
     .method_not_allowed_fallback(|| async { ServerError::from(ErrorCode::MethodNotAllowed) })
     .layer(middleware::from_fn(body_limit))
     .layer(middleware::from_fn_with_state(server.clone(), request_log))
-    .layer(middleware::from_fn(internal::forwarded))
+    .layer(middleware::from_fn_with_state(server.clone(), internal::forwarded))
     .with_state(server)
 }
 
@@ -157,21 +159,6 @@ async fn info(State(server): State<Server>) -> Result<Json<ServerInfo>, ServerEr
     certificate: server.certificate(),
     version: env!("CARGO_PKG_VERSION").to_owned(),
   }))
-}
-
-/// The server's base address: the configured `address`, or the scheme this server serves and the `Host` the request
-/// was sent to. A project's address is this and its slug.
-pub(super) fn base_address(server: &Server, headers: &axum::http::HeaderMap) -> String {
-  if let Some(address) = &server.inner.config.address {
-    return address.clone();
-  }
-  let scheme = if server.inner.tls.is_some() { "https" } else { "http" };
-  let host = headers
-    .get(axum::http::header::HOST)
-    .and_then(|value| value.to_str().ok())
-    .filter(|host| !host.is_empty() && !host.contains(['/', '?', '#', '@']) && !host.contains(char::is_whitespace))
-    .unwrap_or("localhost");
-  format!("{scheme}://{host}")
 }
 
 async fn authenticated(State(server): State<Server>, mut request: Request, next: Next) -> Response {

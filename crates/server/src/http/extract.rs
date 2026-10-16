@@ -6,6 +6,7 @@ use axum::{
 use orchester_api::{Credential, ErrorCode};
 use serde::de::DeserializeOwned;
 
+use super::scheme::{self, Scheme};
 use crate::{Server, db::Authenticated, error::ServerError};
 
 pub(super) struct SafeJson<T>(pub T);
@@ -63,4 +64,19 @@ pub(super) fn bearer(headers: &HeaderMap) -> Result<Credential, ServerError> {
     return Err(ErrorCode::Unauthorized.into());
   }
   Ok(Credential::new(token.to_owned()))
+}
+
+/// The server's base address for this request ([`scheme::base_address`]), with the scheme the listener settled.
+pub(super) struct Base(pub String);
+
+impl FromRequestParts<Server> for Base {
+  type Rejection = ServerError;
+  async fn from_request_parts(parts: &mut Parts, state: &Server) -> Result<Self, Self::Rejection> {
+    let scheme = parts
+      .extensions
+      .get::<Scheme>()
+      .copied()
+      .unwrap_or_else(|| Scheme(scheme::configured(state)));
+    Ok(Self(scheme::base_address(state, scheme, &parts.headers)))
+  }
 }

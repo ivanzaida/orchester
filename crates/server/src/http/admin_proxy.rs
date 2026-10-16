@@ -4,7 +4,7 @@
 //! the browser used in `X-Forwarded-*` headers the server sets here, replacing any the client sent; the admin listens
 //! only on a private address, so it can trust them.
 
-use std::{net::IpAddr, time::Duration};
+use std::time::Duration;
 
 use axum::{
   body::Body,
@@ -59,39 +59,11 @@ pub(super) async fn forward(State(server): State<Server>, peer: ConnectInfo<Peer
   if path == "/" {
     return Redirect::to("/admin").into_response();
   }
-  let scheme = scheme(&server, peer.0.0.ip(), request.headers());
+  let scheme = super::scheme::of(&server, peer.0.0.ip(), request.headers());
   let client = address(&server, peer, request.headers());
   match send(&server.inner.config.admin_url, request, &client.to_string(), scheme).await {
     Ok(response) => response,
     Err(Unreachable) => not_running(),
-  }
-}
-
-/// The scheme the browser used: `https` when the server presents its own certificate. Behind a proxy that holds the
-/// certificate (`tls = "off"`), what a trusted proxy says in `X-Forwarded-Proto` (one value, `http` or `https`), else
-/// the scheme of the configured `address`, else `http`. A client that is not a trusted proxy cannot say it.
-fn scheme(server: &Server, peer: IpAddr, headers: &HeaderMap) -> &'static str {
-  if server.inner.tls.is_some() {
-    return "https";
-  }
-  let config = &server.inner.config;
-  let trusted = config.trusted_proxies.iter().any(|proxy| proxy.contains(peer));
-  let mut said = headers.get_all("x-forwarded-proto").iter();
-  let forwarded = match (said.next(), said.next()) {
-    (Some(value), None) if trusted => value.to_str().ok().map(str::trim),
-    _ => None,
-  };
-  match forwarded {
-    Some(value) if value.eq_ignore_ascii_case("https") => "https",
-    Some(value) if value.eq_ignore_ascii_case("http") => "http",
-    _ if config
-      .address
-      .as_deref()
-      .is_some_and(|address| address.starts_with("https://")) =>
-    {
-      "https"
-    }
-    _ => "http",
   }
 }
 
