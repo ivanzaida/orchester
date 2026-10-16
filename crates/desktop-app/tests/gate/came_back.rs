@@ -1,10 +1,32 @@
 //! Signed in: the app stays open while the cloud cannot be reached (`ZSB6h`); the gate comes back with the cloud's
 //! reason (`obc19`, `ztigw`) and after *Sign out and lock* (`p2VeL`, `mnT1S`).
 
-use orchester_app::routes::{OrchesterView, Route};
+use std::time::{Duration, Instant};
+
+use orchester_app::{
+  routes::{OrchesterView, Route},
+  ui::tooltip::TOOLTIP_DELAY,
+};
 
 use super::{BEHIND_THE_GATE, gone, has, shows, signed_in, support::Window, value};
 use crate::support::signed_in::account_cloud::EMAIL;
+
+/// Rests the pointer on the middle of `id`.
+fn rest_on(window: &mut Window, id: &str) {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  window
+    .tree
+    .mouse_move(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+  window.pass();
+  window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  window.pass();
+}
 
 /// Asks the cloud whether the sign-in holds, as the app does when it can reach it.
 fn check(window: &mut Window) {
@@ -24,6 +46,14 @@ fn gate_stays_open_offline_and_the_status_bar_says_so() {
   shows(&mut window, "status-cloud");
   assert_eq!(window.text("status-cloud-text"), "Orchester Cloud · offline");
   assert!(has(&mut window, "content"), "offline-first: nothing locks");
+  rest_on(&mut window, "status-cloud");
+  shows(&mut window, "status-cloud-card");
+  assert_eq!(window.text("status-cloud-card-hint"), "Click for Settings › Orchester.");
+  let state = window.text("status-cloud-card-state");
+  assert!(
+    state.starts_with("Offline since ") && state.ends_with(&format!(" · signed in as {EMAIL}")),
+    "{state}"
+  );
   window.press("status-cloud");
   shows(&mut window, "orchester-cloud-details");
 

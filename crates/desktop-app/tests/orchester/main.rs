@@ -17,7 +17,6 @@ mod server_support;
 #[path = "../support/mod.rs"]
 mod support;
 
-use support::signed_in::account_cloud::{self, AccountCloud, EMAIL, PASSWORD};
 use harness::{Recorder, administrative, block_on, go, press, shows, window};
 use orchester_api::{
   CodeJoin, Credential,
@@ -27,6 +26,7 @@ use orchester_app::routes::{OrchesterView, ProjectPage, Route};
 use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{CodeRequest, Trust, cloud::BUILD_ADDRESS};
 use server_support::TestServer;
+use support::signed_in::account_cloud::{self, AccountCloud, EMAIL, PASSWORD};
 
 const KONTUR_REMOTE: &str = "https://github.com/acme/kontur.git";
 const BILLING_REMOTE: &str = "https://github.com/acme/billing.git";

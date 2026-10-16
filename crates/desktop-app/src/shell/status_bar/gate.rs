@@ -8,11 +8,11 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{Breakpoint, PaletteColor, SpacingSize},
+    theme::{Breakpoint, PaletteColor, RadiusSize, SpacingSize},
   },
   components::Row,
   layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::time::Timestamp;
 use orchester_workspace::display;
@@ -24,6 +24,7 @@ use super::{
 };
 use crate::{
   mcp::{McpKind, McpLink, McpStatus, ServerState, address},
+  theme::ExtraColor,
   ui::{
     hover_card::{CardWords, hover_card},
     icon::Icon,
@@ -76,7 +77,10 @@ fn refusing(ctx: &mut Ctx, status: &McpStatus, (since, narrow): (Timestamp, bool
       .t_args("shell.status.mcpLockedDevelopment", [("port", port.to_string())])
       .to_string(),
   };
+  // The `hover` fill while the pointer rests on it, as the shell's items take (`UaaqE`).
   let anchor = item("status-mcp")
+    .rounded(RadiusSize::Md)
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .describe("state", "sign-in-required")
     .child(glyph(Icon::Lock, PaletteColor::Warning))
     .child(label(&words, PaletteColor::Warning).id("status-mcp-text"));

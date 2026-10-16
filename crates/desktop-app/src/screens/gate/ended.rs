@@ -67,7 +67,11 @@ pub(super) fn head(ctx: &Ctx, came_back: bool) -> Element {
 }
 
 fn eyebrow(text: &str) -> Text {
-  Text::new(text).id("gate-eyebrow").variant(GateText::Eyebrow.role())
+  // lurq measures a line without its tracking, so the tracked line keeps to one line itself.
+  Text::new(text)
+    .id("gate-eyebrow")
+    .variant(GateText::Eyebrow.role())
+    .nowrap()
 }
 
 fn title(text: &str) -> Text {

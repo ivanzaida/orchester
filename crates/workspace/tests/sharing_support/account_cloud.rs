@@ -64,6 +64,12 @@ pub struct AccountCloud {
 
 impl AccountCloud {
   pub fn start() -> Self {
+    Self::start_on(0)
+  }
+
+  /// [`Self::start`] on loopback port `port`, `0` for one the system picks: a QA build that names the stand-in as its
+  /// own cloud (`ORCHESTER_CLOUD_URL`) finds it there.
+  pub fn start_on(port: u16) -> Self {
     let root = RootKey::new(&PrivateKey::generate().expect("root")).expect("root key");
     let signing = Arc::new(SigningKey::new(&PrivateKey::generate().expect("key")).expect("signing key"));
     let now = now();
@@ -76,7 +82,7 @@ impl AccountCloud {
     };
     let statement = KeySetStatement::new("https://cloud.test".into(), vec![listed], now);
     let key_set = root.sign_key_set(&statement, now).expect("key set");
-    let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
+    let listener = TcpListener::bind(("127.0.0.1", port)).expect("listen");
     let address = listener.local_addr().expect("address");
     let state = Arc::new(Mutex::new(State::default()));
     let serving = (state.clone(), key_set.clone());

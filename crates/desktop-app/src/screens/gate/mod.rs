@@ -104,12 +104,22 @@ impl Component for SignInGate {
       });
     let main = Column::new()
       .width(Dimension::Pct(100.0))
-      .min_height(Dimension::Pct(100.0))
       .padding(Padding::symmetric(GateSpacing::Side.role(), SpacingSize::Section))
       .align_items(Alignment::Center)
-      .justify(Justify::Center)
       .child(column);
-    let content = ScrollVertical::new(main).id("gate-scroll").flex(1.0).into();
+    // As high as the gate when it fits, centered in the panel; scrolled in a window too low for it.
+    let content = Column::new()
+      .width(Dimension::Pct(100.0))
+      .flex(1.0)
+      .min_height(Dimension::Px(0.0))
+      .justify(Justify::Center)
+      .child(
+        ScrollVertical::new(main)
+          .id("gate-scroll")
+          .width(Dimension::Pct(100.0))
+          .max_height(Dimension::Pct(100.0)),
+      )
+      .into();
     panel(content, Some(footer(ctx, ended.is_some(), &address)))
   }
 }
