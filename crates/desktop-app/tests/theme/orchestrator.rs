@@ -68,12 +68,31 @@ fn orchestrator_link_roles_follow_the_link_states() {
     (Some(Color::from_hex("#EDEDF0")), Some(4.0)),
     "a link's tooltip as the kit's, on `text_primary`"
   );
-  let looks = ChatLinkLooks::of(theme);
+}
+
+#[test]
+fn orchestrator_chat_link_looks_follow_the_link_states() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let looks = ChatLinkLooks::of(theme, &theme.typography_style(TypographyStyle::Body));
   let underline = looks.link.text.underline.expect("a reply's link is underlined");
   assert_eq!(
     (underline.color, underline.thickness),
     (Some(Color::from_hex("#8A8A92")), Some(1.0)),
     "a 1 `text_muted` underline"
+  );
+  let body = theme.typography_style(TypographyStyle::Body);
+  let box_below_baseline = (body.line_height - 1.3) / 2.0 * body.font_size + 0.295 * body.font_size;
+  assert!(
+    underline
+      .offset
+      .is_some_and(|offset| (offset + 1.0 - box_below_baseline).abs() < 0.001),
+    "the underline ends where the line box, and a hovered link's fill, ends: {underline:?}"
+  );
+  assert_eq!(
+    looks.focused.underline_color,
+    Some(Color::from_hex("#00000000")),
+    "with keyboard focus the ring stands for the underline"
   );
   assert_eq!(
     (

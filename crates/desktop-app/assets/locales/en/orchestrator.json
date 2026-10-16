@@ -6,9 +6,7 @@
     "date": "{{month}} {{day}}",
     "answerMeta": "{{model}} · {{time}}",
     "link": {
-      "addressNote": "({{address}})",
       "opensHere": "{{place}} · opens in this tab",
-      "opensBrowser": "Opens {{url}} in your browser",
       "inProject": "{{project}} › {{page}}",
       "taskTab": "{{key}} › {{tab}}"
     },

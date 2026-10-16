@@ -1,6 +1,7 @@
 //! Text an agent or a person wrote, read as Markdown (lurq's Markdown with `theme::markdown`): by default
 //! in a chat message's 13/1.5 `text_primary` (`D8JGX4` in `Agent message` `dcd0m`). It is selectable,
-//! and what a link press does is the screen's: the kit never opens anything by itself. It is laid out
+//! and what a link press does is the screen's: the kit never opens anything by itself. Its links are shown as the
+//! chat shows them (`ui::chat::presentation`): a web page with its host, anything not followed as text. It is laid out
 //! again only when what it shows changes; the link handler counts by identity, so a screen keeps it in
 //! its state rather than making a new one on every render. What it reads as once rendered, as plain text, is
 //! [`plain`]'s.
@@ -17,6 +18,11 @@ use lurq::{
   },
   components::{Markdown, MarkdownLink, MarkdownProps},
   node::{Element, dimension::Dimension},
+};
+
+use crate::{
+  theme::ChatLinkLooks,
+  ui::chat::presentation::{LinkWords, presentation},
 };
 
 /// What a press on a link does with its destination.
@@ -87,11 +93,20 @@ impl Component for MarkdownHost {
       }
       .resolve(&theme.typography(), &theme.palette())
     };
+    let looks = ChatLinkLooks::of(ctx.theme(), &style);
+    let i18n = ctx.i18n().clone();
     let on_link = view.on_link;
     let props = MarkdownProps::styled(view.text, style)
       .width(Dimension::Pct(100.0))
       .selectable(true)
-      .on_link_click(move |link: &MarkdownLink| on_link(link.destination()));
+      .on_link_click(move |link: &MarkdownLink| on_link(link.destination()))
+      .link_presentation(move |link: &MarkdownLink| {
+        let words = LinkWords {
+          i18n: &i18n,
+          place: &|_| None,
+        };
+        presentation(link.destination(), link.text(), &looks, &words)
+      });
     Markdown::mount(ctx, props).id(view.id.to_string())
   }
 }

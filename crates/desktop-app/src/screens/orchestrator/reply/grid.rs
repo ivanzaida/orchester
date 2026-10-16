@@ -24,6 +24,7 @@ const LINK_ORDER: i32 = 1;
 pub(super) fn grid(list: &MarkdownList<'_>) -> Option<Element> {
   let rows = labelled_links(list.items())?;
   let grid = Column::new()
+    .overflow_visible()
     .class("orchestrator-link-grid")
     .width(Dimension::Pct(100.0))
     .padding(
@@ -40,12 +41,16 @@ pub(super) fn grid(list: &MarkdownList<'_>) -> Option<Element> {
 /// design draws it. Both are as wide as their words, the detail taking the rest of the row after the link; when they
 /// do not fit the row, the detail wraps first, then the link.
 fn grid_row(list: &MarkdownList<'_>, row: &LabelledLink<'_>) -> Element {
+  // The focused link's ring reaches past the cell and the row: neither clips it, as the paragraph's own containers
+  // do not (`Mjhop` in `agv8r`).
   let link = Row::new()
+    .overflow_visible()
     .flex_shrink(1.0)
     .shrink_order(LINK_ORDER)
     .min_width(Dimension::Px(0.0))
     .child(list.inlines(std::slice::from_ref(row.link), list.style()));
   let mut line = Row::new()
+    .overflow_visible()
     .width(Dimension::Pct(100.0))
     .spacing(OrchestratorSpacing::LinkColumns.role())
     .align_items(Alignment::Center)

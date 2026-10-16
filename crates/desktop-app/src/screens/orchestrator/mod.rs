@@ -112,7 +112,7 @@ impl Component for OrchestratorScreen {
       input: ElementRef::new(),
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
-      links: chat::links::handler(Navigation::of(ctx)),
+      links: chat::links(ctx),
     };
     let project = ctx.props::<Props>().project.open.project.id();
     let navigation = Navigation::of(ctx);

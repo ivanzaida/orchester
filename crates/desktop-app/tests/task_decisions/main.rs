@@ -10,6 +10,7 @@ mod accounts;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
+mod links;
 mod merge;
 #[path = "../support/mod.rs"]
 mod support;

@@ -13,7 +13,7 @@ use std::{
 
 use lurq::{
   app::events::{MouseButton, ScrollPhase, with_synthetic_input},
-  layout::quad::{QuadContent, RichTextSpan},
+  layout::quad::{Quad, QuadContent, RichTextSpan},
   node::color::Color,
 };
 use orchester_app::{
@@ -35,6 +35,9 @@ const PULL_REQUEST: &str = "https://github.com/acme/kontur/pull/42";
 const MUTED: &str = "#8A8A92";
 const SECONDARY: &str = "#B3B3BA";
 const FOCUS: &str = "#A3A3AB";
+/// `hover` and `accent_hover` in the dark mode.
+const HOVER: &str = "#FFFFFF0F";
+const ACCENT_HOVER: &str = "#FFFFFF";
 
 /// The middle of the first line of the element whose text is `label`: a link's words.
 fn center_of(screen: &mut Orchestrator, label: &str) -> (f32, f32) {
@@ -109,6 +112,102 @@ fn span<'a>(spans: &'a [RichTextSpan], text: &str) -> &'a RichTextSpan {
   })
 }
 
+/// The bounds of the first line of the link whose words are `label`.
+fn bounds_of(screen: &mut Orchestrator, label: &str) -> lurq::core::ElementRect {
+  screen
+    .window
+    .tree
+    .find_element(|element| element.text_content() == Some(label))
+    .unwrap_or_else(|| panic!("{label} is a link's words"))
+    .bounds()
+}
+
+/// The filled rectangles in `color`, at most `height` high, drawn over `link`'s width: (x, y, width, height).
+fn rects_over(
+  screen: &mut Orchestrator,
+  link: lurq::core::ElementRect,
+  color: &str,
+  height: f32,
+) -> Vec<(f32, f32, f32, f32)> {
+  screen.window.pass();
+  let tree = &screen.window.tree;
+  tree
+    .resolve_quads(tree.last_layout().expect("a layout"))
+    .into_iter()
+    .filter(|quad| matches!(quad.content, QuadContent::Rect { color: drawn, .. } if drawn == Color::from_hex(color)))
+    .filter(|quad| quad.height <= height && quad.x >= link.x - 1.0 && quad.x + quad.width <= link.x + link.width + 1.0)
+    .filter(|quad| quad.y + quad.height >= link.y && quad.y <= link.y + link.height + 4.0)
+    .map(|quad| (quad.x, quad.y, quad.width, quad.height))
+    .collect()
+}
+
+/// Puts the focus in the message field.
+fn focus_message_field(screen: &mut Orchestrator) {
+  screen
+    .window
+    .tree
+    .get_element_by_id_mut("orchestrator-input")
+    .expect("the message field")
+    .focus();
+  screen.window.pass();
+}
+
+/// Presses Shift+Tab; the words of what has the focus then.
+fn shift_tab(screen: &mut Orchestrator) -> Option<String> {
+  screen
+    .window
+    .tree
+    .key_down("Tab".to_owned(), "Tab".to_owned(), true, false, false);
+  screen
+    .window
+    .tree
+    .key_up("Tab".to_owned(), "Tab".to_owned(), true, false, false);
+  screen.window.pass();
+  screen
+    .window
+    .tree
+    .focused_element()
+    .and_then(|element| element.text_content().map(str::to_owned))
+}
+
+/// The 2 px `border_focus` rings the window draws.
+fn rings(screen: &mut Orchestrator) -> Vec<Quad> {
+  screen.window.pass();
+  let tree = &screen.window.tree;
+  tree
+    .resolve_quads(tree.last_layout().expect("a layout"))
+    .into_iter()
+    .filter(|quad| {
+      quad
+        .border
+        .and_then(|border| border.top)
+        .is_some_and(|top| top.color == Color::from_hex(FOCUS) && top.width == 2.0)
+    })
+    .collect()
+}
+
+/// Under the pointer the link `label`'s fill ends at its underline, a 1 px `accent_hover` line (`K52XFs`).
+fn assert_hover_ends_at_the_underline(screen: &mut Orchestrator, label: &str) {
+  let link = bounds_of(screen, label);
+  screen
+    .window
+    .tree
+    .mouse_move(link.x + link.width / 2.0, link.y + link.height / 2.0);
+  screen.window.pass();
+  let fill = rects_over(screen, link, HOVER, f32::MAX);
+  let line = rects_over(screen, link, ACCENT_HOVER, 2.0);
+  let (Some(fill), Some(line)) = (fill.first(), line.first()) else {
+    panic!("a hover fill and underline under the link: {fill:?} {line:?}");
+  };
+  assert_eq!(line.3, 1.0, "a 1 px underline");
+  assert!(
+    ((line.1 + line.3) - (fill.1 + fill.3)).abs() < 0.51,
+    "the fill ends at the underline: fill {fill:?}, underline {line:?}"
+  );
+  screen.window.tree.mouse_move(0.0, 0.0);
+  screen.window.pass();
+}
+
 /// Back to the conversation, its reply shown.
 fn back_to_the_chat(screen: &mut Orchestrator) {
   screen.window.navigation().back();
@@ -134,8 +233,8 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
   screen.go(OrchestratorChat::New);
   screen.send(&format!(
     "Look at [the tasks](orchester:{tasks}), [its settings](orchester:{settings}), [PR 42]({PULL_REQUEST}), \
-     [KON-99](orchester:/project/{project}/nowhere), [add it](orchester:/add-project?folder=x) and \
-     [mail](mailto:team@example.com)."
+     [KON-99](orchester:/project/{project}/nowhere), [ ](https://evil.example/empty), \
+     [add it](orchester:/add-project?folder=x) and [mail](mailto:team@example.com)."
   ));
   answer(&mut screen, "Noted: Look at");
   let drawn = spans(&mut screen);
@@ -162,6 +261,11 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
   for text in ["KON-99", "add it", "mail"] {
     assert!(!is_shown_on_its_own(&mut screen, text), "{text} is no link");
   }
+  assert!(
+    !drawn.iter().any(|span| span.text == "evil.example")
+      && drawn.iter().any(|span| span.text == "https://evil.example/empty"),
+    "a link to the web with no words is its address as text, with no host of its own"
+  );
 
   press_text(&mut screen, "the tasks");
   assert_eq!(
@@ -198,7 +302,7 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
   let list = screen.bounds("orchestrator-conversation");
   let (x, y) = (list.x + list.width / 2.0, list.y + list.height / 2.0);
   screen.window.tree.mouse_move(x, y);
-  screen.window.tree.scroll(x, y, 0.0, 5000.0, ScrollPhase::Scroll);
+  screen.window.tree.scroll(x, y, 0.0, -5000.0, ScrollPhase::Scroll);
   screen.window.pass();
   screen.window.pass();
   let drawn = spans(&mut screen);
@@ -243,38 +347,24 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
   ));
 
   // From the message field back through the links, last first, as Shift+Tab goes; the focused one has the ring.
-  screen
-    .window
-    .tree
-    .get_element_by_id_mut("orchestrator-input")
-    .expect("the message field")
-    .focus();
-  screen.window.pass();
+  focus_message_field(&mut screen);
   for words in ["PR 42", "ATL-9 import", "KON-1 notes"] {
-    screen
-      .window
-      .tree
-      .key_down("Tab".to_owned(), "Tab".to_owned(), true, false, false);
-    screen
-      .window
-      .tree
-      .key_up("Tab".to_owned(), "Tab".to_owned(), true, false, false);
-    screen.window.pass();
-    let focused = screen
-      .window
-      .tree
-      .focused_element()
-      .and_then(|element| element.text_content().map(str::to_owned));
-    assert_eq!(focused.as_deref(), Some(words), "Shift+Tab reaches each link");
+    assert_eq!(
+      shift_tab(&mut screen).as_deref(),
+      Some(words),
+      "Shift+Tab reaches each link"
+    );
   }
-  let tree = &screen.window.tree;
-  let rings = tree
-    .resolve_quads(tree.last_layout().expect("a layout"))
-    .into_iter()
-    .filter_map(|quad| quad.border.and_then(|border| border.top))
-    .filter(|top| top.color == Color::from_hex(FOCUS) && top.width == 2.0)
-    .count();
-  assert!(rings > 0, "the focused link shows a 2 px `border_focus` ring");
+  assert!(
+    !rings(&mut screen).is_empty(),
+    "the focused link shows a 2 px `border_focus` ring"
+  );
+  let focused = bounds_of(&mut screen, "KON-1 notes");
+  assert!(
+    rects_over(&mut screen, focused, MUTED, 2.0).is_empty(),
+    "inside the ring the link has no underline"
+  );
+  assert_hover_ends_at_the_underline(&mut screen, "ATL-9 import");
   screen.key(("Enter", "Enter"), false);
   assert_eq!(
     screen.route(),
@@ -312,32 +402,36 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
     (12.5, Color::from_hex(SECONDARY)),
     "a detail in 12.5 `text_secondary`"
   );
-  let link = screen
-    .window
-    .tree
-    .find_element(|element| element.text_content() == Some("KON-1 · Delivery log"))
-    .expect("the grid's link")
-    .bounds();
-  let after = screen
-    .window
-    .tree
-    .find_element(|element| element.text_content() == Some("ready for review"))
-    .expect("the grid's detail")
-    .bounds();
+  let link = bounds_of(&mut screen, "KON-1 · Delivery log");
+  let after = bounds_of(&mut screen, "ready for review");
   let gap = after.x - (link.x + link.width);
   assert!(
     (10.0..=14.0).contains(&gap),
     "the detail follows the link's words, 12 after them: {gap}"
   );
   // A link the chat does not follow, its long address after its words, leaves its detail room.
-  let long = screen
-    .window
-    .tree
-    .find_element(|element| element.text_content() == Some("6.1M tokens over 3 runs"))
-    .expect("the usage row's detail")
-    .bounds();
+  let long = bounds_of(&mut screen, "6.1M tokens over 3 runs");
   assert!(
     long.width > 100.0 && long.height < 80.0,
     "the detail keeps room beside a long address: {long:?}"
   );
+  // Shift+Tab from the message field: the plain list's KON-2, then the grid's #42, whose ring nothing clips.
+  focus_message_field(&mut screen);
+  shift_tab(&mut screen);
+  assert_eq!(shift_tab(&mut screen).as_deref(), Some("#42 Delivery log"));
+  let rings = rings(&mut screen);
+  assert!(!rings.is_empty(), "the focused grid link shows its ring");
+  for ring in rings {
+    let clip = ring.clip;
+    assert!(
+      !clip.active
+        || (clip.x <= ring.x
+          && clip.y <= ring.y
+          && ring.x + ring.width <= clip.x + clip.width
+          && ring.y + ring.height <= clip.y + clip.height),
+      "the ring {:?} lies inside its clip {:?}",
+      (ring.x, ring.y, ring.width, ring.height),
+      (clip.x, clip.y, clip.width, clip.height)
+    );
+  }
 }

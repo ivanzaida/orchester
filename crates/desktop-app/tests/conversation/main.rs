@@ -13,6 +13,7 @@ mod jump;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod links;
 mod long;
 mod states;
 #[path = "../support/mod.rs"]

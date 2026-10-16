@@ -65,7 +65,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard) -> Ele
     .child(Spacer::new().flex(1.0))
     .child(Text::new(&step).variant(ExtraTypography::Note.role()).nowrap());
   let report = card.reported.as_ref().map(|reported| {
-    MarkdownView::new(format!("{id}-report"), reported.clone(), super::message::links())
+    MarkdownView::new(format!("{id}-report"), reported.clone(), super::message::links(ctx))
       .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
       .render(ctx)
   });

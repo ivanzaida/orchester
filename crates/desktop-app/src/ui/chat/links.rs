@@ -3,12 +3,15 @@
 //! host after it and a person's press opens it in the default browser; synthetic input (an MCP client driving the
 //! window) may follow a link in the app but never opens the browser. A link to anything else, to a route the app
 //! does not know, or to a place outside a project (Add project, Settings: what an agent may never open for the
-//! person) is shown as text with its address and cannot be pressed. How a reply draws each kind is
-//! `screens::orchestrator::reply`'s, through lurq's Markdown link presentation.
+//! person) is shown as text with its address and cannot be pressed. How every Markdown draws each kind is
+//! `presentation`'s; the window follows them with one handler, [`ChatLinks`].
 
 use std::sync::Arc;
 
-use lurq::app::events::is_synthetic_input;
+use lurq::{
+  app::{ctx::Ctx, events::is_synthetic_input},
+  markdown::strip_bidi_controls,
+};
 use orchester_exec::external;
 use url::Url;
 
@@ -22,8 +25,8 @@ const APP_SCHEME: &str = "orchester:";
 pub enum ChatLink {
   /// A place in a project of the app: every link the tools return is one.
   App(Route),
-  /// A page on the web, opened in the default browser.
-  Web(Url),
+  /// A page on the web, opened in the default browser, and its host as shown: without bidirectional controls.
+  Web { url: Url, host: String },
   /// Nothing the chat follows: another scheme, a route the app does not know, or one outside a project, such as
   /// Add project with a folder, which would read that folder.
   Text,
@@ -37,8 +40,14 @@ impl ChatLink {
         Ok(_) | Err(_) => Self::Text,
       };
     }
-    match Url::parse(destination) {
-      Ok(url) if url.scheme() == "https" && url.host_str().is_some() => Self::Web(url),
+    let Ok(url) = Url::parse(destination) else {
+      return Self::Text;
+    };
+    match url.host_str() {
+      Some(host) if url.scheme() == "https" => Self::Web {
+        host: strip_bidi_controls(host).into_owned(),
+        url,
+      },
       _ => Self::Text,
     }
   }
@@ -72,8 +81,8 @@ pub fn follow(navigation: &Navigation, destination: &str) -> Followed {
       navigation.go(route);
       Followed::Went
     }
-    ChatLink::Web(_) if is_synthetic_input() => Followed::NotOpened,
-    ChatLink::Web(url) => match external::open_url(url.as_str()) {
+    ChatLink::Web { .. } if is_synthetic_input() => Followed::NotOpened,
+    ChatLink::Web { url, .. } => match external::open_url(url.as_str()) {
       Ok(()) => Followed::Opened,
       Err(error) => Followed::Failed(error),
     },
@@ -92,4 +101,23 @@ pub fn handler(navigation: Navigation) -> LinkHandler {
     Followed::Failed(error) => tracing::warn!(%error, "the message's link was not opened"),
     Followed::NotALink => tracing::warn!("a press reached a link that is shown as text; nothing followed"),
   })
+}
+
+/// The window's link handler, which every Markdown of the window follows its links with: made once, so a message is
+/// laid out again only when what it says changes. The root provides it beside the navigation.
+#[derive(Clone)]
+pub struct ChatLinks(LinkHandler);
+
+impl ChatLinks {
+  pub fn new(navigation: Navigation) -> Self {
+    Self(handler(navigation))
+  }
+
+  /// The handler the window provides.
+  pub fn of(ctx: &mut Ctx) -> LinkHandler {
+    ctx
+      .use_context::<Self>()
+      .expect("the window provides its link handler beside the navigation")
+      .0
+  }
 }

@@ -8,8 +8,9 @@
 
 pub mod labelled;
 pub mod links;
+pub mod presentation;
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -21,7 +22,6 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::time::Timestamp;
-use orchester_exec::external;
 use orchester_workspace::display;
 
 use super::{
@@ -34,19 +34,10 @@ use crate::theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize};
 const AVATAR_SIZE: f32 = 24.0;
 const BUBBLE_WIDTH: f32 = 80.0;
 
-/// A press on a message's link opens it in the browser; one handler for every message, so a message is laid
-/// out again only when what it says changes.
-static OPEN_LINK: LazyLock<LinkHandler> = LazyLock::new(|| Arc::new(open_link));
-
-/// What a press on a link in a conversation does.
-pub fn links() -> LinkHandler {
-  OPEN_LINK.clone()
-}
-
-fn open_link(destination: &str) {
-  if let Err(error) = external::open_url(destination) {
-    tracing::warn!(%error, "the message's link was not opened");
-  }
+/// What a press on a link in a conversation does: the window's one handler ([`links::ChatLinks`]), which follows
+/// only places in a project and pages on the web, and never opens the browser for synthetic input.
+pub fn links(ctx: &mut Ctx) -> LinkHandler {
+  links::ChatLinks::of(ctx)
 }
 
 /// Who a row is from, as its avatar shows it: an agent of a run, a command tool that runs a step, or the
@@ -115,7 +106,8 @@ pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Ve
 
 /// What a message says, its Markdown rendered; `id` names it.
 pub fn text(ctx: &mut Ctx, id: &str, text: &Arc<str>) -> Element {
-  MarkdownView::new(id, text.clone(), links()).render(ctx)
+  let links = links(ctx);
+  MarkdownView::new(id, text.clone(), links).render(ctx)
 }
 
 /// *You*, the time when it is known, the bubble with `body` as written, and `delivery` under it; `id` names the

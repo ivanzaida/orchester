@@ -1,10 +1,20 @@
 //! Links in what an agent writes in a chat (`ui::chat::links`): which ones the chat follows; and which lists of
 //! links a reply draws as labelled links (`ui::chat::labelled`).
 
-use lurq::markdown::{MarkdownBlock, MarkdownInline, parse_markdown};
+use lurq::{
+  app::{App, theme::TypographyStyle},
+  components::{MarkdownLinkPresentation, MarkdownRun},
+  markdown::{MarkdownBlock, MarkdownInline, parse_markdown},
+};
 use orchester_app::{
+  i18n,
   routes::Route,
-  ui::chat::{labelled::labelled_links, links::ChatLink},
+  theme::{self, ChatLinkLooks, Mode},
+  ui::chat::{
+    labelled::labelled_links,
+    links::ChatLink,
+    presentation::{LinkWords, presentation},
+  },
 };
 use orchester_core::id::ProjectId;
 
@@ -36,10 +46,33 @@ fn chat_links_name_a_place_in_the_app_a_web_page_or_nothing() {
   ] {
     assert_eq!(ChatLink::of(&text), ChatLink::Text, "{text} is not followed");
   }
-  let ChatLink::Web(url) = ChatLink::of("HTTPS://github.com/acme/kontur/pull/42") else {
+  let ChatLink::Web { url, host } = ChatLink::of("HTTPS://GitHub.com/acme/kontur/pull/42") else {
     panic!("an https address is a web page");
   };
   assert_eq!(url.as_str(), "https://github.com/acme/kontur/pull/42");
+  assert_eq!(host, "github.com", "the host the browser goes to, as the link shows it");
+}
+
+#[test]
+fn chat_links_show_a_web_link_without_words_as_its_address() {
+  let mut app = App::new();
+  theme::install(&mut app, Mode::Dark);
+  i18n::install(&app).expect("bundled locales load");
+  let looks = ChatLinkLooks::of(app.theme(), &app.theme().typography_style(TypographyStyle::Body));
+  let words = LinkWords {
+    i18n: app.i18n(),
+    place: &|_| None,
+  };
+  for said in ["", "   "] {
+    assert_eq!(
+      presentation("https://evil.example/login", said, &looks, &words),
+      MarkdownLinkPresentation::text()
+        .trailing([MarkdownRun::new("https://evil.example/login", looks.address.clone())]),
+      "{said:?}: no host can be placed without the words it belongs to"
+    );
+  }
+  let shown = presentation("https://evil.example/login", "github.com", &looks, &words);
+  assert_ne!(shown, MarkdownLinkPresentation::text(), "with words it is a link");
 }
 
 #[test]

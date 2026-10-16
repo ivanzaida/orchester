@@ -85,7 +85,8 @@ impl Component for Reply {
         color: PaletteColor::TextPrimary,
       }
       .resolve(&theme.typography(), &theme.palette());
-      (style, ChatLinkLooks::of(theme))
+      let looks = ChatLinkLooks::of(theme, &style);
+      (style, looks)
     };
     let words = Words::new(ctx.i18n().clone(), (props.project, props.names.clone()));
     let on_link = props.links.clone();
