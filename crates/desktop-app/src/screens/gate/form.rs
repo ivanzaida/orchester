@@ -3,6 +3,11 @@
 //! two pages in the browser are for. The refusals in place: a wrong email or password (`Atym1`), no internet
 //! (`i8HD8`), an email to confirm first (`vovth`), too many attempts (`t2C4a`); while it signs in, the fields fade and
 //! the button says so (`U0v7kx`). Signing in is a person's: synthetic input (an MCP client's) is refused, and says so.
+//!
+//! The card is a lurq form: Tab goes through the email, the password, *Forgot password?*, *Sign in* and *Create an
+//! account* in the order the card shows them, and Enter in either field signs in as *Sign in* does. The email takes the
+//! focus when the card opens empty, the password when the email is filled in (the gate came back); the design draws
+//! both fields at rest.
 
 use std::time::Duration;
 
@@ -12,8 +17,8 @@ use lurq::{
     ctx::{Ctx, FutureAction, Interval},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
-  core::Signal,
+  components::{Column, Form as LurqForm, FormProps, Row, Spacer, Text},
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
@@ -33,7 +38,7 @@ use crate::{
     callout::{Callout, CalloutTone},
     field::{FieldInput, field_error},
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{Focus, pressable},
   },
 };
 
@@ -49,6 +54,19 @@ const PAUSE_LOOK: Duration = Duration::from_secs(15);
 const PAUSE_DEFAULT: u64 = 15 * 60;
 
 const SUBMIT: &str = "gate-sign-in";
+/// The email's and the password's places at the head of the window's Tab order: *Forgot password?* is drawn over the
+/// password, and Tab reaches it after the password, as a person reads the card.
+const EMAIL_TAB: i32 = 1;
+const PASSWORD_TAB: i32 = 2;
+
+/// A field of the card that takes the focus.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Field {
+  Email,
+  Password,
+}
+
+impl DevtoolsInspectable for Field {}
 
 /// Why the cloud did not sign this computer in, as the card says it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,6 +119,10 @@ pub(super) struct Form {
   /// Looks while a sign-in is paused, so *Sign in* comes back when its time has come.
   pause_look: Interval,
   tick: Signal<u64>,
+  /// The field to focus at the next render.
+  focus: Signal<Option<Field>>,
+  email_input: ElementRef,
+  password_input: ElementRef,
 }
 
 impl Form {
@@ -135,6 +157,13 @@ impl Form {
       person: PersonOnly::new(ctx),
       pause_look: ctx.create_interval(PAUSE_LOOK, move || next.update(|tick| *tick += 1)),
       tick,
+      focus: ctx.signal(Some(if email.is_empty() {
+        Field::Email
+      } else {
+        Field::Password
+      })),
+      email_input: ElementRef::new(),
+      password_input: ElementRef::new(),
     }
   }
 
@@ -153,35 +182,78 @@ impl Form {
   /// Whether this email's sign-in is paused now.
   fn paused(&self) -> bool {
     self.tick.get();
-    match self.refusal() {
-      Some(Refusal::Paused { email, until }) => {
-        let paused = email == self.email.get().trim() && Timestamp::now() < until;
-        if paused {
-          self.pause_look.start();
-        } else {
-          self.pause_look.stop();
-        }
-        paused
+    let refusal = self.refusal();
+    if !matches!(refusal, Some(Refusal::Paused { .. })) {
+      return false;
+    }
+    let paused = paused_now(refusal.as_ref(), &self.email.get());
+    if paused {
+      self.pause_look.start();
+    } else {
+      self.pause_look.stop();
+    }
+    paused
+  }
+
+  /// Signs in with what was typed, for *Sign in* and for Enter in either field alike. Nothing happens while a sign-in
+  /// is under way or this email's sign-in is paused; an empty field takes the focus instead of a sign-in; synthetic
+  /// input is refused, and the card says so under *Sign in*.
+  fn submitter(&self) -> impl Fn() + Send + Sync + 'static {
+    let (action, email, password, person, focus) = (
+      self.sign_in.clone(),
+      self.email.clone(),
+      self.password.clone(),
+      self.person.clone(),
+      self.focus.clone(),
+    );
+    move || {
+      let state = action.state().get_untracked();
+      let (typed, secret) = (email.get_untracked(), password.get_untracked());
+      if state.is_pending() || paused_now(state.error.as_ref(), &typed) {
+        return;
       }
-      _ => false,
+      let empty = if typed.trim().is_empty() {
+        Some(Field::Email)
+      } else {
+        secret.is_empty().then_some(Field::Password)
+      };
+      if let Some(field) = empty {
+        focus.set(Some(field));
+        return;
+      }
+      if person.allows(SUBMIT) {
+        action.run_if_idle((typed, secret));
+      }
     }
   }
+
+  /// Moves the focus to the field asked for, once.
+  fn take_focus(&self, ctx: &Ctx) {
+    let Some(field) = self.focus.get() else {
+      return;
+    };
+    self.focus.set(None);
+    ctx.focus(match field {
+      Field::Email => &self.email_input,
+      Field::Password => &self.password_input,
+    });
+  }
+}
+
+/// Whether `refusal` paused the sign-in of `email` until a time still to come.
+fn paused_now(refusal: Option<&Refusal>, email: &str) -> bool {
+  matches!(refusal, Some(Refusal::Paused { email: paused, until }) if paused == email.trim() && Timestamp::now() < *until)
 }
 
 /// The card, on the cloud whose host is `host`.
 pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
+  form.take_focus(ctx);
   let pending = form.pending();
   let refusal = form.refusal();
-  let faded = |part: Element| {
-    if pending {
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .opacity(DISABLED_OPACITY)
-        .child(part)
-        .into()
-    } else {
-      part
-    }
+  // Always inside the same row, so a field keeps its input, and the focus, while the sign-in fades it.
+  let faded = |part: Element| -> Element {
+    let row = Row::new().width(Dimension::Pct(100.0)).child(part);
+    if pending { row.opacity(DISABLED_OPACITY) } else { row }.into()
   };
   let (email, password) = fields(ctx, form, refusal == Some(Refusal::Wrong));
   let checking = pending.then(|| {
@@ -190,7 +262,7 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
       .variant(ExtraTypography::Note.role())
       .width(Dimension::Pct(100.0))
   });
-  Column::new()
+  let card = Column::new()
     .id("gate-card")
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Xl)
@@ -212,8 +284,9 @@ pub(super) fn card(ctx: &mut Ctx, form: &Form, host: &str) -> Element {
         .id("gate-browser-note")
         .variant(GateText::Note.role())
         .width(Dimension::Pct(100.0)),
-    )
-    .into()
+    );
+  let submit = form.submitter();
+  LurqForm::element(FormProps::default().on_submit_data(move |_| submit()), card)
 }
 
 /// *Sign in*, *Signing in…* while it does, faded while this email's sign-in is paused.
@@ -230,28 +303,20 @@ fn submit(ctx: &mut Ctx, form: &Form) -> Element {
   if form.paused() {
     return button.disabled().into();
   }
-  let (action, email, password, person) = (
-    form.sign_in.clone(),
-    form.email.clone(),
-    form.password.clone(),
-    form.person.clone(),
-  );
-  button
-    .on_click(move || {
-      if person.allows(SUBMIT) {
-        action.run((email.get(), password.get()));
-      }
-    })
-    .into()
+  button.in_form().on_click(form.submitter()).into()
 }
 
 /// The email, and the password with *Forgot password?* over it; both marked after a wrong one.
 fn fields(ctx: &mut Ctx, form: &Form, wrong: bool) -> (Element, Element) {
-  let mut email =
-    FieldInput::new("gate-email", ctx.t("gate.email"), form.email.clone()).placeholder(ctx.t("gate.emailPlaceholder"));
+  let mut email = FieldInput::new("gate-email", ctx.t("gate.email"), form.email.clone())
+    .placeholder(ctx.t("gate.emailPlaceholder"))
+    .element(form.email_input.clone())
+    .tab_first(EMAIL_TAB);
   let mut password = FieldInput::new("gate-password", ctx.t("gate.password"), form.password.clone())
     .masked()
-    .no_trailing();
+    .no_trailing()
+    .element(form.password_input.clone())
+    .tab_first(PASSWORD_TAB);
   if wrong {
     email = email.invalid();
     password = password.invalid();
@@ -377,13 +442,15 @@ fn opener(ctx: &mut Ctx, (form, page): (&Form, WebPage)) -> impl Fn() + Send + S
 fn page_button(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -> Element {
   ActionButton::new(id.to_owned(), ButtonKind::Secondary, label.to_owned())
     .icon(Icon::ExternalLink)
+    .in_form()
     .on_click(opener(ctx, target))
     .into()
 }
 
-/// A quiet link with the external glyph after it (`Link · Forgot password?` `KjUBG`).
+/// A quiet link with the external glyph after it (`Link · Forgot password?` `KjUBG`), a stop of the card's Tab order.
 fn page_link(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -> Element {
-  pressable(opener(ctx, target))
+  Focus::Form
+    .apply(pressable(opener(ctx, target)))
     .id(id.to_owned())
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)

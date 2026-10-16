@@ -1,6 +1,6 @@
 //! What a person does in the window before it shows, with the pointer and the keyboard of the example itself (never an
 //! MCP client's, which the gate refuses): typing and pressing *Sign in*, opening *Advanced*, resting the pointer on a
-//! status item, asking to sign out.
+//! status item, asking to sign out, pressing Tab.
 
 use std::{
   error::Error,
@@ -20,9 +20,22 @@ use super::{
   signed_in::account_cloud::{EMAIL, PASSWORD, PAUSED, UNCONFIRMED},
 };
 
-/// Takes the window to `state`.
-pub fn to(app: &mut App, tree: &mut Tree, (state, link): (State, &WindowLink)) -> Result<(), Box<dyn Error>> {
+/// Takes the window to `state`, then presses Tab `tabs` times.
+pub fn to(
+  app: &mut App,
+  tree: &mut Tree,
+  (state, link): (State, &WindowLink),
+  tabs: usize,
+) -> Result<(), Box<dyn Error>> {
   let mut window = Window { app, tree };
+  reach(&mut window, (state, link))?;
+  for _ in 0..tabs {
+    window.tab();
+  }
+  Ok(())
+}
+
+fn reach(window: &mut Window<'_>, (state, link): (State, &WindowLink)) -> Result<(), Box<dyn Error>> {
   match state {
     State::FirstRun | State::Unreachable | State::Wrong | State::Unconfirmed | State::Paused | State::SigningIn => {
       window.until("gate-email")?;
@@ -112,6 +125,13 @@ impl Window<'_> {
       .set_value(value);
     self.tree.pass_headless(self.app);
     Ok(())
+  }
+
+  /// Presses Tab on the keyboard.
+  fn tab(&mut self) {
+    self.tree.key_down("Tab".into(), "Tab".into(), false, false, false);
+    self.tree.key_up("Tab".into(), "Tab".into(), false, false, false);
+    self.tree.pass_headless(self.app);
   }
 
   /// Rests the pointer on `id` until `card` shows.

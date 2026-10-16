@@ -3,14 +3,15 @@
 //! default*, and *Using a test cloud* while another cloud than the build's is set. Changing it signs out of
 //! Orchester Cloud; team servers keep working. The sign-in gate shows the same section (`Advanced · open` `cUVrD` in
 //! `S8aPFV`) without the line over it, with *test cloud* in `warning` at the line's end and no callout: the gate's
-//! footer names the test cloud.
+//! footer names the test cloud. There the line and the buttons are stops of the gate's Tab order, and Enter in the
+//! address field does *Use this address*.
 
 use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Form, FormProps, Row, Spacer, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -27,7 +28,7 @@ use crate::{
     callout::{Callout, CalloutTone},
     field::{FieldInput, field, field_error},
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{Focus, pressable},
   },
 };
 
@@ -36,6 +37,17 @@ use crate::{
 pub(crate) enum Place {
   Settings,
   Gate,
+}
+
+impl Place {
+  /// How the section's line and buttons take a press: on the gate they are stops of its Tab order, and the open
+  /// section is a form whose address field Enter uses as *Use this address* does.
+  const fn focus(self) -> Focus {
+    match self {
+      Self::Settings => Focus::Pointer,
+      Self::Gate => Focus::Form,
+    }
+  }
 }
 
 pub(crate) struct Advanced {
@@ -98,7 +110,9 @@ pub(crate) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
       PaletteColor::Warning,
     ),
   };
-  let line = pressable(toggle)
+  let line = place
+    .focus()
+    .apply(pressable(toggle))
     .id("orchester-advanced")
     .width(Dimension::Pct(100.0))
     .padding(match place {
@@ -166,22 +180,28 @@ fn form(ctx: &mut Ctx, advanced: &Advanced, place: Place) -> Element {
   )
   .mono()
   .render(ctx);
+  let in_place = |button: ActionButton| {
+    if place == Place::Gate { button.in_form() } else { button }
+  };
   let use_it = {
-    let (set, address, person) = (advanced.set.clone(), advanced.address.clone(), advanced.person.clone());
-    let button = ActionButton::new(USE, ButtonKind::Secondary, ctx.t("cloud.advanced.use"));
+    let button = in_place(ActionButton::new(
+      USE,
+      ButtonKind::Secondary,
+      ctx.t("cloud.advanced.use"),
+    ));
     if pending {
       button.loading()
     } else {
-      button.on_click(move || {
-        if person.allows(USE) {
-          set.run(Some(address.get()));
-        }
-      })
+      button.on_click(use_address(advanced))
     }
   };
   let reset = {
     let (set, person) = (advanced.set.clone(), advanced.person.clone());
-    let button = ActionButton::new(RESET, ButtonKind::Ghost, ctx.t("cloud.advanced.reset"));
+    let button = in_place(ActionButton::new(
+      RESET,
+      ButtonKind::Ghost,
+      ctx.t("cloud.advanced.reset"),
+    ));
     if pending {
       button.disabled()
     } else {
@@ -201,7 +221,7 @@ fn form(ctx: &mut Ctx, advanced: &Advanced, place: Place) -> Element {
         .to_string(),
     ),
   };
-  Column::new()
+  let column = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(spacing)
     .child(field(
@@ -218,6 +238,23 @@ fn form(ctx: &mut Ctx, advanced: &Advanced, place: Place) -> Element {
     )
     .child(Row::new().spacing(SpacingSize::Sm).child(use_it).child(reset))
     .with_children(advanced.person.reason(ctx, USE))
-    .with_children(advanced.person.reason(ctx, RESET))
-    .into()
+    .with_children(advanced.person.reason(ctx, RESET));
+  match place {
+    Place::Settings => column.into(),
+    Place::Gate => {
+      let use_it = use_address(advanced);
+      Form::element(FormProps::default().on_submit_data(move |_| use_it()), column)
+    }
+  }
+}
+
+/// *Use this address*, a person's: synthetic input is refused, and the section says so under the button. Nothing
+/// happens while an address is being set.
+fn use_address(advanced: &Advanced) -> impl Fn() + Send + Sync + 'static {
+  let (set, address, person) = (advanced.set.clone(), advanced.address.clone(), advanced.person.clone());
+  move || {
+    if !set.state().get_untracked().is_pending() && person.allows(USE) {
+      set.run(Some(address.get_untracked()));
+    }
+  }
 }
