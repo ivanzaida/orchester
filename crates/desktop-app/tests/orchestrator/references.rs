@@ -92,9 +92,5 @@ fn orchestrator_reply_links_task_keys_and_routes_and_opens_them_by_browser_rules
       "synthetic input never opens the browser: {followed:?}"
     );
   }
-  assert_eq!(
-    screen.window.navigation().tabs_now(),
-    tabs,
-    "nor a tab"
-  );
+  assert_eq!(screen.window.navigation().tabs_now(), tabs, "nor a tab");
 }

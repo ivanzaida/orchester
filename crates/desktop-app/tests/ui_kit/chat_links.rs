@@ -34,7 +34,11 @@ fn chat_links_make_task_keys_and_routes_written_as_text_links() {
   let path = format!("/project/{project}/tasks/KON-2/changes?file=src%2Flib.rs");
   assert_eq!(
     references("KON-1 is done; KON-2, then KON-3.", project),
-    format!("[KON\\-1]({}) is done; [KON\\-2]({}), then KON-3.", task("KON-1"), task("KON-2")),
+    format!(
+      "[KON\\-1]({}) is done; [KON\\-2]({}), then KON-3.",
+      task("KON-1"),
+      task("KON-2")
+    ),
     "a key of the project's tasks is a link, an unknown one text"
   );
   let linked = references(&format!("See {path}."), project);
@@ -76,7 +80,11 @@ fn chat_links_open_by_a_browsers_rules() {
   use lurq::app::events::MouseButton::{Left, Middle, Other, Right};
   let press = |button, command, shift| LinkPress { button, shift, command }.open_in();
   assert_eq!(press(Left, false, false), Some(OpenIn::ActiveTab));
-  assert_eq!(press(Left, false, true), Some(OpenIn::ActiveTab), "Shift opens no window");
+  assert_eq!(
+    press(Left, false, true),
+    Some(OpenIn::ActiveTab),
+    "Shift opens no window"
+  );
   assert_eq!(press(Left, true, false), Some(OpenIn::BackgroundTab));
   assert_eq!(press(Middle, false, false), Some(OpenIn::BackgroundTab));
   assert_eq!(press(Left, true, true), Some(OpenIn::NewTab));

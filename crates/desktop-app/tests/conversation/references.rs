@@ -54,11 +54,8 @@ fn conversation_message_links_task_keys_and_routes_and_opens_them_by_browser_rul
     .pop()
     .expect("an invocation");
   let said = format!("Like {other}: see {changes}. Not KON-999, /settings or `{code}`.");
-  db.append_activity(
-    &invocation,
-    &[(Timestamp::now(), AgentEvent::Message { text: said })],
-  )
-  .expect("the message");
+  db.append_activity(&invocation, &[(Timestamp::now(), AgentEvent::Message { text: said })])
+    .expect("the message");
   open(&mut window, &seeded, &key, "conversation-chat");
   window.until("the linked message", |window| is_link(window, &other));
   assert!(is_link(&mut window, &changes), "a route path is a link");

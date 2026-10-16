@@ -267,7 +267,7 @@ fn markdown_reads_headings_lists_and_links() {
         MarkdownView::new(
           "plan",
           "## Approach\n\n1. Wrap `send()` in a retry loop\n2. Record each attempt\n\nSee [the docs](https://example.test/retry).",
-          Arc::new(|_: &str| {}),
+          Arc::new(|_: &str, _: &lurq::app::events::MouseEvent| {}),
         )
         .render(ctx),
       )

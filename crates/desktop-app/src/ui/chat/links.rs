@@ -5,12 +5,16 @@
 //! MCP client driving the window) may follow a link in the app but never opens the browser. A link to anything
 //! else, to a route the app does not know, or to a place outside a project (Add project, Settings: what an agent may
 //! never open for the person) is shown as text with its address and cannot be pressed. How every Markdown draws
-//! each kind is `presentation`'s; the window follows them with one handler, [`ChatLinks`]. What an agent writes as
-//! plain text that names a place becomes such a link first (`references`).
+//! each kind is `presentation`'s; the window follows them with one handler, [`ChatLinks`], which routes in-app
+//! paths itself: with `on_link_activate` set, lurq's router no longer follows them. What an agent writes as plain
+//! text that names a place becomes such a link first (`references`).
 
 use std::sync::Arc;
 
-use lurq::app::{ctx::Ctx, events::is_synthetic_input};
+use lurq::app::{
+  ctx::Ctx,
+  events::{MouseEvent, is_synthetic_input},
+};
 use orchester_exec::external;
 use url::Url;
 
@@ -102,11 +106,12 @@ pub fn follow(navigation: &Navigation, destination: &str, press: LinkPress) -> F
   }
 }
 
-/// What a press on a link in a chat does: [`follow`] in `navigation`, with the button and keys the window saw
-/// press it. A screen makes it once and keeps it, so a message is laid out again only when what it says changes.
+/// What a press on a link in a chat does: [`follow`] in `navigation`, with the button and keys of the event that
+/// activated the link. A screen makes it once and keeps it, so a message is laid out again only when what it says
+/// changes.
 pub fn handler(navigation: Navigation) -> LinkHandler {
   Arc::new(
-    move |destination: &str| match follow(&navigation, destination, navigation.link_press()) {
+    move |destination: &str, event: &MouseEvent| match follow(&navigation, destination, LinkPress::of(event)) {
       Followed::Went(_) | Followed::NotFollowed | Followed::Opened => {}
       Followed::NotOpened => {
         tracing::warn!("synthetic input pressed a link to the web; it opens only on a person's press")

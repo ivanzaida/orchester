@@ -14,6 +14,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::MouseEvent,
     theme::{FormTextRole, PaletteColor, TypographyStyle},
   },
   components::{Markdown, MarkdownLink, MarkdownProps},
@@ -98,7 +99,7 @@ impl Component for Reply {
     let markdown = MarkdownProps::styled(text, style)
       .width(Dimension::Pct(100.0))
       .selectable(true)
-      .on_link_click(move |link: &MarkdownLink| on_link(link.destination()))
+      .on_link_activate(move |link: &MarkdownLink, event: &MouseEvent| on_link(link.destination(), event))
       .link_presentation(move |link| present::presentation(link, &looks, &words))
       .list_view(grid::grid);
     Markdown::mount(ctx, markdown).id(props.id.to_string())

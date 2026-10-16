@@ -1,38 +1,59 @@
-//! Presses on a link in a chat by a browser's rules (`navigation::press`), as a person's pointer makes them: a plain
-//! click opens its place in the active tab, Ctrl+click (Cmd+click on macOS) in a new tab right of the active one,
-//! which stays active, Ctrl+Shift+click in a new tab it switches to, Shift+click as a plain click; the right button
-//! opens nothing, synthetic input follows the same rules, and Enter is a plain click. A middle click never reaches a
-//! Markdown link: lurq 0.46 runs a link's press for the left button only.
+//! Presses on a link in a chat by a browser's rules (`navigation::press`): a plain click opens its place in the
+//! active tab; a middle click and Ctrl+click (Cmd+click on macOS) in a new tab right of the active one, which stays
+//! active; Ctrl+Shift+click in a new tab it switches to; Shift+click as a plain click; Enter on the focused link in
+//! the active tab. A person's pointer and lurq's synthetic input (an MCP client's `lurq_interact`, with
+//! `"button": "middle"` and modifiers) follow the same rules.
 
 use lurq::{
-  app::events::{MouseButton, with_synthetic_input},
+  app::{
+    events::MouseButton,
+    synthetic_input::{SyntheticInput, SyntheticModifiers, apply},
+  },
   core::ElementRect,
 };
 use orchester_app::{
-  navigation::{
-    press::LinkPress,
-    tabs::{TabId, TabSet},
-  },
+  navigation::tabs::{TabId, TabSet},
   routes::Route,
 };
 
 use super::Window;
 
-/// Presses the middle of the link whose words are `words` with `button`, once it is in place, holding the platform's
-/// command key (Ctrl, Cmd on macOS) when `command` and Shift when `shift`.
-pub fn press_link(window: &mut Window, words: &str, button: MouseButton, (command, shift): (bool, bool)) {
+/// Who presses a link.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Presser {
+  /// A person's pointer, as the window's shell delivers it.
+  Person,
+  /// lurq's synthetic input, as an MCP client's `lurq_interact` delivers it.
+  Synthetic,
+}
+
+/// The modifiers of a press: the platform's command key (Ctrl, Cmd on macOS) and Shift.
+fn modifiers((command, shift): (bool, bool)) -> SyntheticModifiers {
+  SyntheticModifiers {
+    shift,
+    ctrl: command && !cfg!(target_os = "macos"),
+    alt: false,
+    meta: command && cfg!(target_os = "macos"),
+  }
+}
+
+/// Presses the middle of the link whose words are `words` with `button`, once it is in place, holding the command
+/// key when `command` and Shift when `shift`.
+pub fn press_link(window: &mut Window, words: &str, (presser, button): (Presser, MouseButton), keys: (bool, bool)) {
   let bounds = shown(window, words);
   let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
-  let (ctrl, cmd) = (command && !cfg!(target_os = "macos"), command && cfg!(target_os = "macos"));
-  let tree = &mut window.tree;
-  if cmd {
-    tree.key_down_with_meta("Meta".to_owned(), "MetaLeft".to_owned(), shift, false, false, true);
-  }
-  tree.mouse_move(x, y);
-  tree.mouse_down_with_modifiers(x, y, button, shift, ctrl, false);
-  tree.mouse_up_with_modifiers(x, y, button, shift, ctrl, false);
-  if cmd {
-    tree.key_up_with_meta("Meta".to_owned(), "MetaLeft".to_owned(), shift, false, false, false);
+  let m = modifiers(keys);
+  match presser {
+    Presser::Person => {
+      let tree = &mut window.tree;
+      tree.mouse_move_with_meta(x, y, m.shift, m.ctrl, m.alt, m.meta);
+      tree.mouse_down_with_meta(x, y, button, m.shift, m.ctrl, m.alt, m.meta);
+      tree.mouse_up_with_meta(x, y, button, m.shift, m.ctrl, m.alt, m.meta);
+    }
+    Presser::Synthetic => apply(
+      &mut window.tree,
+      &SyntheticInput::click_button(x, y, button).with_modifiers(m),
+    ),
   }
   window.pass();
 }
@@ -51,6 +72,36 @@ fn shown(window: &mut Window, words: &str) -> ElementRect {
     settled
   });
   last.expect("the link is in place")
+}
+
+/// Moves the keyboard focus with Tab to the link `words`, then presses Enter.
+fn enter_on(window: &mut Window, words: &str) {
+  shown(window, words);
+  let focused = |window: &mut Window| {
+    window
+      .tree
+      .focused_element()
+      .and_then(|element| element.text_content().map(str::to_owned))
+  };
+  let mut tabs = 0;
+  while focused(window).as_deref() != Some(words) {
+    assert!(tabs < 500, "Tab reaches the link {words}");
+    window
+      .tree
+      .key_down("Tab".to_owned(), "Tab".to_owned(), false, false, false);
+    window
+      .tree
+      .key_up("Tab".to_owned(), "Tab".to_owned(), false, false, false);
+    window.pass();
+    tabs += 1;
+  }
+  window
+    .tree
+    .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
+  window
+    .tree
+    .key_up("Enter".to_owned(), "Enter".to_owned(), false, false, false);
+  window.pass();
 }
 
 /// The place of each tab, in order.
@@ -75,19 +126,27 @@ pub fn opens_by_browser_rules(window: &mut Window, words: &str, place: &Route) {
   let (chat_tab, at) = (start.active().id(), position(&start, start.active().id()));
   let mut expected = places(&start);
 
-  // Ctrl+click, twice: each new tab lies right of the active one, before the tabs opened earlier.
-  let background = |window: &mut Window, expected: &mut Vec<Route>| {
-    press_link(window, words, MouseButton::Left, (true, false));
+  // Each new background tab lies right of the active one, before the tabs opened earlier.
+  for (presser, button, command) in [
+    (Presser::Person, MouseButton::Middle, false),
+    (Presser::Synthetic, MouseButton::Middle, false),
+    (Presser::Person, MouseButton::Left, true),
+    (Presser::Synthetic, MouseButton::Left, true),
+  ] {
+    press_link(window, words, (presser, button), (command, false));
     expected.insert(at + 1, place.clone());
-    let tabs = window.navigation().tabs_now();
-    assert_eq!(places(&tabs), *expected, "a new tab at the place, right of the active one");
-    assert_eq!(tabs.active().id(), chat_tab, "the active tab stays active");
-    assert_eq!(window.navigation().route_now(), chat, "and where it was");
-  };
-  background(window, &mut expected);
-  with_synthetic_input(|| background(window, &mut expected));
+    let tabs = navigation.tabs_now();
+    let press = format!("{presser:?} {button:?} with command {command}");
+    assert_eq!(
+      places(&tabs),
+      expected,
+      "{press}: a new tab at the place, right of the active one"
+    );
+    assert_eq!(tabs.active().id(), chat_tab, "{press}: the active tab stays active");
+    assert_eq!(navigation.route_now(), chat, "{press}: and where it was");
+  }
 
-  press_link(window, words, MouseButton::Right, (false, false));
+  press_link(window, words, (Presser::Person, MouseButton::Right), (false, false));
   assert_eq!(
     places(&navigation.tabs_now()),
     expected,
@@ -95,36 +154,48 @@ pub fn opens_by_browser_rules(window: &mut Window, words: &str, place: &Route) {
   );
   assert_eq!(navigation.route_now(), chat);
 
-  press_link(window, words, MouseButton::Left, (false, true));
-  assert_eq!(navigation.route_now(), *place, "Shift+click opens the place in the active tab");
+  // lurq 0.48 takes a Shift press on selectable text to extend the selection an earlier press started; Escape
+  // forgets where it started, and Shift+click is then a plain click.
+  window
+    .tree
+    .key_down("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  window
+    .tree
+    .key_up("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  press_link(window, words, (Presser::Person, MouseButton::Left), (false, true));
+  assert_eq!(
+    navigation.route_now(),
+    *place,
+    "Shift+click opens the place in the active tab"
+  );
   assert_eq!(navigation.tabs_now().active().id(), chat_tab);
   assert_eq!(navigation.tabs_now().tabs().len(), expected.len(), "and no tab");
   navigation.back();
-  shown(window, words);
 
-  press_link(window, words, MouseButton::Left, (true, true));
-  let tabs = navigation.tabs_now();
-  expected.insert(at + 1, place.clone());
-  assert_eq!(places(&tabs), expected, "Ctrl+Shift+click opens a new tab");
-  assert_eq!(position(&tabs, tabs.active().id()), at + 1, "and switches to it");
-  navigation.select(chat_tab);
-  shown(window, words);
+  for presser in [Presser::Person, Presser::Synthetic] {
+    press_link(window, words, (presser, MouseButton::Left), (true, true));
+    let tabs = navigation.tabs_now();
+    expected.insert(at + 1, place.clone());
+    assert_eq!(places(&tabs), expected, "{presser:?} Ctrl+Shift+click opens a new tab");
+    assert_eq!(position(&tabs, tabs.active().id()), at + 1, "and switches to it");
+    navigation.select(chat_tab);
+  }
 
-  // Enter after a Ctrl+click: lurq presses a focused link for Enter without a pointer press, and that press is a
-  // plain one, whatever the pointer's last was.
-  background(window, &mut expected);
-  assert_ne!(navigation.link_press(), LinkPress::PLAIN);
-  window
-    .tree
-    .key_down("Enter".to_owned(), "Enter".to_owned(), false, false, false);
-  window
-    .tree
-    .key_up("Enter".to_owned(), "Enter".to_owned(), false, false, false);
-  window.pass();
-  assert_eq!(navigation.link_press(), LinkPress::PLAIN, "Enter presses as a plain click");
+  enter_on(window, words);
+  assert_eq!(
+    navigation.route_now(),
+    *place,
+    "Enter on the focused link opens the place in the active tab"
+  );
+  assert_eq!(navigation.tabs_now().tabs().len(), expected.len(), "and no tab");
+  navigation.back();
 
-  press_link(window, words, MouseButton::Left, (false, false));
-  assert_eq!(navigation.route_now(), *place, "a plain click opens the place in the active tab");
+  press_link(window, words, (Presser::Synthetic, MouseButton::Left), (false, false));
+  assert_eq!(
+    navigation.route_now(),
+    *place,
+    "a plain click opens the place in the active tab"
+  );
   assert_eq!(navigation.tabs_now().active().id(), chat_tab);
   assert_eq!(navigation.tabs_now().tabs().len(), expected.len(), "and no tab");
 }

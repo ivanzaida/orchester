@@ -25,7 +25,11 @@ const PATH_START: &str = "/project/";
 pub fn shown(ctx: &mut Ctx, text: &Arc<str>, project: ProjectId) -> Arc<str> {
   let tasks = Projects::of(ctx).feed(project).tasks.get();
   let tasks = tasks.ready().map(|tasks| tasks.tasks.clone());
-  let exists = |key: &TaskKey| tasks.as_ref().is_some_and(|tasks| tasks.iter().any(|task| task.key() == key));
+  let exists = |key: &TaskKey| {
+    tasks
+      .as_ref()
+      .is_some_and(|tasks| tasks.iter().any(|task| task.key() == key))
+  };
   match linked(text, project, &exists) {
     Cow::Borrowed(_) => text.clone(),
     Cow::Owned(linked) => Arc::from(linked),
@@ -163,5 +167,8 @@ fn task_key(
     return None;
   }
   let key: TaskKey = text[at..end].parse().ok()?;
-  exists(&key).then(|| (end, Route::Project(project, ProjectPage::Task(key, TaskView::Summary))))
+  if !exists(&key) {
+    return None;
+  }
+  Some((end, Route::Project(project, ProjectPage::Task(key, TaskView::Summary))))
 }

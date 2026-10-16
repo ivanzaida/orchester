@@ -21,7 +21,7 @@ use lurq::{app::ctx::Ctx, core::Signal, router::RouterHandle};
 
 use self::{
   pointed::Pointed,
-  press::{LinkPress, OpenIn, PressInput},
+  press::OpenIn,
   tabs::{TabId, TabSet},
 };
 use crate::routes::Route;
@@ -39,8 +39,6 @@ pub struct Navigation {
   pointings: Arc<AtomicU64>,
   /// The number of the last pointing a card took: a card takes each pointing once.
   taken: Arc<AtomicU64>,
-  /// What the window last saw of the pointer and the keys, for how a press on a link asks to open.
-  press: Arc<parking_lot::Mutex<PressInput>>,
 }
 
 impl Navigation {
@@ -53,7 +51,6 @@ impl Navigation {
       pointed: Signal::new(None),
       pointings: Arc::default(),
       taken: Arc::default(),
-      press: Arc::default(),
     };
     navigation.show();
     navigation
@@ -121,21 +118,6 @@ impl Navigation {
         true
       }),
     }
-  }
-
-  /// How the press on a link that arrives now asks to open its place ([`press`]).
-  pub fn link_press(&self) -> LinkPress {
-    self.press.lock().press()
-  }
-
-  /// The pointer pressed somewhere in the window.
-  fn pointer_down(&self, event: &lurq::app::events::MouseEvent) {
-    self.press.lock().pointer_down(event);
-  }
-
-  /// A key went down (`down`) or up in the window.
-  fn key(&self, event: &lurq::app::events::KeyboardEvent, down: bool) {
-    self.press.lock().key(event, down);
   }
 
   pub fn select(&self, id: TabId) {

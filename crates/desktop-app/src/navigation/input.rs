@@ -61,22 +61,17 @@ impl FirstKeys {
 }
 
 /// `content` filling the window, with the history and tab input around it while `active`; none while the
-/// closing panel holds the window. `first` takes keys before all of it. Every press of the pointer and every key
-/// is recorded first, for how a press on a link asks to open (`press`).
+/// closing panel holds the window. `first` takes keys before all of it.
 pub fn window_input(navigation: &Navigation, content: Element, (active, first): (bool, FirstKeys)) -> Column {
   let (mouse, keys) = (navigation.clone(), navigation.clone());
-  let (pressed, down, up) = (navigation.clone(), navigation.clone(), navigation.clone());
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .on_key_down(move |event: KeyboardEvent| {
-      down.key(&event, true);
       if active {
         first.handle(event);
       }
     })
-    .on_key_up(move |event: KeyboardEvent| up.key(&event, false))
-    .on_mouse_down(move |event: MouseEvent| pressed.pointer_down(&event))
     .on_mouse_up(move |event: MouseEvent| {
       if !active || event.default_prevented() {
         return;
