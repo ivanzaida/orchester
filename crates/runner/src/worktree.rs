@@ -252,7 +252,7 @@ impl Worktrees {
   /// fails as one step, so such a branch is never taken over.
   fn add(&self, git: &Git<'_>, name: &str, branch: &str, base_revision: &str) -> Result<bool, WorktreeError> {
     if let Err(error) = git.stdout(&["branch", "--no-track", branch, base_revision]) {
-      return if names::taken_meanwhile(git, branch, &error)? {
+      return if names::taken_meanwhile(branch, &error) {
         Ok(false)
       } else {
         Err(error)

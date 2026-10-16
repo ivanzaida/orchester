@@ -535,6 +535,7 @@
       "invalidBranch": "Git does not accept the run's branch name.",
       "folderInTheWay": "A folder that is not a worktree of the repository is where the run's worktree goes, in .orchester/worktrees/. Move it away.",
       "git": "Git refused: {{detail}}",
+      "gitSilent": "Git refused without saying why. The runner's log has the details.",
       "unexpected": "Something unexpected stopped it. The runner's log has the details."
     },
     "limit": {

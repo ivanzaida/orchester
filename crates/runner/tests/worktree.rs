@@ -304,3 +304,28 @@ fn a_folder_git_does_not_list_is_not_the_runs_worktree() {
   assert!(matches!(error, WorktreeError::NotAWorktree(_)), "{error:?}");
   assert_eq!(error.failure(), WorktreeFailure::FolderInTheWay);
 }
+
+#[test]
+fn a_name_git_cannot_make_for_a_lasting_reason_fails_at_once() {
+  let repo = repository();
+  let root = repo.path();
+  // A branch where the name's folder would be: git says "cannot lock ref" for every name in that folder.
+  git(root, &["branch", "orchester"]);
+  let worktrees = Worktrees::new(root).expect("worktrees");
+  let run = RunId::generate();
+
+  let error = worktrees
+    .create(run, "orchester/run-1", "main")
+    .expect_err("no branch can be made there");
+
+  let WorktreeError::Git { stderr, .. } = &error else {
+    panic!("git's refusal, not a name taken meanwhile: {error:?}");
+  };
+  assert!(stderr.contains("'refs/heads/orchester' exists"), "{stderr}");
+  assert!(!worktrees.path(run).exists());
+  assert_eq!(
+    git(root, &["for-each-ref", "refs/heads/orchester/"]),
+    "",
+    "no name was made"
+  );
+}

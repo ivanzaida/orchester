@@ -31,12 +31,18 @@ pub(super) fn is_taken(taken: &[String], name: &str) -> bool {
   })
 }
 
-/// Whether `git branch <branch>` failed, `error`, because someone took the name since it was read:
-/// they made the branch, or hold its ref's lock while making or deleting one.
-pub(super) fn taken_meanwhile(git: &Git<'_>, branch: &str, error: &WorktreeError) -> Result<bool, WorktreeError> {
-  match error {
-    WorktreeError::Git { stderr, .. } if stderr.contains("cannot lock ref") => Ok(true),
-    WorktreeError::Git { .. } => git.answer(&["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")]),
-    _ => Ok(false),
+/// Whether `git branch <branch>` failed, `error`, because another creator took the name since it
+/// was read: it made the branch, or holds a ref lock while making or deleting one. Git also says
+/// "cannot lock ref" for what lasts (a branch where the name's folder would be, permissions, a full
+/// disk), and any other name would fail the same way, so only contention counts.
+pub(super) fn taken_meanwhile(branch: &str, error: &WorktreeError) -> bool {
+  let WorktreeError::Git { stderr, .. } = error else {
+    return false;
+  };
+  let locked = stderr.contains("Unable to create '") && stderr.contains(".lock'") && stderr.contains("File exists");
+  let taken = stderr.contains("already exists") || locked;
+  if taken {
+    tracing::info!(%branch, %stderr, "the branch name was taken meanwhile; the next one is tried");
   }
+  taken
 }

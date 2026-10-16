@@ -101,6 +101,21 @@ fn gits_message_is_kept_without_credentials_and_bounded() {
     "its last lines, without credentials"
   );
 
+  let checkout = GitMessage::new(
+    "Preparing worktree (checking out 'orchester/orc-1-run-1-2')\nUpdating files:  50% (1/2)\rUpdating files: 100% \
+     (2/2), done.\nHEAD is now at 1a2b3c4 initial\nerror: post-checkout hook failed\n",
+  );
+  assert_eq!(
+    checkout.as_str(),
+    "error: post-checkout hook failed",
+    "the cause, not git's progress"
+  );
+  assert_eq!(
+    GitMessage::new("Preparing worktree (new branch 'x')\n").as_str(),
+    "",
+    "progress alone says nothing"
+  );
+
   let long = GitMessage::new(&format!("fatal: {}", "x".repeat(1_000)));
   assert_eq!(long.as_str().chars().count(), GitMessage::MAX_CHARS);
   assert!(
@@ -108,7 +123,7 @@ fn gits_message_is_kept_without_credentials_and_bounded() {
     "git's last words, shortened visibly"
   );
 
-  for message in [kept, long] {
+  for message in [kept, checkout, long] {
     assert_eq!(
       GitMessage::new(message.as_str()),
       message,

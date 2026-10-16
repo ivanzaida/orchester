@@ -117,4 +117,12 @@ fn a_run_that_could_not_start_says_why_wherever_it_was_started() {
     worktree_failure_message(&WorktreeFailure::NotIgnored).key,
     "runs.notStarted.notIgnored"
   );
+  let silent = worktree_failure_message(&WorktreeFailure::Git(GitMessage::new(
+    "Preparing worktree (new branch 'x')",
+  )));
+  assert_eq!(
+    silent.key, "runs.notStarted.gitSilent",
+    "no \"Git refused:\" with nothing after it"
+  );
+  assert!(silent.args.is_empty());
 }

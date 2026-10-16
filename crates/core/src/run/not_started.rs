@@ -32,8 +32,9 @@ pub enum WorktreeFailure {
 }
 
 /// What git said when it refused to create a run's worktree, as far as it is kept: credentials in URLs removed,
-/// its last [`GitMessage::MAX_LINES`] lines that say something, and of them the last [`GitMessage::MAX_CHARS`]
-/// characters. A hook or filter that runs while git checks out can print anything, at any length.
+/// its last [`GitMessage::MAX_LINES`] lines that say something (not its progress), and of them the last
+/// [`GitMessage::MAX_CHARS`] characters. A hook or filter that runs while git checks out can print anything, at
+/// any length.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub struct GitMessage(String);
@@ -41,6 +42,9 @@ pub struct GitMessage(String);
 impl GitMessage {
   pub const MAX_LINES: usize = 4;
   pub const MAX_CHARS: usize = 400;
+  /// How lines of git's progress start, which `worktree add` prints before what failed; they are left out so the
+  /// cause comes first.
+  const PROGRESS: [&str; 3] = ["Preparing worktree", "HEAD is now at ", "Updating files:"];
 
   /// `text`, git's error output, as far as it is kept. Keeping what was kept already changes nothing.
   pub fn new(text: &str) -> Self {
@@ -48,7 +52,7 @@ impl GitMessage {
     let lines: Vec<&str> = redacted
       .lines()
       .map(str::trim_end)
-      .filter(|line| !line.trim().is_empty())
+      .filter(|line| !line.trim().is_empty() && !Self::PROGRESS.iter().any(|progress| line.starts_with(progress)))
       .collect();
     let kept = lines[lines.len().saturating_sub(Self::MAX_LINES)..].join("\n");
     if kept.chars().count() <= Self::MAX_CHARS {

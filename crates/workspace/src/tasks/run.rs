@@ -403,6 +403,8 @@ pub fn worktree_failure_message(why: &WorktreeFailure) -> Message {
     WorktreeFailure::UnknownBase => Message::new("runs.notStarted.unknownBase"),
     WorktreeFailure::InvalidBranch => Message::new("runs.notStarted.invalidBranch"),
     WorktreeFailure::FolderInTheWay => Message::new("runs.notStarted.folderInTheWay"),
+    // Git said nothing but its progress: no "Git refused:" with nothing after it.
+    WorktreeFailure::Git(message) if message.as_str().is_empty() => Message::new("runs.notStarted.gitSilent"),
     WorktreeFailure::Git(message) => Message::new("runs.notStarted.git").with("detail", message.as_str().to_owned()),
     WorktreeFailure::Unexpected => Message::new("runs.notStarted.unexpected"),
   }

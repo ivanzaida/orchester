@@ -1,6 +1,7 @@
 //! A run whose worktree could not be created fails before it started (`worktree_not_created`): it has no
-//! failed step, and keeps git's reason in `failure_reason`. SQLite cannot change a `CHECK` in place, so `runs` is
-//! rebuilt as `agent_accounts` left it, keeping its `rowid` and indexes.
+//! failed step, and keeps why in `failure_reason`: the typed reason (`WorktreeFailure`) as JSON, never git's raw
+//! output. SQLite cannot change a `CHECK` in place, so `runs` is rebuilt as `agent_accounts` left it, keeping its
+//! `rowid` and indexes.
 
 pub(super) const MIGRATION: &str = r"
 CREATE TABLE runs_worktree_not_created (
