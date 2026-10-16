@@ -1,12 +1,11 @@
 "use server";
 
-import { field } from "@/lib/form";
-import { readRequest, readStatement, returnsToServer, type AuthorizeRequest } from "@/lib/authorize";
+import { readStatement, returnsToServer, type AuthorizeRequest } from "@/lib/authorize";
 import { message, type Message } from "@/lib/i18n";
 import type { ApiFailure, ApiResult } from "@/lib/server/api";
 import { failureMessage } from "@/lib/server/failures";
 import { adminToken, keySet, linkedServer, linkServer, type Answer } from "@/lib/server/registry";
-import { anonymous, formIsGenuine, leaveIfEnded, signedIn } from "@/lib/server/visitor";
+import { anonymous, authorizeRequest, formIsGenuine, leaveIfEnded, signedIn } from "@/lib/server/visitor";
 
 /**
  * Confirming on `/authorize`: the cloud issues what the server admin asked for, and the page carries it there with a
@@ -56,17 +55,12 @@ async function answer(request: AuthorizeRequest, session: { client?: string | un
   return keys.ok ? { ok: true, value: { identityToken: token.value, keySet: keys.value } } : keys;
 }
 
-function requestOf(form: FormData): AuthorizeRequest | null {
-  const names = ["purpose", "server", "statement", "state", "return"] as const;
-  const params = Object.fromEntries(names.map((name) => [name, field(form, name) || undefined]));
-  return readRequest(params);
-}
-
 export async function authorizeAction(_previous: AuthorizeState, form: FormData): Promise<AuthorizeState> {
   if (!(await formIsGenuine(form))) {
     return failed("error.formExpired");
   }
-  const request = requestOf(form);
+  // The request this browser brought, from its sealed cookie: never from the form, never from a URL.
+  const request = await authorizeRequest();
   if (request === null) {
     return failed("authorize.invalid");
   }
@@ -93,5 +87,8 @@ export async function authorizeAction(_previous: AuthorizeState, form: FormData)
   if (result.value.rootKey !== undefined) {
     fields.push(["root_key", result.value.rootKey]);
   }
+  // The request stays until its cookie expires: deleting a cookie here would render the page again before the answer
+  // is posted. Using it twice gets nothing new: a link statement works once at the API, and a second admin token is
+  // for the same signed-in account.
   return { kind: "go", action: request.returnTo.href, fields };
 }

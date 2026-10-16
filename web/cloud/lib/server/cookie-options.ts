@@ -9,6 +9,13 @@ export const PRESESSION_COOKIE = "__Host-orchester_presession";
 export const SIGNUP_FLOW_COOKIE = "__Host-orchester_signup";
 /** The address shown after *Send reset link*. */
 export const FORGOT_FLOW_COOKIE = "__Host-orchester_forgot";
+/**
+ * A team server admin's request to `/authorize`, sealed: it arrives in a form's body (`/authorize/start`), never in a
+ * URL, and is used once (security review 1, B1).
+ */
+export const AUTHORIZE_COOKIE = "__Host-orchester_authorize";
+/** As long as a link statement is fresh. */
+export const AUTHORIZE_SECONDS = 10 * 60;
 
 const HOUR = 60 * 60;
 

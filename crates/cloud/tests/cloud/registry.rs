@@ -25,19 +25,29 @@ struct TeamServer {
 }
 
 impl TeamServer {
+  /// A server as a team server makes itself: its id is its key's.
   fn generate() -> Self {
+    let key = SigningKey::new(&PrivateKey::generate().expect("server key")).expect("signing key");
     Self {
-      id: TeamServerId::generate(),
-      key: SigningKey::new(&PrivateKey::generate().expect("server key")).expect("signing key"),
+      id: key.public_key().server_id(),
+      key,
     }
   }
 
-  fn statement(&self, signer: &SigningKey, issued_at_ms: i64) -> String {
+  /// A fresh statement of this server's, signed with its own key.
+  fn statement(&self, issued_at_ms: i64) -> String {
+    self.statement_by(&self.key, issued_at_ms)
+  }
+
+  /// A statement naming this server's id, signed by `signer`, which names its own key: what someone squatting the id
+  /// with a key of their own would send.
+  fn statement_by(&self, signer: &SigningKey, issued_at_ms: i64) -> String {
     let statement = LinkStatement {
       server: self.id,
+      nonce: InviteId::generate().as_uuid().simple().to_string(),
       name: "Kontur team".into(),
       address: "https://orchester.kontur.test".into(),
-      public_key: self.key.public_key().encoded(),
+      public_key: signer.public_key().encoded(),
       fingerprint: Some("ab".repeat(32)),
       issued_at: issued_at_ms / 1000,
     };
@@ -82,8 +92,13 @@ async fn signed_in(cloud: &TestCloud, email: &str) -> String {
 }
 
 async fn link(cloud: &TestCloud, device: &str, server: &TeamServer) -> ServerLinked {
-  let body = json!({"link": server.statement(&server.key, cloud.clock.now_ms())});
-  let response = cloud.request("POST", "/servers", Some(device), Some(body)).await;
+  link_with(cloud, device, &server.statement(cloud.clock.now_ms())).await
+}
+
+async fn link_with(cloud: &TestCloud, device: &str, statement: &str) -> ServerLinked {
+  let response = cloud
+    .request("POST", "/servers", Some(device), Some(json!({"link": statement})))
+    .await;
   assert_eq!(response.status, 201, "{}", response.error());
   let linked: ServerLinked = response.json();
   remember(linked.identity_token.expose());
@@ -95,10 +110,7 @@ pub async fn servers_link_from_the_statement_they_signed() {
   cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let server = TeamServer::generate();
-  let forged = json!({"link": server.statement(&TeamServer::generate().key, cloud.clock.now_ms())});
-  let refused = cloud.request("POST", "/servers", Some(&owner), Some(forged)).await;
-  assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
-  let stale = json!({"link": server.statement(&server.key, cloud.clock.now_ms() - 11 * MINUTE)});
+  let stale = json!({"link": server.statement(cloud.clock.now_ms() - 11 * MINUTE)});
   let refused = cloud.request("POST", "/servers", Some(&owner), Some(stale)).await;
   assert_eq!((refused.status, refused.error()), (422, "invalid".into()));
   let linked = link(&cloud, &owner, &server).await;
@@ -123,11 +135,107 @@ pub async fn servers_link_from_the_statement_they_signed() {
   let path = format!("/servers/{}", server.id);
   let shown: ServerResponse = cloud.request("GET", &path, Some(&other), None).await.json();
   assert_eq!(shown.server.server.name, "Kontur team");
-  let taken = json!({"link": server.statement(&server.key, cloud.clock.now_ms())});
-  let refused = cloud.request("POST", "/servers", Some(&other), Some(taken)).await;
-  assert_eq!((refused.status, refused.error()), (409, "conflict".into()));
-  let again = link(&cloud, &owner, &server).await;
-  assert_eq!(again.server.server.id, server.id, "its owner links it again");
+  cloud.finish().await;
+}
+
+/// Security review 1, B1: a server's id is its own key's, so nobody registers another server's id with a key of
+/// their own.
+pub async fn a_server_id_is_its_own_keys() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let mallory = signed_in(&cloud, "mallory@example.test").await;
+  let server = TeamServer::generate();
+  let attacker = TeamServer::generate();
+  for device in [&mallory, &owner] {
+    let squat = json!({"link": server.statement_by(&attacker.key, cloud.clock.now_ms())});
+    let refused = cloud.request("POST", "/servers", Some(device), Some(squat)).await;
+    assert_eq!(
+      (refused.status, refused.error()),
+      (422, "invalid".into()),
+      "before the server linked"
+    );
+  }
+  link(&cloud, &owner, &server).await;
+  let squat = json!({"link": server.statement_by(&attacker.key, cloud.clock.now_ms())});
+  let refused = cloud.request("POST", "/servers", Some(&mallory), Some(squat)).await;
+  assert_eq!(
+    (refused.status, refused.error()),
+    (422, "invalid".into()),
+    "after it linked"
+  );
+  let own = link(&cloud, &mallory, &attacker).await;
+  assert_ne!(
+    own.server.server.id, server.id,
+    "a key of one's own links a server of one's own"
+  );
+  let shown: ServerResponse = cloud
+    .request("GET", &format!("/servers/{}", server.id), Some(&mallory), None)
+    .await
+    .json();
+  assert_eq!(shown.server.server.address, "https://orchester.kontur.test");
+  cloud.finish().await;
+}
+
+/// Security review 1, B1: a statement works once; a newer one signed by the server's key takes the server over, an
+/// older one does not.
+pub async fn a_statement_works_once_and_a_newer_one_takes_the_server_back() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let other = signed_in(&cloud, "alice@example.test").await;
+  let server = TeamServer::generate();
+  let older = server.statement(cloud.clock.now_ms());
+  cloud.clock.advance(2000);
+  let first = server.statement(cloud.clock.now_ms());
+  link_with(&cloud, &other, &first).await;
+  let replayed = cloud
+    .request("POST", "/servers", Some(&owner), Some(json!({"link": first})))
+    .await;
+  assert_eq!(
+    (replayed.status, replayed.error()),
+    (409, "conflict".into()),
+    "a replay"
+  );
+  let stale = cloud
+    .request("POST", "/servers", Some(&owner), Some(json!({"link": older})))
+    .await;
+  assert_eq!(
+    (stale.status, stale.error()),
+    (409, "conflict".into()),
+    "an older statement"
+  );
+  cloud.clock.advance(2000);
+  link_with(&cloud, &owner, &server.statement(cloud.clock.now_ms())).await;
+  let owned: ServersResponse = cloud.request("GET", "/servers", Some(&owner), None).await.json();
+  assert!(
+    owned
+      .servers
+      .iter()
+      .any(|entry| entry.server.id == server.id && entry.owner)
+  );
+  let former: ServersResponse = cloud.request("GET", "/servers", Some(&other), None).await.json();
+  assert!(
+    former.servers.iter().all(|entry| !entry.owner),
+    "the former owner no longer owns it"
+  );
+  cloud.finish().await;
+}
+
+/// Security review 1, M2: one account owns at most five linked servers.
+pub async fn an_account_owns_at_most_five_servers() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let servers: Vec<TeamServer> = (0..6).map(|_| TeamServer::generate()).collect();
+  for server in &servers[..5] {
+    link(&cloud, &owner, server).await;
+  }
+  let sixth = json!({"link": servers[5].statement(cloud.clock.now_ms())});
+  let refused = cloud.request("POST", "/servers", Some(&owner), Some(sixth)).await;
+  assert_eq!((refused.status, refused.error()), (409, "too_many_servers".into()));
+  cloud.clock.advance(2000);
+  link(&cloud, &owner, &servers[0]).await;
   cloud.finish().await;
 }
 

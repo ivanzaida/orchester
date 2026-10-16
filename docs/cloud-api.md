@@ -45,7 +45,8 @@ Two kinds of client call it:
 | `unsupported_media_type` | 415 | A body without `Content-Type: application/json` |
 | `invalid` | 422 | An input breaks a rule: an email that cannot be one, a password outside 12–256 characters, an empty or over-long name |
 | `invalid_link` | 422 | A confirmation or reset link that is unknown, used or expired. One answer for all three |
-| `conflict` | 409 | The team server is linked to another account |
+| `conflict` | 409 | The team server is linked by a statement as new as this one, or this statement was used |
+| `too_many_servers` | 409 | The account owns 5 linked team servers |
 | `rate_limited` | 429 | Too many attempts; see Rate limits below |
 | `keys_unavailable` | 503 | No published key set lets the cloud sign now: the operator has to publish one |
 | `busy` | 503 | No password hashing slot freed within 10 seconds |
@@ -76,7 +77,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `DELETE /devices/{id}` | device | | `204` | `404` |
 | `GET /keys` | none | | `{ key_set }`: the newest key set, a compact JWS the root key signed | `503 keys_unavailable` |
 | `POST /identity-tokens` | device | `{ audience, purpose? }`: the team server's id (a UUID); `purpose: "admin"` for a sign-in to that server's admin | `201 { identity_token, expires_at }` (seconds) | `404 not_found` (purpose `admin` for a server not linked here), `422 invalid` (also purpose `link`), `429`, `503 keys_unavailable` |
-| `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict`, `422 invalid`, `429`, `503 keys_unavailable` |
+| `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
 | `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202`, empty | `422 invalid`, `429` |
@@ -130,12 +131,27 @@ Claims: `iss` (the public URL), `aud`, `sub` (the account id), `email`, `name`, 
 
 **Linking a team server** (`POST /servers { link }`, from the cloud's `/authorize` page, purpose `link`). The link
 statement is a compact JWS of type `orchester-link+jws` that the server signed with its own Ed25519 key:
-`{ server, name, address, public_key, fingerprint, issued_at }` (`orchester_api::statements::LinkStatement`). The cloud
-verifies it with the `public_key` inside, refuses one issued more than 10 minutes ago, and links the server to the
-signed-in account; a server linked to another account answers `409 conflict`, and its own owner may link it again
-(a new name or address) as long as the key is the same. The answer carries what the server pins: the cloud's root key
-(`root_key`, base64url) and the newest key set it signed, and an identity token with purpose `link` that links the
-admin's account on the server. A token with purpose `admin` is issued only for a linked server.
+`{ server, nonce, name, address, public_key, fingerprint, issued_at }` (`orchester_api::statements::LinkStatement`).
+
+- **A server's id is its key's** (security review 1, B1): `server` must be
+  `orchester_api::identity::PublicKey::server_id(public_key)`, a version-8 UUID of the first 16 bytes of
+  SHA-256(`"orchester-team-server-id\0"` ‖ the 32 key bytes). A team server makes its id that way and refuses to start
+  with a stored id that is not its key's, so nobody can register another server's id with a key of their own, and every
+  identity token the cloud issues for an id (the token's `aud`) is for the holder of that key.
+- The cloud verifies the statement with the `public_key` inside, refuses one issued more than 10 minutes ago, and
+  uses each `nonce` once: a replay is `409 conflict`.
+- **The newest statement owns the server.** A statement newer than the one that linked it takes the server over for
+  the signed-in account (its admins moved it); an older or equally old one is `409 conflict`.
+- One account owns at most 5 linked servers (`409 too_many_servers`); linking one it owns already does not count.
+
+The answer carries what the server pins: the cloud's root key (`root_key`, base64url) and the newest key set it
+signed, and an identity token with purpose `link` that links the admin's account on the server. A token with purpose
+`admin` is issued only for a linked server.
+
+**The web front's `/authorize`** takes a team server admin's request only in a form's body, `POST /authorize/start`
+(`purpose`, `server` or `statement`, `state`, `return`), keeps it sealed in this browser's `__Host-orchester_authorize`
+cookie for 10 minutes and shows `/authorize?return=<callback>`, whose address names only the callback: the statement
+never travels in a URL, a history or a log. Confirming uses the request up and binds it to the account signed in then.
 
 **Invites in flight.** A team server signs each invite by email (`orchester-invite+jws`:
 `{ id, server, kind, email, project?, role?, inviter, expires_at, issued_at }`, times in milliseconds) and its server

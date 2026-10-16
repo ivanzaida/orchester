@@ -11,12 +11,14 @@ pub const LINK_STATEMENT_TYPE: &str = "orchester-link+jws";
 pub const SIGNED_INVITE_TYPE: &str = "orchester-invite+jws";
 pub const INVITE_REVOCATION_TYPE: &str = "orchester-invite-revocation+jws";
 
-/// What the server signs to be linked: its id, name, address, public key, and the SHA-256 of its own certificate in
-/// hex (which apps pin; `None` behind a proxy's certificate). `issued_at` in seconds since the Unix epoch.
+/// What the server signs to be linked: its id (its public key's, `identity::PublicKey::server_id`), name, address,
+/// public key, and the SHA-256 of its own certificate in hex (which apps pin; `None` behind a proxy's certificate).
+/// `issued_at` in seconds since the Unix epoch; `nonce` (random, base64url) makes each statement usable once.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LinkStatement {
   pub server: TeamServerId,
+  pub nonce: String,
   pub name: String,
   pub address: String,
   pub public_key: String,

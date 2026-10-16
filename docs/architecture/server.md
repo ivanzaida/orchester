@@ -1058,8 +1058,9 @@ A project owner who is not an admin sees only Projects (their own, rename and hi
 
 **Signing in to the admin.**
 
-- **Through Orchester Cloud.** *Sign in with Orchester Cloud* sends the browser to the cloud's web front
-  (`/authorize?server=<id>&state=…&return=<admin URL>/auth/callback`). The cloud shows *Sign in to Kontur team's
+- **Through Orchester Cloud.** *Sign in with Orchester Cloud* sends the browser to the cloud's web front with a
+  form `POST` to `/authorize/start` (`purpose=admin`, `server=<id>`, `state`, `return=<admin URL>/admin/auth/callback`;
+  never in a URL, security review 1). The cloud shows *Sign in to Kontur team's
   admin as alice@acme.dev?*; on confirmation it returns an identity token for that server (purpose `admin`, 5
   minutes, one use) by a form `POST` to the admin's callback, checked against `state`. The admin's server side sends
   it to the team server (`POST /auth/cloud { identity_token, device: { kind: "admin_web" } }`), which answers with a
@@ -1069,9 +1070,14 @@ A project owner who is not an admin sees only Projects (their own, rename and hi
   server's entry, *Sign in to the admin*) or an account code from the host (`orchester-server account-code <username>`),
   redeemed with `POST /auth/code` as an `admin_web` device.
 - **Linking the server to the cloud** at setup or later goes the same way: the admin's server side gets the server's
-  signed link statement (`PATCH /server/cloud { link: start }`), the browser carries it to the cloud's `/authorize`
-  (purpose `link`), the cloud registers the server for the signed-in owner and returns its key set with an identity
-  token, and the admin hands both to the team server, which pins the cloud's root.
+  signed link statement (`PATCH /server/cloud { link: start }`), the browser carries it in a form's body to the cloud's
+  `/authorize/start` (purpose `link`), the cloud registers the server for the signed-in owner and returns its key set
+  with an identity token, and the admin hands both to the team server, which pins the cloud's root.
+- **A server's id is its own key's** (security review 1, B1): the team server's id is a hash of its Ed25519 public key
+  (`PublicKey::server_id`), the server refuses to start with a stored id that is not its key's, and the cloud
+  registers an id only from a statement that key signed. A statement works once (its `nonce`), and the newest one
+  owns the server, so the server's admins can always take it back. Squatting a server's id with another key, and with
+  it getting identity tokens whose audience is that server, is not possible.
 
 **Sessions and CSRF**, the cloud web front's model: the admin web token (kind `admin_web`, 12 hours, revocable like a
 device) lives only in the `__Host-orchester_admin` cookie, `Secure`, `HttpOnly`, `SameSite=Lax`, no `Domain`; every
@@ -1176,9 +1182,9 @@ Row 42; the rules here are the architect's.
 **Linking a team server at setup.** The server starts with an empty data directory and prints its check code and a
 one-time **setup code** to its console (row 45). The owner opens the server admin (row 62), enters the setup code and
 chooses a username; the server makes that account its first admin. *Link to Orchester Cloud* then carries the
-server's signed link statement (server id, public key, address, `fingerprint`: the certificate's SHA-256 in hex, the
-value apps pin, never the shorter check code) through the browser to the cloud's
-`/authorize`, where the owner is signed in; the cloud registers the server for that account (`POST /servers`) and the
+server's signed link statement (server id, which is its public key's, a nonce, public key, address, `fingerprint`:
+the certificate's SHA-256 in hex, the value apps pin, never the shorter check code) through the browser, in a form's
+body, to the cloud's `/authorize/start`, where the owner is signed in; the cloud registers the server for that account (`POST /servers`) and the
 browser brings back the cloud's key set, whose root the server pins ([The server admin](#the-server-admin)). Without
 the internet the setup stops after the first step: the server is simply not linked, and can be linked later. The owner
 then creates projects by name and slug and invites people, all in the server admin, and connects their own desktop

@@ -521,5 +521,11 @@
     "unavailable": "Linking did not finish: the server is not answering. Try again in a minute.",
     "trip": "That trip to Orchester Cloud took too long or came back to another browser. Start again.",
     "expired": "This form has expired. Reload the page and try again."
+  },
+  "trip": {
+    "pageTitle": "Orchester Cloud",
+    "title": "Going to Orchester Cloud",
+    "text": "Your browser goes to Orchester Cloud to confirm it's you, then comes back here.",
+    "continue": "Continue"
   }
 }

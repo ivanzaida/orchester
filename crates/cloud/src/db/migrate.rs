@@ -11,6 +11,7 @@ const MIGRATIONS: &[(i32, &str)] = &[
   (1, include_str!("../../migrations/0001_accounts.sql")),
   (2, include_str!("../../migrations/0002_pending_sign_up.sql")),
   (3, include_str!("../../migrations/0003_servers_invites.sql")),
+  (4, include_str!("../../migrations/0004_registry_ownership.sql")),
 ];
 
 /// The newest schema version this binary knows.

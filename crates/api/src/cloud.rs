@@ -270,8 +270,10 @@ pub enum CloudErrorCode {
   RateLimited,
   /// No published key set lists a signing key the cloud may use now.
   KeysUnavailable,
-  /// The team server is linked to another account.
+  /// The team server is linked by a statement as new as this one, or this statement was used already.
   Conflict,
+  /// The account owns as many linked team servers as one account may.
+  TooManyServers,
   /// The cloud is at a capacity limit (its limiters' memory, its password hashing); try again shortly.
   Busy,
   Internal,

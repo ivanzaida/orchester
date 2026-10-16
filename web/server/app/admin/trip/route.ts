@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 
 import { field } from "@/lib/form";
-import { authorizeUrl, backPath, withOutcome } from "@/lib/server/authorize";
+import { authorizeFields, authorizeStart, backPath, withOutcome } from "@/lib/server/authorize";
 import { config } from "@/lib/server/config";
 import { sessionEnded } from "@/lib/server/failures";
 import { newState, type TripBack } from "@/lib/server/session";
 import { serverInfo } from "@/lib/server/team/auth";
 import { changeCloud } from "@/lib/server/team/settings";
-import { anonymous, endSession, formIsGenuine, ownOrigin, session, startTrip } from "@/lib/server/visitor";
+import { anonymous, endSession, formIsGenuine, keepHandoff, ownOrigin, session, startTrip } from "@/lib/server/visitor";
 
 /**
  * Starts a trip to Orchester Cloud's `/authorize` (contract, "The trip to the cloud's /authorize"): *Sign in with
  * Orchester Cloud* (`purpose=admin`) or *Link to Orchester Cloud* (`purpose=link`). A plain form `POST` with the CSRF
- * token; the answer sends the browser to the cloud (303) with a fresh `state` kept in a cookie.
+ * token; the answer keeps a fresh `state` in a cookie and sends the browser to `/admin/trip/go`, whose form posts the
+ * trip to the cloud: the link statement never goes into a URL.
  */
 /**
  * A 303 to one of the admin's own pages, as a path: behind the team server the request's own URL has the private
@@ -33,8 +34,9 @@ async function signInTrip(request: Request, cloud: string): Promise<NextResponse
   }
   const state = newState();
   await startTrip({ state, purpose: "admin", back: "signin", session: null });
-  const target = authorizeUrl(cloud, await ownOrigin(), state, { purpose: "admin", server: info.value.cloud.server });
-  return NextResponse.redirect(target, 303);
+  const fields = authorizeFields(await ownOrigin(), state, { purpose: "admin", server: info.value.cloud.server });
+  await keepHandoff({ action: authorizeStart(cloud), fields });
+  return to(request, "/admin/trip/go");
 }
 
 async function linkTrip(request: Request, cloud: string, back: TripBack): Promise<NextResponse> {
@@ -52,8 +54,9 @@ async function linkTrip(request: Request, cloud: string, back: TripBack): Promis
   }
   const state = newState();
   await startTrip({ state, purpose: "link", back, session: current });
-  const target = authorizeUrl(cloud, await ownOrigin(), state, { purpose: "link", statement: result.value.statement });
-  return NextResponse.redirect(target, 303);
+  const fields = authorizeFields(await ownOrigin(), state, { purpose: "link", statement: result.value.statement });
+  await keepHandoff({ action: authorizeStart(cloud), fields });
+  return to(request, "/admin/trip/go");
 }
 
 export async function POST(request: Request): Promise<NextResponse> {

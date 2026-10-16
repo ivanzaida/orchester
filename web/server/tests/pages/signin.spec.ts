@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, apiRequests, expectNoApiAddress, reset, signIn, watchBrowserRequests } from "./support";
+import { ADMIN, authorizePosts, apiRequests, expectNoApiAddress, reset, signIn, watchBrowserRequests } from "./support";
 
 test.beforeEach(async () => {
   await reset();
@@ -75,12 +75,12 @@ test.describe("sign in with Orchester Cloud", () => {
   test("goes to the cloud's /authorize with a state and comes back signed in", async ({ page, context }) => {
     await page.goto("/admin/signin");
     await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
-    await expect(page).toHaveURL(/127\.0\.0\.1:4220\/authorize\?purpose=admin&server=/);
-    const url = new URL(page.url());
-    expect(url.searchParams.get("return")).toBe(`${ADMIN}/admin/auth/callback`);
+    await expect(page).toHaveURL("http://127.0.0.1:4220/authorize/start");
+    const trip = (await authorizePosts()).at(-1);
+    expect(trip).toMatchObject({ purpose: "admin", return: `${ADMIN}/admin/auth/callback` });
     const state = (await context.cookies()).find((cookie) => cookie.name === "__Host-orchester_admin_state");
     expect(state).toMatchObject({ httpOnly: true, secure: true, sameSite: "None", path: "/" });
-    expect(state?.value).not.toContain(url.searchParams.get("state") ?? "-");
+    expect(state?.value).not.toContain(trip?.state ?? "-");
 
     await page.getByRole("button", { name: "Continue as ivan@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin`);

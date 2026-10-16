@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import type { ApiFailure, CallOptions } from "@/lib/server/api";
 import { config } from "@/lib/server/config";
 import {
+  AUTHORIZE_COOKIE,
+  AUTHORIZE_SECONDS,
   FORGOT_FLOW_COOKIE,
   FORGOT_FLOW_SECONDS,
   PRESESSION_COOKIE,
@@ -16,7 +18,8 @@ import {
   cookieOptions,
 } from "@/lib/server/cookie-options";
 import { csrfToken, originMatches, tokenMatches, type CsrfCookies } from "@/lib/server/csrf";
-import { deriveKey } from "@/lib/server/seal";
+import { readRequest, requestParams, type AuthorizeRequest } from "@/lib/authorize";
+import { deriveKey, open, seal } from "@/lib/server/seal";
 import {
   openSession,
   readForgotFlow,
@@ -29,7 +32,7 @@ import {
 
 /** The request's visitor as pages and actions see it: cookies, CSRF, the session and the address. */
 
-const key = (purpose: "csrf" | "session" | "flow") => deriveKey(config().secret, purpose);
+const key = (purpose: "csrf" | "session" | "flow" | "authorize") => deriveKey(config().secret, purpose);
 
 async function csrfCookies(): Promise<CsrfCookies> {
   const jar = await cookies();
@@ -118,4 +121,26 @@ export async function leaveIfEnded(failure: ApiFailure): Promise<void> {
     await endSession();
     redirect("/signin");
   }
+}
+
+/** Keeps a team server admin's request to `/authorize` for this browser, sealed, for 10 minutes. */
+export async function keepAuthorizeRequest(request: AuthorizeRequest): Promise<void> {
+  const value = seal(key("authorize"), JSON.stringify({ ...requestParams(request), expires: Date.now() + AUTHORIZE_SECONDS * 1000 }));
+  (await cookies()).set(AUTHORIZE_COOKIE, value, cookieOptions(AUTHORIZE_SECONDS));
+}
+
+/** The request this browser brought to `/authorize`, while it is fresh. */
+export async function authorizeRequest(): Promise<AuthorizeRequest | null> {
+  const value = (await cookies()).get(AUTHORIZE_COOKIE)?.value;
+  const plaintext = value === undefined ? null : open(key("authorize"), value);
+  if (plaintext === null) {
+    return null;
+  }
+  const params = JSON.parse(plaintext) as Record<string, unknown>;
+  if (typeof params.expires !== "number" || params.expires <= Date.now()) {
+    return null;
+  }
+  const text = (name: string) => (typeof params[name] === "string" ? params[name] : undefined);
+  return readRequest({ purpose: text("purpose"), server: text("server"), statement: text("statement"), state: text("state"),
+    return: text("return") });
 }

@@ -52,6 +52,9 @@ const TESTS: &[(&str, Test)] = tests![
   hosting::requests_follow_the_contract,
   hosting::unsafe_configuration_is_refused,
   registry::servers_link_from_the_statement_they_signed,
+  registry::a_server_id_is_its_own_keys,
+  registry::a_statement_works_once_and_a_newer_one_takes_the_server_back,
+  registry::an_account_owns_at_most_five_servers,
   registry::admin_tokens_are_issued_only_for_linked_servers,
   registry::invites_reach_the_invitee_once_and_end_when_revoked,
 ];

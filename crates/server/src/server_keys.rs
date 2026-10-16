@@ -19,18 +19,30 @@ pub(crate) struct ServerKeys {
 }
 
 impl ServerKeys {
-  /// Makes the server's id and keys; run once, by the migration that adds the table.
+  /// Makes the server's keys and its id, which is its signing key's (`PublicKey::server_id`); run once, by the
+  /// migration that adds the table.
   pub fn create(db: &Connection) -> Result<(), ServerError> {
     let signing = PrivateKey::generate().map_err(|_| ServerError::Random)?;
     let code_key = random::<32>()?;
+    let id = SigningKey::new(&signing)
+      .map_err(|_| ServerError::Random)?
+      .public_key()
+      .server_id();
     db.execute(
       "INSERT INTO server_keys(id,server_id,signing_key,code_key) VALUES (1,?1,?2,?3)",
-      params![
-        TeamServerId::generate().to_string(),
-        signing.pkcs8(),
-        code_key.as_slice()
-      ],
+      params![id.to_string(), signing.pkcs8(), code_key.as_slice()],
     )?;
+    Ok(())
+  }
+
+  /// Gives a server made before ids came from keys (S1c's random id) its key's id. Run once, by schema 4.
+  pub fn derive_id(db: &Connection) -> Result<(), ServerError> {
+    let signing: Vec<u8> = db.query_row("SELECT signing_key FROM server_keys WHERE id=1", [], |row| row.get(0))?;
+    let id = SigningKey::new(&PrivateKey::from_pkcs8(signing))
+      .map_err(|_| ServerError::StoredData)?
+      .public_key()
+      .server_id();
+    db.execute("UPDATE server_keys SET server_id=?1 WHERE id=1", [id.to_string()])?;
     Ok(())
   }
 
@@ -40,9 +52,15 @@ impl ServerKeys {
       [],
       |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )?;
+    let signing = SigningKey::new(&PrivateKey::from_pkcs8(signing)).map_err(|_| ServerError::StoredData)?;
+    let id: TeamServerId = id.parse().map_err(|_| ServerError::StoredData)?;
+    // The id is the key's: a stored id that is not would let tokens for another server's id in.
+    if id != signing.public_key().server_id() {
+      return Err(ServerError::StoredData);
+    }
     Ok(Self {
-      id: id.parse().map_err(|_| ServerError::StoredData)?,
-      signing: SigningKey::new(&PrivateKey::from_pkcs8(signing)).map_err(|_| ServerError::StoredData)?,
+      id,
+      signing,
       code_key: hmac::Key::new(hmac::HMAC_SHA256, &code_key),
     })
   }

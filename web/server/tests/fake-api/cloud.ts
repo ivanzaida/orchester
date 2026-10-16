@@ -36,10 +36,13 @@ function hidden(name: string, value: string): string {
   return `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`;
 }
 
-function authorize(url: URL): string {
-  const purpose = url.searchParams.get("purpose") ?? "";
-  const back = url.searchParams.get("return") ?? "";
-  const state = url.searchParams.get("state") ?? "";
+/** What the trip posted: the fake shows it, so a test can see the statement came in the body. */
+export const posted: Record<string, string>[] = [];
+
+function authorize(fields: Record<string, string>): string {
+  const purpose = fields.purpose ?? "";
+  const back = fields.return ?? "";
+  const state = fields.state ?? "";
   const forms = IDENTITIES.map(([email, name]) => {
     const fields = [hidden("state", state), hidden("identity_token", identityToken(email, name)), hidden("key_set", "fake-key-set")];
     if (purpose === "link") {
@@ -80,8 +83,10 @@ export function cloudRoute(request: IncomingMessage, response: ServerResponse, t
     response.writeHead(status, { "content-type": "text/html; charset=utf-8" });
     response.end(body);
   };
-  if (url.pathname === "/authorize") {
-    html(200, authorize(url));
+  if (url.pathname === "/authorize/start" && request.method === "POST") {
+    const fields = form(text);
+    posted.push(fields);
+    html(200, authorize(fields));
     return true;
   }
   if (url.pathname === "/invites/deliver" && request.method === "POST") {
@@ -103,6 +108,11 @@ export function cloudRoute(request: IncomingMessage, response: ServerResponse, t
   if (url.pathname === "/__fake/deliveries") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify(deliveries));
+    return true;
+  }
+  if (url.pathname === "/__fake/authorize") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(posted));
     return true;
   }
   return false;

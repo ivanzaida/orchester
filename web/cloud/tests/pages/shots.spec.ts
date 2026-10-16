@@ -13,7 +13,7 @@ const CALLBACK = `${API}/admin/auth/callback`;
 
 function statement(): string {
   const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  const payload = { server: SERVER_ID, name: "Kontur team", address: API, public_key: "key", fingerprint: "ab".repeat(32),
+  const payload = { server: SERVER_ID, nonce: "n".repeat(32), name: "Kontur team", address: API, public_key: "key", fingerprint: "ab".repeat(32),
     issued_at: 1 };
   return `${part({ alg: "EdDSA", typ: "orchester-link+jws" })}.${part(payload)}.c2ln`;
 }
@@ -27,12 +27,15 @@ test("authorize screenshots", async ({ page }) => {
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/account$/);
-  const admin = new URLSearchParams({ purpose: "admin", server: SERVER_ID, state: STATE, return: CALLBACK });
-  const link = new URLSearchParams({ purpose: "link", statement: statement(), state: STATE, return: CALLBACK });
-  for (const [name, query] of [["sssAw", admin], ["WNc6d", link]] as const) {
+  const admin = { purpose: "admin", server: SERVER_ID, state: STATE, return: CALLBACK };
+  const link = { purpose: "link", statement: statement(), state: STATE, return: CALLBACK };
+  for (const [name, fields] of [["sssAw", admin], ["WNc6d", link]] as const) {
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
-      await page.goto(`/authorize?${query.toString()}`);
+      const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${key}" value="${value}">`);
+      await page.setContent(`<form method="post" action="http://localhost:4100/authorize/start">${inputs.join("")}<button>Go</button></form>`);
+      await page.getByRole("button", { name: "Go" }).click();
+      await page.waitForURL(/\/authorize\?return=/);
       await page.screenshot({ path: `${String(folder)}/cloud-${name}-${String(width)}.png`, fullPage: true });
     }
   }

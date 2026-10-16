@@ -42,6 +42,7 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
   }
   if version < 4 {
     transaction.execute_batch(include_str!("admin.sql"))?;
+    ServerKeys::derive_id(&transaction)?;
   }
   let broken: bool = transaction.query_row("SELECT EXISTS(SELECT 1 FROM pragma_foreign_key_check)", [], |row| {
     row.get(0)

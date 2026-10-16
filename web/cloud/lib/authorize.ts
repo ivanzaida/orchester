@@ -11,7 +11,8 @@ export const CALLBACK_PATH = "/admin/auth/callback";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATE = /^[A-Za-z0-9_-]{16,128}$/;
 const JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-const MAX_STATEMENT = 16 * 1024;
+/** A link statement is about 700 characters; it must fit a cookie once sealed. */
+const MAX_STATEMENT = 2048;
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export type AuthorizeRequest =
@@ -68,11 +69,18 @@ export function nextAfterSignIn(value: string | undefined): string | null {
   return value !== undefined && value.startsWith("/authorize?") && !value.includes("\\") ? value : null;
 }
 
-/** The request again as query parameters, for coming back after sign-in. */
-export function requestQuery(request: AuthorizeRequest): string {
+/** The request's own fields, as `/authorize/start` keeps them. */
+export function requestParams(request: AuthorizeRequest): Record<string, string> {
   const own: [string, string] = request.purpose === "admin" ? ["server", request.server] : ["statement", request.statement];
-  return new URLSearchParams([["purpose", request.purpose], ["state", request.state], ["return", request.returnTo.href], own])
-    .toString();
+  return Object.fromEntries([["purpose", request.purpose], ["state", request.state], ["return", request.returnTo.href], own]);
+}
+
+/**
+ * The page's own address for a request: only the callback, which is no secret and which the page's CSP lets its form
+ * post to. The request itself (the statement among it) stays in the sealed cookie.
+ */
+export function pageFor(request: AuthorizeRequest): string {
+  return `/authorize?${new URLSearchParams({ return: request.returnTo.href }).toString()}`;
 }
 
 /** A team server as the page shows it. */
