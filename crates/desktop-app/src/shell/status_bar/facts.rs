@@ -58,6 +58,8 @@ pub struct ProjectFacts {
   pub undecided_runs: usize,
   /// The accounts the project's connections run on that reported plan limits, by CLI.
   pub limits: Vec<AccountLimits>,
+  /// The revision of the project's data: whether its name and folder may show is asked again when it changes.
+  pub revision: u64,
 }
 
 /// An account a project's connection runs on, with the newest plan reading its CLI reported.
