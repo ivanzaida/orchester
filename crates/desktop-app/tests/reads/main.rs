@@ -37,7 +37,7 @@ const QUIET: Duration = Duration::from_millis(400);
 
 /// A window on `scenario`, seeded in its own data folder, its reads counted from the start.
 struct Counted {
-  /// First: it counts on the test's thread while the window lives.
+  /// Counts the reads of the test's thread while the window lives.
   reads: Reads,
   window: Window,
   seeded: Seeded,
