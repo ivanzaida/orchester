@@ -10,7 +10,7 @@ use orchester_api::{
   cloud::CloudServer,
 };
 use orchester_core::{
-  id::{ApprovalId, InviteId, ServerId},
+  id::{ApprovalId, CloudAccountId, InviteId, ServerId},
   secret::SecretValue,
   time::Timestamp,
 };
@@ -53,6 +53,7 @@ impl Servers {
     trust: Trust,
     request: CodeRequest,
   ) -> Result<ServerId, SharingError> {
+    let owner = self.joining_account().await?;
     let client = trust.client(address.clone())?;
     // The certificate is checked by this first request, before the code is sent.
     let name = client.server_info().await.map_err(|error| trust.refusal(error))?.name;
@@ -65,7 +66,9 @@ impl Servers {
         kind: DeviceKind::App,
       })
       .await?;
-    self.keep_join(address, (trust, JoinedWith::Code), name, joined).await
+    self
+      .keep_join((address, owner), (trust, JoinedWith::Code), name, joined)
+      .await
   }
 
   /// Joins `server`, as Orchester Cloud names it, with a cloud identity: at the address the cloud has for it and
@@ -78,6 +81,7 @@ impl Servers {
     identity: CloudIdentity<'_>,
     approval: Option<ApprovalId>,
   ) -> Result<CloudJoined, SharingError> {
+    let owner = self.joining_account().await?;
     let (address, trust, client, name) = Self::reach_named(server).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
     let issued = identity
@@ -92,7 +96,7 @@ impl Servers {
       kind: DeviceKind::App,
     };
     self
-      .finish_cloud_join(server, (&address, trust, &client, name), &request)
+      .finish_cloud_join(server, (&address, owner, trust, &client, name), &request)
       .await
   }
 
@@ -109,13 +113,13 @@ impl Servers {
   async fn finish_cloud_join(
     &self,
     server: &CloudServer,
-    (address, trust, client, name): (&ServerAddress, Trust, &Client, String),
+    (address, owner, trust, client, name): (&ServerAddress, Option<CloudAccountId>, Trust, &Client, String),
     request: &CloudJoin,
   ) -> Result<CloudJoined, SharingError> {
     match client.join_with_cloud(request).await? {
       CloudJoinAnswer::Joined(joined) => Ok(CloudJoined::Joined(
         self
-          .keep_join(address, (trust, JoinedWith::Cloud(server.id)), name, joined)
+          .keep_join((address, owner), (trust, JoinedWith::Cloud(server.id)), name, joined)
           .await?,
       )),
       CloudJoinAnswer::Waiting(approval) => Ok(CloudJoined::Waiting(approval)),
@@ -129,11 +133,19 @@ impl Servers {
       .await
   }
 
-  /// Keeps what a join gave: the server in the list with its trust and name, the device token in the keychain and
-  /// the account.
+  /// The Orchester Cloud account a join that begins now is for: the server it joins goes into that account's list,
+  /// even when another account signs in before the join finished.
+  async fn joining_account(&self) -> Result<Option<CloudAccountId>, SharingError> {
+    let workspace = self.inner.workspace.clone();
+    Ok(background::run(move || workspace.signed_in_account()).await??)
+  }
+
+  /// Keeps what a join gave: the server in `owner`'s list with its trust and name, the device token in the keychain
+  /// and the account. A server another account joined from this computer gets an entry of `owner`'s own, with the
+  /// device token this join was issued: each account is its own device on the server.
   async fn keep_join(
     &self,
-    address: &ServerAddress,
+    (address, owner): (&ServerAddress, Option<CloudAccountId>),
     (trust, joined_with): (Trust, JoinedWith),
     name: String,
     joined: Joined,
@@ -148,7 +160,10 @@ impl Servers {
       account(&joined.user),
     );
     let id = background::run(move || -> Result<ServerId, SharingError> {
-      let known = workspace.servers()?.into_iter().find(|server| server.url == url);
+      let known = workspace
+        .servers_of(owner.as_ref())?
+        .into_iter()
+        .find(|server| server.url == url);
       let id = match known {
         Some(server) => {
           workspace.set_server_trust(server.id, pin.as_deref(), plain_http)?;
@@ -167,7 +182,7 @@ impl Servers {
             joined_with: Some(joined_with),
             account: None,
           };
-          workspace.add_server(&server)?;
+          workspace.add_server(&server, owner.as_ref())?;
           server.id
         }
       };

@@ -64,10 +64,11 @@ impl Servers {
     Err(SharingError::NoPasswords)
   }
 
-  /// Signs this computer out of `server`: the server ends the session if it can be reached, and the
-  /// token leaves the keychain and the account the list either way.
+  /// Signs this computer out of `server`, one of the signed-in account's: the server ends the session if it can be
+  /// reached, and the token leaves the keychain and the account the list either way.
   pub async fn sign_out(&self, server: &ServerEntry) -> Result<(), SharingError> {
     let id = server.stored.id;
+    self.own(id).await?;
     match self
       .with_token(server, |client, token| async move { client.sign_out(&token).await })
       .await

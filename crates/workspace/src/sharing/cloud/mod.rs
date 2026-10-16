@@ -3,8 +3,9 @@
 //! *Forgot password* open in the browser, the cloud's address (the build's, or a test cloud's from Settings ›
 //! Orchester › Advanced), and the account's invites ([`invites`]). The account is in the application database's
 //! `cloud_account` row; its device token in the keychain, under this installation's id, so a development build or a
-//! QA copy never signs the installed app in or out. Team servers joined through the cloud keep working without it.
-//! The app is used only while this computer is signed in ([`gate`]).
+//! QA copy never signs the installed app in or out. The projects and team servers on this computer are each account's
+//! own: the signed-in account sees only its own, and another's stay, with their tokens, for when it signs in again,
+//! their shared projects kept in step meanwhile. The app is used only while this computer is signed in ([`gate`]).
 
 mod accepting;
 mod asking;
@@ -213,8 +214,10 @@ impl Cloud {
       inner.generation.fetch_add(1, Ordering::SeqCst);
       db.set_cloud_account(Some(&kept))?;
       db.set_cloud_sign_in_ended(None)?;
-      // The projects added while no account was signed in, and those from before projects had owners, are its.
+      // The projects and team servers added while no account was signed in, and those from before they had owners,
+      // are its.
       db.claim_unowned_projects(&kept.account)?;
+      db.claim_unowned_servers(&kept.account)?;
       Ok(())
     })
     .await??;
@@ -224,11 +227,14 @@ impl Cloud {
       email: account.email.clone(),
     });
     self.changed();
+    // The server lists show this account's servers from now on.
+    self.servers().changed();
     Ok(account)
   }
 
   /// Signs this computer out of the cloud: the cloud ends its token if it can be reached, and the token leaves the
-  /// keychain and the account the database either way. Team servers joined through the cloud keep working.
+  /// keychain and the account the database either way. The account's team servers and their tokens stay, hidden, for
+  /// when it signs in again.
   pub async fn sign_out(&self) -> Result<(), CloudError> {
     self.end_session().await;
     let forgotten = self.forget(CloudSignInEnd::SignedOut, Timestamp::now(), None).await;
@@ -301,6 +307,8 @@ impl Cloud {
       ended,
       since: Timestamp::now(),
     });
+    // The account's servers leave the lists; their tokens stay in the keychain for when it signs in again.
+    self.servers().changed();
     forgot.map(|_| true)
   }
 
