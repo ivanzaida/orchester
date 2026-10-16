@@ -3,13 +3,15 @@
 //! two pages in the browser are for. The refusals in place: a wrong email or password (`Atym1`), no internet
 //! (`i8HD8`), an email to confirm first (`vovth`), too many attempts (`t2C4a`); while it signs in, the fields fade and
 //! the button says so (`U0v7kx`). Signing in is a person's: synthetic input (an MCP client's) is refused, and says so.
+//! A password the cloud answers with a challenge goes on to the code step ([`super::code`]), which comes back here
+//! with *Back* or when the challenge ends.
 //!
 //! The card is a lurq form: Tab goes through the email, the password, *Forgot password?*, *Sign in* and *Create an
 //! account* in the order the card shows them, and Enter in either field signs in as *Sign in* does. The email takes the
 //! focus when the card opens empty, the password when the email is filled in (the gate came back); the design draws
 //! both fields at rest.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use lurq::{
   app::{
@@ -26,9 +28,10 @@ use orchester_api::{Credential, cloud::CloudErrorCode};
 use orchester_core::time::Timestamp;
 use orchester_workspace::{
   display,
-  sharing::cloud::{CloudError, WebPage},
+  sharing::cloud::{CloudError, SignInStep, WebPage},
 };
 
+use super::step::Step;
 use crate::{
   screens::settings::orchester::{PersonOnly, Said, cloud_said},
   services::Services,
@@ -45,7 +48,7 @@ use crate::{
 /// A divider's thickness (`Divider` `I2ZKts`).
 const DIVIDER: f32 = 1.0;
 /// The email's label line (`Label` `lSC1y` in `Field · Email` `JPVVZ`): the field block is 48 high.
-const LABEL_HEIGHT: f32 = 14.0;
+pub(super) const LABEL_HEIGHT: f32 = 14.0;
 /// The password's label line with *Forgot password?* (`Password label` `N1TYBK`): the field block is 49 high.
 const PASSWORD_LABEL_HEIGHT: f32 = 15.0;
 /// How often a paused sign-in looks whether its time has come.
@@ -58,6 +61,9 @@ const SUBMIT: &str = "gate-sign-in";
 /// password, and Tab reaches it after the password, as a person reads the card.
 const EMAIL_TAB: i32 = 1;
 const PASSWORD_TAB: i32 = 2;
+
+/// Takes the gate back to the password step, the password empty and focused; `true` when a code step timed out.
+pub(super) type ToPassword = Arc<dyn Fn(bool) + Send + Sync>;
 
 /// A field of the card that takes the focus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -82,8 +88,6 @@ pub(super) enum Refusal {
   },
   /// *Signing in needs the internet once*: the cloud did not answer then.
   Unreachable(Timestamp),
-  /// The account has two-factor authentication on, and the app cannot ask for its code yet.
-  TwoFactor,
   Other(Said),
 }
 
@@ -103,7 +107,6 @@ impl Refusal {
           until: Timestamp::from_unix_millis(now.unix_millis().saturating_add(millis)),
         }
       }
-      _ if error.two_factor_required() => Self::TwoFactor,
       _ if error.unanswered() => Self::Unreachable(now),
       _ => Self::Other(cloud_said(error)),
     }
@@ -126,28 +129,36 @@ pub(super) struct Form {
   focus: Signal<Option<Field>>,
   email_input: ElementRef,
   password_input: ElementRef,
+  step: Signal<Step>,
 }
 
 impl Form {
-  /// The card, its email filled in with `email` (the account whose sign-in ended here).
-  pub(super) fn new(ctx: &mut Ctx, email: &str) -> Self {
+  /// The card, its email filled in with `email` (the account whose sign-in ended here), going on to the code step in
+  /// `step`.
+  pub(super) fn new(ctx: &mut Ctx, email: &str, step: Signal<Step>) -> Self {
     let cloud = Services::of(ctx).cloud;
     let password = Signal::new(String::new());
-    let clear = password.clone();
+    let (clear, coded) = (password.clone(), step.clone());
     let tick = ctx.signal(0_u64);
     let next = tick.clone();
     Self {
       email: ctx.signal(email.to_owned()),
       password,
       sign_in: ctx.future_action(move |(email, password): (String, String)| {
-        let (cloud, clear) = (cloud.clone(), clear.clone());
+        let (cloud, clear, coded) = (cloud.clone(), clear.clone(), coded.clone());
         async move {
           let email = email.trim().to_owned();
           let signed_in = cloud.sign_in(email.clone(), Credential::new(password)).await;
-          let signed_in = signed_in.map(drop).map_err(|error| {
-            tracing::info!(%error, "Orchester Cloud did not sign this computer in");
-            Refusal::of(&error, &email)
-          });
+          let signed_in = signed_in
+            .map(|step| {
+              if let SignInStep::Code(challenge) = step {
+                coded.set(Step::code(challenge));
+              }
+            })
+            .map_err(|error| {
+              tracing::info!(%error, "Orchester Cloud did not sign this computer in");
+              Refusal::of(&error, &email)
+            });
           // A wrong email or password leaves the email to correct and the password to type again (`Atym1`); any
           // other refusal keeps the password, masked, for the next try.
           if matches!(signed_in, Ok(()) | Err(Refusal::Wrong)) {
@@ -167,7 +178,18 @@ impl Form {
       })),
       email_input: ElementRef::new(),
       password_input: ElementRef::new(),
+      step,
     }
+  }
+
+  /// Back to this card from the code step: the email kept, the password to type again.
+  pub(super) fn to_password(&self) -> ToPassword {
+    let (step, password, focus) = (self.step.clone(), self.password.clone(), self.focus.clone());
+    Arc::new(move |timed_out| {
+      password.set(String::new());
+      focus.set(Some(Field::Password));
+      step.set(Step::Password { timed_out });
+    })
   }
 
   /// Whether a sign-in is under way: the gate's other parts fade with the card's.
@@ -209,6 +231,7 @@ impl Form {
       self.person.clone(),
       self.focus.clone(),
     );
+    let step = self.step.clone();
     move || {
       let state = action.state().get_untracked();
       let (typed, secret) = (email.get_untracked(), password.get_untracked());
@@ -225,6 +248,7 @@ impl Form {
         return;
       }
       if person.allows(SUBMIT) {
+        step.set(Step::Password { timed_out: false });
         action.run_if_idle((typed, secret));
       }
     }
@@ -390,10 +414,6 @@ fn refusal_part(ctx: &mut Ctx, form: &Form, (refusal, host): (&Refusal, &str)) -
       [("host", host.to_owned()), ("time", display::clock(*at))],
     ))
     .into(),
-    Refusal::TwoFactor => Callout::new("gate-two-factor", CalloutTone::Warning, ctx.t("gate.twoFactor.title"))
-      .icon(Icon::ShieldAlert)
-      .body(ctx.t("gate.twoFactor.body"))
-      .into(),
     Refusal::Other(said) => field_error("gate-failed", &said.text(ctx)).into(),
   }
 }
@@ -476,7 +496,7 @@ fn page_link(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -> 
 }
 
 /// The hairline over *New to Orchester?*.
-fn divider() -> Element {
+pub(super) fn divider() -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(DIVIDER))

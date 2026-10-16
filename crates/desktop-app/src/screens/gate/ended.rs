@@ -1,7 +1,9 @@
 //! The gate's head, and why it came back (`Sign-in gate · why the gate came back` `obc19`): above the form, a notice
 //! names the reason the cloud gave, or that the person signed out here, and always says what happens to the work on
 //! this computer meanwhile (`While signed out` `Qkpc2`). A reason with no frame (the account was deleted) is worded
-//! like the others; any other refusal shows the fallback.
+//! like the others; any other refusal shows the fallback. Signed out here to sign in again with a code, the notice
+//! says so and names the invite that needs it, without the rows (`Nq3Mf`); the code step has a head of its own
+//! (`Tmwkg`, `hJ2yS`), and a code step that ended says so over the password (`R2wOmb`).
 
 use lurq::{
   app::{
@@ -31,18 +33,35 @@ const UNDER_MARK: f32 = 2.0;
 /// The slot of a *While signed out* row's icon, as high as its first line (`Icon slot` `x7C91I`).
 const ICON_SLOT: f32 = 19.0;
 
-/// *Sign in to start* with the mark and what the gate is for on a first run; *Sign in again* once it came back.
-pub(super) fn head(ctx: &Ctx, came_back: bool) -> Element {
+/// Which head the gate shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Head {
+  /// *Sign in to start*, on a first run.
+  First,
+  /// *Sign in again*, once the gate came back.
+  Again,
+  /// *Enter your code*, or *Enter a recovery code* (`recovery`).
+  Code { recovery: bool },
+}
+
+/// *Sign in to start* with the mark and what the gate is for on a first run; *Sign in again* once it came back; the
+/// code step's, with the mark and what to type.
+pub(super) fn head(ctx: &Ctx, kind: Head) -> Element {
   let head = Column::new()
     .id("gate-head")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role());
-  if came_back {
-    return head
-      .child(eyebrow(&ctx.t("gate.again.eyebrow")))
-      .child(title(&ctx.t("gate.again.title")))
-      .into();
-  }
+  let (eyebrow_key, title_key, lead_key) = match kind {
+    Head::Again => {
+      return head
+        .child(eyebrow(&ctx.t("gate.again.eyebrow")))
+        .child(title(&ctx.t("gate.again.title")))
+        .into();
+    }
+    Head::First => ("gate.first.eyebrow", "gate.first.title", "gate.first.lead"),
+    Head::Code { recovery: false } => ("gate.code.eyebrow", "gate.code.title", "gate.code.lead"),
+    Head::Code { recovery: true } => ("gate.code.eyebrow", "gate.code.recoveryTitle", "gate.code.recoveryLead"),
+  };
   let tile = Row::new()
     .width(Dimension::Px(MARK_TILE))
     .height(Dimension::Px(MARK_TILE))
@@ -55,10 +74,10 @@ pub(super) fn head(ctx: &Ctx, came_back: bool) -> Element {
   head
     .child(tile)
     .child(Row::new().height(Dimension::Px(UNDER_MARK)))
-    .child(eyebrow(&ctx.t("gate.first.eyebrow")))
-    .child(title(&ctx.t("gate.first.title")))
+    .child(eyebrow(&ctx.t(eyebrow_key)))
+    .child(title(&ctx.t(title_key)))
     .child(
-      Text::new(&ctx.t("gate.first.lead"))
+      Text::new(&ctx.t(lead_key))
         .id("gate-lead")
         .variant(GateText::Lead.role())
         .width(Dimension::Pct(100.0)),
@@ -76,6 +95,36 @@ fn eyebrow(text: &str) -> Text {
 
 fn title(text: &str) -> Text {
   Text::new(text).id("gate-title").variant(GateText::Title.role())
+}
+
+/// *Sign-in timed out*: a code step ended before a code finished it, and the password is asked again.
+pub(super) fn timed_out(ctx: &Ctx) -> Element {
+  Callout::new(
+    "gate-timed-out",
+    CalloutTone::Warning,
+    ctx.t("gate.code.timedOut.title"),
+  )
+  .icon(Icon::TimerOff)
+  .body(ctx.t("gate.code.timedOut.body"))
+  .into()
+}
+
+/// *Sign in with your code to accept invites*, naming the invite when the gate knows it (`Nq3Mf`).
+fn for_code(ctx: &Ctx, ended: &EndedCloudSignIn) -> Element {
+  let body = match &ended.invite {
+    Some(invite) => ctx.t_args("gate.ended.twoFactor.body", [("invite", invite.as_str())]),
+    None => ctx.t("gate.ended.twoFactor.bodyNoInvite"),
+  };
+  let notice: Element = Callout::new("gate-notice", CalloutTone::Info, ctx.t("gate.ended.twoFactor.title"))
+    .icon(Icon::ShieldCheck)
+    .body(body)
+    .into();
+  Column::new()
+    .id("gate-ended")
+    .width(Dimension::Pct(100.0))
+    .describe("reason", "two-factor")
+    .child(notice)
+    .into()
 }
 
 /// Why the last sign-in from here ended, and what that means while signed out.
@@ -105,6 +154,7 @@ pub(super) fn notice(ctx: &Ctx, ended: &EndedCloudSignIn) -> Element {
       "signed-out",
       ("gate.ended.signedOut.title", "gate.ended.signedOut.body"),
     ),
+    CloudSignInEnd::TwoFactor => return for_code(ctx, ended),
     CloudSignInEnd::Other => (
       CalloutTone::Warning,
       Icon::CircleAlert,
