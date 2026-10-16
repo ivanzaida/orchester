@@ -51,6 +51,7 @@ pub mod state;
 pub mod status;
 pub mod table;
 pub mod tabs;
+pub mod tinted_note;
 pub mod toggle;
 pub mod tool_row;
 pub mod tooltip;

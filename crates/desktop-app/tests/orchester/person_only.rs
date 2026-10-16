@@ -1,11 +1,15 @@
 //! N1 security review 1, B2 and M1: what changes who this computer trusts or what it sends is a person's. Each test
 //! presses one such button with lurq's synthetic input, as an MCP client does, and finds the reason under it and that
-//! nothing happened; the same press from a person goes through where a later step needs it.
+//! nothing happened; the same press from a person goes through where a later step needs it. The reason is the
+//! Orchestrator's: the hand in `warning` (N1 design 2).
 
 use lurq::app::events::with_synthetic_input;
-use orchester_api::client::{PlainHttp, ServerAddress};
-use orchester_app::routes::{OrchesterView, ProjectPage, Route};
-use orchester_workspace::sharing::{CodeRequest, Trust};
+use orchester_api::client::{Client, PlainHttp, ServerAddress};
+use orchester_app::{
+  routes::{OrchesterView, ProjectPage, Route},
+  ui::icon::{Icon, glyph},
+};
+use orchester_workspace::sharing::{CodeRequest, Trust, trust::PresentedCertificate};
 
 use super::{
   KONTUR_REMOTE,
@@ -22,7 +26,30 @@ use super::{
 fn refused(window: &mut Window, id: &str) {
   shows(window, id);
   with_synthetic_input(|| window.press(id));
-  shows(window, &format!("{id}-person-only"));
+  let reason = format!("{id}-person-only");
+  shows(window, &reason);
+  in_warning(window, &reason);
+}
+
+/// The reason `id` is the Orchestrator's person-only note (`ui::tinted_note::person_only`): the hand beside its words,
+/// not the danger field error. The tree does not carry a text's color; the component gives both `warning`.
+fn in_warning(window: &mut Window, id: &str) {
+  fn leaves(element: lurq::node::element::ElementRef<'_>, into: &mut Vec<String>) {
+    into.extend(element.text_content().map(str::to_owned));
+    for child in element.children() {
+      leaves(child, into);
+    }
+  }
+  let mut parts = Vec::new();
+  leaves(window.tree.get_element_by_id(id).expect("the reason"), &mut parts);
+  assert_eq!(
+    parts,
+    [
+      glyph(Icon::Hand),
+      "Only a person does this here: input from an MCP client is refused. Clients can still read this page.".to_owned()
+    ],
+    "the hand beside the words"
+  );
 }
 
 #[test]
@@ -234,16 +261,11 @@ fn orchester_person_only_joining_again() {
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
   let address = ServerAddress::parse(&server.url()).expect("address");
-  let request = CodeRequest {
-    code,
-    username: Some("ivan".into()),
-    display_name: Some("Ivan Zaida".into()),
-  };
   let joined = block_on(
     &window,
     services
       .servers
-      .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request),
+      .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), as_ivan(code)),
   )
   .expect("joined");
   let entry = services.servers.entries().expect("entries").remove(0);
@@ -254,4 +276,78 @@ fn orchester_person_only_joining_again() {
     "orchester-server-join-again",
   );
   refused(&mut window, "orchester-server-join-again");
+}
+
+/// A code request for `ivan` with `code`.
+fn as_ivan(code: orchester_api::Credential) -> CodeRequest {
+  CodeRequest {
+    code,
+    username: Some("ivan".into()),
+    display_name: Some("Ivan Zaida".into()),
+  }
+}
+
+#[test]
+fn orchester_person_only_check_code_when_connecting() {
+  let mut server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  server.serve_self_signed();
+  let mut window = window(None);
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::connect()),
+    "orchester-connect-address",
+  );
+  window.set("orchester-connect-address", &server.url());
+  press(&mut window, "orchester-connect-continue");
+  refused(&mut window, "orchester-connect-matches");
+  window.pass();
+  assert!(
+    window.tree.get_element_by_id("orchester-connect-code").is_none(),
+    "the check code was not confirmed"
+  );
+  press(&mut window, "orchester-connect-matches");
+  shows(&mut window, "orchester-connect-code");
+}
+
+#[test]
+fn orchester_person_only_check_code_of_a_changed_certificate() {
+  let mut server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  let code = server.code_for("ivan", false);
+  server.serve_self_signed();
+  let mut other = TestServer::start();
+  other.serve_self_signed();
+  let mut window = window(None);
+  let services = window.launch.services().expect("services").clone();
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let presented = block_on(&window, PresentedCertificate::read(&address)).expect("certificate");
+  let joined = block_on(
+    &window,
+    services
+      .servers
+      .join_with_code(&address, presented.confirm(), as_ivan(code)),
+  )
+  .expect("joined");
+  // This computer now trusts another server's certificate, so this one's looks changed.
+  let elsewhere = ServerAddress::parse(&other.url()).expect("address");
+  let stale = other
+    .block_on(Client::presented_certificate(&elsewhere))
+    .expect("certificate");
+  let wrong = block_on(&window, PresentedCertificate::read(&elsewhere)).expect("certificate");
+  let entry = services.servers.entries().expect("entries").remove(0);
+  block_on(&window, services.servers.trust_again(&entry, wrong.confirm())).expect("trusted");
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::server(joined)),
+    "orchester-server-certificate-matches",
+  );
+  refused(&mut window, "orchester-server-certificate-matches");
+  window.pass();
+  let entry = services.servers.entries().expect("entries").remove(0);
+  assert_eq!(
+    entry.stored.certificate_pin,
+    Some(stale.to_hex()),
+    "the new certificate was not trusted"
+  );
 }

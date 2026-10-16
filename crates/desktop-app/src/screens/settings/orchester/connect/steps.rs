@@ -17,7 +17,6 @@ use orchester_workspace::sharing::{Reaching, ServerEntry};
 
 use super::{ConnectPage, Found, Stage, join};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   services::Services,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing, OrchesterText},
   ui::{
@@ -464,6 +463,9 @@ fn already_in<'a>(found: &Found, entries: &'a [ServerEntry]) -> Option<&'a Serve
     .find(|entry| entry.address == found.address && entry.in_use())
 }
 
+/// *It matches* under the check code, which only a person presses.
+const MATCHES: &str = "orchester-connect-matches";
+
 /// *Compare the check code*: the code, *It matches* (a person only) and *It doesn't match*.
 fn compare(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Element {
   let Reaching::OwnCertificate(presented) = &found.reached.trust else {
@@ -495,22 +497,17 @@ fn compare(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Element {
       .child(Row::new().child(back))
       .into();
   }
-  let gate = ctx.use_context::<InputGate>();
-  let (stage, join) = (page.stage.clone(), page.join.clone());
+  let (stage, join, person) = (page.stage.clone(), page.join.clone(), page.person.clone());
   let chosen = presented.clone();
-  let matches = ActionButton::new(
-    "orchester-connect-matches",
-    ButtonKind::Primary,
-    ctx.t("sharing.connect.compare.matches"),
-  )
-  .icon(Icon::Check)
-  .on_click(move || {
-    // Only a person compares the code with the server's console; synthetic input never confirms it.
-    if input_may_decide(gate.as_ref(), Guarded::CheckCode) {
-      join.confirm(chosen.clone().confirm());
-      stage.set(Stage::Join);
-    }
-  });
+  let matches = ActionButton::new(MATCHES, ButtonKind::Primary, ctx.t("sharing.connect.compare.matches"))
+    .icon(Icon::Check)
+    .on_click(move || {
+      // Only a person compares the code with the server's console; synthetic input never confirms it.
+      if person.confirms_code(MATCHES) {
+        join.confirm(chosen.clone().confirm());
+        stage.set(Stage::Join);
+      }
+    });
   let differs = {
     let stage = page.stage.clone();
     ActionButton::new(
@@ -523,13 +520,15 @@ fn compare(ctx: &mut Ctx, page: &ConnectPage, found: &Found) -> Element {
   let compared = super::super::code::compared(
     "orchester-connect-check",
     &presented.check_code(),
-    vec![
-      Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into(),
-      Text::new(&ctx.t_args("sharing.connect.compare.person", [("server", name)]))
-        .variant(ExtraTypography::Note.role())
-        .width(Dimension::Pct(100.0))
-        .into(),
-    ],
+    std::iter::once(Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into())
+      .chain(page.person.reason(ctx, MATCHES))
+      .chain([
+        Text::new(&ctx.t_args("sharing.connect.compare.person", [("server", name)]))
+          .variant(ExtraTypography::Note.role())
+          .width(Dimension::Pct(100.0))
+          .into(),
+      ])
+      .collect(),
   );
   Column::new()
     .width(Dimension::Pct(100.0))

@@ -87,19 +87,7 @@ pub(super) fn head(id: &str, (glyph, title): (Icon, &str), chip: Option<Element>
 
 /// A note of card `id` (`{id}-{suffix}`): `text` in `color` beside its icon in the same color.
 pub(super) fn note(id: &str, suffix: &str, (glyph, color): (Icon, PaletteColor), text: &str) -> Row {
-  Row::new()
-    .id(format!("{id}-{suffix}"))
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, color.clone()))
-    .child(
-      Text::new(text)
-        .variant(ExtraTypography::Note.role())
-        .color(color)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
+  crate::ui::tinted_note::tinted_note(format!("{id}-{suffix}"), (glyph, color), text)
 }
 
 /// A decision to take on a proposal.

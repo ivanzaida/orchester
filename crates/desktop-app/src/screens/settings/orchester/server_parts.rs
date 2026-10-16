@@ -21,7 +21,6 @@ use super::{
   words::day,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   routes::{OrchesterPanel, OrchesterView, Route},
   services::Services,
@@ -40,6 +39,7 @@ const ADD_COMPUTER: &str = "orchester-server-add-computer";
 const ADMIN_SIGN_IN: &str = "orchester-server-admin-sign-in";
 const JOIN_AGAIN: &str = "orchester-server-join-again";
 const SIGN_OUT: &str = "orchester-server-sign-out-confirm";
+const CERTIFICATE_MATCHES: &str = "orchester-server-certificate-matches";
 
 /// What is wrong with the server, first in the panel, and what came of an answer to it.
 pub(super) fn problems(
@@ -121,17 +121,16 @@ fn certificate_changed(
         .as_deref()
         .and_then(check_code)
         .unwrap_or_default();
-      let gate = ctx.use_context::<InputGate>();
-      let (trust, chosen) = (panel.trust.clone(), presented.clone());
+      let (trust, chosen, person) = (panel.trust.clone(), presented.clone(), panel.person.clone());
       let matches = ActionButton::new(
-        "orchester-server-certificate-matches",
+        CERTIFICATE_MATCHES,
         ButtonKind::Primary,
         ctx.t("cloud.server.certificate.matches"),
       )
       .icon(Icon::Check)
       .on_click(move || {
         // A person compares the code with the server's console; synthetic input never confirms it.
-        if input_may_decide(gate.as_ref(), Guarded::CheckCode) {
+        if person.confirms_code(CERTIFICATE_MATCHES) {
           trust.run(chosen.clone());
         }
       });
@@ -154,12 +153,15 @@ fn certificate_changed(
             )
             .into(),
             Row::new().spacing(SpacingSize::Sm).child(matches).child(differs).into(),
-            hint(
-              "orchester-server-certificate-person",
-              &ctx.t("cloud.server.certificate.person"),
-            )
-            .into(),
-          ],
+          ]
+          .into_iter()
+          .chain(panel.person.reason(ctx, CERTIFICATE_MATCHES))
+          .chain([hint(
+            "orchester-server-certificate-person",
+            &ctx.t("cloud.server.certificate.person"),
+          )
+          .into()])
+          .collect(),
         ));
     }
   }
