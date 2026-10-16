@@ -4,6 +4,7 @@
 use std::time::{Duration, Instant};
 
 use orchester_core::{
+  id::ResourceId,
   resource::{Pipeline, StepKind},
   store::ResourceStore,
 };
@@ -83,8 +84,9 @@ enum Page {
 }
 
 /// Shows `page` unlocked and renders it a few times, asks the weaker save's question, then tries an edit
-/// while it locks the page: confirming saves what was asked about, not the locked edit.
-fn locked_edit_while_asked(page: Page) {
+/// while it locks the page: confirming saves what was asked about, not the locked edit. Gives the editor,
+/// the pipeline and the field it edited.
+fn locked_edit_while_asked(page: Page) -> (Editor, ResourceId, &'static str) {
   let mut editor = Editor::new();
   let id = editor.published();
   editor.open(id);
@@ -130,6 +132,38 @@ fn locked_edit_while_asked(page: Page) {
   match page {
     Page::Step => assert_eq!(step.budget.map(|b| b.get()), Some(4000)),
     Page::Summary | Page::Settings => assert_eq!(draft.body().description(), "Asked"),
+  }
+  (editor, id, field)
+}
+
+/// The draft's budget of its only step, or its description.
+fn saved(editor: &Editor, id: ResourceId, page: Page) -> Option<String> {
+  let draft = editor.db().draft::<Pipeline>(id).expect("the draft can be read")?;
+  Some(match page {
+    Page::Step => draft.body().steps()[0]
+      .budget
+      .map_or_else(String::new, |b| b.get().to_string()),
+    Page::Summary | Page::Settings => draft.body().description().to_owned(),
+  })
+}
+
+#[test]
+fn pipelines_watch_fields_follow_again_once_the_question_is_answered() {
+  for page in [Page::Step, Page::Summary, Page::Settings] {
+    let (mut editor, id, field) = locked_edit_while_asked(page);
+    let (typed, stored) = if matches!(page, Page::Step) {
+      ("3,000", "3000")
+    } else {
+      ("Unlocked", "Unlocked")
+    };
+    editor.set(field, typed);
+    // The draft still drops the published gate, so it is saved through the question, never by autosave.
+    editor.click("pipeline-save");
+    editor.until("save question again", |e| e.exists("pipeline-save-question-confirm"));
+    editor.click("pipeline-save-question-confirm");
+    editor.until("the unlocked edit saved", |e| {
+      saved(e, id, page).as_deref() == Some(stored)
+    });
   }
 }
 
