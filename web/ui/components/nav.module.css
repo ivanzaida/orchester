@@ -4,8 +4,9 @@
   gap: var(--space-hairline);
 }
 
+/* 12 under the eyebrow with the nav's own gap: `EJ8tl`'s 8 spacer between two 2 gaps. */
 .eyebrow {
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-tight);
   font-family: var(--font-mono);
   font-size: var(--text-tag);
   letter-spacing: var(--tracking-tag);

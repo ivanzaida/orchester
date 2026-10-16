@@ -55,6 +55,11 @@ a.ghost:hover {
   background-image: linear-gradient(var(--color-hover), var(--color-hover));
 }
 
+/* The row's button whose question is open stays as drawn: the row above the question is the one marked. */
+.button[aria-expanded="true"]:hover:enabled {
+  background-image: none;
+}
+
 .small {
   width: auto;
   height: var(--control-md);
