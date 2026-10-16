@@ -9,9 +9,9 @@
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod screens;
 #[path = "../support/mod.rs"]
 mod support;
-mod screens;
 mod transcript;
 
 use std::{

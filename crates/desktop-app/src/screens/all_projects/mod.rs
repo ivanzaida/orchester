@@ -126,7 +126,11 @@ impl Component for AllProjects {
 /// What each listed project's database says, read after the list is shown and again whenever its runner
 /// reports; the previous data stays on screen while it is read again. Held while QA holds reads
 /// (`hold_reads`).
-fn read_data(ctx: &mut Ctx, (services, read): (&Services, &Arc<Mutex<(Reported, ListedData)>>), entries: Entries) -> ListedData {
+fn read_data(
+  ctx: &mut Ctx,
+  (services, read): (&Services, &Arc<Mutex<(Reported, ListedData)>>),
+  entries: Entries,
+) -> ListedData {
   let (hold, programs, read) = (services.hold.clone(), services.programs.clone(), Arc::clone(read));
   ctx
     .future(entries, move |Entries(entries, reported)| {

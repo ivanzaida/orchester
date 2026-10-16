@@ -11,11 +11,7 @@ use orchester_app::{
   project::feed::TRANSCRIPT_PACE,
   routes::{ProjectPage, TaskView},
 };
-use orchester_core::{
-  name::Name,
-  store::TaskStore,
-  task::TaskUpdate,
-};
+use orchester_core::{name::Name, store::TaskStore, task::TaskUpdate};
 use orchester_store::ProjectDb;
 
 use super::Counted;
@@ -56,7 +52,6 @@ fn reads_a_transcript_line_again_only_where_its_run_runs() {
   retitle(&running, "KON-12", "Retry webhooks, renamed");
   running.report(false);
   let line = running.settle();
-  eprintln!("KON-12 Conversation, a transcript line: {line:?}");
   assert_eq!(
     line,
     counts(&[("requests", 1), ("task", 1), ("transcript", 1)]),
@@ -68,16 +63,17 @@ fn reads_a_transcript_line_again_only_where_its_run_runs() {
   retitle(&ended, "KON-1", "CI caching, renamed");
   ended.report(false);
   let line = ended.settle();
-  eprintln!("KON-1 Summary, another run's transcript line: {line:?}");
   assert_eq!(line, counts(&[]), "another run's lines read nothing");
   ended.report(true);
   let state = ended.settle();
-  eprintln!("KON-1 Summary, a run's state: {state:?}");
   assert_eq!(
     state,
     counts(&[("project tasks", 1), ("project usage", 1), ("task", 1)])
   );
-  assert!(title(&mut ended).contains("CI caching, renamed"), "a run's state reads the page again");
+  assert!(
+    title(&mut ended).contains("CI caching, renamed"),
+    "a run's state reads the page again"
+  );
 }
 
 #[test]
@@ -95,9 +91,14 @@ fn reads_a_burst_of_lines_once_per_pace_and_shows_the_last() {
   }
   let burst = counted.settle();
   let paces = (start.elapsed().as_millis() / TRANSCRIPT_PACE.as_millis()) as usize;
-  eprintln!("KON-12 Summary, 20 lines 10 ms apart: {burst:?} in {paces} paces");
   let reads = burst.get("task").copied().unwrap_or(0);
-  assert!((1..=paces + 1).contains(&reads), "{reads} reads of the task");
+  assert!(
+    (1..=paces + 1).contains(&reads),
+    "{reads} reads of the task in {paces} paces"
+  );
   assert_eq!(burst.len(), 1, "only the task is read: {burst:?}");
-  assert!(title(&mut counted).contains("after the burst"), "the last line is read too");
+  assert!(
+    title(&mut counted).contains("after the burst"),
+    "the last line is read too"
+  );
 }

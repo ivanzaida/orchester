@@ -20,7 +20,11 @@ fn reads_agents_again_when_a_run_changes_state_not_on_its_lines() {
   assert_eq!(agents.settle(), counts(&[]), "a transcript line reads nothing");
   agents.report(true);
   let state = agents.settle();
-  assert_eq!(state.get("agents"), Some(&1), "a run's state reads the profiles' uses: {state:?}");
+  assert_eq!(
+    state.get("agents"),
+    Some(&1),
+    "a run's state reads the profiles' uses: {state:?}"
+  );
 }
 
 #[test]
@@ -37,7 +41,11 @@ fn reads_the_code_index_again_on_its_own_changes_not_on_lines() {
   assert_eq!(changed.get("code index"), Some(&1), "{changed:?}");
   index.report(true);
   let state = index.settle();
-  assert_eq!(state.get("code index"), Some(&1), "a run's state reads what uses an index: {state:?}");
+  assert_eq!(
+    state.get("code index"),
+    Some(&1),
+    "a run's state reads what uses an index: {state:?}"
+  );
 }
 
 #[test]
@@ -51,7 +59,11 @@ fn reads_skills_again_when_a_run_changes_state_not_when_tasks_are_saved() {
   assert_eq!(saved.get("project tasks"), Some(&1), "the tasks are read: {saved:?}");
   skills.report(true);
   let state = skills.settle();
-  assert_eq!(state.get("skills"), Some(&1), "a run's state reads the skills' uses: {state:?}");
+  assert_eq!(
+    state.get("skills"),
+    Some(&1),
+    "a run's state reads the skills' uses: {state:?}"
+  );
 }
 
 #[test]
@@ -76,5 +88,9 @@ fn reads_only_the_listed_project_whose_runner_reported() {
   services.runners.ensure(&other.repo_root, "Other");
   let report = all.settle();
   assert_eq!(report, counts(&[("listed project", 1)]), "only Other is read again");
-  assert_ne!(all.window.text(&status), before, "Other's row shows what its runner reported");
+  assert_ne!(
+    all.window.text(&status),
+    before,
+    "Other's row shows what its runner reported"
+  );
 }
