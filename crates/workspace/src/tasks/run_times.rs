@@ -34,7 +34,7 @@ pub(super) fn starts_of(db: &ProjectDb, run: &Run) -> Result<Vec<AttemptStart>, 
 }
 
 /// When `run` ended, if it did: succeeded, failed or was cancelled.
-pub(super) fn finished_at(db: &ProjectDb, run: &Run) -> Result<Option<Timestamp>, StoreError> {
+pub(crate) fn finished_at(db: &ProjectDb, run: &Run) -> Result<Option<Timestamp>, StoreError> {
   if !run.status().is_terminal() {
     return Ok(None);
   }

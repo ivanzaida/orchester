@@ -9,12 +9,15 @@
 //! the backoff. Shared projects (S2b) are in [`project`].
 
 mod account;
+pub mod address;
 mod connection;
 pub mod device;
 mod error;
+mod joining;
 mod monitor;
 mod password;
 pub mod project;
+pub mod trust;
 
 use std::{
   collections::{HashMap, HashSet},
@@ -35,10 +38,13 @@ use tokio::sync::watch;
 
 pub use self::{
   account::{PendingPasswordChange, SignedIn},
+  address::{ProjectAddress, ProjectAddressError, RemoteMatch, remote_match},
   connection::{Connection, Schedule},
   error::{SharingError, client_message},
+  joining::{CloudIdentity, CloudJoined, CodeRequest},
   monitor::run as monitor,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
+  trust::{ConfirmedPin, PresentedCertificate, Trust},
 };
 use crate::{background, secrets::Vault, workspace::Workspace};
 
@@ -221,6 +227,7 @@ impl Servers {
       url: address.as_str().to_owned(),
       name,
       plain_http_allowed: plain_http == PlainHttp::Allowed,
+      certificate_pin: None,
       added_at: Timestamp::now(),
       account: None,
     };
@@ -231,14 +238,11 @@ impl Servers {
     Ok(id)
   }
 
-  /// The client of `server`, with the plain HTTP opt-in stored with it.
-  fn client(server: &ServerEntry) -> Result<Client, SharingError> {
-    let plain_http = if server.stored.plain_http_allowed {
-      PlainHttp::Allowed
-    } else {
-      PlainHttp::NotAllowed
-    };
-    Ok(Client::new(server.address.clone(), plain_http)?)
+  /// The client of `server`, with the trust stored with it: its pinned certificate, or the system's trust store and
+  /// the plain HTTP opt-in.
+  fn client(server: &ServerEntry) -> Result<(Client, Trust), SharingError> {
+    let trust = Trust::stored(&server.stored)?;
+    Ok((trust.client(server.address.clone())?, trust))
   }
 
   /// The token of `server` from the keychain; signed out when there is none.
@@ -270,7 +274,7 @@ impl Servers {
     F: FnOnce(Client, SecretValue) -> Fut,
     Fut: Future<Output = Result<T, ClientError>>,
   {
-    let client = Self::client(server)?;
+    let (client, trust) = Self::client(server)?;
     let token = match self.token(server.stored.id).await {
       Ok(token) => token,
       Err(SharingError::SignedOut) => {
@@ -286,7 +290,7 @@ impl Servers {
         code: orchester_api::ErrorCode::Unauthorized,
         ..
       }) => Err(SharingError::SignedOut),
-      answer => Ok(answer?),
+      answer => answer.map_err(|error| trust.refusal(error)),
     }
   }
 

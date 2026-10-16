@@ -53,7 +53,7 @@ fn local_git_the_legacy_merge_creates_nothing_in_git() {
   let fixture = Fixture::new(false);
   let root = fixture.root();
   let source = git(&fixture.task_root, &["rev-parse", "HEAD"]);
-  merge_in(root, &Programs::processes(), fixture.run).expect("legacy merge");
+  merge_in(root, &Programs::processes(), (fixture.run, None)).expect("legacy merge");
   assert_eq!(git(root, &["rev-parse", "HEAD"]), source);
   assert!(orchester_files(root).is_empty());
 }

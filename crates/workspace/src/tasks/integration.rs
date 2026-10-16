@@ -12,8 +12,9 @@ use orchester_core::{
   id::RunId,
   integration::{
     Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run,
+    RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run_at,
   },
+  revision::Revision,
   run::Run,
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
@@ -132,6 +133,9 @@ fn merge_message(error: &MergeError, separator: &str) -> Message {
     MergeError::BranchMissing(branch) => {
       Message::new("runs.merge.failure.branchMissing").with("branch", branch.to_string())
     }
+    MergeError::BranchMoved { branch, expected } => Message::new("runs.merge.failure.branchMoved")
+      .with("branch", branch.to_string())
+      .with("revision", crate::display::short_revision(expected.as_str()).to_owned()),
     MergeError::Conflict { files } => with_files("runs.merge.failure.conflict", files),
     MergeError::Refused(said) => Message::new("runs.merge.failure.refused").with("detail", said.clone()),
     MergeError::Git(error) => git_message(error),
@@ -222,8 +226,13 @@ pub struct Merged {
 }
 
 /// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
-/// that is safe to remove: its clean worktrees and its merged branches.
-pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Merged, IntegrationProblem> {
+/// that is safe to remove: its clean worktrees and its merged branches. With `expected`, only while the run's
+/// branch is at that commit (the one a person reviewed); a branch that moved since merges nothing.
+pub fn merge_in(
+  repo_root: &Path,
+  programs: &Programs,
+  (run, expected): (RunId, Option<&Revision>),
+) -> Result<Merged, IntegrationProblem> {
   let _lease = orchester_exec::local_git::IntegrationLease::acquire(repo_root)
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?;
   let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(repo_root)
@@ -272,8 +281,14 @@ pub fn merge_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result<Mer
     return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
   }
   let git = programs.git_work();
-  let merge = merge_run(&git, Path::new(GIT), repo_root, (&run, task.key()), Timestamp::now())
-    .map_err(IntegrationProblem::Merge)?;
+  let merge = merge_run_at(
+    &git,
+    (Path::new(GIT), repo_root),
+    (&run, task.key()),
+    expected,
+    Timestamp::now(),
+  )
+  .map_err(IntegrationProblem::Merge)?;
   if merge.kind == orchester_core::integration::MergeKind::AlreadyMerged {
     return Err(IntegrationProblem::Store(Message::new(
       "localIntegration.externalResult",

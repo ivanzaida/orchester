@@ -24,11 +24,13 @@ use lurq::{
 use orchester_core::{
   connection::AccountStartProblem,
   id::ProjectId,
-  orchestrator::{ActionOutcome, ChatEvent, HeldWork, SessionChange, TurnFailure, TurnState},
+  orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange, TurnFailure, TurnState},
+  time::Timestamp,
 };
 use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
 use super::{
+  change::{ChangeCard, ChangeProps},
   held::{HeldCard, HeldProps},
   proposal::{ProposalProps, StartProposal},
   turns::{Part, Turn},
@@ -174,44 +176,19 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
     None => time,
   };
   let key = row.turn.key();
-  let body = row
+  let parts: Vec<Element> = row
     .turn
     .answer
     .iter()
     .enumerate()
     .map(|(index, part)| match part {
       Part::Reply { text: said, .. } => text(ctx, &format!("orchestrator-reply-{key}-{index}"), said),
-      Part::Action { action, at, seq } => {
-        let id = format!("orchestrator-action-{key}-{index}");
-        match (&action.outcome, &row.env.scope) {
-          (ActionOutcome::Proposed(start), Some(scope)) => ctx.mount_keyed::<StartProposal>(
-            &id,
-            ProposalProps {
-              id: id.clone(),
-              scope: scope.clone(),
-              seq: *seq,
-              task: action.task.clone().unwrap_or_default(),
-              start: (**start).clone(),
-              at: *at,
-            },
-          ),
-          (ActionOutcome::Done, Some(scope)) if action.held.is_some() => ctx.mount_keyed::<HeldCard>(
-            &id,
-            HeldProps {
-              id: id.clone(),
-              project: (row.env.project, row.env.name.to_string()),
-              root: scope.root.clone(),
-              task: action.task.clone(),
-              held: action.held.clone().unwrap_or(HeldWork {
-                group: None,
-                waiting: Vec::new(),
-              }),
-              at: *at,
-            },
-          ),
-          _ => super::action::card(ctx, &id, (action, *at), (row.env.project, &row.env.name)),
-        }
-      }
+      Part::Action { action, at, seq } => action_card(
+        ctx,
+        row,
+        &format!("orchestrator-action-{key}-{index}"),
+        (action, *at, *seq),
+      ),
       Part::Event {
         event: ChatEvent::NewSession { because },
         ..
@@ -224,12 +201,65 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
       }
     })
     .collect();
+  // The answer's parts, 10 apart: replies, cards and events (`b55NqO`'s *Answer*).
+  let body = Column::new()
+    .id(format!("orchestrator-answer-{key}-parts"))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Loose.role())
+    .with_children(parts);
   Some(chat_row(
     format!("orchestrator-answer-{key}"),
     Avatar::Orchestrator,
     (&ctx.t("orchestrator.title"), &meta),
-    body,
+    vec![body.into()],
   ))
+}
+
+/// The card of `action`, taken at `at` as entry `seq` of the conversation; `id` names it.
+fn action_card(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&ChatAction, Timestamp, i64)) -> Element {
+  let id = id.to_owned();
+  if action.change.is_some() || action.auto_mode {
+    return ctx.mount_keyed::<ChangeCard>(
+      &id,
+      ChangeProps {
+        id: id.clone(),
+        scope: row.env.scope.clone(),
+        project: (row.env.project, Arc::from(row.env.name.as_ref())),
+        seq,
+        action: action.clone(),
+        at,
+      },
+    );
+  }
+  match (&action.outcome, &row.env.scope) {
+    (ActionOutcome::Proposed(start), Some(scope)) => ctx.mount_keyed::<StartProposal>(
+      &id,
+      ProposalProps {
+        id: id.clone(),
+        scope: scope.clone(),
+        seq,
+        task: action.task.clone().unwrap_or_default(),
+        start: (**start).clone(),
+        applying: action.claimed.is_some(),
+        at,
+      },
+    ),
+    (ActionOutcome::Done, Some(scope)) if action.held.is_some() => ctx.mount_keyed::<HeldCard>(
+      &id,
+      HeldProps {
+        id: id.clone(),
+        project: (row.env.project, row.env.name.to_string()),
+        root: scope.root.clone(),
+        task: action.task.clone(),
+        held: action.held.clone().unwrap_or(HeldWork {
+          group: None,
+          waiting: Vec::new(),
+        }),
+        at,
+      },
+    ),
+    _ => super::action::card(ctx, &id, (action, at), (row.env.project, &row.env.name)),
+  }
 }
 
 /// How the turn ended, with what the person can do about the newest one.

@@ -1,11 +1,13 @@
+use std::num::NonZeroU64;
+
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, RouteError,
-  SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
+  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
+  RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
   query::{Params, with_query},
 };
 
@@ -21,6 +23,8 @@ pub enum ProjectPage {
   Task(TaskKey, TaskView),
   MergeQueue,
   PullRequests,
+  /// A pull request of the project's repository, by its number.
+  PullRequest(NonZeroU64),
   Usage,
   Pipelines,
   NewPipeline,
@@ -89,7 +93,7 @@ impl ProjectPage {
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
-      Self::PullRequests => Screen::PullRequests,
+      Self::PullRequests | Self::PullRequest(_) => Screen::PullRequests,
       Self::Usage => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
@@ -130,6 +134,7 @@ impl ProjectPage {
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
       Self::Pipeline(id) => format!("{project_root}/pipelines/{id}"),
+      Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
       Self::Agent(id) => format!("{project_root}/agents/{id}"),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
@@ -178,6 +183,10 @@ impl ProjectPage {
       },
       ["pipelines", id] => id.parse().map(Self::Pipeline).map_err(|_| RouteError::NoScreen),
       ["agents", id] => id.parse().map(Self::Agent).map_err(|_| RouteError::NoScreen),
+      [PULL_REQUESTS, number] => number
+        .parse::<NonZeroU64>()
+        .map(Self::PullRequest)
+        .map_err(|_| RouteError::NoScreen),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),

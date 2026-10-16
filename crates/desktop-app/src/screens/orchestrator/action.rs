@@ -80,6 +80,12 @@ fn words(tool: &str) -> Words {
       "orchestrator.action.holdQueue.refused",
       Some("orchestrator.action.holdQueue.effect"),
     ),
+    "duplicate_pipeline" => (
+      Icon::Copy,
+      "orchestrator.action.duplicatePipeline.done",
+      "orchestrator.action.duplicatePipeline.refused",
+      Some("orchestrator.action.duplicatePipeline.effect"),
+    ),
     "release_queue" => (
       Icon::Play,
       "orchestrator.action.releaseQueue.done",
@@ -142,7 +148,10 @@ pub(super) fn card(
         ),
     );
   // A proposal waiting or dismissed did nothing yet: no check to tell of.
-  let ran = !matches!(action.outcome, ActionOutcome::Proposed(_) | ActionOutcome::Dismissed);
+  let ran = !matches!(
+    action.outcome,
+    ActionOutcome::Proposed(_) | ActionOutcome::Waits | ActionOutcome::Dismissed
+  );
   let checked = ran.then(|| {
     Row::new()
       .width(Dimension::Pct(100.0))
@@ -193,7 +202,7 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
   let args = [("task", task), ("tool", action.tool.as_str())];
   let time = display::clock(at);
   let (title, glyph, state, state_glyph, state_color, effect) = match &action.outcome {
-    ActionOutcome::Done => (
+    ActionOutcome::Done | ActionOutcome::Applied => (
       ctx.t_args(words.done, args),
       words.glyph,
       ctx.t_args("orchestrator.action.confirmed", [("time", time.as_str())]),
@@ -220,6 +229,15 @@ fn shown(ctx: &Ctx, action: &ChatAction, at: Timestamp) -> Shown {
       Icon::Hourglass,
       PaletteColor::Warning,
       Some(ctx.t("orchestrator.proposal.effect")),
+    ),
+    // A change waits with its own card (`super::change`); this is a waiting action without it.
+    ActionOutcome::Waits => (
+      ctx.t_args(words.done, args),
+      words.glyph,
+      ctx.t_args("orchestrator.proposal.waits", [("time", time.as_str())]),
+      Icon::Hourglass,
+      PaletteColor::Warning,
+      None,
     ),
     ActionOutcome::Dismissed => (
       ctx.t_args("orchestrator.proposal.dismissedTitle", args),
@@ -260,8 +278,9 @@ pub(super) fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Optio
 const fn outcome_name(outcome: &ActionOutcome) -> &'static str {
   match outcome {
     ActionOutcome::Done => "done",
+    ActionOutcome::Applied => "applied",
     ActionOutcome::Refused { .. } => "refused",
-    ActionOutcome::Proposed { .. } => "proposed",
+    ActionOutcome::Proposed(_) | ActionOutcome::Waits => "proposed",
     ActionOutcome::Dismissed => "dismissed",
   }
 }

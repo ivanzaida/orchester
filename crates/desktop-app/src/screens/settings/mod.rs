@@ -1,8 +1,8 @@
 //! The app's settings: a header with its tabs (`General · Automation · Accounts · Servers`, `t098v` and `lye6f`) over
-//! the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and, of *What automation may do*,
-//! *Let automation change agent permissions*: the person's own switch for what automation may widen through the MCP
-//! server, which no tool can change. *Accounts* (`accounts`, layer `hgOl2`) holds the person's agent CLI accounts.
-//! *General* and *Servers* are not built in this app yet and say so.
+//! the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and *What automation may do*: the
+//! person's own switches for what automation may widen through the MCP server and whether the Orchestrator chat
+//! publishes its drafts itself, which no tool can change. *Accounts* (`accounts`, layer `hgOl2`) holds the person's
+//! agent CLI accounts. *General* and *Servers* are not built in this app yet and say so.
 
 mod accounts;
 mod automation;
@@ -145,6 +145,6 @@ fn automation(ctx: &mut Ctx) -> Element {
     .padding_top(SpacingSize::Sm)
     .spacing(SpacingSize::Xl)
     .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
-    .child(ctx.mount_keyed::<automation::ChangePermissions>("change-permissions", automation::NoProps))
+    .child(automation::section(ctx))
     .into()
 }

@@ -1,28 +1,34 @@
 //! A real `orchester-server` on loopback with a temporary data directory.
 
+#![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
+
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use orchester_api::{
-  CreateUser, Credential, PasswordChange, SignIn,
+  CodeJoin, Credential, Joined,
   client::{Client, PlainHttp, ServerAddress},
 };
-use orchester_core::secret::SecretValue;
-use orchester_server::{Server, clock::SystemClock, config::Config, error::ServerError};
+use orchester_core::{id::UserId, secret::SecretValue};
+use orchester_server::{
+  Server,
+  clock::SystemClock,
+  config::{Config, TlsMode},
+  error::ServerError,
+};
+use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
-
-/// The admin's own password after the first sign-in.
-pub const ADMIN_PASSWORD: &str = "a secure admin password";
 
 pub struct TestServer {
   pub server: Server,
   pub address: SocketAddr,
-  _directory: TempDir,
+  pub directory: TempDir,
   stop: Option<oneshot::Sender<()>>,
   task: Option<JoinHandle<Result<(), ServerError>>>,
 }
 
 impl TestServer {
+  /// A server on plain HTTP unless `configure` asks for TLS.
   pub async fn start(configure: impl FnOnce(&mut Config)) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/api-client/tests");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
@@ -34,6 +40,7 @@ impl TestServer {
       data_dir: directory.path().into(),
       listen: "127.0.0.1:0".parse().expect("loopback"),
       name: "Kontur team".into(),
+      tls: TlsMode::Off,
       ..Config::default()
     };
     configure(&mut config);
@@ -50,7 +57,7 @@ impl TestServer {
     Self {
       server,
       address,
-      _directory: directory,
+      directory,
       stop: Some(stop),
       task: Some(task),
     }
@@ -69,41 +76,58 @@ impl TestServer {
     .expect("client")
   }
 
-  /// Creates `username` on the host, as `orchester-server user create` does, and returns the first
-  /// password.
-  pub async fn create_user(&self, username: &str, admin: bool) -> Credential {
+  /// Joins with `code` from this computer; `username` when the code makes an account.
+  pub async fn join(&self, code: &Credential, username: Option<&str>) -> Joined {
     self
-      .server
-      .host_create_user(CreateUser {
-        username: username.into(),
-        display_name: username.into(),
-        admin,
+      .client()
+      .join_with_code(&CodeJoin {
+        code: Credential::new(code.expose().into()),
+        device: "test computer · Windows".into(),
+        username: username.map(Into::into),
+        display_name: username.map(Into::into),
       })
       .await
-      .expect("create user on the host")
-      .initial_password
+      .expect("join with a code")
   }
 
-  /// The first admin, signed in with a password of their own; returns the token.
+  /// The first admin, `alice`, from the setup code; returns the device token.
   pub async fn admin(&self) -> SecretValue {
-    let first = self.create_user("alice", true).await;
-    let client = self.client();
-    let signed = client
-      .sign_in(&sign_in("alice", first.expose()))
+    let code = self
+      .server
+      .host_setup_code()
       .await
-      .expect("first sign-in");
-    let token = token(&signed.token);
-    client
-      .change_password(
-        &token,
-        &PasswordChange {
-          current_password: Credential::new(first.expose().into()),
-          new_password: Credential::new(ADMIN_PASSWORD.into()),
-        },
-      )
+      .expect("setup code")
+      .expect("no admin yet");
+    token(&self.join(&code, Some("alice")).await.token)
+  }
+
+  /// `username`, invited to the server by `admin` with a code and joined: their id and token.
+  pub async fn person(&self, admin: &SecretValue, username: &str) -> (UserId, SecretValue) {
+    let invite = self
+      .post(admin, "/invites", json!({"kind":"server","delivery":"code"}))
+      .await;
+    let code = Credential::new(invite["code"].as_str().expect("invite code").into());
+    let joined = self.join(&code, Some(username)).await;
+    (joined.user.id, token(&joined.token))
+  }
+
+  /// A request the desktop never makes (admin actions belong to the server admin), sent here to set a test up.
+  pub async fn post(&self, token: &SecretValue, path: &str, body: Value) -> Value {
+    // reqwest needs the process's crypto provider even for plain HTTP; an installed one serves as well.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let response = reqwest::Client::builder()
+      .no_proxy()
+      .build()
+      .expect("setup client")
+      .post(format!("{}/api/v1{path}", self.url()))
+      .header("Authorization", format!("Bearer {}", token.expose()))
+      .header("Content-Type", "application/json")
+      .body(body.to_string())
+      .send()
       .await
-      .expect("choose a password");
-    token
+      .expect("setup request");
+    assert!(response.status().is_success(), "{path}: {}", response.status());
+    serde_json::from_slice(&response.bytes().await.expect("setup answer")).expect("setup JSON")
   }
 
   pub async fn finish(mut self) {
@@ -126,14 +150,6 @@ impl Drop for TestServer {
     if let Some(task) = self.task.take() {
       task.abort();
     }
-  }
-}
-
-pub fn sign_in(username: &str, password: &str) -> SignIn {
-  SignIn {
-    username: username.into(),
-    password: Credential::new(password.into()),
-    device: "test computer · Windows".into(),
   }
 }
 

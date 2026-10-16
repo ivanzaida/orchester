@@ -7,32 +7,27 @@
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::Ctx,
     events::is_synthetic_input,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::{orchestrator::proposal::ProposedStart, time::Timestamp};
 use orchester_workspace::{
   display,
-  messages::Message,
-  orchestrator::{
-    proposal::{self, Decision},
-    tools::ChatScope,
-  },
+  orchestrator::{proposal::Decision, tools::ChatScope},
 };
 
+use super::card::{self, DecideAction, Deciding, State};
 use crate::{
-  mcp::domain,
-  services::Services,
-  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
+  theme::{ExtraSpacing, ExtraTypography, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
-    icon::{Icon, icon},
+    icon::Icon,
     message::message_text,
   },
 };
@@ -46,22 +41,12 @@ pub(super) struct ProposalProps {
   pub(super) task: String,
   /// What the person is asked to start: the task's title and brief's opening, the pipeline.
   pub(super) start: ProposedStart,
+  /// A person started it and the start is being carried out.
+  pub(super) applying: bool,
   pub(super) at: Timestamp,
 }
 
 impl DevtoolsInspectable for ProposalProps {}
-
-/// A decision to take on a proposal.
-#[derive(Clone)]
-struct Deciding {
-  scope: ChatScope,
-  seq: i64,
-  decision: Decision,
-}
-
-impl DevtoolsInspectable for Deciding {}
-
-type DecideAction = FutureAction<Deciding, (), Message>;
 
 pub(super) struct StartProposal {
   decide: DecideAction,
@@ -75,24 +60,8 @@ impl Component for StartProposal {
   type Props = ProposalProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let services = Services::of(ctx);
-    let i18n = ctx.i18n().clone();
-    let decide = ctx.future_action(move |deciding: Deciding| {
-      let (services, i18n) = (services.clone(), i18n.clone());
-      async move {
-        let tools = domain::on(&services);
-        let translate = domain::translate(i18n);
-        proposal::decide(
-          (&tools, &translate, &services.runners),
-          &deciding.scope,
-          deciding.seq,
-          deciding.decision,
-        )
-        .await
-      }
-    });
     Self {
-      decide,
+      decide: card::decide_action(ctx),
       refused: ctx.signal(false),
       criteria_open: ctx.signal(false),
     }
@@ -102,65 +71,36 @@ impl Component for StartProposal {
     let props = ctx.props::<ProposalProps>().clone();
     let id = props.id.as_str();
     let state = self.decide.state().get();
-    let args = [
-      ("task", props.task.as_str()),
-      ("pipeline", props.start.pipeline.as_str()),
-    ];
-    let head = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(icon(Icon::Play, IconSize::Md, PaletteColor::TextSecondary))
-      .child(
-        Text::new(&ctx.t_args("orchestrator.proposal.title", args))
-          .id(format!("{id}-title"))
-          .variant(ConversationText::ResultTitle.role())
-          .flex_shrink(1.0),
-      )
-      .child(Spacer::new().flex(1.0))
-      .child(
-        Row::new()
-          .id(format!("{id}-state"))
-          .spacing(ExtraSpacing::Pair.role())
-          .align_items(Alignment::Center)
-          .child(icon(Icon::Hourglass, IconSize::Sm, PaletteColor::Warning))
-          .child(
-            Text::new(&ctx.t_args(
-              "orchestrator.proposal.waits",
-              [("time", display::clock(props.at).as_str())],
-            ))
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
-            .nowrap(),
-          ),
-      );
-    let note = |text: &str, suffix: &str, color: PaletteColor| {
-      Text::new(text)
-        .id(format!("{id}-{suffix}"))
-        .variant(ExtraTypography::Note.role())
-        .color(color)
-        .width(Dimension::Pct(100.0))
+    let title = ctx.t_args(
+      "orchestrator.proposal.title",
+      [
+        ("task", props.task.as_str()),
+        ("pipeline", props.start.pipeline.as_str()),
+      ],
+    );
+    let state_now = if props.applying {
+      applying(ctx, props.at)
+    } else {
+      waits(ctx, props.at)
     };
+    let head = card::head(id, (Icon::Play, &title), None, state_now);
     let refused = self.refused.get().then(|| {
-      note(
-        &ctx.t("orchestrator.proposal.personOnly"),
+      card::note(
+        id,
         "person-only",
-        PaletteColor::Warning,
+        (Icon::Hand, PaletteColor::Warning),
+        &ctx.t("orchestrator.proposal.personOnly"),
       )
     });
-    let failed = state
-      .error
-      .as_ref()
-      .map(|error| note(&message_text(ctx, error), "error", PaletteColor::Danger));
-    Column::new()
-      .id(id.to_owned())
-      .describe("outcome", "proposed")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(ExtraSpacing::Section.role(), SpacingSize::Md))
-      .spacing(ExtraSpacing::Loose.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Lg)
+    let failed = state.error.as_ref().map(|error| {
+      card::note(
+        id,
+        "error",
+        (Icon::CircleAlert, PaletteColor::Danger),
+        &message_text(ctx, error),
+      )
+    });
+    card::frame(id, "proposed")
       .child(head)
       .child(asked(ctx, id, (&props.task, &props.start)))
       .with_children(self.criteria(ctx, id, &props.start.criteria))
@@ -178,7 +118,25 @@ impl Component for StartProposal {
       )
       .with_children(refused)
       .with_children(failed)
-      .child(self.buttons(ctx, &props, state.is_pending()))
+      .child(self.buttons(ctx, &props, state.is_pending() || props.applying))
+  }
+}
+
+/// That the proposal made at `at` waits for the person.
+pub(super) fn waits(ctx: &Ctx, at: Timestamp) -> State {
+  State {
+    glyph: Icon::Hourglass,
+    color: PaletteColor::Warning,
+    words: ctx.t_args("orchestrator.proposal.waits", [("time", display::clock(at).as_str())]),
+  }
+}
+
+/// That a person's decision on the proposal made at `at` is being carried out.
+pub(super) fn applying(ctx: &Ctx, at: Timestamp) -> State {
+  State {
+    glyph: Icon::LoaderCircle,
+    color: PaletteColor::TextSecondary,
+    words: ctx.t_args("orchestrator.change.applying", [("time", display::clock(at).as_str())]),
   }
 }
 
@@ -208,7 +166,11 @@ impl StartProposal {
     } else {
       let (decide, dismissing) = (self.decide.clone(), deciding(Decision::Dismiss));
       let dismiss = dismiss.on_click(move || decide.run(dismissing.clone()));
-      let (decide, starting, refused) = (self.decide.clone(), deciding(Decision::Start), self.refused.clone());
+      let (decide, starting, refused) = (
+        self.decide.clone(),
+        deciding(Decision::Accept { widens: Vec::new() }),
+        self.refused.clone(),
+      );
       let start = start.on_click(move || {
         if is_synthetic_input() {
           tracing::warn!("synthetic input reached the start of a run the Orchestrator proposed; not taken");
@@ -226,9 +188,7 @@ impl StartProposal {
       .child(start)
       .child(dismiss)
   }
-}
 
-impl StartProposal {
   /// The task's acceptance criteria, behind *Show N acceptance criteria*; nothing when it has none.
   fn criteria(&self, ctx: &Ctx, id: &str, criteria: &[String]) -> Option<Column> {
     if criteria.is_empty() {

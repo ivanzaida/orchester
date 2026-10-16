@@ -14,11 +14,16 @@ use lurq::{
   node::{Element, dimension::Dimension},
   router::RouterHandle,
 };
+use orchester_workspace::orchestrator::recover;
 
 use crate::{
   chrome, lifecycle,
-  mcp::{McpLink, WindowLink},
-  navigation::{Navigation, input::window_input, tabs::TabSet},
+  mcp::{self, McpLink, WindowLink},
+  navigation::{
+    Navigation,
+    input::{FirstKeys, window_input},
+    tabs::TabSet,
+  },
   project::{Landing, Projects, ProjectsHost},
   routes,
   services::Services,
@@ -114,6 +119,7 @@ struct SessionWindow {
   needs_you: PanelOpen,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
+  first_keys: FirstKeys,
 }
 
 impl Component for SessionWindow {
@@ -130,12 +136,19 @@ impl Component for SessionWindow {
     let projects = Projects::new(landing.project, services.jobs);
     link.attach(navigation.clone(), projects.clone());
     lifecycle::hook(ctx, &services.close);
+    // The Orchestrator's decisions an earlier session left under way are settled by what happened, in its words.
+    services.runtime.spawn(recover::recover_all(
+      services.workspace.clone(),
+      (services.session_start, mcp::domain::translate(ctx.i18n().clone())),
+      services.runners.clone(),
+    ));
     Self {
       router,
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),
       focus: ctx.signal(None),
+      first_keys: FirstKeys::default(),
     }
   }
 
@@ -148,6 +161,7 @@ impl Component for SessionWindow {
     ctx.provide(gate);
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
+    ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
@@ -165,7 +179,7 @@ impl Component for SessionWindow {
       .height(Dimension::Pct(100.0))
       .child(projects)
       .child(chrome::chrome(ctx, body.into(), closing));
-    window_input(&self.navigation, window.into(), !closing)
+    window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
       .id(WINDOW_ID)
       .on_key_down(lifecycle::keys(&services.close, &self.focus))
   }

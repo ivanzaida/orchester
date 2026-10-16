@@ -7,13 +7,14 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
+  id::ResourceId,
   name::Name,
   resource::{Pipeline, PipelineEdit, StepKey, StepKind},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use rmcp::schemars::JsonSchema;
+use rmcp::{model::JsonObject, schemars::JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -59,7 +60,7 @@ pub async fn duplicate_pipeline(
 ) -> Result<Value, ToolError> {
   let services = services.clone();
   let then = translate.text(&Message::new("pipelines.flow.then"));
-  let copy = blocking(move || {
+  let (project, copy) = blocking(move || {
     let open = services.project(&args.project)?;
     let root = open.repo_root;
     let mut db = ProjectDb::open(&root)?;
@@ -75,11 +76,36 @@ pub async fn duplicate_pipeline(
     let (version, _) = published.map_err(|error| ToolError::refused("not_published", vec![publish_error(&error)]))?;
     // The task form offers the published version.
     services.changes.record(open.project.id(), Outside::Tasks);
-    pinned_pipeline(&ProjectDb::open(&root)?, id, version)?
-      .ok_or_else(|| ToolError::not_found(Missing::Pipeline, id.to_string()))
+    let copy = pinned_pipeline(&ProjectDb::open(&root)?, id, version)?
+      .ok_or_else(|| ToolError::not_found(Missing::Pipeline, id.to_string()))?;
+    Ok((open.project.id(), copy))
   })
   .await?;
-  Ok(json!({ "pipeline": pipeline_json(&copy, translate) }))
+  Ok(json!({ "pipeline": pipeline_json(&copy, project, translate) }))
+}
+
+/// `duplicate_pipeline` with `arguments` as the Orchestrator chat takes it: the copy is saved as a draft, nothing is
+/// published, and a draft reaches no agent; its first version is published by the chat's own rule. The copy's id and
+/// name.
+pub(crate) async fn duplicate_pipeline_draft(
+  services: &Services,
+  arguments: JsonObject,
+  translate: &Translate,
+) -> Result<(ResourceId, String), ToolError> {
+  let args: DuplicatePipeline = super::parse(Value::Object(arguments))?;
+  let services = services.clone();
+  let then = translate.text(&Message::new("pipelines.flow.then"));
+  blocking(move || {
+    let open = services.project(&args.project)?;
+    let mut db = ProjectDb::open(&open.repo_root)?;
+    let (_, body) = copied(&db, &args, &then)?;
+    let name =
+      Name::new(&args.name).map_err(|error| ToolError::refused("invalid_name", vec![messages::name_error(&error)]))?;
+    let id = create_with(&mut db, name.clone(), &body, Timestamp::now()).map_err(|error| create_error(&error))?;
+    services.changes.record(open.project.id(), Outside::Pipelines);
+    Ok((id, name.as_str().to_owned()))
+  })
+  .await
 }
 
 /// The steps of the copy: the source's latest published version with the profiles given, refused
