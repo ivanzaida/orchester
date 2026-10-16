@@ -176,6 +176,8 @@ const WINDOW_RADIUS: f32 = 10.0;
 /// The design's control heights (`control_height_sm`, `control_height_md`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ControlHeight {
+  /// 20: the code viewer tree's *Collapse all* (`mJGHi` in `o1Uea4`).
+  Xs,
   /// 22: the helper's Open Secrets action (ZdkB0).
   Helper,
   /// 24: a removable row's button (`ivlGM` in `o6h0L5`).
@@ -193,6 +195,7 @@ pub enum ControlHeight {
 impl ControlHeight {
   pub const fn value(self) -> f32 {
     match self {
+      Self::Xs => 20.0,
       Self::Helper => 22.0,
       Self::Sm => 24.0,
       Self::Md => 28.0,
