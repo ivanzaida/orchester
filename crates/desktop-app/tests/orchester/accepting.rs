@@ -114,6 +114,43 @@ fn check_now(window: &mut Window) {
 }
 
 #[test]
+fn orchester_accept_never_lists_an_invite_it_keeps_as_accepted() {
+  let cloud = AccountCloud::start();
+  let (server, recorder, _) = linked(&cloud, true);
+  let recorder = recorder.expect("a recording port");
+  let invite = server.email_invite(EMAIL);
+  cloud.invite(&invite, None);
+  let mut window = signed_in(&cloud);
+  // The server cannot be reached before the cloud issued a token: the cloud still lists the invite (N1 design 3).
+  recorder.refuse_once("GET /api/v1/server");
+  press(&mut window, &format!("orchester-invite-{invite}-accept"));
+  let kept = format!("orchester-accepted-{invite}");
+  shows(&mut window, &format!("{kept}-stopped"));
+  assert_eq!(cloud.tokens_for(&invite), 0, "no token was issued");
+  window.until("listed as accepted only", |window| {
+    window
+      .tree
+      .get_element_by_id(&format!("orchester-invite-{invite}"))
+      .is_none()
+  });
+  shows(&mut window, "orchester-invites-none");
+  assert!(
+    !window.text("orchester-invites-title").contains("waiting"),
+    "{}",
+    window.text("orchester-invites-title")
+  );
+  go(&mut window, Route::AllProjects, "all-projects-tabs");
+  window.pass();
+  assert!(
+    window
+      .tree
+      .get_element_by_id(&format!("all-projects-invite-{invite}"))
+      .is_none(),
+    "the All projects notice does not offer it either"
+  );
+}
+
+#[test]
 fn orchester_accept_waits_for_approval_and_finishes_once_approved() {
   let cloud = AccountCloud::start();
   let (server, _, address) = linked(&cloud, false);

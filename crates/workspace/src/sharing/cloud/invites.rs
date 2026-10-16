@@ -21,11 +21,20 @@ pub enum ServerJoin {
 }
 
 impl Cloud {
-  /// The invites waiting for the account, soonest to expire first, as the cloud lists them.
+  /// The invites waiting for the account, soonest to expire first, as the cloud lists them, without those accepted
+  /// here (N1 design 3). The cloud lists an invite no more once it issued a token that accepts it; one whose first ask
+  /// failed before that is still listed there, but this computer keeps it as accepted, to try again or set aside.
   pub async fn invites(&self) -> Result<Vec<CloudInvite>, CloudError> {
-    self
+    let listed = self
       .with_token(|client, token| async move { Ok(client.invites(&token).await?) })
-      .await
+      .await?;
+    let kept = self.accepted_invites().await?;
+    Ok(
+      listed
+        .into_iter()
+        .filter(|invite| !kept.iter().any(|accepted| accepted.invite == invite.id))
+        .collect(),
+    )
   }
 
   /// Declines `invite`: the cloud keeps it as declined, and no token can accept it any more. The team server is not
