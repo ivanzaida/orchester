@@ -140,4 +140,6 @@ fn sa_an_admin_api_listener_beyond_private_networks_is_flagged() {
     ..Default::default()
   };
   assert!(!off.admin_api_exposed());
+  // Security review 2, 4: the warning reads as one sentence, with no run of spaces from a wrapped line.
+  assert!(!orchester_server::config::ADMIN_API_EXPOSED.contains("  "));
 }

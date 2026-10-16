@@ -8,7 +8,7 @@ use std::{
 use orchester_server::{
   Server,
   clock::{Clock, SystemClock},
-  config::Config,
+  config::{self, Config},
   error::ServerError,
   host::{self, CloudCommand},
 };
@@ -95,10 +95,7 @@ SHA-256 fingerprint: {}",
 async fn serve(config: Config) -> Result<(), ServerError> {
   let listen = config.listen;
   if config.admin_api_exposed() {
-    tracing::warn!(
-      address = ?config.admin_api_listen,
-      "ADMIN_API_LISTEN is not a loopback or private address: the admin API trusts the forwarded headers it is sent, so        nothing but the admin may reach it (keep its port unpublished)"
-    );
+    tracing::warn!(address = ?config.admin_api_listen, "{}", config::ADMIN_API_EXPOSED);
   }
   let server = Server::open(config, Arc::new(SystemClock)).await?;
   if let Some(code) = server.check_code() {

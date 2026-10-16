@@ -7,6 +7,12 @@ use serde::Deserialize;
 
 use crate::{addresses::TrustedProxy, error::ServerError};
 
+/// What the host's log says at start when [`Config::admin_api_exposed`].
+pub const ADMIN_API_EXPOSED: &str = concat!(
+  "ADMIN_API_LISTEN is not a loopback or private address: the admin API trusts the forwarded headers it is sent, ",
+  "so nothing but the admin may reach it (keep its port unpublished)"
+);
+
 /// How the server's connections are secured (`docs/architecture/server.md`, "Transport and certificates").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
