@@ -65,6 +65,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    composer::message_scrollbar,
     icon::{Icon, icon},
     message::message_text,
   },
@@ -324,6 +325,7 @@ impl Composer {
       .describe("a11y_name", placeholder.clone())
       .textarea()
       .rows(1, MAX_LINES)
+      .scrollbar(message_scrollbar(ctx))
       .width(Dimension::Pct(100.0))
       .placeholder(&placeholder)
       .ref_element(self.input.clone())

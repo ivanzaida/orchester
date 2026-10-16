@@ -9,7 +9,10 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Row, Text},
-  layout::Alignment,
+  layout::{
+    Alignment,
+    scrollbar::{ScrollBarPlacement, ScrollBarStyle},
+  },
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
@@ -51,5 +54,14 @@ pub fn recipient_pill(ctx: &mut Ctx, (words, glyph): (&str, Icon), fixed: Option
   match fixed {
     Some(reason) => Tooltip::new("composer-recipient", reason.clone()).wrap(ctx, pill.describe("reason", reason)),
     None => pill.into(),
+  }
+}
+
+/// The message field's scrollbar once its lines scroll: the theme's bar in a lane of its own, kept while the lines
+/// fit, so the text neither re-wraps nor jumps when the bar appears or goes.
+pub fn message_scrollbar(ctx: &Ctx) -> ScrollBarStyle {
+  ScrollBarStyle {
+    placement: ScrollBarPlacement::Reserved,
+    ..ctx.theme().scrollbar().clone()
   }
 }
