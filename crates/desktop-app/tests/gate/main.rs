@@ -8,6 +8,8 @@
 
 mod accounts;
 mod came_back;
+#[path = "../../../workspace/tests/server_support/mod.rs"]
+mod server_support;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

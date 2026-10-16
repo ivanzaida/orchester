@@ -68,10 +68,13 @@ pub enum State {
   LinkConfirm,
   /// The same with Kontur linked: Project settings › Sharing as `L5o9Xy`, with *Leave*.
   Linked,
+  /// The same, then signed out and in as another Orchester Cloud account: Settings › Orchester and the status bar
+  /// show none of the first account's servers (servers per account).
+  OtherAccount,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 11] = [
+  const ALL: [(&'static str, Self); 12] = [
     ("signed-in", Self::SignedIn),
     ("pending", Self::Pending),
     ("failed", Self::Failed),
@@ -83,6 +86,7 @@ impl State {
     ("project", Self::Project),
     ("link-confirm", Self::LinkConfirm),
     ("linked", Self::Linked),
+    ("other-account", Self::OtherAccount),
   ];
 
   fn named(name: &str) -> Option<Self> {
