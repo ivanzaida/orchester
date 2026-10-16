@@ -10,7 +10,7 @@ use orchester_core::{
   connection::AccountStartProblem,
   id::ResourceId,
   resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
-  run::{AcceptRefusal, AutoAsk, PreflightInput, PreflightProblem, RunLimit, preflight},
+  run::{AcceptRefusal, AutoAsk, PreflightInput, PreflightProblem, RunLimit, WorktreeFailure, preflight},
   store::{ConnectionStore, ResourceStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
   time::Timestamp,
@@ -341,7 +341,12 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
     }) => vec![Message::new("tasks.blocked.runUnavailable")],
     RunRequestError::Request(RequestError::NotConnected) => vec![Message::new("runs.start.runnerUnavailable")],
     RunRequestError::Request(RequestError::Lost) => vec![Message::new("runs.start.lost")],
-    RunRequestError::Rejected(Rejection::RunNotStarted { why, .. }) => vec![not_started(why)],
+    RunRequestError::Rejected(Rejection::RunNotStarted { why, .. }) => {
+      vec![
+        Message::new("runs.start.worktreeNotCreated"),
+        worktree_failure_message(why),
+      ]
+    }
     RunRequestError::Rejected(Rejection::Preflight { problems }) => problems.iter().map(preflight_message).collect(),
     RunRequestError::Rejected(Rejection::TaskNotFound) => vec![Message::new("runs.start.taskMissing")],
     RunRequestError::Rejected(Rejection::TaskNotQueued) => vec![Message::new("runs.start.notQueued")],
@@ -389,9 +394,18 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
   }
 }
 
-/// The run failed before it started: its worktree could not be created, `why` (git's message).
-fn not_started(why: &str) -> Message {
-  Message::new("runs.start.worktreeNotCreated").with("reason", why.to_owned())
+/// Why the run's worktree could not be created, so it never started.
+pub fn worktree_failure_message(why: &WorktreeFailure) -> Message {
+  match why {
+    WorktreeFailure::NotIgnored => Message::new("runs.notStarted.notIgnored"),
+    WorktreeFailure::NoFreeBranch => Message::new("runs.notStarted.noFreeBranch"),
+    WorktreeFailure::GitUnavailable => Message::new("runs.notStarted.gitUnavailable"),
+    WorktreeFailure::UnknownBase => Message::new("runs.notStarted.unknownBase"),
+    WorktreeFailure::InvalidBranch => Message::new("runs.notStarted.invalidBranch"),
+    WorktreeFailure::FolderInTheWay => Message::new("runs.notStarted.folderInTheWay"),
+    WorktreeFailure::Git(message) => Message::new("runs.notStarted.git").with("detail", message.as_str().to_owned()),
+    WorktreeFailure::Unexpected => Message::new("runs.notStarted.unexpected"),
+  }
 }
 
 /// Whether a failed start request definitely stopped before a run was created. Once a reply is
@@ -438,7 +452,8 @@ pub fn control_message(error: &RunRequestError) -> Message {
   match error {
     RunRequestError::Request(RequestError::NotConnected) => Message::new("runs.control.runnerUnavailable"),
     RunRequestError::Request(RequestError::Lost) => Message::new("runs.control.lost"),
-    RunRequestError::Rejected(Rejection::RunNotStarted { why, .. }) => not_started(why),
+    // Its task's Summary says why.
+    RunRequestError::Rejected(Rejection::RunNotStarted { .. }) => Message::new("runs.start.worktreeNotCreated"),
     RunRequestError::Rejected(Rejection::RunNotRunning) => Message::new("runs.control.notRunning"),
     RunRequestError::Rejected(Rejection::RunNotPaused) => Message::new("runs.control.notPaused"),
     RunRequestError::Rejected(Rejection::NotAnotherAccount) => Message::new("runs.control.notAnotherAccount"),

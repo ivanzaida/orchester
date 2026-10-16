@@ -227,6 +227,13 @@ impl Run {
     &self.created.branch
   }
 
+  /// The branch that is the run's own, which its leftovers, cleanup, pull requests and screens name: `None` for a
+  /// run that never started as its worktree could not be created. It made no branch, and a branch of the name it was
+  /// created with is someone else's.
+  pub fn own_branch(&self) -> Option<&BranchName> {
+    (!matches!(self.status, RunStatus::Failed(RunFailure::WorktreeNotCreated(_)))).then_some(&self.created.branch)
+  }
+
   /// Revision the run's branch was created from.
   pub fn base(&self) -> &Revision {
     &self.created.base

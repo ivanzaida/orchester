@@ -19,11 +19,13 @@ use orchester_workspace::{
     approvals::ShownApproval,
     delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
+    run::worktree_failure_message,
   },
 };
 
 use crate::ui::{
   icon::Icon,
+  message::message_text,
   notice::{Notice, NoticeTone},
 };
 
@@ -393,7 +395,10 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
       Icon::CircleX,
       (
         ctx.t("summary.notice.notStartedTitle"),
-        ctx.t_args("summary.notice.notStartedBody", [("reason", reason.as_str())]),
+        ctx.t_args(
+          "summary.notice.notStartedBody",
+          [("reason", message_text(ctx, &worktree_failure_message(reason)))],
+        ),
       ),
     ),
     RunStatus::Failed(_) if run.current_step().is_some_and(|step| step.tool_step) => Said::new(

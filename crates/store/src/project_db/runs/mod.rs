@@ -44,11 +44,12 @@ pub struct RunBranch {
 
 impl ProjectDb {
   /// Every run's task and branch, by number: what names a pull request's head branch. Reads no run's record,
-  /// so a run whose record cannot be read is listed too.
+  /// so a run whose record cannot be read is listed too. A run that never started (`failure_reason` says why) made
+  /// no branch, so it is left out ([`orchester_core::run::Run::own_branch`]).
   pub fn run_branches(&self) -> Result<Vec<RunBranch>, StoreError> {
     let mut statement = self
       .connection
-      .prepare("SELECT id, task_id, number, branch FROM runs ORDER BY number")?;
+      .prepare("SELECT id, task_id, number, branch FROM runs WHERE failure_reason IS NULL ORDER BY number")?;
     let rows = statement
       .query_map([], |row| {
         Ok((

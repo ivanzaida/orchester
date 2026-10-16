@@ -9,6 +9,7 @@ use super::{
   branch::BranchName,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
+  not_started::WorktreeFailure,
   state::Run,
   status::{AttemptReason, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus},
 };
@@ -63,7 +64,7 @@ impl Run {
 
   /// Fails the pending run, whose worktree could not be created for `reason`: it never started, and
   /// works again only as a new run.
-  pub fn fail_to_start(&mut self, reason: String, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+  pub fn fail_to_start(&mut self, reason: WorktreeFailure, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     self.transition(now, |transition| {
       transition.record(RunEventKind::Failed {
         reason: RunFailure::WorktreeNotCreated(reason),

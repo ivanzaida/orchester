@@ -4,7 +4,7 @@
 mod support;
 
 use orchester_core::{
-  run::{BranchName, Run, RunFailure, RunStatus},
+  run::{BranchName, GitMessage, Run, RunFailure, RunStatus, WorktreeFailure},
   store::RunStore,
 };
 use orchester_store::ProjectDb;
@@ -33,18 +33,22 @@ fn a_chosen_branch_is_stored_as_the_runs_branch() {
 }
 
 #[test]
-fn a_run_that_could_not_start_keeps_its_reason() {
+fn a_run_that_could_not_start_keeps_its_reason_and_owns_no_branch() {
   let (repo, mut db, mut run) = pending_run();
-  let reason = "`git worktree add` failed (Some(128)): fatal: disk full".to_owned();
+  let reason = WorktreeFailure::Git(GitMessage::new("fatal: disk full"));
 
   let events = run.fail_to_start(reason.clone(), at(7)).expect("failed");
   db.append_events(&run, &events).expect("stored");
 
   let stored = reloaded(&db, &run);
   assert_eq!(stored, run);
+  assert!(
+    db.run_branches().expect("run branches").is_empty(),
+    "no pull request is its"
+  );
   assert_eq!(
     stored.status(),
-    &RunStatus::Failed(RunFailure::WorktreeNotCreated(reason.clone()))
+    &RunStatus::Failed(RunFailure::WorktreeNotCreated(reason))
   );
   drop(db);
   let columns: (String, Option<String>, Option<String>) = Connection::open(repo.path().join(".orchester/orchester.db"))
@@ -55,7 +59,14 @@ fn a_run_that_could_not_start_keeps_its_reason() {
       |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )
     .expect("row");
-  assert_eq!(columns, ("worktree_not_created".to_owned(), None, Some(reason)));
+  assert_eq!(
+    columns,
+    (
+      "worktree_not_created".to_owned(),
+      None,
+      Some(r#"{"git":"fatal: disk full"}"#.to_owned())
+    )
+  );
 }
 
 #[test]

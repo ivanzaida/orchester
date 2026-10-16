@@ -1,23 +1,25 @@
 //! The branch a run starts on, and a run whose worktree cannot be created. A branch of the run's own name may exist
 //! already (an earlier task with the same key, a removed worktree's, one a person made): the run takes the first
 //! free numbered name, records it, and leaves that branch as it was. Any other failure to create the worktree fails
-//! the run with git's reason instead of leaving it pending. Needs `git` and the fake Codex CLI. Run with
-//! `cargo test -p orchester-runner --features test-agent --test run_branch`.
+//! the run with a reason in words of its own instead of leaving it pending; such a run owns no branch. Needs `git`
+//! and the fake Codex CLI. Run with `cargo test -p orchester-runner --features test-agent --test run_branch`.
 
 mod support;
 
-use std::{fs, path::Path, sync::Barrier, thread};
+use std::{fs, path::Path, sync::Barrier, thread, time::Duration};
 
 use orchester_core::{
   id::{IdempotencyKey, RunId},
-  run::{Run, RunFailure, RunStatus},
+  integration::{clean_up, leftovers},
+  run::{Run, RunFailure, RunStatus, WorktreeFailure},
   store::RunStore,
 };
-use orchester_ipc::Rejection;
+use orchester_exec::ProcessRunner;
+use orchester_ipc::{Event, Rejection};
 use orchester_runner::worktree::Worktrees;
 use orchester_store::ProjectDb;
 
-use self::support::{Setup, git, project, scheduler, wait_for, wait_for_idle};
+use self::support::{Setup, git, pending::record_pending_run, project, scheduler, wait_for, wait_for_idle};
 
 /// The branch the task's first run takes when its name is free.
 const FIRST_RUN_BRANCH: &str = "orchester/orc-1-run-1";
@@ -38,6 +40,23 @@ fn someones_branch(root: &Path, branch: &str) -> String {
   );
   git(root, &["branch", branch, &commit]);
   commit
+}
+
+/// A `post-checkout` hook that prints a URL with credentials and fails, as a hook that misses a tool may. Git for
+/// Windows runs it with its own `sh`, as Unix does.
+fn failing_post_checkout_hook(root: &Path) {
+  let hook = root.join(".git/hooks/post-checkout");
+  fs::create_dir_all(hook.parent().expect("hooks folder")).expect("hooks folder");
+  fs::write(
+    &hook,
+    "#!/bin/sh\necho 'fatal: cannot fetch https://someone:hunter2@example.com/lfs' >&2\nexit 1\n",
+  )
+  .expect("write hook");
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).expect("make the hook executable");
+  }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -127,7 +146,7 @@ async fn a_worktree_that_cannot_be_created_fails_the_run_with_the_reason_and_it_
   let Err(Rejection::RunNotStarted { run: id, why }) = refused else {
     panic!("the start is refused with the reason, got {refused:?}");
   };
-  assert!(why.contains("is not ignored by git"), "git's reason: {why}");
+  assert_eq!(why, WorktreeFailure::NotIgnored, "the reason in words of its own");
   let run = stored(root, id);
   assert_eq!(
     run.status(),
@@ -137,6 +156,9 @@ async fn a_worktree_that_cannot_be_created_fails_the_run_with_the_reason_and_it_
   assert!(run.attempts().is_empty(), "no step ran");
   assert!(!Worktrees::new(root).expect("worktrees").path(id).exists());
   assert!(scheduler.active_runs().is_empty(), "nothing waits for it");
+  let told = std::iter::from_fn(|| events.try_recv().ok())
+    .any(|event| matches!(event, Event::RunChanged { run, task } if run == id && task == project.task));
+  assert!(told, "the screens are told the run changed");
   assert_eq!(
     scheduler.start_run(key, project.task).await,
     Err(Rejection::RunNotStarted { run: id, why }),
@@ -152,4 +174,76 @@ async fn a_worktree_that_cannot_be_created_fails_the_run_with_the_reason_and_it_
   assert_eq!(next.branch().as_str(), "orchester/orc-1-run-2");
   assert!(!next.attempts().is_empty(), "this one started");
   wait_for_idle(&scheduler).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pending_run_whose_worktree_exists_starts_on_the_branch_it_has() {
+  let project = project(&Setup::new("Report failure."));
+  let root = project.repo.path();
+  let pending = record_pending_run(root, project.task).await;
+  someones_branch(root, FIRST_RUN_BRANCH);
+  // The start that recorded the run made its worktree on a free name, then stopped before recording it.
+  let made = Worktrees::new(root)
+    .expect("worktrees")
+    .create(pending.id(), pending.branch().as_str(), pending.base().as_str())
+    .expect("worktree");
+  let chosen = format!("{FIRST_RUN_BRANCH}-2");
+  assert_eq!(made.branch(), chosen);
+  let (scheduler, mut events) = scheduler(root);
+
+  let id = scheduler
+    .start_run(project.task.first_run_key(), project.task)
+    .await
+    .expect("the retried start goes on in that worktree");
+
+  assert_eq!(id, pending.id());
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.branch().as_str(), chosen, "the branch its worktree has");
+  assert!(!run.attempts().is_empty(), "it started");
+  wait_for_idle(&scheduler).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_that_fails_after_skipping_a_taken_name_owns_no_branch() {
+  let project = project(&Setup::new("Report failure."));
+  let root = project.repo.path();
+  // Merged into `main`: cleanup would delete it, were it the run's.
+  git(root, &["branch", FIRST_RUN_BRANCH]);
+  failing_post_checkout_hook(root);
+  let (scheduler, _events) = scheduler(root);
+
+  let refused = scheduler.start_run(IdempotencyKey::generate(), project.task).await;
+
+  let Err(Rejection::RunNotStarted {
+    run: id,
+    why: WorktreeFailure::Git(said),
+  }) = refused
+  else {
+    panic!("git's refusal is the reason, got {refused:?}");
+  };
+  assert!(said.as_str().contains("https://***@example.com/lfs"), "{said:?}");
+  assert!(!said.as_str().contains("hunter2"), "no credentials: {said:?}");
+  let run = stored(root, id);
+  assert_eq!(run.own_branch(), None, "it made no branch");
+  assert!(!Worktrees::new(root).expect("worktrees").path(id).exists());
+  assert_eq!(
+    git(root, &["branch", "--list", &format!("{FIRST_RUN_BRANCH}-2")]),
+    "",
+    "the branch made for it went with its worktree"
+  );
+  let (runner, program) = (ProcessRunner::new(Duration::from_secs(60)), Path::new("git"));
+  let left = leftovers(&runner, program, root, &run).expect("leftovers");
+  assert!(left.worktrees.is_empty() && left.branches.is_empty(), "{left:?}");
+  let cleanup = clean_up(&runner, program, root, &run, None).expect("cleanup");
+  assert!(
+    cleanup.deleted.is_empty() && cleanup.kept_branches.is_empty(),
+    "{cleanup:?}"
+  );
+  assert_eq!(
+    git(root, &["branch", "--list", FIRST_RUN_BRANCH]),
+    FIRST_RUN_BRANCH,
+    "the taken branch stays"
+  );
+  let db = ProjectDb::open(root).expect("open");
+  assert!(db.run_branches().expect("run branches").is_empty());
 }

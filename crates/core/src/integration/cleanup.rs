@@ -171,7 +171,7 @@ pub fn leftovers_of(
   runs: &[&Run],
 ) -> Result<Vec<Leftovers>, GitError> {
   let git = Git::new(runner, git, repo);
-  let listed = parse_worktrees(&git.stdout(&["worktree", "list", "--porcelain", "-z"])?);
+  let listed = parse_worktree_list(&git.stdout(&["worktree", "list", "--porcelain", "-z"])?);
   let checked_out = git.checked_out_branch()?;
   let mut all = Vec::with_capacity(runs.len());
   for run in runs {
@@ -301,9 +301,12 @@ fn merge_targets<R: CommandRunner>(
   Ok(targets)
 }
 
-/// The run's branch and its step branches that exist.
+/// The run's branch and its step branches that exist; none for a run that never started ([`Run::own_branch`]).
 fn run_branches<R: CommandRunner>(git: &Git<'_, R>, run: &Run) -> Result<Vec<BranchName>, GitError> {
-  let own = format!("refs/heads/{}", run.branch());
+  let Some(branch) = run.own_branch() else {
+    return Ok(Vec::new());
+  };
+  let own = format!("refs/heads/{branch}");
   let steps = format!("{own}--*");
   let listed = git.stdout(&["for-each-ref", "--format=%(refname)", &own, &steps])?;
   listed
@@ -318,16 +321,20 @@ fn run_branches<R: CommandRunner>(git: &Git<'_, R>, run: &Run) -> Result<Vec<Bra
     .collect()
 }
 
-/// A worktree as `git worktree list` lists it.
-struct Listed {
-  path: String,
-  branch: Option<BranchName>,
-  prunable: bool,
+/// A worktree as `git worktree list --porcelain -z` lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListedWorktree {
+  /// As git prints it: absolute, with `/` separators on every platform.
+  pub path: String,
+  /// The branch checked out there; `None` on a detached HEAD.
+  pub branch: Option<BranchName>,
+  /// Its folder is gone; git lists it until it is pruned.
+  pub prunable: bool,
 }
 
 /// `listed` as a worktree of `run`: its own, or one of its step executions', under
 /// [`WORKTREES_DIR`].
-fn owned_by(run: &Run, listed: &Listed) -> Option<LeftWorktree> {
+fn owned_by(run: &Run, listed: &ListedWorktree) -> Option<LeftWorktree> {
   let path = Path::new(&listed.path);
   let parent = path.parent()?;
   let in_worktrees = parent.file_name()? == "worktrees" && parent.parent()?.file_name()? == ".orchester";
@@ -359,11 +366,11 @@ fn owned_by(run: &Run, listed: &Listed) -> Option<LeftWorktree> {
 /// The worktrees `git worktree list --porcelain -z` lists: `worktree <path>`, then attributes
 /// (`branch refs/heads/<name>`, `prunable …`), each ended by NUL, with an empty field between
 /// worktrees.
-fn parse_worktrees(listed: &str) -> Vec<Listed> {
-  let mut worktrees: Vec<Listed> = Vec::new();
+pub fn parse_worktree_list(listed: &str) -> Vec<ListedWorktree> {
+  let mut worktrees: Vec<ListedWorktree> = Vec::new();
   for field in listed.split('\0') {
     if let Some(path) = field.strip_prefix("worktree ") {
-      worktrees.push(Listed {
+      worktrees.push(ListedWorktree {
         path: path.to_owned(),
         branch: None,
         prunable: false,

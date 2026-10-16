@@ -23,12 +23,15 @@ pub(super) struct StatusColumns<'a> {
   pub(super) reason: Option<&'static str>,
   pub(super) failed_step: Option<&'a str>,
   pub(super) limit_execution: Option<String>,
-  pub(super) failure_reason: Option<&'a str>,
+  /// The reason of a run that failed before it started, as JSON.
+  pub(super) failure_reason: Option<String>,
 }
 
 pub(super) fn run_status_columns(run_status: &RunStatus) -> StatusColumns<'_> {
   let failure_reason = match run_status {
-    RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) => Some(reason.as_str()),
+    RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) => {
+      Some(serde_json::to_string(reason).expect("a worktree failure is plain data with string keys"))
+    }
     _ => None,
   };
   let (status, reason, failed_step, limit_execution) = match run_status {
@@ -74,7 +77,8 @@ pub(super) fn parse_run_status(
   const WHAT: &str = "run status";
   match (status, reason, failure_reason) {
     ("failed", Some(WORKTREE_NOT_CREATED), Some(failure)) if failed_step.is_none() && limit_execution.is_none() => {
-      return Ok(RunStatus::Failed(RunFailure::WorktreeNotCreated(failure.to_owned())));
+      let failure = serde_json::from_str(failure).map_err(|error| corrupt("run failure reason", error))?;
+      return Ok(RunStatus::Failed(RunFailure::WorktreeNotCreated(failure)));
     }
     (_, _, Some(failure)) => return Err(corrupt(WHAT, format!("{status} / {reason:?} with reason {failure:?}"))),
     _ => {}

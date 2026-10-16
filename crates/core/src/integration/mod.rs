@@ -20,8 +20,8 @@ use thiserror::Error;
 
 pub use self::{
   cleanup::{
-    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, WORKTREES_DIR, WorktreeOwner, clean_up,
-    leftovers, leftovers_of,
+    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, WORKTREES_DIR,
+    WorktreeOwner, clean_up, leftovers, leftovers_of, parse_worktree_list,
   },
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   merge::{MergeError, MergeKind, RunMerge, merge_run, merge_run_at},

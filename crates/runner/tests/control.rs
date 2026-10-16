@@ -20,7 +20,8 @@ use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use self::support::{
-  PATIENCE, Setup, git, is_running, project, reported, scheduler, threads, wait_for, wait_for_turns,
+  PATIENCE, Setup, git, is_running, pending::record_pending_run, project, reported, scheduler, threads, wait_for,
+  wait_for_turns,
 };
 
 fn step_status(run: &Run, step: &str) -> Option<StepStatus> {
@@ -267,28 +268,15 @@ async fn control_a_run_without_limits_never_stops_at_a_limit() {
   scheduler.cancel_run(id).await.expect("the run is cancelled");
 }
 
-/// A run whose start failed stays pending. Cancelling it ends it without an attempt, and the
-/// task's runs still read.
+/// A run whose start stopped after it was recorded stays pending. Cancelling it ends it without an
+/// attempt, and the task's runs still read.
 #[tokio::test(flavor = "multi_thread")]
 async fn control_cancel_ends_a_pending_run_that_never_started() {
   let project = project(&Setup::new("Keep working."));
   let root = project.repo.path();
-  // The run's branch exists already, so its worktree cannot be created and the run never starts.
-  git(root, &["branch", "orchester/orc-1-run-1"]);
+  let pending = record_pending_run(root, project.task).await;
   let (scheduler, mut events) = scheduler(root);
-  assert!(
-    scheduler
-      .start_run(IdempotencyKey::generate(), project.task)
-      .await
-      .is_err()
-  );
   let db = ProjectDb::open(root).expect("open");
-  let [pending] = db
-    .runs_of_task(project.task)
-    .expect("runs")
-    .try_into()
-    .expect("one run");
-  let pending = pending.expect("readable run");
   assert_eq!(pending.status(), &RunStatus::Pending);
 
   tokio::time::timeout(PATIENCE, scheduler.cancel_run(pending.id()))

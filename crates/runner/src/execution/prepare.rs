@@ -15,7 +15,7 @@ use orchester_core::{
   revision::Revision,
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunFailure, RunSnapshot, RunStatus,
-    preflight,
+    WorktreeFailure, preflight,
   },
   sharing::TaskRevision,
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
@@ -222,8 +222,8 @@ fn finish_recorded(db: &mut ProjectDb, root: &Path, mut run: Run, task: Task) ->
 }
 
 /// The branch of the pending run's worktree, which is created now unless an earlier request did
-/// (`exists`); why there is none, when it cannot be.
-fn worktree_branch(worktrees: &Worktrees, run: &Run, exists: bool) -> Result<BranchName, String> {
+/// (`exists`); why there is none, when it cannot be. Only the runner's log has git's full answer.
+fn worktree_branch(worktrees: &Worktrees, run: &Run, exists: bool) -> Result<BranchName, WorktreeFailure> {
   let branch = if exists {
     worktrees.branch_of(run.id())
   } else {
@@ -231,14 +231,20 @@ fn worktree_branch(worktrees: &Worktrees, run: &Run, exists: bool) -> Result<Bra
       .create(run.id(), run.branch().as_str(), run.base().as_str())
       .map(|created| created.branch().to_owned())
   }
-  .map_err(|error| error.to_string())?;
-  BranchName::new(&branch).map_err(|error| error.to_string())
+  .map_err(|error| {
+    tracing::error!(run = %run.id(), %error, "cannot create the run's worktree");
+    error.failure()
+  })?;
+  BranchName::new(&branch).map_err(|error| {
+    tracing::error!(run = %run.id(), %branch, %error, "the run's worktree is on a branch a run cannot have");
+    WorktreeFailure::InvalidBranch
+  })
 }
 
 /// Fails the pending run whose worktree could not be created for `reason`: it would otherwise wait
 /// for a start that cannot come. The answer says why; the run goes on only as a new one.
-fn fail_to_start(db: &mut ProjectDb, mut run: Run, reason: String) -> Rejection {
-  tracing::error!(run = %run.id(), %reason, "cannot create the run's worktree; the run failed");
+fn fail_to_start(db: &mut ProjectDb, mut run: Run, reason: WorktreeFailure) -> Rejection {
+  tracing::error!(run = %run.id(), ?reason, "the run failed before it started");
   let recorded = run
     .fail_to_start(reason.clone(), Timestamp::now())
     .map_err(|error| failed("cannot fail the run that could not start", &error))

@@ -525,7 +525,17 @@
       "taskMissing": "The task no longer exists.",
       "notQueued": "The task is not queued for a run.",
       "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying.",
-      "worktreeNotCreated": "The run failed before it started: its worktree could not be created. Fix the cause, then run the task again. Reason: {{reason}}"
+      "worktreeNotCreated": "The run failed before it started: its worktree could not be created. Fix the cause, then run the task again."
+    },
+    "notStarted": {
+      "notIgnored": "Git does not ignore .orchester/ in this repository, so a worktree there would show in your checkout. Add .orchester/ to .git/info/exclude.",
+      "noFreeBranch": "A branch of the run's name exists, and so does each of its numbered names. Delete the branches you no longer need.",
+      "gitUnavailable": "Git could not be started. Check that git is installed and on the search path.",
+      "unknownBase": "The commit the run starts from is not in the repository.",
+      "invalidBranch": "Git does not accept the run's branch name.",
+      "folderInTheWay": "A folder that is not a worktree of the repository is where the run's worktree goes, in .orchester/worktrees/. Move it away.",
+      "git": "Git refused: {{detail}}",
+      "unexpected": "Something unexpected stopped it. The runner's log has the details."
     },
     "limit": {
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",
