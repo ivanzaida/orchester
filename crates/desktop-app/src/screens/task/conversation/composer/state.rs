@@ -183,17 +183,9 @@ impl ComposerState {
     state
   }
 
-  /// Keeps the sends with the page: lurq keeps a component's futures by the order it asks for them in each
-  /// render, so the page asks for these first, as it made them.
-  pub fn keep(&self, ctx: &mut Ctx) {
-    send_action(ctx);
-    after_turn_action(ctx);
-    self.await_flight(ctx);
-  }
-
   /// While a send that an earlier page of the task started runs, the composer is busy; once it ends, the
   /// draft is the one kept by then (the send emptied it if it still held the sent words).
-  fn await_flight(&self, ctx: &mut Ctx) {
+  pub fn await_flight(&self, ctx: &mut Ctx) {
     let Some(flight) = self.flight.clone() else {
       return;
     };

@@ -129,8 +129,6 @@ impl Component for NeedsYouPanel {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    // First, as the panel made it: lurq keeps a component's futures by the order it asks for them.
-    self.decisions.keep(ctx);
     ctx.provide(self.decisions.clone());
     self.tick.get();
     self.interval.start();

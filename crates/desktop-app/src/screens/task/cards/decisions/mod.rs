@@ -85,12 +85,6 @@ impl Decisions {
     }
   }
 
-  /// Keeps the answers with the tab: lurq keeps a component's futures by the order it asks for them in each
-  /// render, so the tab asks for this first, as it made it.
-  pub fn keep(&self, ctx: &mut Ctx) {
-    answers::action(ctx);
-  }
-
   /// Whether the run lost its runner (it is interrupted until one looks after it): then no card waits.
   pub fn follow_runner(&self, lost: bool) {
     if self.lost.get_untracked() != lost {

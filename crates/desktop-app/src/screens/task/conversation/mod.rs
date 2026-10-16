@@ -85,8 +85,6 @@ impl Component for ConversationTab {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    // First, as the tab made it: lurq keeps a component's futures by the order it asks for them.
-    self.decisions.keep(ctx);
     ctx.provide(self.decisions.clone());
     let task = ctx.props::<TaskContext>().clone();
     let detail = &task.detail;
