@@ -306,8 +306,8 @@ fn identity_server_statements_verify_with_their_key_and_type() {
   };
   let server = signing_key();
   let statement = LinkStatement {
-    server: SERVER.parse().expect("a server id"),
-    nonce: "00112233445566778899aabbccddeeff".into(),
+    server: server.public_key().server_id(),
+    nonce: "a fresh nonce".into(),
     name: "Kontur team".into(),
     address: "https://team.example.test".into(),
     public_key: server.public_key().encoded(),

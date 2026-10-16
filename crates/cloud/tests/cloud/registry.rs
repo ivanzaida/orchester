@@ -380,7 +380,10 @@ pub async fn invites_are_declined_by_the_invitee() {
   link(&cloud, &owner, &server).await;
   let id = InviteId::generate();
   let body = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
-  assert_eq!(cloud.request("POST", "/invites", None, Some(body)).await.status, 202);
+  assert_eq!(
+    cloud.request("POST", "/invites", None, Some(body.clone())).await.status,
+    202
+  );
   let decline = format!("/invites/{id}/decline");
   let stranger = cloud.request("POST", &decline, Some(&owner), None).await;
   assert_eq!(stranger.status, 404, "only the invitee declines");
@@ -398,8 +401,8 @@ pub async fn invites_are_declined_by_the_invitee() {
   cloud.finish().await;
 }
 
-/// N1 security review 1, minor 1: the answer stays with the invite, so delivering it again brings nothing back, and a
-/// declined invite issues no token.
+/// N1 security review 1, minor 1: the answer stays with the invite, so delivering it again (from the server or the
+/// inviter's browser) lists nothing and emails nothing, and a declined invite issues no token.
 async fn declined_stays_declined(cloud: &TestCloud, dana: &str, (server, id): (&TeamServer, InviteId)) {
   let again = json!({"invite": server.invite(id, "dana@example.test", cloud.clock.now_ms())});
   assert_eq!(cloud.request("POST", "/invites", None, Some(again)).await.status, 202);
@@ -410,6 +413,12 @@ async fn declined_stays_declined(cloud: &TestCloud, dana: &str, (server, id): (&
     .request("POST", "/identity-tokens", Some(dana), Some(accept))
     .await;
   assert_eq!(token.status, 404, "a declined invite issues no token");
+  cloud.mail.nth("dana@example.test", 2).await;
+  assert_eq!(
+    cloud.mail.count("dana@example.test"),
+    2,
+    "the confirmation and one invite: delivering it again emails nothing"
+  );
 }
 
 async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {

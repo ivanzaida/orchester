@@ -87,7 +87,7 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
 | `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at }] }` | |
 | `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
-| `POST /invites/{id}/decline` | device | | `204` | `404` |
+| `POST /invites/{id}/decline` | device | | `204`; the invite stays declined until it expires: no token accepts it, and delivering it again changes nothing | `404` (also one already answered) |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
@@ -217,13 +217,16 @@ registered for that server (`<address>/admin`): nothing in the post or the page'
 (security review 1, minor 2).
 
 **Declining an invite.** `POST /invites/{id}/decline` answers an open invite to the account's email with no (`404`
-for any other, also one already answered). It leaves the list and issues no token. The team server keeps its own copy
-until it expires or is revoked; nothing joins with it, since a join needs an identity token that names it.
+for any other, also one already answered). It leaves the list and issues no token. The row stays, as declined, until
+the invite expires, so delivering it again (from the server or the inviter's browser) changes nothing and sends no
+email. `revoked_invites` holds only the team server's revocations. The team server keeps its own copy until it
+expires or is revoked; nothing joins with it, since a join needs an identity token that names it.
 
 **Deleting the account.** `DELETE /me { password }` asks for the password again (failures count as a password
-change's do). It deletes the account, its devices, links and joins, the servers it linked (with their invites and
-other accounts' joins of them), and the open invites to its email. The audit keeps the account's id with the actions it
-took.
+change's do). It deletes the account, its devices, links and joins, and the invites to its email, answered or not. The team
+servers it linked stay registered with no owner, with their members' joins and invites (migration 5), until an admin of
+the server links it again: the newest statement the server's key signs owns it. Meanwhile the server's daily invites
+count on the server itself. The audit keeps the account's id with the actions it took.
 
 ## Rate limits
 

@@ -67,13 +67,20 @@ Compose sets the rest: the backend's `ORCHESTER_CLOUD_DATABASE_URL` (PostgreSQL 
 `ORCHESTER_CLOUD_API_URL`. If one of the variables above is unset, `docker compose` refuses to start and names it.
 If a value is wrong, the backend or the web front exits at once and logs the variable, for example
 `detail="ORCHESTER_CLOUD_SMTP_URL is required"` or `Orchester Cloud web cannot start: ORCHESTER_CLOUD_WEB_SECRET: …`.
-Compose restarts it in a loop, which `dc ps` shows as *Restarting*; Caddy starts only once the web front's health
-check (its sign-in page answers) passes.
+Compose restarts it in a loop, which `dc ps` shows as *Restarting*.
+
+**When the web front fails.** Caddy does not wait for the web front, so `/api/*` (the desktop app, team servers'
+invites) keeps working while it is down. The pages then answer Caddy's `502 Bad Gateway`. `dc ps` shows `web` as
+*Restarting* (a bad configuration, see its log) or *unhealthy*: its health check asks its own `/signin` every 10
+seconds and marks it after 3 failures. Watch that state, or `docker inspect --format '{{.State.Health.Status}}'` on
+the container, in your monitoring.
 
 ## The SMTP relay
 
-The backend sends three emails: the sign-up confirmation (its link works for 24 hours), *you already have an
-account*, and the password reset (its link works for 1 hour). Any relay that takes SMTP with a password works. Use a
+The backend sends the sign-up confirmation (its link works for 24 hours), *you already have an account*, the
+password reset (its link works for 1 hour), and the invite emails: one to a person with an account, telling them to
+open Orchester, and one to an address with no account, asking them to sign up (`/signup?invite=…`). Invite emails
+carry only the cloud's own words, never a name a team server chose. Any relay that takes SMTP with a password works. Use a
 port with TLS, 465 or 587 with `tls=required`; plain `smtp://` is only for a relay on the same host or private
 network. The relay must be allowed to send for the domain of `ORCHESTER_CLOUD_SMTP_FROM`; set up the SPF and DKIM
 records the relay asks for in `lurq.dev`'s DNS, or the emails land in spam. A failed send is logged with the
@@ -113,6 +120,15 @@ email's purpose only, never its address.
 | `root.key` | A second offline copy | Without it, no new key set can be signed, and team servers that pinned its fingerprint have to pin a new one |
 | `.env` | With the operator's secrets | It holds every other secret |
 | `caddy_data` volume | Optional | Caddy gets a new certificate if it is lost |
+
+**Encrypt the database dumps** wherever they are kept, for example with `age` or `gpg` before they leave the host,
+or on encrypted storage: they hold every account's email, password hash and display name, the devices' token
+hashes, the invites in flight and the sealed signing keys (sealed with the key-encryption key, which must not travel
+with them). Keep the key that opens them apart from the dumps.
+
+**Deleted accounts live on in old dumps.** Deleting an account removes it from the database, not from the dumps
+taken before. Rotate the dumps (for example, keep 30 days) and delete older ones, so a deleted account is gone from
+every copy once its last dump expires; a restore brings back accounts deleted after that dump was taken.
 
 To restore a dump into the running stack:
 
