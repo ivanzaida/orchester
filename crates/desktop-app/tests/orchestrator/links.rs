@@ -117,14 +117,12 @@ fn back_to_the_chat(screen: &mut Orchestrator) {
   });
 }
 
-/// The `count`th answer once it ended, as the conversation shows it.
-fn answer(screen: &mut Orchestrator, count: usize) -> String {
+/// Waits for the answer that starts with `start` to end. A list that keeps only the turns in view may have let the
+/// earlier ones go, so the answer is found by its words, not counted.
+fn answer(screen: &mut Orchestrator, start: &str) {
   screen.until("the answer", |screen| {
-    !screen.exists("orchestrator-thinking")
-      && screen.text("orchestrator-conversation").matches("Noted:").count() == count
+    !screen.exists("orchestrator-thinking") && screen.text("orchestrator-conversation").contains(start)
   });
-  let shown = screen.text("orchestrator-conversation");
-  shown.rsplit("Noted:").next().unwrap_or_default().to_owned()
 }
 
 #[test]
@@ -139,7 +137,7 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
      [KON-99](orchester:/project/{project}/nowhere), [add it](orchester:/add-project?folder=x) and \
      [mail](mailto:team@example.com)."
   ));
-  answer(&mut screen, 1);
+  answer(&mut screen, "Noted: Look at");
   let drawn = spans(&mut screen);
   let pull = span(&drawn, "PR 42");
   assert_eq!(
@@ -195,7 +193,7 @@ fn orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as
     "Last:\n\n$$x$$ [github.com](https://evil.example/login)\n\n> [repo]:\n> https://github.com/acme/kontur\n\n\
      [the repo][repo] beside [\u{202E}sksat](orchester:{tasks})"
   ));
-  answer(&mut screen, 2);
+  answer(&mut screen, "Noted: Last:");
   // The answer's end, below the fold: only what is on screen is drawn.
   let list = screen.bounds("orchestrator-conversation");
   let (x, y) = (list.x + list.width / 2.0, list.y + list.height / 2.0);
@@ -227,7 +225,7 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
     "The notes are in [KON-1 notes](orchester:{conversation}); Atlas runs \
      [ATL-9 import](orchester:/project/{atlas}/tasks/ATL-9/summary); see [PR 42]({PULL_REQUEST})."
   ));
-  answer(&mut screen, 1);
+  answer(&mut screen, "Noted: The notes");
 
   assert!(tooltip_shows(
     &mut screen,
@@ -295,7 +293,7 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
      - Pull request: [#42 Delivery log]({PULL_REQUEST})\n\nAnd:\n\n\
      - [KON-2](orchester:/project/{project}/tasks/KON-2) waits\n- Task: no link here"
   ));
-  answer(&mut screen, 1);
+  answer(&mut screen, "Noted: Status:");
   let grids = screen
     .window
     .tree
