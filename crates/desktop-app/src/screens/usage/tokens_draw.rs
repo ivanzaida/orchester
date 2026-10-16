@@ -133,7 +133,8 @@ fn hatch_part(
     context.stroke();
     from += STRIPE_PITCH;
   }
-  context.restore();
+  // The outline lies inside the clip; stroked before `restore`, it keeps the stripes' color and width rather
+  // than the grid's.
   let inset = STRIPE_WIDTH / 2.0;
   part_path(
     context,
@@ -141,6 +142,7 @@ fn hatch_part(
     rounded,
   );
   context.stroke();
+  context.restore();
 }
 
 /// A bar part's path: a rectangle, with its top corners rounded when it is the bar's top part. Geometry the
