@@ -11,7 +11,6 @@ use orchester_workspace::{
   background,
   connections::mcp::Allowed,
   messages::Message,
-  tasks::outside::Outside,
   tools::{
     data::ToolChange,
     editor::{self, Edit},
@@ -33,17 +32,14 @@ pub(super) type Work = FutureAction<Start, Saved, Message>;
 pub(super) fn action(ctx: &mut Ctx) -> Work {
   let services = Services::of(ctx);
   let activity = services.activity;
-  let changes = services.changes;
   ctx.future_action(move |start: Start| {
     let activity = activity.clone();
-    let changes = changes.clone();
     async move {
       let (name, change, version) = operation(&start.edit);
       let spec = operations::tool_change(&start.open, &name, &change, version);
       let root: PathBuf = start.open.repo_root.clone();
       let target = root.clone();
-      let project = start.open.project.id();
-      let result = activity
+      activity
         .track_to(
           spec,
           async move {
@@ -53,11 +49,7 @@ pub(super) fn action(ctx: &mut Ctx) -> Work {
           },
           move |saved| Some(operations::tool(&target, saved.0)),
         )
-        .await;
-      if result.is_ok() {
-        changes.record(project, Outside::Tools);
-      }
-      result
+        .await
     }
   })
 }

@@ -55,6 +55,7 @@ pub(super) struct CodeIndex {
   rebuild: Rebuild,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
+  own: work::OwnSaves,
   list_revision: Signal<u64>,
   check_revision: Signal<u64>,
   tick: Signal<u64>,
@@ -69,6 +70,7 @@ impl Component for CodeIndex {
       rebuild: rebuild_action(ctx),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
+      own: work::OwnSaves::new(ctx, &[Outside::CodeIndex]),
       list_revision: ctx.signal(0),
       check_revision: ctx.signal(0),
       tick: ctx.signal(0),
@@ -81,8 +83,7 @@ impl Component for CodeIndex {
       ctx,
       &save,
       ctx.props::<TabProps>().status.clone(),
-      tab.revision.clone(),
-      tab.stored.clone(),
+      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
     );
     let revision = tab.list_revision.clone();
     ctx.watch(&rebuild.state(), move |_| revision.update(|r| *r += 1));
@@ -97,7 +98,8 @@ impl Component for CodeIndex {
     let state = work::load(
       ctx,
       props.project.open.repo_root.clone(),
-      self.revision.get() + props.project.feed.outside.get().of(Outside::CodeIndex),
+      self.revision.get() + self.own.count(&props.project.feed),
+      &self.own,
     );
     let list = self.list(ctx, &props);
     let check = self.check(ctx, &props);

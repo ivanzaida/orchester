@@ -71,7 +71,7 @@ impl Component for AgentsScreen {
       view: ctx.signal(ctx.props::<Props>().selected.map_or(View::List, View::Edit)),
       revision: ctx.signal(0),
       retry: ctx.signal(0),
-      profiles: OwnChanges::new(ctx, Outside::Profiles),
+      profiles: OwnChanges::new(ctx, &[Outside::Profiles]),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {

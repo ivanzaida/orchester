@@ -14,6 +14,7 @@ use lurq::{
 use orchester_workspace::{
   agents::data::VersionState,
   connections::mcp::Allowed,
+  tasks::outside::Outside,
   tools::{
     data::ToolEntry,
     editor::{Edit, EditorData, next_version},
@@ -28,9 +29,10 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  project::ShownProject,
+  project::{ShownProject, own::OwnChanges},
   routes::{ProjectPage, Route, ToolTab},
   screens::connections::widen::{WidenConfirm, WidenProps},
+  services::Services,
   theme::{ConnectionsSpacing, ExtraSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -47,6 +49,8 @@ pub struct EditorProps {
   pub data: EditorData,
   pub entry: Option<ToolEntry>,
   pub revision: Signal<u64>,
+  /// Where a save records its change of the tools.
+  pub tools: OwnChanges,
   pub read_revision: u64,
   pub page: ProjectPage,
 }
@@ -91,6 +95,7 @@ impl Component for ToolEditor {
     };
     let action = editor.action.clone();
     let (revision, busy) = (props.revision.clone(), editor.busy.clone());
+    let (tools, changes) = (props.tools.clone(), Services::of(ctx).changes);
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
     ctx.watch(&action.state(), move |state| {
@@ -99,6 +104,8 @@ impl Component for ToolEditor {
       }
       busy.set(false);
       if let Some(saved) = state.data.filter(|_| state.is_fulfilled()) {
+        // Every other screen that shows the tools reads them again; this one reads them again once.
+        tools.record(&changes, project, Outside::Tools);
         revision.update(|r| *r += 1);
         let tab = match navigation.route_now() {
           Route::Project(_, ProjectPage::Tool(_, tab)) => tab,

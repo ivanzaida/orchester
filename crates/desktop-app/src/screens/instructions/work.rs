@@ -195,6 +195,7 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
     Err(error) => activity.fail(error.message().clone()),
   }
   result.map(|entry| {
+    // Every screen that shows the instructions reads them again; Instructions itself reads them again only so.
     services.changes.record(project.project.id(), Outside::Instructions);
     Done {
       entry,

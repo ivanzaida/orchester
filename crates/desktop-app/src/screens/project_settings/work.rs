@@ -15,10 +15,13 @@ use orchester_workspace::{
   connections::github::expect_active_account_in,
   messages::{self, Message},
   project_settings::{self, Settings},
+  tasks::outside::Outside,
 };
+use parking_lot::Mutex;
 
 use super::{Status, TabProps};
 use crate::{
+  project::{ProjectFeed, own::OwnChanges},
   services::Services,
   ui::{
     field::field_error,
@@ -45,23 +48,26 @@ pub enum Change {
   },
   UseAccount(ConnectionId),
 }
+/// The settings as the save read them after writing, and the kind of change it made.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Saved(pub Settings);
+pub struct Saved(pub Settings, pub Outside);
 impl DevtoolsInspectable for Saved {}
 pub type Save = FutureAction<(PathBuf, Change), Saved, Message>;
 
 pub fn action(ctx: &mut Ctx) -> Save {
   let services = Services::of(ctx);
   ctx.future_action(move |(root, change): (PathBuf, Change)| {
-    let (runners, changes) = (services.runners.clone(), services.changes.clone());
+    // The save reads the settings again after writing them, for the tab.
+    tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
+    let runners = services.runners.clone();
     async move {
       background::run(move || {
         let outside = match &change {
-          Change::Limits { .. } => orchester_workspace::tasks::outside::Outside::Limits,
-          Change::Auto { .. } => orchester_workspace::tasks::outside::Outside::AutoMode,
-          Change::Index(_) => orchester_workspace::tasks::outside::Outside::CodeIndex,
-          Change::Files(_) => orchester_workspace::tasks::outside::Outside::ProjectSettings,
-          Change::UseAccount(_) => orchester_workspace::tasks::outside::Outside::Connections,
+          Change::Limits { .. } => Outside::Limits,
+          Change::Auto { .. } => Outside::AutoMode,
+          Change::Index(_) => Outside::CodeIndex,
+          Change::Files(_) => Outside::ProjectSettings,
+          Change::UseAccount(_) => Outside::Connections,
         };
         match change {
           Change::Limits { base, asked } => {
@@ -84,21 +90,48 @@ pub fn action(ctx: &mut Ctx) -> Save {
           }
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
         }
-        let db = orchester_store::ProjectDb::open(&root).map_err(|e| messages::store_error(&e))?;
-        changes.record(db.project().id(), outside);
         project_settings::load_in(&root)
-          .map(Saved)
+          .map(|settings| Saved(settings, outside))
           .map_err(|e| messages::store_error(&e))
       })
       .await?
     }
   })
 }
-pub fn load(ctx: &mut Ctx, root: PathBuf, revision: u64) -> FutureState<Read, Message> {
+/// What a tab's own saves leave for its reads: the settings a save read right after writing, which the read the
+/// save asks for takes instead of reading them again, and the changes of the kinds the tab shows, its own too.
+#[derive(Clone)]
+pub struct OwnSaves {
+  read: Arc<Mutex<Option<Settings>>>,
+  changes: OwnChanges,
+}
+
+impl OwnSaves {
+  pub fn new(ctx: &mut Ctx, kinds: &'static [Outside]) -> Self {
+    Self {
+      read: Arc::default(),
+      changes: OwnChanges::new(ctx, kinds),
+    }
+  }
+
+  /// How often the kinds the tab shows changed. Reading it in a render renders again when it moves.
+  pub fn count(&self, feed: &ProjectFeed) -> u64 {
+    self.changes.count(feed)
+  }
+}
+
+pub fn load(ctx: &mut Ctx, root: PathBuf, revision: u64, own: &OwnSaves) -> FutureState<Read, Message> {
+  let saved = Arc::clone(&own.read);
   let mut state = ctx
-    .future((root, revision), |(root, revision)| {
-      tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
+    .future((root, revision), move |(root, revision)| {
+      let saved = saved.lock().take();
+      if saved.is_none() {
+        tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
+      }
       async move {
+        if let Some(settings) = saved {
+          return Ok(Read(settings, revision));
+        }
         background::run(move || project_settings::load_in(&root).map(|settings| Read(settings, revision)))
           .await?
           .map_err(|e| messages::store_error(&e))
@@ -112,8 +145,14 @@ pub fn load(ctx: &mut Ctx, root: PathBuf, revision: u64) -> FutureState<Read, Me
   }
   state
 }
-pub fn follow(ctx: &mut Ctx, save: &Save, status: Signal<Status>, revision: Signal<u64>, stored: Signal<Option<Read>>) {
+pub fn follow(
+  ctx: &mut Ctx,
+  save: &Save,
+  status: Signal<Status>,
+  (revision, stored, own): (Signal<u64>, Signal<Option<Read>>, OwnSaves),
+) {
   let project = ctx.props::<TabProps>().project.clone();
+  let changes = Services::of(ctx).changes;
   ctx.watch(&save.state(), move |state| {
     if state.is_pending() {
       status.set(Status::Saving);
@@ -125,6 +164,10 @@ pub fn follow(ctx: &mut Ctx, save: &Save, status: Signal<Status>, revision: Sign
     } else if let Some(saved) = &state.data {
       stored.set(Some(Read(saved.0.clone(), u64::MAX)));
       status.set(Status::Saved);
+      // Every other screen that shows the change reads it again; the tab takes what the save read, in the
+      // same render, so neither its revision nor the feed catching up reads the settings again.
+      own.changes.record(&changes, project.open.project.id(), saved.1);
+      *own.read.lock() = Some(saved.0.clone());
       revision.update(|r| *r += 1);
       project.feed.saved();
     }

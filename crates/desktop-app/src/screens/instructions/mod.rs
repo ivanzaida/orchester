@@ -47,7 +47,6 @@ pub struct Props(pub ShownProject);
 impl DevtoolsInspectable for Props {}
 pub struct InstructionsScreen {
   selection: Selection,
-  revision: Signal<u64>,
   retry: Signal<u64>,
   leave: crate::navigation::guard::LeaveGuard,
 }
@@ -73,7 +72,6 @@ impl Component for InstructionsScreen {
         busy,
         full: ctx.signal(false),
       },
-      revision: ctx.signal(0),
       retry: ctx.signal(0),
       leave,
     }
@@ -83,7 +81,6 @@ impl Component for InstructionsScreen {
     let outside = project.feed.outside.get();
     let deps = (
       project.open.repo_root.clone(),
-      self.revision.get(),
       self.retry.get(),
       outside.of(Outside::Instructions),
       outside.of(Outside::Profiles),
@@ -144,7 +141,6 @@ impl InstructionsScreen {
         import::Props {
           project,
           selection: self.selection.clone(),
-          revision: self.revision.clone(),
         },
       ),
       Some(tab) => {
@@ -175,7 +171,6 @@ impl InstructionsScreen {
             entry,
             tab,
             selection: self.selection.clone(),
-            revision: self.revision.clone(),
             reading,
           },
         )

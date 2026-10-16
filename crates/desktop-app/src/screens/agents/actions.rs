@@ -13,6 +13,7 @@ use orchester_workspace::{
   agents::editor::{self, Action, Outcome, Request},
   background,
   messages::Message,
+  tasks::outside::Outside,
 };
 
 use super::{View, editor::Props};
@@ -56,7 +57,9 @@ pub fn follow(ctx: &mut Ctx, work: &Work, pending: Signal<Pending>, busy: Signal
           pending.set(Pending(None));
           props.view.set(View::Edit(id));
           // Every other screen that shows the profiles reads them again; this one reads them again once.
-          props.profiles.record(&changes, props.project.open.project.id());
+          props
+            .profiles
+            .record(&changes, props.project.open.project.id(), Outside::Profiles);
           props.revision.update(|revision| *revision += 1);
         }
         Outcome::Confirm(reasons) => pending.set(Pending(Some(Request {

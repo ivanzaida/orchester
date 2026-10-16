@@ -30,6 +30,7 @@ pub(super) struct General {
   save: work::Save,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
+  own: work::OwnSaves,
 }
 impl Component for General {
   type Props = TabProps;
@@ -38,27 +39,30 @@ impl Component for General {
       save: work::action(ctx),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
+      own: work::OwnSaves::new(
+        ctx,
+        &[
+          Outside::AutoMode,
+          Outside::Runs,
+          Outside::Connections,
+          Outside::ProjectSettings,
+        ],
+      ),
     };
     let save = tab.save.clone();
     work::follow(
       ctx,
       &save,
       ctx.props::<TabProps>().status.clone(),
-      tab.revision.clone(),
-      tab.stored.clone(),
+      (tab.revision.clone(), tab.stored.clone(), tab.own.clone()),
     );
     tab
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
-    let outside = props.project.feed.outside.get();
-    let revision = self.revision.get()
-      + outside.of(Outside::AutoMode)
-      + outside.of(Outside::Runs)
-      + outside.of(Outside::Connections)
-      + outside.of(Outside::ProjectSettings);
-    let state = work::load(ctx, props.project.open.repo_root.clone(), revision);
+    let revision = self.revision.get() + self.own.count(&props.project.feed);
+    let state = work::load(ctx, props.project.open.repo_root.clone(), revision, &self.own);
     let Some(read) = state.data.clone().or_else(|| self.stored.get()) else {
       return page::scroll(work::pending(ctx, &state, &self.revision));
     };

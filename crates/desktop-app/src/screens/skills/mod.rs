@@ -50,7 +50,7 @@ impl Component for SkillsScreen {
           navigation: crate::navigation::Navigation::of(ctx),
         },
         revision: ctx.signal(0),
-        skills: OwnChanges::new(ctx, Outside::Skills),
+        skills: OwnChanges::new(ctx, &[Outside::Skills]),
         reset: ctx.signal(0),
         reload_requested: ctx.signal(false),
       },

@@ -3,36 +3,41 @@
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::id::ProjectId;
-use orchester_workspace::tasks::outside::{Outside, OutsideChanges};
+use orchester_workspace::tasks::outside::{Outside, OutsideChanges, OutsideCounts};
 
 use super::ProjectFeed;
 
-/// How often one kind of a project's data changed, as a screen that changes it too follows it.
+/// How often the kinds of a project's data a screen shows changed, as a screen that changes them too follows
+/// them.
 #[derive(Clone)]
 pub struct OwnChanges {
-  kind: Outside,
+  kinds: &'static [Outside],
   /// The count right after the screen's own last change.
   seen: Signal<u64>,
 }
 
 impl OwnChanges {
-  pub fn new(ctx: &mut Ctx, kind: Outside) -> Self {
+  pub fn new(ctx: &mut Ctx, kinds: &'static [Outside]) -> Self {
     Self {
-      kind,
+      kinds,
       seen: ctx.signal(0),
     }
   }
 
-  /// How often the kind changed: the feed's count, or the count right after the screen's own last change while
+  /// How often the kinds changed: the feed's count, or the count right after the screen's own last change while
   /// the feed has not caught up with it. Reading it in a render renders again when it moves.
   pub fn count(&self, feed: &ProjectFeed) -> u64 {
-    feed.outside.get().of(self.kind).max(self.seen.get())
+    self.of(feed.outside.get()).max(self.seen.get())
   }
 
-  /// Records the screen's own change of `project`, which the screen reads again itself in the same render: when
-  /// the feed catches up with it, [`Self::count`] stays where it is.
-  pub fn record(&self, changes: &OutsideChanges, project: ProjectId) {
-    changes.record(project, self.kind);
-    self.seen.set(changes.counts(project).of(self.kind));
+  /// Records the screen's own change of `kind` in `project`, which the screen reads again itself in the same
+  /// render: when the feed catches up with it, [`Self::count`] stays where it is.
+  pub fn record(&self, changes: &OutsideChanges, project: ProjectId, kind: Outside) {
+    changes.record(project, kind);
+    self.seen.set(self.of(changes.counts(project)));
+  }
+
+  fn of(&self, counts: OutsideCounts) -> u64 {
+    self.kinds.iter().map(|kind| counts.of(*kind)).sum()
   }
 }

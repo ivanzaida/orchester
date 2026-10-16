@@ -8,6 +8,7 @@ mod insertion;
 mod library;
 mod preview;
 mod publication_layout;
+mod reads;
 mod recovery;
 mod repository;
 mod saving;

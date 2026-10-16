@@ -51,7 +51,6 @@ pub struct Props {
   pub entry: Option<InstructionEntry>,
   pub tab: Tab,
   pub selection: Selection,
-  pub revision: Signal<u64>,
   pub reading: bool,
 }
 impl PartialEq for Props {
@@ -97,7 +96,6 @@ impl Component for Editor {
       published: published.clone(),
     };
     let selection = props.selection.clone();
-    let revision = props.revision.clone();
     let fields = editor.fields.clone();
     ctx.watch(&editor.work.action.state(), move |result| {
       selection.busy.set(result.is_pending());
@@ -112,7 +110,6 @@ impl Component for Editor {
         if done.published {
           published.set(done.entry.state.published().map(|v| v.get()));
         }
-        revision.update(|v| *v += 1);
         autosave.again();
         // Opening the newly created resource preserves the complete body just saved.
         if matches!(selection.view.get_untracked(), View::New(_)) {
