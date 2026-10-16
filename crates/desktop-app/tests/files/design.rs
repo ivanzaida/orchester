@@ -228,23 +228,57 @@ fn files_meta_line_shortens_the_checkouts_folder_and_keeps_the_files_facts() {
 }
 
 #[test]
-fn files_actions_stay_inside_the_header_at_960() {
+fn files_header_names_the_file_and_keeps_the_actions_inside_at_960_and_1440() {
   let mut files = Files::new();
-  files.window.tree.resize(960, 640);
-  files.open(Some("logo.png"), Version::Checkout);
+  // A text file at a commit: *Copy file* and *Open in editor* with its reason, the widest actions.
+  fs::write(
+    files.repo.join("src/plan_limits.rs"),
+    "pub struct Limits;
+",
+  )
+  .expect("a file");
+  git(&files.repo, &["add", "."]);
+  git(&files.repo, &["commit", "--quiet", "-m", "limits"]);
+  files.window.tree.resize(2400, 900);
+  files.open(Some("src/plan_limits.rs"), Version::Base);
   files.window.until("the reason", |w| {
     w.tree.get_element_by_id("files-open-reason").is_some()
   });
-  let (header, actions, open) = (
-    files.bounds("files-header"),
-    files.bounds("files-actions-column"),
-    files.bounds("files-open"),
-  );
-  let inside = header.x + header.width - 32.0 + 0.5;
-  assert!(
-    actions.x + actions.width <= inside && open.x + open.width <= inside,
-    "the actions in the header's padding: {actions:?}, {open:?} in {header:?}"
-  );
-  let reason = files.bounds("files-open-reason");
-  assert!(reason.x + reason.width <= inside, "{reason:?}");
+  let whole = files.bounds("files-title").width;
+  for width in [1440, 960] {
+    files.window.tree.resize(width, 900);
+    files.window.until("the header laid out for the width", |w| {
+      w.tree.get_element_by_id("files-title").is_some()
+    });
+    for _ in 0..3 {
+      files.window.pass();
+    }
+    let (header, title, actions, open, reason) = (
+      files.bounds("files-header"),
+      files.bounds("files-title"),
+      files.bounds("files-actions-column"),
+      files.bounds("files-open"),
+      files.bounds("files-open-reason"),
+    );
+    near(title.width, whole, &format!("the file's name uncut at {width}"));
+    let inside = header.x + header.width - 32.0 + 0.5;
+    for (what, bounds) in [
+      ("the actions", actions),
+      ("Open in editor", open),
+      ("the reason", reason),
+    ] {
+      assert!(
+        bounds.x + bounds.width <= inside,
+        "{what} inside the header at {width}: {bounds:?} in {header:?}"
+      );
+    }
+    if width == 1440 {
+      near(header.height, 105.0, "1440 keeps the reason beside the meta line");
+    } else {
+      assert!(
+        actions.y >= title.y + title.height,
+        "at 960 the actions go under the title: {actions:?}, {title:?}"
+      );
+    }
+  }
 }

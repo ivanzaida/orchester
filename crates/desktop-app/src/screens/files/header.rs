@@ -5,8 +5,10 @@
 //! 612 lines · 21.4 KB"). As the Tasks header (`mQeh3`) lays it out, the title and the meta line are a column on
 //! the left, the meta cut with an ellipsis when it is long, and the actions a column on the right with why *Open in
 //! editor* is unavailable under them, at their end: the reason sits beside the meta line, so the header keeps its
-//! height, and a long reason wraps inside its column. The actions keep their width; the title and the meta line
-//! give way, the checkout's folder first, shortened in its middle (`H:\…\work\kontur`), so the branch and the
+//! height, and a long reason wraps inside its column. The actions keep their width; when that would leave the title
+//! less than [`TITLE_MIN_WIDTH`] (a narrow window), they move to a row of their own under the meta line, at its end,
+//! so the file stays named and every button stays in the header ([`Room`]). The title and the meta line give way,
+//! the checkout's folder first, shortened in its middle (`H:\…\work\kontur`), so the branch and the
 //! file's facts after it stay in view. Every crumb is an ancestor of the file, all in
 //! `text_muted`. A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
 //! with no file the title is *Files* (`o3iVXj`); a version that no longer exists says so in `warning`
@@ -18,7 +20,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  layout::{Alignment, text_style::TextAlign},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
@@ -48,6 +50,35 @@ const TITLE_HEIGHT: f32 = 28.0;
 const META_HEIGHT: f32 = 15.0;
 /// How much faster than the rest of the meta line the checkout's folder gives way when the line is short.
 const PATH_GIVES_WAY: f32 = 100.0;
+/// The least room the title and the meta line keep beside the actions, enough for a file's name.
+const TITLE_MIN_WIDTH: f32 = 240.0;
+/// The gap between the title column and the actions (`SpacingSize::Lg`).
+const ACTIONS_GAP: f32 = 16.0;
+
+/// The header's title row and its actions as the last layout measured them; zero before the first.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Room {
+  row: f32,
+  actions: f32,
+}
+
+impl Room {
+  /// The room of a title row `row` wide beside actions `actions` wide, to whole pixels so that a layout that
+  /// moves by a fraction measures the same room.
+  pub fn new(row: f32, actions: f32) -> Self {
+    Self {
+      row: row.round(),
+      actions: actions.round(),
+    }
+  }
+
+  /// Whether the actions leave the title too little room beside them, so they go under it.
+  fn actions_below(self) -> bool {
+    self.row > 0.0 && self.row - self.actions - ACTIONS_GAP < TITLE_MIN_WIDTH
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for Room {}
 
 pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
   let (switch, menu) = version::switch(ctx, page);
@@ -74,6 +105,7 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
   });
   let actions = Column::new()
     .id("files-actions-column")
+    .ref_element(page.view.actions.clone())
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::End)
@@ -85,13 +117,26 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
     .spacing(SpacingSize::Sm)
     .child(title(ctx, page).height(Dimension::Px(TITLE_HEIGHT)))
     .child(meta(ctx, page, gone));
+  let below = page.view.header_room.get().actions_below();
+  let (beside, under) = if below {
+    let under = Row::new()
+      .id("files-actions-row")
+      .width(Dimension::Pct(100.0))
+      .justify(Justify::End)
+      .child(actions);
+    (None, Some(under))
+  } else {
+    (Some(actions), None)
+  };
   let title = Row::new()
     .id("files-title-row")
+    .ref_element(page.view.title_row.clone())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
     .align_items(Alignment::Start)
+    .describe("actions", if below { "below" } else { "beside" })
     .child(named)
-    .child(actions);
+    .with_children(beside);
   Column::new()
     .id("files-header")
     .width(Dimension::Pct(100.0))
@@ -106,6 +151,7 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(crumbs(ctx, page))
     .child(title)
+    .with_children(under)
     .with_children(menu)
     .into()
 }

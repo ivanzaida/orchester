@@ -119,6 +119,11 @@ pub struct View {
   pub goto: goto::GotoState,
   pub version_open: Signal<bool>,
   pub version_anchor: ElementRef,
+  /// The header's title row and its actions, measured after each layout: whether the actions fit beside the
+  /// title ([`header::Room`]).
+  pub title_row: ElementRef,
+  pub actions: ElementRef,
+  pub header_room: Signal<header::Room>,
   pub refusal: Signal<Option<Refusal>>,
   /// Whether the highlighting under way is still wanted: a newer text turns the older pass's flag off.
   pub highlighting: Arc<parking_lot::Mutex<Arc<AtomicBool>>>,
@@ -225,11 +230,26 @@ impl Component for FilesScreen {
         goto: goto::GotoState::new(ctx),
         version_open: ctx.signal(false),
         version_anchor: ElementRef::new(),
+        title_row: ElementRef::new(),
+        actions: ElementRef::new(),
+        header_room: ctx.signal(header::Room::default()),
         refusal: ctx.signal(None),
         highlighting: Arc::default(),
       },
       following: follow::Following::default(),
       shown: parking_lot::Mutex::new(None),
+    }
+  }
+
+  /// Keeps the header's measured room after a layout that changed it, e.g. a resized window.
+  fn after_layout(&self) {
+    let view = &self.view;
+    if !view.title_row.is_attached() || !view.actions.is_attached() {
+      return;
+    }
+    let room = header::Room::new(view.title_row.width(), view.actions.width());
+    if room != view.header_room.get_untracked() {
+      view.header_room.set(room);
     }
   }
 
