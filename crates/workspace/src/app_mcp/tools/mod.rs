@@ -24,6 +24,7 @@ mod runs;
 pub mod setup;
 mod task_write;
 mod tasks;
+mod usage;
 mod wire;
 mod worktree;
 
@@ -250,7 +251,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_pull_requests",
-    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, when it was merged or closed, whether it comes from a fork, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last successful sync read (open ones and the 50 most recently updated closed ones). Each repository says how its latest sync went (sync: synced, rate_limited, github_unreachable, paused_other_account, gh_unavailable…), when the list was read (synced_at), when the latest sync ran (attempted_at) and, during a rate limit, until when syncs wait (paused_until); unreadable_projects lists the projects that could not be read, with why. refresh syncs one project (needs project) first through gh, unless a sync ran in the last 30 s or a rate limit holds: then the stored list answers. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key.",
+    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, when it was merged or closed, whether it comes from a fork, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last successful sync read (open ones and the 50 most recently updated closed ones). Each repository says how its latest sync went (sync: synced, rate_limited, github_unreachable, paused_other_account, gh_unavailableâ€¦), when the list was read (synced_at), when the latest sync ran (attempted_at) and, during a rate limit, until when syncs wait (paused_until); unreadable_projects lists the projects that could not be read, with why. refresh syncs one project (needs project) first through gh, unless a sync ran in the last 30 s or a rate limit holds: then the stored list answers. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key.",
     schema: schema_for_type::<pull_requests::ListPullRequests>,
     read_only: true,
   },
@@ -258,6 +259,12 @@ const SPECS: &[Spec] = &[
     name: "get_pull_request",
     description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request.",
     schema: schema_for_type::<pull_requests::GetPullRequest>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_usage",
+    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account (an id, or `none` for usage on no account; names in any case); `unmatched` names each filter value nothing in the range matches. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row.",
+    schema: schema_for_type::<usage::GetUsage>,
     read_only: true,
   },
   Spec {
@@ -315,6 +322,7 @@ async fn dispatch(
     "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
+    "get_usage" => usage::get_usage(services, parse(arguments)?).await,
     "set_code_index" => projects::set_code_index(services, parse(arguments)?).await,
     "update_project_limits" => limits::update_project_limits(services, parse(arguments)?).await,
     "duplicate_pipeline" => pipeline_copy::duplicate_pipeline(services, parse(arguments)?, translate).await,

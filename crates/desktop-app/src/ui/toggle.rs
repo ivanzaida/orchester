@@ -151,11 +151,7 @@ impl Toggle {
         .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
     };
     match (self.kind, self.on) {
-      (ToggleKind::Checkbox, false) => off(square(MARK_SIZE)).rounded(RadiusSize::Sm),
-      (ToggleKind::Checkbox, true) => square(MARK_SIZE)
-        .rounded(RadiusSize::Sm)
-        .background(PaletteColor::Accent)
-        .child(icon(Icon::Check, IconSize::Sm, ExtraColor::OnAccent.role())),
+      (ToggleKind::Checkbox, on) => check_mark(on),
       (ToggleKind::Radio, false) => off(square(MARK_SIZE)).rounded(round),
       (ToggleKind::Radio, true) => square(MARK_SIZE).rounded(round).background(PaletteColor::Accent).child(
         square(RADIO_CENTER)
@@ -184,6 +180,27 @@ impl Toggle {
           )
       }
     }
+  }
+}
+
+/// A checkbox's mark alone (`Checkbox/off` `q3JN1`, `Checkbox/on` `Una0j`), for a row that is pressed as a
+/// whole, e.g. a filter's option.
+pub fn check_mark(on: bool) -> Row {
+  let mark = Row::new()
+    .width(Dimension::Px(MARK_SIZE))
+    .height(Dimension::Px(MARK_SIZE))
+    .flex_shrink(0.0)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .rounded(RadiusSize::Sm);
+  if on {
+    mark
+      .background(PaletteColor::Accent)
+      .child(icon(Icon::Check, IconSize::Sm, ExtraColor::OnAccent.role()))
+  } else {
+    mark
+      .background(PaletteColor::SurfaceInput)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
   }
 }
 

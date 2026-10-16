@@ -11,7 +11,9 @@ use thiserror::Error;
 
 use super::{CliSeries, UsageFilter};
 use crate::{
+  account::AccountCli,
   connection::{AgentProvider, plan_limits::PlanLimits},
+  id::AgentAccountId,
   run::RunNumber,
   time::Timestamp,
 };
@@ -90,6 +92,8 @@ pub enum Join {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LimitLine {
   pub provider: AgentProvider,
+  /// The account whose limits these are; `None` for a provider without accounts.
+  pub account: Option<AgentAccountId>,
   pub minutes: u64,
   pub points: Vec<LimitPoint>,
   /// Between each point and the next.
@@ -112,6 +116,7 @@ impl LimitLine {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CurrentLimit {
   pub provider: AgentProvider,
+  pub account: Option<AgentAccountId>,
   pub minutes: u64,
   /// `None` when the CLI reported only the window's state.
   pub percent: Option<f64>,
@@ -126,10 +131,13 @@ pub struct LimitHistory {
   pub current: Vec<CurrentLimit>,
   /// Each CLI's first stored report: before it, nothing is known.
   pub first: Vec<(AgentProvider, Timestamp)>,
+  /// Each account's first stored report, in the order first reported.
+  pub first_by_account: Vec<(AgentProvider, Option<AgentAccountId>, Timestamp)>,
 }
 
 impl LimitHistory {
-  /// The history of the CLIs `filter` admits between `start` and `end`, measured at `now`.
+  /// The history of the CLIs and accounts `filter` admits between `start` and `end`, measured at `now`: one
+  /// line per account and window. A report from before accounts were recorded is its CLI's Default account's.
   pub fn of(
     snapshots: &[LimitSnapshot],
     (start, end): (Timestamp, Timestamp),
@@ -138,23 +146,34 @@ impl LimitHistory {
   ) -> Self {
     let mut sorted: Vec<&LimitSnapshot> = snapshots
       .iter()
-      .filter(|snapshot| filter.admits_cli(snapshot.provider) && snapshot.at < end)
+      .filter(|snapshot| {
+        filter.admits_cli(snapshot.provider) && filter.admits_account(account_of(snapshot)) && snapshot.at < end
+      })
       .collect();
     sorted.sort_by_key(|snapshot| snapshot.at);
     let mut first: Vec<(AgentProvider, Timestamp)> = Vec::new();
-    let mut windows: BTreeMap<(CliSeries, u64), (AgentProvider, Vec<LimitPoint>)> = BTreeMap::new();
-    let mut current: BTreeMap<(CliSeries, u64), CurrentLimit> = BTreeMap::new();
+    let mut first_by_account: Vec<(AgentProvider, Option<AgentAccountId>, Timestamp)> = Vec::new();
+    let mut windows: BTreeMap<WindowKey, (AgentProvider, Vec<LimitPoint>)> = BTreeMap::new();
+    let mut current: BTreeMap<WindowKey, CurrentLimit> = BTreeMap::new();
     for snapshot in sorted {
+      let account = account_of(snapshot);
       if !first.iter().any(|(provider, _)| *provider == snapshot.provider) {
         first.push((snapshot.provider, snapshot.at));
       }
+      if !first_by_account
+        .iter()
+        .any(|(provider, of, _)| *provider == snapshot.provider && *of == account)
+      {
+        first_by_account.push((snapshot.provider, account, snapshot.at));
+      }
       for window in &snapshot.limits.windows {
-        let key = (CliSeries::of(Some(snapshot.provider)), window.minutes());
+        let key = (CliSeries::of(Some(snapshot.provider)), account, window.minutes());
         let at = window.reported_at().unwrap_or(snapshot.at);
         current.insert(
           key,
           CurrentLimit {
             provider: snapshot.provider,
+            account,
             minutes: window.minutes(),
             percent: window.percent(),
             resets: window.resets(),
@@ -180,12 +199,13 @@ impl LimitHistory {
     let until = now.min(end);
     let lines = windows
       .into_iter()
-      .map(|((_, minutes), (provider, points))| line(provider, minutes, points, until))
+      .map(|((_, account, minutes), (provider, points))| line((provider, account, minutes), points, until))
       .collect();
     Self {
       lines,
       current: current.into_values().collect(),
       first,
+      first_by_account,
     }
   }
 
@@ -195,7 +215,21 @@ impl LimitHistory {
   }
 }
 
-fn line(provider: AgentProvider, minutes: u64, points: Vec<LimitPoint>, until: Timestamp) -> LimitLine {
+/// A window: its CLI, its account and its length.
+type WindowKey = (CliSeries, Option<AgentAccountId>, u64);
+
+/// The account a report is of: the one recorded, or, from before accounts were, its CLI's Default.
+fn account_of(snapshot: &LimitSnapshot) -> Option<AgentAccountId> {
+  snapshot
+    .account
+    .or_else(|| AccountCli::of(snapshot.provider).map(AccountCli::default_account))
+}
+
+fn line(
+  (provider, account, minutes): (AgentProvider, Option<AgentAccountId>, u64),
+  points: Vec<LimitPoint>,
+  until: Timestamp,
+) -> LimitLine {
   let mut joins = Vec::new();
   let mut resets = Vec::new();
   for pair in points.windows(2) {
@@ -220,6 +254,7 @@ fn line(provider: AgentProvider, minutes: u64, points: Vec<LimitPoint>, until: T
   resets.dedup();
   LimitLine {
     provider,
+    account,
     minutes,
     points,
     joins,

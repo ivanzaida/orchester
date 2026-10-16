@@ -94,6 +94,8 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
     at_most: false,
   };
   db.save_edit_progress(invocation.id, &progress).expect("progress");
+  let account = orchester_core::id::AgentAccountId::generate();
+  db.save_invocation_account(invocation.id, account).expect("account");
   invocation.ended_at = Some(at(5 * DAY + 10));
   invocation.outcome = Some(orchester_core::connection::stream::InvocationOutcome::Completed);
   db.save_invocation(&invocation).expect("ended");
@@ -109,6 +111,8 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
   assert_eq!(read.cli, Some(AgentProvider::CodexCli));
   assert_eq!(read.model.as_deref(), Some(model().as_str()));
   assert_eq!(read.profile.as_deref(), Some("Builder"));
+  assert!(read.profile_id.is_some(), "the profile's resource");
+  assert_eq!(read.account, Some(account));
   assert_eq!(&*read.step, "Implement", "the step's name, not its key");
   assert_eq!(read.index, IndexGiven::Yes);
   assert_eq!(read.edit.as_ref(), Some(&progress));
@@ -120,6 +124,12 @@ fn usage_facts_give_each_turn_with_its_invocation_and_run() {
   assert_eq!(&*run_facts.task_key, "ORC-1");
   assert_eq!(&*run_facts.task_title, "Say hello");
   assert_eq!(run_facts.pipeline.as_deref(), Some("Delivery"));
+  assert!(run_facts.pipeline_id.is_some(), "the pipeline's resource");
+  assert_eq!(
+    run_facts.pipeline_version.map(|version| version.get()),
+    Some(1),
+    "the version the run pinned"
+  );
   assert_eq!(run_facts.tags, ["auth".into()]);
   assert_eq!(run_facts.outcome, RunOutcome::Running);
 }

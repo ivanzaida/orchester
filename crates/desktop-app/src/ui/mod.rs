@@ -19,6 +19,7 @@ pub mod command_trigger;
 pub mod composer;
 pub mod detail_row;
 pub mod field;
+pub mod filter;
 pub mod form_section;
 pub mod github_mark;
 pub mod icon;

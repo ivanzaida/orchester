@@ -39,9 +39,11 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
+  usage::{GroupBy, Period},
 };
 use orchester_workspace::{
-  files::Version, pull_requests::list::PullRequestTab, tasks::integration_jobs::ProjectJobs, workspace::OpenProject,
+  files::Version, pull_requests::list::PullRequestTab, tasks::integration_jobs::ProjectJobs, usage::UsageQuery,
+  workspace::OpenProject,
 };
 use parking_lot::Mutex;
 use support::Data;
@@ -74,6 +76,7 @@ const BUILT: &[Screen] = &[
   Screen::Skills,
   Screen::Tasks,
   Screen::Tools,
+  Screen::Usage,
 ];
 /// What is built without a route of its own, a popover the shell opens: its element and the tests that check
 /// it, under `tests/`.
@@ -208,6 +211,18 @@ fn kontur(id: ProjectId) -> OpenProject {
   }
 }
 
+/// The Usage page over the last 30 days by task, filtered to a model and a step, as a link may open it.
+fn filtered_usage() -> UsageQuery {
+  let mut query = UsageQuery {
+    period: Period::Month,
+    group: GroupBy::Task,
+    ..UsageQuery::default()
+  };
+  query.filter.models.push("gpt-5".into());
+  query.filter.steps.push("Implement".into());
+  query
+}
+
 fn at(page: ProjectPage) -> Route {
   Route::Project(PROJECT.parse().expect("a project id"), page)
 }
@@ -261,7 +276,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       )),
       Vec::new(),
     ),
-    (at(ProjectPage::Usage), placeholder("Usage")),
+    (at(ProjectPage::Usage(Box::new(filtered_usage()))), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
     (at(ProjectPage::Instructions), placeholder("Instructions")),

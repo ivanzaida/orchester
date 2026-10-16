@@ -20,6 +20,9 @@ default = []
 devtools = ["lurq/devtools"]
 
 [dependencies]
+# The Usage page's days (`orchester_core::usage::DayRange`) read as month, day and weekday; already built
+# for core and the workspace.
+chrono.workspace = true
 # The routing and bearer/Origin guard of the app's MCP server (`mcp::server`, `mcp::guard`), on loopback.
 axum.workspace = true
 # The MCP server serves each connection with a header deadline and a connection cap, which axum::serve
@@ -59,6 +62,8 @@ lurq = { workspace = true, features = [
   "mcp",
   # Futures and streams of screens run on the app's runtime, off the UI thread.
   "tokio",
+  # The Usage page's charts; tiny-skia and lyon are already built for `svg`, so it adds no crate.
+  "canvas",
 ] }
 parking_lot.workspace = true
 # The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.

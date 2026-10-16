@@ -88,14 +88,24 @@ struct Profiles {
 
 impl Profiles {
   fn publish(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Result<Self, SeedError> {
+    Self::publish_on(db, |_| (connection, MODEL), now)
+  }
+
+  /// The profiles, each on the connection and model `on` gives for its role.
+  fn publish_on(
+    db: &mut ProjectDb,
+    on: impl Fn(&str) -> (ConnectionId, &'static str),
+    now: Timestamp,
+  ) -> Result<Self, SeedError> {
     let mut versions = BTreeMap::new();
     let mut profile = |role: &str, duties: &str, access: RepositoryAccess| -> Result<ResourceId, SeedError> {
+      let (connection, model) = on(role);
       let body = AgentProfile::new(
         name(role),
         duties.to_owned(),
         PromptText::new(duties).expect("the profiles' instructions are valid prompts"),
         connection,
-        ModelId::new(MODEL).expect("a valid model id"),
+        ModelId::new(model).expect("a valid model id"),
         ProviderSettings::default(),
       )
       .with_permissions(AgentPermissions::new(
@@ -192,12 +202,57 @@ fn pinned(
   Ok(Published { snapshot })
 }
 
+/// An agent connection of `provider` named `title` that is stored but never checked or run: what a
+/// scenario's recorded runs name as their CLI.
+pub fn recorded_connection(
+  db: &mut ProjectDb,
+  (title, provider, program): (&str, AgentProvider, &Path),
+  now: Timestamp,
+) -> Result<ConnectionId, SeedError> {
+  let connection = AgentConnection::new(
+    ConnectionId::generate(),
+    name(title),
+    provider,
+    program.to_path_buf(),
+    now,
+  )?;
+  let connection = connection.into_connection();
+  db.create_connection(&connection)?;
+  Ok(connection.id())
+}
+
+/// The catalogue of the Usage page's scenario: the design's, its Explorer and Builder on Codex (`gpt-5.5`), its
+/// Planner and Reviewer on Claude Code (`claude-sonnet-5-5`), so runs spend on both CLIs.
+pub fn usage(
+  db: &mut ProjectDb,
+  (codex, claude): (ConnectionId, ConnectionId),
+  now: Timestamp,
+) -> Result<Catalogue, SeedError> {
+  let profiles = Profiles::publish_on(
+    db,
+    |role| match role {
+      "Planner" | "Reviewer" => (claude, CLAUDE_MODEL),
+      _ => (codex, MODEL),
+    },
+    now,
+  )?;
+  starter_catalogue(db, &profiles, now)
+}
+
+/// The model of the usage scenario's Claude Code profiles.
+const CLAUDE_MODEL: &str = "claude-sonnet-5-5";
+
 /// The catalogue the design shows: Feature delivery v3 (the starter pipeline: Research, Plan with plan
 /// approval, Implement, Run checks and Review, Create pull request) and Quick fix v2 (Research, Plan,
 /// Implement, Review). Its tools run `cargo test` and `gh pr create`, which the QA repository cannot
 /// pass: runs here are recorded, not run.
 pub fn kontur(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Result<Catalogue, SeedError> {
   let profiles = Profiles::publish(db, connection, now)?;
+  starter_catalogue(db, &profiles, now)
+}
+
+/// Feature delivery v3 and Quick fix v2 on `profiles`, with the checks and pull request tools.
+fn starter_catalogue(db: &mut ProjectDb, profiles: &Profiles, now: Timestamp) -> Result<Catalogue, SeedError> {
   let checks = command_tool(db, "Run checks", CHECKS, now)?;
   let pull_request = command_tool(db, "Create pull request", PULL_REQUEST, now)?;
   let assignments = StarterAssignments {
@@ -220,13 +275,13 @@ pub fn kontur(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> R
   let quick_fix = publish(
     db,
     "Quick fix",
-    vec![quick_fix(&profiles, 1), quick_fix(&profiles, 2)],
+    vec![quick_fix(profiles, 1), quick_fix(profiles, 2)],
     now,
   )?;
   let tools = BTreeMap::from([checks, pull_request]);
   Ok(Catalogue {
-    feature_delivery: pinned(feature.0, &feature.1, &profiles, &tools)?,
-    quick_fix: pinned(quick_fix.0, &quick_fix.1, &profiles, &tools)?,
+    feature_delivery: pinned(feature.0, &feature.1, profiles, &tools)?,
+    quick_fix: pinned(quick_fix.0, &quick_fix.1, profiles, &tools)?,
   })
 }
 

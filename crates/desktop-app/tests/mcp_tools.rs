@@ -163,6 +163,11 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       format!("{root}/files/src/a%20b.rs?at=base&line=3-5"),
       json!({ "project": PROJECT, "file": "src/a b.rs", "at": "base", "line": "3-5" }),
     ),
+    (
+      json!({ "route": "usage", "project": PROJECT, "query": "group=task&model=gpt%205&period=30d" }),
+      format!("{root}/usage?period=30d&group=task&model=gpt%205"),
+      json!({ "project": PROJECT, "query": "period=30d&group=task&model=gpt%205" }),
+    ),
   ];
   for (args, path, params) in cases {
     let answer = navigate(&navigation, &args).expect("a valid route");
@@ -179,6 +184,16 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
     window.texts("screen-edit_task").is_none(),
     "only the active route's screen is shown"
   );
+}
+
+#[test]
+fn navigate_opens_every_projects_usage_without_a_project() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let answer = navigate(&navigation, &json!({ "route": "usage", "query": "group=agent" })).expect("a valid route");
+  assert_eq!(answer["route"]["path"], json!("/usage?group=agent"));
+  assert_eq!(answer["route"]["name"], json!("usage"));
+  assert_eq!(answer["route"]["params"], json!({ "query": "group=agent" }));
 }
 
 #[test]

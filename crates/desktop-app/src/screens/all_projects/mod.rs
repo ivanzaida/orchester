@@ -4,7 +4,8 @@
 //! project yet, the welcome. The list and its folders show at once, the counts once each project's data is
 //! read (a dash until then), and the runners' states as they report. Selecting a project that opens shows its
 //! Overview; *Open project folder…* opens the project a folder keeps ([`folder`]); *Add project* opens Add
-//! project; the × asks in place whether to remove a project from the list ([`remove`]). The rules are
+//! project; the × asks in place whether to remove a project from the list ([`remove`]). The *Usage* tab
+//! shows every project's usage (`rHA8G`, `crate::screens::usage::everywhere`). The rules are
 //! `orchester_workspace::project_list`'s.
 
 mod folder;
@@ -28,6 +29,7 @@ use orchester_workspace::{
   background, messages,
   project_list::{self, Listing},
   runner::{RunnerStatus, Runners},
+  usage::UsageQuery,
   workspace::{ListedData, ProjectEntry},
 };
 use parking_lot::Mutex;
@@ -40,8 +42,22 @@ fn screen_id() -> String {
 }
 
 pub fn screen(ctx: &mut Ctx) -> Element {
-  ctx.mount_keyed::<AllProjects>("all-projects", ())
+  ctx.mount_keyed::<AllProjects>("all-projects", Tab::Projects)
 }
+
+/// The *Usage* tab, showing `query`.
+pub fn usage_screen(ctx: &mut Ctx, query: UsageQuery) -> Element {
+  ctx.mount_keyed::<AllProjects>("all-projects", Tab::Usage(Box::new(query)))
+}
+
+/// The tab the page shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Tab {
+  Projects,
+  Usage(Box<UsageQuery>),
+}
+
+impl DevtoolsInspectable for Tab {}
 
 /// The screen's own state: what was removed, and which project's removal is asked.
 #[derive(Clone)]
@@ -69,7 +85,7 @@ struct AllProjects {
 }
 
 impl Component for AllProjects {
-  type Props = ();
+  type Props = Tab;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -105,9 +121,14 @@ impl Component for AllProjects {
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
+    let tab = ctx.props::<Tab>().clone();
     match (listing.data, failed) {
       (_, Some(error)) => page::page(ctx, &open, page::Body::Failed(&error)),
       (Some(Listing::Welcome), None) => welcome::welcome(ctx, &open),
+      (Some(Listing::Projects(_)), None) if let Tab::Usage(query) = tab => {
+        let usage = crate::screens::usage::everywhere(ctx, &query, work);
+        page::page(ctx, &open, page::Body::Usage(usage))
+      }
       (Some(Listing::Projects(_)), None) => {
         let rows = project_list::listed(&entries, &data, &services.runners);
         let body = if rows.is_empty() {

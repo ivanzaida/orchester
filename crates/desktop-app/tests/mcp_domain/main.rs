@@ -30,6 +30,7 @@ mod skills_window;
 mod tools;
 mod tools_window;
 mod unverified;
+mod usage;
 #[path = "../mcp_stable/vault.rs"]
 mod vault;
 mod window;

@@ -96,6 +96,12 @@ fn every_extra_color_is_registered_with_its_design_value() {
     ExtraColor::DiffRemoved => ("#F0605A1F", "#D4342F14"),
     ExtraColor::BrandTile => ("#18191D", "#18191D"),
     ExtraColor::BrandMark => ("#F1F1F4", "#F1F1F4"),
+    ExtraColor::Chart1 => ("#3987E5", "#2A78D6"),
+    ExtraColor::Chart2 => ("#D95926", "#D95926"),
+    ExtraColor::Chart3 => ("#199E70", "#13976A"),
+    ExtraColor::ChartOther => ("#66666E", "#9A9AA2"),
+    ExtraColor::ChartNone => ("#8A8A92", "#6B6B74"),
+    ExtraColor::ChartHatch => ("#FFFFFF0F", "#00000012"),
   };
   let (dark, light) = (themed(Mode::Dark), themed(Mode::Light));
   for extra in ExtraColor::ALL {

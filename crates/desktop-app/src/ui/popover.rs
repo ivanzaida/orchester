@@ -2,7 +2,7 @@
 //! on a press outside or Esc (`Run permissions popover` `ojhrZ`): `surface_raised` inside a
 //! `border_strong` stroke, radius 10, 14 over and under its content and 16 at its sides, its parts 12
 //! apart, lifted by the `lg` shadow. It opens 6 under its control, or over it where the design puts it
-//! above.
+//! above; one for a control at a card's end opens under it from the control's end.
 
 use lurq::{
   app::{
@@ -16,11 +16,12 @@ use lurq::{
 
 use crate::theme::ExtraSpacing;
 
-/// Where a popover opens: under its control or over it, from the control's start.
+/// Where a popover opens: under its control or over it, from the control's start, or under it from its end.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PopoverSide {
   Below,
   Above,
+  BelowEnd,
 }
 
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
@@ -42,6 +43,7 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
   let (placement, offset) = match side {
     PopoverSide::Below => (Placement::BottomStart, gap),
     PopoverSide::Above => (Placement::TopStart, -gap),
+    PopoverSide::BelowEnd => (Placement::BottomEnd, gap),
   };
   Popup::new(anchor, panel)
     .open(open)

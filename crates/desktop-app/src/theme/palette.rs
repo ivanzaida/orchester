@@ -68,10 +68,21 @@ pub enum ExtraColor {
   BrandTile,
   /// The Orchester mark's bars, the same in both modes.
   BrandMark,
+  /// `chart_1`, `chart_2`, `chart_3`: a chart's series, accounts 1–3 in series order (Usage `et35n`, `FDC8B`).
+  Chart1,
+  Chart2,
+  Chart3,
+  /// `chart_other`: *Other accounts*, the fourth connected account and later (`FDC8B`).
+  ChartOther,
+  /// `chart_none`: *No account*'s stripes and outline over `chart_hatch` (`LEQ1w`).
+  ChartNone,
+  /// `chart_hatch`: a chart's stretch where nothing is known (*No data from Claude · Work* in `et35n`), and
+  /// *No account*'s ground.
+  ChartHatch,
 }
 
 impl ExtraColor {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 23] = [
     Self::AccentText,
     Self::OnAccent,
     Self::PanelBorder,
@@ -89,6 +100,12 @@ impl ExtraColor {
     Self::DiffRemoved,
     Self::BrandTile,
     Self::BrandMark,
+    Self::Chart1,
+    Self::Chart2,
+    Self::Chart3,
+    Self::ChartOther,
+    Self::ChartNone,
+    Self::ChartHatch,
   ];
 
   pub fn role(self) -> PaletteColor {
@@ -115,6 +132,12 @@ impl ExtraColor {
       Self::DiffRemoved => "diff_remove",
       Self::BrandTile => "brand_tile",
       Self::BrandMark => "brand_mark",
+      Self::Chart1 => "chart_1",
+      Self::Chart2 => "chart_2",
+      Self::Chart3 => "chart_3",
+      Self::ChartOther => "chart_other",
+      Self::ChartNone => "chart_none",
+      Self::ChartHatch => "chart_hatch",
     }
   }
 
@@ -137,6 +160,12 @@ impl ExtraColor {
       Self::DiffRemoved => mode.pick("#F0605A1F", "#D4342F14"),
       Self::BrandTile => mode.pick("#18191D", "#18191D"),
       Self::BrandMark => mode.pick("#F1F1F4", "#F1F1F4"),
+      Self::Chart1 => mode.pick("#3987E5", "#2A78D6"),
+      Self::Chart2 => mode.pick("#D95926", "#D95926"),
+      Self::Chart3 => mode.pick("#199E70", "#13976A"),
+      Self::ChartOther => mode.pick("#66666E", "#9A9AA2"),
+      Self::ChartNone => mode.pick("#8A8A92", "#6B6B74"),
+      Self::ChartHatch => mode.pick("#FFFFFF0F", "#00000012"),
     }
   }
 }

@@ -6,30 +6,35 @@
 //! mode's reviewer counts as a turn of its run, in the hour it ended, on the reviewer's CLI and model
 //! and under no agent profile.
 
+mod accounts;
 mod breakdown;
 mod efficiency;
 mod expensive;
 mod facts;
 mod filter;
+mod grouped;
 pub mod limits;
 mod period;
 mod report;
 mod series;
 
 pub use self::{
+  accounts::{AccountOrder, AccountPlace, AccountSeries, AccountSplit, AccountUsage, OWN_SERIES, SERIES},
   breakdown::{BreakdownKey, BreakdownRow, Breakdowns},
   efficiency::{EditTokens, Efficiency, FailedRuns},
   expensive::{RunCost, TaskCost},
   facts::{IndexGiven, InvocationFacts, ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts},
   filter::{FilterOptions, UsageFilter, toggle},
+  grouped::{GroupBy, GroupKey, GroupRow, Grouped, Named, grouped},
   period::{Bucket, DayRange, DayRangeError, Grouping, HOURLY_DAYS, Period, bucket_of, day_start, local_date},
   report::{Summary, UsageQuery, UsageReport},
   series::{Measure, SeriesBar},
 };
 use crate::connection::AgentProvider;
 
-/// The series a CLI's tokens are drawn in. Color follows the CLI, never its rank: Codex, Claude
-/// Code, and a third for any other provider.
+/// The series a CLI's tokens were drawn in before the page drew accounts ([`AccountSeries`]); kept for the
+/// old app (`crates/desktop`). Color follows the CLI, never its rank: Codex, Claude Code, and a third for any
+/// other provider.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CliSeries {
   Codex,

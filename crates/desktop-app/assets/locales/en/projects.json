@@ -25,8 +25,7 @@
     "add": "Add project",
     "tabs": {
       "projects": "Projects",
-      "usage": "Usage",
-      "usageUnavailable": "Usage across projects isn't in this app yet."
+      "usage": "Usage"
     },
     "columns": {
       "project": "PROJECT",

@@ -1,26 +1,34 @@
 //! Every kind of link `orchester_workspace::links` makes, the links the domain tools return
 //! (`docs/design/orchestrator-toolset.md`, "Links"), reads as the route of its place, writes back as the same
 //! path and resolves in the router's table to that route's screen, so a link a tool returns opens its place.
-//! A page that is not built yet has its route too.
+//! A page that is not built yet has its route too. A Usage link carries its whole query.
 
 use std::num::NonZeroU64;
 
+use chrono::NaiveDate;
 use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, FilesView, OverviewTab, ProjectPage, Route, RouteError, TaskView,
   ToolTab, routes,
 };
-use orchester_core::{id::ProjectId, project::TaskKey, revision::Revision};
+use orchester_core::{
+  connection::AgentProvider,
+  id::{AgentAccountId, ProjectId, RunId},
+  project::TaskKey,
+  revision::Revision,
+  usage::{DayRange, GroupBy, Period},
+};
 use orchester_workspace::{
   files::{FilePath, LineRange, Version},
   links::{Link, TaskPage},
   pull_requests::list::PullRequestTab,
+  usage::UsageQuery,
 };
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 13;
+const KINDS: usize = 15;
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
@@ -59,7 +67,38 @@ const fn kind(link: &Link) -> usize {
     Link::PullRequest(..) => 10,
     Link::File { .. } => 11,
     Link::PullRequests(..) => 12,
+    Link::Usage(..) => 13,
+    Link::UsageEverywhere(_) => 14,
   }
+}
+
+/// A query with every parameter a Usage link carries, repeated values among them, and one with `period`.
+fn usage_queries() -> [UsageQuery; 2] {
+  let day = |day: u32| NaiveDate::from_ymd_opt(2026, 10, day).expect("an October day");
+  let mut every = UsageQuery {
+    period: Period::Custom(DayRange::new(day(1), day(15)).expect("a range")),
+    group: GroupBy::Step,
+    ..UsageQuery::default()
+  };
+  let filter = &mut every.filter;
+  filter
+    .clis
+    .extend([AgentProvider::CodexCli, AgentProvider::ClaudeCodeCli]);
+  filter.models.extend(["gpt-5".into(), "claude opus & co".into()]);
+  filter.profiles.push(ID.into());
+  filter.pipelines.push("Quick fix #2".into());
+  filter.tags.extend(["auth".into(), "billing".into()]);
+  filter.tasks.push("ORC-24".into());
+  filter.runs.push(RunId::generate());
+  filter.steps.push("Implement".into());
+  filter.accounts.push(AgentAccountId::generate());
+  filter.no_account = true;
+  let today = UsageQuery {
+    period: Period::Today,
+    group: GroupBy::Hour,
+    ..UsageQuery::default()
+  };
+  [every, today]
 }
 
 /// Every kind of link and each tab of a task, with the route each names.
@@ -114,6 +153,20 @@ fn every_link() -> Vec<(Link, Route)> {
   ]
   .into_iter()
   .chain(file_links(project))
+  .chain(usage_queries().into_iter().flat_map(|query| {
+    let mut everywhere = query.clone();
+    everywhere.filter.projects.extend([project, ProjectId::generate()]);
+    [
+      (
+        Link::Usage(project, Box::new(query.clone())),
+        at(ProjectPage::Usage(Box::new(query))),
+      ),
+      (
+        Link::UsageEverywhere(Box::new(everywhere.clone())),
+        Route::Usage(Box::new(everywhere)),
+      ),
+    ]
+  }))
   .collect()
 }
 
@@ -212,9 +265,31 @@ fn links_have_the_documented_paths() {
       },
       format!("{root}/files/src/a%20b.rs?at=base&line=12-20"),
     ),
+    (
+      Link::Usage(project(), Box::new(usage_queries()[1].clone())),
+      format!("{root}/usage?period=today"),
+    ),
+    (
+      Link::UsageEverywhere(Box::new(UsageQuery {
+        group: GroupBy::Model,
+        ..UsageQuery::default()
+      })),
+      "/usage?group=model".to_owned(),
+    ),
   ] {
     assert_eq!(link.path(), path);
   }
+}
+
+#[test]
+fn links_carry_an_account_and_no_account_and_read_back() {
+  let mut query = UsageQuery::default();
+  query.filter.accounts.push(id());
+  query.filter.no_account = true;
+  let link = Link::UsageEverywhere(Box::new(query.clone()));
+  let path = link.path();
+  assert_eq!(path, format!("/usage?account={ID}&account=none"));
+  assert_eq!(Route::parse(&path), Ok(Route::Usage(Box::new(query))));
 }
 
 #[test]

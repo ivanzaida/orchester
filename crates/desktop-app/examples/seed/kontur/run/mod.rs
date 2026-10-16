@@ -14,7 +14,8 @@ use orchester_core::{
   resource::{ModelId, RepositoryAccess, StepKey, StepKind},
   run::{
     Answerer, BranchName, InterruptCause, Invocation, InvocationKind, NewRun, PendingToolApproval, Plan, PlanDecision,
-    ReviewNote, Run, RunEvent, RunLimit, RunStatus, StepFailure, StepStatus, StuckDecision, TokenUsage, WaitReason,
+    ReviewNote, Run, RunEvent, RunLimit, RunStatus, StepExecutor, StepFailure, StepSnapshot, StepStatus, StuckDecision,
+    TokenUsage, WaitReason,
   },
   store::{ActivityStore, ConversationStore, MergeStore, RunStore, WorktreeStore},
   task::Task,
@@ -120,6 +121,14 @@ impl<'k> Drive<'k> {
       .ok_or_else(|| SeedError::NoSuchStep(step.to_owned()))
   }
 
+  /// The model the run pinned for `step`'s agent.
+  fn model(&self, step: &str) -> ModelId {
+    match self.run.snapshot().step(&Self::key(step)).map(StepSnapshot::executor) {
+      Some(StepExecutor::Agent { model, .. }) => model.clone(),
+      _ => ModelId::new(catalogue::MODEL).expect("a valid model"),
+    }
+  }
+
   fn kind(&self, step: &str) -> Result<&StepKind, SeedError> {
     self
       .run
@@ -147,16 +156,12 @@ impl<'k> Drive<'k> {
     let events = self.run.start_step(execution, at)?;
     self.record(&events)?;
     let tool = matches!(self.kind(step)?, StepKind::Tool { .. });
+    let model = self.model(step);
     let db = &mut self.kontur.db;
     let invocation = if tool {
       db.start_command_invocation(self.run.id(), execution, at)?
     } else {
-      db.start_invocation(
-        self.run.id(),
-        execution,
-        &ModelId::new(catalogue::MODEL).expect("a valid model"),
-        at,
-      )?
+      db.start_invocation(self.run.id(), execution, &model, at)?
     };
     let opening = if tool {
       vec![AgentEvent::ToolCommandStarted {

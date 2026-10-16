@@ -4,7 +4,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
 };
-use orchester_workspace::pull_requests::list::PullRequestTab;
+use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
 use super::{
   CONNECTIONS, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
@@ -29,7 +29,8 @@ pub enum ProjectPage {
   PullRequests(PullRequestTab),
   /// A pull request of the project's repository, by its number.
   PullRequest(NonZeroU64),
-  Usage,
+  /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
+  Usage(Box<UsageQuery>),
   Pipelines,
   NewPipeline,
   NewEmptyPipeline,
@@ -75,7 +76,7 @@ impl ProjectPage {
       Screen::NewTask => Self::NewTask,
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
-      Screen::Usage => Self::Usage,
+      Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions,
@@ -101,7 +102,7 @@ impl ProjectPage {
       Self::Task(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(_) => Screen::PullRequests,
-      Self::Usage => Screen::Usage,
+      Self::Usage(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(_) => Screen::Pipelines,
       Self::Agents | Self::Agent(_) => Screen::Agents,
       Self::Instructions => Screen::Instructions,
@@ -148,6 +149,7 @@ impl ProjectPage {
         with_query(format!("{project_root}/{PULL_REQUESTS}"), &[(TAB, tab)])
       }
       Self::PullRequest(number) => format!("{project_root}/{PULL_REQUESTS}/{number}"),
+      Self::Usage(query) => super::usage::path(project_root, query),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -199,6 +201,7 @@ impl ProjectPage {
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
       )),
+      [USAGE] => super::usage::take(params).map(|query| Self::Usage(Box::new(query))),
       [PULL_REQUESTS, number] => number
         .parse::<NonZeroU64>()
         .map(Self::PullRequest)

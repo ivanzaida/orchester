@@ -38,14 +38,17 @@ pub enum ExtraSpacing {
   BrandBars,
   /// 2: the app menu below the button that opens it.
   MenuOffset,
-  /// 18: settings heading to tabs (eDPtp, including trimmed text line boxes).
+  /// 18: a page's heading to its tabs: settings (eDPtp, including trimmed text line boxes), All projects'
+  /// Usage tab (`anSHC`).
   SettingsHead,
   /// 18: the index empty line's top (lNMHR).
   IndexEmpty,
+  /// 9: a filter chip's start, before its facet (`Filter chip` `zjUM8`).
+  ChipStart,
 }
 
 impl ExtraSpacing {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 18] = [
     Self::Hair,
     Self::Tight,
     Self::Fine,
@@ -63,6 +66,7 @@ impl ExtraSpacing {
     Self::MenuOffset,
     Self::SettingsHead,
     Self::IndexEmpty,
+    Self::ChipStart,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -88,6 +92,7 @@ impl ExtraSpacing {
       Self::MenuOffset => "menu_offset",
       Self::SettingsHead => "settings_head",
       Self::IndexEmpty => "index_empty",
+      Self::ChipStart => "chip_start",
     }
   }
 
@@ -108,6 +113,7 @@ impl ExtraSpacing {
       Self::BrandBars => 2.5,
       Self::MenuOffset => 2.0,
       Self::SettingsHead | Self::IndexEmpty => 18.0,
+      Self::ChipStart => 9.0,
     }
   }
 }
@@ -129,16 +135,19 @@ pub enum ExtraRadius {
   BrandBar,
   /// 2: a meter's track and fill (`Meter` `wtAQI`).
   Meter,
+  /// 2: a color swatch in a legend or a filter's option (`Swatch` `p4TazJ`, `u1ZxRL`).
+  Swatch,
 }
 
 impl ExtraRadius {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 7] = [
     Self::Tile,
     Self::Window,
     Self::Full,
     Self::BrandTile,
     Self::BrandBar,
     Self::Meter,
+    Self::Swatch,
   ];
 
   pub fn role(self) -> RadiusSize {
@@ -153,6 +162,7 @@ impl ExtraRadius {
       Self::BrandTile => "brand_tile",
       Self::BrandBar => "brand_bar",
       Self::Meter => "meter",
+      Self::Swatch => "swatch",
     }
   }
 
@@ -163,7 +173,7 @@ impl ExtraRadius {
       Self::Full => 999.0,
       Self::BrandTile => 5.4,
       Self::BrandBar => 1.75,
-      Self::Meter => 2.0,
+      Self::Meter | Self::Swatch => 2.0,
     }
   }
 }

@@ -91,6 +91,8 @@ pub struct MenuItem {
   /// The detail says what is wrong with the choice.
   warning: bool,
   chosen: bool,
+  /// An unavailable row ends in a lock.
+  lock: bool,
   focus: Focus,
   choice: Choice,
 }
@@ -115,6 +117,7 @@ impl MenuItem {
       detail: None,
       warning: false,
       chosen: false,
+      lock: true,
       focus: Focus::Pointer,
       choice,
     }
@@ -140,6 +143,13 @@ impl MenuItem {
   /// The detail says what is wrong with the choice: in `warning`.
   pub fn warning_detail(mut self) -> Self {
     self.warning = true;
+    self
+  }
+
+  /// An unavailable row says why without the lock, where the choice comes back by itself (*By hour* on a
+  /// range longer than 7 days, `Group by menu` in `p732q`).
+  pub fn without_lock(mut self) -> Self {
+    self.lock = false;
     self
   }
 
@@ -186,6 +196,7 @@ impl MenuItem {
 
   fn trailing(&self) -> Option<Element> {
     match (&self.choice, self.chosen, &self.shortcut) {
+      (Choice::Unavailable(_), ..) if !self.lock => None,
       (Choice::Unavailable(_), ..) => Some(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).into()),
       (_, true, _) => Some(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into()),
       (_, false, Some(keys)) => Some(

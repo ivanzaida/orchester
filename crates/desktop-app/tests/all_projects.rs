@@ -1,6 +1,6 @@
 //! All projects and the welcome of a first launch: what the list says of each project, opening one, removing one
-//! in place, the empty list, and *Open project folder…* with a stand-in picker. Projects live in repositories of
-//! the test's own data folder.
+//! in place, the empty list, *Open project folder…* with a stand-in picker, and the *Usage* tab. Projects live in
+//! repositories of the test's own data folder.
 
 mod support;
 
@@ -90,8 +90,51 @@ fn all_projects_lists_projects_with_where_they_stand() {
     note.starts_with("Removing a project from this list only makes Orchester forget it."),
     "{note}"
   );
-  let usage = window.text("all-projects-tab-usage");
-  assert_eq!(usage, "Usage", "Usage across projects is locked");
+  usage_tab(&mut window);
+}
+
+/// The *Usage* tab: every project's usage across the whole content panel, its top pinned, and back.
+fn usage_tab(window: &mut Window) {
+  window.press("all-projects-tab-usage");
+  assert_eq!(window.navigation().route_now(), Route::Usage(Box::default()));
+  window.until("every project's usage", |window| {
+    window.tree.get_element_by_id("usage-summary-runs-value").is_some()
+      && window.text("usage-readback").contains(" project")
+  });
+  let readback = window.text("usage-readback");
+  assert!(readback.contains("· 1 project ·"), "Kontur is read: {readback}");
+  assert!(
+    readback.contains("Gone") && readback.contains("Legacy CRM") && readback.ends_with("could not be read"),
+    "the projects that could not be read are named: {readback}"
+  );
+  assert!(
+    window.tree.get_element_by_id("usage-filter-project").is_some(),
+    "a Project filter"
+  );
+  // The whole content panel, 40 from its sides, with the heading, tabs and toolbar pinned over the scroll.
+  let bounds = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  };
+  let (screen, filters) = (bounds(window, SCREEN), bounds(window, "usage-filters"));
+  assert!(
+    (filters.x - screen.x - 40.0).abs() < 1.0 && (screen.width - filters.width - 80.0).abs() < 1.0,
+    "the filters span the panel less 40 at each side: {screen:?} {filters:?}"
+  );
+  assert!(
+    window.tree.get_element_by_id("all-projects-scroll").is_none(),
+    "not the Projects tab's column"
+  );
+  let (top, scroll) = (bounds(window, "all-projects-top"), bounds(window, "usage-scroll"));
+  assert!(
+    top.y + top.height <= scroll.y,
+    "the heading and tabs sit over the scroll, pinned"
+  );
+  window.press("all-projects-tab-projects");
+  assert_eq!(window.navigation().route_now(), Route::AllProjects);
 }
 
 #[test]

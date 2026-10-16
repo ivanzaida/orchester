@@ -39,10 +39,12 @@ mod table;
 mod task;
 mod tasks;
 mod tools;
+mod usage;
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::id::ProjectId;
+use orchester_workspace::usage::UsageQuery;
 
 use self::query::{Params, with_query};
 pub use self::{
@@ -85,6 +87,8 @@ const FILE_PATTERN: &str = "/project/:project/files/**path";
 const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 /// A task's path without its tab, which reads as its Summary.
 const TASK_SUMMARY_PATTERN: &str = "/project/:project/tasks/:key";
+/// All projects' *Usage* tab, a path of its own under the home screen.
+const EVERY_PROJECT_USAGE_PATTERN: &str = "/usage";
 
 /// A folder a route names. An address is text, so only a folder whose path is text can be named: the
 /// address then keeps it whole.
@@ -110,6 +114,8 @@ impl RouteFolder {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Route {
   AllProjects,
+  /// All projects' *Usage* tab: every project's usage for the query (`rHA8G`).
+  Usage(Box<UsageQuery>),
   /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
   AddProject(Option<RouteFolder>),
   Settings,
@@ -127,12 +133,13 @@ impl Route {
       Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
+      Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }
   }
   pub const fn screen(&self) -> Screen {
     match self {
-      Self::AllProjects => Screen::AllProjects,
+      Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
       Self::Settings | Self::Accounts(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
@@ -142,13 +149,13 @@ impl Route {
   /// Whether the route is the window's home, which the home tab shows by its icon alone: All projects, and
   /// Add project opened from it (`W5PIR`, `kkGWj`).
   pub const fn is_home(&self) -> bool {
-    matches!(self, Self::AllProjects | Self::AddProject(_))
+    matches!(self, Self::AllProjects | Self::Usage(_) | Self::AddProject(_))
   }
 
   pub const fn project(&self) -> Option<ProjectId> {
     match self {
       Self::Project(project, _) => Some(*project),
-      Self::AllProjects | Self::AddProject(_) | Self::Settings | Self::Accounts(_) => None,
+      Self::AllProjects | Self::Usage(_) | Self::AddProject(_) | Self::Settings | Self::Accounts(_) => None,
     }
   }
 
@@ -165,6 +172,7 @@ impl Route {
   pub fn path(&self) -> String {
     match self {
       Self::AllProjects => "/".to_owned(),
+      Self::Usage(query) => usage::everywhere_path(query),
       Self::AddProject(folder) => with_query(
         format!("/{ADD_PROJECT}"),
         &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
@@ -192,6 +200,7 @@ impl Route {
     }
     let route = match segments.as_slice() {
       [] => Self::AllProjects,
+      [usage::SEGMENT] => Self::Usage(Box::new(usage::take_everywhere(&mut params)?)),
       [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(RouteFolder)),
       [SETTINGS] => Self::settings(&mut params)?,
       [PROJECT, project, page @ ..] => {
