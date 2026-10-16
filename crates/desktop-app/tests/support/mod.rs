@@ -55,7 +55,12 @@ pub struct Data {
 
 impl Data {
   pub fn new() -> Self {
-    let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-app-tests");
+    // The workspace's folder named without `..`, as the seed and the app name the data folder.
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+      .ancestors()
+      .nth(2)
+      .expect("the crate lies two folders inside the workspace");
+    let scratch = workspace.join(".tmp").join("orc-24-app-tests");
     fs::create_dir_all(&scratch).expect("worktree scratch");
     Self {
       dir: tempfile::tempdir_in(scratch).expect("private worktree directory"),

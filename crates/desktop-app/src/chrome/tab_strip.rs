@@ -31,7 +31,7 @@ use lurq::{
 
 use super::{
   tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MARK_WIDTH, MIN_DRAG_WIDTH, Slot},
-  tab_label::{attention, close_button, has_attention, label, unsaved},
+  tab_label::{attention, close_button, has_attention, label, tab_icon, unsaved},
   tab_list::{TabList, TabListProps},
   tab_measure::{ActiveKey, ActiveWidth, ListHold},
 };
@@ -44,7 +44,7 @@ use crate::{
   shell::needs_you,
   theme::{CLOSING_TABS_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
-    icon::{Icon, icon, screen_icon},
+    icon::{Icon, icon},
     pressable::{Focus, in_title_bar, pressable},
   },
 };
@@ -330,7 +330,7 @@ fn labelled_tab(
     .max_width(Dimension::Px(widest))
     .padding(padding)
     .spacing(ExtraSpacing::Snug.role())
-    .child(icon(screen_icon(tab.route().screen()), IconSize::Base, glyph))
+    .child(icon(tab_icon(tab.route()), IconSize::Base, glyph))
     .child(
       Text::new(label)
         .variant(style)

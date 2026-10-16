@@ -284,3 +284,31 @@ fn a_field_error_wraps_within_its_column() {
 
 /// A narrow column, as the retries panel's card is (`j7DjNG`, 288 inside).
 const NARROW: f32 = 200.0;
+
+#[test]
+fn a_grouped_field_tells_of_each_edit_as_it_is_typed_and_still_groups() {
+  let (value, typed) = (Signal::new(String::new()), Signal::new(0_usize));
+  let mut kit = {
+    let (value, typed) = (value.clone(), typed.clone());
+    Kit::show(move |ctx| {
+      let told = typed.clone();
+      Column::new()
+        .child(
+          FieldInput::new("count", "Count", value.clone())
+            .grouped(",")
+            .on_typed(move |_| told.set(told.get_untracked() + 1))
+            .render(ctx),
+        )
+        .into()
+    })
+  };
+  kit.click("count");
+  for digit in "12345".chars() {
+    kit
+      .tree
+      .key_down(digit.to_string(), format!("Digit{digit}"), false, false, false);
+    kit.pass();
+  }
+  assert_eq!(value.get(), "12,345");
+  assert_eq!(typed.get(), 5, "each edit told");
+}

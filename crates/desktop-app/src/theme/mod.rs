@@ -17,6 +17,7 @@ mod composer;
 mod connections;
 mod conversation;
 mod decisions;
+mod files;
 mod fonts;
 mod form;
 pub mod instructions;
@@ -56,6 +57,7 @@ pub use self::{
   connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},
+  files::{FilesRadius, FilesText},
   fonts::mono_space,
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -112,6 +114,7 @@ pub fn install(app: &mut App, mode: Mode) {
   conversation::install(theme);
   cards::install(theme);
   composer::install(theme);
+  files::install(theme);
   orchestrator::install(theme);
   needs_you::install(theme);
   theme.set_shadows(shadow::shadows());

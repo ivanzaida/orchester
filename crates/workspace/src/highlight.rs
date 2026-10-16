@@ -1,4 +1,5 @@
-//! Syntax highlighting of a changed file's diff lines with syntect's bundled Sublime grammars. A
+//! Syntax highlighting of a changed file's diff lines, and of a whole file in the code viewer, with
+//! syntect's bundled Sublime grammars. A
 //! grammar's scopes are reduced to the few kinds of token the design colors (Pencil `code-*`,
 //! mapped like GitHub Dark maps them), so the UI draws tokens through theme roles only.
 //!
@@ -60,6 +61,33 @@ pub fn highlight(file: &FileDiff) -> Option<FileTokens> {
       .map(|hunk| highlight_hunk(syntaxes, syntax, hunk))
       .collect(),
   )
+}
+
+/// Highlights the lines of the file at `path`, read from its start, with the grammar its path names;
+/// `None` when no bundled grammar knows it.
+/// `wanted` is asked as it goes: once it says no (a newer text superseded this one), highlighting stops and
+/// nothing is returned.
+pub fn highlight_lines<S: AsRef<str>>(path: &str, lines: &[S], wanted: &dyn Fn() -> bool) -> Option<Vec<LineTokens>> {
+  let syntaxes = syntaxes();
+  let syntax = syntax_for(syntaxes, path)?;
+  let mut side = Side::new(syntax);
+  let mut tokens = Vec::with_capacity(lines.len());
+  for (at, line) in lines.iter().enumerate() {
+    if at % WANTED_EVERY == 0 && !wanted() {
+      return None;
+    }
+    tokens.push(side.tokens(syntaxes, line.as_ref()));
+  }
+  Some(tokens)
+}
+
+/// How many lines [`highlight_lines`] highlights between asking whether it is still wanted.
+const WANTED_EVERY: usize = 256;
+
+/// The name of the language whose grammar reads the file at `path` ("Rust"); `None` when no bundled
+/// grammar knows it.
+pub fn language(path: &str) -> Option<&'static str> {
+  syntax_for(syntaxes(), path).map(|syntax| syntax.name.as_str())
 }
 
 fn syntaxes() -> &'static SyntaxSet {
@@ -219,16 +247,56 @@ fn append(tokens: &mut Vec<Token>, kind: TokenKind, text: &str, column: &mut usi
 fn display(text: &str, column: &mut usize) -> String {
   let mut shown = String::with_capacity(text.len());
   for character in text.chars() {
-    if character == '\t' {
-      let spaces = TAB_WIDTH - *column % TAB_WIDTH;
-      shown.extend(std::iter::repeat_n(' ', spaces));
-      *column += spaces;
-    } else {
-      shown.push(if character.is_control() { '\u{FFFD}' } else { character });
-      *column += 1;
-    }
+    push_shown(character, column, |shown_char| shown.push(shown_char));
   }
   shown
+}
+
+/// The characters `text` shows as from its line's start, into `shown` (which it clears): as [`plain`] shows them,
+/// without making tokens, e.g. to search a long file line by line in one buffer.
+pub fn shown_chars(text: &str, shown: &mut Vec<char>) {
+  shown.clear();
+  let mut column = 0;
+  for character in text.chars() {
+    push_shown(character, &mut column, |shown_char| shown.push(shown_char));
+  }
+}
+
+/// What `character` shows as at `column`: a tab as spaces to the next tab stop, another control character as
+/// the replacement character.
+fn push_shown(character: char, column: &mut usize, mut push: impl FnMut(char)) {
+  if character == '\t' {
+    let spaces = TAB_WIDTH - *column % TAB_WIDTH;
+    for _ in 0..spaces {
+      push(' ');
+    }
+    *column += spaces;
+  } else {
+    push(if character.is_control() { '\u{FFFD}' } else { character });
+    *column += 1;
+  }
+}
+
+/// `tokens` cut to their first `max_chars` shown characters, and whether they were longer: a line that long is
+/// not laid out whole.
+pub fn shorten(tokens: &LineTokens, max_chars: usize) -> (LineTokens, bool) {
+  let mut left = max_chars;
+  let mut kept = Vec::new();
+  for token in tokens.iter() {
+    let count = token.text.chars().count();
+    if count <= left {
+      left -= count;
+      kept.push(token.clone());
+      continue;
+    }
+    let text: String = token.text.chars().take(left).collect();
+    kept.push(Token {
+      kind: token.kind,
+      text: text.into(),
+    });
+    return (kept.into(), true);
+  }
+  (tokens.clone(), false)
 }
 
 /// The kind of the innermost scope a rule knows; scopes without a rule (punctuation, meta)

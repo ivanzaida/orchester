@@ -28,6 +28,9 @@ use super::{
 };
 use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
+/// A row's label line, 16 high (`Label` in `Menu item/detail` `j6ZUhL`).
+const LABEL_HEIGHT: f32 = 16.0;
+
 /// The panel of a menu with the element id `id`; add its rows as children.
 pub fn menu_panel(id: &str) -> Column {
   Column::new()
@@ -46,6 +49,15 @@ pub fn menu(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -
   Popup::new(anchor, panel)
     .open(open)
     .placement(Placement::BottomStart)
+    .offset(0.0, ExtraSpacing::Snug.value())
+}
+
+/// `panel` opened 6 under `anchor` at its end while `open` holds, for a control at the end of a row (`Version
+/// menu` `DqtY6` under its picker in `kadDh`); it closes as [`menu`] does.
+pub fn menu_at_end(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
+  Popup::new(anchor, panel)
+    .open(open)
+    .placement(Placement::BottomEnd)
     .offset(0.0, ExtraSpacing::Snug.value())
 }
 
@@ -145,18 +157,22 @@ impl MenuItem {
 
   /// The label, cut to the row's room with its whole words in a tooltip, and the detail under it.
   fn text(&self, ctx: &mut Ctx, detail: Option<&str>) -> Column {
+    let label = Truncated::new(
+      format!("{}-label", self.id),
+      self.label.clone(),
+      TypographyStyle::Description,
+    )
+    .color(PaletteColor::TextPrimary)
+    .render(ctx);
     Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
       .child(
-        Truncated::new(
-          format!("{}-label", self.id),
-          self.label.clone(),
-          TypographyStyle::Description,
-        )
-        .color(PaletteColor::TextPrimary)
-        .render(ctx),
+        Row::new()
+          .height(Dimension::Px(LABEL_HEIGHT))
+          .align_items(Alignment::Center)
+          .child(label),
       )
       .with_children(detail.map(|detail| {
         let detail = Text::new(detail).variant(TypographyStyle::Caption);

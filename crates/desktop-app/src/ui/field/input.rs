@@ -49,6 +49,9 @@ enum Lines {
   Compact,
 }
 
+/// Told of an edit as it is typed ([`FieldInput::on_typed`]).
+type OnTyped = Arc<dyn Fn(&TextInputEvent) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct FieldInput {
   id: Arc<str>,
@@ -81,6 +84,8 @@ pub struct FieldInput {
   invalid: bool,
   masked: bool,
   on_leave: Option<Arc<dyn Fn() + Send + Sync>>,
+  /// Told of each edit as it is typed, before it lands, e.g. to tell a person's typing from automation's.
+  on_typed: Option<OnTyped>,
   /// The input, for its owner to focus.
   element: Option<ElementRef>,
 }
@@ -142,6 +147,7 @@ impl FieldInput {
       invalid: false,
       masked: false,
       on_leave: None,
+      on_typed: None,
       element: None,
     }
   }
@@ -278,6 +284,13 @@ impl FieldInput {
   /// Commits an autosaving field after its edit and grouping have landed.
   pub fn on_leave(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
     self.on_leave = Some(Arc::new(handler));
+    self
+  }
+
+  /// `typed` is told of each edit as it is typed, before it lands in the value, and before a field that
+  /// groups digits regroups it. A locked field takes no input, so it is never told.
+  pub fn on_typed(mut self, typed: impl Fn(&TextInputEvent) + Send + Sync + 'static) -> Self {
+    self.on_typed = Some(Arc::new(typed));
     self
   }
 
@@ -431,8 +444,20 @@ impl FieldBox {
       input = input
         .on_input(|event: TextInputEvent| event.prevent_default())
         .focusable(false);
-    } else if let Some(separator) = props.group_separator.clone() {
-      input = input.on_input(group_while_typing(props.value.clone(), separator));
+    } else if props.group_separator.is_some() || props.on_typed.is_some() {
+      let group = props
+        .group_separator
+        .clone()
+        .map(|separator| group_while_typing(props.value.clone(), separator));
+      let typed = props.on_typed.clone();
+      input = input.on_input(move |event: TextInputEvent| {
+        if let Some(typed) = &typed {
+          typed(&event);
+        }
+        if let Some(group) = &group {
+          group(event);
+        }
+      });
     }
     match props.lines {
       Lines::One => input.single_line(),

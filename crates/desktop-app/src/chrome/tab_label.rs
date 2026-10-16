@@ -23,7 +23,7 @@ use crate::{
   shell::needs_you::{self, Attention, count_words},
   theme::{ExtraColor, IconSize},
   ui::{
-    icon::{Icon, icon},
+    icon::{Icon, file_icon, icon, screen_icon},
     pressable::in_title_bar,
     tooltip::Tooltip,
   },
@@ -95,7 +95,7 @@ pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 }
 
 /// The page a tab shows: its screen's name, a task by its key and its Edit task as `Edit <key>`
-/// (`Qp1B0`), a pipeline by its name.
+/// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`).
 pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
@@ -111,7 +111,20 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
     Route::Project(_, ProjectPage::EditTask(key)) => ctx
       .t_args("shell.screens.editTaskOf", [("key", key.to_string())])
       .to_string(),
+    Route::Project(_, ProjectPage::Files(view)) => view.file().map_or_else(
+      || ctx.t(route.screen().title_key()).to_string(),
+      |file| file.rsplit('/').next().unwrap_or(file).to_owned(),
+    ),
     route => ctx.t(route.screen().title_key()).to_string(),
+  }
+}
+
+/// The icon of a tab at `route`: its screen's, or for a file of the code viewer the file's, as the page's title
+/// shows it (`o1Uea4`, `c2jICC`, `ISM2O`).
+pub fn tab_icon(route: &Route) -> Icon {
+  match route {
+    Route::Project(_, ProjectPage::Files(view)) => view.file().map_or(Icon::FolderTree, file_icon),
+    route => screen_icon(route.screen()),
   }
 }
 

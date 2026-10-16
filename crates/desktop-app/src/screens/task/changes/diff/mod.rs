@@ -36,7 +36,15 @@ use self::{
   rows::DiffRow,
 };
 use super::files::{FileSummary, change_letter};
-use crate::theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography};
+use crate::{
+  navigation::Navigation,
+  routes::Route,
+  theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    icon::Icon,
+  },
+};
 
 /// A diff, by its key, and a file's position in it.
 type DiffAt = (Arc<str>, usize);
@@ -57,6 +65,8 @@ pub struct DiffViewProps {
   pub file: Arc<str>,
   /// Where the change was read, at the head's end ("checkpointed at 7c1e9f2").
   pub source: Arc<str>,
+  /// Where *Open file* takes the file: the code viewer at the version the change shows.
+  pub open: Route,
 }
 
 impl PartialEq for DiffViewProps {
@@ -66,6 +76,7 @@ impl PartialEq for DiffViewProps {
       && self.index == other.index
       && self.file == other.file
       && self.source == other.source
+      && self.open == other.open
   }
 }
 
@@ -136,7 +147,7 @@ impl Component for DiffView {
       });
     column
       .describe("highlighted", tokens.is_some().to_string())
-      .child(head(ctx, file, &props.source))
+      .child(head(ctx, file, (&props.source, &props.open)))
       .child(list)
   }
 }
@@ -185,8 +196,17 @@ impl DiffView {
   }
 }
 
-/// The file's change, path and counts, and where its change was read (`rIRdw`).
-fn head(ctx: &Ctx, file: &FileDiff, source: &str) -> Element {
+/// The file's change, path and counts, where its change was read (`rIRdw`), and *Open file*, which opens the
+/// file in the code viewer in a new tab.
+fn head(ctx: &mut Ctx, file: &FileDiff, (source, open): (&str, &Route)) -> Element {
+  let navigation = Navigation::of(ctx);
+  let route = open.clone();
+  let open = ActionButton::new("changes-open-file", ButtonKind::Ghost, ctx.t("changes.diff.openFile"))
+    .icon(Icon::SquareArrowOutUpRight)
+    .on_click(move || {
+      navigation.open_tab();
+      navigation.replace(route.clone());
+    });
   let (letter, color) = change_letter(ctx, file.change());
   Row::new()
     .id("changes-diff-head")
@@ -217,6 +237,7 @@ fn head(ctx: &Ctx, file: &FileDiff, source: &str) -> Element {
         .variant(ExtraTypography::Note.role())
         .nowrap(),
     )
+    .child(open)
     .into()
 }
 

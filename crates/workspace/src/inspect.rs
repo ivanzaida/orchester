@@ -25,6 +25,20 @@ macro_rules! markers {
     impl $inspect for crate::connections::github::GitHubDraft {}
     impl $inspect for crate::connections::mcp::TransportChoice {}
     impl $inspect for crate::connections::native::NativeDraft {}
+    impl $inspect for crate::files::FileFacts {}
+    impl $inspect for crate::files::Follow {}
+    impl $inspect for crate::files::FileList {}
+    impl $inspect for crate::files::FilePath {}
+    impl $inspect for crate::files::FileText {}
+    impl $inspect for crate::files::FileView {}
+    impl $inspect for crate::files::FilesError {}
+    impl $inspect for crate::files::LineRange {}
+    impl $inspect for crate::files::NameMatches {}
+    impl $inspect for crate::files::TextMatch {}
+    impl $inspect for crate::files::TreeRow {}
+    impl $inspect for crate::files::Version {}
+    impl $inspect for crate::files::VersionChoice {}
+    impl $inspect for crate::files::Versions {}
     impl $inspect for crate::import::data::Catalogs {}
     impl $inspect for crate::import::data::Sources {}
     impl $inspect for crate::instructions::data::NewInstruction {}

@@ -40,6 +40,7 @@ pub struct Crumb {
   label: Arc<str>,
   typography: TypographyStyle,
   open: Option<Arc<dyn Fn() + Send + Sync>>,
+  ancestor: bool,
 }
 
 impl Crumb {
@@ -49,6 +50,7 @@ impl Crumb {
       label: label.into(),
       typography: TypographyStyle::Description,
       open: Some(Arc::new(open)),
+      ancestor: false,
     }
   }
 
@@ -58,12 +60,20 @@ impl Crumb {
       label: label.into(),
       typography: TypographyStyle::Description,
       open: None,
+      ancestor: false,
     }
   }
 
   /// The label is an identifier, e.g. a task's key.
   pub fn mono(mut self) -> Self {
     self.typography = TypographyStyle::Mono;
+    self
+  }
+
+  /// An ancestor of the page even when it ends the trail (the code viewer's folders, whose page names the file
+  /// in its title): in `text_muted` like the others (`gxF9b` in `o1Uea4`).
+  pub fn ancestor(mut self) -> Self {
+    self.ancestor = true;
     self
   }
 
@@ -76,7 +86,9 @@ impl Crumb {
   /// The crumb, cut to its room with its whole label in a tooltip; a link's label is `<id>-label`.
   fn render(self, ctx: &mut Ctx, id: String, last: bool) -> Element {
     let typography = self.typography;
-    let color = if last && typography == TypographyStyle::Title {
+    let color = if self.ancestor {
+      PaletteColor::TextMuted
+    } else if last && typography == TypographyStyle::Title {
       PaletteColor::TextPrimary
     } else if last {
       PaletteColor::TextSecondary

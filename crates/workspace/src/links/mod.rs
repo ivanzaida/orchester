@@ -13,7 +13,8 @@ use orchester_core::{
   project::TaskKey,
 };
 
-pub use self::query::{encode, with_query};
+pub use self::query::{encode, encode_path, with_query};
+use crate::files::{FilePath, LineRange, Version};
 
 /// A place in the app a tool result points to.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,6 +41,13 @@ pub enum Link {
   Account(AgentAccountId),
   /// A pull request of the project's repository, by its number.
   PullRequest(ProjectId, NonZeroU64),
+  /// A file of the project in the code viewer, at a version, on a range of its lines.
+  File {
+    project: ProjectId,
+    path: FilePath,
+    at: Version,
+    line: Option<LineRange>,
+  },
 }
 
 /// The tab of a task's page a link opens.
@@ -91,8 +99,27 @@ impl Link {
         &[("tab", Some("accounts")), ("account", Some(&id.to_string()))],
       ),
       Self::PullRequest(project, number) => format!("{}/pull-requests/{number}", root(*project)),
+      Self::File {
+        project,
+        path,
+        at,
+        line,
+      } => files_path(format!("{}/files", root(*project)), Some(path.as_str()), at, *line),
     }
   }
+}
+
+/// The code viewer's path under `files` (a project's `/project/<id>/files`): the file's path, if any, as
+/// segments ([`encode_path`]), then `at` the version unless it is the checkout, and `line` the lines. The
+/// router's Files route writes its paths with it too, so the two cannot differ.
+pub fn files_path(files: String, file: Option<&str>, at: &Version, line: Option<LineRange>) -> String {
+  let path = match file {
+    Some(file) => format!("{files}/{}", encode_path(file)),
+    None => files,
+  };
+  let at = (*at != Version::Checkout).then(|| at.to_string());
+  let line = line.map(|line| line.to_string());
+  with_query(path, &[("at", at.as_deref()), ("line", line.as_deref())])
 }
 
 fn root(project: ProjectId) -> String {

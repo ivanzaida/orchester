@@ -1,5 +1,5 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS,
+  ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS, files::FILES,
   project_screen_path,
 };
 
@@ -30,10 +30,12 @@ pub enum Screen {
   NewConnection,
   EditConnection,
   ProjectSettings,
+  /// The code viewer.
+  Files,
 }
 
 impl Screen {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 25] = [
     Self::AllProjects,
     Self::AddProject,
     Self::Settings,
@@ -58,15 +60,18 @@ impl Screen {
     Self::NewConnection,
     Self::EditConnection,
     Self::ProjectSettings,
+    Self::Files,
   ];
-  /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`).
-  pub const PROJECT_MAIN: [Self; 6] = [
+  /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`), and Files
+  /// under Usage (`Nav · Files` `E0b2rn` in `o1Uea4`).
+  pub const PROJECT_MAIN: [Self; 7] = [
     Self::Overview,
     Self::Orchestrator,
     Self::Tasks,
     Self::MergeQueue,
     Self::PullRequests,
     Self::Usage,
+    Self::Files,
   ];
   /// The sidebar's Configure section (`Section · Configure`).
   pub const CONFIGURE: [Self; 8] = [
@@ -107,6 +112,7 @@ impl Screen {
       Self::NewConnection => "new_connection",
       Self::EditConnection => "edit_connection",
       Self::ProjectSettings => "project_settings",
+      Self::Files => "files",
     }
   }
 
@@ -141,6 +147,7 @@ impl Screen {
       Self::NewConnection => "shell.screens.newConnection",
       Self::EditConnection => "shell.screens.editConnection",
       Self::ProjectSettings => "shell.screens.projectSettings",
+      Self::Files => "shell.screens.files",
     }
   }
 
@@ -172,6 +179,7 @@ impl Screen {
       Self::Secrets => Some("secrets"),
       Self::Connections => Some(CONNECTIONS),
       Self::ProjectSettings => Some(SETTINGS),
+      Self::Files => Some(FILES),
     }
   }
 

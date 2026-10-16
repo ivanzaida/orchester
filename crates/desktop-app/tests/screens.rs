@@ -27,8 +27,8 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OrchestratorChat, OverviewTab,
-    ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OrchestratorChat,
+    OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
   shell::needs_you::PanelOpen,
@@ -40,7 +40,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
 };
-use orchester_workspace::{tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
+use orchester_workspace::{files::Version, tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
 use parking_lot::Mutex;
 use support::Data;
 
@@ -58,6 +58,7 @@ const BUILT: &[Screen] = &[
   Screen::Connections,
   Screen::EditConnection,
   Screen::EditTask,
+  Screen::Files,
   Screen::Instructions,
   Screen::NewConnection,
   Screen::NewTask,
@@ -273,6 +274,10 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       placeholder("Edit connection"),
     ),
     (at(ProjectPage::Settings), placeholder("Project settings")),
+    (
+      at(ProjectPage::Files(FilesView::new(Some("src/a b.rs"), Version::Base))),
+      Vec::new(),
+    ),
   ]);
   all
 }

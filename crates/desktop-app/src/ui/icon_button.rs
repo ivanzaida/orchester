@@ -30,21 +30,29 @@ pub enum IconButtonSize {
   Small,
   /// Inspector close (Secrets m1So5): 26 square, 15 glyph.
   Inspector,
+  /// 20 square, 14 `text_muted` glyph: a panel head's action (`Collapse all` `mJGHi` in `o1Uea4`).
+  Compact,
+  /// 26 wide and 24 high, 14 `text_muted` glyph: a toggle among small buttons (`Match case` `O7iJW` in
+  /// `b7RGL`).
+  Toggle,
 }
 
 impl IconButtonSize {
-  const fn side(self) -> f32 {
+  /// Its width and height.
+  const fn sides(self) -> (f32, f32) {
     match self {
-      Self::Regular => ControlHeight::Md.value(),
-      Self::Small => ControlHeight::Sm.value(),
-      Self::Inspector => ControlHeight::Inspector.value(),
+      Self::Regular => (ControlHeight::Md.value(), ControlHeight::Md.value()),
+      Self::Small => (ControlHeight::Sm.value(), ControlHeight::Sm.value()),
+      Self::Inspector => (ControlHeight::Inspector.value(), ControlHeight::Inspector.value()),
+      Self::Compact => (ControlHeight::Xs.value(), ControlHeight::Xs.value()),
+      Self::Toggle => (ControlHeight::Inspector.value(), ControlHeight::Sm.value()),
     }
   }
 
   const fn glyph(self) -> (IconSize, PaletteColor) {
     match self {
       Self::Regular => (IconSize::Lg, PaletteColor::TextSecondary),
-      Self::Small => (IconSize::Md, PaletteColor::TextMuted),
+      Self::Small | Self::Compact | Self::Toggle => (IconSize::Md, PaletteColor::TextMuted),
       Self::Inspector => (IconSize::Nav, PaletteColor::TextSecondary),
     }
   }
@@ -80,6 +88,16 @@ impl IconButton {
     self
   }
 
+  pub fn compact(mut self) -> Self {
+    self.size = IconButtonSize::Compact;
+    self
+  }
+
+  pub fn toggle(mut self) -> Self {
+    self.size = IconButtonSize::Toggle;
+    self
+  }
+
   pub fn inspector(mut self) -> Self {
     self.size = IconButtonSize::Inspector;
     self
@@ -103,13 +121,13 @@ impl IconButton {
   }
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let side = Dimension::Px(self.size.side());
+    let (width, height) = self.size.sides();
     let (size, color) = self.size.glyph();
     let color = if self.active { PaletteColor::TextPrimary } else { color };
     let button = Button::empty()
       .id(self.id.clone())
-      .width(side)
-      .height(side)
+      .width(Dimension::Px(width))
+      .height(Dimension::Px(height))
       .align_items(Alignment::Center)
       .justify(Justify::Center)
       .rounded(RadiusSize::Md)

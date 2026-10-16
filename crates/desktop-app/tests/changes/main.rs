@@ -11,6 +11,7 @@
   reason = "the seed is shared with its own tests, which read what this binary does not"
 )]
 mod kontur;
+mod open_file;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;

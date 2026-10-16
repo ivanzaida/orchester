@@ -23,12 +23,12 @@ use lurq::{
 };
 
 use crate::{
-  chrome::tab_label::attention,
+  chrome::tab_label::{attention, tab_icon},
   navigation::{Navigation, tabs::Tab},
   project::Projects,
   theme::{ControlHeight, ExtraColor, IconSize},
   ui::{
-    icon::{Icon, icon, screen_icon},
+    icon::{Icon, icon},
     pressable::pressable,
     tooltip::Tooltip,
   },
@@ -226,11 +226,11 @@ fn words(props: &RowProps) -> [Element; 2] {
   [page.into(), project.into()]
 }
 
-/// The tab's glyph: the folders for All projects, else its screen's.
+/// The tab's glyph: the folders for All projects, else its page's ([`tab_icon`]).
 fn glyph(tab: &Tab) -> Icon {
   if tab.route().is_home() {
     Icon::Folders
   } else {
-    screen_icon(tab.route().screen())
+    tab_icon(tab.route())
   }
 }

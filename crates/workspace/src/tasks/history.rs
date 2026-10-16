@@ -150,7 +150,7 @@ fn step_name(run: &Run, step: &StepKey) -> String {
 
 /// The step of the run's last agent or command, else the first step of its attempt that did not
 /// pass, if any.
-fn last_step(db: &ProjectDb, run: &Run) -> Result<Option<String>, StoreError> {
+pub(crate) fn last_step(db: &ProjectDb, run: &Run) -> Result<Option<String>, StoreError> {
   let invoked = db
     .invocations(run.id())?
     .last()

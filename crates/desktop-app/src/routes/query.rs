@@ -62,7 +62,7 @@ impl Params {
 }
 
 /// [`orchester_workspace::links::encode`] undone; `None` for a malformed escape or bytes that are not UTF-8.
-fn decode(value: &str) -> Option<String> {
+pub(super) fn decode(value: &str) -> Option<String> {
   let mut bytes = Vec::with_capacity(value.len());
   let mut rest = value.bytes();
   while let Some(byte) = rest.next() {

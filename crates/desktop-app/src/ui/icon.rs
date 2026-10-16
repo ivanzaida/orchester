@@ -4,6 +4,7 @@
 //! component layers), sorted by name.
 
 use lurq::{app::theme::PaletteColor, components::Text};
+use orchester_workspace::highlight::language;
 
 use super::loader;
 use crate::{routes::Screen, theme::IconSize};
@@ -13,9 +14,9 @@ use crate::{routes::Screen, theme::IconSize};
 /// the design's `chart-column` is the font's `bar-chart-3`, `circle-alert` its `alert-circle`,
 /// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
 /// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
-/// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`, `square-plus` its
-/// `plus-square`, `triangle-alert` its `alert-triangle`, `user-round-check` its `user-check` and
-/// `user-round-cog` its `user-cog`.
+/// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`, `shield-x` its
+/// `shield-close`, `square-arrow-out-up-right` its `external-link`, `square-plus` its `plus-square`, `triangle-alert`
+/// its `alert-triangle`, `user-round-check` its `user-check` and `user-round-cog` its `user-cog`.
 macro_rules! icons {
   ($($name:ident => $glyph:literal,)*) => {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,10 +49,12 @@ icons! {
   Ban => '\u{e051}',
   Bell => '\u{e059}',
   BookOpen => '\u{e05f}',
+  Binary => '\u{e1f2}',
   Bot => '\u{e1bb}',
   Braces => '\u{e36a}',
   Brain => '\u{e3c6}',
   CalendarClock => '\u{e304}',
+  CaseSensitive => '\u{e3d9}',
   ChartColumn => '\u{e2a3}',
   Check => '\u{e06c}',
   CheckCheck => '\u{e38e}',
@@ -59,6 +62,7 @@ icons! {
   ChevronLeft => '\u{e06e}',
   ChevronRight => '\u{e06f}',
   ChevronUp => '\u{e070}',
+  ChevronsDownUp => '\u{e228}',
   ChevronsUpDown => '\u{e211}',
   Circle => '\u{e076}',
   CircleAlert => '\u{e077}',
@@ -95,7 +99,9 @@ icons! {
   Eye => '\u{e0ba}',
   EyeOff => '\u{e0bb}',
   File => '\u{e0c0}',
+  FileCode => '\u{e0c3}',
   FileDiff => '\u{e317}',
+  FileImage => '\u{e31c}',
   FileMinus => '\u{e0c6}',
   FilePen => '\u{e31f}',
   FilePenLine => '\u{e320}',
@@ -112,6 +118,7 @@ icons! {
   FolderOpen => '\u{e247}',
   FolderPlus => '\u{e0d9}',
   FolderSearch => '\u{e339}',
+  FolderTree => '\u{e33c}',
   FolderX => '\u{e33e}',
   Folders => '\u{e33f}',
   Gauge => '\u{e1bf}',
@@ -195,6 +202,7 @@ icons! {
   Shield => '\u{e158}',
   ShieldAlert => '\u{e1fe}',
   ShieldCheck => '\u{e1ff}',
+  ShieldX => '\u{e200}',
   SignalHigh => '\u{e260}',
   SignalLow => '\u{e261}',
   SignalMedium => '\u{e262}',
@@ -202,6 +210,7 @@ icons! {
   SlidersHorizontal => '\u{e29a}',
   Sparkles => '\u{e412}',
   Square => '\u{e167}',
+  SquareArrowOutUpRight => '\u{e0b9}',
   SquarePlus => '\u{e173}',
   SquareTerminal => '\u{e20a}',
   Tag => '\u{e17f}',
@@ -241,6 +250,21 @@ pub fn glyph(icon: Icon) -> String {
   icon.glyph().to_string()
 }
 
+/// Extensions of the files shown as images.
+const IMAGES: [&str; 9] = ["png", "jpg", "jpeg", "gif", "ico", "bmp", "webp", "svg", "icns"];
+
+/// The icon of the file at `path` in the code viewer and its tab: an image, code a grammar reads, or text.
+pub fn file_icon(path: &str) -> Icon {
+  let extension = path.rsplit_once('.').map_or("", |(_, extension)| extension);
+  if IMAGES.iter().any(|image| image.eq_ignore_ascii_case(extension)) {
+    return Icon::FileImage;
+  }
+  match language(path) {
+    Some("Markdown" | "Plain Text") | None => Icon::FileText,
+    Some(_) => Icon::FileCode,
+  }
+}
+
 /// The icon of a screen in the sidebar, the tabs and its placeholder (`Nav · *` in `q9mf0k`; the tabs of
 /// New task and Edit task in `s7jKkA` and `Qp1B0`).
 pub const fn screen_icon(screen: Screen) -> Icon {
@@ -267,6 +291,7 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::NewConnection => Icon::Plus,
     Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
+    Screen::Files => Icon::FolderTree,
   }
 }
 

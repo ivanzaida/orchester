@@ -6,8 +6,10 @@ use orchester_core::{
 };
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
-  RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab, project_screen_path,
+  CONNECTIONS, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
+  PULL_REQUESTS, RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab,
+  files::FILES,
+  project_screen_path,
   query::{Params, with_query},
 };
 
@@ -47,6 +49,8 @@ pub enum ProjectPage {
   /// Edit MCP server, the server's id.
   EditConnection(ConnectionId),
   Settings,
+  /// The code viewer: a file, its version and lines.
+  Files(FilesView),
 }
 
 impl ProjectPage {
@@ -80,6 +84,7 @@ impl ProjectPage {
       Screen::Connections => Self::Connections(ConnectionsView::default()),
       Screen::NewConnection => Self::NewConnection(NewConnection::default()),
       Screen::ProjectSettings => Self::Settings,
+      Screen::Files => Self::Files(FilesView::default()),
     })
   }
 
@@ -106,6 +111,7 @@ impl ProjectPage {
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
       Self::Settings => Screen::ProjectSettings,
+      Self::Files(_) => Screen::Files,
     }
   }
 
@@ -139,6 +145,7 @@ impl ProjectPage {
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
+      Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       page => project_screen_path(project_root, page.screen()),
     }
   }
@@ -189,6 +196,7 @@ impl ProjectPage {
         .map_err(|_| RouteError::NoScreen),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
+      [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
       [segment] => Screen::ALL
         .into_iter()

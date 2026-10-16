@@ -96,6 +96,15 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("from", file.source().name());
       }
     }
+    ProjectPage::Files(view) => {
+      if let Some(file) = view.file() {
+        insert("file", file);
+      }
+      insert("at", &view.at().to_string());
+      if let Some(line) = view.line() {
+        insert("line", &line.to_string());
+      }
+    }
     _ => {}
   }
 }
