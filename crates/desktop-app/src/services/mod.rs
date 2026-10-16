@@ -5,8 +5,8 @@
 //! interrupted. They come from `orchester-workspace`, which the deprecated desktop shares; this app only puts them
 //! together ([`Services::start`]) and hands them to its screens ([`Services::of`]).
 //!
-//! The shared servers' connection monitor and the shared projects' sync run on the app's runtime while
-//! [`Background`] is held, which `main` keeps until the window closes.
+//! The shared servers' connection monitor, the shared projects' sync and the check of this computer's cloud sign-in
+//! run on the app's runtime while [`Background`] is held, which `main` keeps until the window closes.
 
 use std::path::PathBuf;
 
@@ -130,8 +130,8 @@ impl Services {
       .expect("the root provides the services before mounting the window of a started session")
   }
 
-  /// Starts the shared servers' connection monitor and the shared projects' sync; they run until the
-  /// returned [`Background`] is dropped.
+  /// Starts the shared servers' connection monitor, the shared projects' sync and the check of the cloud sign-in
+  /// (`sharing::cloud::keep_checking`); they run until the returned [`Background`] is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -139,6 +139,7 @@ impl Services {
         self.servers.clone(),
         self.runners.run_changes(),
       )),
+      self.runtime.spawn(sharing::cloud::keep_checking(self.cloud.clone())),
     ])
   }
 }

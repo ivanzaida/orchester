@@ -3,18 +3,26 @@
 //! and the projects its tabs show; it creates the tabs, the router and the projects once, and hands them
 //! to the app's MCP tools. The window's close requests go to the session's close flow, whose panel takes
 //! the window's body while a close is held (`lifecycle`).
+//!
+//! Until this computer is signed in to Orchester Cloud, the session's window is the sign-in gate alone
+//! (`screens::gate`): no tabs, menu, sidebar, screens or keyboard shortcuts. The tabs stay as they were behind it, so
+//! signing in opens them again; the projects' runners keep running, and the close flow still holds a close.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
+    ctx::{Ctx, StreamEmitter},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Router, Stack},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, dimension::Dimension, padding::Padding},
   router::RouterHandle,
 };
-use orchester_workspace::orchestrator::recover;
+use orchester_workspace::{
+  orchestrator::recover,
+  sharing::cloud::{Cloud, SignIn},
+};
 
 use crate::{
   chrome, lifecycle,
@@ -26,8 +34,9 @@ use crate::{
   },
   project::{Landing, Projects, ProjectsHost},
   routes,
+  screens::gate::{GateProps, SignInGate},
   services::Services,
-  shell::needs_you::PanelOpen,
+  shell::{needs_you::PanelOpen, status_bar},
   startup::{self, Problem},
   ui::chat::links::ChatLinks,
 };
@@ -168,10 +177,14 @@ impl Component for SessionWindow {
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
+    let sign_in = follow_sign_in(ctx, &services.cloud);
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
-    let screen = Router::mount(ctx, self.router.clone());
+    let screen = match &sign_in {
+      SignIn::SignedIn { .. } => Router::mount(ctx, self.router.clone()),
+      SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
+    };
     let overlay = lifecycle::overlay(ctx, phase, &services.close, &self.focus);
     // The closing panel lies over the page, which stays as it was under it.
     let body = Stack::new()
@@ -179,13 +192,65 @@ impl Component for SessionWindow {
       .height(Dimension::Pct(100.0))
       .child(screen)
       .with_children(overlay);
+    let signed_in = sign_in.is_signed_in();
+    let framed = if signed_in {
+      chrome::chrome(ctx, body.into(), closing)
+    } else {
+      chrome::gate(ctx, body.into(), closing)
+    };
     let window = Column::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(projects)
-      .child(chrome::chrome(ctx, body.into(), closing));
-    window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
-      .id(WINDOW_ID)
-      .on_key_down(lifecycle::keys(&services.close, &self.focus))
+      .child(framed);
+    // Behind the gate no shortcut opens a tab or a screen.
+    window_input(
+      &self.navigation,
+      window.into(),
+      (signed_in && !closing, self.first_keys.clone()),
+    )
+    .id(WINDOW_ID)
+    .on_key_down(lifecycle::keys(&services.close, &self.focus))
   }
+}
+
+/// The gate in the content panel over its status bar (`Body` and `Status bar` of `Lpznn`).
+fn gate_screen(ctx: &mut Ctx, sign_in: &SignIn, since: orchester_core::time::Timestamp) -> Element {
+  let gate = ctx.mount_keyed::<SignInGate>(
+    "sign-in-gate",
+    GateProps {
+      sign_in: sign_in.clone(),
+    },
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfaceBase)
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .flex(1.0)
+        .padding(Padding::horizontal(SpacingSize::Sm))
+        .child(gate),
+    )
+    .child(status_bar::gate(ctx, since))
+    .into()
+}
+
+/// Whether this computer is signed in to Orchester Cloud, whenever that changes.
+fn follow_sign_in(ctx: &mut Ctx, cloud: &Cloud) -> SignIn {
+  ctx
+    .stream(cloud.clone(), |cloud, emitter: StreamEmitter<SignIn, ()>| async move {
+      let mut changes = cloud.follow_sign_in();
+      loop {
+        let sign_in = changes.borrow_and_update().clone();
+        if !emitter.emit(sign_in) || changes.changed().await.is_err() {
+          return;
+        }
+      }
+    })
+    .state()
+    .get()
+    .data
+    .unwrap_or_else(|| cloud.sign_in_state())
 }

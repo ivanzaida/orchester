@@ -30,6 +30,8 @@ pub struct BarFacts {
   pub stopping: Stopping,
   /// The team server the item names: the project's, or those this computer is signed in to.
   pub servers: super::server::ServerFacts,
+  /// Orchester Cloud, while it cannot be reached.
+  pub cloud: super::cloud::CloudFacts,
 }
 
 /// How *Stop* of the runs that auto-approve goes.
