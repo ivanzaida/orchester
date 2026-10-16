@@ -85,7 +85,7 @@ pub fn open_sharing(app: &mut App, tree: &mut Tree, (state, server): (State, &st
     .get_element_by_id_mut("sharing-address")
     .and_then(|element| element.as_text_input())
     .ok_or("sharing-address is a text input")?
-    .set_value(&format!("{server}/kontur"));
+    .set_value(format!("{server}/kontur"));
   tree.pass_headless(app);
   press(app, tree, "sharing-link-button")?;
   until(app, tree, "sharing-link-confirm")
