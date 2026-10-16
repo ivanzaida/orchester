@@ -20,6 +20,7 @@ const IDENTITIES: readonly [email: string, name: string][] = [
   ["dana@example.com", "Dana Ruiz"],
   ["stranger@example.com", "Sam Stranger"],
   ["stale@example.com", "Stale Keys"],
+  ["approval@example.com", "Approval Needed"],
 ];
 
 function escape(text: string): string {

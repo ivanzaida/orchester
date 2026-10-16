@@ -98,6 +98,15 @@ test.describe("sign in with Orchester Cloud", () => {
     await expect(page.getByText("There's no account on Kontur team for that Orchester account.", { exact: false })).toBeVisible();
   });
 
+  test("with join approval on, a cloud sign-in asks for a code from one of the person's computers", async ({ page }) => {
+    await page.goto("/admin/signin");
+    await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
+    await page.getByRole("button", { name: "Continue as approval@example.com" }).click();
+    await expect(page).toHaveURL(`${ADMIN}/admin/signin?failed=approval_required`);
+    await expect(page.getByText("Join approval is on, so a sign-in through Orchester Cloud needs one of your computers",
+      { exact: false })).toBeVisible();
+  });
+
   test("nothing to manage names who the cloud vouched for", async ({ page }) => {
     await page.goto("/admin/signin");
     await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();

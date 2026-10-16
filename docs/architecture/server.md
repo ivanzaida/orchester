@@ -1065,7 +1065,12 @@ A project owner who is not an admin sees only Projects (their own, rename and hi
   minutes, one use) by a form `POST` to the admin's callback, checked against `state`. The admin's server side sends
   it to the team server (`POST /auth/cloud { identity_token, device: { kind: "admin_web" } }`), which answers with a
   short-lived admin web token if the account is an admin or a project owner. Only the browser talks to the cloud; the
-  team server needs no internet.
+  team server needs no internet. **While join approval is on** (row 57) the team server refuses a cloud sign-in to
+  the admin with `403 approval_required`, and the sign-in page says to make a code in Orchester on one of the
+  person's computers (Settings › Orchester, the server's entry, *Sign in to the admin*): a cloud identity alone opens
+  no more than it could join with. A browser signed in to the admin never answers its own account's approvals; one of
+  the account's own computers, or another admin, does (security review 1, B2). The refusal is not drawn: it is
+  `j8WujU`'s *code* path with its own sentence under the sign-in title.
 - **With a code, offline.** *Sign in with a code*: a pairing code made in the desktop (Settings › Orchester, the
   server's entry, *Sign in to the admin*) or an account code from the host (`orchester-server account-code <username>`),
   redeemed with `POST /auth/code` as an `admin_web` device.

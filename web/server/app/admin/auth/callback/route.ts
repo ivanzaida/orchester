@@ -25,7 +25,14 @@ function to(_request: Request, path: string): NextResponse {
   return new NextResponse(null, { status: 303, headers: { location: path } });
 }
 
-const SIGN_IN_REFUSALS = new Set(["not_invited", "cloud_off", "key_set_stale", "invalid_identity", "rate_limited"]);
+const SIGN_IN_REFUSALS = new Set([
+  "not_invited",
+  "cloud_off",
+  "key_set_stale",
+  "invalid_identity",
+  "approval_required",
+  "rate_limited",
+]);
 
 function signInOutcome(failure: ApiFailure): string {
   return failure.kind === "refused" && SIGN_IN_REFUSALS.has(failure.code) ? failure.code : "unavailable";

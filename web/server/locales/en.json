@@ -415,7 +415,8 @@
     "cloudOff": "Sign-ins through Orchester Cloud were turned off on this server. Sign in with a code.",
     "tripLost": "That sign-in took too long or came back to another browser. Start again.",
     "tooMany": "Too many sign-in attempts from your network. Try again in a few minutes.",
-    "failed": "The sign-in did not finish: the server is not answering. Try again in a minute."
+    "failed": "The sign-in did not finish: the server is not answering. Try again in a minute.",
+    "approvalRequired": "Join approval is on, so a sign-in through Orchester Cloud needs one of your computers: in Orchester, Settings › Orchester › {{server}} › Sign in to the admin, then sign in here with that code."
   },
   "code": {
     "pageTitle": "Sign in with a code",

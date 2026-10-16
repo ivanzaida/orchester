@@ -25,6 +25,7 @@ const FAILURES: Readonly<Record<string, MessageKey>> = {
   invalid_identity: "signin.invalidIdentity",
   key_set_stale: "signin.keySetStale",
   cloud_off: "signin.cloudOff",
+  approval_required: "signin.approvalRequired",
   rate_limited: "signin.tooMany",
   trip: "signin.tripLost",
   expired: "error.formExpired",

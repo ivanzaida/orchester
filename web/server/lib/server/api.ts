@@ -26,6 +26,7 @@ export type ServerErrorCode =
   | "too_many_codes"
   | "slug_taken"
   | "nothing_to_manage"
+  | "approval_required"
   | "rate_limited"
   | "conflict"
   | "internal";
@@ -33,7 +34,7 @@ export type ServerErrorCode =
 const CODES = new Set<string>([
   "bad_request", "unauthorized", "forbidden", "not_found", "invalid", "username_taken", "last_admin", "last_owner",
   "no_such_user", "invalid_identity", "not_invited", "cloud_off", "key_set_stale", "invalid_code", "too_many_codes",
-  "slug_taken", "nothing_to_manage", "rate_limited", "conflict", "internal",
+  "slug_taken", "nothing_to_manage", "approval_required", "rate_limited", "conflict", "internal",
 ]);
 
 export type ApiFailure =

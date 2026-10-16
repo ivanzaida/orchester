@@ -103,6 +103,10 @@ orchester-server cloud unlink
 account then answers `202 { approval }`. One of that account's devices or an admin approves or refuses it
 (`GET /auth/approvals`, `POST /auth/approvals/{id} { approve }`); the joining app asks again with `approval: <id>` and
 gets its device token once approved (`403 approval_refused` when refused, used or expired; approvals wait an hour).
+While join approval is on, a sign-in to the server admin through Orchester Cloud is refused with
+`403 approval_required` (nothing is used up): a pairing code from one of the account's own computers, or an account code
+from the host, signs the browser in instead. A browser signed in to the admin never lists or answers its own
+account's approvals; one of the account's own computers, or another admin, does (security review 1, B2).
 
 The server itself never reaches the cloud: it neither fetches key sets nor sends or revokes invites. The server
 admin's own server side delivers invites and revocations to the cloud when the host has the internet, or the
