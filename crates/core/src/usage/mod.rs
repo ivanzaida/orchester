@@ -19,7 +19,7 @@ mod report;
 mod series;
 
 pub use self::{
-  accounts::{AccountOrder, AccountSeries, AccountSplit, AccountUsage, OWN_SERIES, SERIES},
+  accounts::{AccountOrder, AccountPlace, AccountSeries, AccountSplit, AccountUsage, OWN_SERIES, SERIES},
   breakdown::{BreakdownKey, BreakdownRow, Breakdowns},
   efficiency::{EditTokens, Efficiency, FailedRuns},
   expensive::{RunCost, TaskCost},

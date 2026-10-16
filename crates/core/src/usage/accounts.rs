@@ -20,17 +20,28 @@ pub const OWN_SERIES: usize = 3;
 /// One series, in drawing order: stacks build bottom up, legends and columns read left to right.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum AccountSeries {
-  /// The connected account at this place (0, 1 or 2) in series order.
-  Account(usize),
+  /// The connected account at this place in series order.
+  Account(AccountPlace),
   Other,
   NoAccount,
 }
 
+/// A place (0, 1 or 2) among the connected accounts that keep a series of their own; only
+/// [`AccountSeries::ALL`] and [`AccountOrder::series`] make one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct AccountPlace(usize);
+
+impl AccountPlace {
+  pub const fn get(self) -> usize {
+    self.0
+  }
+}
+
 impl AccountSeries {
   pub const ALL: [Self; SERIES] = [
-    Self::Account(0),
-    Self::Account(1),
-    Self::Account(2),
+    Self::Account(AccountPlace(0)),
+    Self::Account(AccountPlace(1)),
+    Self::Account(AccountPlace(2)),
     Self::Other,
     Self::NoAccount,
   ];
@@ -38,17 +49,17 @@ impl AccountSeries {
   /// Its place among [`Self::ALL`], which its colour follows.
   pub const fn index(self) -> usize {
     match self {
-      Self::Account(place) => place,
+      Self::Account(place) => place.0,
       Self::Other => OWN_SERIES,
       Self::NoAccount => OWN_SERIES + 1,
     }
   }
 }
 
-/// The connected accounts in series order, with their CLI.
+/// The connected accounts in series order.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AccountOrder {
-  accounts: Vec<(AgentAccountId, AccountCli)>,
+  accounts: Vec<AgentAccountId>,
 }
 
 impl AccountOrder {
@@ -65,32 +76,13 @@ impl AccountOrder {
       )
     });
     Self {
-      accounts: sorted
-        .into_iter()
-        .map(|account| (account.id(), account.cli()))
-        .collect(),
+      accounts: sorted.into_iter().map(AgentAccount::id).collect(),
     }
   }
 
   /// Every connected account in series order.
   pub fn accounts(&self) -> impl Iterator<Item = AgentAccountId> + '_ {
-    self.accounts.iter().map(|(id, _)| *id)
-  }
-
-  /// The connected accounts of `cli`, in series order.
-  pub fn of_cli(&self, cli: AccountCli) -> impl Iterator<Item = AgentAccountId> + '_ {
-    self
-      .accounts
-      .iter()
-      .filter(move |(_, of)| *of == cli)
-      .map(|(id, _)| *id)
-  }
-
-  /// The CLIs with connected accounts, in series order.
-  pub fn clis(&self) -> Vec<AccountCli> {
-    let mut clis: Vec<AccountCli> = self.accounts.iter().map(|(_, cli)| *cli).collect();
-    clis.dedup();
-    clis
+    self.accounts.iter().copied()
   }
 
   /// The series usage that started on `account` counts in: its own while it is one of the first three
@@ -99,8 +91,8 @@ impl AccountOrder {
     let Some(account) = account else {
       return AccountSeries::NoAccount;
     };
-    match self.accounts.iter().position(|(id, _)| *id == account) {
-      Some(place) if place < OWN_SERIES => AccountSeries::Account(place),
+    match self.accounts.iter().position(|id| *id == account) {
+      Some(place) if place < OWN_SERIES => AccountSeries::Account(AccountPlace(place)),
       _ => AccountSeries::Other,
     }
   }
@@ -108,7 +100,7 @@ impl AccountOrder {
   /// The connected account a series of its own stands for.
   pub fn account(&self, series: AccountSeries) -> Option<AgentAccountId> {
     match series {
-      AccountSeries::Account(place) => self.accounts.get(place).map(|(id, _)| *id),
+      AccountSeries::Account(place) => self.accounts.get(place.0).copied(),
       AccountSeries::Other | AccountSeries::NoAccount => None,
     }
   }
@@ -124,13 +116,7 @@ impl AccountOrder {
         split.others.push((*account, *spent));
       }
     }
-    let place = |account: AgentAccountId| {
-      self
-        .accounts
-        .iter()
-        .position(|(id, _)| *id == account)
-        .unwrap_or(usize::MAX)
-    };
+    let place = |account: AgentAccountId| self.accounts.iter().position(|id| *id == account).unwrap_or(usize::MAX);
     split.others.sort_by_key(|(account, _)| (place(*account), *account));
     split
   }
@@ -159,10 +145,6 @@ impl AccountUsage {
   /// Each account's usage, in the order first seen.
   pub fn entries(&self) -> &[(Option<AgentAccountId>, TokenUsage)] {
     &self.0
-  }
-
-  pub fn total(&self) -> TokenUsage {
-    self.0.iter().map(|(_, usage)| *usage).sum()
   }
 }
 

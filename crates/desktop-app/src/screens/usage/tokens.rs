@@ -290,14 +290,14 @@ fn tokens_tip(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar, measure: Measur
   };
   let split = dashboard.split(&bar.by_account);
   let mut rows: Vec<Element> = Vec::new();
-  for series in dashboard.shown_series() {
+  for shown in dashboard.shown_series() {
     rows.push(tooltip::line(
-      Some(series_swatch(series)),
-      &series_text(ctx, &dashboard.series_label(series)),
-      Some(&words::exact(ctx, measure.of(split.of(series)))),
+      Some(series_swatch(shown.series)),
+      &series_text(ctx, &shown.label),
+      Some(&words::exact(ctx, measure.of(split.of(shown.series)))),
     ));
-    if series == AccountSeries::Other && split.others.len() > 1 {
-      rows.extend(split.others.iter().map(|(account, usage)| {
+    if shown.series == AccountSeries::Other {
+      rows.extend(dashboard.opened_others(&split).iter().map(|(account, usage)| {
         tooltip::detail_line(
           &account_text(ctx, &dashboard.account_label(*account)),
           &words::exact(ctx, measure.of(*usage)),

@@ -88,6 +88,11 @@ impl UsageFilter {
   pub fn admits_cli(&self, cli: AgentProvider) -> bool {
     self.clis.is_empty() || self.clis.contains(&cli)
   }
+
+  /// Whether it chooses whose plan limits are shown: CLIs, accounts or *No account*.
+  pub fn chooses_limits(&self) -> bool {
+    !self.clis.is_empty() || !self.accounts.is_empty() || self.no_account
+  }
 }
 
 /// A filter admits what it has chosen, or everything while nothing is chosen; a value the record

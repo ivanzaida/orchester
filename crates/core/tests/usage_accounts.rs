@@ -1,7 +1,8 @@
 //! Usage by the account it started on: series in Settings' order by CLI (Codex first, named accounts before
 //! Default), a colour slot by position among every connected account, the fourth and later in Other with the
 //! accounts no longer connected, No account last, the reviewer's reviews on no account, and the Account filter
-//! with *No account*.
+//! with *No account*; plan limits per account, a report from before accounts as its CLI's Default, and the
+//! Account filter choosing whose plan limits are shown.
 //! `cargo test -p orchester-core --test usage_accounts usage_accounts`.
 
 use std::{num::NonZeroU32, path::PathBuf};
@@ -9,7 +10,10 @@ use std::{num::NonZeroU32, path::PathBuf};
 use chrono::NaiveDate;
 use orchester_core::{
   account::{AccountCli, AccountFolder, AgentAccount},
-  connection::AgentProvider,
+  connection::{
+    AgentProvider,
+    plan_limits::{LimitState, LimitWindow, PlanLimits},
+  },
   id::{AgentAccountId, InvocationId, ProjectId, RunId, TaskId},
   name::Name,
   run::{RunNumber, TokenUsage},
@@ -17,6 +21,7 @@ use orchester_core::{
   usage::{
     AccountOrder, AccountSeries, AccountUsage, DayRange, Grouping, IndexGiven, InvocationFacts, ProjectFacts,
     ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport, day_start,
+    limits::{LimitHistory, LimitSnapshot},
   },
 };
 
@@ -82,8 +87,8 @@ fn usage_accounts_go_by_cli_then_as_settings_lists_them_and_keep_their_slot() {
     expected.iter().map(|account| account.id()).collect::<Vec<_>>(),
     "Codex first, named accounts before Default"
   );
-  assert_eq!(order.series(Some(expected[0].id())), AccountSeries::Account(0));
-  assert_eq!(order.series(Some(expected[2].id())), AccountSeries::Account(2));
+  assert_eq!(order.series(Some(expected[0].id())), AccountSeries::ALL[0]);
+  assert_eq!(order.series(Some(expected[2].id())), AccountSeries::ALL[2]);
   assert_eq!(order.series(Some(expected[3].id())), AccountSeries::Other, "the fourth");
   assert_eq!(order.series(None), AccountSeries::NoAccount);
   assert_eq!(
@@ -126,12 +131,12 @@ fn usage_accounts_an_empty_series_keeps_its_slot() {
   usage.add(Some(work), spent(3));
   let split = order.split(&usage);
   assert_eq!(
-    split.of(AccountSeries::Account(0)),
+    split.of(AccountSeries::ALL[0]),
     TokenUsage::default(),
     "Client spent nothing"
   );
   assert_eq!(
-    split.of(AccountSeries::Account(2)),
+    split.of(AccountSeries::ALL[2]),
     spent(3),
     "Work keeps the third slot, and its colour, without Client and Default"
   );
@@ -266,4 +271,104 @@ fn usage_accounts_the_filter_chooses_accounts_and_no_account() {
     ..UsageFilter::default()
   };
   assert!(!filter.admits_account(None), "another account leaves out usage on none");
+}
+
+/// A weekly report of `provider` on `account` (`None`: from before accounts were recorded), `hours` ago.
+fn weekly(
+  provider: AgentProvider,
+  account: Option<AgentAccountId>,
+  (now, hours): (Timestamp, i64),
+  percent: f64,
+) -> LimitSnapshot {
+  let window = LimitWindow::new(10_080, Some(percent), None, LimitState::Normal, false).expect("a window");
+  LimitSnapshot {
+    provider,
+    account,
+    at: Timestamp::from_unix_millis(now.unix_millis() - hours * 3_600_000),
+    limits: PlanLimits {
+      windows: vec![window],
+      plan: None,
+      credits: None,
+      blocked: None,
+    },
+    source: None,
+  }
+}
+
+/// The last day up to `now`.
+fn last_day(now: Timestamp) -> (Timestamp, Timestamp) {
+  (Timestamp::from_unix_millis(now.unix_millis() - 24 * 3_600_000), now)
+}
+
+#[test]
+fn usage_accounts_plan_limits_draw_a_line_per_account_and_old_reports_are_default() {
+  let now = Timestamp::now();
+  let client = AgentAccountId::generate();
+  let default = AccountCli::Codex.default_account();
+  let snapshots = [
+    weekly(AgentProvider::CodexCli, None, (now, 3), 10.0),
+    weekly(AgentProvider::CodexCli, Some(default), (now, 2), 20.0),
+    weekly(AgentProvider::CodexCli, Some(client), (now, 1), 30.0),
+  ];
+  let history = LimitHistory::of(&snapshots, last_day(now), now, &UsageFilter::default());
+  let lines: Vec<(Option<AgentAccountId>, Vec<f64>)> = history
+    .lines
+    .iter()
+    .map(|line| (line.account, line.points.iter().map(|point| point.percent).collect()))
+    .collect();
+  assert_eq!(lines.len(), 2, "one line per account: {lines:?}");
+  assert!(
+    lines.contains(&(Some(default), vec![10.0, 20.0])),
+    "the report from before accounts joins Default's line: {lines:?}"
+  );
+  assert!(lines.contains(&(Some(client), vec![30.0])), "{lines:?}");
+  assert_eq!(history.current.len(), 2, "a reading per account");
+}
+
+#[test]
+fn usage_accounts_plan_limits_follow_the_account_filter() {
+  let now = Timestamp::now();
+  let client = AgentAccountId::generate();
+  let snapshots = [
+    weekly(AgentProvider::CodexCli, None, (now, 3), 10.0),
+    weekly(AgentProvider::CodexCli, Some(client), (now, 1), 30.0),
+  ];
+  let accounts = |filter: &UsageFilter| -> Vec<Option<AgentAccountId>> {
+    LimitHistory::of(&snapshots, last_day(now), now, filter)
+      .current
+      .iter()
+      .map(|window| window.account)
+      .collect()
+  };
+  let none = UsageFilter {
+    no_account: true,
+    ..UsageFilter::default()
+  };
+  assert!(
+    accounts(&none).is_empty(),
+    "plan limits are an account's: No account has none"
+  );
+  let only_client = UsageFilter {
+    accounts: vec![client],
+    ..UsageFilter::default()
+  };
+  assert_eq!(accounts(&only_client), [Some(client)]);
+  let only_default = UsageFilter {
+    accounts: vec![AccountCli::Codex.default_account()],
+    ..UsageFilter::default()
+  };
+  assert_eq!(
+    accounts(&only_default),
+    [Some(AccountCli::Codex.default_account())],
+    "the report from before accounts is Default's"
+  );
+  assert!(only_client.chooses_limits() && none.chooses_limits());
+  let models = UsageFilter {
+    models: vec!["gpt-5".into()],
+    ..UsageFilter::default()
+  };
+  assert!(
+    !models.chooses_limits(),
+    "a model does not choose whose plan limits are shown"
+  );
 }

@@ -34,11 +34,12 @@ const ITEM_HEIGHT: f32 = 22.0;
 
 /// The legend over the chart.
 pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
-  let totals = series_totals(dashboard, measure);
-  let items: Vec<Element> = totals
+  let items: Vec<Element> = dashboard
+    .shown_series()
     .into_iter()
-    .map(|(series, total)| {
-      let name = series_text(ctx, &dashboard.series_label(series));
+    .map(|shown| {
+      let (series, total) = (shown.series, measure.of(shown.usage));
+      let name = series_text(ctx, &shown.label);
       let id = format!("usage-tokens-legend-{}", series.index());
       let info =
         (series == AccountSeries::NoAccount).then(|| ctx.mount_keyed::<NoAccountInfo>("usage-no-account-info", ()));
@@ -75,22 +76,6 @@ pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element
         .nowrap(),
     )
     .into()
-}
-
-/// Each series with usage in the range and its total for `measure`, in series order.
-fn series_totals(dashboard: &Dashboard, measure: Measure) -> Vec<(AccountSeries, u64)> {
-  let mut totals = [0_u64; orchester_core::usage::SERIES];
-  for bar in &dashboard.report.series {
-    let split = dashboard.split(&bar.by_account);
-    for series in AccountSeries::ALL {
-      totals[series.index()] += measure.of(split.of(series));
-    }
-  }
-  dashboard
-    .shown_series()
-    .into_iter()
-    .map(|series| (series, totals[series.index()]))
-    .collect()
 }
 
 /// What the bars count, per day or per hour.

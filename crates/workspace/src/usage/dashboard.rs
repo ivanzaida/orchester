@@ -61,8 +61,8 @@ pub struct Dashboard {
   pub(super) order: Arc<AccountOrder>,
   /// The range's usage by series: which series the legend and table show, and what Other holds.
   pub(super) range_split: Arc<AccountSplit>,
-  /// Some CLI reported its plan limits, whatever the filters choose.
-  pub limits_reported: bool,
+  /// Some CLI reported its plan limits before the range's end, whatever the filters choose.
+  limits_reported: bool,
   pub threshold: WarningThreshold,
   pub state: DashboardState,
   pub now: Timestamp,
@@ -121,11 +121,20 @@ impl Dashboard {
       names: Arc::new(Names::of(data)),
       order: Arc::new(order),
       range_split: Arc::new(range_split),
-      limits_reported: !data.snapshots.is_empty(),
+      limits_reported: data
+        .snapshots
+        .iter()
+        .any(|snapshot| snapshot.at < range.end() && !snapshot.limits.windows.is_empty()),
       threshold: data.threshold,
       state,
       now,
     }
+  }
+
+  /// The filter hides every plan limit the range has: some CLI reported its limits by the range's end, and
+  /// the CLIs, accounts or *No account* the filter chooses did not.
+  pub fn limits_filtered_out(&self) -> bool {
+    self.limits.is_empty() && self.limits_reported && self.query.filter.chooses_limits()
   }
 
   pub fn today(&self) -> NaiveDate {

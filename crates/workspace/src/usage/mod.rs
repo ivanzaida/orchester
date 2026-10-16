@@ -21,5 +21,5 @@ pub use self::{
     CustomRangeError, DAY_FORMAT, LONGEST_DAYS, NO_ACCOUNT, ParamsError, QueryError, UsageQuery, cli_name, cli_of,
     custom_range, group_name, group_of,
   },
-  series::{AccountLabel, SeriesLabel},
+  series::{AccountLabel, SeriesLabel, ShownSeries},
 };

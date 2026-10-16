@@ -86,6 +86,7 @@ fn usage_queries() -> [UsageQuery; 2] {
   filter.runs.push(RunId::generate());
   filter.steps.push("Implement".into());
   filter.accounts.push(AgentAccountId::generate());
+  filter.no_account = true;
   let today = UsageQuery {
     period: Period::Today,
     group: GroupBy::Hour,
@@ -210,6 +211,17 @@ fn links_have_the_documented_paths() {
   ] {
     assert_eq!(link.path(), path);
   }
+}
+
+#[test]
+fn links_carry_an_account_and_no_account_and_read_back() {
+  let mut query = UsageQuery::default();
+  query.filter.accounts.push(id());
+  query.filter.no_account = true;
+  let link = Link::UsageEverywhere(Box::new(query.clone()));
+  let path = link.path();
+  assert_eq!(path, format!("/usage?account={ID}&account=none"));
+  assert_eq!(Route::parse(&path), Ok(Route::Usage(Box::new(query))));
 }
 
 #[test]

@@ -7,6 +7,7 @@ use std::sync::Arc;
 use orchester_core::{
   account::AccountCli,
   id::AgentAccountId,
+  run::TokenUsage,
   usage::{AccountSeries, AccountSplit, AccountUsage},
 };
 
@@ -14,6 +15,14 @@ use super::{
   Dashboard,
   filters::{FilterOption, FilterValue, ValueLabel},
 };
+
+/// A series with usage in the range: how it reads, and its usage over the range.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShownSeries {
+  pub series: AccountSeries,
+  pub label: SeriesLabel,
+  pub usage: TokenUsage,
+}
 
 /// How a series reads.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,24 +52,36 @@ impl Dashboard {
 
   /// The series with usage in the range, in drawing order; a series without any is left out of the legend,
   /// the tooltip and the table, and keeps its colour.
-  pub fn shown_series(&self) -> Vec<AccountSeries> {
+  pub fn shown_series(&self) -> Vec<ShownSeries> {
     AccountSeries::ALL
       .into_iter()
-      .filter(|series| self.range_split.of(*series) != Default::default())
+      .filter_map(|series| {
+        let usage = self.range_split.of(series);
+        if usage == TokenUsage::default() {
+          return None;
+        }
+        let label = match series {
+          // Usage in an account's own series started on the connected account at its place.
+          AccountSeries::Account(_) => SeriesLabel::Account(self.account_label(self.order.account(series)?)),
+          AccountSeries::Other => match self.range_split.others.as_slice() {
+            [(account, _)] => SeriesLabel::OtherOne(self.account_label(*account)),
+            others => SeriesLabel::Other(others.len()),
+          },
+          AccountSeries::NoAccount => SeriesLabel::NoAccount,
+        };
+        Some(ShownSeries { series, label, usage })
+      })
       .collect()
   }
 
-  /// How `series` reads on this page.
-  pub fn series_label(&self, series: AccountSeries) -> SeriesLabel {
-    match series {
-      AccountSeries::Account(_) => self.order.account(series).map_or(SeriesLabel::Other(0), |account| {
-        SeriesLabel::Account(self.account_label(account))
-      }),
-      AccountSeries::Other => match self.range_split.others.as_slice() {
-        [(account, _)] => SeriesLabel::OtherOne(self.account_label(*account)),
-        others => SeriesLabel::Other(others.len()),
-      },
-      AccountSeries::NoAccount => SeriesLabel::NoAccount,
+  /// The accounts Other holds in `split` (a bar's), each on a row of its own under Other while Other reads as
+  /// *Other accounts · N*, so a bar holding one of them still names it; none while Other reads as its one
+  /// account.
+  pub fn opened_others<'a>(&self, split: &'a AccountSplit) -> &'a [(AgentAccountId, TokenUsage)] {
+    if self.range_split.others.len() == 1 {
+      &[]
+    } else {
+      &split.others
     }
   }
 

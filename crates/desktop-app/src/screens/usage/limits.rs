@@ -51,7 +51,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, sa
     .fill();
   if dashboard.limits.is_empty() {
     // Reports the filters leave out are not reports that never came.
-    let (title, detail) = if dashboard.limits_reported {
+    let (title, detail) = if dashboard.limits_filtered_out() {
       ("usage.limits.noneChosen", "usage.limits.noneChosenDetail")
     } else {
       ("usage.limits.none", "usage.limits.noneDetail")

@@ -18,16 +18,18 @@ use orchester_workspace::usage::{AccountLabel, SeriesLabel};
 use super::card::{SWATCH, swatch};
 use crate::theme::{ExtraColor, ExtraRadius};
 
-/// The stripes across a hatched part: how many fit its diagonal, each a fifth of its own band.
+/// The stripes across a hatched part: how many fit its diagonal, each 35% of its own band.
 const STRIPES: usize = 3;
 const STRIPE_SHARE: f32 = 0.35;
 
 /// The color `series` is drawn in; No account's stripes and outline.
 pub fn series_color(series: AccountSeries) -> PaletteColor {
   match series {
-    AccountSeries::Account(0) => ExtraColor::Chart1.role(),
-    AccountSeries::Account(1) => ExtraColor::Chart2.role(),
-    AccountSeries::Account(_) => ExtraColor::Chart3.role(),
+    AccountSeries::Account(place) => match place.get() {
+      0 => ExtraColor::Chart1.role(),
+      1 => ExtraColor::Chart2.role(),
+      _ => ExtraColor::Chart3.role(),
+    },
     AccountSeries::Other => ExtraColor::ChartOther.role(),
     AccountSeries::NoAccount => ExtraColor::ChartNone.role(),
   }

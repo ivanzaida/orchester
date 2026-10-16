@@ -99,25 +99,28 @@ fn stacked(
     let gap = if position > 0 { BAR_GAP } else { 0.0 };
     let y = base - gap - height;
     let none = *series == AccountSeries::NoAccount.index();
+    let rounded = position + 1 == shown.len();
     context.set_fill_style(if none { style.hatch } else { style.series[*series] });
-    if position + 1 == shown.len() {
-      rounded_top(context, x, y, width, height);
-    } else {
-      context.fill_rect(x, y, width, height);
-    }
+    part_path(context, (x, y, width, height), rounded);
+    context.fill();
     if none {
-      hatch_part(context, (x, y, width, height), style.series[*series]);
+      hatch_part(context, (x, y, width, height), rounded, style.series[*series]);
     }
     base = y;
   }
   base
 }
 
-/// No account's stripes, 45° and `STRIPE_PITCH` apart, and its 1 outline, over its ground.
-fn hatch_part(context: &Context2D, (x, y, width, height): (f32, f32, f32, f32), stripe: lurq::node::color::Color) {
+/// No account's stripes, 45° and `STRIPE_PITCH` apart, and its 1 outline, over its ground; both inside the
+/// part's rounded top when it is the bar's top part.
+fn hatch_part(
+  context: &Context2D,
+  (x, y, width, height): (f32, f32, f32, f32),
+  rounded: bool,
+  stripe: lurq::node::color::Color,
+) {
   context.save();
-  context.begin_path();
-  context.rect(x, y, width, height);
+  part_path(context, (x, y, width, height), rounded);
   context.clip();
   context.set_stroke_style(stripe);
   context.set_line_width(STRIPE_WIDTH);
@@ -131,23 +134,31 @@ fn hatch_part(context: &Context2D, (x, y, width, height): (f32, f32, f32, f32), 
     from += STRIPE_PITCH;
   }
   context.restore();
-  context.stroke_rect(
-    x + STRIPE_WIDTH / 2.0,
-    y + STRIPE_WIDTH / 2.0,
-    width - STRIPE_WIDTH,
-    height - STRIPE_WIDTH,
+  let inset = STRIPE_WIDTH / 2.0;
+  part_path(
+    context,
+    (x + inset, y + inset, width - STRIPE_WIDTH, height - STRIPE_WIDTH),
+    rounded,
   );
+  context.stroke();
 }
 
-/// A rectangle whose top corners are rounded.
-fn rounded_top(context: &Context2D, x: f32, y: f32, width: f32, height: f32) {
-  let radius = BAR_RADIUS.min(width / 2.0).min(height);
+/// A bar part's path: a rectangle, with its top corners rounded when it is the bar's top part. Geometry the
+/// canvas refuses (a bar thinner than a pixel) is a plain rectangle.
+fn part_path(context: &Context2D, (x, y, width, height): (f32, f32, f32, f32), rounded: bool) {
   context.begin_path();
-  // Geometry the canvas refuses (a bar thinner than a pixel) is drawn square, by the rect below.
-  if context.round_rect(x, y, width, height, radius).is_ok() {
-    context.fill();
+  let radius = BAR_RADIUS.min(width / 2.0).min(height);
+  if rounded && radius > 0.0 {
+    context.move_to(x, y + height);
+    let corners = context
+      .arc_to(x, y, x + width, y, radius)
+      .and_then(|()| context.arc_to(x + width, y, x + width, y + height, radius));
+    if corners.is_ok() {
+      context.line_to(x + width, y + height);
+      context.close_path();
+      return;
+    }
+    context.begin_path();
   }
-  if height > radius {
-    context.fill_rect(x, y + radius, width, height - radius);
-  }
+  context.rect(x, y, width, height);
 }

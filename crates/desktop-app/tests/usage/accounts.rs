@@ -1,9 +1,11 @@
 //! The page by connected account (`Usage · many accounts` `u2cb1M`) on the `usage` seed's five accounts: the
 //! legend's series in order with Other accounts and No account last with its ⓘ, the table taking the whole
-//! row with more than three series, and the Account filter grouped by CLI with *No account*.
+//! row with more than three series, the Account filter grouped by CLI with *No account*, and what *Plan limits*
+//! says when the filter hides its windows.
 
 use orchester_core::{
   account::AccountCli,
+  id::AgentAccountId,
   time::Timestamp,
   usage::{DayRange, Period, local_date},
 };
@@ -204,4 +206,66 @@ fn assert_whole(page: &mut Seeded, cell: &str) {
     "{cell} ({}) is cut: {text} of {room}",
     page.text(cell)
   );
+}
+
+#[test]
+fn usage_accounts_compact_plan_limits_name_the_filter_that_hides_them() {
+  let mut query = UsageQuery::default();
+  query.filter.no_account = true;
+  query.filter.models.push("claude-opus-5-5".into());
+  query.filter.pipelines.push("Quick fix".into());
+  let mut page = Seeded::usage("usage", query);
+  assert!(page.shows("usage-unmatched"), "the filters match no run");
+  assert_eq!(
+    page.text("usage-limits-caption"),
+    "no plan limits from the chosen accounts",
+    "No account has no plan limits; the CLIs still reported theirs"
+  );
+}
+
+#[test]
+fn usage_accounts_without_runs_plan_limits_follow_the_account_filter() {
+  let mut query = UsageQuery {
+    period: Period::Today,
+    ..UsageQuery::default()
+  };
+  query.filter.accounts.push(AccountCli::Codex.default_account());
+  let mut page = Seeded::usage("usage-empty", query);
+  assert!(page.shows("usage-no-runs"), "nothing ran today");
+  let caption = page.text("usage-limits-caption");
+  assert!(
+    caption.starts_with("follow the Account filter only"),
+    "the windows shown are the chosen account's: {caption}"
+  );
+}
+
+#[test]
+fn usage_accounts_plan_limit_windows_of_removed_accounts_keep_their_own_ids() {
+  // Codex's reports and Claude's each on an account no longer connected: two removed accounts, each with a
+  // 5-hour and a weekly window.
+  let mut page = Seeded::prepared("usage", false, |repo| {
+    let db = rusqlite::Connection::open(repo.join(".orchester").join("orchester.db")).expect("the project database");
+    for (provider, account) in [
+      ("codex", AgentAccountId::generate()),
+      ("claude", AgentAccountId::generate()),
+    ] {
+      db.execute(
+        "UPDATE plan_limit_snapshots SET account_id = ?1 WHERE provider LIKE ?2",
+        [account.to_string(), format!("{provider}%")],
+      )
+      .expect("move the reports");
+    }
+  });
+  page.go(UsageQuery::default());
+  page.until("the plan limits", |page| page.shows("usage-limits-legend"));
+  let windows: Vec<String> = page
+    .ids("usage-limits-window-")
+    .into_iter()
+    .filter(|id| !id.ends_with("-value") && !id.ends_with("-resets"))
+    .collect();
+  assert_eq!(windows.len(), 4, "{windows:?}");
+  let mut distinct = windows.clone();
+  distinct.sort();
+  distinct.dedup();
+  assert_eq!(distinct.len(), windows.len(), "each window its own id: {windows:?}");
 }

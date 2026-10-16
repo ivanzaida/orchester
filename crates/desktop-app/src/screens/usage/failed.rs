@@ -139,8 +139,8 @@ fn split(ctx: &Ctx, failed: &FailedRuns) -> Element {
     .into()
 }
 
-/// *Most: KON-11 · Run 2 · 2.4M*, the failed run that spent the most.
-/// *Most: KON-11 · Run 2 · 2.4M*; on every project's page with the run's project first.
+/// *Most: KON-11 · Run 2 · 2.4M*, the failed run that spent the most; on every project's page with the run's
+/// project first.
 fn most(ctx: &Ctx, failed: &FailedRuns, everywhere: bool) -> Option<Element> {
   let largest = failed.largest.as_ref()?;
   let run = words::run_label(ctx, &largest.key, largest.number.get());

@@ -29,18 +29,18 @@ pub fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Eleme
     Width::Flex(1.0),
     false,
   )];
-  columns.extend(series.iter().map(|series| {
-    let (over, heading) = series_heading(ctx, &dashboard.series_label(*series));
+  columns.extend(series.iter().map(|shown| {
+    let (over, heading) = series_heading(ctx, &shown.label);
     column(heading, Width::Px(series_width), true)
       .over(over)
-      .swatch(*series)
+      .swatch(shown.series)
   }));
   columns.push(column(ctx.t(heading_key(measure)), Width::Px(figure_width), true));
   columns.push(column(ctx.t("usage.table.runs"), Width::Px(runs_width), true));
   let bars = &dashboard.report.series;
   let figures = |bar: &SeriesBar| -> Vec<u64> {
     let split = dashboard.split(&bar.by_account);
-    series.iter().map(|series| measure.of(split.of(*series))).collect()
+    series.iter().map(|shown| measure.of(split.of(shown.series))).collect()
   };
   let mut sums = vec![0_u64; series.len()];
   let mut rows: Vec<Element> = Vec::new();

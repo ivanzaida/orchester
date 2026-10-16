@@ -108,6 +108,18 @@ impl Seeded {
     }
   }
 
+  /// The ids starting with `prefix`, in tree order, a repeated id as often as it is given.
+  pub fn ids(&mut self, prefix: &str) -> Vec<String> {
+    let found = parking_lot::Mutex::new(Vec::new());
+    self.window.tree.find_element(|element| {
+      if let Some(id) = element.id().filter(|id| id.starts_with(prefix)) {
+        found.lock().push(id.to_owned());
+      }
+      false
+    });
+    found.into_inner()
+  }
+
   /// Where `id` is laid out, in logical pixels: (x, y, width, height).
   pub fn bounds(&mut self, id: &str) -> (f32, f32, f32, f32) {
     let bounds = self

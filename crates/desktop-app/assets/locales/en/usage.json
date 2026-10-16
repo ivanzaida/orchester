@@ -194,6 +194,7 @@
       "noneDetail": "Orchester keeps a snapshot each time Codex or Claude reports its plan limits during a run, for 90 days. None has been reported so far, so there is no history for this period. The next run that reports its limits adds the first point.",
       "noneYet": "no plan limits reported yet",
       "noneChosen": "No plan limits from the chosen accounts",
+      "noneChosenCaption": "no plan limits from the chosen accounts",
       "noneChosenDetail": "Plan limits follow the Account filter, and none of the chosen accounts reported its limits in this period. Choose another account or clear the filter to see the others.",
       "lastReported": "last reported {{time}}",
       "accountFilterOnly": "follow the Account filter only · last reported {{time}}",

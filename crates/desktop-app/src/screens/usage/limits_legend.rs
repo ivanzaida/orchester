@@ -75,11 +75,11 @@ fn column(ctx: &Ctx, dashboard: &Dashboard, windows: &[&CurrentLimit], faded: bo
 /// One window: its line, name, share and reset.
 fn entry(ctx: &Ctx, dashboard: &Dashboard, window: &CurrentLimit, faded: bool) -> Element {
   let (value, resets) = reading(ctx, dashboard, window);
-  let id = format!(
-    "usage-limits-window-{}-{}",
-    dashboard.account_place(window.account),
-    window.minutes
-  );
+  // By the account's id: accounts no longer connected all come after the connected ones.
+  let account = window
+    .account
+    .map_or_else(|| "none".to_owned(), |account| account.to_string());
+  let id = format!("usage-limits-window-{account}-{}", window.minutes);
   let line = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -170,11 +170,17 @@ pub fn compact(ctx: &Ctx, dashboard: &Dashboard, menu: Element) -> Element {
     .note(ctx.t("usage.limits.note"))
     .trailing(menu);
   let Some(last) = dashboard.limits.current.iter().map(|window| window.at).max() else {
-    return card.body([footnote("usage-limits-caption", &ctx.t("usage.limits.noneYet"))]);
+    // Reports the filter leaves out are not reports that never came.
+    let none = if dashboard.limits_filtered_out() {
+      "usage.limits.noneChosenCaption"
+    } else {
+      "usage.limits.noneYet"
+    };
+    return card.body([footnote("usage-limits-caption", &ctx.t(none))]);
   };
   let reported = words::reported(ctx, last, dashboard.now);
   let filtered =
-    matches!(dashboard.state, DashboardState::FilteredOut { .. }) || !dashboard.query.filter.clis.is_empty();
+    matches!(dashboard.state, DashboardState::FilteredOut { .. }) || dashboard.query.filter.chooses_limits();
   let caption = if filtered {
     ctx.t_args("usage.limits.accountFilterOnly", [("time", &*reported)])
   } else {

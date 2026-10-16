@@ -193,7 +193,11 @@ fn usage_page_shows_the_reviewer_and_both_clis_five_hour_windows() {
     page.text("usage-breakdown-subtitle"),
     "Auto mode reviewer rows can’t be selected as a filter."
   );
-  assert!(page.shows("usage-limits-window-2-300"), "Claude · Work's 5-hour window");
+  let legend = page.text("usage-limits-legend");
+  assert!(
+    legend.contains("Claude · Work · 5-hour"),
+    "Claude · Work's 5-hour window: {legend}"
+  );
 }
 
 #[test]
