@@ -90,7 +90,7 @@ impl Component for Limits {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
-      save: work::action(ctx),
+      save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       default: ctx.signal(String::new()),
       daily: ctx.signal(String::new()),
       minutes: ctx.signal(String::new()),

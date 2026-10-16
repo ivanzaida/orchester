@@ -6,6 +6,8 @@ use std::{
   time::{Duration, Instant},
 };
 
+use orchester_app::routes::{ProjectPage, Route, TaskList};
+
 use super::{
   harness::{Tools, command_text},
   support::{project_id, reads::Reads},
@@ -38,5 +40,25 @@ fn tools_save_reads_the_tools_once() {
   let saved = reads.take();
   assert_eq!(saved.get("tools"), Some(&1), "{saved:?}");
   assert_eq!(feed.outside.get_untracked().tools, before + 1, "the save is recorded");
+  assert_eq!(command_text(&t.entry(id).tool).timeout, "60");
+}
+
+#[test]
+fn tools_save_is_recorded_when_the_editor_leaves_before_it_ends() {
+  let mut t = Tools::new();
+  let id = t.seed("Checks", true);
+  t.edit(id);
+  t.set("tool-timeout", "60");
+  t.ready();
+  t.click("tool-save");
+  // The person leaves before the save ended: the editor that started it is gone when it does.
+  t.window
+    .navigation()
+    .go(Route::Project(project_id(), ProjectPage::Tasks(TaskList::default())));
+  t.window.pass();
+  let services = t.window.launch.services().expect("the session started").clone();
+  t.window.until("the change recorded", |_| {
+    services.changes.counts(project_id()).tools == 1
+  });
   assert_eq!(command_text(&t.entry(id).tool).timeout, "60");
 }

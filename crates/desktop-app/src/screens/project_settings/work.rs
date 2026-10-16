@@ -1,5 +1,11 @@
 //! Off-thread saves using workspace services, and the page's read/save feedback.
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use lurq::{
   app::{
@@ -9,13 +15,17 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{id::ConnectionId, limits::ProjectLimits, run::review::AutoModeSettings};
+use orchester_core::{
+  id::{ConnectionId, ProjectId},
+  limits::ProjectLimits,
+  run::review::AutoModeSettings,
+};
 use orchester_workspace::{
   background, code_index,
   connections::github::expect_active_account_in,
   messages::{self, Message},
   project_settings::{self, Settings},
-  tasks::outside::Outside,
+  tasks::outside::{Outside, OutsideCounts},
 };
 use parking_lot::Mutex;
 
@@ -48,18 +58,20 @@ pub enum Change {
   },
   UseAccount(ConnectionId),
 }
-/// The settings as the save read them after writing, and the kind of change it made.
+/// The settings as the save read them after writing, and the project's change counts right after the save
+/// recorded its change.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Saved(pub Settings, pub Outside);
+pub struct Saved(pub Settings, pub OutsideCounts);
 impl DevtoolsInspectable for Saved {}
 pub type Save = FutureAction<(PathBuf, Change), Saved, Message>;
 
-pub fn action(ctx: &mut Ctx) -> Save {
+/// Saves the settings of `project` as asked.
+pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
   let services = Services::of(ctx);
   ctx.future_action(move |(root, change): (PathBuf, Change)| {
     // The save reads the settings again after writing them, for the tab.
     tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
-    let runners = services.runners.clone();
+    let (runners, changes) = (services.runners.clone(), services.changes.clone());
     async move {
       background::run(move || {
         let outside = match &change {
@@ -90,8 +102,11 @@ pub fn action(ctx: &mut Ctx) -> Save {
           }
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
         }
+        // Right after the write, whether or not the tab is still there to take the save: every screen that
+        // shows the change reads it again.
+        let counts = changes.record(project, outside);
         project_settings::load_in(&root)
-          .map(|settings| Saved(settings, outside))
+          .map(|settings| Saved(settings, counts))
           .map_err(|e| messages::store_error(&e))
       })
       .await?
@@ -104,6 +119,10 @@ pub fn action(ctx: &mut Ctx) -> Save {
 pub struct OwnSaves {
   read: Arc<Mutex<Option<Settings>>>,
   changes: OwnChanges,
+  /// How many of the tab's saves run now.
+  saving: Signal<u32>,
+  /// The count the tab last read at, which holds while a save of its own runs.
+  last: Arc<Mutex<u64>>,
 }
 
 impl OwnSaves {
@@ -111,12 +130,42 @@ impl OwnSaves {
     Self {
       read: Arc::default(),
       changes: OwnChanges::new(ctx, kinds),
+      saving: ctx.signal(0),
+      last: Arc::default(),
     }
   }
 
-  /// How often the kinds the tab shows changed. Reading it in a render renders again when it moves.
+  /// Follows a save of the tab's as it runs (`pending`) and ends; `begun` is that save's own mark.
+  pub fn saving(&self, pending: bool, begun: &AtomicBool) {
+    if pending != begun.swap(pending, Ordering::Relaxed) {
+      self.saving.update(|saving| {
+        *saving = if pending { *saving + 1 } else { saving.saturating_sub(1) };
+      });
+    }
+  }
+
+  /// How often the kinds the tab shows changed. Reading it in a render renders again when it moves. While a save of
+  /// the tab's runs, it holds: the save records its change before the tab takes it, and a change counted
+  /// meanwhile is read once the save ended. Once a change was counted after the tab's own save, what that save
+  /// read is not taken: the tab reads the settings again.
   pub fn count(&self, feed: &ProjectFeed) -> u64 {
-    self.changes.count(feed)
+    let count = self.changes.count(feed);
+    if self.saving.get() > 0 {
+      return *self.last.lock();
+    }
+    if self.changes.newer(feed) {
+      self.read.lock().take();
+    }
+    *self.last.lock() = count;
+    count
+  }
+
+  /// Takes a save of the tab's own: the tab's next read is what the save read, and the change the save recorded
+  /// is seen, so neither the tab's revision nor the feed catching up reads the settings again. A change made
+  /// after the save recorded its own still reads them again.
+  pub fn took(&self, saved: &Saved) {
+    self.changes.saw(saved.1);
+    *self.read.lock() = Some(saved.0.clone());
   }
 }
 
@@ -152,8 +201,9 @@ pub fn follow(
   (revision, stored, own): (Signal<u64>, Signal<Option<Read>>, OwnSaves),
 ) {
   let project = ctx.props::<TabProps>().project.clone();
-  let changes = Services::of(ctx).changes;
+  let begun = AtomicBool::new(false);
   ctx.watch(&save.state(), move |state| {
+    own.saving(state.is_pending(), &begun);
     if state.is_pending() {
       status.set(Status::Saving);
       return;
@@ -164,10 +214,7 @@ pub fn follow(
     } else if let Some(saved) = &state.data {
       stored.set(Some(Read(saved.0.clone(), u64::MAX)));
       status.set(Status::Saved);
-      // Every other screen that shows the change reads it again; the tab takes what the save read, in the
-      // same render, so neither its revision nor the feed catching up reads the settings again.
-      own.changes.record(&changes, project.open.project.id(), saved.1);
-      *own.read.lock() = Some(saved.0.clone());
+      own.took(saved);
       revision.update(|r| *r += 1);
       project.feed.saved();
     }

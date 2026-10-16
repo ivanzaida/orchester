@@ -30,11 +30,24 @@ impl OwnChanges {
     self.of(feed.outside.get()).max(self.seen.get())
   }
 
+  /// Whether the feed counted a change after the screen's own last one.
+  pub fn newer(&self, feed: &ProjectFeed) -> bool {
+    self.of(feed.outside.get()) > self.seen.get()
+  }
+
   /// Records the screen's own change of `kind` in `project`, which the screen reads again itself in the same
   /// render: when the feed catches up with it, [`Self::count`] stays where it is.
   pub fn record(&self, changes: &OutsideChanges, project: ProjectId, kind: Outside) {
-    changes.record(project, kind);
-    self.seen.set(self.of(changes.counts(project)));
+    self.saw(changes.record(project, kind));
+  }
+
+  /// Takes `counts`, the project's counts right after the screen's own change was recorded, as seen: the feed
+  /// reaching them reads nothing again, a change counted after them does.
+  pub fn saw(&self, counts: OutsideCounts) {
+    let seen = self.of(counts);
+    if seen > self.seen.get_untracked() {
+      self.seen.set(seen);
+    }
   }
 
   fn of(&self, counts: OutsideCounts) -> u64 {

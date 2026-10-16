@@ -244,7 +244,9 @@ fn start(
     programs: services.programs.clone(),
     activity: services.activity.clone(),
     separator,
-    changed: Arc::new(move || changes.record(project, Outside::Tasks)),
+    changed: Arc::new(move || {
+      changes.record(project, Outside::Tasks);
+    }),
   };
   let job = jobs.of(run.id());
   let started = match expected {

@@ -66,7 +66,7 @@ impl Component for CodeIndex {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
-      save: work::action(ctx),
+      save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       rebuild: rebuild_action(ctx),
       stored: ctx.signal(None),
       revision: ctx.signal(0),

@@ -36,7 +36,7 @@ impl Component for General {
   type Props = TabProps;
   fn create(ctx: &mut Ctx) -> Self {
     let tab = Self {
-      save: work::action(ctx),
+      save: work::action(ctx, ctx.props::<TabProps>().project.open.project.id()),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
       own: work::OwnSaves::new(
@@ -78,6 +78,7 @@ impl Component for General {
         settings: settings.clone(),
         parent_read: self.stored.clone(),
         refresh: self.revision.clone(),
+        own: self.own.clone(),
       },
     );
     page::scroll(
