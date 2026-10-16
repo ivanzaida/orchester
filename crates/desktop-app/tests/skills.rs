@@ -24,10 +24,10 @@ impl Skills {
   fn new() -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/skills");
     fs::create_dir_all(&scratch).expect("private Skills fixture folder");
-    let data = support::Data {
-      dir: tempfile::tempdir_in(scratch).expect("private Skills fixture"),
-      runtime: tokio::runtime::Runtime::new().expect("tokio runtime"),
-    };
+    let data = support::Data::at(
+      tempfile::tempdir_in(scratch).expect("private Skills fixture"),
+      tokio::runtime::Runtime::new().expect("tokio runtime"),
+    );
     let launch = data.launch();
     data.add_kontur(launch.workspace().expect("the session started"));
     let window = Window::of(data, launch);

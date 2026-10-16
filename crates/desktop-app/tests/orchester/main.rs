@@ -8,8 +8,6 @@
 //! `cargo test -p orchester-app --test orchester orchester_`
 
 mod accepting;
-#[path = "../../../workspace/tests/sharing_support/account_cloud.rs"]
-mod account_cloud;
 mod clipboard;
 mod design;
 mod harness;
@@ -19,7 +17,7 @@ mod server_support;
 #[path = "../support/mod.rs"]
 mod support;
 
-use account_cloud::{AccountCloud, EMAIL, PASSWORD};
+use support::signed_in::account_cloud::{self, AccountCloud, EMAIL, PASSWORD};
 use harness::{Recorder, administrative, block_on, go, press, shows, window};
 use orchester_api::{
   CodeJoin, Credential,
@@ -36,14 +34,12 @@ const BILLING_REMOTE: &str = "https://github.com/acme/billing.git";
 #[test]
 fn orchester_web_links_open_the_clouds_pages() {
   let mut window = window(None);
-  go(
-    &mut window,
-    Route::Orchester(OrchesterView::default()),
-    "orchester-sign-in-form",
-  );
-  press(&mut window, "orchester-create-account");
-  press(&mut window, "orchester-forgot");
-  shows(&mut window, "orchester-opened");
+  let services = window.launch.services().expect("services").clone();
+  // Back to the build's own cloud, which signs out: the gate holds its sign-in and its pages.
+  block_on(&window, services.cloud.set_address(None)).expect("the build's cloud");
+  shows(&mut window, "gate-create-account");
+  press(&mut window, "gate-create-account");
+  press(&mut window, "gate-forgot");
   let links = window.launch.services().expect("services").links.recorded();
   assert_eq!(
     links,
@@ -70,20 +66,17 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
   let cloud_address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  // Another cloud signs out: the sign-in is the gate's, a person's.
   block_on(&window, services.cloud.set_address(Some(cloud_address))).expect("a test cloud");
-  go(
-    &mut window,
-    Route::Orchester(OrchesterView::default()),
-    "orchester-sign-in-form",
-  );
-  window.set("orchester-sign-in-email", EMAIL);
-  window.set("orchester-sign-in-password", "not the password");
-  press(&mut window, "orchester-sign-in");
-  shows(&mut window, "orchester-sign-in-wrong");
-  window.set("orchester-sign-in-password", PASSWORD);
-  press(&mut window, "orchester-sign-in");
+  shows(&mut window, "gate-email");
+  window.set("gate-email", EMAIL);
+  window.set("gate-password", "not the password");
+  press(&mut window, "gate-sign-in");
+  shows(&mut window, "gate-wrong");
+  window.set("gate-password", PASSWORD);
+  press(&mut window, "gate-sign-in");
   let accept = format!("orchester-invite-{invite}-accept");
-  shows(&mut window, &accept);
+  go(&mut window, Route::Orchester(OrchesterView::default()), &accept);
   assert!(window.text("orchester-row-cloud").contains("1 invite waiting"));
   invite_notice(&mut window, &invite);
   go(&mut window, Route::Orchester(OrchesterView::default()), &accept);

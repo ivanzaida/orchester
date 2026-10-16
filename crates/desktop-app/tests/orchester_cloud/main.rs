@@ -63,16 +63,17 @@ fn signed_in(cloud: &RealCloud) -> support::Window {
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();
   let address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  // Another cloud signs out: Bohdan signs in at the gate, as a person.
   block_on(&window, services.cloud.set_address(Some(address))).expect("the test cloud");
+  shows(&mut window, "gate-email");
+  window.set("gate-email", BOHDAN);
+  window.set("gate-password", PASSWORD);
+  press(&mut window, "gate-sign-in");
   go(
     &mut window,
     Route::Orchester(OrchesterView::default()),
-    "orchester-sign-in-form",
+    "orchester-cloud-details",
   );
-  window.set("orchester-sign-in-email", BOHDAN);
-  window.set("orchester-sign-in-password", PASSWORD);
-  press(&mut window, "orchester-sign-in");
-  shows(&mut window, "orchester-cloud-details");
   window
 }
 

@@ -16,6 +16,8 @@ mod kontur;
 
 mod data;
 mod host;
+#[path = "../../tests/support/signed_in.rs"]
+mod signed_in;
 
 use std::{
   env,
@@ -34,7 +36,6 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{RootProps, Start},
   routes::{Route, RouteFolder},
-  startup::Launch,
   theme::{self, Mode},
   ui::loader,
 };
@@ -190,7 +191,9 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
     .and_then(Path::parent)
     .ok_or("the example's folder is in the target folder")?
     .join(format!("orchester-runner{}", env::consts::EXE_SUFFIX));
-  let launch = Launch::begin_at(&database, runner, runtime.handle(), None);
+  // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
+  let cloud = signed_in::account_cloud::AccountCloud::start();
+  let launch = signed_in::launch(&database, runner, runtime.handle(), &cloud);
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
   prepare(state, &workspace, &database)?;
   let route = match state {

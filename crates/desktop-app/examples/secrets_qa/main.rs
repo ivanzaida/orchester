@@ -3,6 +3,8 @@
 //! The example-only qa_secrets MCP tool controls actual vault delay/failure and masked fixture input.
 //! The same Root, screen, workspace actions, MCP privacy and person-only gates as the app are used.
 mod fixtures;
+#[path = "../../tests/support/signed_in.rs"]
+mod signed_in;
 mod tools;
 mod vault;
 
@@ -45,6 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     runtime.handle().clone(),
     Vault::with(vault.clone()),
   );
+  // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
+  let cloud = signed_in::account_cloud::AccountCloud::start();
+  signed_in::sign_in(&services, runtime.handle(), &cloud);
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());

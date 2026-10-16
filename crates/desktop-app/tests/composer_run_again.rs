@@ -17,7 +17,6 @@ use std::{
 use lurq::app::events::MouseButton;
 use orchester_app::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  startup::Launch,
   ui::icon::Icon,
 };
 use orchester_core::{
@@ -109,7 +108,7 @@ fn composer_run_again_of_a_task_changed_since_the_page_read_it_keeps_the_message
     now: Timestamp::now(),
   })
   .expect("the scenario seeds");
-  let launch = Launch::begin_at(&data.database(), runner, data.runtime.handle(), None);
+  let launch = data.launch_with(runner);
   let mut window = Window::of(data, launch);
   let seeded_task = seeded.tasks.iter().find(|task| task.title == TITLE).expect("the task");
   let key: orchester_core::project::TaskKey = seeded_task.key.parse().expect("a task key");

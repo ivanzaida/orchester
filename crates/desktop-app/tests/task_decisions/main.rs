@@ -58,10 +58,7 @@ impl Page {
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
     prepare(dir.path(), Some(&seeded.repo));
-    let data = Data {
-      dir,
-      runtime: Runtime::new().expect("tokio runtime"),
-    };
+    let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
     let launch = data.launch();
     let window = Window::of(data, launch);
     let tasks = seeded.tasks.into_iter().map(|task| (task.key, task.state)).collect();
