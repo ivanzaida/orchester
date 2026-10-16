@@ -76,29 +76,31 @@ fn three_series() -> UsageQuery {
 }
 
 #[test]
-fn usage_accounts_narrow_table_columns_fit_their_dates_and_headings() {
+fn usage_accounts_narrow_table_shows_every_heading_and_cell_whole() {
   let mut page = Seeded::usage("usage", three_series());
   page.click("usage-tokens-view-table");
   assert!(!page.shows("usage-limits-row"), "three series stay beside Plan limits");
   let width = |page: &mut Seeded, cell: usize| page.bounds(&format!("usage-tokens-table-row-0-cell-{cell}")).2;
-  for series in 1..=3 {
+  for (cell, expected) in [(1, 84.0), (2, 84.0), (3, 84.0), (4, 84.0), (5, 36.0)] {
     assert!(
-      (width(&mut page, series) - 84.0).abs() < 0.5,
-      "series columns are 84 (d3lc3)"
+      (width(&mut page, cell) - expected).abs() < 0.5,
+      "column {cell} is {expected} (d3lc3)"
     );
   }
-  assert!(
-    (width(&mut page, 4) - 84.0).abs() < 0.5,
-    "SPENT is 84 beside Plan limits, not the wide 110"
-  );
-  assert!((width(&mut page, 5) - 36.0).abs() < 0.5, "RUNS is 36");
-  assert!(
-    width(&mut page, 0) >= 72.0,
-    "DAY keeps room for Wed, Oct 14: {}",
-    width(&mut page, 0)
-  );
   let header = page.text("usage-tokens-table-header");
   assert!(header.contains("NO ACCOUNT"), "{header}");
+  assert_headings_fit(&mut page, "usage-tokens-table", 6);
+  let mut row = 0;
+  while page.shows(&format!("usage-tokens-table-row-{row}")) {
+    for cell in 0..6 {
+      assert_whole(&mut page, &format!("usage-tokens-table-row-{row}-cell-{cell}"));
+    }
+    row += 1;
+  }
+  assert!(row >= 7, "a week's rows");
+  for cell in 0..6 {
+    assert_whole(&mut page, &format!("usage-tokens-table-total-cell-{cell}"));
+  }
   let footnote = page.text("usage-tokens-footnote");
   assert!(
     footnote.starts_with("Exact counts as the CLIs reported them. Today counts up to "),
@@ -122,10 +124,84 @@ fn usage_accounts_readings_from_yesterday_keep_their_window_whole() {
   let width = |page: &mut Seeded, cell: usize| page.bounds(&format!("usage-limits-table-row-0-cell-{cell}")).2;
   assert!(
     (width(&mut page, 0) - 96.0).abs() < 0.5,
-    "REPORTED fits yesterday 19:17 and no more"
+    "REPORTED fits yesterday 19:17"
   );
   assert!(
     (width(&mut page, 1) - 140.0).abs() < 0.5,
     "WINDOW keeps the design's 140 for Codex · Default · weekly"
+  );
+  assert_readings_whole(&mut page);
+}
+
+#[test]
+fn usage_accounts_resets_on_a_two_digit_day_stay_whole() {
+  // Oct 8, 2026 at noon UTC: Codex's weekly window resets on Oct 12 and Claude's on Oct 10.
+  let now = Timestamp::from_unix_millis(1_791_460_800_000);
+  let today = local_date(now);
+  let first = today - chrono::Days::new(6);
+  let query = UsageQuery {
+    period: Period::Custom(DayRange::new(first, today).expect("a week")),
+    ..UsageQuery::default()
+  };
+  let mut page = Seeded::usage_at("usage", now, query);
+  page.click("usage-limits-view-table");
+  let width = page.bounds("usage-limits-table-row-0-cell-3").2;
+  assert!((width - 84.0).abs() < 0.5, "RESETS is 84: {width}");
+  let mut resets = Vec::new();
+  let mut row = 0;
+  while page.shows(&format!("usage-limits-table-row-{row}")) {
+    resets.push(page.text(&format!("usage-limits-table-row-{row}-cell-3")));
+    row += 1;
+  }
+  assert!(
+    resets
+      .iter()
+      .any(|reset| reset.starts_with("Oct 1") && reset.contains(", ")),
+    "a reset on a two-digit day: {resets:?}"
+  );
+  assert_readings_whole(&mut page);
+}
+
+/// Every heading of `table` lies inside its cell, so nothing cuts it, and its cell ends where the column's
+/// cells do.
+fn assert_headings_fit(page: &mut Seeded, table: &str, columns: usize) {
+  for index in 0..columns {
+    let heading = format!("{table}-heading-{index}");
+    let cell = page.bounds(&heading);
+    let words = page.bounds(&format!("{heading}-words"));
+    assert!(
+      words.0 >= cell.0 - 0.5 && words.0 + words.2 <= cell.0 + cell.2 + 0.5,
+      "{heading} ({}) {words:?} runs out of its cell {cell:?}",
+      page.text(&heading)
+    );
+    let data = page.bounds(&format!("{table}-row-0-cell-{index}"));
+    assert!(
+      (cell.0 + cell.2 - data.0 - data.2).abs() < 0.5,
+      "{heading} ends where its column does: {cell:?} over {data:?}"
+    );
+  }
+}
+
+/// Every reading's cells whole, and the headings over them.
+fn assert_readings_whole(page: &mut Seeded) {
+  assert_headings_fit(page, "usage-limits-table", 5);
+  let mut row = 0;
+  while page.shows(&format!("usage-limits-table-row-{row}")) {
+    for cell in 0..4 {
+      assert_whole(page, &format!("usage-limits-table-row-{row}-cell-{cell}"));
+    }
+    row += 1;
+  }
+  assert!(row > 0, "readings");
+}
+
+/// The text in `cell` is whole: one cut with an ellipsis is as wide as its cell.
+fn assert_whole(page: &mut Seeded, cell: &str) {
+  let text = page.bounds(&format!("{cell}-text")).2;
+  let room = page.bounds(cell).2;
+  assert!(
+    text < room - 0.01,
+    "{cell} ({}) is cut: {text} of {room}",
+    page.text(cell)
   );
 }

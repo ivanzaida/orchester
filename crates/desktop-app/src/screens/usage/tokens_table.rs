@@ -75,7 +75,7 @@ pub fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Eleme
   // A run can report in several hours or days, so the total is the period's, not the rows' sum.
   total.push(Cell::Strong(dashboard.report.summary.runs.to_string().into()));
   rows.push(total_row("usage-tokens-table-total", &columns, total).into());
-  table("usage-tokens-table", &columns, Density::Data, rows)
+  table(ctx, "usage-tokens-table", &columns, Density::Data, rows)
 }
 
 /// What the table's figures are, and how far today counts when the range has it.

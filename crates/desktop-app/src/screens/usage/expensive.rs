@@ -202,7 +202,7 @@ fn tasks(ctx: &mut Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> El
       task_row(ctx, (&columns, index), (project, pipeline, task), opener)
     })
     .collect();
-  table("usage-expensive-tasks", &columns, Density::List, rows)
+  table(ctx, "usage-expensive-tasks", &columns, Density::List, rows)
 }
 
 fn task_row(
@@ -255,7 +255,7 @@ fn runs(ctx: &mut Ctx, dashboard: &Dashboard, opener: &Opener, all: bool) -> Ele
       run_row(ctx, (&columns, index), (project, pipeline, run), opener)
     })
     .collect();
-  table("usage-expensive-runs", &columns, Density::List, rows)
+  table(ctx, "usage-expensive-runs", &columns, Density::List, rows)
 }
 
 fn run_row(

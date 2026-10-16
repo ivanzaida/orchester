@@ -324,5 +324,5 @@ fn breakdown_table(
       row(&row_id, &columns, Density::Data, cells).into()
     })
     .collect();
-  table(&id, &columns, Density::Data, rows)
+  table(ctx, &id, &columns, Density::Data, rows)
 }

@@ -7,7 +7,10 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  },
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -105,7 +108,8 @@ impl Density {
 }
 
 /// The table `id`: its headings over `rows`.
-pub fn table(id: &str, columns: &[TableColumn], density: Density, rows: Vec<Element>) -> Element {
+pub fn table(ctx: &Ctx, id: &str, columns: &[TableColumn], density: Density, rows: Vec<Element>) -> Element {
+  let gap = (density.gap(), ctx.theme().spacing_value(density.gap()).to_px());
   // Headings with a line over them make the header taller; every heading then sits on its bottom.
   let tall = columns.iter().any(|column| column.over.is_some());
   let headings = Row::new()
@@ -117,10 +121,14 @@ pub fn table(id: &str, columns: &[TableColumn], density: Density, rows: Vec<Elem
     } else {
       Padding::new()
     })
-    .spacing(density.gap())
     .align_items(if tall { Alignment::End } else { Alignment::Center })
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(columns.iter().map(heading));
+    .with_children(
+      columns
+        .iter()
+        .enumerate()
+        .map(|(index, column)| heading(&format!("{id}-heading-{index}"), column, (index > 0).then_some(gap))),
+    );
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -129,24 +137,27 @@ pub fn table(id: &str, columns: &[TableColumn], density: Density, rows: Vec<Elem
     .into()
 }
 
-/// A column's heading: its swatch and words, with the line over them where it has one.
-fn heading(column: &TableColumn) -> Element {
+/// A column's heading `id`: its swatch and words `{id}-words`, with the line over them where it has one; its
+/// cell takes the `gap` before its column too.
+fn heading(id: &str, column: &TableColumn, gap: Option<(SpacingSize, f32)>) -> Element {
+  let whole = column.swatch.is_some();
   // A series' heading is shown whole, past its column's room if it must (*2 ACCOUNTS*, *NO ACCOUNT* in
   // `FdC7Y`); other headings give way with an ellipsis.
   let text = Text::new(&column.heading).variant(UsageText::ColumnHeading.role());
-  let text = if column.swatch.is_some() {
+  let text = if whole {
     text.nowrap().flex_shrink(0.0).into()
   } else {
     fit(text)
   };
   let words = Row::new()
+    .id(format!("{id}-words"))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .flex_shrink(0.0)
+    .flex_shrink(if whole { 0.0 } else { 1.0 })
+    .min_width(Dimension::Px(0.0))
     .with_children(column.swatch.map(series_swatch))
     .child(text);
   let justify = if column.figures { Justify::End } else { Justify::Start };
-  // A heading wider than its column runs past its start, as a figure column's does (`NO ACCOUNT` `pmUhB`).
   let line = |child: Element| Row::new().width(Dimension::Pct(100.0)).justify(justify).child(child);
   let cell = Column::new()
     .spacing(ExtraSpacing::Fine.role())
@@ -157,7 +168,7 @@ fn heading(column: &TableColumn) -> Element {
         .map(|over| line(Text::new(over).variant(UsageText::ColumnOver.role()).nowrap().into())),
     )
     .child(line(words.into()));
-  sized_column(cell, column)
+  sized_column(cell.id(id.to_owned()), column, gap)
 }
 
 /// Row `id` of `cells` under `columns`; its cells are `{id}-cell-{column}`.
@@ -178,8 +189,11 @@ fn bare_row(id: &str, columns: &[TableColumn], density: Density, cells: Vec<Cell
     .spacing(density.gap())
     .align_items(Alignment::Center)
     .with_children(columns.iter().zip(cells).enumerate().map(|(index, (column, cell))| {
+      let cell_id = format!("{id}-cell-{index}");
       sized(
-        Row::new().id(format!("{id}-cell-{index}")).child(content(column, cell)),
+        Row::new()
+          .child(content(&format!("{cell_id}-text"), column, cell))
+          .id(cell_id),
         column,
       )
     }))
@@ -194,8 +208,9 @@ pub fn opening(row: Row, open: impl Fn() + Send + Sync + 'static) -> Element {
     .into()
 }
 
-fn content(column: &TableColumn, cell: Cell) -> Element {
-  let text = |words: &Arc<str>| Text::new(words);
+/// A cell's content; its text is `id`.
+fn content(id: &str, column: &TableColumn, cell: Cell) -> Element {
+  let text = |words: &Arc<str>| Text::new(words).id(id.to_owned());
   match cell {
     Cell::Text(words) if column.figures => fit(text(&words).variant(TypographyStyle::Mono)),
     Cell::Text(words) => fit(
@@ -225,12 +240,21 @@ pub fn fit(text: Text) -> Element {
     .into()
 }
 
-/// A heading's cell, as wide as its column.
-fn sized_column(cell: Column, column: &TableColumn) -> Element {
+/// A heading's cell: its column and the `gap` before it. Every box clips what runs past it, so a fixed figure
+/// column's heading takes the gap as room (*NO ACCOUNT* over an 84 column in `d3lc3`); other headings keep
+/// it as padding and start where their column does.
+fn sized_column(cell: Column, column: &TableColumn, gap: Option<(SpacingSize, f32)>) -> Element {
   let cell = cell.min_width(Dimension::Px(0.0));
+  let room = matches!(column.width, Width::Px(_)) && column.figures;
+  let cell = match gap {
+    Some((role, _)) if !room => cell.padding(Padding::new().left(role)),
+    _ => cell,
+  };
   match column.width {
     Width::Flex(share) => cell.flex_full(share, 1.0, Some(0.0)),
-    Width::Px(width) => cell.width(Dimension::Px(width)).flex_shrink(0.0),
+    Width::Px(width) => cell
+      .width(Dimension::Px(width + gap.map_or(0.0, |(_, px)| px)))
+      .flex_shrink(0.0),
   }
   .into()
 }

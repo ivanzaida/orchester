@@ -183,7 +183,7 @@ fn cache_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     Cell::Strong(words::share(ctx, dashboard.report.summary.cache_share())),
   ];
   rows.push(total_row("usage-cache-table-total", &columns, total).into());
-  table("usage-cache-table", &columns, Density::Data, rows)
+  table(ctx, "usage-cache-table", &columns, Density::Data, rows)
 }
 
 fn edits(ctx: &mut Ctx, dashboard: &Dashboard, views: &Signal<Views>) -> Element {
@@ -302,5 +302,5 @@ fn edits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     row(&format!("usage-edits-table-{id}"), &columns, Density::Data, cells).into()
   })
   .collect();
-  table("usage-edits-table", &columns, Density::Data, rows)
+  table(ctx, "usage-edits-table", &columns, Density::Data, rows)
 }

@@ -25,13 +25,18 @@ impl Seeded {
   /// `scenario` seeded into a new data folder, changed by `prepare` in its repository, and its window, its
   /// reads held while `held`.
   pub fn prepared(scenario: &str, held: bool, prepare: impl FnOnce(&Path)) -> Self {
+    Self::prepared_at(scenario, Timestamp::now(), held, prepare)
+  }
+
+  /// `prepared`, with the scenario seeded as if it were `now`.
+  pub fn prepared_at(scenario: &str, now: Timestamp, held: bool, prepare: impl FnOnce(&Path)) -> Self {
     let data = Data::new();
     let request = SeedRequest {
       data_dir: data.dir.path().to_path_buf(),
       repo: data.dir.path().join(format!("repo-{scenario}")),
       scenario: scenarios::named(scenario).expect("a known scenario"),
       fake_codex: None,
-      now: Timestamp::now(),
+      now,
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
     prepare(&seeded.repo);
@@ -47,7 +52,12 @@ impl Seeded {
 
   /// `scenario`'s Usage page on `query`, once it has read the usage.
   pub fn usage(scenario: &str, query: UsageQuery) -> Self {
-    let mut seeded = Self::prepared(scenario, false, |_| {});
+    Self::usage_at(scenario, Timestamp::now(), query)
+  }
+
+  /// `usage`, with the scenario seeded as if it were `now`.
+  pub fn usage_at(scenario: &str, now: Timestamp, query: UsageQuery) -> Self {
+    let mut seeded = Self::prepared_at(scenario, now, false, |_| {});
     seeded.go(query);
     seeded.until("the usage", |seeded| {
       seeded.shows("usage-tokens-chart") || seeded.shows("usage-no-runs") || seeded.shows("usage-unmatched")
