@@ -22,7 +22,7 @@ use serde_json::{Value, json};
 
 use super::{
   project::{Variable, environment},
-  project_tools::{tool_json, tool_named},
+  project_tools::{tool_json, tool_named, tools_with_revision},
   tool_program::found_program,
   widening,
 };
@@ -31,7 +31,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
-  drafts::save_draft_in,
+  drafts::save_draft_expecting_in,
   messages::{self, Message},
   tools::{
     data::{ProjectTools, ToolEntry, create_tool},
@@ -67,6 +67,9 @@ pub struct SaveToolDraft {
   pub environment: Option<Vec<Variable>>,
   /// How much of its output the run keeps, in KiB (1 up to 16384); a new tool's default is 256.
   pub output_limit_kib: Option<u32>,
+  /// The tool's `revision` as get_tool or the last save returned it: the draft is saved only while it is
+  /// unchanged, else refused as draft_changed. Left out, the save goes over a change saved meanwhile.
+  pub expected_revision: Option<String>,
 }
 
 pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result<Value, ToolError> {
@@ -84,7 +87,16 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
     let (id, saved) = match existing {
       Some(entry) => {
         let tool = changed_tool(&services, &args, entry, (&project, &open.repo_root))?;
-        (entry.id, save_draft_in(&open.repo_root, entry.id, tool)?)
+        let expected = args.expected_revision.as_deref();
+        (
+          entry.id,
+          save_draft_expecting_in(&open.repo_root, entry.id, tool, expected)?,
+        )
+      }
+      None if args.expected_revision.is_some() => {
+        return Err(ToolError::InvalidArguments(
+          "expected_revision names a tool's draft; a new tool has none".into(),
+        ));
       }
       None => {
         let action = command(&args, None, &project, &open.repo_root)?;
@@ -97,7 +109,7 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
         )
       }
     };
-    let tools = ProjectTools::load_in(&open.repo_root)?;
+    let (tools, revision) = tools_with_revision(&open.repo_root, id)?;
     let entry = tools
       .tool(id)
       .ok_or_else(|| ToolError::not_found(Missing::Tool, id.to_string()))?;
@@ -106,6 +118,7 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
       .record(open.project.id(), crate::tasks::outside::Outside::Tools);
     let mut value = tool_json(&tools, entry, open.project.id());
     value["draft_kept"] = json!(saved == DraftSaved::Stored);
+    value["revision"] = json!(revision);
     Ok(json!({ "tool": value }))
   })
   .await

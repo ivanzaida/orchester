@@ -16,7 +16,7 @@ use orchester_store::ProjectDb;
 use orchester_workspace::tasks::{
   data::{ProjectTasks, SaveTarget, pinned_pipeline, published_pipelines},
   list::PipelineLabel,
-  run::queue_in,
+  run::{QueueFailure, queue_in},
 };
 
 use super::{now, project_db};
@@ -180,6 +180,57 @@ fn replaying_a_queued_batch_returns_the_original_pin_after_republish() {
   assert_eq!(replay.task.pipeline_version(), Some(v1.number()));
   assert_eq!(replay.pipeline.version, v1.number());
   assert_eq!(&*replay.pipeline.steps[0].name, "Research");
+}
+
+#[test]
+fn create_and_run_on_a_pipeline_published_again_since_its_version_was_chosen_saves_nothing() {
+  let (repo, mut db) = project_db();
+  let pipeline = Pipeline::new(vec![research_step()]).expect("pipeline");
+  let id = db
+    .create_resource(
+      Slug::new("delivery").expect("slug"),
+      Name::new("Delivery").expect("name"),
+      &pipeline,
+      now(),
+    )
+    .expect("create pipeline")
+    .id();
+  // The form shows version 1; version 2 is published before Create & run is pressed.
+  let shown = db.publish_draft::<Pipeline>(id, now()).expect("publish v1");
+  let mut draft = shown.to_draft(now());
+  let mut changed = pipeline.steps().to_vec();
+  changed[0].name = Name::new("Research updated").expect("name");
+  draft.edit(Pipeline::new(changed).expect("pipeline"), now());
+  db.save_draft(id, &draft).expect("save draft");
+  db.publish_draft::<Pipeline>(id, now()).expect("publish v2");
+  drop(db);
+  let details = TaskDetails {
+    title: Name::new("Build feature").expect("title"),
+    brief: "Complete the requested feature.".into(),
+    acceptance_criteria: vec!["It works.".into()],
+    pipeline: Some(id),
+    limits: TaskLimits::new(None, None).expect("no limits"),
+  };
+  let batch = IdempotencyKey::generate();
+
+  let (_data, servers) = servers();
+  let refused = queue_in(repo.path(), &servers, SaveTarget::New(batch), details, shown.number()).err();
+  let messages = refused.as_ref().map(QueueFailure::messages).unwrap_or_default();
+  assert!(
+    matches!(
+      refused,
+      Some(QueueFailure::PipelineChanged { chosen, latest }) if chosen.get() == 1 && latest.get() == 2
+    ),
+    "{refused:?}"
+  );
+  assert_eq!(messages[0].key, "tasks.new.pipelineChanged");
+  // Worded for every caller: the form chose what it showed, the task page and the tools what they read.
+  assert_eq!(
+    messages[0].args,
+    [("chosen", "1".to_owned()), ("latest", "2".to_owned())]
+  );
+  let db = ProjectDb::open(repo.path()).expect("open");
+  assert!(db.task_by_batch(batch).expect("read").is_none(), "nothing was saved");
 }
 
 #[test]

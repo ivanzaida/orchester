@@ -19,13 +19,14 @@ use orchester_core::{
   id::{IdempotencyKey, MessageId, RunId, TaskId},
   project::TaskKey,
   run::Answerer,
+  sharing::TaskRevision,
 };
 use orchester_workspace::{
   background,
   messages::{self, Message},
   tasks::conversation::{
     composer::ComposerMode,
-    follow::{RunnerOf, Sent, Stored, follow, tell},
+    follow::{RunnerOf, Sent, Stored, follow_seen, tell},
     outgoing::{Action, Context, Way, plan_changes, prepare_in, store_in},
     send_after_turn_in,
   },
@@ -48,6 +49,7 @@ pub(super) struct Request {
   pub(super) project: OpenProject,
   pub(super) task: TaskId,
   pub(super) written_for: Option<RunId>,
+  pub(super) revision: TaskRevision,
   pub(super) reading: (bool, Option<Context>),
   pub(super) way: Way,
   pub(super) expected: Action,
@@ -360,7 +362,8 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     &services.servers,
     RunnerOf::Project(&request.project),
   );
-  let sent = follow(runner, &stored, then).await;
+  // On the task as the page showed it: Run again refuses one changed since.
+  let sent = follow_seen(runner, &stored, (then, Some(request.revision))).await;
   Ok(Outcome::Message {
     id,
     sent,

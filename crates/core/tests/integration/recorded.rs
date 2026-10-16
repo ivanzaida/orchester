@@ -9,7 +9,7 @@ use orchester_core::{
   id::{RunId, TaskId},
   integration::{
     CleanupError, FolderListing, KeepReason, RecordedCleanupError, RemovalStart, WorktreeOwner, clean_up_recorded,
-    leftovers,
+    clean_up_recorded_as_seen, leftovers,
   },
   store::WorktreeStore,
   time::Timestamp,
@@ -270,4 +270,24 @@ fn recorded_clean_up_takes_the_record_back_when_git_cannot_run() {
     store.recorded, None,
     "nothing was touched: the run can continue as before"
   );
+}
+
+#[test]
+fn recorded_clean_up_of_a_run_changed_by_the_time_its_removal_is_recorded_removes_nothing() {
+  let (repo, run) = repo_with_leftovers(Ending::Interrupted);
+  let mut store = Removals::default();
+  let refused = clean_up_recorded_as_seen(
+    &mut store,
+    (&Processes, &git_program(), &repo.root),
+    &run,
+    None,
+    (now(), |store: &Removals| {
+      // Asked once the removal is recorded: the run can no longer continue and change after the answer.
+      assert!(store.recorded.is_some(), "read under the record");
+      Ok(false)
+    }),
+  );
+  assert!(matches!(refused, Err(RecordedCleanupError::RunChanged)), "{refused:?}");
+  assert!(own(&repo.root, run.id()).is_dir(), "nothing was removed");
+  assert_eq!(store.recorded, None, "the record is taken back");
 }

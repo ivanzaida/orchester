@@ -26,7 +26,7 @@ pub use self::{
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   merge::{MergeError, MergeKind, RunMerge, merge_run, merge_run_at},
   merged::{Branches, Delivered, RunWork},
-  recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded},
+  recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen},
 };
 use crate::{
   command::{CommandError, CommandRunner},

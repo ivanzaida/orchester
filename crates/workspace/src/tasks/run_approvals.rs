@@ -11,17 +11,48 @@ use orchester_core::{
   id::RunId,
   resource::{AgentProfile, ModelId},
   run::{
-    ApprovalRule, ApprovalRuleId, Run, StepExecutor, auto_approves,
+    ApprovalRule, ApprovalRuleId, Run, StepExecutor, TaskPhase, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
-  store::{ConnectionStore, ResourceStore},
+  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
+  task::Task,
   time::Timestamp,
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
 
+use super::detail::run_store_error;
+
 /// Whether `run` auto-approves now.
 pub fn auto_approving(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
   Ok(auto_approves(db.run_auto_approve(run.id())?, profile_approves(db, run)))
+}
+
+/// Whether `latest`, the latest run of `task`, is active and auto-approves: a run the status bar counts as
+/// auto-approving, which its *Stop* stops.
+pub fn counts_as_auto_approving(db: &ProjectDb, task: &Task, latest: &Run) -> Result<bool, StoreError> {
+  Ok(TaskPhase::of(task, Some(latest), None).is_active() && auto_approving(db, latest)?)
+}
+
+/// Stops every run of the project at `repo_root` that auto-approves now ([`counts_as_auto_approving`]), read
+/// when it writes, in the transaction that writes: a run that began auto-approving after the status bar was read
+/// stops too, and none begins between the reading and the write. The runs it stopped.
+pub fn stop_auto_approving_in(repo_root: &Path) -> Result<Vec<RunId>, StoreError> {
+  ProjectDb::open(repo_root)?.stop_auto_approving(&auto_approving_runs)
+}
+
+/// The latest run of each task of `db` that counts as auto-approving ([`counts_as_auto_approving`]).
+fn auto_approving_runs(db: &ProjectDb) -> Result<Vec<RunId>, StoreError> {
+  let mut runs = Vec::new();
+  for task in db.tasks()? {
+    let listed = db.runs_of_task(task.id()).map_err(run_store_error)?;
+    // An unreadable latest run cannot be read as auto-approving; the bar does not count it either.
+    if let Some(Ok(latest)) = listed.last()
+      && counts_as_auto_approving(db, &task, latest)?
+    {
+      runs.push(latest.id());
+    }
+  }
+  Ok(runs)
 }
 
 /// Whether a profile version one of `run`'s steps pinned approves automatically. A version that can no

@@ -5,8 +5,10 @@
 //! nothing of the secrets it uses. Tools are not removed or archived in this version: the project data
 //! keeps every resource.
 
+use std::path::Path;
+
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, ResourceId},
   resource::{CommandAction, CommandArg, PublishError, Tool, ToolAction},
   store::ResourceStore,
   time::Timestamp,
@@ -32,6 +34,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  drafts::revision_of,
   links::Link,
   messages::{self, Message},
   tasks::outside::Outside,
@@ -54,8 +57,8 @@ pub(super) const SPECS: &[Spec] = &[
     name: "get_tool",
     description: "One tool as its editor shows it (its draft if it has one, otherwise its latest version): a \
                   command tool's program, arguments, timeout, exit codes that pass, environment variables and \
-                  output limit; where it stands; which published pipeline steps call it; and its link in the \
-                  app. A command tool runs \
+                  output limit; where it stands; which published pipeline steps call it; its revision, which \
+                  save_tool_draft's expected_revision takes; and its link in the app. A command tool runs \
                   in the worktree of the step that calls it, without a shell, with the person's rights, network \
                   access and no sandbox.",
     schema: schema_for_type::<InTool>,
@@ -77,7 +80,10 @@ pub(super) const SPECS: &[Spec] = &[
                   Unless a person turned on Let automation change agent permissions, making a tool is refused as \
                   person_only, as is changing its program or arguments, letting more exit codes pass, or \
                   changing any variable but the harmless ones set_project_environment names. Its description, \
-                  timeout and output limit, and fewer exit codes, are always taken. Publish it with publish_tool.",
+                  timeout and output limit, and fewer exit codes, are always taken. With expected_revision, the \
+                  revision get_tool or the last save returned, the draft is saved only while it is unchanged, \
+                  else refused as draft_changed; without it the save goes over a change a person or another \
+                  agent saved meanwhile. Publish it with publish_tool.",
     schema: schema_for_type::<tool_input::SaveToolDraft>,
     read_only: false,
   },
@@ -142,11 +148,23 @@ async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError>
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let tools = ProjectTools::load_in(&open.repo_root)?;
-    let entry = tool_named(&tools, &args.tool)?;
-    Ok(json!({ "tool": tool_json(&tools, entry, open.project.id()) }))
+    let id = tool_named(&ProjectTools::load_in(&open.repo_root)?, &args.tool)?.id;
+    let (tools, revision) = tools_with_revision(&open.repo_root, id)?;
+    let entry = tools
+      .tool(id)
+      .ok_or_else(|| ToolError::not_found(Missing::Tool, id.to_string()))?;
+    let mut value = tool_json(&tools, entry, open.project.id());
+    value["revision"] = json!(revision);
+    Ok(json!({ "tool": value }))
   })
   .await
+}
+
+/// The project's tools and tool `id`'s revision ([`crate::drafts::draft_revision`]), read before them: a save made
+/// meanwhile shows in the tools, so a save on that revision is refused rather than going over what was not shown.
+pub(super) fn tools_with_revision(root: &Path, id: ResourceId) -> Result<(ProjectTools, String), ToolError> {
+  let revision = revision_of::<Tool>(&ProjectDb::open(root)?, id)?;
+  Ok((ProjectTools::load_in(root)?, revision))
 }
 
 async fn publish_tool(services: &Services, args: InTool) -> Result<Value, ToolError> {

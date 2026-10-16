@@ -26,7 +26,7 @@ use serde_json::{Value, json};
 
 use super::{
   connections::agent_named,
-  profiles::{profile_json, profile_named},
+  profiles::{profile_named, profile_with_revision},
   widening,
 };
 use crate::{
@@ -41,6 +41,7 @@ use crate::{
     error::{Missing, ToolError},
     services::{Services, blocking},
   },
+  drafts::save_draft_expecting_in,
   messages::Message,
 };
 
@@ -72,6 +73,9 @@ pub struct SaveProfileDraft {
   /// MCP servers of the project its agents get, by id or name.
   #[serde(default)]
   pub mcp_servers: Vec<String>,
+  /// The profile's `revision` as get_profile or the last save returned it: the draft is saved only while it
+  /// is unchanged, else refused as draft_changed. Left out, the save goes over a change saved meanwhile.
+  pub expected_revision: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -134,7 +138,7 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let root = open.repo_root;
+    let root = open.repo_root.clone();
     let agents = ProjectAgents::load_in(&root)?;
     let db = ProjectDb::open(&root)?;
     let existing = args
@@ -158,19 +162,22 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       .map_err(|reason| refused("mcp_server_not_offered", reason))?;
     let id = existing.map(|entry| entry.id);
     widening::check_profile(&services, &db, (id, &profile), connection.provider())?;
-    let change = match existing {
-      Some(entry) => ProfileChange::SaveDraft(entry.id, profile),
-      None => ProfileChange::Create(profile),
+    let id = match existing {
+      Some(entry) => {
+        save_draft_expecting_in(&root, entry.id, profile, args.expected_revision.as_deref())?;
+        entry.id
+      }
+      None if args.expected_revision.is_some() => {
+        return Err(ToolError::InvalidArguments(
+          "expected_revision names a profile's draft; a new profile has none".into(),
+        ));
+      }
+      None => apply_in(&root, ProfileChange::Create(profile))?,
     };
-    let id = apply_in(&root, change)?;
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
-    let agents = ProjectAgents::load_in(&root)?;
-    let entry = agents
-      .profile(id)
-      .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
+    Ok(json!({ "profile": profile_with_revision(&open, id)? }))
   })
   .await
 }

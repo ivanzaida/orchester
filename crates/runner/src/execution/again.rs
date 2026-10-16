@@ -76,7 +76,8 @@ impl Scheduler {
     if let Some(confirmed) = &remove_worktrees {
       self::remove_worktrees(&mut db, root, &previous, confirmed)?;
     }
-    let prepared = super::prepare::record(&mut db, root, key, checked)?;
+    // Compared again where the run is recorded: an edit after the check above is refused there.
+    let prepared = super::prepare::record(&mut db, root, key, checked, revision)?;
     self.begin(db, prepared)
   }
 }

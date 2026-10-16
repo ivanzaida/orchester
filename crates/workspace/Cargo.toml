@@ -40,6 +40,8 @@ parking_lot.workspace = true
 rmcp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# A draft's revision for automation names its body by a digest that stays the same across restarts (`drafts`).
+sha2.workspace = true
 syntect.workspace = true
 thiserror.workspace = true
 # Reads the repository's discovery file `orchester.toml` (docs/architecture/server.md, decision 11).

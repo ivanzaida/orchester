@@ -186,7 +186,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "remove_worktree",
-    description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already.",
+    description: "Removes an ended run's worktree as the task page's Remove worktree does: committed work stays on the branches, and only merged branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds uncommitted changes (a person decides that on the task page), or when it was removed already; refused as run_changed when the run worked again in other worktrees since this read it.",
     schema: schema_for_type::<worktree::RemoveWorktree>,
     read_only: false,
   },

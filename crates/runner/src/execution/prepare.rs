@@ -16,6 +16,7 @@ use orchester_core::{
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, PublishedVersions, Run, RunSnapshot, RunStatus, preflight,
   },
+  sharing::TaskRevision,
   store::{ConnectionStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
   task::{Task, TaskStatus},
   time::Timestamp,
@@ -49,7 +50,7 @@ pub(super) fn prepare_first(
   task_id: TaskId,
 ) -> Result<Prepared, Rejection> {
   let checked = check(db, root, task_id, PipelineSource::QueuedPin)?;
-  record(db, root, key, checked)
+  record(db, root, key, checked, None)
 }
 
 /// A queued task that passed the preflight, and the run it starts.
@@ -137,17 +138,20 @@ fn check(db: &ProjectDb, root: &Path, task_id: TaskId, source: PipelineSource) -
   Ok(Checked { task, new })
 }
 
-/// Records the run `checked` starts under `key`, then starts it only if it is still pending.
+/// Records the run `checked` starts under `key`, with `revision` only while the task is still at it, then starts
+/// it only if it is still pending.
 pub(super) fn record(
   db: &mut ProjectDb,
   root: &Path,
   key: IdempotencyKey,
   Checked { task, new }: Checked,
+  revision: Option<TaskRevision>,
 ) -> Result<Prepared, Rejection> {
   let run = db
-    .create_run_of_queued_task(key, new, Timestamp::now())
+    .create_run_of_queued_task(key, new, Timestamp::now(), revision)
     .map_err(|error| match error {
       RunStoreError::TaskNotQueued(_) => Rejection::TaskNotQueued,
+      RunStoreError::TaskChangedMeanwhile(_) => Rejection::TaskChangedMeanwhile,
       other => read_failed("cannot record the run", other),
     })?;
   let task = db

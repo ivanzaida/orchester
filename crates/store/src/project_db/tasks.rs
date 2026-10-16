@@ -474,6 +474,21 @@ pub(super) fn is_queued(transaction: &rusqlite::Transaction<'_>, task: TaskId) -
   )?)
 }
 
+/// Whether `task` is at `revision`, read in `transaction`: a run confirmed on that revision is recorded only
+/// while no edit came since.
+pub(super) fn has_revision(
+  transaction: &rusqlite::Transaction<'_>,
+  task: TaskId,
+  revision: TaskRevision,
+) -> Result<bool, StoreError> {
+  let revision = i64::try_from(revision.get()).map_err(|_| corrupt("task revision", revision.get()))?;
+  Ok(transaction.query_row(
+    "SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ?1 AND revision = ?2)",
+    params![task.to_string(), revision],
+    |row| row.get(0),
+  )?)
+}
+
 /// The `tasks.status` value: draft or submitted ([`TaskStatus`]), which no run event changes.
 pub(super) const fn status_text(status: TaskStatus) -> &'static str {
   match status {

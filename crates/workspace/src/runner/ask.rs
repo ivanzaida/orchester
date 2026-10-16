@@ -51,12 +51,23 @@ impl Runners {
     after: RunId,
     remove_worktrees: Option<Leftovers>,
   ) -> Result<RunId, RunRequestError> {
+    self.run_again_at(key, (task, after, None), remove_worktrees).await
+  }
+
+  /// [`Runners::run_again`], with `revision` only for the task at it (`Rejection::TaskChangedMeanwhile`
+  /// otherwise).
+  pub async fn run_again_at(
+    &self,
+    key: IdempotencyKey,
+    (task, after, revision): (TaskId, RunId, Option<TaskRevision>),
+    remove_worktrees: Option<Leftovers>,
+  ) -> Result<RunId, RunRequestError> {
     let command = Command::RunAgain {
       key,
       task,
       after,
       remove_worktrees,
-      revision: None,
+      revision,
     };
     run_started(self.ask(self.displayed().as_deref(), command).await?, "RunAgain")
   }
@@ -79,12 +90,13 @@ impl Runners {
   }
 
   /// [`Runners::run_again`] for `project`, whichever tab shows it, removing `remove_worktrees`, what
-  /// `after` left, first.
+  /// `after` left, first, only for the task at `revision`, the one the person confirmed: a task changed since is
+  /// refused (`Rejection::TaskChangedMeanwhile`).
   pub async fn run_again_removing_in(
     &self,
     project: &OpenProject,
     key: IdempotencyKey,
-    (task, after): (TaskId, RunId),
+    (task, after, revision): (TaskId, RunId, TaskRevision),
     remove_worktrees: Option<Leftovers>,
   ) -> Result<RunId, RunRequestError> {
     let command = Command::RunAgain {
@@ -92,7 +104,7 @@ impl Runners {
       task,
       after,
       remove_worktrees,
-      revision: None,
+      revision: Some(revision),
     };
     run_started(self.ask_project(project, command).await?, "RunAgain")
   }

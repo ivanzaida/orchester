@@ -164,6 +164,27 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Turns auto-approval off for every run `pick` chooses, read under an immediate write lock: no run starts
+  /// auto-approving between the choice and the write. The runs turned off; on an error nothing changed.
+  pub fn stop_auto_approving(
+    &mut self,
+    pick: &dyn Fn(&Self) -> Result<Vec<RunId>, StoreError>,
+  ) -> Result<Vec<RunId>, StoreError> {
+    self.with_write_transaction(
+      |db| {
+        let runs = pick(db)?;
+        for run in &runs {
+          db.connection
+            .execute("UPDATE runs SET auto_approve = 0 WHERE id = ?1", [run.to_string()])?;
+        }
+        Ok(runs)
+      },
+      |error| error,
+      // Nothing was committed: the transaction rolls back, so the runs still auto-approve.
+      |_, error| error,
+    )
+  }
+
   /// How `run`'s requests were answered, by who answered them, and how many wait.
   pub fn decision_counts(&self, run: RunId) -> Result<DecisionCounts, StoreError> {
     let mut query = self.connection.prepare(

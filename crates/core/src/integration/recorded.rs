@@ -33,16 +33,33 @@ pub enum RecordedCleanupError<E: std::error::Error + 'static> {
   Cleanup(#[from] CleanupError),
   #[error("cannot record the removal: {0}")]
   Store(#[source] E),
+  /// The run as stored once the removal was recorded is not the one the removal was asked for:
+  /// nothing was removed, and a removal recorded now was taken back.
+  #[error("the run changed since its worktrees were listed")]
+  RunChanged,
 }
 
 /// Removes what `run` left in the repository at `repo` as [`clean_up`] does, `confirmed` being what
 /// a person saw, with the removal recorded in `store` at `at` first.
 pub fn clean_up_recorded<S: WorktreeStore>(
   store: &mut S,
-  (runner, git, repo): (&impl CommandRunner, &Path, &Path),
+  git: (&impl CommandRunner, &Path, &Path),
   run: &Run,
   confirmed: Option<&Leftovers>,
   at: Timestamp,
+) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
+  clean_up_recorded_as_seen(store, git, run, confirmed, (at, |_: &S| Ok(true)))
+}
+
+/// [`clean_up_recorded`], only while `unchanged` says the run is still as `run` shows it, read once the removal
+/// is recorded, so the run cannot change after the answer: otherwise nothing is removed
+/// ([`RecordedCleanupError::RunChanged`]).
+pub fn clean_up_recorded_as_seen<S: WorktreeStore>(
+  store: &mut S,
+  (runner, git, repo): (&impl CommandRunner, &Path, &Path),
+  run: &Run,
+  confirmed: Option<&Leftovers>,
+  (at, unchanged): (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
 ) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
   let start = store
     .begin_worktree_removal(run.id(), at)
@@ -52,6 +69,14 @@ pub fn clean_up_recorded<S: WorktreeStore>(
   }
   if start == RemovalStart::LocalIntegration {
     return Err(CleanupError::LocalIntegration.into());
+  }
+  if !unchanged(store).map_err(RecordedCleanupError::Store)? {
+    if start == RemovalStart::Recorded {
+      store
+        .undo_worktree_removal(run.id(), at)
+        .map_err(RecordedCleanupError::Store)?;
+    }
+    return Err(RecordedCleanupError::RunChanged);
   }
   let cleanup = clean_up(runner, git, repo, run, confirmed);
   // A clean-up fails only before it removes anything (`clean_up`): nothing was touched.

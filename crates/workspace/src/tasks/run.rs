@@ -44,6 +44,12 @@ pub enum QueueFailure {
   Queue(QueueError),
   /// The task was changed since the form read it: nothing was saved or queued.
   Changed,
+  /// The task's pipeline was published again after version `chosen` was chosen for the run: nothing was saved
+  /// or queued.
+  PipelineChanged {
+    chosen: VersionNumber,
+    latest: VersionNumber,
+  },
 }
 
 impl From<StoreError> for QueueFailure {
@@ -70,6 +76,11 @@ impl QueueFailure {
       Self::Preflight(problems) => problems.iter().map(preflight_message).collect(),
       Self::Queue(_) => vec![Message::new("runs.start.incomplete")],
       Self::Changed => vec![messages::task_changed_meanwhile()],
+      Self::PipelineChanged { chosen, latest } => vec![
+        Message::new("tasks.new.pipelineChanged")
+          .with("chosen", chosen.get().to_string())
+          .with("latest", latest.get().to_string()),
+      ],
     }
   }
 }
@@ -102,6 +113,7 @@ pub fn queue_organized_in(
     writer.db().check_task_readiness(task.id())?;
     return queued_start(writer.db(), task);
   }
+  chosen_is_latest(writer.db(), &details, version)?;
   let problems = check(writer.db(), &details, version)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
@@ -161,6 +173,7 @@ fn queue_claimed(
     writer.db().check_task_readiness(task.id())?;
     return queued_start(writer.db(), task);
   }
+  chosen_is_latest(writer.db(), &details, selected_version)?;
   let problems = check(writer.db(), &details, selected_version)?;
   if !problems.is_empty() {
     return Err(QueueFailure::Preflight(problems));
@@ -226,6 +239,23 @@ fn load_pipeline(
 ) -> Result<PipelineChoice, QueueFailure> {
   let id = pipeline_id.ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineNotPublished]))?;
   pinned_pipeline(db, id, number)?.ok_or_else(|| QueueFailure::Preflight(vec![PreflightProblem::PipelineNotPublished]))
+}
+
+/// Refused when the task's pipeline has a version newer than `chosen` published. Every caller chooses the latest:
+/// New task's form the one it showed, the task page's Run and the MCP tools the one they read when asked. An
+/// older one means the pipeline was published again in between, and the run would start on steps that are no
+/// longer its latest. A queued task's retry keeps its pin and never comes here.
+fn chosen_is_latest(db: &ProjectDb, details: &TaskDetails, chosen: VersionNumber) -> Result<(), QueueFailure> {
+  let Some(pipeline) = details.pipeline else {
+    return Ok(());
+  };
+  match db.latest_version::<Pipeline>(pipeline)? {
+    Some(latest) if latest.number() > chosen => Err(QueueFailure::PipelineChanged {
+      chosen,
+      latest: latest.number(),
+    }),
+    _ => Ok(()),
+  }
 }
 
 /// Problems the runner would refuse the run for, as far as the configuration shows them. The

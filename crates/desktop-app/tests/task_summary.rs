@@ -26,7 +26,12 @@ use orchester_app::{
   theme::{self, Mode, TaskSpacing, TaskText},
   ui::icon::Icon,
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{
+  id::ProjectId,
+  store::{RunStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::ProjectDb;
 use support::{Data, Window};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
@@ -434,9 +439,9 @@ fn summary_run_again_waits_for_a_runner() {
   assert_eq!(page.text("task-action-reasons"), "Runner not connected");
 }
 
-#[test]
-fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
-  let mut page = Page::live();
+/// The `live` page on *Typed errors per module*, its first run canceled and Run again's confirmation open;
+/// the task's key.
+fn confirming_run_again(page: &mut Page) -> String {
   let key = page.open_titled("Typed errors per module");
   page.wait("the runner", |window| {
     window
@@ -459,6 +464,13 @@ fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
   page.wait("the confirmation", |window| {
     window.texts("task-run-again-confirm").is_some()
   });
+  key
+}
+
+#[test]
+fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
+  let mut page = Page::live();
+  let key = confirming_run_again(&mut page);
   let title = page.text("task-run-again-title");
   assert!(title.starts_with(&format!("Run {key} again as run #")), "{title}");
   assert_eq!(page.text("task-run-again-starts"), "Implement · its only step");
@@ -481,6 +493,37 @@ fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
       .texts("task-runs-head")
       .is_some_and(|texts| texts.join(" ") == "Runs of this task 2")
   });
+  let services = page.window.launch.services().expect("the session started").clone();
+  services.runners.terminate();
+}
+
+#[test]
+fn summary_run_again_of_a_task_changed_since_its_confirmation_showed_it_starts_nothing() {
+  let mut page = Page::live();
+  confirming_run_again(&mut page);
+  // Another window edits the task while the confirmation shows it. The headless window delivers what its futures
+  // read only in `tick_futures`, which nothing calls from here to the press: the confirmation sends the revision
+  // it read before the edit, whatever the runner reports meanwhile.
+  let mut db = ProjectDb::open(&page.window.data.dir.path().join("repo-live")).expect("the project");
+  let mut task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.details().title.as_str() == "Typed errors per module")
+    .expect("the task");
+  let mut details = task.details().clone();
+  details.brief = "Delete the repository.".into();
+  task.edit(details, true).expect("edit");
+  db.save_task(&task).expect("save").saved().expect("saved as read");
+  page.click("task-run-again-start");
+  page.wait("the refusal", |window| {
+    window.texts("task-run-again-confirm").is_some_and(|texts| {
+      texts
+        .iter()
+        .any(|text| text.starts_with("The task was changed since you opened it"))
+    })
+  });
+  assert_eq!(db.runs_of_task(task.id()).expect("runs").len(), 1, "nothing started");
   let services = page.window.launch.services().expect("the session started").clone();
   services.runners.terminate();
 }

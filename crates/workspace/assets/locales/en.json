@@ -326,6 +326,7 @@
       "unconfirmedDescription": "The task is saved, but the runner has not confirmed whether its run started. Check Tasks or retry the same request. The task details are locked.",
       "limitsBlockSave": "Correct the run budget and time limit to save the task.",
       "noLongerDraft": "This task was queued meanwhile, so it was not saved as a draft.",
+      "pipelineChanged": "Version {{latest}} of the task’s pipeline was published while the run was being started on version {{chosen}}, so nothing was saved or queued. Check its steps, then run it again.",
       "savedDetailsDiffer": "The task was saved, but what is stored differs from the form. Open it again to check it."
     },
     "edit": {
@@ -476,6 +477,7 @@
         "notFinished": "Only a run that ended or was interrupted can have its worktrees removed.",
         "localIntegration": "This worktree is reserved by local integration or an unfinished Git process. Open Local integration to reconcile or cancel the operation before removing it.",
         "newChanges": "Nothing was removed from {{path}}: changes appeared in it after this dialog listed them. Look at them, then remove it again.",
+        "runChanged": "Nothing was removed: the run worked again after this listed what it left. Look at what it left now, then remove it again.",
         "notRemoved": "Git didn’t remove {{path}}: {{detail}}",
         "folderUnreadable": "Couldn’t read {{path}}: {{detail}}"
       }
@@ -594,10 +596,6 @@
       "notLatestRun": "Messages go to the task’s latest run, #{{run}}.",
       "noSecondWay": "In the run’s state a message is sent one way only.",
       "notReadable": "Its run has ended or is no longer the task’s latest, so no agent reads this message any more.",
-      "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
-      "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
-      "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
-      "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "The run changed since you wrote this. Check what sending does now, then send again."
     }
   },
@@ -1529,6 +1527,10 @@
       "changed": "{{task}} changed after it was proposed: its details, its pipeline or the pipeline's version are not what you were asked to start. Nothing started; ask the Orchestrator to propose it again.",
       "draftChanged": "The draft of {{name}} changed after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
       "draftChangedAt": "The draft changed at {{time}}, after this proposal. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "draftChangedPlain": "The draft changed after this proposal, or what it widens did. Nothing was published: ask the Orchestrator again to see the changes you would publish.",
+      "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
+      "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
+      "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
     },
     "start": {

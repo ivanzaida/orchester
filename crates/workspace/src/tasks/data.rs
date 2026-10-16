@@ -331,7 +331,7 @@ fn latest_runs<'a>(
         if shown.phase == TaskPhase::Succeeded {
           unmerged.add(task.id(), latest);
         }
-        if shown.phase.is_active() && run_approvals::auto_approving(db, latest)? {
+        if run_approvals::counts_as_auto_approving(db, task, latest)? {
           found.auto_approving.push(AutoApprovingRun {
             run: latest.id(),
             number: latest.number(),

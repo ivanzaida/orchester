@@ -128,6 +128,7 @@ impl From<StoreError> for ToolError {
       StoreError::TaskNotEditable { .. } => "task_not_editable",
       StoreError::SharedTask(_) | StoreError::SharedProject | StoreError::NotSharedTask(_) => "shared_task",
       StoreError::PipelineNotPublished(_) => "pipeline_not_published",
+      StoreError::DraftChanged(_) => "draft_changed",
       _ => "project_data",
     };
     Self::refused(code, vec![messages::store_error(&error)])

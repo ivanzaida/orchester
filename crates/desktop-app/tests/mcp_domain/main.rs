@@ -8,6 +8,7 @@ mod accounts;
 mod accounts_window;
 mod automation_permissions;
 mod connections_window;
+mod drafts;
 mod gates;
 #[path = "../mcp_server/http.rs"]
 mod http;

@@ -68,3 +68,54 @@ fn status_stop_in_the_window_ends_auto_approval() {
     "the run's auto-approval is off in its data"
   );
 }
+
+#[test]
+fn status_stop_in_the_window_ends_a_run_that_began_auto_approving_after_the_bar_read_it() {
+  let data = Data::new();
+  let repo = data.dir.path().join("repo-tasks");
+  let request = SeedRequest {
+    data_dir: data.dir.path().to_path_buf(),
+    repo: repo.clone(),
+    scenario: scenarios::named("tasks").expect("a known scenario"),
+    fake_codex: None,
+    now: Timestamp::now(),
+  };
+  kontur::seed(&request).expect("the scenario seeds");
+  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
+  let active: Vec<_> = tasks
+    .phases
+    .values()
+    .filter_map(|latest| latest.run())
+    .filter(|run| run.phase.is_active())
+    .map(|run| run.id)
+    .collect();
+  let [shown, later, ..] = active[..] else {
+    panic!("two active runs: {active:?}");
+  };
+  apply_in(&repo, shown, RunApprovalChange::AutoApprove(true)).expect("the run auto-approves");
+  let launch = data.launch();
+  let mut window = Window::of(data, launch);
+  window.until("Stop to show", |window| {
+    window.texts("status-auto-approving-stop").is_some()
+  });
+  // Another window turns auto-approval on for a second run. No future is delivered from here to the press,
+  // so the bar still shows only the first.
+  apply_in(&repo, later, RunApprovalChange::AutoApprove(true)).expect("the run auto-approves");
+  let bounds = window
+    .tree
+    .get_element_by_id_mut("status-auto-approving-stop")
+    .and_then(|element| element.bounds())
+    .expect("Stop is laid out");
+  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+  window.tree.mouse_move(x, y);
+  window.tree.mouse_down(x, y, MouseButton::Left);
+  window.tree.mouse_up(x, y, MouseButton::Left);
+  window.pass();
+  window.until("both runs to stop auto-approving", |window| {
+    window.texts("status-auto-approving").is_none()
+  });
+  let db = orchester_store::ProjectDb::open(&repo).expect("the project");
+  for run in [shown, later] {
+    assert_eq!(db.run_auto_approve(run).expect("read"), Some(false), "{run}");
+  }
+}

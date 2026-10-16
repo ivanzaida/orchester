@@ -79,7 +79,7 @@ impl<'k> Drive<'k> {
     };
     let mut run = kontur
       .db
-      .create_run_of_queued_task(IdempotencyKey::generate(), new, at)?;
+      .create_run_of_queued_task(IdempotencyKey::generate(), new, at, None)?;
     let events = run.start(at)?;
     kontur.db.append_events(&run, &events)?;
     let worktree = Worktree::add(&kontur.repo, &run.id().to_string(), run.branch().as_str(), &kontur.base)?;

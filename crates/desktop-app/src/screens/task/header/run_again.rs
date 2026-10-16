@@ -22,6 +22,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
   integration::{Leftovers, WORKTREES_DIR},
   run::{RunAgainBlock, can_run_again_after},
+  sharing::TaskRevision,
   task::TaskLimits,
   tokens::compact_tokens,
 };
@@ -116,6 +117,8 @@ pub fn check(
 pub struct Request {
   key: IdempotencyKey,
   task: TaskId,
+  /// The task as the confirmation showed it: one changed since does not run.
+  revision: TaskRevision,
   after: RunId,
   remove: Option<Leftovers>,
   pipeline: Arc<str>,
@@ -164,7 +167,7 @@ pub fn start_action(
         .run_again_removing_in(
           &project,
           request.key,
-          (request.task, request.after),
+          (request.task, request.after, request.revision),
           request.remove.clone(),
         )
         .await;
@@ -510,6 +513,7 @@ fn actions(ctx: &Ctx, confirm: &Confirmation, pending: bool) -> Element {
     let request = Request {
       key: confirm.key,
       task: confirm.detail.task.id(),
+      revision: confirm.detail.task.revision(),
       after: confirm.run.id(),
       remove: confirm.leftovers.cloned().filter(|_| confirm.remove.get()),
       steps: confirm
