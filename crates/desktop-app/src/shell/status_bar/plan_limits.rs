@@ -71,6 +71,8 @@ pub fn item(ctx: &mut Ctx, limits: &[AccountLimits], bar: &ElementRef) -> Option
 
 pub struct PlanLimitsItem {
   open: Signal<bool>,
+  /// The item, which the popover is anchored to.
+  item: ElementRef,
 }
 
 impl Component for PlanLimitsItem {
@@ -79,6 +81,7 @@ impl Component for PlanLimitsItem {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
+      item: ctx.element_ref(),
     }
   }
 
@@ -96,6 +99,7 @@ impl Component for PlanLimitsItem {
     };
     let toggle = self.open.clone();
     let mut item = pressed("status-plan-limits", move || toggle.update(|open| *open = !*open))
+      .ref_element(self.item.clone())
       .describe("reached", reached.to_string())
       .child(glyph(Icon::Gauge, color));
     for (index, part) in parts(ctx, &props.limits, now).into_iter().enumerate() {
@@ -105,12 +109,15 @@ impl Component for PlanLimitsItem {
     if self.open.get() {
       item = item.background(ExtraColor::Hover.role());
     }
-    let mut row = Row::new().child(item);
-    if self.open.get() {
-      let panel = panel(ctx, &props.limits, now);
-      row = row.child(bar_popover(ctx, props.bar, self.open.clone(), panel));
-    }
-    row
+    // Declared while closed too, so that a press on the item switches to it from another open dropdown.
+    let panel = if self.open.get() {
+      panel(ctx, &props.limits, now)
+    } else {
+      Element::new()
+    };
+    Row::new()
+      .child(item)
+      .child(bar_popover(ctx, (&self.item, &props.bar), self.open.clone(), panel))
   }
 }
 

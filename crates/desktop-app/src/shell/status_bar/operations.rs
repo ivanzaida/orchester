@@ -118,21 +118,25 @@ impl Component for Operations {
         if open { Icon::ChevronUp } else { Icon::ChevronDown },
         PaletteColor::TextMuted,
       ));
-    let mut row = Row::new()
+    let row = Row::new()
       .flex_shrink(1.0)
       .shrink_order(give_way::ACTIVITY)
       .shrink_limit(ShrinkLimit::Content)
       .child(item);
-    if open {
-      let panel = panel(ctx, &props, &running, &self.open);
-      row = row.child(popover(
+    // Declared while closed too, so that a press on the item switches to it from another open dropdown.
+    let panel = if open {
+      panel(ctx, &props, &running, &self.open)
+    } else {
+      Element::new()
+    };
+    row
+      .child(popover(
         self.anchor.clone(),
         self.open.clone(),
         PopoverSide::Above,
         panel,
-      ));
-    }
-    row.into()
+      ))
+      .into()
   }
 }
 

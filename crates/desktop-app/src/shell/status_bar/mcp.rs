@@ -70,6 +70,8 @@ pub fn mcp_item(ctx: &mut Ctx, status: &McpStatus, dispatch: &Dispatch, bar: &El
 
 pub struct McpItem {
   open: Signal<bool>,
+  /// The item, which the popover is anchored to.
+  item: ElementRef,
 }
 
 impl Component for McpItem {
@@ -78,6 +80,7 @@ impl Component for McpItem {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
+      item: ctx.element_ref(),
     }
   }
 
@@ -87,18 +90,22 @@ impl Component for McpItem {
     let toggle = self.open.clone();
     let open = self.open.get();
     let mut item = pressed("status-mcp", move || toggle.update(|open| *open = !*open))
+      .ref_element(self.item.clone())
       .describe("state", state_name(&props.status.server))
       .child(glyph(Icon::RadioTower, color.clone()))
       .child(label(&words, color).id("status-mcp-text"));
     if open {
       item = item.background(ExtraColor::Hover.role());
     }
-    let mut row = Row::new().child(item);
-    if open {
-      let panel = panel(ctx, &props, &self.open);
-      row = row.child(bar_popover(ctx, props.bar.clone(), self.open.clone(), panel));
-    }
-    row
+    // Declared while closed too, so that a press on the item switches to it from another open dropdown.
+    let panel = if open {
+      panel(ctx, &props, &self.open)
+    } else {
+      Element::new()
+    };
+    Row::new()
+      .child(item)
+      .child(bar_popover(ctx, (&self.item, &props.bar), self.open.clone(), panel))
   }
 }
 

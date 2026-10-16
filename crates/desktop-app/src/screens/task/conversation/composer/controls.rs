@@ -61,7 +61,8 @@ pub(super) struct Bar<'a> {
   pub(super) sending: Sending,
   /// The send menu is open.
   pub(super) menu: &'a Signal<bool>,
-  /// The send button, which the menu opens over.
+  /// The send menu's chevron, which opens the menu over it: the menu's end at the button's, the chevron's end
+  /// (only the chevron is its trigger, so a press on Send with another dropdown open only closes that one).
   pub(super) anchor: &'a ElementRef,
 }
 
@@ -154,7 +155,6 @@ fn send(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
   Row::new()
     .id("composer-send-button")
     .describe("action", label.to_string())
-    .ref_element(bar.anchor.clone())
     .height(Dimension::Px(ControlHeight::Md.value()))
     .align_items(Alignment::Center)
     .background(PaletteColor::Accent)
@@ -216,6 +216,7 @@ fn options(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
   let chevron: Element = if matches!(bar.sending, Sending::Ready { .. }) {
     pressable(move || open.update(|open| *open = !*open))
       .id("composer-send-options")
+      .ref_element(bar.anchor.clone())
       .describe("a11y_name", label)
       .hovered_style(Style::new().background(PaletteColor::AccentHover))
       .child(chevron)

@@ -94,12 +94,20 @@ impl Component for ScopePicker {
     } else {
       trigger
     };
-    let mut frame = Column::new().width(Dimension::Pct(100.0)).child(trigger);
-    if self.open.get() && !locked {
-      let panel = self.options(ctx, &p);
-      frame = frame.child(menu::menu(self.anchor.clone(), self.open.clone(), panel));
-    }
-    frame
+    // Declared while closed too, so that a press on the picker switches to it from another open dropdown; a
+    // locked picker opens nothing.
+    let menu = (!locked).then(|| {
+      let panel = if self.open.get() {
+        self.options(ctx, &p)
+      } else {
+        Element::new()
+      };
+      menu::menu(self.anchor.clone(), self.open.clone(), panel)
+    });
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .child(trigger)
+      .with_children(menu)
   }
 }
 impl ScopePicker {

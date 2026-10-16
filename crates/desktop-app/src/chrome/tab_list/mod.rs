@@ -147,19 +147,22 @@ impl Component for TabList {
       .id("tab-list")
       .on_key_down(keys.handler())
       .child(self.button(ctx, open, &button));
-    if open {
+    // Declared while closed too, so that a press on the button switches to it from another open dropdown.
+    let panel = if open {
       let panel = self.panel(ctx, &navigation);
       self.keep_in_view(ctx);
-      root = root.child(
-        Popup::new(button.clone(), panel)
-          .open(self.open.clone())
-          .placement(Placement::BottomStart)
-          // The button is 5 above the title bar's bottom edge; the list is 4 under it.
-          .offset(shift(ctx, &button), ExtraSpacing::Inline.value()),
-      );
+      panel.into()
     } else {
       *self.scrolled_to.lock() = None;
-    }
+      Element::new()
+    };
+    root = root.child(
+      Popup::new(button.clone(), panel)
+        .open(self.open.clone())
+        .placement(Placement::BottomStart)
+        // The button is 5 above the title bar's bottom edge; the list is 4 under it.
+        .offset(shift(ctx, &button), ExtraSpacing::Inline.value()),
+    );
     match self.focus.lock().take() {
       Some(FocusTo::Button) => ctx.focus(&button),
       Some(FocusTo::Search) if open => ctx.focus(&self.search),

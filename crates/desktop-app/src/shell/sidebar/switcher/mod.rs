@@ -115,12 +115,16 @@ impl Component for Switcher {
     };
     let project = ctx.props::<SwitcherProps>().project;
     let button = self.button(ctx, project);
-    let mut switcher = Column::new().width(Dimension::Pct(100.0)).child(button);
-    if self.open.get() {
-      let panel = self.panel(ctx, project, &picks);
-      switcher = switcher.child(menu(self.anchor.clone(), self.open.clone(), panel));
-    }
-    switcher
+    // Declared while closed too, so that a press on the switcher switches to it from another open dropdown.
+    let panel = if self.open.get() {
+      self.panel(ctx, project, &picks)
+    } else {
+      Element::new()
+    };
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .child(button)
+      .child(menu(self.anchor.clone(), self.open.clone(), panel))
   }
 }
 

@@ -67,7 +67,8 @@ pub struct UsageToolbar {
   /// Each menu filter's menu, in [`Facet::EVERY_PROJECT_MENUS`] order, and its button.
   filters: [(Signal<bool>, ElementRef); 6],
   group: (Signal<bool>, ElementRef),
-  custom: (Signal<bool>, ElementRef),
+  /// *Custom…*'s range: whether it is open, its segment and the period control, which places it.
+  custom: (Signal<bool>, ElementRef, ElementRef),
   /// What a filter's menu searches for.
   search: Signal<String>,
 }
@@ -80,7 +81,7 @@ impl Component for UsageToolbar {
     let toolbar = Self {
       filters: [pair(), pair(), pair(), pair(), pair(), pair()],
       group: pair(),
-      custom: pair(),
+      custom: (ctx.signal(false), ElementRef::default(), ElementRef::default()),
       search: ctx.signal(String::new()),
     };
     // A menu opens on its whole list: what the last one searched for is forgotten.
@@ -229,10 +230,11 @@ impl UsageToolbar {
         SegmentFace::Text(ctx.t("usage.period.custom")),
         picking || matches!(chosen, Period::Custom(_)),
         move || custom.update(|open| *open = !*open),
-      ),
+      )
+      .element(self.custom.1.clone()),
     ];
     Row::new()
-      .ref_element(self.custom.1.clone())
+      .ref_element(self.custom.2.clone())
       .child(segmented("usage-period", segments, Focus::Pointer))
       .into()
   }
@@ -247,29 +249,32 @@ impl UsageToolbar {
     FilterButton::new("usage-group-by", label, self.group.0.clone(), self.group.1.clone()).into()
   }
 
-  /// The open menus and popovers: a filter's menu, *Group by*'s, and the custom range.
+  /// The menus and popovers: a filter's menu, *Group by*'s, and the custom range. Each is declared while closed
+  /// too, so that a press on its button switches to it from another open dropdown.
   fn popups(&self, ctx: &mut Ctx, props: &ToolbarProps) -> Vec<Element> {
     let mut popups = Vec::new();
     for (facet, (open, anchor)) in self.menus(props) {
-      if open.get() {
-        let panel = filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery);
-        let popup = menu(anchor.clone(), open.clone(), panel);
-        // The Account menu opens 12 under its button (`EU0ex`).
-        let popup = if facet == Facet::Account {
-          popup.offset(0.0, ctx.theme().spacing_value(SpacingSize::Md).to_px())
-        } else {
-          popup
-        };
-        popups.push(popup.into());
-      }
+      let panel = if open.get() {
+        filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery)
+      } else {
+        Element::new()
+      };
+      let popup = menu(anchor.clone(), open.clone(), panel);
+      // The Account menu opens 12 under its button (`EU0ex`).
+      let popup = if facet == Facet::Account {
+        popup.offset(0.0, ctx.theme().spacing_value(SpacingSize::Md).to_px())
+      } else {
+        popup
+      };
+      popups.push(popup.into());
     }
-    if self.group.0.get() {
-      let panel = self.group_menu(ctx, props);
-      popups.push(menu(self.group.1.clone(), self.group.0.clone(), panel).into());
-    }
-    if self.custom.0.get() {
-      popups.push(custom_range::popover(ctx, props, &self.custom));
-    }
+    let panel = if self.group.0.get() {
+      self.group_menu(ctx, props)
+    } else {
+      Element::new()
+    };
+    popups.push(menu(self.group.1.clone(), self.group.0.clone(), panel).into());
+    popups.push(custom_range::popover(ctx, props, &self.custom));
     popups
   }
 

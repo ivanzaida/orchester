@@ -51,13 +51,32 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
     .offset(0.0, offset)
 }
 
-/// `panel` over the status bar `bar` while `open` holds, for an item at the bar's end (the MCP item's popover,
-/// `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window.
-pub fn bar_popover(ctx: &Ctx, bar: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
+/// `panel` opened by the status bar item `item` while `open` holds, placed over the status bar `bar` (the MCP
+/// item's popover, `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window.
+pub fn bar_popover(
+  ctx: &Ctx,
+  (item, bar): (&ElementRef, &ElementRef),
+  open: Signal<bool>,
+  panel: impl Into<Element>,
+) -> Popup {
   let inset = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-  Popup::new(bar, panel)
+  let (x, y) = at_frame_end(item, bar, PopoverSide::Above);
+  Popup::new(item.clone(), panel)
     .open(open)
     .placement(Placement::TopEnd)
     // Over its anchor, lurq counts the offset away from it.
-    .offset(-inset, ExtraSpacing::Inline.value())
+    .offset(x - inset, y + ExtraSpacing::Inline.value())
+}
+
+/// How far a popup at the end of `trigger`, over or under it, moves to open at the end of `frame`, the element
+/// around the trigger the design places it by (the status bar, a segmented control), as both were last laid out.
+/// The trigger stays the popup's anchor: lurq switches to a popup in one press, from another open dropdown, only
+/// when the pressed control is the anchor itself.
+pub fn at_frame_end(trigger: &ElementRef, frame: &ElementRef, side: PopoverSide) -> (f32, f32) {
+  let x = (frame.x() + frame.width()) - (trigger.x() + trigger.width());
+  let y = match side {
+    PopoverSide::Above => trigger.y() - frame.y(),
+    PopoverSide::Below | PopoverSide::BelowEnd => (frame.y() + frame.height()) - (trigger.y() + trigger.height()),
+  };
+  (x, y)
 }

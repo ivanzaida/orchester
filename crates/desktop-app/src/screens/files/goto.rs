@@ -97,12 +97,24 @@ pub fn trigger(ctx: &mut Ctx, page: &Page<'_>) -> Element {
   .into()
 }
 
-/// The search under the trigger while it is open, over the files of `list`.
-pub fn search(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Option<Popup> {
+/// The search under the trigger while it is open, over the files of `list`. It is declared while closed too, so
+/// that a press on the trigger switches to it from another open dropdown.
+pub fn search(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Popup {
+  let state = &page.view.goto;
+  let panel = if state.open.get() {
+    search_panel(ctx, page, list)
+  } else {
+    Element::new()
+  };
+  Popup::new(state.anchor.clone(), panel)
+    .open(state.open.clone())
+    .placement(Placement::BottomStart)
+    .offset(0.0, ExtraSpacing::Snug.value())
+}
+
+/// The search's field, the files found and its footer.
+fn search_panel(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Element {
   let state = page.view.goto.clone();
-  if !state.open.get() {
-    return None;
-  }
   if state.focus.get() {
     ctx.focus(&state.input);
     state.focus.set(false);
@@ -161,12 +173,7 @@ pub fn search(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Option
         .with_children(rows),
     )
     .child(footer(ctx, &found, !query.trim().is_empty()));
-  Some(
-    Popup::new(state.anchor.clone(), panel)
-      .open(state.open.clone())
-      .placement(Placement::BottomStart)
-      .offset(0.0, ExtraSpacing::Snug.value()),
-  )
+  panel.into()
 }
 
 /// ↑ and ↓ move among `count` files, Enter opens the current one.

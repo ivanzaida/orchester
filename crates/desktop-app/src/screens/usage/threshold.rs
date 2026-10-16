@@ -132,19 +132,21 @@ impl Component for ThresholdMenu {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let open = self.open.clone();
     let button = IconButton::new("usage-limits-menu", Icon::Ellipsis, ctx.t("usage.limits.menu"))
+      .element(self.anchor.clone())
       .on_click(move || open.update(|open| *open = !*open));
     let button = if self.open.get() { button.active() } else { button }.render(ctx);
-    let mut row = Row::new().ref_element(self.anchor.clone()).child(button);
-    if self.open.get() {
-      let panel = self.panel(ctx);
-      row = row.child(popover(
-        self.anchor.clone(),
-        self.open.clone(),
-        PopoverSide::BelowEnd,
-        panel,
-      ));
-    }
-    row
+    // Declared while closed too, so that a press on the button switches to it from another open dropdown.
+    let panel = if self.open.get() {
+      self.panel(ctx)
+    } else {
+      Element::new()
+    };
+    Row::new().child(button).child(popover(
+      self.anchor.clone(),
+      self.open.clone(),
+      PopoverSide::BelowEnd,
+      panel,
+    ))
   }
 }
 

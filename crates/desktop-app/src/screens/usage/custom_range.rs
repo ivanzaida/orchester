@@ -26,30 +26,41 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field, field_error},
-    popover::popover_panel,
+    popover::{PopoverSide, at_frame_end, popover_panel},
   },
 };
 
 /// The popover's width (`Custom range` in `p732q`).
 const WIDTH: f32 = 300.0;
 
-/// The popover, open under `anchor` while `open` holds.
-pub fn popover(ctx: &mut Ctx, props: &ToolbarProps, (open, anchor): &(Signal<bool>, ElementRef)) -> Element {
-  let range = props.query.range(local_date(Timestamp::now()));
-  let content = ctx.mount_keyed::<CustomRange>(
-    "usage-custom-range",
-    RangeProps {
-      requery: props.requery.clone(),
-      query: props.query.clone(),
-      first: range.first(),
-      last: range.last(),
-      open: open.clone(),
-    },
-  );
-  Popup::new(anchor.clone(), content)
+/// The popover, opened by *Custom…*'s segment `trigger` while `open` holds, under the period control `frame` at
+/// its end. It is declared while closed too, so that a press on the segment switches to it from another open
+/// dropdown; its fields are new each time it opens.
+pub fn popover(
+  ctx: &mut Ctx,
+  props: &ToolbarProps,
+  (open, trigger, frame): &(Signal<bool>, ElementRef, ElementRef),
+) -> Element {
+  let content = if open.get() {
+    let range = props.query.range(local_date(Timestamp::now()));
+    ctx.mount_keyed::<CustomRange>(
+      "usage-custom-range",
+      RangeProps {
+        requery: props.requery.clone(),
+        query: props.query.clone(),
+        first: range.first(),
+        last: range.last(),
+        open: open.clone(),
+      },
+    )
+  } else {
+    Element::new()
+  };
+  let (x, y) = at_frame_end(trigger, frame, PopoverSide::BelowEnd);
+  Popup::new(trigger.clone(), content)
     .open(open.clone())
     .placement(Placement::BottomEnd)
-    .offset(0.0, ExtraSpacing::Snug.value())
+    .offset(x, y + ExtraSpacing::Snug.value())
     .into()
 }
 

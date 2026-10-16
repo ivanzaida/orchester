@@ -11,6 +11,7 @@ use lurq::{
     theme::{PaletteColor, RadiusSize},
   },
   components::Button,
+  core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, dimension::Dimension},
 };
@@ -66,6 +67,7 @@ pub struct IconButton {
   action: Option<Arc<dyn Fn() + Send + Sync>>,
   focus: Focus,
   active: bool,
+  element: Option<ElementRef>,
 }
 
 impl IconButton {
@@ -80,6 +82,7 @@ impl IconButton {
       action: None,
       focus: Focus::Pointer,
       active: false,
+      element: None,
     }
   }
 
@@ -115,6 +118,13 @@ impl IconButton {
     self
   }
 
+  /// The button's element, for a popup it opens to anchor to: lurq switches to that popup in one press, from
+  /// another open dropdown, only when the pressed button is the popup's anchor itself.
+  pub fn element(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
+    self
+  }
+
   /// A button of a form: a Tab stop with the focus ring.
   pub fn in_form(mut self) -> Self {
     self.focus = Focus::Form;
@@ -138,6 +148,10 @@ impl IconButton {
       button.background(ExtraColor::Pressed.role())
     } else {
       button
+    };
+    let button = match self.element {
+      Some(element) => button.ref_element(element),
+      None => button,
     };
     let button = match self.action {
       Some(handler) => self

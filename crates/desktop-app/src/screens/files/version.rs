@@ -63,7 +63,8 @@ fn name(ctx: &Ctx, version: &Version, run: Option<&RunFacts>) -> String {
   }
 }
 
-/// The picker and, while it is open, its menu.
+/// The picker and, once the versions are read, its menu: declared while closed too, so that a press on the picker
+/// switches to it from another open dropdown.
 pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<Popup>) {
   let view = page.view;
   let shown = label(ctx, page);
@@ -84,7 +85,10 @@ pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<Popup>) {
     view.version_anchor.clone(),
   );
   let picker = if gone { picker.warning() } else { picker };
-  let menu = (view.version_open.get() && page.versions.is_some()).then(|| {
+  let menu = page.versions.is_some().then(|| {
+    if !view.version_open.get() {
+      return menu_at_end(view.version_anchor.clone(), view.version_open.clone(), Element::new());
+    }
     let mut panel = menu_panel("files-version-menu").width(Dimension::Px(MENU_WIDTH)).child(
       Column::new()
         .padding(

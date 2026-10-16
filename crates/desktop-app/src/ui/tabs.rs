@@ -18,6 +18,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
   components::{Button, Row, Stack, Text},
+  core::ElementRef,
   layout::{Alignment, StackAlignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -196,6 +197,7 @@ pub struct Segment {
   face: SegmentFace,
   chosen: bool,
   choose: Arc<dyn Fn() + Send + Sync>,
+  element: Option<ElementRef>,
 }
 
 impl Segment {
@@ -210,7 +212,15 @@ impl Segment {
       face,
       chosen,
       choose: Arc::new(choose),
+      element: None,
     }
+  }
+
+  /// The segment's element, for a popup it opens to anchor to: lurq switches to that popup in one press, from
+  /// another open dropdown, only when the pressed segment is the popup's anchor itself.
+  pub fn element(mut self, element: ElementRef) -> Self {
+    self.element = Some(element);
+    self
   }
 
   fn render(self, focus: Focus) -> Element {
@@ -222,6 +232,9 @@ impl Segment {
       .justify(Justify::Center)
       .rounded(RadiusSize::Sm)
       .describe("state", if self.chosen { "chosen" } else { "enabled" });
+    if let Some(element) = self.element {
+      button = button.ref_element(element);
+    }
     let (text, glyph) = if self.chosen {
       (PaletteColor::TextPrimary, PaletteColor::TextPrimary)
     } else {

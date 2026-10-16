@@ -309,7 +309,7 @@ impl Component for FilesScreen {
       .on_key_down(keys)
       .child(header)
       .child(body)
-      .with_children(search)
+      .child(search)
   }
 }
 
