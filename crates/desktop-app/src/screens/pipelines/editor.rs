@@ -90,7 +90,8 @@ impl Component for Editor {
     if self.writing.get_untracked() != writing {
       self.writing.set(writing);
     }
-    self.autosave(ctx, &props);
+    // First: lurq keeps a component's futures by the order it asks for them.
+    self.autosave(ctx, &props, writing);
     let opened = self.state.get().opened;
     props.project.feed.pipeline_named(opened.id, &opened.name);
     let editing = self.state.get();
@@ -173,10 +174,13 @@ impl Editor {
   }
   /// Saves the fields once they rest valid and unchanged for a moment. The rest is the first future each
   /// render asks for, so lurq keeps its state across renders and following it once follows every rest.
-  fn autosave(&self, ctx: &mut Ctx, props: &EditorProps) {
+  /// No rest runs while a write is `writing`: what was edited meanwhile rests once the write ends, so it is
+  /// saved after it rather than skipped.
+  fn autosave(&self, ctx: &mut Ctx, props: &EditorProps, writing: bool) {
     let editing = self.state.get();
     let root = props.project.open.repo_root.clone();
     let body = (editing.dirty()
+      && !writing
       && editing.errors.is_empty()
       && editing.viewing.is_none()
       && !editing.restore_requested

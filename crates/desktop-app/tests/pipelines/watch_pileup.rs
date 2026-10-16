@@ -168,6 +168,39 @@ fn pipelines_watch_fields_follow_again_once_the_question_is_answered() {
 }
 
 #[test]
+fn pipelines_watch_edit_during_a_slow_write_is_saved_after_it() {
+  let mut editor = Editor::new();
+  let id = editor.published();
+  editor.open(id);
+  let path = editor
+    .window
+    .data
+    .dir
+    .path()
+    .join("repo-kontur/.orchester/orchester.db");
+  let mut connection = rusqlite::Connection::open(path).unwrap();
+  let lock = connection
+    .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+    .unwrap();
+  let before = writes(&editor);
+  editor.set("pipeline-description", "First");
+  editor.until("first autosave under way", |e| {
+    e.text("screen-pipelines").contains("Saving draft")
+  });
+  editor.set("pipeline-description", "Second");
+  // The second edit's rest ends while the first write still waits for the database.
+  rest(&mut editor);
+  assert!(editor.text("screen-pipelines").contains("Saving draft"));
+  lock.commit().unwrap();
+  editor.until("the second edit autosaved without another keystroke", |e| {
+    saved(e, id, Page::Summary).as_deref() == Some("Second")
+  });
+  rest(&mut editor);
+  assert_eq!(writes(&editor) - before, 2, "the first edit, then the second once");
+  assert!(!editor.exists("pipeline-write-error"));
+}
+
+#[test]
 fn pipelines_watch_locked_step_field_keeps_the_asked_draft() {
   locked_edit_while_asked(Page::Step);
 }
