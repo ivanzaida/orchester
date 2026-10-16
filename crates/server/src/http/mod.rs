@@ -1,5 +1,6 @@
 mod admin;
 mod admin_proxy;
+mod admin_unavailable;
 mod auth;
 mod claims;
 mod cloud;

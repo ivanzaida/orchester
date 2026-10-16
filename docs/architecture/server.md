@@ -1139,7 +1139,9 @@ certificate in every setup:
   (`tls = "off"`, as before). Caddy routes everything to `server`.
 - **Without Docker:** the admin is a Node standalone folder started beside the binary (a service unit example ships
   with it); a server without it serves the API and answers admin paths with *the admin app is not running*, and the
-  host commands remain for recovery.
+  host commands remain for recovery. That page is in the design's face, Geist, carried inside the page under a CSP of
+  `default-src 'none'; style-src 'unsafe-inline'; font-src data:` (the fonts and their OFL licence are in
+  `crates/server/assets/fonts`).
 - **Air-gapped:** both images (or the binary and the admin folder) are built elsewhere and copied in; nothing is
   fetched at runtime (no npm, no fonts or scripts from the internet: the fonts are bundled). The browser meets the
   server's own certificate: the admin's first page and the console both show its check code, and the team trusts the

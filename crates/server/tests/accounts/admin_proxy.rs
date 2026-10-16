@@ -80,6 +80,11 @@ async fn sa_without_the_admin_app_admin_paths_say_it_is_not_running() {
   assert_eq!(page.status, 502);
   assert!(page.contains("The admin app is not running"));
   assert!(page.headers["content-security-policy"].contains("default-src 'none'"));
+  // Design 1, m21: in the design's face, carried inside the page, and the commands in plain text.
+  assert!(page.contains("@font-face { font-family: \"Geist\"; font-weight: 400; src: url(data:font/ttf;base64,AAEAAA"));
+  assert!(page.contains("font: 14px/1.5 \"Geist\""));
+  assert!(!page.contains("<code>"));
+  assert!(page.headers["content-security-policy"].contains("font-src data:"));
   let api = server.request("GET", "/server", None, None).await;
   assert_eq!(api.status, 200, "the API works without the admin app");
   server.finish().await;

@@ -9,8 +9,8 @@ use std::time::Duration;
 use axum::{
   body::Body,
   extract::{ConnectInfo, Request, State},
-  http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri, header},
-  response::{Html, IntoResponse, Redirect, Response},
+  http::{HeaderMap, HeaderName, HeaderValue, Uri, header},
+  response::{IntoResponse, Redirect, Response},
 };
 use hyper_util::rt::TokioIo;
 use orchester_api::ErrorCode;
@@ -63,7 +63,7 @@ pub(super) async fn forward(State(server): State<Server>, peer: ConnectInfo<Peer
   let client = address(&server, peer, request.headers());
   match send(&server.inner.config.admin_url, request, &client.to_string(), scheme).await {
     Ok(response) => response,
-    Err(Unreachable) => not_running(),
+    Err(Unreachable) => super::admin_unavailable::not_running(),
   }
 }
 
@@ -134,15 +134,4 @@ fn set(headers: &mut HeaderMap, name: &'static str, value: &str) {
   if let Ok(value) = HeaderValue::from_str(value) {
     headers.insert(HeaderName::from_static(name), value);
   }
-}
-
-/// j8WujU, *The admin app is not running*. The server has no words of its own beyond its console's, which are
-/// English; this page is the one answer it gives a browser without the admin.
-fn not_running() -> Response {
-  let mut response = (StatusCode::BAD_GATEWAY, Html(include_str!("admin_unavailable.html"))).into_response();
-  response.headers_mut().insert(
-    header::CONTENT_SECURITY_POLICY,
-    HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"),
-  );
-  response
 }
