@@ -58,7 +58,10 @@ impl Cloud {
     if known(&client, invite.id).await? {
       return Ok(server);
     }
-    self.inner.limits.invite_per_owner(owner(&client, invite.server).await?, now)?;
+    self
+      .inner
+      .limits
+      .invite_per_owner(owner(&client, invite.server).await?, now)?;
     if !store(&client, &invite, &email, now).await? {
       return Ok(server);
     }
