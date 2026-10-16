@@ -1,19 +1,24 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
-import { cloudAccount, cloudDevice, cloudInvites, joinWithCode, tokenWorks } from "./accounts";
+import { cloudAccount, cloudDevice, cloudInvites, cloudTwoFactor, joinWithCode, tokenWorks } from "./accounts";
 import { SERVER, startStack, type Stack } from "./stack";
 import { accountCode, createProject, expectNoSecretIn, inviteWithCode, logs, setUp, signInAtCloud, signInWithCode } from "./steps";
 
 /**
  * The server admin end to end, against a loopback team server and a loopback Orchester Cloud on a throwaway
- * PostgreSQL: setup with the setup code and linking, sign-in through the cloud and with a code, a project, invites by
- * email (reaching the cloud) and by code, a role, a device revoked, join approval on; and no code or token in a log.
+ * PostgreSQL: setup with the setup code and linking, sign-in through the cloud (with two-factor authentication) and with
+ * a code, a project, invites by email (only from the two-factor sign-in, reaching the cloud) and by code, a role, a
+ * device revoked, join approval on; and no code or token in a log.
  */
 
 test.describe.configure({ mode: "serial" });
 
 let stack: Stack;
 let admin: Page;
+/** A browser signed in to the admin through the cloud with two-factor authentication, which sends invites by email. */
+let cloudAdmin: Page | undefined;
+/** Ivan's recovery codes: each finishes one of his cloud sign-ins in the browser. */
+const recovery: string[] = [];
 const codes: string[] = [];
 let olehToken = "";
 
@@ -28,6 +33,8 @@ test.beforeAll(async ({ browser }) => {
   codes.push(stack.setupCode);
   await cloudAccount(stack, "ivan@example.test", "Ivan Zaida");
   await cloudAccount(stack, "dana@example.test", "Dana Ruiz");
+  recovery.push(...(await cloudTwoFactor("ivan@example.test")));
+  codes.push(...recovery);
   admin = await freshPage(browser);
 });
 
@@ -38,7 +45,7 @@ test.afterAll(async () => {
 test("setup with the setup code, then linking through the cloud", async () => {
   await setUp(admin, stack.setupCode);
   await admin.getByRole("button", { name: "Link to Orchester Cloud" }).click();
-  await signInAtCloud(admin, "ivan@example.test");
+  await signInAtCloud(admin, "ivan@example.test", recovery[0]);
   await expect(admin.getByRole("heading", { name: "Link Kontur team to your account?" })).toBeVisible();
   await admin.getByRole("button", { name: "Link Kontur team" }).click();
   await expect(admin).toHaveURL(/\/admin\/setup\/done$/);
@@ -51,11 +58,12 @@ test("sign-in through the cloud", async ({ browser }) => {
   await page.goto(`${SERVER}/admin`);
   await expect(page).toHaveURL(/\/admin\/signin$/);
   await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
-  await signInAtCloud(page, "ivan@example.test");
+  await signInAtCloud(page, "ivan@example.test", recovery[1]);
   await page.getByRole("button", { name: "Sign in to the admin" }).click();
   await expect(page).toHaveURL(`${SERVER}/admin`);
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
-  await page.context().close();
+  // Kept for the invites by email, which only a cloud sign-in with two-factor authentication sends.
+  cloudAdmin = page;
 });
 
 test("sign-in with an account code from the host", async ({ browser }) => {
@@ -71,7 +79,13 @@ test("creating a project and inviting by email: the invite reaches the cloud", a
   await admin.goto(`${SERVER}/admin/projects/kontur/invites`);
   await admin.getByRole("textbox", { name: "Email" }).fill("dana@example.test");
   await admin.getByRole("button", { name: "Send invite" }).click();
-  await expect(admin.getByText("Invite sent to dana@example.test")).toBeVisible();
+  // The setup code's sign-in did not come through the cloud with two-factor authentication.
+  await expect(admin.getByText("Two-factor authentication needed")).toBeVisible();
+  const sender = cloudAdmin ?? admin;
+  await sender.goto(`${SERVER}/admin/projects/kontur/invites`);
+  await sender.getByRole("textbox", { name: "Email" }).fill("dana@example.test");
+  await sender.getByRole("button", { name: "Send invite" }).click();
+  await expect(sender.getByText("Invite sent to dana@example.test")).toBeVisible();
   const invites = await cloudInvites(await cloudDevice("dana@example.test"));
   expect(invites).toHaveLength(1);
   expect(invites[0]?.server).toMatchObject({ name: "Kontur team", address: SERVER });

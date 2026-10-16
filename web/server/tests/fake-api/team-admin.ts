@@ -84,6 +84,10 @@ function newInvite(world: World, request: Request, me: string): Answer {
   if (typeof email === "string" && email.startsWith("limit")) {
     return refuse(429, "rate_limited", 3 * 3600);
   }
+  // The server sends invites by email only for a cloud sign-in with two-factor authentication (`mfa_required`).
+  if (typeof email === "string" && email.startsWith("no-mfa")) {
+    return refuse(403, "mfa_required");
+  }
   if (kind === "account" && world.state.users.find((u) => u.id === user)?.admin === true) {
     return refuse(403, "forbidden");
   }
