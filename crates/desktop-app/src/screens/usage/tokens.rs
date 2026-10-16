@@ -26,7 +26,7 @@ use super::{
   series::{account_text, series_swatch, series_text},
   tokens_draw::{TokenPlot, draw},
   tokens_legend::legend,
-  tokens_table::tokens_table,
+  tokens_table::{table_footnote, tokens_table},
   tooltip, words,
 };
 use crate::{
@@ -51,7 +51,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>) ->
     return card.body([
       tokens_table(ctx, dashboard, shown.measure),
       push_down(),
-      footnote("usage-tokens-footnote", &ctx.t("usage.tokens.tableFootnote")),
+      footnote("usage-tokens-footnote", &table_footnote(ctx, dashboard)),
     ]);
   }
   let chart = ctx.mount_keyed::<TokensChart>(

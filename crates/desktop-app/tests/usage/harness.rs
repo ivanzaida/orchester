@@ -98,6 +98,17 @@ impl Seeded {
     }
   }
 
+  /// Where `id` is laid out, in logical pixels: (x, y, width, height).
+  pub fn bounds(&mut self, id: &str) -> (f32, f32, f32, f32) {
+    let bounds = self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"));
+    (bounds.x, bounds.y, bounds.width, bounds.height)
+  }
+
   /// A press with the pointer at the middle of `id`, and what the window does with it.
   pub fn click(&mut self, id: &str) {
     let bounds = self

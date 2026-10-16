@@ -77,17 +77,18 @@ pub enum Cell {
   Element(Element),
 }
 
-/// Rows of a table: dense data rows, or *Most expensive*'s list rows.
+/// Rows of a table: dense data rows, *Plan limits*' readings, or *Most expensive*'s list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Density {
   Data,
+  Readings,
   List,
 }
 
 impl Density {
   const fn height(self) -> f32 {
     match self {
-      Self::Data => DATA_ROW_HEIGHT,
+      Self::Data | Self::Readings => DATA_ROW_HEIGHT,
       Self::List => LIST_ROW_HEIGHT,
     }
   }
@@ -96,6 +97,8 @@ impl Density {
   const fn gap(self) -> SpacingSize {
     match self {
       Self::Data => SpacingSize::Md,
+      // 8 between *Plan limits*' readings (`CFzvr`).
+      Self::Readings => SpacingSize::Sm,
       Self::List => SpacingSize::Lg,
     }
   }
@@ -110,7 +113,7 @@ pub fn table(id: &str, columns: &[TableColumn], density: Density, rows: Vec<Elem
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(if tall { TALL_HEADER_HEIGHT } else { HEADER_HEIGHT }))
     .padding(if tall {
-      Padding::new().bottom(ExtraSpacing::Snug.role())
+      Padding::new().bottom(ExtraSpacing::TextArea.role())
     } else {
       Padding::new()
     })
@@ -139,21 +142,21 @@ fn heading(column: &TableColumn) -> Element {
   let words = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
+    .flex_shrink(0.0)
     .with_children(column.swatch.map(series_swatch))
     .child(text);
+  let justify = if column.figures { Justify::End } else { Justify::Start };
+  // A heading wider than its column runs past its start, as a figure column's does (`NO ACCOUNT` `pmUhB`).
+  let line = |child: Element| Row::new().width(Dimension::Pct(100.0)).justify(justify).child(child);
   let cell = Column::new()
-    .align_items(if column.figures {
-      Alignment::End
-    } else {
-      Alignment::Start
-    })
+    .spacing(ExtraSpacing::Fine.role())
     .with_children(
       column
         .over
         .as_ref()
-        .map(|over| fit(Text::new(over).variant(UsageText::ColumnHeading.role()))),
+        .map(|over| line(Text::new(over).variant(UsageText::ColumnOver.role()).nowrap().into())),
     )
-    .child(words);
+    .child(line(words.into()));
   sized_column(cell, column)
 }
 
@@ -207,7 +210,7 @@ fn content(column: &TableColumn, cell: Cell) -> Element {
     ),
     Cell::Muted(words) => fit(text(&words).variant(TypographyStyle::Description)),
     Cell::Strong(words) if column.figures => fit(text(&words).variant(UsageText::TotalFigure.role())),
-    Cell::Strong(words) => fit(text(&words).variant(TypographyStyle::Label)),
+    Cell::Strong(words) => fit(text(&words).variant(UsageText::TotalLabel.role())),
     Cell::Element(element) => element,
   }
 }

@@ -253,7 +253,14 @@ impl UsageToolbar {
     for (facet, (open, anchor)) in self.menus(props) {
       if open.get() {
         let panel = filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery);
-        popups.push(menu(anchor.clone(), open.clone(), panel).into());
+        let popup = menu(anchor.clone(), open.clone(), panel);
+        // The Account menu opens 12 under its button (`EU0ex`).
+        let popup = if facet == Facet::Account {
+          popup.offset(0.0, ctx.theme().spacing_value(SpacingSize::Md).to_px())
+        } else {
+          popup
+        };
+        popups.push(popup.into());
       }
     }
     if self.group.0.get() {

@@ -19,8 +19,8 @@ use super::card::{SWATCH, swatch};
 use crate::theme::{ExtraColor, ExtraRadius};
 
 /// The stripes across a hatched part: how many fit its diagonal, each a fifth of its own band.
-const STRIPES: usize = 4;
-const STRIPE_SHARE: f32 = 0.2;
+const STRIPES: usize = 3;
+const STRIPE_SHARE: f32 = 0.35;
 
 /// The color `series` is drawn in; No account's stripes and outline.
 pub fn series_color(series: AccountSeries) -> PaletteColor {
@@ -67,7 +67,8 @@ fn hatched(part: Row) -> Row {
     ]
   });
   part
-    .background_gradient(Gradient::linear(45.0, stops.collect::<Vec<_>>()))
+    // At 135° the bands run as `/` does (`LEQ1w`).
+    .background_gradient(Gradient::linear(135.0, stops.collect::<Vec<_>>()))
     .border(Border::inside(BorderSize::Sm, stripe))
 }
 

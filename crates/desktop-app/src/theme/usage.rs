@@ -37,6 +37,10 @@ pub enum UsageText {
   /// 11/500 `text_muted`, tracking 0.4, upper case: a table's column heading (`DAY` `PxHBc`, `TASK`
   /// `uuYPZ`).
   ColumnHeading,
+  /// 10/500 `text_muted`, tracking 0.4, upper case: the CLI over an account's column heading (`lBEhJ`).
+  ColumnOver,
+  /// 12/600 `text_primary`: a table's *Total* (`TNU34`).
+  TotalLabel,
   /// 12 `text_muted`, 1.4: what a card's rows mean under its title (`Subtitle` `Pde5c`, `UBN8h`).
   Subtitle,
   /// 13 `text_secondary`, 1.3: what the page shows under its title (`Description` `f8ubk`).
@@ -54,12 +58,14 @@ pub enum UsageText {
 }
 
 impl UsageText {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 14] = [
     Self::Axis,
     Self::AxisDay,
     Self::AxisStrong,
     Self::Footnote,
     Self::ColumnHeading,
+    Self::ColumnOver,
+    Self::TotalLabel,
     Self::Subtitle,
     Self::Description,
     Self::Figure,
@@ -80,6 +86,8 @@ impl UsageText {
       Self::AxisStrong => "usage_axis_strong",
       Self::Footnote => "usage_footnote",
       Self::ColumnHeading => "usage_column_heading",
+      Self::ColumnOver => "usage_column_over",
+      Self::TotalLabel => "usage_total_label",
       Self::Subtitle => "usage_subtitle",
       Self::Description => "usage_description",
       Self::Figure => "usage_figure",
@@ -97,6 +105,8 @@ impl UsageText {
       Self::AxisStrong => style(10.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
       Self::Footnote => style(11.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
       Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
+      Self::ColumnOver => style(10.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
+      Self::TotalLabel => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::Subtitle => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
       Self::Description => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Figure => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.text_primary),

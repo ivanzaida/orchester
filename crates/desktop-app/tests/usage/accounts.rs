@@ -2,6 +2,11 @@
 //! legend's series in order with Other accounts and No account last with its ⓘ, the table taking the whole
 //! row with more than three series, and the Account filter grouped by CLI with *No account*.
 
+use orchester_core::{
+  account::AccountCli,
+  time::Timestamp,
+  usage::{DayRange, Period, local_date},
+};
 use orchester_workspace::usage::UsageQuery;
 
 use crate::harness::Seeded;
@@ -56,5 +61,71 @@ fn usage_accounts_filter_groups_by_cli_and_chooses_no_account() {
     page.text("usage-limits-none-title"),
     "No plan limits from the chosen accounts",
     "plan limits follow the Account filter; reports it leaves out still came"
+  );
+}
+
+/// Three series: Codex's Default, Claude Code's Default (Other's one account) and No account.
+fn three_series() -> UsageQuery {
+  let mut query = UsageQuery::default();
+  query.filter.accounts = vec![
+    AccountCli::Codex.default_account(),
+    AccountCli::ClaudeCode.default_account(),
+  ];
+  query.filter.no_account = true;
+  query
+}
+
+#[test]
+fn usage_accounts_narrow_table_columns_fit_their_dates_and_headings() {
+  let mut page = Seeded::usage("usage", three_series());
+  page.click("usage-tokens-view-table");
+  assert!(!page.shows("usage-limits-row"), "three series stay beside Plan limits");
+  let width = |page: &mut Seeded, cell: usize| page.bounds(&format!("usage-tokens-table-row-0-cell-{cell}")).2;
+  for series in 1..=3 {
+    assert!(
+      (width(&mut page, series) - 84.0).abs() < 0.5,
+      "series columns are 84 (d3lc3)"
+    );
+  }
+  assert!(
+    (width(&mut page, 4) - 84.0).abs() < 0.5,
+    "SPENT is 84 beside Plan limits, not the wide 110"
+  );
+  assert!((width(&mut page, 5) - 36.0).abs() < 0.5, "RUNS is 36");
+  assert!(
+    width(&mut page, 0) >= 72.0,
+    "DAY keeps room for Wed, Oct 14: {}",
+    width(&mut page, 0)
+  );
+  let header = page.text("usage-tokens-table-header");
+  assert!(header.contains("NO ACCOUNT"), "{header}");
+  let footnote = page.text("usage-tokens-footnote");
+  assert!(
+    footnote.starts_with("Exact counts as the CLIs reported them. Today counts up to "),
+    "{footnote}"
+  );
+}
+
+#[test]
+fn usage_accounts_readings_from_yesterday_keep_their_window_whole() {
+  let yesterday = local_date(Timestamp::now()).pred_opt().expect("a day before today");
+  let query = UsageQuery {
+    period: Period::Custom(DayRange::new(yesterday, yesterday).expect("a day")),
+    ..UsageQuery::default()
+  };
+  let mut page = Seeded::usage("usage", query);
+  page.click("usage-limits-view-table");
+  assert!(
+    page.text("usage-limits-table-row-0-cell-0").starts_with("yesterday "),
+    "a reading from yesterday"
+  );
+  let width = |page: &mut Seeded, cell: usize| page.bounds(&format!("usage-limits-table-row-0-cell-{cell}")).2;
+  assert!(
+    (width(&mut page, 0) - 96.0).abs() < 0.5,
+    "REPORTED fits yesterday 19:17 and no more"
+  );
+  assert!(
+    (width(&mut page, 1) - 140.0).abs() < 0.5,
+    "WINDOW keeps the design's 140 for Codex · Default · weekly"
   );
 }

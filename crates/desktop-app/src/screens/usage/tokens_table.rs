@@ -14,9 +14,9 @@ use super::{
   words,
 };
 
-/// A series' column, the measure's total and the runs: beside *Plan limits* (`fxX9i`), and taking the whole
-/// row with more than three series (`FdC7Y`).
-const NARROW: (f32, f32, f32) = (84.0, 96.0, 44.0);
+/// A series' column, the measure's total and the runs: beside *Plan limits* (`fxX9i`, `d3lc3`), and taking
+/// the whole row with more than three series (`FdC7Y`).
+pub const NARROW: (f32, f32, f32) = (84.0, 84.0, 36.0);
 const WIDE: (f32, f32, f32) = (120.0, 110.0, 50.0);
 
 /// The bars as a table.
@@ -78,13 +78,25 @@ pub fn tokens_table(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> Eleme
   table("usage-tokens-table", &columns, Density::Data, rows)
 }
 
+/// What the table's figures are, and how far today counts when the range has it.
+pub fn table_footnote(ctx: &Ctx, dashboard: &Dashboard) -> Arc<str> {
+  if dashboard.has_today() {
+    ctx.t_args(
+      "usage.tokens.tableFootnoteToday",
+      [("time", display::clock(dashboard.now).as_str())],
+    )
+  } else {
+    ctx.t("usage.tokens.tableFootnote")
+  }
+}
+
 /// Whether the table needs the whole row: more than three series columns do not fit beside *Plan limits*
 /// (`FdC7Y`).
 pub fn needs_row(dashboard: &Dashboard) -> bool {
   dashboard.shown_series().len() > orchester_core::usage::OWN_SERIES
 }
 
-/// A row's name in the table: `Wed, Sep 24`, `Today, until 14:20`, or an hour.
+/// A row's name in the table: `Wed, Sep 24`, *Today* (the footnote says until when), or an hour.
 fn row_name(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar) -> Arc<str> {
   if let Some(hour) = bar.bucket.hour {
     return ctx.t_args(
@@ -96,10 +108,7 @@ fn row_name(ctx: &Ctx, dashboard: &Dashboard, bar: &SeriesBar) -> Arc<str> {
     );
   }
   if bar.bucket.date == dashboard.today() {
-    return ctx.t_args(
-      "usage.tokens.todayUntil",
-      [("time", display::clock(dashboard.now).as_str())],
-    );
+    return ctx.t("usage.date.today");
   }
   words::long_day(ctx, bar.bucket.date)
 }

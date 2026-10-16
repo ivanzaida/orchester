@@ -12,7 +12,7 @@ use lurq::{
   components::{Column, Placement, Popup, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, HitTestBehavior, dimension::Dimension},
+  node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
 };
 use orchester_core::usage::{AccountSeries, Grouping, Measure};
 use orchester_workspace::usage::Dashboard;
@@ -29,6 +29,8 @@ use crate::{
 /// The legend's room over the chart, as tall as *Plan limits*' two rows of windows beside it, so the two
 /// plots line up (`Legend` `CuobA`).
 pub const LEGEND_HEIGHT: f32 = 72.0;
+/// An item's line, with the 6 under it a row of 22 (`EA7QF`).
+const ITEM_HEIGHT: f32 = 22.0;
 
 /// The legend over the chart.
 pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element {
@@ -42,6 +44,8 @@ pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element
         (series == AccountSeries::NoAccount).then(|| ctx.mount_keyed::<NoAccountInfo>("usage-no-account-info", ()));
       Row::new()
         .id(id)
+        .height(Dimension::Px(ITEM_HEIGHT))
+        .padding(Padding::new().right(SpacingSize::Lg).bottom(ExtraSpacing::Snug.role()))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(series_swatch(series))
@@ -55,13 +59,13 @@ pub fn legend(ctx: &mut Ctx, dashboard: &Dashboard, measure: Measure) -> Element
     .id("usage-tokens-legend")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(LEGEND_HEIGHT))
-    .spacing(SpacingSize::Sm)
+    .spacing(ExtraSpacing::Fine.role())
     .child(
+      // Each item keeps 16 after it and 6 under it: one gap would space the rows as wide as the items.
       Row::new()
         .width(Dimension::Pct(100.0))
         .wrap()
-        .spacing(SpacingSize::Lg)
-        .align_items(Alignment::Center)
+        .align_items(Alignment::Start)
         .with_children(items),
     )
     .child(
@@ -101,6 +105,9 @@ fn caption(ctx: &Ctx, dashboard: &Dashboard, measure: Measure) -> std::sync::Arc
   })
 }
 
+/// The ⓘ's room, no taller than the legend's line.
+const ICON_ROOM: f32 = 16.0;
+
 /// The ⓘ after *No account*, which says what has no account while the pointer rests on it (`m6cFFt`).
 pub struct NoAccountInfo {
   shown: Signal<bool>,
@@ -122,6 +129,8 @@ impl Component for NoAccountInfo {
     let anchor = Row::new()
       .id("usage-no-account-info")
       .ref_element(self.anchor.clone())
+      .height(Dimension::Px(ICON_ROOM))
+      .align_items(Alignment::Center)
       .describe("a11y_name", ctx.t("usage.accounts.noneInfo"))
       .on_mouse_enter(move || show.set(true))
       .on_mouse_leave(move || hide.set(false))
@@ -137,7 +146,7 @@ impl Component for NoAccountInfo {
     anchor.child(
       Popup::new(self.anchor.clone(), panel)
         .open_when(true)
-        .placement(Placement::BottomStart)
+        .placement(Placement::Bottom)
         .offset(0.0, ExtraSpacing::Snug.value())
         .hit_test(HitTestBehavior::None)
         .dismiss_on_outside_click(false)

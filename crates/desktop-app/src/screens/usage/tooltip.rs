@@ -20,6 +20,9 @@ use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography};
 pub const WIDTH: f32 = 216.0;
 pub const TITLE_WIDTH: f32 = 282.0;
 const INFO_WIDTH: f32 = 264.0;
+/// A line's height, and an account's under Other accounts (`EA7QF`: 21 and 18 apart with the 5 between).
+const LINE: f32 = 16.0;
+const DETAIL_LINE: f32 = 13.0;
 const OFFSET: f32 = 12.0;
 
 /// The tooltip `id`: `title`, its `lines`, and where it came from.
@@ -74,6 +77,7 @@ pub fn line(mark: Option<Element>, name: &str, value: Option<&str>) -> Element {
   let mark = mark.unwrap_or_else(|| Row::new().width(Dimension::Px(SWATCH)).flex_shrink(0.0).into());
   Row::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(LINE))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(mark)
@@ -93,6 +97,7 @@ pub fn line(mark: Option<Element>, name: &str, value: Option<&str>) -> Element {
 pub fn detail_line(name: &str, value: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(DETAIL_LINE))
     .padding(Padding::new().left(SWATCH + ExtraSpacing::Snug.value()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)

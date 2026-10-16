@@ -214,6 +214,8 @@ fn name(ctx: &Ctx, dashboard: &Dashboard, key: &BreakdownKey, id: String) -> Ele
 
 /// A bar row, 2 above the next (`Row · Builder · Implement` in `Where tokens go`).
 const ROW_HEIGHT: f32 = 40.0;
+/// A bar row's line of figures (`YAqCn`), which leaves its 6 high bar room in the row.
+const FIGURES_LINE: f32 = 16.0;
 
 fn bar_row(
   ctx: &Ctx,
@@ -227,6 +229,7 @@ fn bar_row(
   let spent = dashboard.report.summary.spent();
   let figures = Row::new()
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(FIGURES_LINE))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(name(ctx, dashboard, &entry.key, format!("{id}-name")))

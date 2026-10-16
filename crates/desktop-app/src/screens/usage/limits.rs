@@ -21,10 +21,12 @@ use super::{
 use crate::ui::icon::Icon;
 
 /// Table columns (`CFzvr`): when, which window, % used, its reset.
-const REPORTED_COLUMN: f32 = 92.0;
-const WINDOW_COLUMN: f32 = 100.0;
-const USED_COLUMN: f32 = 40.0;
-const RESETS_COLUMN: f32 = 84.0;
+/// REPORTED takes *yesterday 19:17*, wider than the design's *today 14:15*; WINDOW keeps the design's 140, so
+/// *Codex · Default · weekly* is whole; REPORTED BY gives way instead.
+pub const REPORTED_COLUMN: f32 = 96.0;
+pub const WINDOW_COLUMN: f32 = 140.0;
+const USED_COLUMN: f32 = 36.0;
+const RESETS_COLUMN: f32 = 72.0;
 
 pub fn limits_view_switch(ctx: &Ctx, views: &Signal<Views>) -> Element {
   let views = views.clone();
@@ -156,11 +158,11 @@ fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
       row(
         &format!("usage-limits-table-row-{index}"),
         &columns,
-        Density::Data,
+        Density::Readings,
         cells,
       )
       .into()
     })
     .collect();
-  table("usage-limits-table", &columns, Density::Data, rows)
+  table("usage-limits-table", &columns, Density::Readings, rows)
 }
