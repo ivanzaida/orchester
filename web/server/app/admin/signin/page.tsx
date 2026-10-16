@@ -50,8 +50,11 @@ function FailureCallout({ failure, server }: { failure: Failure; server: string 
   );
 }
 
-/** *Sign in with Orchester Cloud*, or why it is not offered now (`j8WujU`). */
-function CloudSignIn({ server, csrf }: { server: ServerInfo; csrf: string }) {
+/**
+ * *Sign in with Orchester Cloud*, or why it is not offered now (`j8WujU`). `second`: the code is the way on now (join
+ * approval refused the cloud's sign-in), so the cloud's button steps back to secondary.
+ */
+function CloudSignIn({ server, csrf, second }: { server: ServerInfo; csrf: string; second: boolean }) {
   const cloud = config().cloudOrigin;
   if (cloud === null) {
     return <Callout tone="neutral" icon="cloud-off" title={t("signin.noCloudTitle")} body={t("signin.noCloudText")} />;
@@ -67,7 +70,7 @@ function CloudSignIn({ server, csrf }: { server: ServerInfo; csrf: string }) {
       <form action="/admin/trip" method="post">
         <CsrfField token={csrf} />
         <Hidden name="purpose" value="admin" />
-        <Submit kind="primary" icon="cloud" label={t("signin.cloud")} busyLabel={t("signin.cloudBusy")} />
+        <Submit kind={second ? "secondary" : "primary"} icon="cloud" label={t("signin.cloud")} busyLabel={t("signin.cloudBusy")} />
       </form>
       <Small>{t("signin.cloudHint", { host: new URL(cloud).host, server: server.name })}</Small>
     </>
@@ -86,13 +89,15 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const { failed } = await searchParams;
   const failure = failed === undefined ? undefined : FAILURES[failed];
   const cloudReady = config().cloudOrigin !== null && server.cloud?.accepting === true;
+  // As the drawn cloud-off case (`j8WujU`): when the cloud's sign-in would only be refused again, the code leads.
+  const codeLeads = !cloudReady || failed === "approval_required";
   return (
     <EntryShell server={server}>
       <Pair>
         <EntryCard>
           <CardHead title={t("signin.title", { server: server.name })} description={t("signin.description")} />
           {failure !== undefined && <FailureCallout failure={failure} server={server.name} />}
-          <CloudSignIn server={server} csrf={await formToken()} />
+          <CloudSignIn server={server} csrf={await formToken()} second={codeLeads} />
           {cloudReady && (
             <div className={styles.or}>
               <span className={styles.line} />
@@ -100,7 +105,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
               <span className={styles.line} />
             </div>
           )}
-          <ButtonLink kind={cloudReady ? "secondary" : "primary"} icon="key-round" href="/admin/signin/code">
+          <ButtonLink kind={codeLeads ? "primary" : "secondary"} icon="key-round" href="/admin/signin/code">
             {t("signin.code")}
           </ButtonLink>
           {cloudReady && <Small>{t("signin.codeHint")}</Small>}

@@ -200,12 +200,47 @@ test.describe("sign-in and setup (`j8WujU`, `ulIoG`, `w7qUM`)", () => {
 });
 
 test.describe("Members (`Mhudf`, `KagFB`)", () => {
-  test("m23: the browser's own select, with what the chosen role means under it", async ({ page }) => {
+  test("m23: the browser's own select says what the chosen role means to assistive technology only", async ({ page }) => {
     await signIn(page);
     await page.goto("/admin/projects/kontur");
     const select = page.getByRole("combobox", { name: "Role of Oleh Petrenko" });
     await expect(select).toHaveAccessibleDescription("Works on Kontur's tasks and configuration.");
+    await expect(page.getByText("Works on Kontur's tasks and configuration.").filter({ visible: true })).toHaveCount(0);
     await select.selectOption("owner");
     await expect(select).toHaveAccessibleDescription("Manages members and invites of Kontur.");
+    await expect(page.getByText("Manages members and invites of Kontur.").filter({ visible: true })).toHaveCount(0);
+  });
+
+  test("R1: member rows keep their drawn 54 at 1440", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/admin/projects/kontur");
+    const first = await box(page.getByRole("combobox", { name: "Role of Ivan Zaida" }));
+    const second = await box(page.getByRole("combobox", { name: "Role of Alice Moreau" }));
+    expect(second.y - first.y).toBeGreaterThan(52);
+    expect(second.y - first.y).toBeLessThan(57);
+  });
+
+  test("R1: at 390 the names keep to their line, whole, with · you", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await signIn(page);
+    await page.goto("/admin/projects/kontur");
+    const table = page.getByRole("table", { name: "Person" });
+    await expect(table.getByText("· you", { exact: true })).toBeVisible();
+    for (const name of ["Ivan Zaida", "Alice Moreau", "Oleh Petrenko"]) {
+      const cell = table.getByText(name, { exact: true });
+      expect((await box(cell)).height, name).toBeLessThan(20);
+      expect(await cell.evaluate((element) => element.scrollWidth <= element.clientWidth), name).toBe(true);
+    }
+  });
+});
+
+test.describe("sign-in after a refusal (`j8WujU`)", () => {
+  test("with join approval on, the code is the way on: it leads, and the cloud's button steps back", async ({ page }) => {
+    await page.goto("/admin/signin?failed=approval_required");
+    await expect(page.getByRole("link", { name: "Sign in with a code" })).toHaveClass(/primary/);
+    await expect(page.getByRole("button", { name: "Sign in with Orchester Cloud" })).toHaveClass(/secondary/);
+    await page.goto("/admin/signin");
+    await expect(page.getByRole("button", { name: "Sign in with Orchester Cloud" })).toHaveClass(/primary/);
+    await expect(page.getByRole("link", { name: "Sign in with a code" })).toHaveClass(/secondary/);
   });
 });
