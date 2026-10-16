@@ -48,6 +48,9 @@ pub enum InstructionsView {
   Import,
 }
 
+// The view a person left Instructions for, held while unsaved edits are asked about.
+impl lurq::app::component::DevtoolsInspectable for InstructionsView {}
+
 impl Default for InstructionsView {
   fn default() -> Self {
     Self::Rule(InstructionsTab::default(), None)
