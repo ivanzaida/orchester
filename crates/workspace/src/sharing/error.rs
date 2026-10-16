@@ -145,7 +145,7 @@ pub fn client_message(error: &ClientError, address: &ServerAddress) -> Message {
       .with("address", address.as_str().to_owned())
       .with("status", status.to_string()),
     ClientError::Api { code, .. } => api_message(*code),
-    ClientError::Cloud { .. } | ClientError::TwoFactorRequired => Message::new("servers.errors.cloudRefused"),
+    ClientError::Cloud { .. } => Message::new("servers.errors.cloudRefused"),
     ClientError::Setup => Message::new("servers.errors.setup"),
   }
 }

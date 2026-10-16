@@ -15,10 +15,20 @@ use serde::de::DeserializeOwned;
 
 use super::{ClientError, ServerAddress, bearer, builder};
 use crate::cloud::{
-  AccountResponse, AccountServer, CloudError, CloudInvite, CloudInvites, CloudSignIn, CloudSignedIn,
-  IdentityTokenIssued, IdentityTokenRequest, KeySetResponse, RegisteredServer, ServerResponse, ServersResponse,
-  TokenPurpose,
+  AccountResponse, AccountServer, CloudError, CloudInvite, CloudInvites, CloudSignIn, CloudSignInChallenge,
+  CloudSignedIn, IdentityTokenIssued, IdentityTokenRequest, KeySetResponse, RegisteredServer, ServerResponse,
+  ServersResponse, TokenPurpose, TwoFactorSignIn, TwoFactorSignedIn,
 };
+
+/// What the cloud answered the password step of a sign-in (`POST /auth/sessions`).
+#[derive(Debug)]
+pub enum SignInAnswer {
+  /// Signed in: the account has two-factor authentication off.
+  SignedIn(CloudSignedIn),
+  /// The password was right and the account has two-factor authentication on: a code finishes the sign-in
+  /// ([`CloudClient::finish_sign_in`]) with this challenge.
+  Challenged(CloudSignInChallenge),
+}
 
 /// Orchester Cloud's API at one address.
 #[derive(Clone, Debug)]
@@ -46,14 +56,19 @@ impl CloudClient {
   }
 
   /// `POST /auth/sessions`: signs this computer in with the person's email and password; the device token in the
-  /// answer is shown once. An account with two-factor authentication answers a challenge (`202`) instead, which is
-  /// [`ClientError::TwoFactorRequired`]: the code step is not built here yet.
-  pub async fn sign_in(&self, request: &CloudSignIn) -> Result<CloudSignedIn, ClientError> {
+  /// answer is shown once. An account with two-factor authentication answers a challenge (`202`) instead.
+  pub async fn sign_in(&self, request: &CloudSignIn) -> Result<SignInAnswer, ClientError> {
     let response = answered(self.json(Method::POST, "/auth/sessions", request)?).await?;
     if response.status() == StatusCode::ACCEPTED {
-      return Err(ClientError::TwoFactorRequired);
+      return read(response).await.map(SignInAnswer::Challenged);
     }
-    read(response).await
+    read(response).await.map(SignInAnswer::SignedIn)
+  }
+
+  /// `POST /auth/sessions/two-factor`: finishes a sign-in whose password step answered a challenge, with a code from
+  /// the authenticator app or a recovery code. The device is a two-factor session.
+  pub async fn finish_sign_in(&self, request: &TwoFactorSignIn) -> Result<TwoFactorSignedIn, ClientError> {
+    call(self.json(Method::POST, "/auth/sessions/two-factor", request)?).await
   }
 
   /// `DELETE /auth/sessions/current`: ends the device token `device`.

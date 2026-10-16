@@ -27,7 +27,7 @@ use zeroize::Zeroize;
 
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
-  cloud::CloudClient,
+  cloud::{CloudClient, SignInAnswer},
   error::ClientError,
 };
 use crate::{

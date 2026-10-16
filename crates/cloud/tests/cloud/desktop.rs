@@ -1,7 +1,7 @@
 //! The desktop's calls to Orchester Cloud (N1: `orchester-api`'s `CloudClient`, which `orchester-workspace`'s
 //! `sharing::cloud` and so Settings › Orchester use) against this cloud on loopback: an account confirmed through the
 //! API signs a desktop in, a wrong password is refused, a new account has no invites and no servers, and signing out
-//! ends the token. An account with two-factor authentication is told apart (`ClientError::TwoFactorRequired`).
+//! ends the token. An account with two-factor authentication answers a challenge, which a code from the app finishes.
 //! Accepting an invite with a token that names it is in `accept.rs`; the whole flow through the app is in
 //! `crates/desktop-app/tests/orchester_cloud`. The desktop's own handling (the keychain, the account row) is tested in
 //! `crates/workspace/tests/cloud_account.rs`; neither the workspace nor the app can be built into this binary without
@@ -9,8 +9,8 @@
 
 use orchester_api::{
   Credential,
-  client::{ClientError, CloudClient, ServerAddress},
-  cloud::{CloudErrorCode, CloudPlatform, CloudSignIn, DeviceInfo},
+  client::{ClientError, CloudClient, ServerAddress, SignInAnswer},
+  cloud::{CloudErrorCode, CloudPlatform, CloudSignIn, DeviceInfo, TwoFactorSignIn},
 };
 use orchester_core::secret::SecretValue;
 
@@ -47,7 +47,9 @@ pub async fn desktop_signs_in_and_out_with_a_confirmed_account() {
     "{wrong:?}"
   );
 
-  let signed = client.sign_in(&sign_in(email, PASSWORD)).await.expect("sign in");
+  let Ok(SignInAnswer::SignedIn(signed)) = client.sign_in(&sign_in(email, PASSWORD)).await else {
+    panic!("an account without two-factor authentication signs in with its password");
+  };
   remember(signed.token.expose());
   assert_eq!(signed.account.email, email);
   let token = SecretValue::new(signed.token.expose().to_owned()).expect("a token");
@@ -57,12 +59,23 @@ pub async fn desktop_signs_in_and_out_with_a_confirmed_account() {
   assert!(client.invites(&token).await.expect("invites").is_empty());
   assert!(client.servers(&token).await.expect("servers").is_empty());
 
-  cloud.enable_two_factor(signed.token.expose()).await;
+  let authenticator = cloud.enable_two_factor(signed.token.expose()).await;
   let challenged = client.sign_in(&sign_in(email, PASSWORD)).await;
-  assert!(
-    matches!(challenged, Err(ClientError::TwoFactorRequired)),
-    "a challenge is said as such, not as another server: {challenged:?}"
-  );
+  let Ok(SignInAnswer::Challenged(challenge)) = challenged else {
+    panic!("a challenge is said as such, not as another server: {challenged:?}");
+  };
+  remember(challenge.challenge.expose());
+  // The setup took the code of the cloud's now; the next step's is the first one left.
+  let finished = client
+    .finish_sign_in(&TwoFactorSignIn {
+      challenge: challenge.challenge,
+      code: Credential::new(authenticator.code(&cloud, 1)),
+    })
+    .await
+    .expect("the code finishes the sign-in");
+  remember(finished.signed_in.token.expose());
+  assert_eq!(finished.signed_in.account.email, email);
+  assert_eq!(finished.recovery_codes_left, 10);
 
   client.sign_out(&token).await.expect("sign out");
   let after = client.me(&token).await;

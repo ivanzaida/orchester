@@ -537,16 +537,25 @@ fn why_the_last_cloud_sign_in_ended_is_one_row() {
     email: "ivan@example.com".into(),
     reason: CloudSignInEnd::Revoked,
     ended_at: at(7),
+    invite: None,
   };
   db.set_cloud_sign_in_ended(Some(&revoked)).expect("recorded");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(revoked.clone()));
   let reset = EndedCloudSignIn {
     reason: CloudSignInEnd::PasswordReset,
-    ..revoked
+    ..revoked.clone()
   };
   db.set_cloud_sign_in_ended(Some(&reset))
     .expect("the newer one replaces it");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(reset));
+  let for_a_code = EndedCloudSignIn {
+    reason: CloudSignInEnd::TwoFactor,
+    invite: Some("Billing".into()),
+    ..revoked
+  };
+  db.set_cloud_sign_in_ended(Some(&for_a_code))
+    .expect("signed out to sign in with a code");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(for_a_code));
   db.set_cloud_sign_in_ended(None).expect("signed in again");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
 }

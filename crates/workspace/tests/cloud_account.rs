@@ -27,7 +27,7 @@ use orchester_core::{repository::RepositoryIdentity, secret::SecretVault};
 use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{
   CloudIdentity, CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError, Trust,
-  cloud::{CloudError, ServerJoin, WebPage},
+  cloud::{CloudError, ServerJoin, SignInStep, WebPage},
 };
 use server_support::{TestServer, test_cloud};
 
@@ -44,9 +44,10 @@ fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
   assert_eq!(refused.cloud_code(), Some(CloudErrorCode::InvalidCredentials));
   assert!(desktop.cloud.account().expect("account").is_none());
 
-  let account = desktop
-    .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
-    .expect("sign in");
+  let signed_in = desktop.block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())));
+  let Ok(SignInStep::SignedIn(account)) = signed_in else {
+    panic!("signed in with the password: {signed_in:?}");
+  };
   assert_eq!(account.email, EMAIL);
   assert_eq!(desktop.cloud.account().expect("account"), Some(account));
   let stored = desktop

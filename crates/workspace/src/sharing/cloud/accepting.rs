@@ -4,7 +4,8 @@
 //! no check code to compare. The cloud lists an accepted invite no more but keeps issuing tokens for it to this
 //! account, so this computer keeps the invite until the join finished (N1 security review 1, M2): a join that failed is
 //! asked again, and one that waits for approval is asked again with that approval until it is approved or refused,
-//! as often as [`super::asking`] lets it.
+//! as often as [`super::asking`] lets it. Accepting needs two-factor authentication on the account and a sign-in with a
+//! code on this computer: a refusal for either leaves the invite open, at the cloud and here.
 
 use orchester_api::{
   ErrorCode,
@@ -98,7 +99,10 @@ impl Cloud {
           self.keep_accepted(scheduled(waiting, now)).await?;
         }
       },
-      Err(CloudError::InviteEnded | CloudError::JoinRefused) => self.forget_accepted(kept.invite).await?,
+      // Not accepted: the invite stays open, listed by the cloud again, to accept once the person has a code.
+      Err(
+        CloudError::InviteEnded | CloudError::JoinRefused | CloudError::TwoFactorOff | CloudError::TwoFactorSession,
+      ) => self.forget_accepted(kept.invite).await?,
       // Kept: asked again on its own while its approval is open, and by the person.
       Err(_) => self.keep_accepted(scheduled(kept, now)).await?,
     }
@@ -145,8 +149,9 @@ impl Cloud {
   }
 }
 
-/// How a failed join ends the invite for good, so it is not asked again: the cloud no longer issues tokens for it
-/// (declined elsewhere, revoked or expired), the server has no invite for it, or the server refused this computer.
+/// How a failed join ends this ask without asking again on its own: the cloud no longer issues tokens for the invite
+/// (declined elsewhere, revoked or expired), the server has no invite for it, or the server refused this computer; or
+/// the cloud refused a token without two-factor authentication.
 fn ending(error: &SharingError) -> Option<CloudError> {
   let SharingError::Client(error) = error else {
     return None;
@@ -156,6 +161,14 @@ fn ending(error: &SharingError) -> Option<CloudError> {
       code: CloudErrorCode::NotFound,
       ..
     } => Some(CloudError::InviteEnded),
+    ClientError::Cloud {
+      code: CloudErrorCode::MfaRequired,
+      ..
+    } => Some(CloudError::TwoFactorOff),
+    ClientError::Cloud {
+      code: CloudErrorCode::SessionWithoutMfa,
+      ..
+    } => Some(CloudError::TwoFactorSession),
     _ => match error.code()? {
       ErrorCode::NotInvited => Some(CloudError::InviteEnded),
       ErrorCode::ApprovalRefused | ErrorCode::Forbidden => Some(CloudError::JoinRefused),

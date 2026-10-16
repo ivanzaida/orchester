@@ -37,6 +37,14 @@ pub enum CloudError {
   /// This computer asked for the invite as often as it does ([`super::MAX_ASKS`]); each ask takes an identity token.
   #[error("asked for this invite as often as Orchester does")]
   TooManyAsks,
+  /// Accepting the invite needs two-factor authentication on the account, which is off (`403 mfa_required`); the invite
+  /// stays open.
+  #[error("accepting the invite needs two-factor authentication on the account")]
+  TwoFactorOff,
+  /// Accepting the invite needs this computer signed in with a two-factor code, and it signed in without one
+  /// (`403 session_without_mfa`); the invite stays open.
+  #[error("accepting the invite needs a sign-in with a two-factor code")]
+  TwoFactorSession,
   /// The cloud lists no team server at that address for the account.
   #[error("the cloud lists no team server at that address for the account")]
   NoServer,
@@ -88,11 +96,6 @@ impl CloudError {
           | ClientError::UntrustedCertificate
       )
     )
-  }
-
-  /// Whether the cloud took the password but asks for a two-factor code, which the app does not ask for yet.
-  pub fn two_factor_required(&self) -> bool {
-    matches!(self, Self::Client(ClientError::TwoFactorRequired))
   }
 
   /// Why the cloud ended this computer's token, and when (milliseconds), when it refused it saying so.
