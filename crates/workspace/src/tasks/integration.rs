@@ -12,7 +12,7 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, clean_up_recorded, leftovers_of, merge_run_at,
+    RecordedCleanupError, RunMerge, clean_up_recorded_as_seen, leftovers_of, merge_run_at,
   },
   revision::Revision,
   run::{BranchName, Run},
@@ -55,6 +55,23 @@ pub enum IntegrationProblem {
     merge: RunMerge,
     problem: Message,
   },
+}
+
+/// Why a removal automation asked for did not happen: what a person reads, and whether the run changed since
+/// automation read it ([`IntegrationProblem::RunChanged`]), which it names with a code of its own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemovalRefused {
+  pub message: Message,
+  pub run_changed: bool,
+}
+
+impl From<Message> for RemovalRefused {
+  fn from(message: Message) -> Self {
+    Self {
+      message,
+      run_changed: false,
+    }
+  }
 }
 
 impl From<StoreError> for IntegrationProblem {
@@ -372,8 +389,8 @@ fn worktree_owners(run: &Run) -> (&BranchName, Vec<StepExecutionId>) {
 }
 
 /// Removes what `run` left with the removal recorded first, refused once the run has live work as
-/// stored now, e.g. continued from another window since its page was read
-/// ([`clean_up_recorded`]).
+/// stored now, e.g. continued from another window since its page was read, or, read again once the
+/// removal is recorded, has other worktrees than `run` ([`clean_up_recorded_as_seen`]).
 fn clear(
   db: &mut ProjectDb,
   programs: &Programs,
@@ -382,14 +399,19 @@ fn clear(
   confirmed: Option<&Leftovers>,
 ) -> Result<Cleanup, IntegrationProblem> {
   let git = programs.git_work();
-  let cleanup =
-    clean_up_recorded(db, (&git, Path::new(GIT), repo_root), run, confirmed, Timestamp::now()).map_err(|error| {
-      tracing::warn!("cannot remove what the run left");
-      match error {
-        RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
-        RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
-      }
-    })?;
+  let unchanged = |db: &ProjectDb| {
+    let stored = db.run(run.id()).map_err(run_store_error)?;
+    Ok(stored.is_some_and(|stored| worktree_owners(&stored) == worktree_owners(run)))
+  };
+  let git = (&git, Path::new(GIT), repo_root);
+  let cleanup = clean_up_recorded_as_seen(db, git, run, confirmed, (Timestamp::now(), unchanged)).map_err(|error| {
+    tracing::warn!("cannot remove what the run left");
+    match error {
+      RecordedCleanupError::Cleanup(error) => IntegrationProblem::Cleanup(error),
+      RecordedCleanupError::Store(error) => IntegrationProblem::from(error),
+      RecordedCleanupError::RunChanged => IntegrationProblem::RunChanged,
+    }
+  })?;
   prune_indexes(repo_root);
   Ok(cleanup)
 }

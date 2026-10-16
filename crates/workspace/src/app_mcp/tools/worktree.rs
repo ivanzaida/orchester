@@ -124,7 +124,9 @@ pub async fn remove_worktree(
     // The removal drops the channel unanswered when it did not start: another operation took the run.
     match outcome.recv() {
       Ok(Ok(())) => {}
-      Ok(Err(reason)) => return Err(ToolError::refused("removal_failed", vec![reason])),
+      // The run worked again since it was read here: read it again before removing what it left.
+      Ok(Err(refused)) if refused.run_changed => return Err(ToolError::refused("run_changed", vec![refused.message])),
+      Ok(Err(refused)) => return Err(ToolError::refused("removal_failed", vec![refused.message])),
       Err(_) => return Err(refused("merge_running", "appMcp.errors.integrationRunning")),
     }
     Ok(json!({

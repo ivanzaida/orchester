@@ -3,6 +3,8 @@
 
 mod support;
 
+use std::sync::{Arc, mpsc};
+
 use orchester_core::{
   integration::{CleanupError, Leftovers},
   run::InterruptCause,
@@ -10,9 +12,14 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::tasks::{
-  detail::TaskDetail,
-  integration::{IntegrationProblem, remove_in},
+use orchester_workspace::{
+  activity::Activity,
+  tasks::{
+    detail::TaskDetail,
+    integration::{IntegrationProblem, remove_in},
+    integration_jobs::{IntegrationJobs, RemoveArgs, Remover},
+  },
+  workspace::OpenProject,
 };
 use support::{Fixture, at};
 
@@ -86,4 +93,41 @@ fn worktree_removal_is_recorded_once_an_interrupted_run_is_found_without_its_fol
   let latest = detail.run.as_ref().expect("the run");
   assert!(latest.worktree_removed.is_some());
   assert!(detail.history[0].removed_at.is_some());
+}
+
+#[test]
+fn worktree_removal_automation_asked_for_tells_it_the_run_changed() {
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add login", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  fixture.succeed(&mut run, at(30));
+  // What the tool read; the run then works again in a new worktree and is interrupted.
+  let read = run.clone();
+  let step = run.snapshot().steps()[0].key().clone();
+  let events = run.follow_up(&step, at(40)).expect("follow up");
+  fixture.record(&run, &events);
+  let events = run.interrupt(InterruptCause::QuitNow, at(50)).expect("interrupt");
+  fixture.record(&run, &events);
+
+  let open = OpenProject {
+    project: fixture.db.project().clone(),
+    repo_root: fixture.repo.path().to_path_buf(),
+  };
+  let (answer, outcome) = mpsc::channel();
+  IntegrationJobs::default().of(run.id()).start_remove(RemoveArgs {
+    open,
+    task,
+    key: "ORC-1".into(),
+    number: run.number().get(),
+    run: read,
+    confirmed: Leftovers::default(),
+    programs: Programs::processes(),
+    activity: Activity::new(),
+    separator: ", ".into(),
+    changed: Arc::new(|| {}),
+    by: Remover::Automation(answer),
+  });
+  let refused = outcome.recv().expect("an answer").expect_err("refused");
+  assert!(refused.run_changed, "{refused:?}");
+  assert_eq!(refused.message.key, "runs.worktree.failure.runChanged");
 }

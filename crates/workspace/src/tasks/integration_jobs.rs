@@ -22,7 +22,7 @@ use orchester_exec::programs::Programs;
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
-use super::integration::{IntegrationProblem, merge_in, remove_in};
+use super::integration::{IntegrationProblem, RemovalRefused, merge_in, remove_in};
 use crate::{
   activity::{Activity, OperationSpec, operations},
   messages::{self, Message},
@@ -453,7 +453,7 @@ impl RunJobs {
     {
       tracing::error!(%error, "cannot start run cleanup thread");
       match automation {
-        Some(answer) => answer_automation(&answer, Err(messages::interrupted())),
+        Some(answer) => answer_automation(&answer, Err(messages::interrupted().into())),
         None => self.update(|state| state.remove = JobState::Failed(messages::interrupted())),
       }
       self.finish();
@@ -481,6 +481,7 @@ impl RunJobs {
     let result = catch_unwind(AssertUnwindSafe(|| {
       remove_in(&open.repo_root, &programs, &run, &confirmed)
     }));
+    let run_changed = matches!(result, Ok(Err(IntegrationProblem::RunChanged)));
     let outcome = match (result, &by) {
       (Ok(Ok(())), _) => {
         running.finish();
@@ -512,7 +513,10 @@ impl RunJobs {
     self.finish();
     changed();
     if let Remover::Automation(answer) = by {
-      answer_automation(&answer, outcome);
+      answer_automation(
+        &answer,
+        outcome.map_err(|message| RemovalRefused { message, run_changed }),
+      );
     }
   }
 
@@ -576,7 +580,7 @@ pub struct RemoveArgs {
 
 /// Tells the automation that asked for a removal how it ended. A caller that stopped waiting no longer
 /// needs it: the removal stands either way, as the status bar and the run's page show.
-fn answer_automation(answer: &mpsc::Sender<Result<(), Message>>, outcome: Result<(), Message>) {
+fn answer_automation(answer: &mpsc::Sender<Result<(), RemovalRefused>>, outcome: Result<(), RemovalRefused>) {
   if answer.send(outcome).is_err() {
     tracing::debug!("the automation that asked for a worktree removal stopped waiting for it");
   }
@@ -589,5 +593,5 @@ pub enum Remover {
   /// is published as done, and closes that dialog.
   Person(Arc<dyn Fn() + Send + Sync>),
   /// Automation through Orchester's MCP server, which waits for the outcome on this channel.
-  Automation(mpsc::Sender<Result<(), Message>>),
+  Automation(mpsc::Sender<Result<(), RemovalRefused>>),
 }
