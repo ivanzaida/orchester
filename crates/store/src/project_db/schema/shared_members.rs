@@ -18,3 +18,10 @@ ALTER TABLE sharing ADD COLUMN members_read_at INTEGER;
 ALTER TABLE sharing ADD COLUMN remote_hint TEXT;
 ALTER TABLE sharing ADD COLUMN remote_hint_read_at INTEGER;
 ";
+
+/// Who this computer was signed in as when it read the members, so the list still names the person once it signed out
+/// of the server and no longer knows its account there.
+pub(super) const READ_AS_MIGRATION: &str = r"
+-- The person's user id on the server when the members were last read; NULL when the reader was not one of them.
+ALTER TABLE sharing ADD COLUMN members_read_as TEXT;
+";
