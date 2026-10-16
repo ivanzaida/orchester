@@ -1,29 +1,30 @@
-//! Orchester Cloud from this tree (`orchester-cloud`) on loopback, on a database of its own in the PostgreSQL that
-//! `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, with a mailer that keeps what it sends and the key ceremony done: what
-//! the desktop's N1 flows talk to in `tests/orchester_cloud`. The database is dropped at the end.
+//! Orchester Cloud from this tree on loopback: the `orchester-cloud` program (`cargo build -p orchester-cloud`), run
+//! as its own process so the app's tests do not link the cloud's web stack, on a database of its own in the PostgreSQL
+//! that `ORCHESTER_CLOUD_TEST_DATABASE_URL` names, sending its mail to an SMTP stub, with the key ceremony done as an
+//! operator does it. The process is stopped and the database dropped at the end.
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+  net::{SocketAddr, TcpListener},
+  path::PathBuf,
+  process::{Child, Command, Stdio},
+  sync::Arc,
+  time::Duration,
+};
 
 use orchester_api::{
   Credential,
   client::{CloudClient, ServerAddress},
   cloud::{CloudPlatform, CloudSignIn, DeviceInfo, ServerLinked},
-  identity::{PrivateKey, RootKey},
-};
-use orchester_cloud::{
-  Cloud,
-  clock::SystemClock,
-  config::Config,
-  mail::{Email, MailFuture, Mailer},
+  identity::{KeySetStatement, PrivateKey, RootKey},
 };
 use orchester_core::id::IdempotencyKey;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+use tempfile::TempDir;
 use tokio::{
-  io::{AsyncReadExt, AsyncWriteExt},
+  io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
   net::TcpStream,
   runtime::Runtime,
-  sync::oneshot,
 };
 
 /// The variable that names the PostgreSQL server (a URL without a database, whose user may create databases).
@@ -32,10 +33,11 @@ pub const DATABASE_URL: &str = "ORCHESTER_CLOUD_TEST_DATABASE_URL";
 pub struct RealCloud {
   runtime: Runtime,
   address: SocketAddr,
-  inbox: Arc<Inbox>,
+  mail: Arc<Mutex<Vec<String>>>,
   server: String,
   database: String,
-  stop: Option<oneshot::Sender<()>>,
+  process: Child,
+  _scratch: TempDir,
 }
 
 impl RealCloud {
@@ -47,47 +49,43 @@ impl RealCloud {
       .to_owned();
     let runtime = Runtime::new().expect("cloud runtime");
     let database = format!("n1_{}", IdempotencyKey::generate().to_string().replace('-', ""));
-    let inbox = Arc::new(Inbox::default());
-    let root = RootKey::new(&PrivateKey::generate().expect("root key")).expect("root");
-    let (address, stop) = runtime.block_on(async {
+    runtime.block_on(async {
       admin(&server)
         .await
         .batch_execute(&format!("CREATE DATABASE {database}"))
         .await
         .expect("database");
-      let config = Config {
-        listen: "127.0.0.1:0".parse().expect("loopback"),
-        public_url: "https://cloud.example.test".into(),
-        database_url: Credential::new(format!("{server}/{database}?sslmode=disable")),
-        smtp_url: Credential::new("smtp://127.0.0.1:25".into()),
-        smtp_from: "Orchester <no-reply@cloud.example.test>".into(),
-        key_encryption_key: Credential::new("ab".repeat(32)),
-        root_public_key: root.public_key(),
-        trusted_proxies: Vec::new(),
-      };
-      let cloud = Cloud::open(config, Arc::new(SystemClock), inbox.clone())
-        .await
-        .expect("open the cloud");
-      cloud.host_rotate_keys().await.expect("a signing key");
-      let statement = cloud.host_prepare_key_set().await.expect("key set");
-      let signed = root.sign_key_set(&statement, statement.issued_at).expect("signed");
-      cloud.host_publish_key_set(&signed).await.expect("published");
-      let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listen");
-      let address = listener.local_addr().expect("address");
-      let (stop, stopped) = oneshot::channel::<()>();
-      tokio::spawn(orchester_cloud::serve(cloud, listener, async {
-        stopped.await.unwrap_or(());
-      }));
-      (address, stop)
     });
-    Self {
+    let mail = Arc::new(Mutex::new(Vec::new()));
+    let relay = runtime.block_on(relay(mail.clone()));
+    let scratch = tempfile::Builder::new()
+      .prefix("cloud-")
+      .tempdir_in(scratch_root())
+      .expect("scratch");
+    let root = RootKey::new(&PrivateKey::generate().expect("root key")).expect("root");
+    let address = free_address();
+    let environment = environment((&server, &database), (address, relay), &root.public_key().encoded());
+    ceremony(&scratch, &environment, &root);
+    let process = Command::new(program())
+      .arg("serve")
+      .current_dir(scratch.path())
+      .envs(environment)
+      .stdout(Stdio::null())
+      // Its request log is the cloud's own business; a failing test says what it saw.
+      .stderr(Stdio::null())
+      .spawn()
+      .expect("start orchester-cloud");
+    let cloud = Self {
       runtime,
       address,
-      inbox,
+      mail,
       server,
       database,
-      stop: Some(stop),
-    }
+      process,
+      _scratch: scratch,
+    };
+    cloud.wait_until_listening();
+    cloud
   }
 
   pub fn url(&self) -> String {
@@ -98,7 +96,7 @@ impl RealCloud {
   pub fn account(&self, email: &str, password: &str, name: &str) {
     let body = json!({"email": email, "password": password, "display_name": name});
     assert_eq!(self.request("POST", "/auth/signup", None, &body).0, 202);
-    let link = self.runtime.block_on(self.inbox.link_to(email));
+    let link = self.confirmation_to(email);
     let confirm = json!({"link_token": link, "password": password});
     assert_eq!(self.request("POST", "/auth/confirm", None, &confirm).0, 204);
   }
@@ -139,24 +137,127 @@ impl RealCloud {
   fn request(&self, method: &str, path: &str, token: Option<&str>, body: &Value) -> (u16, Value) {
     self.runtime.block_on(exchange(self.address, method, path, token, body))
   }
+
+  fn wait_until_listening(&self) {
+    for _ in 0..300 {
+      if std::net::TcpStream::connect(self.address).is_ok() {
+        return;
+      }
+      std::thread::sleep(Duration::from_millis(100));
+    }
+    panic!("orchester-cloud did not listen at {}", self.address);
+  }
+
+  /// The token of the newest confirmation link the relay received for `email`.
+  fn confirmation_to(&self, email: &str) -> String {
+    for _ in 0..100 {
+      let found = self.mail.lock().iter().rev().find_map(|message| {
+        // Quoted-printable wraps long lines with a soft break.
+        let text = message.replace("=\r\n", "").replace("=\n", "");
+        if !text.contains(email) {
+          return None;
+        }
+        let start = text.find("/confirm/")? + "/confirm/".len();
+        text.get(start..start + 64).map(str::to_owned)
+      });
+      if let Some(token) = found {
+        return token;
+      }
+      std::thread::sleep(Duration::from_millis(100));
+    }
+    panic!("no confirmation reached {email}");
+  }
 }
 
 impl Drop for RealCloud {
   fn drop(&mut self) {
-    if let Some(stop) = self.stop.take() {
-      // The cloud may have stopped already; its database goes either way.
-      let _ = stop.send(());
+    // Our own child, stopped by its handle; it may have stopped already.
+    if let Err(error) = self.process.kill() {
+      eprintln!("orchester-cloud had stopped: {error}");
+    }
+    if let Err(error) = self.process.wait() {
+      eprintln!("orchester-cloud could not be waited for: {error}");
     }
     let (server, database) = (self.server.clone(), self.database.clone());
     self.runtime.block_on(async move {
-      // Let the cloud's pool close its connections before the database goes.
-      tokio::time::sleep(Duration::from_millis(200)).await;
       let drop = format!("DROP DATABASE IF EXISTS {database} WITH (FORCE)");
       if let Err(error) = admin(&server).await.batch_execute(&drop).await {
         eprintln!("the test database {database} stays: {error}");
       }
     });
   }
+}
+
+/// The weekly ceremony on a new cloud: a signing key, its key set signed offline by `root`, published.
+fn ceremony(scratch: &TempDir, environment: &[(String, String)], root: &RootKey) {
+  let run = |args: &[&str]| {
+    let status = Command::new(program())
+      .args(args)
+      .current_dir(scratch.path())
+      .envs(environment.iter().cloned())
+      .stdout(Stdio::null())
+      .status()
+      .expect("run orchester-cloud");
+    assert!(status.success(), "orchester-cloud {args:?} failed");
+  };
+  run(&["keys", "rotate"]);
+  let statement = scratch.path().join("statement.json");
+  run(&["keys", "prepare", path(&statement)]);
+  let prepared: KeySetStatement =
+    serde_json::from_slice(&std::fs::read(&statement).expect("statement")).expect("a key set statement");
+  let signed = scratch.path().join("signed.jws");
+  let compact = root.sign_key_set(&prepared, prepared.issued_at).expect("signed");
+  std::fs::write(&signed, compact).expect("write the signed key set");
+  run(&["keys", "publish", path(&signed)]);
+}
+
+/// The program built from this tree, beside the test binaries' folder (`target/<profile>/`).
+fn program() -> PathBuf {
+  let deps = std::env::current_exe().expect("the test binary");
+  let profile = deps.parent().and_then(|deps| deps.parent()).expect("target/<profile>");
+  let program = profile.join(format!("orchester-cloud{}", std::env::consts::EXE_SUFFIX));
+  assert!(
+    program.is_file(),
+    "build the cloud first: cargo build -p orchester-cloud ({} is missing)",
+    program.display()
+  );
+  program
+}
+
+fn scratch_root() -> PathBuf {
+  let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/desktop-sharing/tests");
+  std::fs::create_dir_all(&root).expect("scratch directory");
+  root
+}
+
+fn path(path: &std::path::Path) -> &str {
+  path.to_str().expect("a UTF-8 path")
+}
+
+fn free_address() -> SocketAddr {
+  TcpListener::bind("127.0.0.1:0")
+    .and_then(|listener| listener.local_addr())
+    .expect("a free port")
+}
+
+/// The cloud's configuration, as `ORCHESTER_CLOUD_*` variables.
+fn environment(
+  (server, database): (&str, &str),
+  (listen, relay): (SocketAddr, SocketAddr),
+  root_public_key: &str,
+) -> Vec<(String, String)> {
+  [
+    ("LISTEN", listen.to_string()),
+    ("PUBLIC_URL", "https://cloud.example.test".to_owned()),
+    ("DATABASE_URL", format!("{server}/{database}?sslmode=disable")),
+    ("SMTP_URL", format!("smtp://{relay}")),
+    ("SMTP_FROM", "Orchester <no-reply@cloud.example.test>".to_owned()),
+    ("KEY_ENCRYPTION_KEY", "ab".repeat(32)),
+    ("ROOT_PUBLIC_KEY", root_public_key.to_owned()),
+  ]
+  .into_iter()
+  .map(|(key, value)| (format!("ORCHESTER_CLOUD_{key}"), value))
+  .collect()
 }
 
 /// A connection to the server's `postgres` database.
@@ -173,37 +274,54 @@ async fn admin(server: &str) -> tokio_postgres::Client {
   client
 }
 
-/// The cloud's mail, kept for the test to read the links in it.
-#[derive(Default)]
-struct Inbox(Mutex<Vec<(String, String)>>);
-
-impl Mailer for Inbox {
-  fn send(&self, email: Email) -> MailFuture<'_> {
-    self.0.lock().push((email.to().to_owned(), email.body().to_owned()));
-    Box::pin(async { Ok(()) })
-  }
+/// An SMTP relay on loopback that accepts every message and keeps its data.
+async fn relay(mail: Arc<Mutex<Vec<String>>>) -> SocketAddr {
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+    .await
+    .expect("relay listens");
+  let address = listener.local_addr().expect("relay address");
+  tokio::spawn(async move {
+    while let Ok((stream, _)) = listener.accept().await {
+      tokio::spawn(session(stream, mail.clone()));
+    }
+  });
+  address
 }
 
-impl Inbox {
-  /// The token of the newest confirmation link sent to `email`, waiting for it to be sent in the background.
-  async fn link_to(&self, email: &str) -> String {
-    for _ in 0..100 {
-      let found = self
-        .0
-        .lock()
-        .iter()
-        .rev()
-        .find(|(to, _)| to == email)
-        .and_then(|(_, body)| {
-          let start = body.find("/confirm/")? + "/confirm/".len();
-          body.get(start..start + 64).map(str::to_owned)
-        });
-      if let Some(token) = found {
-        return token;
+async fn session(stream: TcpStream, mail: Arc<Mutex<Vec<String>>>) {
+  let (read, mut write) = stream.into_split();
+  let mut lines = BufReader::new(read).lines();
+  if write.write_all(b"220 relay.test ESMTP\r\n").await.is_err() {
+    return;
+  }
+  while let Ok(Some(line)) = lines.next_line().await {
+    let command = line.to_ascii_uppercase();
+    let reply: &[u8] = if command.starts_with("EHLO") || command.starts_with("HELO") {
+      b"250-relay.test\r\n250 8BITMIME\r\n"
+    } else if command.starts_with("DATA") {
+      if write.write_all(b"354 go ahead\r\n").await.is_err() {
+        return;
       }
-      tokio::time::sleep(Duration::from_millis(100)).await;
+      let mut data = String::new();
+      while let Ok(Some(line)) = lines.next_line().await {
+        if line == "." {
+          break;
+        }
+        data.push_str(&line);
+        data.push('\n');
+      }
+      mail.lock().push(data);
+      b"250 queued\r\n"
+    } else if command.starts_with("QUIT") {
+      // The client goes either way.
+      let _ = write.write_all(b"221 bye\r\n").await;
+      return;
+    } else {
+      b"250 ok\r\n"
+    };
+    if write.write_all(reply).await.is_err() {
+      return;
     }
-    panic!("no confirmation reached {email}");
   }
 }
 

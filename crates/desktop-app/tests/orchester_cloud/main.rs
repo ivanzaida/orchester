@@ -7,7 +7,13 @@
 //!
 //! The tests need a PostgreSQL whose user may create databases, named by `ORCHESTER_CLOUD_TEST_DATABASE_URL`
 //! (`postgres://user:password@host:port`); without it they are ignored, never passed:
-//! `cargo test -p orchester-app --test orchester_cloud orchester_cloud -- --ignored`.
+//! `cargo test -p orchester-app --test orchester_cloud orchester_cloud -- --ignored`, after
+//! `cargo build -p orchester-cloud`.
+
+#![allow(
+  clippy::print_stderr,
+  reason = "the tests say on the console what they could not clean up: a database or the cloud's process"
+)]
 
 #[path = "../orchester/harness.rs"]
 #[allow(dead_code, reason = "the recording port is for tests/orchester's plain-HTTP server")]

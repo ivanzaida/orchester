@@ -102,8 +102,9 @@ orchester-server.workspace = true
 orchester-api = { workspace = true, features = ["client", "identity"] }
 # Set-up requests to a test server that presents its own certificate (`workspace/tests/server_support/tls.rs`).
 tokio-rustls.workspace = true
-# Orchester Cloud from this tree on a PostgreSQL of the test's own, for N1 end to end (`tests/orchester_cloud`).
-orchester-cloud.workspace = true
+# Creates and drops the database of N1's end-to-end tests against the `orchester-cloud` program
+# (`tests/orchester_cloud`). The cloud runs as its own process: linking it would bring actix's `tracing/log` into
+# the shared crates and change their lints.
 tokio-postgres.workspace = true
 # Exercises the production MCP tools over an in-process transport without discovery-file ACLs.
 rmcp = { workspace = true, features = ["client"] }
