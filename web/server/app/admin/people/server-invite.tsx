@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useCallback, useState } from "react";
 
 import { Checkbox } from "@orchester/ui/components/checkbox";
 import { Submit } from "@orchester/ui/components/submit";
@@ -34,6 +34,8 @@ export function ServerInvite(props: Props) {
   const [admin, setAdmin] = useState(false);
   const [code, codeAction] = useActionState<CodeState, FormData>(codeInviteAction, START);
   const [dropped, setDropped] = useState(0);
+  // The form clears for the next one (`Gs9Vu`): the email in `EmailInvite`, *As an admin* here.
+  const sent = useCallback(() => { setAdmin(false); }, []);
   const scope = { kind: "server", admin: admin ? "yes" : "no" };
   const asAdmin = (
     <span className={styles.checkbox}>
@@ -52,7 +54,7 @@ export function ServerInvite(props: Props) {
   return (
     <InviteCard id="invite-server" icon="user-plus" title={t("people.inviteTitle")} text={t("people.inviteText")}>
       <EmailInvite csrf={props.csrf} server={props.server} reach={props.reach} scope={scope}
-        extra={ready ? asAdmin : null} beside={ready ? codeForm : undefined} sentText="people.sentText"
+        extra={ready ? asAdmin : null} beside={ready ? codeForm : undefined} sentText="people.sentText" onSent={sent}
         sentTitle={(email, isAdmin) => (isAdmin ? t("people.sentTitleAdmin", { email }) : t("people.sentTitle", { email }))} />
       {!ready && (
         <div className={styles.form}>

@@ -39,14 +39,21 @@ function Search({ query }: { query: string }) {
   );
 }
 
-function Waiting({ list, csrf, now }: { list: readonly Approval[]; csrf: string; now: number }) {
+function Waiting({ list, usernames, csrf, now }: {
+  list: readonly Approval[];
+  usernames: ReadonlyMap<string, string>;
+  csrf: string;
+  now: number;
+}) {
   if (list.length === 0) {
     return null;
   }
   return (
     <Section id="waiting" title={t("devices.waitingTitle")} meta={computers(list.length)} description={t("devices.waitingText")}>
       <div className={styles.waiting}>
-        {list.map((approval) => <ApprovalRow key={approval.id} approval={approval} csrf={csrf} now={now} />)}
+        {list.map((approval) => (
+          <ApprovalRow key={approval.id} approval={approval} username={usernames.get(approval.user.id) ?? null} csrf={csrf} now={now} />
+        ))}
       </div>
     </Section>
   );
@@ -117,7 +124,8 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   return (
     <AdminShell context={context} area="devices">
       <PageHead title={t("devices.title")} description={t("devices.description", { server: server.name })} actions={<Search query={query} />} />
-      <Waiting list={waiting} csrf={csrf} now={now} />
+      <Waiting list={waiting} usernames={new Map((context.people ?? []).map((person) => [person.id, person.username]))} csrf={csrf}
+        now={now} />
       <Joined list={joined} query={query} me={context.me.id} server={server.name} csrf={csrf} now={now} />
       <Browsers list={signedIn} server={server.name} csrf={csrf} now={now} />
     </AdminShell>

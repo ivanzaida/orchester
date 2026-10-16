@@ -16,6 +16,7 @@
 .title {
   margin: 0;
   font-size: var(--text-page-title);
+  line-height: var(--leading-auto);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-page-title);
   color: var(--color-text-primary);
@@ -34,9 +35,10 @@
   gap: var(--space-sm);
 }
 
-/* On a phone the page's action fills the width (`p5PNRS` in `mYBka`). */
+/* On a phone the page's action fills the width at the full button height (`p5PNRS` in `mYBka`, 36). */
 .actions > * {
   flex: var(--admin-head-action-grow);
+  height: var(--admin-head-action-height);
 }
 
 .note {

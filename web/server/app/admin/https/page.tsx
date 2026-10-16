@@ -22,11 +22,14 @@ export default async function HttpsRequired() {
   const named = sent === null ? null : verify(deriveKey(config().secret, "place"), sent);
   const origin = named !== null && URL.canParse(named) ? new URL(named).origin : originOf(placeOf(list));
   const secure = `${origin.replace(/^http:/, "https:")}/admin`;
+  // The server itself, on the port this browser used (`j8WujU`: http://127.0.0.1:8740/admin).
+  const port = new URL(origin).port;
+  const local = `http://127.0.0.1${port === "" ? "" : `:${port}`}/admin`;
   return (
     <CenteredPage brand={<AdminBrand />} footer={null}>
       <EntryCard>
         <CardHead title={t("https.title")} description={t("https.text", { origin })} />
-        <Small>{t("https.open", { secure })}</Small>
+        <Small>{t("https.open", { secure, local })}</Small>
       </EntryCard>
     </CenteredPage>
   );

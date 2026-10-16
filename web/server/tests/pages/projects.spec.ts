@@ -10,7 +10,8 @@ test.describe("projects", () => {
   test("lists every project for an admin, with the waiting computer", async ({ page }) => {
     await signIn(page);
     await expect(page.getByRole("link", { name: /Kontur/ }).first()).toBeVisible();
-    await expect(page.getByText("A computer is waiting for approval")).toBeVisible();
+    // The wide page; the phone's own copies are in the page but not shown (`mYBka`, design.spec.ts).
+    await expect(page.getByText("A computer is waiting for approval").filter({ visible: true })).toBeVisible();
     await expect(page.getByText("Orchester on oleh-pc wants to join as Oleh Petrenko.", { exact: false })).toBeVisible();
     await expect(page.getByText("No repository hint yet")).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Kontur team" }).getByRole("link", { name: "People · 5" })).toBeVisible();
@@ -21,7 +22,7 @@ test.describe("projects", () => {
   test("an owner who is not an admin sees only their project and no admin pages", async ({ page }) => {
     await signIn(page, "OWNR-0001");
     await expect(page.getByRole("banner").getByText("Project owner · signed in with a code").first()).toBeVisible();
-    await expect(page.getByText("Mobile app")).toBeVisible();
+    await expect(page.getByText("Mobile app").filter({ visible: true })).toBeVisible();
     await expect(page.getByText("Billing")).toHaveCount(0);
     await expect(page.getByRole("link", { name: /People/ })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "New project" })).toHaveCount(0);
@@ -48,7 +49,7 @@ test.describe("new project", () => {
     await expect(page.getByText("api is kept for the server itself. Choose another slug.")).toBeVisible();
     await page.getByLabel("Slug").fill("kontur");
     await page.getByRole("button", { name: "Create project" }).click();
-    await expect(page.getByText("Another project on this server has this address", { exact: false })).toBeVisible();
+    await expect(page.getByText("Another project on Kontur team has this address. Choose another slug.")).toBeVisible();
     await page.getByLabel("Slug").fill("API Gateway");
     await page.getByRole("button", { name: "Create project" }).click();
     await expect(page.getByText("Use small letters, digits and hyphens, like api-gateway.")).toBeVisible();

@@ -1,19 +1,19 @@
 .waiting {
   display: grid;
-  grid-template-columns: var(--admin-waiting-columns);
-  grid-template-areas: var(--admin-waiting-areas);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "glyph text action";
   align-items: center;
   column-gap: var(--space-row);
   row-gap: var(--space-tight);
   padding: var(--space-lg) var(--space-row-x);
-  background: var(--admin-waiting-fill);
-  box-shadow: inset 0 0 0 var(--border-sm) var(--admin-waiting-stroke);
+  background: var(--color-surface-panel);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--color-border-strong);
   border-radius: var(--radius-lg);
 }
 
 .glyph {
   grid-area: glyph;
-  align-self: var(--admin-waiting-glyph-align);
+  align-self: center;
   display: flex;
   flex: none;
   align-items: center;
@@ -23,12 +23,11 @@
   background: var(--color-surface-raised);
   box-shadow: inset 0 0 0 var(--border-sm) var(--color-border);
   border-radius: var(--radius-mark);
-  color: var(--admin-waiting-icon);
+  color: var(--color-text-secondary);
 }
 
 .action {
   grid-area: action;
-  justify-self: start;
 }
 
 .text {

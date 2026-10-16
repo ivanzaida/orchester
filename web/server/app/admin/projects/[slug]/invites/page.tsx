@@ -25,7 +25,7 @@ export default async function InvitesPage({ params }: Params) {
   const { context, project } = await loadProject(slug);
   if (project === null) {
     return (
-      <AdminShell context={context} area="projects">
+      <AdminShell context={context} area="projects" project>
         <MissingProject server={context.server.name} />
       </AdminShell>
     );
@@ -34,7 +34,7 @@ export default async function InvitesPage({ params }: Params) {
   const csrf = await formToken();
   const { server } = context;
   return (
-    <AdminShell context={context} area="projects">
+    <AdminShell context={context} area="projects" project>
       <ProjectHead project={project} tab="invites" members={value(memberList).length} />
       <ProjectInvites csrf={csrf} server={server.name} project={{ id: project.id, name: project.name, address: project.address }}
         reach={emailReach(server)}

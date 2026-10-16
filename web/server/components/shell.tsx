@@ -66,7 +66,15 @@ function Menu({ name, line, csrf }: { name: string; line: string; csrf: string }
  * The signed-in pages (`FCQCr`): the header (`NNrob`), the server's links at the left (`EJ8tl`) or as tabs on a
  * narrow window (`mYBka`), the page, the footer.
  */
-export async function AdminShell(props: { context: AdminContext; area: Area; spaced?: boolean; children: ReactNode }) {
+export async function AdminShell(props: {
+  context: AdminContext;
+  area: Area;
+  /** Settings' sections sit further apart (`JzPl5`). */
+  spaced?: boolean;
+  /** A project's pages keep their parts 20 apart (`Ej9GL`, `iLFy5`). */
+  project?: boolean;
+  children: ReactNode;
+}) {
   const { context, area, children } = props;
   const csrf = await formToken();
   const { server, me } = context;
@@ -89,7 +97,7 @@ export async function AdminShell(props: { context: AdminContext; area: Area; spa
           <div className={styles.nav}>
             <SideNav title={server.name} items={links.map((item) => ({ href: item.href, label: item.nav, current: item.area === area }))} />
           </div>
-          <main className={`${styles.main}${props.spaced ? ` ${styles.spaced}` : ""}`}>
+          <main className={[styles.main, props.spaced && styles.spaced, props.project && styles.project].filter(Boolean).join(" ")}>
             {links.length > 1 && (
               <div className={styles.tabs}>
                 <Tabs label={t("nav.label")} items={links.map((item) => ({ href: item.href, label: item.tab, current: item.area === area }))} />

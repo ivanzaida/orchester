@@ -24,7 +24,7 @@ export default async function ProjectSettingsPage({ params }: Params) {
   const { context, project } = await loadProject(slug);
   if (project === null) {
     return (
-      <AdminShell context={context} area="projects">
+      <AdminShell context={context} area="projects" project>
         <MissingProject server={context.server.name} />
       </AdminShell>
     );
@@ -32,7 +32,7 @@ export default async function ProjectSettingsPage({ params }: Params) {
   const memberList = value(await members(project.id, context.options));
   const csrf = await formToken();
   return (
-    <AdminShell context={context} area="projects">
+    <AdminShell context={context} area="projects" project>
       <ProjectHead project={project} tab="settings" members={memberList.length} />
       <SettingsPanel>
         <SettingRow label={t("projectSettings.name")}>

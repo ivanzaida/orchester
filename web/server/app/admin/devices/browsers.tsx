@@ -27,17 +27,22 @@ export function BrowserRow({ browser, csrf, now }: { browser: AdminBrowser; csrf
   if (state.revoked === true) {
     return <DoneRow title={t("devices.browserRevokedTitle", { name })} text={t("devices.browserRevokedText")} />;
   }
-  const dates = { when: { at: browser.createdAt, format: "near" as const }, end: { at: browser.expiresAt, format: "time" as const } };
+  // When it began where a computer says how it joined, and when it ends where a computer says when it was used.
   const side = (
     <span className={styles.side}>
+      <span className={styles.joined}>
+        <RowLine tone="secondary" wide>
+          <Phrase k="devices.browserSignedIn" dates={{ when: { at: browser.createdAt, format: "near" } }} now={now} />
+        </RowLine>
+      </span>
       <span className={styles.used}>
-        <Phrase k="devices.browserSince" dates={dates} now={now} />
+        <Phrase k="devices.browserEnds" dates={{ end: { at: browser.expiresAt, format: "time" } }} now={now} />
       </span>
       <span className={styles.actions}>
         {browser.current ? (
           <Badge tone="neutral">{t("devices.thisBrowser")}</Badge>
         ) : (
-          <ActionButton kind="secondary" row onClick={() => { setAsking(true); }}>
+          <ActionButton kind="secondary" row expanded={asking} onClick={() => { setAsking(true); }}>
             {t("devices.revoke")}
           </ActionButton>
         )}
@@ -52,7 +57,7 @@ export function BrowserRow({ browser, csrf, now }: { browser: AdminBrowser; csrf
       </Row>
       {asking && (
         <InPlaceConfirm title={t("devices.browserRevokeTitle", { name })} text={t("devices.browserRevokeText")}>
-          <ActionButton kind="secondary" row onClick={() => { setAsking(false); }}>
+          <ActionButton kind="secondary" row autoFocus onClick={() => { setAsking(false); }}>
             {t("common.keep")}
           </ActionButton>
           <form action={action}>

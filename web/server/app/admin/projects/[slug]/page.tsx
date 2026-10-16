@@ -25,7 +25,7 @@ export default async function MembersPage({ params }: Params) {
   const { context, project } = await loadProject(slug);
   if (project === null) {
     return (
-      <AdminShell context={context} area="projects">
+      <AdminShell context={context} area="projects" project>
         <MissingProject server={context.server.name} />
       </AdminShell>
     );
@@ -33,7 +33,7 @@ export default async function MembersPage({ params }: Params) {
   const list = value(await members(project.id, context.options));
   const words = { project: project.name, server: context.server.name };
   return (
-    <AdminShell context={context} area="projects">
+    <AdminShell context={context} area="projects" project>
       <ProjectHead project={project} tab="members" members={list.length} />
       <div className={styles.stack}>
         <p className={styles.lead}>{t("members.description", words)}</p>

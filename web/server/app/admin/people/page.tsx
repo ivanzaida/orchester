@@ -40,8 +40,7 @@ export default async function PeoplePage() {
       <PageHead title={t("people.title")} description={t("people.description", { server: server.name })} />
       <ServerInvite csrf={csrf} server={server.name} reach={emailReach(server)} address={own}
         checkCode={server.certificate?.checkCode ?? null} />
-      <InviteList id="server-invites" title={t("people.serverInvites")} description={t("people.serverInvitesText", { server: server.name })}
-        invites={serverInvites} empty={null} csrf={csrf} server={server.name} now={Date.now()} />
+      <InviteList id="server-invites" invites={serverInvites} empty={null} csrf={csrf} server={server.name} now={Date.now()} />
       <Section id="accounts" title={t("people.accounts")} meta={count}>
         <div className={styles.stack}>
           <PeopleTable people={people} me={me.id} server={server.name} address={own} checkCode={server.certificate?.checkCode ?? null}

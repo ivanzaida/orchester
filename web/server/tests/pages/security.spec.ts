@@ -33,6 +33,8 @@ test.describe("headers", () => {
       const text = await answer.text();
       expect(text).toContain("This page needs HTTPS");
       expect(text).toContain("https://10.0.4.20:8740/admin");
+      // Design 1, m20: the server itself as drawn, on the port the browser used.
+      expect(text).toContain("on the server itself, http://127.0.0.1:8740/admin.");
     }
     const post = await request.post("/admin/trip", { headers, form: { purpose: "admin" }, maxRedirects: 0 });
     expect(post.headers().location ?? "").not.toContain(CLOUD);
