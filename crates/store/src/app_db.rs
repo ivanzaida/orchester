@@ -6,6 +6,7 @@
 
 mod accounts;
 mod cloud;
+mod cloud_ended;
 mod cloud_joins;
 mod servers;
 mod settings;
@@ -17,6 +18,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 pub use self::{
   cloud::StoredCloudAccount,
+  cloud_ended::{CloudSignInEnd, EndedCloudSignIn},
   cloud_joins::AcceptedInvite,
   servers::{JoinedWith, ServerAccount, StoredServer},
 };
@@ -61,6 +63,7 @@ CREATE TABLE ui_state (
   cloud::MIGRATION,
   cloud_joins::MIGRATION,
   cloud_joins::ASKS_MIGRATION,
+  cloud_ended::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

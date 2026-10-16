@@ -1,7 +1,9 @@
 //! A stand-in for Orchester Cloud's account API on loopback, in `docs/cloud-api.md`'s shapes: sign-in and sign-out of
-//! a device, the account's invites (list, decline, and an identity token that accepts one) and team servers (the
-//! account's list and the registry's entry), the key set and identity tokens, all signed with `orchester-api`'s
-//! identity keys. The real cloud on PostgreSQL is in `crates/desktop-app/tests/orchester_cloud`.
+//! a device, the account (`GET /me`), the account's invites (list, decline, and an identity token that accepts one)
+//! and team servers (the account's list and the registry's entry), the key set and identity tokens, all signed with
+//! `orchester-api`'s identity keys. It can end the device's token with a reason, stop answering, and answer a sign-in
+//! slowly; [`UNCONFIRMED`] and [`PAUSED`] sign in to an unconfirmed email and a paused one. The real cloud on
+//! PostgreSQL is in `crates/desktop-app/tests/orchester_cloud`.
 
 #![allow(
   dead_code,
@@ -13,7 +15,7 @@ use std::{
   net::{SocketAddr, TcpListener, TcpStream},
   sync::Arc,
   thread,
-  time::{SystemTime, UNIX_EPOCH},
+  time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use orchester_api::identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey};
@@ -26,6 +28,11 @@ pub const ACCOUNT: &str = "0191c7c0-0000-7000-8000-000000000b0b";
 pub const EMAIL: &str = "bohdan@example.com";
 pub const PASSWORD: &str = "correct horse battery";
 const TOKEN: &str = "orcc_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+/// Signs in with any password as an email that is not confirmed yet: `403 email_unconfirmed`.
+pub const UNCONFIRMED: &str = "unconfirmed@example.com";
+/// Signs in as an email whose sign-in is paused: `429 rate_limited`, for [`PAUSED_SECONDS`].
+pub const PAUSED: &str = "paused@example.com";
+pub const PAUSED_SECONDS: u64 = 900;
 
 /// What the cloud holds: the team server it names, the invites waiting, and what was asked of it.
 #[derive(Default)]
@@ -38,6 +45,14 @@ struct State {
   /// The invites that the tokens issued so far accept, one entry per token.
   accepting: Vec<String>,
   signed_out: bool,
+  /// The token ended: the reason the `401` names, if any, and when (milliseconds).
+  ended: Option<(Option<String>, i64)>,
+  /// Connections are closed without an answer, as when the cloud cannot be reached.
+  down: bool,
+  /// How long a sign-in waits before it answers.
+  sign_in_delay: Duration,
+  /// How many times `GET /me` was asked.
+  checks: usize,
 }
 
 pub struct AccountCloud {
@@ -117,18 +132,63 @@ impl AccountCloud {
   pub fn signed_out(&self) -> bool {
     self.state.lock().signed_out
   }
+
+  /// Ends the device's token: from now on its requests answer `401` with `reason` (`revoked`, `password_reset`,
+  /// `account_deleted`, `signed_out`, or none) and the time `at` (milliseconds).
+  pub fn end_token(&self, reason: Option<&str>, at: i64) {
+    self.state.lock().ended = Some((reason.map(str::to_owned), at));
+  }
+
+  /// Accepts the device's token again, as after a new sign-in.
+  pub fn accept_token(&self) {
+    self.state.lock().ended = None;
+  }
+
+  /// Whether the cloud answers: down, every connection is closed at once.
+  pub fn set_down(&self, down: bool) {
+    self.state.lock().down = down;
+  }
+
+  /// Sign-ins answer after `delay`.
+  pub fn slow_sign_in(&self, delay: Duration) {
+    self.state.lock().sign_in_delay = delay;
+  }
+
+  /// How many times the account was asked for (`GET /me`).
+  pub fn checks(&self) -> usize {
+    self.state.lock().checks
+  }
 }
 
 fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &SigningKey) {
+  if state.lock().down {
+    return;
+  }
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
-  let authorized = headers.contains(&format!("authorization: bearer {TOKEN}"));
+  let ended = state.lock().ended.clone();
+  let authorized = headers.contains(&format!("authorization: bearer {TOKEN}")) && ended.is_none();
   let path = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
-  let (status, answer) = route(&path, (authorized, &body), state, (key_set, signing));
+  let (status, answer) = match ended {
+    Some((reason, at)) if headers.contains(&format!("authorization: bearer {TOKEN}")) => ended_token(reason, at),
+    _ => route(&path, (authorized, &body), state, (key_set, signing)),
+  };
+  if path == "POST /api/v1/auth/sessions" {
+    thread::sleep(state.lock().sign_in_delay);
+    // A new sign-in is a new token: the ended one is forgotten.
+    if status.starts_with("201") {
+      state.lock().ended = None;
+    }
+  }
+  let retry = if status.starts_with("429") {
+    format!("Retry-After: {PAUSED_SECONDS}\r\n")
+  } else {
+    String::new()
+  };
   let answer = answer.map(|value| value.to_string()).unwrap_or_default();
   let reply = format!(
-    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}",
+    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n{retry}Content-Length: {}\r\nConnection: close\r\n\r\n{answer}",
     answer.len()
   );
   // The test reads the answer or fails on its own; a broken connection needs nothing here.
@@ -149,6 +209,10 @@ fn route(
     "GET /api/v1/keys" => ("200 OK", Some(json!({"key_set": key_set}))),
     "POST /api/v1/auth/sessions" => sign_in(body),
     _ if !authorized => unauthorized,
+    "GET /api/v1/me" => {
+      state.lock().checks += 1;
+      ("200 OK", Some(json!({"account": account()})))
+    }
     "POST /api/v1/identity-tokens" => issue(body, state, signing).unwrap_or(not_found),
     "DELETE /api/v1/auth/sessions/current" => {
       state.lock().signed_out = true;
@@ -213,12 +277,32 @@ fn registered(path: &str, state: &Mutex<State>) -> Option<Answer> {
   Some(("200 OK", Some(json!({"server": server}))))
 }
 
+/// The `401` of a token the cloud ended, with its reason when it has one.
+fn ended_token(reason: Option<String>, at: i64) -> Answer {
+  let mut refused = error("unauthorized");
+  if let Some(reason) = reason {
+    refused["reason"] = json!(reason);
+    refused["ended_at"] = json!(at);
+  }
+  ("401 Unauthorized", Some(refused))
+}
+
+fn account() -> Value {
+  json!({"id": ACCOUNT, "email": EMAIL, "display_name": "Bohdan Koval", "created_at": 1})
+}
+
 fn sign_in(body: &str) -> Answer {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
+  if request["email"] == UNCONFIRMED {
+    return ("403 Forbidden", Some(error("email_unconfirmed")));
+  }
+  if request["email"] == PAUSED {
+    return ("429 Too Many Requests", Some(error("rate_limited")));
+  }
   if request["email"] != EMAIL || request["password"] != PASSWORD {
     return ("401 Unauthorized", Some(error("invalid_credentials")));
   }
-  let account = json!({"id": ACCOUNT, "email": EMAIL, "display_name": "Bohdan Koval", "created_at": 1});
+  let account = account();
   let device = json!({"id": "0191c7c0-0000-7000-8000-00000000d0d0", "name": request["device"]["name"],
     "platform": request["device"]["platform"], "created_at": 1, "last_used_at": 1, "current": true});
   (

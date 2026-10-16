@@ -10,7 +10,7 @@ use orchester_core::{
   usage::limits::WarningThreshold,
 };
 use orchester_store::{
-  AppDb, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredCloudAccount,
+  AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredCloudAccount,
   StoredServer,
 };
 
@@ -518,4 +518,26 @@ fn the_cloud_account_is_one_row_and_the_address_a_setting() {
     db.cloud_address().expect("address").as_deref(),
     Some("https://cloud.test.lurq.dev")
   );
+}
+
+#[test]
+fn why_the_last_cloud_sign_in_ended_is_one_row() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
+  let revoked = EndedCloudSignIn {
+    email: "ivan@example.com".into(),
+    reason: CloudSignInEnd::Revoked,
+    ended_at: at(7),
+  };
+  db.set_cloud_sign_in_ended(Some(&revoked)).expect("recorded");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(revoked.clone()));
+  let reset = EndedCloudSignIn {
+    reason: CloudSignInEnd::PasswordReset,
+    ..revoked
+  };
+  db.set_cloud_sign_in_ended(Some(&reset)).expect("the newer one replaces it");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(reset));
+  db.set_cloud_sign_in_ended(None).expect("signed in again");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
 }

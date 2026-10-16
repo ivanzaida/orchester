@@ -4,30 +4,33 @@
 //! Orchester › Advanced), and the account's invites ([`invites`]). The account is in the application database's
 //! `cloud_account` row; its device token in the keychain, under this installation's id, so a development build or a
 //! QA copy never signs the installed app in or out. Team servers joined through the cloud keep working without it.
+//! The app is used only while this computer is signed in ([`gate`]).
 
 mod accepting;
 mod asking;
 mod error;
+mod gate;
 mod invites;
 
 use std::sync::Arc;
 
 use orchester_api::{
   Credential,
-  client::{ClientError, CloudClient, ServerAddress},
+  client::{CloudClient, ServerAddress},
   cloud::{CloudErrorCode, CloudSignIn},
 };
 use orchester_core::{
   secret::{SecretValue, VaultError, VaultKey},
   time::Timestamp,
 };
-use orchester_store::StoredCloudAccount;
+use orchester_store::{CloudSignInEnd, EndedCloudSignIn, StoredCloudAccount};
 use tokio::sync::watch;
 
 pub use self::{
   accepting::Accepted,
   asking::{Checked, MAX_ASKS, may_ask, waits},
   error::CloudError,
+  gate::{CHECK_EVERY, RETRY_EVERY, Reach, SignIn, keep_checking},
   invites::ServerJoin,
 };
 use super::{Servers, device};
@@ -81,6 +84,8 @@ struct Inner {
   servers: Servers,
   /// Counts sign-ins, sign-outs and answered invites, for the screens.
   changes: watch::Sender<u64>,
+  sign_in: watch::Sender<SignIn>,
+  reach: watch::Sender<Reach>,
 }
 
 impl PartialEq for Cloud {
@@ -90,13 +95,17 @@ impl PartialEq for Cloud {
 }
 
 impl Cloud {
+  /// The cloud account of `workspace`'s session, signed in or not as its application database says. Blocking.
   pub fn new(workspace: Workspace, vault: Vault, servers: Servers) -> Self {
+    let sign_in = stored_sign_in(&workspace);
     Self {
       inner: Arc::new(Inner {
         workspace,
         vault,
         servers,
         changes: watch::channel(0).0,
+        sign_in: watch::channel(sign_in).0,
+        reach: watch::channel(Reach::Unknown).0,
       }),
     }
   }
@@ -169,10 +178,16 @@ impl Cloud {
     background::run(move || -> Result<(), CloudError> {
       let key = device_key(&workspace)?;
       vault.get().store(&key, &token)?;
-      workspace.db.lock().set_cloud_account(Some(&kept))?;
+      let mut db = workspace.db.lock();
+      db.set_cloud_account(Some(&kept))?;
+      db.set_cloud_sign_in_ended(None)?;
       Ok(())
     })
     .await??;
+    self.inner.reach.send_replace(Reach::Reached);
+    self.inner.sign_in.send_replace(SignIn::SignedIn {
+      email: account.email.clone(),
+    });
     self.changed();
     Ok(account)
   }
@@ -181,7 +196,7 @@ impl Cloud {
   /// keychain and the account the database either way. Team servers joined through the cloud keep working.
   pub async fn sign_out(&self) -> Result<(), CloudError> {
     self.end_session().await;
-    self.forget().await?;
+    self.forget(CloudSignInEnd::SignedOut, Timestamp::now()).await?;
     self.changed();
     Ok(())
   }
@@ -221,55 +236,89 @@ impl Cloud {
     }
   }
 
-  /// Removes the token and the account from this computer.
-  async fn forget(&self) -> Result<(), CloudError> {
+  /// Removes the token and the account from this computer, and records that its sign-in ended for `reason` at `at`:
+  /// the gate shows from now on.
+  async fn forget(&self, reason: CloudSignInEnd, at: Timestamp) -> Result<(), CloudError> {
     let (workspace, vault) = (self.inner.workspace.clone(), self.inner.vault.clone());
-    background::run(move || -> Result<(), CloudError> {
+    let ended = background::run(move || -> Result<Option<EndedCloudSignIn>, CloudError> {
       let key = device_key(&workspace)?;
       match vault.get().delete(&key) {
         Ok(()) | Err(VaultError::NotFound) => {}
         Err(error) => return Err(error.into()),
       }
       let mut db = workspace.db.lock();
+      let ended = db.cloud_account()?.map(|account| EndedCloudSignIn {
+        email: account.email,
+        reason,
+        ended_at: at,
+      });
       db.set_cloud_account(None)?;
+      if ended.is_some() {
+        db.set_cloud_sign_in_ended(ended.as_ref())?;
+      }
       // The invites accepted here belong to the account that accepted them.
       db.forget_accepted_invites()?;
-      Ok(())
+      Ok(match ended {
+        Some(ended) => Some(ended),
+        None => db.cloud_sign_in_ended()?,
+      })
     })
-    .await?
+    .await??;
+    self.inner.reach.send_replace(Reach::Unknown);
+    self.inner.sign_in.send_replace(SignIn::SignedOut {
+      ended,
+      since: Timestamp::now(),
+    });
+    Ok(())
   }
 
-  /// The client of the cloud the account signed in at, and its device token; signed out without either.
+  /// The client of the cloud the account signed in at, and its device token; signed out without either. An account
+  /// whose token is no longer in the keychain is signed out here.
   async fn signed_in(&self) -> Result<(CloudClient, SecretValue), CloudError> {
     let (workspace, vault) = (self.inner.workspace.clone(), self.inner.vault.clone());
-    let (account, token) = background::run(move || -> Result<_, CloudError> {
+    let found = background::run(move || -> Result<_, CloudError> {
       let Some(account) = workspace.db.lock().cloud_account()? else {
-        return Err(CloudError::SignedOut);
+        return Ok(None);
       };
       match vault.get().read(&device_key(&workspace)?) {
-        Ok(token) => Ok((account, token)),
-        Err(VaultError::NotFound) => Err(CloudError::SignedOut),
+        Ok(token) => Ok(Some((account, Some(token)))),
+        Err(VaultError::NotFound) => Ok(Some((account, None))),
         Err(error) => Err(error.into()),
       }
     })
     .await??;
+    let (account, token) = match found {
+      Some((account, Some(token))) => (account, token),
+      Some((_, None)) => {
+        tracing::warn!("this computer's cloud token is gone from the keychain; it is signed out");
+        self.forget(CloudSignInEnd::Other, Timestamp::now()).await?;
+        self.changed();
+        return Err(CloudError::SignedOut);
+      }
+      None => return Err(CloudError::SignedOut),
+    };
     let client = CloudClient::new(ServerAddress::parse(&account.cloud_address)?)?;
     Ok((client, token))
   }
 
-  /// Runs `call` with the signed-in client and token; a token the cloud no longer accepts signs this computer out.
+  /// Runs `call` with the signed-in client and token; a token the cloud no longer accepts signs this computer out with
+  /// the reason the cloud gives. Whether the cloud answered is kept in [`Self::reach`].
   async fn with_token<T, F, Fut>(&self, call: F) -> Result<T, CloudError>
   where
     F: FnOnce(CloudClient, SecretValue) -> Fut,
     Fut: Future<Output = Result<T, CloudError>>,
   {
     let (client, token) = self.signed_in().await?;
-    match call(client, token).await {
-      Err(CloudError::Client(ClientError::Cloud {
-        code: CloudErrorCode::Unauthorized,
-        ..
-      })) => {
-        self.forget().await?;
+    let answer = call(client, token).await;
+    self.inner.reach.send_if_modified(|reach| {
+      let after = reach.after(&answer, Timestamp::now());
+      std::mem::replace(reach, after) != after
+    });
+    match answer {
+      Err(error) if error.cloud_code() == Some(CloudErrorCode::Unauthorized) => {
+        let (reason, at) = error.ended().map_or((None, None), |(reason, at)| (Some(reason), at));
+        let at = at.map_or_else(Timestamp::now, Timestamp::from_unix_millis);
+        self.forget(gate::end_of(reason), at).await?;
         self.changed();
         Err(CloudError::SignedOut)
       }
@@ -279,6 +328,26 @@ impl Cloud {
 
   fn servers(&self) -> &Servers {
     &self.inner.servers
+  }
+}
+
+/// Whether `workspace`'s application database has an account signed in, and why the last one ended if not. A database
+/// that cannot be read shows the gate: nothing is used without a sign-in.
+fn stored_sign_in(workspace: &Workspace) -> SignIn {
+  let db = workspace.db.lock();
+  match (db.cloud_account(), db.cloud_sign_in_ended()) {
+    (Ok(Some(account)), _) => SignIn::SignedIn { email: account.email },
+    (Ok(None), Ok(ended)) => SignIn::SignedOut {
+      ended,
+      since: Timestamp::now(),
+    },
+    (Err(error), _) | (_, Err(error)) => {
+      tracing::error!(%error, "cannot read this computer's cloud sign-in; the sign-in gate shows");
+      SignIn::SignedOut {
+        ended: None,
+        since: Timestamp::now(),
+      }
+    }
   }
 }
 
