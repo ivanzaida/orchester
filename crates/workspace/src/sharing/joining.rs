@@ -107,7 +107,7 @@ impl Servers {
   /// [`SharingError::TwoFactorSession`]). The server's certificate is checked first, before anything of the cloud.
   ///
   /// The token is for codes only (purpose `code`), and asked for only after the server proved it holds the key whose
-  /// id it gives itself ([`super::server_key::proven`]), so no server can pass it on as another's.
+  /// id it gives itself on this connection ([`super::server_key::proven`]).
   pub async fn code_proof(
     &self,
     address: &ServerAddress,
@@ -131,7 +131,7 @@ impl Servers {
     if !two_factor.this_session {
       return Err(SharingError::TwoFactorSession);
     }
-    super::server_key::proven(&client, said).await?;
+    super::server_key::proven(&client, said, (address, trust)).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
     let issued = identity.cloud.code_token(identity.device, said).await?;
     Ok(Some(CodeProof {

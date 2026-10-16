@@ -22,13 +22,13 @@ use desktop::{Desktop, linked_server};
 use impostor::{Claimed, Impostor};
 use orchester_api::{
   Credential,
-  client::{Client, PlainHttp, ServerAddress},
+  client::{Client, ServerAddress},
   cloud::CloudErrorCode,
 };
 use orchester_core::{repository::RepositoryIdentity, secret::SecretVault};
 use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{
-  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError, Trust,
+  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError,
   cloud::{CloudError, ServerJoin, WebPage},
 };
 use server_support::TestServer;
@@ -212,9 +212,18 @@ fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of
   desktop
     .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
     .expect("sign in");
-  let server = TestServer::start();
+  let mut server = TestServer::start();
   server.create_user("alice", "Alice Moreau", true);
   let id = server.cloud_audience();
+  server.serve_self_signed();
+  let pinned = |url: &str| {
+    let address = ServerAddress::parse(url).expect("address");
+    let trust = desktop
+      .block_on(PresentedCertificate::read(&address))
+      .expect("certificate")
+      .confirm();
+    (address, trust)
+  };
   let nonce = orchester_api::identity::key_proof_nonce().expect("a nonce");
   let public_key = server
     .block_on(server.client().key_proof(&nonce))
@@ -226,16 +235,18 @@ fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of
     display_name: Some("Bohdan Koval".into()),
     proof: None,
   };
-  // A server that gives itself this server's id, with a key of its own or with this server's key it cannot sign with.
-  for claimed in [Claimed::OwnKey, Claimed::Borrowed(public_key)] {
+  // A server that gives itself this server's id: with a key of its own, with this server's key it cannot sign with,
+  // or passing the nonce on to this server and returning its proof, which names this server's certificate.
+  let claims = [
+    Claimed::OwnKey,
+    Claimed::Borrowed(public_key),
+    Claimed::Relayed(server.client()),
+  ];
+  for claimed in claims {
     let impostor = Impostor::start(&id, claimed);
-    let address = ServerAddress::parse(&impostor.url()).expect("address");
+    let (address, trust) = pinned(&impostor.url());
     let code = Credential::new("ABCD-EFGH".into());
-    let refused = desktop.block_on(desktop.cloud.join_with_code(
-      &address,
-      Trust::System(PlainHttp::NotAllowed),
-      request(code),
-    ));
+    let refused = desktop.block_on(desktop.cloud.join_with_code(&address, trust, request(code)));
     assert!(
       matches!(refused, Err(CloudError::Join(SharingError::UnprovenServer))),
       "{refused:?}"
@@ -246,14 +257,14 @@ fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of
       impostor.asked()
     );
   }
-  // The server itself proves its key, and takes the code with the token for its id.
-  let address = ServerAddress::parse(&server.url()).expect("address");
+  // The server itself proves its key on the connection this computer checked, and takes the code with the token.
+  let (address, trust) = pinned(&server.url());
   desktop
-    .block_on(desktop.cloud.join_with_code(
-      &address,
-      Trust::System(PlainHttp::NotAllowed),
-      request(server.code_for("bohdan", false)),
-    ))
+    .block_on(
+      desktop
+        .cloud
+        .join_with_code(&address, trust, request(server.code_for("bohdan", false))),
+    )
     .expect("joined with the code and the token");
 }
 

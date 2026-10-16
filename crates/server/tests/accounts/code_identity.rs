@@ -7,9 +7,11 @@
 
 use orchester_api::{
   ErrorCode, Joined, KeyProofResponse, PairingCode, UserResponse,
-  identity::{key_proof_nonce, verify_key_proof},
+  identity::{key_proof_nonce, read_statement, verify_key_proof},
+  statements::{KEY_PROOF_TYPE, KeyProof},
 };
 use orchester_core::id::UserId;
+use orchester_server::config::TlsMode;
 use serde_json::json;
 
 use crate::{
@@ -38,33 +40,64 @@ async fn code_identity_a_token_for_codes_neither_joins_nor_signs_in() {
   server.finish().await;
 }
 
+/// The key proof the server answers `nonce` with, over its own TLS when it has it.
+async fn key_proof(server: &TestServer, nonce: &str, tls: bool) -> KeyProofResponse {
+  let body = Some(json!({"nonce": nonce}));
+  let answer = if tls {
+    server.tls_pinned_request("POST", "/server/key-proof", None, body).await
+  } else {
+    server.request("POST", "/server/key-proof", None, body).await
+  };
+  answer.json()
+}
+
+/// The certificate a key proof names, read without checking it.
+fn named_certificate(answer: &KeyProofResponse) -> Option<String> {
+  read_statement::<KeyProof>(&answer.proof, KEY_PROOF_TYPE)
+    .expect("a key proof")
+    .certificate
+}
+
 #[tokio::test]
-async fn code_identity_the_server_proves_it_holds_the_key_of_its_id() {
-  let server = TestServer::start(|_| {}).await;
+async fn code_identity_the_server_proves_its_key_for_the_connection_s_certificate() {
+  let server = TestServer::start(|config| config.tls = TlsMode::SelfSigned).await;
   let id = server.audience().await.parse().expect("the server's id");
+  let own = server.server.certificate().expect("its own certificate").sha256;
   let nonce = key_proof_nonce().expect("a nonce");
-  let answer: KeyProofResponse = server
-    .request("POST", "/server/key-proof", None, Some(json!({"nonce": nonce})))
-    .await
-    .json();
-  verify_key_proof(&answer, id, &nonce).expect("the proof of this server's key, for this nonce");
+  let answer = key_proof(&server, &nonce, true).await;
+  verify_key_proof(&answer, id, (&nonce, &own)).expect("its key, for this nonce and its certificate");
   let other_nonce = key_proof_nonce().expect("a nonce");
   assert!(
-    verify_key_proof(&answer, id, &other_nonce).is_err(),
+    verify_key_proof(&answer, id, (&other_nonce, &own)).is_err(),
     "only for its nonce"
+  );
+  // Passed on by a server that presents another certificate.
+  let elsewhere = "ab".repeat(32);
+  assert!(
+    verify_key_proof(&answer, id, (&nonce, &elsewhere)).is_err(),
+    "only for its certificate"
   );
   let other = TestServer::start(|_| {}).await;
   let other_id = other.audience().await.parse().expect("another server's id");
   assert!(
-    verify_key_proof(&answer, other_id, &nonce).is_err(),
+    verify_key_proof(&answer, other_id, (&nonce, &own)).is_err(),
     "not another server's"
   );
   for nonce in ["short", "not a nonce at all, with spaces"] {
     let refused = server
-      .request("POST", "/server/key-proof", None, Some(json!({"nonce": nonce})))
+      .tls_pinned_request("POST", "/server/key-proof", None, Some(json!({"nonce": nonce})))
       .await;
     assert_eq!(refused.status, 422, "{nonce}");
   }
+  // Plain HTTP names no certificate, so no app takes its proof; one configured with its proxy's names that one.
+  let plain = key_proof(&other, &nonce, false).await;
+  assert_eq!(named_certificate(&plain), None);
+  let proxied = TestServer::start(|config| config.proxy_certificate = Some("AB:".repeat(31) + "AB")).await;
+  assert_eq!(
+    named_certificate(&key_proof(&proxied, &nonce, false).await),
+    Some("ab".repeat(32))
+  );
+  proxied.finish().await;
   other.finish().await;
   server.finish().await;
 }

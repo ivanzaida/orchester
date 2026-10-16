@@ -358,8 +358,9 @@ or with a code) only from a device token issued for an identity token with it, a
 from an app only with a token for codes (purpose `code`, the server's id as `aud`) that says `mfa`
 ([architecture/server.md](architecture/server.md), "Invites", "Codes"). So the desktop asks for a token for the server it
 enters a code for, from a two-factor session, and carries the key set with it. It asks only after the server proved
-it holds the key whose id it gives itself (a team server's id is its public key's; `POST /server/key-proof` on the team
-server), so the token's audience names that key and no other server can take it, linked here or not. Invites made before and delivered later are not held to it: delivering
+it holds the key whose id it gives itself, on a connection presenting the certificate the proof names (a team
+server's id is its public key's; `POST /server/key-proof` on the team server), so a server cannot get a token for
+another's id, nor pass on another's proof, unless the two present the same certificate. Invites made before and delivered later are not held to it: delivering
 (`POST /invites`) checks the server's signature only. A team server keeps whether a device joined with `mfa` for as
 long as that device token lives: turning two-factor authentication off at the cloud does not reach team servers, and
 a device keeps sending invites there until an admin signs it out or the person joins it again.

@@ -1,7 +1,8 @@
-//! A team server that gives itself another server's id (`docs/architecture/server.md`, "Codes"): `GET /server` names
-//! that id, and `POST /server/key-proof` answers with a key it holds, whose id is not that one, or with the other
-//! server's public key, which it cannot sign with. It records the paths it was asked, so a test can tell that no code
-//! reached it.
+//! A team server that gives itself another server's id (`docs/architecture/server.md`, "Codes"), over TLS with a
+//! certificate of its own: `GET /server` names that id, and `POST /server/key-proof` answers with a key it holds, whose
+//! id is not that one; with the other server's public key, which it cannot sign with; or with the other server's own
+//! proof for the same nonce, passed on from it, which names the other server's certificate. It records the paths it
+//! was asked, so a test can tell that no code reached it.
 
 use std::{
   io::{Read, Write},
@@ -11,18 +12,29 @@ use std::{
 };
 
 use orchester_api::{
+  client::Client,
   identity::{PrivateKey, SigningKey},
   statements::{KEY_PROOF_TYPE, KeyProof},
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+use tokio_rustls::rustls::{
+  ServerConfig, ServerConnection, StreamOwned,
+  crypto::ring,
+  pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
+};
 
-/// Whose public key the impostor answers with.
+const CERTIFICATE: &[u8] = include_bytes!("../../../server/tests/fixtures/server.pem");
+const KEY: &[u8] = include_bytes!("../../../server/tests/fixtures/server-key.pem");
+
+/// What the impostor answers a key proof with.
 pub enum Claimed {
-  /// Its own, whose id is not the one it gives itself.
+  /// A key of its own, whose id is not the one it gives itself.
   OwnKey,
-  /// The other server's (base64url), which it cannot sign with.
+  /// The other server's public key (base64url), which it cannot sign with.
   Borrowed(String),
+  /// The other server's own answer for the same nonce, asked through `Client`.
+  Relayed(Client),
 }
 
 pub struct Impostor {
@@ -36,22 +48,20 @@ impl Impostor {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind the impostor");
     let port = listener.local_addr().expect("address").port();
     let asked = Arc::new(Mutex::new(Vec::new()));
-    let key = SigningKey::new(&PrivateKey::generate().expect("a key")).expect("a signing key");
-    let public_key = match claimed {
-      Claimed::OwnKey => key.public_key().encoded(),
-      Claimed::Borrowed(public_key) => public_key,
-    };
+    let tls = Arc::new(tls_config());
     let (id, seen) = (id.to_owned(), asked.clone());
+    let answers = Answers::new(claimed);
     thread::spawn(move || {
       for stream in listener.incoming().flatten() {
-        answer(stream, (&id, &public_key, &key), &seen);
+        let connection = ServerConnection::new(tls.clone()).expect("a TLS connection");
+        answer(StreamOwned::new(connection, stream), (&id, &answers), &seen);
       }
     });
     Self { port, asked }
   }
 
   pub fn url(&self) -> String {
-    format!("http://localhost:{}", self.port)
+    format!("https://localhost:{}", self.port)
   }
 
   /// The requests it was asked, as `METHOD /path`.
@@ -60,7 +70,63 @@ impl Impostor {
   }
 }
 
-fn answer(mut stream: TcpStream, (id, public_key, key): (&str, &str, &SigningKey), asked: &Mutex<Vec<String>>) {
+/// The impostor's own key, and what it claims.
+struct Answers {
+  key: SigningKey,
+  claimed: Claimed,
+}
+
+impl Answers {
+  fn new(claimed: Claimed) -> Self {
+    let key = SigningKey::new(&PrivateKey::generate().expect("a key")).expect("a signing key");
+    Self { key, claimed }
+  }
+
+  fn key_proof(&self, id: &str, nonce: &str) -> Value {
+    if let Claimed::Relayed(client) = &self.claimed {
+      let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("a runtime");
+      let theirs = runtime
+        .block_on(client.key_proof(nonce))
+        .expect("the other server's proof");
+      return json!({"public_key": theirs.public_key, "proof": theirs.proof});
+    }
+    let public_key = match &self.claimed {
+      Claimed::Borrowed(public_key) => public_key.clone(),
+      _ => self.key.public_key().encoded(),
+    };
+    let proof = KeyProof {
+      server: id.parse().expect("a server id"),
+      nonce: nonce.to_owned(),
+      certificate: Some(orchester_api::certificate::CertificatePin::of(&certificate()).to_hex()),
+      issued_at: 0,
+    };
+    let signed = self.key.sign_statement(KEY_PROOF_TYPE, &proof).expect("signed");
+    json!({"public_key": public_key, "proof": signed})
+  }
+}
+
+fn certificate() -> CertificateDer<'static> {
+  CertificateDer::from_pem_slice(CERTIFICATE).expect("the fixture certificate")
+}
+
+fn tls_config() -> ServerConfig {
+  let key = PrivateKeyDer::from_pem_slice(KEY).expect("the fixture key");
+  ServerConfig::builder_with_provider(Arc::new(ring::default_provider()))
+    .with_safe_default_protocol_versions()
+    .expect("protocol versions")
+    .with_no_client_auth()
+    .with_single_cert(vec![certificate()], key)
+    .expect("the impostor's certificate")
+}
+
+fn answer(
+  mut stream: StreamOwned<ServerConnection, TcpStream>,
+  (id, answers): (&str, &Answers),
+  asked: &Mutex<Vec<String>>,
+) {
   let Some((line, body)) = read_request(&mut stream) else {
     return;
   };
@@ -71,13 +137,7 @@ fn answer(mut stream: TcpStream, (id, public_key, key): (&str, &str, &SigningKey
       "cloud": {"server": id, "root_fingerprint": "root", "accepting": true, "codes_need_two_factor": true}}),
     "POST /api/v1/server/key-proof" => {
       let request: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
-      let proof = KeyProof {
-        server: id.parse().expect("a server id"),
-        nonce: request["nonce"].as_str().unwrap_or_default().to_owned(),
-        issued_at: 0,
-      };
-      let signed = key.sign_statement(KEY_PROOF_TYPE, &proof).expect("signed");
-      json!({"public_key": public_key, "proof": signed})
+      answers.key_proof(id, request["nonce"].as_str().unwrap_or_default())
     }
     _ => json!({"error": "not_found", "message": "Not found"}),
   };
@@ -86,11 +146,13 @@ fn answer(mut stream: TcpStream, (id, public_key, key): (&str, &str, &SigningKey
     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",
     text.len()
   );
-  // The test reads the answer or fails on its own; a broken connection needs nothing here.
+  // The test reads the answer or fails on its own; a broken connection needs nothing here, nor a close it missed.
   let _ = stream.write_all(response.as_bytes());
+  stream.conn.send_close_notify();
+  let _ = stream.flush();
 }
 
-fn read_request(stream: &mut TcpStream) -> Option<(String, String)> {
+fn read_request(stream: &mut impl Read) -> Option<(String, String)> {
   let mut buffer = Vec::new();
   let mut chunk = [0_u8; 4096];
   loop {

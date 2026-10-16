@@ -101,7 +101,7 @@
       "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account. Turn it on under Security on the cloud's Account page; signing in here with its code is coming to Orchester.",
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication. Signing in here with a code is coming to Orchester; until then a code can't be entered on this computer.",
       "twoFactorUnverifiable": "This server can't check two-factor authentication: its admin links it to Orchester Cloud, or pins Orchester Cloud's root key on the server (orchester-server cloud pin).",
-      "unprovenServer": "This server didn't prove it is the server it says it is, so your sign-in wasn't shown to it and the code wasn't sent. Check the address, or ask the server's admin.",
+      "unprovenServer": "This server didn't prove it is the server it says it is on this connection, so your sign-in wasn't shown to it and the code wasn't sent. Connect to it over HTTPS; if a proxy holds its certificate, its admin sets that certificate's fingerprint on the server (proxy_certificate).",
       "accountExists": "Your Orchester Cloud account already has an account on this server. Join with that account instead: with a code from one of its computers, or an account code from an admin. The invite code is still open."
     },
     "link": {

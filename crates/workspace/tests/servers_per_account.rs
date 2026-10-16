@@ -39,7 +39,7 @@ use orchester_store::ProjectDb;
 use orchester_workspace::{
   project_setup::NewProject,
   sharing::{
-    CloudJoined, CodeRequest, ProjectAddress, ServerEntry, SharingError, Trust,
+    CloudJoined, CodeRequest, PresentedCertificate, ProjectAddress, ServerEntry, SharingError, Trust,
     cloud::ServerJoin,
     project::{LinkFirst, ProjectServer, ShareError, link::LinkProblem},
   },
@@ -395,8 +395,9 @@ fn per_account_a_cloud_join_overtaken_by_another_sign_in_stays_the_joining_accou
 #[test]
 fn per_account_a_code_join_overtaken_by_another_sign_in_stays_the_joining_accounts() {
   let cloud = AccountCloud::start();
-  let (server, audience) = linked_server(&cloud);
-  cloud.name_server(&audience, &server.url(), None);
+  let (mut server, _) = linked_server(&cloud);
+  // A code's token is asked for only over a connection whose certificate the server's key proof names.
+  server.serve_self_signed();
   let desktop = Desktop::signed_in(&cloud);
   let request = CodeRequest {
     code: server.code_for("bohdan", false),
@@ -409,13 +410,15 @@ fn per_account_a_code_join_overtaken_by_another_sign_in_stays_the_joining_accoun
   cloud.hold_checks();
   let asked = cloud.checks_arrived();
   let address = ServerAddress::parse(&server.url()).expect("address");
+  let trust = desktop
+    .block_on(PresentedCertificate::read(&address))
+    .expect("certificate")
+    .confirm();
   let joining = {
     let cloud = desktop.cloud.clone();
-    desktop.runtime.spawn(async move {
-      cloud
-        .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request)
-        .await
-    })
+    desktop
+      .runtime
+      .spawn(async move { cloud.join_with_code(&address, trust, request).await })
   };
   desktop.block_on(async {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);

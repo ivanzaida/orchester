@@ -1344,15 +1344,23 @@ Row 45: address plus an 8-character code, for networks without the internet.
 - **Seeing and ending a link.** The server admin's People page shows how each account signs in and offers *Unlink
   Orchester Cloud* (`DELETE /admin/users/{id}/cloud`, audited `cloud_unlinked`); on the host, `orchester-server
   account-cloud <username>` prints the cloud account an account is linked to and `account-unlink <username>` ends the
-  link. The account's computers stay joined; its cloud identity signs in to nothing here until it is linked again.
+  link. Neither an unlink nor an account code's relink revokes a session: the account's computers stay joined, and a
+  computer that joined with the old identity keeps its device token until an admin signs it out (*Devices*) or the
+  account is disabled. The unlinked identity signs in to nothing here until it is linked again.
 - **Which server.** The app never asks the cloud for a token for an id on the server's word alone, since a server
   could name another one's and pass the token on. A server's id is its public key's (`PublicKey::server_id`). Before
   it asks, the app sends the server a fresh nonce (`POST /server/key-proof { nonce }`, 16 to 64 base64url characters);
-  the server answers its public key and a statement of type `orchester-key-proof+jws` naming its id and that nonce,
-  signed with that key. The app checks that the key's id is the id the server gives itself and that the signature
-  holds, and otherwise sends nothing (*the server didn't prove it is the server it says it is*). The token's audience,
-  that id, then names the key that proved itself, whatever certificate, proxy or registry entry the server is reached
-  through: no other server can take it, and every token for codes is bound so, linked server or not. A `GET /server`
+  the server answers its public key and a statement of type `orchester-key-proof+jws` naming its id, that nonce and
+  the SHA-256 of the certificate its connections present, signed with that key: its own certificate, or with `tls =
+  "off"` the one its proxy presents, which the host configures (`proxy_certificate`, `docs/server-hosting.md`). The
+  app checks that the key's id is the id the server gives itself, that the signature holds, and that the certificate
+  is the one of the connection the app itself uses; otherwise it sends nothing (*the server didn't prove it is the
+  server it says it is*). A server that names another's id cannot sign for it, and one that passes the nonce on to the
+  other and returns that one's proof is caught by the certificate. The one case the check cannot tell apart is two
+  servers presenting the same certificate (one certificate shared by several servers, or a proxy in front of several
+  with one certificate): either could pass on the other's proof, so give each server a certificate of its own. A
+  server with TLS off and no `proxy_certificate`, or one reached over plain HTTP, names no certificate the app can
+  compare, so the app asks for no token and the server takes no code but its setup code. A `GET /server`
   that names no `codes_need_two_factor` is a server from before two-factor authentication: the app sends it the code
   alone, since its `CodeJoin` refuses unknown fields; this server keeps refusing them too, so an app and a server that
   disagree on the contract fail at once rather than drop a field.

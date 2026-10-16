@@ -18,9 +18,9 @@ use crate::{
   settings,
 };
 
-/// `POST /server/key-proof`: the server's public key and its signature of the app's nonce, with the id of that key,
-/// which is the server's: what an app checks before it asks Orchester Cloud for a code's token for this id
-/// (`docs/architecture/server.md`, "Codes"). Nothing is stored.
+/// `POST /server/key-proof`: the server's public key and its signature of the app's nonce and of the certificate its
+/// connections present, with the id of that key, which is the server's: what an app checks before it asks Orchester
+/// Cloud for a code's token for this id (`docs/architecture/server.md`, "Codes"). Nothing is stored.
 pub(super) async fn key_proof(
   State(server): State<Server>,
   SafeJson(input): SafeJson<KeyProofRequest>,
@@ -34,9 +34,17 @@ pub(super) async fn key_proof(
     return Err(ErrorCode::Invalid.into());
   }
   let keys = &server.inner.keys;
+  let proxied = server
+    .inner
+    .config
+    .proxy_certificate
+    .as_deref()
+    .and_then(|fingerprint| orchester_api::certificate::CertificatePin::parse(&fingerprint.replace(':', "")));
+  let presented = server.inner.tls.as_ref().map(|tls| tls.pin).or(proxied);
   let proof = KeyProof {
     server: keys.id,
     nonce,
+    certificate: presented.map(|pin| pin.to_hex()),
     issued_at: server.now().div_euclid(1000),
   };
   Ok(Json(KeyProofResponse {
