@@ -34,8 +34,8 @@ use orchester_store::{ProjectDb, SharingLink};
 pub use self::{
   claims::{WorkClaim, WorkRefusal},
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
-  make_local::{MadeLocal, MakeLocalPlan},
-  members::{MemberChange, ProjectMembers},
+  make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
+  members::{MemberChange, MembersRead, ProjectMembers},
   share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
 };
 use super::{Connection, ServerEntry, Servers, SharingError};

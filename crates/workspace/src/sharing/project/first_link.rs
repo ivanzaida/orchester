@@ -14,11 +14,11 @@ use orchester_store::{ProjectDb, StoreError};
 use super::{
   ShareError, Shared,
   discovery::{self, DiscoveryState, discovery_state},
-  share::upload_keys,
+  share::{InProgress, upload_keys},
 };
 use crate::{
   background,
-  sharing::{ServerEntry, Servers, SharingError},
+  sharing::{ProjectAddress, ServerEntry, Servers, SharingError},
 };
 
 /// What linking a checkout to a server project would do.
@@ -64,6 +64,7 @@ impl Servers {
     repo_root: &Path,
     project: SharedProject,
   ) -> Result<LinkPlan, SharingError> {
+    ProjectAddress::reported(&project.address, &entry.address)?;
     let id = project.id;
     let server = self
       .with_token(entry, |client, token| async move { client.tasks(&token, id).await })
@@ -88,7 +89,10 @@ impl Servers {
     })
   }
 
-  /// Links the project at `repo_root` as `plan` says, once the person confirmed `request`.
+  /// Links the project at `repo_root` as `plan` says, once the person confirmed `request`. When the checkout's tasks
+  /// are no longer those `plan` read (one was added meanwhile, by another screen or MCP), nothing is sent:
+  /// [`SharingError::ProjectChanged`], and the person reviews the link again. From that check on the project takes no
+  /// change from this computer's screens until the link is made.
   pub async fn link_checkout(
     &self,
     entry: &ServerEntry,
@@ -96,41 +100,62 @@ impl Servers {
     plan: &LinkPlan,
     request: LinkRequest,
   ) -> Result<Shared, ShareError> {
-    let write = request.write_discovery && plan.discovery == DiscoveryState::Absent;
-    match plan.kind {
-      LinkKind::Upload { .. } => {
-        self
-          .link_upload(
-            entry,
-            repo_root,
-            plan.project.clone(),
-            (request.remote, request.key),
-            write,
-          )
-          .await
+    let _in_progress = InProgress::start(self, repo_root);
+    let reviewed = match &plan.kind {
+      LinkKind::Upload { tasks, .. } => tasks.clone(),
+      LinkKind::Download { .. } => Vec::new(),
+      LinkKind::Review { .. } => {
+        return Err(ShareError::Taken {
+          project: plan.project.id,
+          member: true,
+          owners: Vec::new(),
+        });
       }
-      LinkKind::Download { .. } => {
-        let review = self.join_review_at(entry, repo_root, &plan.project.slug).await?;
-        self
-          .join(entry, repo_root, &review, (Vec::new(), request.key))
-          .await
-          .map_err(|failed| failed.error)?;
-        let (root, address) = (repo_root.to_owned(), plan.project.address.clone());
-        Ok(
-          background::run(move || -> Result<Shared, SharingError> {
-            let link = ProjectDb::open(&root)?.sharing()?.ok_or(StoreError::NotShared)?;
-            let discovery = write.then(|| discovery::write(&root, &address));
-            Ok(Shared { link, discovery })
-          })
-          .await
-          .map_err(SharingError::from)??,
-        )
-      }
-      LinkKind::Review { .. } => Err(ShareError::Taken {
-        project: plan.project.id,
-        member: true,
-        owners: Vec::new(),
-      }),
+    };
+    let root = repo_root.to_owned();
+    let (current, ..) = background::run(move || upload_keys(&ProjectDb::open(&root)?))
+      .await
+      .map_err(SharingError::from)??;
+    if current != reviewed {
+      return Err(SharingError::ProjectChanged.into());
     }
+    let write = request.write_discovery && plan.discovery == DiscoveryState::Absent;
+    if let LinkKind::Upload { .. } = plan.kind {
+      return self
+        .link_upload(
+          entry,
+          repo_root,
+          plan.project.clone(),
+          (request.remote, request.key),
+          write,
+        )
+        .await;
+    }
+    self.link_download(entry, repo_root, plan, (request.key, write)).await
+  }
+
+  /// Links a checkout without tasks to `plan`'s project as it is on the server: its tasks come down.
+  async fn link_download(
+    &self,
+    entry: &ServerEntry,
+    repo_root: &Path,
+    plan: &LinkPlan,
+    (key, write): (IdempotencyKey, bool),
+  ) -> Result<Shared, ShareError> {
+    let review = self.review(entry, repo_root, plan.project.clone()).await?;
+    self
+      .join(entry, repo_root, &review, (Vec::new(), key))
+      .await
+      .map_err(|failed| failed.error)?;
+    let (root, address) = (repo_root.to_owned(), review.address);
+    Ok(
+      background::run(move || -> Result<Shared, SharingError> {
+        let link = ProjectDb::open(&root)?.sharing()?.ok_or(StoreError::NotShared)?;
+        let discovery = write.then(|| discovery::write(&root, &address));
+        Ok(Shared { link, discovery })
+      })
+      .await
+      .map_err(SharingError::from)??,
+    )
   }
 }

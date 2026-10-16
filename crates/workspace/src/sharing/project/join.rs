@@ -32,7 +32,7 @@ use orchester_store::{ProjectDb, SharingLink, StoreError};
 use super::{convert, organization::tag, share};
 use crate::{
   background,
-  sharing::{ServerEntry, Servers, SharingError},
+  sharing::{ProjectAddress, ServerEntry, Servers, SharingError},
   tasks::detail::run_store_error,
   workspace::OpenProject,
 };
@@ -136,12 +136,14 @@ impl Servers {
     self.review(entry, repo_root, project).await
   }
 
-  async fn review(
+  /// What joining `project` on `entry` would do for the project at `repo_root`.
+  pub(super) async fn review(
     &self,
     entry: &ServerEntry,
     repo_root: &Path,
     project: SharedProject,
   ) -> Result<JoinReview, SharingError> {
+    let address = ProjectAddress::reported(&project.address, &entry.address)?.to_text();
     let id = project.id;
     let server_tasks = self
       .with_token(entry, |client, token| async move { client.tasks(&token, id).await })
@@ -159,7 +161,7 @@ impl Servers {
     let tasks = background::run(move || review_tasks(&root, &hints)).await??;
     Ok(JoinReview {
       project: project.id,
-      address: project.address,
+      address,
       key: ProjectKey::new(&project.key).map_err(|_| SharingError::InvalidAnswer("project key"))?,
       next: u32::try_from(project.next_number).map_err(|_| SharingError::InvalidAnswer("next number"))?,
       tasks,

@@ -55,6 +55,14 @@ pub enum SharingError {
   /// The server has no project at the address, or the person is not a member of it; it answers both alike.
   #[error("no project the person is a member of at this address")]
   NoProject,
+  /// The checkout's tasks are no longer those the person reviewed before confirming the link: nothing was sent, and
+  /// the link is reviewed again.
+  #[error("the project's tasks changed since the link was reviewed")]
+  ProjectChanged,
+  /// The server reported an address for one of its projects that is on another server: Orchester neither keeps it,
+  /// writes it into a repository nor opens it.
+  #[error("the server reported a project address on another server")]
+  ForeignAddress,
 }
 
 impl From<Message> for SharingError {
@@ -92,6 +100,8 @@ impl SharingError {
         Message::new("servers.errors.certificateChanged").with("host", address.host().to_owned())
       }
       Self::NoProject => Message::new("sharing.errors.noProject"),
+      Self::ProjectChanged => Message::new("sharing.errors.projectChanged"),
+      Self::ForeignAddress => Message::new("sharing.errors.foreignAddress").with("server", address.as_str().to_owned()),
     }
   }
 }

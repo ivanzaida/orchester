@@ -1519,7 +1519,9 @@
       "notEditable": "The server didn't take the change: the task can't be edited in its state.",
       "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
       "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished.",
-      "noProject": "The server has no project at this address that you're a member of. Ask whoever shared it for an invite."
+      "noProject": "The server has no project at this address that you're a member of. Ask whoever shared it for an invite.",
+      "projectChanged": "This project's tasks changed since you reviewed the link, so nothing was sent. Review what linking does again.",
+      "foreignAddress": "{{server}} named an address on another server for this project, so Orchester didn't use it and nothing was changed."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

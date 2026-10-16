@@ -30,7 +30,7 @@ use orchester_store::{ProjectDb, SharingLink, StoreError};
 use super::{ProjectServer, convert, discovery, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
-  sharing::{ServerEntry, Servers, SharingError},
+  sharing::{ProjectAddress, ServerEntry, Servers, SharingError},
 };
 
 /// What sharing the project would do, as the confirmation says it (10.12).
@@ -198,6 +198,7 @@ impl Servers {
     (remote, key): (Option<RepositoryIdentity>, IdempotencyKey),
     write_discovery: bool,
   ) -> Result<Shared, ShareError> {
+    let address = ProjectAddress::reported(&project.address, &entry.address)?.to_text();
     let id = project.id;
     let on_server = self
       .with_token(entry, |client, token| async move { client.tasks(&token, id).await })
@@ -232,9 +233,9 @@ impl Servers {
       cursor: linked.cursor,
       last_synced_at: Timestamp::now(),
       removed_at: None,
-      address: Some(project.address.clone()),
+      address: Some(address.clone()),
     };
-    let (root, stored, address) = (repo_root.to_owned(), link.clone(), project.address);
+    let (root, stored) = (repo_root.to_owned(), link.clone());
     let servers = self.clone();
     let discovery = background::run(move || -> Result<_, SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
@@ -257,25 +258,30 @@ impl Servers {
 }
 
 /// The project at `repo_root` takes no change from this computer's screens while it is shared or
-/// joins a server project.
+/// joins a server project. A link holds it from its check of the reviewed tasks on, around the share or join it runs,
+/// which then only finds it held: the outermost one ends it.
 pub(super) struct InProgress {
   servers: Servers,
   root: PathBuf,
+  outermost: bool,
 }
 
 impl InProgress {
   pub(super) fn start(servers: &Servers, root: &Path) -> Self {
-    servers.inner.sharing_now.lock().insert(root.to_owned());
+    let outermost = servers.inner.sharing_now.lock().insert(root.to_owned());
     Self {
       servers: servers.clone(),
       root: root.to_owned(),
+      outermost,
     }
   }
 }
 
 impl Drop for InProgress {
   fn drop(&mut self) {
-    self.servers.inner.sharing_now.lock().remove(&self.root);
+    if self.outermost {
+      self.servers.inner.sharing_now.lock().remove(&self.root);
+    }
   }
 }
 

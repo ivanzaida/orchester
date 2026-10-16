@@ -6,6 +6,8 @@
 use orchester_api::client::{AddressError, ServerAddress};
 use orchester_core::{repository::RepositoryIdentity, resource::Slug};
 
+use super::SharingError;
+
 /// Why a typed project address is not one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProjectAddressError {
@@ -37,6 +39,17 @@ impl ProjectAddress {
       server: ServerAddress::parse(server)?,
       slug,
     })
+  }
+
+  /// `text`, the address the server at `server` reported for one of its projects, when it is on that server. An
+  /// address on another server is never kept, written into a repository or opened in the browser
+  /// ([`SharingError::ForeignAddress`]).
+  pub fn reported(text: &str, server: &ServerAddress) -> Result<Self, SharingError> {
+    let address = Self::parse(text).map_err(|_| SharingError::InvalidAnswer("project address"))?;
+    if address.server() != server {
+      return Err(SharingError::ForeignAddress);
+    }
+    Ok(address)
   }
 
   pub fn server(&self) -> &ServerAddress {

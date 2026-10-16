@@ -4,12 +4,17 @@
 //! person leaves, or makes themself a member, the cache records it. Since API 3 the app shows the members read-only
 //! (row 63) and keeps them as last read, so they show while the server cannot be reached ([`ProjectMembers`]).
 
-use orchester_api::{Member, MemberChanges, MemberCreate, MemberRole};
+use std::path::Path;
+
+use orchester_api::{ErrorCode, Member, MemberChanges, MemberCreate, MemberRole};
 use orchester_core::{id::UserId, time::Timestamp};
-use orchester_store::{ProjectDb, SharedMember};
+use orchester_store::{ProjectDb, SharedMember, StoreError};
 
 use super::ProjectServer;
-use crate::{background, sharing::SharingError};
+use crate::{
+  background,
+  sharing::{Servers, SharingError},
+};
 
 /// A change of one member.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,8 +29,20 @@ pub enum MemberChange {
 pub struct ProjectMembers {
   pub members: Vec<SharedMember>,
   pub read_at: Timestamp,
-  /// Read from the server now; otherwise as last read, while it cannot be reached.
-  pub live: bool,
+  pub read: MembersRead,
+}
+
+/// Whether the members were read from the server now, and why not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MembersRead {
+  /// The server listed them now.
+  Live,
+  /// As last read: the server cannot be reached now.
+  Unreachable,
+  /// As last read: this computer is signed out of the server, or the server is no longer in the list.
+  NoServer,
+  /// As last read: the server shows its members only to members, and the person is not one any more.
+  NotMember,
 }
 
 impl ProjectMembers {
@@ -33,11 +50,32 @@ impl ProjectMembers {
   pub fn owners(&self) -> impl Iterator<Item = &SharedMember> {
     self.members.iter().filter(|member| member.role == MemberRole::Owner)
   }
+
+  pub fn live(&self) -> bool {
+    self.read == MembersRead::Live
+  }
+}
+
+impl Servers {
+  /// The members of the project at `repo_root` as Sharing shows them ([`ProjectServer::current_members`]), also once
+  /// its server is no longer in the list: then as last read.
+  pub async fn project_members(&self, repo_root: &Path) -> Result<ProjectMembers, SharingError> {
+    let (servers, root) = (self.clone(), repo_root.to_owned());
+    let server = background::run(move || ProjectServer::open(&servers, &root)).await?;
+    match server {
+      Ok(Some(server)) => server.current_members().await,
+      Ok(None) => Err(StoreError::NotShared.into()),
+      Err(SharingError::ServerMissing) => last_read(repo_root, MembersRead::NoServer)
+        .await?
+        .ok_or(SharingError::ServerMissing),
+      Err(error) => Err(error),
+    }
+  }
 }
 
 impl ProjectServer {
-  /// The members as the server lists them now, kept as the cache; while it cannot be reached, or once the person is
-  /// no longer a member, as last read (the error when they never were).
+  /// The members as the server lists them now, kept as the cache; while it cannot be reached, once this computer is
+  /// signed out of it, or once the person is no longer a member, as last read (the error when they never were).
   pub async fn current_members(&self) -> Result<ProjectMembers, SharingError> {
     let root = self.repo_root.clone();
     // The server shows a project's members only to its members: once the person is not one, the list is as last read.
@@ -45,30 +83,29 @@ impl ProjectServer {
       Some(_) => Err(SharingError::NotMember),
       None => self.members().await,
     };
-    match read {
+    let error = match read {
       Ok(members) => {
         let mut members: Vec<SharedMember> = members.into_iter().map(shared_member).collect();
         // Owners first, then by when they were added, as the cache keeps them.
         members.sort_by_key(|member| (member.role != MemberRole::Owner, member.added_at));
         let (kept, read_at) = (members.clone(), Timestamp::now());
         background::run(move || ProjectDb::open(&root)?.record_shared_members(&kept, read_at)).await??;
-        Ok(ProjectMembers {
+        return Ok(ProjectMembers {
           members,
           read_at,
-          live: true,
-        })
+          read: MembersRead::Live,
+        });
       }
-      Err(error) if unreachable(&error) => {
-        let cached = background::run(move || ProjectDb::open(&root)?.shared_members()).await??;
-        let (read_at, members) = cached.ok_or(error)?;
-        Ok(ProjectMembers {
-          members,
-          read_at,
-          live: false,
-        })
-      }
-      Err(error) => Err(error),
+      Err(error) => error,
+    };
+    let Some(why) = as_last_read(&error) else {
+      return Err(error);
+    };
+    if why == MembersRead::NotMember && self.link.removed_at.is_none() {
+      // The server answers a non-member like no project; its sync records since when the person is not one.
+      self.servers.sync_now();
     }
+    last_read(&root, why).await?.ok_or(error)
   }
 
   /// The project's members, as the server lists them.
@@ -122,14 +159,26 @@ impl ProjectServer {
   }
 }
 
-/// Whether `error` says the server could not be asked, or no longer shows the members to the person, so they are
-/// shown as last read.
-fn unreachable(error: &SharingError) -> bool {
+/// Why the members are shown as last read after `error`: the server could not be asked, or no longer shows them to
+/// the person; `None` for an error the person is told instead.
+fn as_last_read(error: &SharingError) -> Option<MembersRead> {
   match error {
-    SharingError::Offline | SharingError::CertificateChanged | SharingError::NotMember => true,
-    SharingError::Client(error) => error.is_connection(),
-    _ => false,
+    SharingError::Offline | SharingError::CertificateChanged => Some(MembersRead::Unreachable),
+    SharingError::SignedOut => Some(MembersRead::NoServer),
+    SharingError::NotMember => Some(MembersRead::NotMember),
+    SharingError::Client(error) if error.is_connection() => Some(MembersRead::Unreachable),
+    SharingError::Client(error) if matches!(error.code(), Some(ErrorCode::NotFound | ErrorCode::NotMember)) => {
+      Some(MembersRead::NotMember)
+    }
+    _ => None,
   }
+}
+
+/// The members of the project at `root` as last read, `read` for why; `None` when they never were.
+async fn last_read(root: &Path, read: MembersRead) -> Result<Option<ProjectMembers>, SharingError> {
+  let root = root.to_owned();
+  let cached = background::run(move || ProjectDb::open(&root)?.shared_members()).await??;
+  Ok(cached.map(|(read_at, members)| ProjectMembers { members, read_at, read }))
 }
 
 fn shared_member(member: Member) -> SharedMember {
