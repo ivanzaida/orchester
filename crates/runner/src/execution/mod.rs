@@ -230,18 +230,23 @@ impl Scheduler {
         self.check_group_start(&db, task, Some(&recorded))?;
         self.admit(&db)?;
       }
-      let prepared = prepare::resume_recorded(&mut db, root, task, recorded)?;
-      return self.begin(db, prepared);
+      let prepared = prepare::resume_recorded(&mut db, root, task, recorded);
+      return self.begin(db, task, prepared);
     }
     self.check_group_start(&db, task, None)?;
     self.admit(&db)?;
-    let prepared = prepare::prepare_first(&mut db, root, key, task)?;
-    self.begin(db, prepared)
+    let prepared = prepare::prepare_first(&mut db, root, key, task);
+    self.begin(db, task, prepared)
   }
 
   /// Tells the desktop about the run `prepared` recorded and executes it, unless an earlier
-  /// request already does.
-  fn begin(&self, db: ProjectDb, prepared: Prepared) -> Result<RunId, Rejection> {
+  /// request already does; or about the run of `task` that failed as it could not start.
+  fn begin(&self, db: ProjectDb, task: TaskId, prepared: Result<Prepared, Rejection>) -> Result<RunId, Rejection> {
+    let prepared = prepared.inspect_err(|rejection| {
+      if let Rejection::RunNotStarted { run, .. } = rejection {
+        self.inner.notifier.send(Event::RunChanged { run: *run, task });
+      }
+    })?;
     let run = prepared.run.id();
     self.inner.notifier.send(Event::RunChanged {
       run,

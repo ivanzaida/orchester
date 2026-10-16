@@ -16,6 +16,7 @@ mod sign_up;
 
 use std::{sync::Arc, time::Duration};
 
+use orchester_api::identity::PublicKey;
 pub(crate) use rows::Authenticated;
 
 use crate::{
@@ -23,7 +24,7 @@ use crate::{
   config::Config,
   db::Database,
   error::CloudError,
-  keys::KeySealing,
+  keys::{KeySealing, open_root},
   limits::Limits,
   mail::{Email, Mailer, Messages},
   passwords::Passwords,
@@ -45,18 +46,25 @@ pub(crate) struct State {
   pub passwords: Passwords,
   pub limits: Limits,
   pub sealing: KeySealing,
+  /// The public half of the cloud's root key, which team servers pin.
+  pub root: PublicKey,
   pub people: People,
 }
 
 impl Cloud {
-  /// Connects to the database and applies its migrations; refuses a database newer than this binary.
+  /// Connects to the database and applies its migrations, refusing a database newer than this binary; loads the root
+  /// key, or makes it at the first start; then brings the signing keys and the key set up to date, so `GET /keys`
+  /// answers from the first request. A root the key-encryption key does not open stops the start.
   pub async fn open(config: Config, clock: Arc<dyn Clock>, mailer: Arc<dyn Mailer>) -> Result<Self, CloudError> {
     config.validate()?;
     let sealing = KeySealing::new(&config.key_encryption_key)?;
     let people = People::new(&config.key_encryption_key)?;
     let db = Database::open(&config.database_url, clock.now_ms()).await?;
+    let root = open_root(&db, &sealing, clock.now_ms()).await?;
+    // Both are public: the fingerprint team servers show, and the key their admins pin again after a new root.
+    tracing::info!(root_public_key = %root.encoded(), root_fingerprint = %root.fingerprint(), "root key ready");
     let messages = Messages::new(config.public_url.clone())?;
-    Ok(Self {
+    let cloud = Self {
       inner: Arc::new(State {
         config,
         clock,
@@ -66,9 +74,12 @@ impl Cloud {
         passwords: Passwords::new(4, Duration::from_secs(10)),
         limits: Limits::new(),
         sealing,
+        root,
         people,
       }),
-    })
+    };
+    cloud.keep_keys().await?;
+    Ok(cloud)
   }
 
   pub(crate) async fn client(&self) -> Result<deadpool_postgres::Object, CloudError> {

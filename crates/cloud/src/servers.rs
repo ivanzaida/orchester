@@ -65,7 +65,7 @@ impl Cloud {
       .await?;
     Ok(ServerLinked {
       server: registered(server(&statement)),
-      root_key: self.inner.config.root_public_key.encoded(),
+      root_key: self.inner.root.encoded(),
       key_set,
       identity_token: issued.identity_token,
       expires_at: issued.expires_at,

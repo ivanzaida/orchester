@@ -272,15 +272,12 @@ fn cancel(ctx: &Ctx, view: &View, number: u32) -> Words {
     Phase::Refused(_) => "orchestrator.change.cancel.refused",
   };
   let time = view.time();
-  let effect = match (view.phase(), view.run()) {
+  let branch = view.run().and_then(|facts| facts.branch.as_deref());
+  let effect = match (view.phase(), branch) {
     (Phase::Waits | Phase::Applying, _) => ctx.t("orchestrator.change.cancel.effectWaits"),
-    (Phase::Applied | Phase::Done, Some(facts)) => ctx.t_args(
+    (Phase::Applied | Phase::Done, Some(branch)) => ctx.t_args(
       "orchestrator.change.cancel.effectApplied",
-      [
-        ("time", time.as_str()),
-        ("branch", facts.branch.as_str()),
-        ("task", view.task()),
-      ],
+      [("time", time.as_str()), ("branch", branch), ("task", view.task())],
     ),
     (Phase::Applied | Phase::Done, None) => ctx.t_args(
       "orchestrator.change.cancel.effectAppliedPlain",

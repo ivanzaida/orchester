@@ -3,13 +3,12 @@
 
 use std::process::{Command, Output};
 
-const REQUIRED: [&str; 6] = [
+const REQUIRED: [&str; 5] = [
   "ORCHESTER_CLOUD_PUBLIC_URL",
   "ORCHESTER_CLOUD_DATABASE_URL",
   "ORCHESTER_CLOUD_SMTP_URL",
   "ORCHESTER_CLOUD_SMTP_FROM",
   "ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY",
-  "ORCHESTER_CLOUD_ROOT_PUBLIC_KEY",
 ];
 
 fn value(variable: &str) -> &'static str {
@@ -19,7 +18,6 @@ fn value(variable: &str) -> &'static str {
     "ORCHESTER_CLOUD_SMTP_URL" => "smtp://127.0.0.1:1",
     "ORCHESTER_CLOUD_SMTP_FROM" => "Orchester <no-reply@cloud.example.test>",
     "ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY" => "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
-    "ORCHESTER_CLOUD_ROOT_PUBLIC_KEY" => "IKipR35SvHpGcnHNdp2QXlLNBQS0St6caCeRIoyqdZA",
     _ => unreachable!("only the required variables have test values"),
   }
 }
@@ -62,7 +60,6 @@ fn config_a_wrong_value_is_named_in_full() {
   let wrong = [
     ("ORCHESTER_CLOUD_PUBLIC_URL", "https://cloud.example.test/"),
     ("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY", "not hex"),
-    ("ORCHESTER_CLOUD_ROOT_PUBLIC_KEY", "not a key"),
     ("ORCHESTER_CLOUD_SMTP_FROM", "not an address"),
     ("ORCHESTER_CLOUD_SMTP_URL", "http://relay.example.test"),
     ("ORCHESTER_CLOUD_LISTEN", "nowhere"),

@@ -388,9 +388,11 @@ impl Scheduler {
     }
     let used = usage(&runs);
     let blockers = blockers(db, group, &statuses)?;
-    // A failed worktree creation may have left a Pending run. Retry its own saved key before
-    // looking for more drafts; Pending is already counted against the group limit. A blocked task
-    // waits for its blocking tasks without holding the others.
+    // A start that stopped between recording the run and starting it (the runner ended, a database
+    // write failed) left a Pending run. Retry its own saved key before looking for more drafts;
+    // Pending is already counted against the group limit. A run whose worktree could not be created
+    // failed instead, which holds the group for the person. A blocked task waits for its blocking
+    // tasks without holding the others.
     let pending = group
       .tasks()
       .iter()
@@ -502,6 +504,8 @@ impl Scheduler {
 fn rejection_hold(error: &Rejection) -> GroupHold {
   match error {
     Rejection::TaskGroupWaiting { hold } => hold.clone(),
+    // The run failed before it started; retrying its key answers the same, so the person decides.
+    Rejection::RunNotStarted { .. } => GroupHold::FailedTask,
     Rejection::NoAgentSlot { .. } => GroupHold::AgentCapacity,
     Rejection::DailyBudgetUsed { .. } => GroupHold::DailyBudget,
     Rejection::Preflight { problems } => GroupHold::Preflight(problems.clone()),

@@ -6,6 +6,7 @@ use orchester_api::{
 use orchester_core::id::{CloudAccountId, InviteId};
 use uuid::Uuid;
 
+use super::CLOCK_SKEW_MS;
 use crate::{
   Cloud,
   accounts::Authenticated,
@@ -15,13 +16,14 @@ use crate::{
 };
 
 impl Cloud {
-  /// The newest published key set that has not expired, as the root key signed it, read with the caller's
-  /// connection: an issuance holds one connection, never two (review 1, M4).
+  /// The newest published key set that has not expired and is not dated in the future, as the root key signed it, read
+  /// with the caller's connection: an issuance holds one connection, never two (review 1, M4).
   pub(crate) async fn key_set(&self, client: &impl GenericClient) -> Result<String, CloudError> {
+    let now = self.now();
     let row = client
       .query_opt(
-        "SELECT compact FROM key_sets WHERE expires_at > $1 ORDER BY issued_at DESC LIMIT 1",
-        &[&time(self.now())],
+        "SELECT compact FROM key_sets WHERE expires_at > $1 AND issued_at <= $2 ORDER BY issued_at DESC LIMIT 1",
+        &[&time(now), &time(now + CLOCK_SKEW_MS)],
       )
       .await?
       .ok_or(CloudErrorCode::KeysUnavailable)?;
@@ -121,7 +123,7 @@ impl Cloud {
   /// The cloud signs only with a key a team server holding the newest key set would accept now.
   async fn signing_key(&self, client: &impl GenericClient, now: i64) -> Result<SigningKey, CloudError> {
     let compact = self.key_set(client).await?;
-    let verified = match VerifiedKeySet::verify(&compact, &self.inner.config.root_public_key, seconds(now)) {
+    let verified = match VerifiedKeySet::verify(&compact, &self.inner.root, seconds(now)) {
       Ok(verified) => verified,
       Err(IdentityError::KeySetExpired | IdentityError::NotYetValid) => {
         return Err(CloudErrorCode::KeysUnavailable.into());

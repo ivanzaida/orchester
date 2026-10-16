@@ -3,7 +3,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use orchester_api::{Credential, identity::PublicKey};
+use orchester_api::Credential;
 use serde::Deserialize;
 
 use crate::{addresses::TrustedProxy, error::CloudError};
@@ -23,10 +23,9 @@ pub struct Config {
   pub smtp_url: Credential,
   /// The sender, e.g. `Orchester <no-reply@example.com>`.
   pub smtp_from: String,
-  /// 64 hex characters (32 bytes): seals the signing keys' private halves in the database.
+  /// 64 hex characters (32 bytes): seals the root's and the signing keys' private halves in the database. The root
+  /// is made at the first start; a different key later stops the start rather than make another root.
   pub key_encryption_key: Credential,
-  /// The public half of the offline root key that signs key sets.
-  pub root_public_key: PublicKey,
   pub trusted_proxies: Vec<TrustedProxy>,
 }
 
@@ -39,7 +38,6 @@ struct File {
   smtp_url: Option<Credential>,
   smtp_from: Option<String>,
   key_encryption_key: Option<Credential>,
-  root_public_key: Option<String>,
   trusted_proxies: Option<Vec<TrustedProxy>>,
 }
 
@@ -86,7 +84,6 @@ impl File {
     set_secret(&mut self.smtp_url, "SMTP_URL")?;
     set(&mut self.smtp_from, "SMTP_FROM")?;
     set_secret(&mut self.key_encryption_key, "KEY_ENCRYPTION_KEY")?;
-    set(&mut self.root_public_key, "ROOT_PUBLIC_KEY")?;
     if let Some(value) = environment("TRUSTED_PROXIES")? {
       self.trusted_proxies = Some(
         value
@@ -102,9 +99,6 @@ impl File {
 
   fn into_config(self) -> Result<Config, CloudError> {
     let missing = CloudError::Configuration;
-    let root = self
-      .root_public_key
-      .ok_or(missing("ORCHESTER_CLOUD_ROOT_PUBLIC_KEY is required"))?;
     let config = Config {
       listen: self.listen.unwrap_or(SocketAddr::from(([127, 0, 0, 1], 8090))),
       public_url: self
@@ -118,8 +112,6 @@ impl File {
       key_encryption_key: self
         .key_encryption_key
         .ok_or(missing("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY is required"))?,
-      root_public_key: PublicKey::parse(&root)
-        .map_err(|_| missing("ORCHESTER_CLOUD_ROOT_PUBLIC_KEY is not an Ed25519 public key"))?,
       trusted_proxies: self.trusted_proxies.unwrap_or_default(),
     };
     config.validate()?;

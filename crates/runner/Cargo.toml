@@ -181,6 +181,10 @@ name = "run_again"
 required-features = ["test-agent"]
 
 [[test]]
+name = "run_branch"
+required-features = ["test-agent"]
+
+[[test]]
 name = "command_approvals"
 required-features = ["test-agent"]
 

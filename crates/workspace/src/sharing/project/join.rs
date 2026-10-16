@@ -295,7 +295,7 @@ fn review_tasks(root: &Path, hints: &[SimilarTask]) -> Result<Vec<ReviewTask>, S
       let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
       let count = runs.len();
       let latest = runs.into_iter().filter_map(Result::ok).next_back();
-      let branch = latest.as_ref().map(|run| run.branch().clone());
+      let branch = latest.as_ref().and_then(|run| run.own_branch()).cloned();
       let run = match latest {
         Some(run) => {
           let merge = db.run_merge(run.id())?;

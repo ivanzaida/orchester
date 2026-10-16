@@ -1,0 +1,130 @@
+# Orchester Cloud as a Portainer stack behind the host's Traefik (deploy/cloud/PORTAINER.md). The images come from
+# GHCR, built by .github/workflows/cloud-images.yml. Nothing is published: Traefik owns ports 80 and 443 and reaches
+# `cloud` and `web` over its external network. Every value comes from the stack's environment variables; nothing here
+# is the person's relay or key.
+#
+# The stack's own network `backend` is internal (no route out) with a fixed subnet, so the backend can believe the
+# web front's forwarded client address by its fixed IP: `${CLOUD_SUBNET_PREFIX}.3` is cloud, `.4` PostgreSQL, `.5`
+# web. Inside the stack the services call each other by aliases that only exist on `backend`, so a container of
+# another stack on the Traefik network that happens to be called `postgres` or `cloud` is never reached instead.
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orchester_cloud
+      POSTGRES_DB: orchester_cloud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "orchester_cloud", "-d", "orchester_cloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    labels:
+      traefik.enable: 'false'
+    # Only on the stack's internal network: nothing else reaches the database.
+    networks:
+      backend:
+        ipv4_address: ${CLOUD_SUBNET_PREFIX:-10.231.0}.4
+        aliases: [orchester-cloud-postgres]
+
+  cloud:
+    image: ghcr.io/ivanzaida/orchester-cloud:${CLOUD_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ORCHESTER_CLOUD_PUBLIC_URL: ${ORCHESTER_CLOUD_PUBLIC_URL:?Set ORCHESTER_CLOUD_PUBLIC_URL, e.g. https://cloud.example.com}
+      # PostgreSQL on the stack's internal network.
+      ORCHESTER_CLOUD_DATABASE_URL: postgres://orchester_cloud:${POSTGRES_PASSWORD}@orchester-cloud-postgres:5432/orchester_cloud?sslmode=disable
+      # smtps://user:pass@host:465 or smtp://user:pass@host:587?tls=required (user and password URL-encoded).
+      ORCHESTER_CLOUD_SMTP_URL: ${ORCHESTER_CLOUD_SMTP_URL:?Set ORCHESTER_CLOUD_SMTP_URL}
+      ORCHESTER_CLOUD_SMTP_FROM: ${ORCHESTER_CLOUD_SMTP_FROM:?Set ORCHESTER_CLOUD_SMTP_FROM}
+      ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY: ${ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY:?Set ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY}
+      # Whose X-Forwarded-For is believed: Traefik (its address on the Traefik network, PORTAINER.md, "Trusted
+      # proxies") and the web front's server, which forwards the address Traefik gave it.
+      ORCHESTER_CLOUD_TRUSTED_PROXIES: ${TRAEFIK_ADDRESS:?Set TRAEFIK_ADDRESS to Traefik's address on the Traefik network},${CLOUD_SUBNET_PREFIX:-10.231.0}.5
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      # /api/* goes to the backend, as in Caddyfile.web; the longer rule wins over the web front's Host-only rule.
+      traefik.http.routers.orchester-cloud-api.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester-cloud.lurq.dev}`) && PathPrefix(`/api/`)
+      traefik.http.routers.orchester-cloud-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.orchester-cloud-api.tls: 'true'
+      traefik.http.routers.orchester-cloud-api.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.orchester-cloud-api.middlewares: orchester-cloud-api-hsts
+      traefik.http.routers.orchester-cloud-api.service: orchester-cloud-api
+      # No access log for this host (Traefik 3.3 or later): the web front's paths carry one-time tokens.
+      traefik.http.routers.orchester-cloud-api.observability.accesslogs: 'false'
+      traefik.http.middlewares.orchester-cloud-api-hsts.headers.stsSeconds: '31536000'
+      traefik.http.services.orchester-cloud-api.loadbalancer.server.port: '8090'
+      # Plain HTTP on the host goes to HTTPS, as Caddy does. Kept here, not on `web`, because Traefik drops the
+      # routers of a container that is unhealthy, and the API stays up while the web front is down.
+      traefik.http.routers.orchester-cloud-http.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester-cloud.lurq.dev}`)
+      traefik.http.routers.orchester-cloud-http.entrypoints: ${TRAEFIK_HTTP_ENTRYPOINT:-web}
+      traefik.http.routers.orchester-cloud-http.middlewares: orchester-cloud-https
+      traefik.http.routers.orchester-cloud-http.service: orchester-cloud-api
+      traefik.http.routers.orchester-cloud-http.observability.accesslogs: 'false'
+      traefik.http.middlewares.orchester-cloud-https.redirectscheme.scheme: https
+      traefik.http.middlewares.orchester-cloud-https.redirectscheme.permanent: 'true'
+    networks:
+      backend:
+        ipv4_address: ${CLOUD_SUBNET_PREFIX:-10.231.0}.3
+        aliases: [orchester-cloud-api]
+      # Traefik reaches the backend here, and the backend reaches the SMTP relay through it (`backend` has no route
+      # out).
+      traefik: {}
+
+  web:
+    image: ghcr.io/ivanzaida/orchester-cloud-web:${CLOUD_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - cloud
+    environment:
+      # The same public address the cloud puts in its emails and Traefik serves.
+      ORCHESTER_CLOUD_PUBLIC_URL: ${ORCHESTER_CLOUD_PUBLIC_URL:?Set ORCHESTER_CLOUD_PUBLIC_URL}
+      ORCHESTER_CLOUD_API_URL: http://orchester-cloud-api:8090
+      # Signs the CSRF tokens and seals the session cookie: 32 random bytes in base64, e.g. `openssl rand -base64 32`.
+      ORCHESTER_CLOUD_WEB_SECRET: ${ORCHESTER_CLOUD_WEB_SECRET:?Set ORCHESTER_CLOUD_WEB_SECRET}
+    # For monitoring: the server stops on a bad configuration (and restarts in a loop); a server that runs but cannot
+    # answer its sign-in page is marked unhealthy, and Traefik stops routing to it until it is healthy again. The API
+    # router lives on `cloud`, so the API stays up while the web front is down.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/signin').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      # Every other path on the host: sign-up, sign-in, /confirm/{token}, /reset/{token}, the account pages.
+      traefik.http.routers.orchester-cloud-web.rule: Host(`${ORCHESTER_CLOUD_HOST:-orchester-cloud.lurq.dev}`)
+      traefik.http.routers.orchester-cloud-web.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.orchester-cloud-web.tls: 'true'
+      traefik.http.routers.orchester-cloud-web.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.orchester-cloud-web.middlewares: orchester-cloud-web-hsts
+      traefik.http.routers.orchester-cloud-web.service: orchester-cloud-web
+      traefik.http.routers.orchester-cloud-web.observability.accesslogs: 'false'
+      traefik.http.middlewares.orchester-cloud-web-hsts.headers.stsSeconds: '31536000'
+      traefik.http.services.orchester-cloud-web.loadbalancer.server.port: '3000'
+    networks:
+      backend:
+        ipv4_address: ${CLOUD_SUBNET_PREFIX:-10.231.0}.5
+      traefik: {}
+
+networks:
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${CLOUD_SUBNET_PREFIX:-10.231.0}.0/24
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+
+volumes:
+  postgres_data:

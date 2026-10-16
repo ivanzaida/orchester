@@ -19,11 +19,12 @@ use orchester_core::{
   task::{Task, TaskDetails, TaskStatus, TaskUpdate, organization::TaskOrganization},
   time::Timestamp,
 };
+use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  runner::Runners,
+  runner::{RunRequestError, Runners},
   sharing::{Servers, project::WorkClaim},
   tasks::{
     conflict::{Edit, EditConflict, EditSaved, save_edit},
@@ -156,9 +157,16 @@ pub enum RunArgs {
   Retry(QueuedTask),
 }
 
-/// The task whose run started.
+/// The task whose run was asked to start, and whether it did: one that failed before it started opens on the Summary,
+/// which says why.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Started(pub TaskKey);
+pub struct Started(pub TaskKey, pub RunBegan);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunBegan {
+  Yes,
+  FailedBeforeStart,
+}
 
 impl lurq::app::component::DevtoolsInspectable for Started {}
 
@@ -273,7 +281,12 @@ async fn start(services: &RunServices, queued: QueuedTask, claim: WorkClaim) -> 
     .start_run(queued.task.first_run_key(), queued.task)
     .await
   {
-    Ok(_) => Ok(Started(queued.key)),
+    Ok(_) => Ok(Started(queued.key, RunBegan::Yes)),
+    // The run failed before it started: the task's page says why and runs it again, which retrying here cannot.
+    Err(RunRequestError::Rejected(Rejection::RunNotStarted { .. })) => {
+      claim.release(&services.servers).await;
+      Ok(Started(queued.key, RunBegan::FailedBeforeStart))
+    }
     Err(error) => {
       tracing::warn!(%error, "the start request failed");
       claim.release(&services.servers).await;

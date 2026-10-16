@@ -18,7 +18,6 @@ use crate::{
 
 pub async fn invites_are_accepted_with_a_token_that_names_them() {
   let cloud = TestCloud::start().await;
-  cloud.publish_keys().await;
   let owner = signed_in(&cloud, "ivan@example.test").await;
   let dana = signed_in(&cloud, "dana@example.test").await;
   let (server, other) = (TeamServer::generate(), TeamServer::generate());
@@ -48,7 +47,7 @@ async fn token_names_the_invite(cloud: &TestCloud, dana: &str, (server, id): (&T
   remember(issued.identity_token.expose());
   let keys: KeySetResponse = cloud.request("GET", "/keys", None, None).await.json();
   let now = cloud.clock.now_ms() / 1000;
-  let set = VerifiedKeySet::verify(&keys.key_set, &cloud.root.public_key(), now).expect("keys");
+  let set = VerifiedKeySet::verify(&keys.key_set, &cloud.root().await, now).expect("keys");
   let claims = set
     .verify_token(issued.identity_token.expose(), &server.id().to_string(), now)
     .expect("verifies")

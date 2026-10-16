@@ -1,0 +1,283 @@
+# Publishes a release of the self-hosted team server (deploy/server/README.md): on a `server-v<version>` tag, builds
+# `orchester-server` (crates/server) and `orchester-server-admin` (web/server) for linux/amd64 and linux/arm64, pushes
+# them to Docker Hub, creates the GitHub Release with the images' digests and the quick start, and publishes the
+# self-hosting guide (deploy/server/DOCKERHUB.md with the compose files inlined, tools/dockerhub-description.ps1) as
+# both image repositories' Docker Hub description. The repository is private: that page is the guide self-hosters see.
+# Orchester Cloud's images are not here: they stay private on GHCR (cloud-images.yml).
+#
+# Settings: the secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (an access token with Read & Write), the variable
+# DOCKERHUB_NAMESPACE (default: the username), and the secret DOCKERHUB_DESCRIPTION_TOKEN (Read, Write & Delete, which
+# Docker Hub requires to change a repository's description; without it the description is skipped with a notice).
+name: Server release
+
+on:
+  push:
+    tags: ['server-v*']
+  # A release: run it on a tag (*Use workflow from* → *Tags* → server-v<version>). Only the Docker Hub description:
+  # tick `description_only`, on any branch or tag; the page is built from that ref's files.
+  workflow_dispatch:
+    inputs:
+      description_only:
+        description: Only update the Docker Hub descriptions from deploy/server (no images, no release)
+        type: boolean
+        default: false
+
+concurrency:
+  group: server-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  prepare:
+    name: Version and settings
+    if: ${{ !inputs.description_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      minor: ${{ steps.version.outputs.minor }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: version
+        name: Read the version from the tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" != tag ]; then
+            echo "::error::Run this workflow on a server-v<version> tag (Use workflow from → Tags), not on $REF_NAME."
+            exit 1
+          fi
+          if [[ ! "$REF_NAME" =~ ^server-v(([0-9]+)\.([0-9]+)\.[0-9]+)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$REF_NAME is not server-v<major>.<minor>.<patch>[-<pre-release>], e.g. server-v0.1.0 or server-v0.2.0-rc.1."
+            exit 1
+          fi
+          release="${BASH_REMATCH[1]}"
+          # The server reports the workspace's version (GET /api/v1/server); the tag must name the same release.
+          cargo="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          if [ "$release" != "$cargo" ]; then
+            echo "::error::The tag names $release, but Cargo.toml's workspace version is $cargo."
+            exit 1
+          fi
+          {
+            echo "version=${REF_NAME#server-v}"
+            echo "minor=${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            if [ -n "${BASH_REMATCH[4]}" ]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
+      - name: Check the Docker Hub settings
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          missing=""
+          [ -n "$DOCKERHUB_USERNAME" ] || missing="$missing DOCKERHUB_USERNAME"
+          [ -n "$DOCKERHUB_TOKEN" ] || missing="$missing DOCKERHUB_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::Repository secrets not set:${missing}. See deploy/server/README.md, \"Publishing a release\"."
+            exit 1
+          fi
+      # The Portainer template carries the compose files inline; a release must not ship one that differs from them.
+      - name: Check the Portainer template against the compose files
+        run: |
+          for file in compose.yaml compose.private.yaml compose.traefik.yaml; do
+            jq -e --arg file "$file" --rawfile content "deploy/server/$file" \
+              '[.templates[] | select(.note | contains($file))] | length == 1 and .[0].stackFile == $content' \
+              deploy/server/portainer-template.json > /dev/null || {
+              echo "::error file=deploy/server/portainer-template.json::Its template for $file differs from deploy/server/$file."
+              exit 1
+            }
+          done
+
+  images:
+    name: Image (${{ matrix.image }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    # arm64 is built under QEMU, which makes the Rust build slow.
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: orchester-server
+            context: .
+            file: deploy/server/Dockerfile
+            title: Orchester team server
+            description: The self-hosted Orchester team server (crates/server)
+          - image: orchester-server-admin
+            context: web
+            file: web/Dockerfile.server
+            title: Orchester team server admin
+            description: The web admin of the self-hosted Orchester team server (web/server)
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # `<version>` always; `<major>.<minor>` and `latest` only for a release that is not a pre-release.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.NAMESPACE }}/${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.prepare.outputs.version }}
+            type=raw,value=${{ needs.prepare.outputs.minor }},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  release:
+    name: GitHub Release
+    needs: [prepare, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # The digests come from Docker Hub itself, which also shows the pushes arrived.
+      - name: Write the release notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          MINOR: ${{ needs.prepare.outputs.minor }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          tags="\`$VERSION\`"
+          [ "$PRERELEASE" = true ] || tags="$tags, \`$MINOR\`, \`latest\`"
+          {
+            echo "## Images"
+            echo
+            echo "For linux/amd64 and linux/arm64, on Docker Hub. Tags: $tags."
+            echo
+            echo "| Image | Digest |"
+            echo "| --- | --- |"
+            for image in orchester-server orchester-server-admin; do
+              digest="$(docker buildx imagetools inspect "$NAMESPACE/$image:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)"
+              echo "| \`$NAMESPACE/$image:$VERSION\` | \`$digest\` |"
+            done
+            echo
+            echo "## Quick start"
+            echo
+            echo "The self-hosting guide, with every compose file, is on Docker Hub:"
+            echo "https://hub.docker.com/r/$NAMESPACE/orchester-server. In short, on a Linux host with Docker, a public DNS"
+            echo "name pointing to it, and ports 80 and 443 open: save \`compose.yaml\` and \`.env.example\` (below, and"
+            echo "attached) in a new folder, the second as \`.env\`; in \`.env\` set \`ORCHESTER_VERSION=$VERSION\`,"
+            echo "\`ORCHESTER_HOST\` and \`ORCHESTER_ADMIN_SECRET\` (\`openssl rand -base64 32\`); run \`docker compose up -d\`;"
+            echo "then open \`https://<ORCHESTER_HOST>/admin\` and enter the setup code from \`docker compose logs server\`."
+            echo "Without a public DNS name, or air-gapped: \`compose.private.yaml\`; behind an existing Traefik:"
+            echo "\`compose.traefik.yaml\`. Both are attached, with a Portainer app template."
+            for file in compose.yaml .env.example; do
+              echo
+              echo "<details><summary>$file</summary>"
+              echo
+              if [ "$file" = compose.yaml ]; then echo '```yaml'; else echo '```sh'; fi
+              cat "deploy/server/$file"
+              echo '```'
+              echo
+              echo "</details>"
+            done
+          } > "$RUNNER_TEMP/notes.md"
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/assets"
+          mkdir -p "$assets"
+          cp deploy/server/compose.yaml deploy/server/compose.private.yaml deploy/server/compose.traefik.yaml \
+            deploy/server/portainer-template.json "$assets/"
+          # Attached without its leading dot, so a download is not a hidden file; the notes say to save it as .env.
+          cp deploy/server/.env.example "$assets/env.example"
+          flags=()
+          [ "$PRERELEASE" = false ] || flags+=(--prerelease)
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --title "Orchester server $VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+            gh release upload "$TAG" "$assets"/* --clobber
+          else
+            gh release create "$TAG" --verify-tag --title "Orchester server $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+              "${flags[@]}" "$assets"/*
+          fi
+
+  # The same page, built from the checked-out files, for both image repositories. It is also kept as the run's
+  # artifact `dockerhub-description`, to paste into Docker Hub by hand without the token.
+  description:
+    name: Docker Hub description
+    needs: [prepare, images]
+    if: ${{ !cancelled() && (inputs.description_only || (needs.images.result == 'success' && needs.prepare.outputs.prerelease == 'false')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build the page from deploy/server
+        shell: pwsh
+        run: ./tools/dockerhub-description.ps1 -Out "$env:RUNNER_TEMP/description.md"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dockerhub-description
+          path: ${{ runner.temp }}/description.md
+      - id: check
+        env:
+          DOCKERHUB_DESCRIPTION_TOKEN: ${{ secrets.DOCKERHUB_DESCRIPTION_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_DESCRIPTION_TOKEN" ]; then
+            echo "set=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "set=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Description skipped::Set the secret DOCKERHUB_DESCRIPTION_TOKEN (Read, Write & Delete) to publish the Docker Hub descriptions, or paste the artifact dockerhub-description into both repositories by hand."
+          fi
+      - if: steps.check.outputs.set == 'true'
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_DESCRIPTION_TOKEN }}
+          repository: ${{ env.NAMESPACE }}/orchester-server
+          short-description: The self-hosted Orchester team server. The full guide with compose files is below.
+          readme-filepath: ${{ runner.temp }}/description.md
+      - if: steps.check.outputs.set == 'true'
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_DESCRIPTION_TOKEN }}
+          repository: ${{ env.NAMESPACE }}/orchester-server-admin
+          short-description: The web admin of the self-hosted Orchester team server. The full guide is below.
+          readme-filepath: ${{ runner.temp }}/description.md

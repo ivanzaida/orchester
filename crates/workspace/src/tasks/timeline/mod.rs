@@ -23,7 +23,10 @@ use orchester_core::{
   id::StepExecutionId,
   integration::RunMerge,
   question::AskedQuestions,
-  run::{DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunStatus, StepOutcome, StepResult, StepStatus},
+  run::{
+    DecidedBy, DecidedToolApproval, PendingToolApproval, Plan, RunFailure, RunStatus, StepOutcome, StepResult,
+    StepStatus,
+  },
   time::Timestamp,
 };
 
@@ -540,6 +543,8 @@ fn run_end(run: &RunView, merge: Option<&RunMerge>) -> Option<Item> {
   let end = match (run.run.status(), merge) {
     (RunStatus::Succeeded, Some(merge)) => RunEnd::Merged(merge.into.as_str().into()),
     (RunStatus::Succeeded, None) => RunEnd::Ready,
+    // It never started, so nothing ran that it could end after.
+    (RunStatus::Failed(RunFailure::WorktreeNotCreated(_)), _) => return None,
     (RunStatus::Failed(_), _) => RunEnd::Failed(
       run
         .steps

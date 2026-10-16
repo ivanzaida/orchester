@@ -1,6 +1,7 @@
 //! The members of a shared project and its repository hint as last read (`docs/architecture/server.md`, row 63): kept
 //! in the project database so Sharing shows them while the server cannot be reached; a local project has none and
-//! refuses to record them, a new list replaces the old one, owners come first, and Make local forgets them.
+//! refuses to record them, a new list replaces the old one, owners come first, and Make local forgets them. A shared
+//! project's database from before them opens with neither read yet.
 //!
 //! `cargo test -p orchester-store --test shared_members members_`
 
@@ -14,8 +15,11 @@ use orchester_core::{
   sharing::MemberRole,
 };
 use orchester_store::{ProjectDb, SharedMember, SharingLink, StoreError};
-use support::{at, name};
+use support::{at, copied_at_version, name};
 use tempfile::TempDir;
+
+/// The schema before the members and the hint were kept (`shared_members`, the 68th). Migrations are append-only.
+const BEFORE_MEMBERS: u32 = 67;
 
 fn project() -> (TempDir, ProjectDb) {
   let repo = tempfile::tempdir().expect("temporary directory");
@@ -123,4 +127,21 @@ fn members_and_the_hint_are_forgotten_by_make_local() {
     db.record_shared_members(&[], at(500)),
     Err(StoreError::NotShared)
   ));
+}
+
+#[test]
+fn members_of_a_database_from_before_them_are_not_read_yet() {
+  let (repo, mut db) = project();
+  shared(&mut db);
+  drop(db);
+  let old = copied_at_version(&repo.path().join(".orchester").join("orchester.db"), BEFORE_MEMBERS);
+
+  let mut db = ProjectDb::open(old.path()).expect("migrated");
+  assert!(db.sharing().expect("link").is_some(), "the link is kept");
+  assert_eq!(db.shared_members().expect("members"), None);
+  assert_eq!(db.remote_hint().expect("hint"), None);
+  let alice = member("Alice Moreau", "alice", MemberRole::Owner, 20);
+  db.record_shared_members(std::slice::from_ref(&alice), at(200))
+    .expect("recorded");
+  assert_eq!(db.shared_members().expect("members"), Some((at(200), vec![alice])));
 }
