@@ -387,16 +387,7 @@ pub async fn invites_are_declined_by_the_invitee() {
   let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
   assert!(listed.invites.is_empty());
   assert_eq!(cloud.request("POST", &decline, Some(&dana), None).await.status, 404);
-  let again = cloud.request("POST", "/invites", None, Some(body)).await;
-  assert_eq!(again.status, 422, "a declined invite is not delivered again");
-  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
-  assert!(listed.invites.is_empty());
-  cloud.mail.nth("dana@example.test", 2).await;
-  assert_eq!(
-    cloud.mail.count("dana@example.test"),
-    2,
-    "the confirmation and one invite"
-  );
+  a_declined_invite_stays_declined(&cloud, &dana, body).await;
   let malformed = cloud
     .request("POST", "/invites/not-an-id/decline", Some(&dana), None)
     .await;
@@ -404,6 +395,21 @@ pub async fn invites_are_declined_by_the_invitee() {
   let anonymous = cloud.request("POST", &decline, None, None).await;
   assert_eq!(anonymous.status, 401);
   cloud.finish().await;
+}
+
+/// Delivering a declined invite again (from the server or the inviter's browser) is refused, lists nothing and
+/// emails nothing: decline leaves the same tombstone as a revocation.
+async fn a_declined_invite_stays_declined(cloud: &TestCloud, invitee: &str, delivery: serde_json::Value) {
+  let again = cloud.request("POST", "/invites", None, Some(delivery)).await;
+  assert_eq!(again.status, 422, "a declined invite is not delivered again");
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(invitee), None).await.json();
+  assert!(listed.invites.is_empty());
+  cloud.mail.nth("dana@example.test", 2).await;
+  assert_eq!(
+    cloud.mail.count("dana@example.test"),
+    2,
+    "the confirmation and one invite"
+  );
 }
 
 async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
