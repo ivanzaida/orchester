@@ -197,3 +197,54 @@ fn files_a_move_to_another_file_closes_the_version_menu_and_go_to_file() {
     "it opens again without the old query"
   );
 }
+
+#[test]
+fn files_meta_line_shortens_the_checkouts_folder_and_keeps_the_files_facts() {
+  let mut files = Files::new();
+  files.window.tree.resize(2400, 900);
+  files.open(Some("src/main.rs"), Version::Checkout);
+  files
+    .window
+    .until("the facts", |w| w.text("files-meta-text").contains("120 lines"));
+  let whole = files.bounds("files-meta-facts").width;
+  files.window.tree.resize(1440, 900);
+  files.window.pass();
+  let (facts, meta) = (files.bounds("files-meta-facts"), files.bounds("files-meta"));
+  near(
+    facts.width,
+    whole,
+    "the branch, language, lines and size uncut at 1440 (`o1Uea4`)",
+  );
+  assert!(
+    facts.x + facts.width <= meta.x + meta.width + 0.5,
+    "{facts:?} in {meta:?}"
+  );
+  let folder = files.window.text("files-meta-folder");
+  assert!(
+    folder.contains('…'),
+    "the long folder shortened in its middle: {folder}"
+  );
+  assert!(files.window.text("files-meta-facts").contains("120 lines"));
+}
+
+#[test]
+fn files_actions_stay_inside_the_header_at_960() {
+  let mut files = Files::new();
+  files.window.tree.resize(960, 640);
+  files.open(Some("logo.png"), Version::Checkout);
+  files.window.until("the reason", |w| {
+    w.tree.get_element_by_id("files-open-reason").is_some()
+  });
+  let (header, actions, open) = (
+    files.bounds("files-header"),
+    files.bounds("files-actions-column"),
+    files.bounds("files-open"),
+  );
+  let inside = header.x + header.width - 32.0 + 0.5;
+  assert!(
+    actions.x + actions.width <= inside && open.x + open.width <= inside,
+    "the actions in the header's padding: {actions:?}, {open:?} in {header:?}"
+  );
+  let reason = files.bounds("files-open-reason");
+  assert!(reason.x + reason.width <= inside, "{reason:?}");
+}

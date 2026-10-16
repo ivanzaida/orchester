@@ -30,7 +30,7 @@ use crate::{
 
 /// The menu's width (`DqtY6`), and the characters of the checkout's folder its detail keeps on one line.
 const MENU_WIDTH: f32 = 340.0;
-const FOLDER_CHARS: usize = 36;
+pub const FOLDER_CHARS: usize = 36;
 
 /// The icon of a version: a folder for the checkout, a branch for a run's worktree, a commit otherwise.
 pub const fn glyph(version: &Version) -> Icon {

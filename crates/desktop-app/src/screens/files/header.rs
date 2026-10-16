@@ -5,7 +5,9 @@
 //! 612 lines · 21.4 KB"). As the Tasks header (`mQeh3`) lays it out, the title and the meta line are a column on
 //! the left, the meta cut with an ellipsis when it is long, and the actions a column on the right with why *Open in
 //! editor* is unavailable under them, at their end: the reason sits beside the meta line, so the header keeps its
-//! height, and a long reason wraps inside its column. Every crumb is an ancestor of the file, all in
+//! height, and a long reason wraps inside its column. The actions keep their width; the title and the meta line
+//! give way, the checkout's folder first, shortened in its middle (`H:\…\work\kontur`), so the branch and the
+//! file's facts after it stay in view. Every crumb is an ancestor of the file, all in
 //! `text_muted`. A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
 //! with no file the title is *Files* (`o3iVXj`); a version that no longer exists says so in `warning`
 //! (`SyXwU`).
@@ -20,7 +22,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
-  display::byte_size,
+  display::{byte_size, shorten_path},
   files::{FilePath, FileView, OpenFacts, Platform, Version, open_with},
   highlight::language,
 };
@@ -44,8 +46,8 @@ use crate::{
 const CRUMBS_HEIGHT: f32 = 16.0;
 const TITLE_HEIGHT: f32 = 28.0;
 const META_HEIGHT: f32 = 15.0;
-/// The most of the header's width the actions and their reason take; a longer reason wraps there.
-const ACTIONS_MAX_SHARE: f32 = 60.0;
+/// How much faster than the rest of the meta line the checkout's folder gives way when the line is short.
+const PATH_GIVES_WAY: f32 = 100.0;
 
 pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
   let (switch, menu) = version::switch(ctx, page);
@@ -67,11 +69,12 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
       .id("files-open-reason")
       .variant(TypographyStyle::Caption)
       .text_align(TextAlign::Right)
+      .width(Dimension::Pct(100.0))
       .describe("role", "unavailable-reason")
   });
   let actions = Column::new()
     .id("files-actions-column")
-    .max_width(Dimension::Pct(ACTIONS_MAX_SHARE))
+    .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::End)
     .child(buttons)
@@ -153,26 +156,34 @@ fn title(ctx: &Ctx, page: &Page<'_>) -> Row {
   let text = Text::new(&text)
     .id("files-title")
     .variant(TypographyStyle::Heading)
-    .nowrap();
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0));
   let text = if mono {
     text.variant(FilesText::RefusedPath.role())
   } else {
     text
   };
   Row::new()
+    .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary).flex_shrink(0.0))
     .child(text)
 }
 
 /// Where the file was read and what it is, or that the version no longer exists; and what a press the
 /// page refused was.
 fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
-  let (glyph, color, text) = if gone {
-    (Icon::TriangleAlert, PaletteColor::Warning, states::gone_meta(ctx, page))
+  let (glyph, color, line) = if gone {
+    (
+      Icon::TriangleAlert,
+      PaletteColor::Warning,
+      MetaLine::whole(states::gone_meta(ctx, page)),
+    )
   } else {
-    (version::glyph(page.at()), PaletteColor::TextMuted, meta_text(ctx, page))
+    (version::glyph(page.at()), PaletteColor::TextMuted, meta_line(ctx, page))
   };
   let refusal = page.view.refusal.get().map(|refusal| {
     Text::new(&ctx.t(refusal.key()))
@@ -195,47 +206,99 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
     .height(Dimension::Px(META_HEIGHT))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, color.clone()))
-    .child(
-      Text::new(&text)
-        .id("files-meta-text")
-        .variant(ExtraTypography::Note.role())
-        .color(color)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
+    .child(icon(glyph, IconSize::Sm, color.clone()).flex_shrink(0.0))
+    .child(line.render(&color))
     .with_children(refusal)
     .with_children(stale)
 }
 
-/// "Run #12 worktree · ORC-24 · Implement · Rust · 612 lines · 21.4 KB".
-fn meta_text(ctx: &Ctx, page: &Page<'_>) -> String {
-  let mut parts = vec![version::label(ctx, page)];
-  let choice = page.shown_choice();
-  match page.at() {
-    Version::Checkout => {
-      parts.push(page.project.open.repo_root.display().to_string());
-      parts.extend(
-        choice
-          .and_then(|choice| choice.branch.as_ref())
-          .map(ToString::to_string),
-      );
-    }
-    Version::Run(_) => parts.extend(page.run_facts().into_iter().flat_map(version::run_parts)),
-    Version::Base | Version::Revision(_) => {
-      parts.extend(
-        choice
-          .and_then(|choice| choice.branch.as_ref())
-          .map(ToString::to_string),
-      );
+/// The meta line in its parts: what comes before the checkout's folder, the folder, and what comes after it.
+struct MetaLine {
+  before: String,
+  folder: Option<String>,
+  after: String,
+}
+
+impl MetaLine {
+  /// A line without a folder in it.
+  fn whole(text: String) -> Self {
+    Self {
+      before: text,
+      folder: None,
+      after: String::new(),
     }
   }
+
+  /// The line's texts in `color`, each cut with an ellipsis when the line is short, the folder long before the
+  /// rest. Its parts stand a word space apart, as the separators' own spaces would.
+  fn render(self, color: &PaletteColor) -> Row {
+    let text = |words: &str, gives_way: f32| {
+      Text::new(words)
+        .variant(ExtraTypography::Note.role())
+        .color(color.clone())
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(gives_way)
+        .min_width(Dimension::Px(0.0))
+    };
+    Row::new()
+      .id("files-meta-text")
+      .min_width(Dimension::Px(0.0))
+      .flex_shrink(1.0)
+      .spacing(SpacingSize::Xs)
+      .align_items(Alignment::Center)
+      .child(text(&self.before, 1.0))
+      .with_children(
+        self
+          .folder
+          .map(|folder| text(&folder, PATH_GIVES_WAY).id("files-meta-folder")),
+      )
+      .with_children((!self.after.is_empty()).then(|| text(&self.after, 1.0).id("files-meta-facts")))
+  }
+}
+
+/// "Run #12 worktree · ORC-24 · Implement · Rust · 612 lines · 21.4 KB"; for the checkout its folder, shortened in
+/// its middle, after the version's name.
+fn meta_line(ctx: &Ctx, page: &Page<'_>) -> MetaLine {
+  let separator = ctx.t("files.meta.separator");
+  let mut parts = Vec::new();
+  let choice = page.shown_choice();
+  let branch = || {
+    choice
+      .and_then(|choice| choice.branch.as_ref())
+      .map(ToString::to_string)
+  };
+  let folder = match page.at() {
+    Version::Checkout => {
+      parts.extend(branch());
+      Some(shorten_path(&page.project.open.repo_root, version::FOLDER_CHARS))
+    }
+    Version::Run(_) => {
+      parts.extend(page.run_facts().into_iter().flat_map(version::run_parts));
+      None
+    }
+    Version::Base | Version::Revision(_) => {
+      parts.extend(branch());
+      None
+    }
+  };
   if let Some(Shown::Read(read)) = &page.read {
     parts.extend(file_parts(ctx, page, read));
   }
-  parts.join(&ctx.t("files.meta.separator"))
+  let label = version::label(ctx, page);
+  let trimmed = separator.trim();
+  match folder {
+    Some(folder) => MetaLine {
+      before: format!("{label} {trimmed}"),
+      folder: Some(folder),
+      after: parts
+        .iter()
+        .map(|part| format!("{trimmed} {part}"))
+        .collect::<Vec<_>>()
+        .join(" "),
+    },
+    None => MetaLine::whole([label].into_iter().chain(parts).collect::<Vec<_>>().join(&separator)),
+  }
 }
 
 /// The file's language, lines and size; or that it is binary or text, and its size.
