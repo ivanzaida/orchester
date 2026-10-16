@@ -3,6 +3,8 @@
 //! linked with, keeps the invite until it expires or the server revokes it, emails the invitee in its own words, and
 //! lists it to the account with that email.
 
+use std::net::IpAddr;
+
 use deadpool_postgres::GenericClient;
 use orchester_api::{
   InviteKind, MemberRole,
@@ -13,6 +15,7 @@ use orchester_api::{
 use orchester_core::id::{InviteId, TeamServerId};
 use serde::de::DeserializeOwned;
 use tokio_postgres::Row;
+use uuid::Uuid;
 
 use crate::{
   Cloud,
@@ -20,19 +23,24 @@ use crate::{
   clock::DAY_MS,
   db::{audit, millis, time},
   error::CloudError,
+  mail::Email,
   servers,
 };
 
-/// Invites one server may send through the cloud in a day, whatever its own limits say.
-const PER_SERVER_PER_DAY: i64 = 200;
 /// An invite by email is open at most this long (the team server's 7 days, and a day of clock difference).
 const MAX_LIFETIME_MS: i64 = 8 * DAY_MS;
 
 impl Cloud {
   /// `POST /invites`: an invite a linked server signed. Delivering one twice (from the server and from a browser)
-  /// keeps one and sends one email.
-  pub(crate) async fn receive_invite(&self, input: InviteDelivered) -> Result<(), CloudError> {
+  /// keeps one and sends at most one email; a revoked one is refused until it would have expired. Answers the server
+  /// as registered.
+  pub(crate) async fn receive_invite(
+    &self,
+    input: InviteDelivered,
+    address: IpAddr,
+  ) -> Result<InvitingServer, CloudError> {
     let now = self.now();
+    self.inner.limits.invite_post(address, now)?;
     let client = self.client().await?;
     let invite: SignedInvite = verified(&client, &input.invite, SIGNED_INVITE_TYPE, |invite: &SignedInvite| {
       invite.server
@@ -43,28 +51,30 @@ impl Cloud {
     if !fresh || invite.expires_at > now + MAX_LIFETIME_MS || !email.contains('@') || email.len() > 254 {
       return Err(CloudErrorCode::Invalid.into());
     }
-    let sent_today: i64 = client
-      .query_one(
-        "SELECT count(*) FROM invites WHERE server = $1 AND received_at > $2",
-        &[&invite.server.as_uuid(), &time(now - DAY_MS)],
-      )
-      .await?
-      .try_get(0)?;
-    if sent_today >= PER_SERVER_PER_DAY {
-      return Err(CloudError::RateLimited(3600));
+    let server = inviting(&client, invite.server).await?;
+    if revoked(&client, invite.id).await? {
+      return Err(CloudErrorCode::Invalid.into());
     }
-    let known = client
-      .query_opt("SELECT 1 FROM invites WHERE id = $1", &[&invite.id.as_uuid()])
-      .await?
-      .is_some();
-    if known {
-      return Ok(());
+    if known(&client, invite.id).await? {
+      return Ok(server);
     }
-    self.inner.limits.invite_email(&email, now)?;
+    self.inner.limits.invite_per_owner(owner(&client, invite.server).await?, now)?;
     if !store(&client, &invite, &email, now).await? {
-      return Ok(());
+      return Ok(server);
     }
     audit(&client, None, "invite_received", &invite.id.to_string(), None, now).await?;
+    if self.inner.limits.invite_email(invite.server, &email, now) {
+      self.send_later(self.invite_message(&client, email, invite.id).await?);
+    }
+    Ok(server)
+  }
+
+  async fn invite_message(
+    &self,
+    client: &impl GenericClient,
+    email: String,
+    id: InviteId,
+  ) -> Result<Email, CloudError> {
     let registered = client
       .query_opt(
         "SELECT 1 FROM accounts WHERE email = $1 AND confirmed_at IS NOT NULL",
@@ -72,17 +82,17 @@ impl Cloud {
       )
       .await?
       .is_some();
-    let message = if registered {
+    Ok(if registered {
       self.inner.messages.invite(email)
     } else {
-      self.inner.messages.invite_sign_up(email, invite.id)
-    };
-    self.send_later(message);
-    Ok(())
+      self.inner.messages.invite_sign_up(email, id)
+    })
   }
 
-  /// `DELETE /invites/{id}`: the server that made the invite revoked it.
+  /// `DELETE /invites/{id}`: the server that made the invite revoked it. The id stays revoked until the invite would
+  /// have expired, so it cannot be delivered again (security review 1, minor 1).
   pub(crate) async fn withdraw_invite(&self, id: InviteId, input: InviteWithdrawn) -> Result<(), CloudError> {
+    let now = self.now();
     let client = self.client().await?;
     let revocation: InviteRevocation = verified(
       &client,
@@ -96,11 +106,23 @@ impl Cloud {
     }
     client
       .execute(
+        "INSERT INTO revoked_invites (id, server, until)
+         VALUES ($1, $2, coalesce((SELECT expires_at FROM invites WHERE id = $1), $3))
+         ON CONFLICT (id) DO NOTHING",
+        &[
+          &id.as_uuid(),
+          &revocation.server.as_uuid(),
+          &time(now + MAX_LIFETIME_MS),
+        ],
+      )
+      .await?;
+    client
+      .execute(
         "DELETE FROM invites WHERE id = $1 AND server = $2",
         &[&id.as_uuid(), &revocation.server.as_uuid()],
       )
       .await?;
-    audit(&client, None, "invite_withdrawn", &id.to_string(), None, self.now()).await
+    audit(&client, None, "invite_withdrawn", &id.to_string(), None, now).await
   }
 
   /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first.
@@ -135,6 +157,46 @@ async fn verified<T: DeserializeOwned>(
     .ok_or_else(invalid)?;
   let key = PublicKey::parse(row.try_get::<_, &str>(4)?).map_err(|_| CloudError::StoredData)?;
   verify_statement(compact, typ, &key).map_err(|_| invalid())
+}
+
+/// The linked server an invite is from, as the cloud registered it.
+async fn inviting(client: &impl GenericClient, server: TeamServerId) -> Result<InvitingServer, CloudError> {
+  let row = servers::linked(client, server.as_uuid())
+    .await?
+    .ok_or(CloudErrorCode::Invalid)?;
+  Ok(InvitingServer {
+    id: server,
+    name: row.try_get(1)?,
+    address: row.try_get(2)?,
+  })
+}
+
+async fn revoked(client: &impl GenericClient, id: InviteId) -> Result<bool, CloudError> {
+  Ok(
+    client
+      .query_opt("SELECT 1 FROM revoked_invites WHERE id = $1", &[&id.as_uuid()])
+      .await?
+      .is_some(),
+  )
+}
+
+async fn known(client: &impl GenericClient, id: InviteId) -> Result<bool, CloudError> {
+  Ok(
+    client
+      .query_opt("SELECT 1 FROM invites WHERE id = $1", &[&id.as_uuid()])
+      .await?
+      .is_some(),
+  )
+}
+
+/// The account that owns `server`, whose daily invites `Limits::invite_per_owner` counts.
+async fn owner(client: &impl GenericClient, server: TeamServerId) -> Result<Uuid, CloudError> {
+  Ok(
+    client
+      .query_one("SELECT owner FROM servers WHERE id = $1", &[&server.as_uuid()])
+      .await?
+      .try_get(0)?,
+  )
 }
 
 /// Keeps the invite; `false` when it was here already.

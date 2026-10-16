@@ -365,3 +365,116 @@ async fn revoke(cloud: &TestCloud, server: &TeamServer, id: InviteId, now: i64) 
   let revoked = json!({"revocation": server.revocation(&server.key, id, now)});
   assert_eq!(cloud.request("DELETE", &path, None, Some(revoked)).await.status, 204);
 }
+
+async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {
+  cloud
+    .request_headers(
+      "POST",
+      "/invites",
+      None,
+      Some(json!({"invite": invite})),
+      &[("X-Forwarded-For", from)],
+    )
+    .await
+}
+
+/// Security review 1, minor 1: a revoked invite stays revoked: delivering it again is refused until it would have
+/// expired. The answer to a delivery names the server as the cloud registered it.
+pub async fn a_revoked_invite_cannot_be_delivered_again() {
+  let cloud = TestCloud::start().await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let server = TeamServer::generate();
+  link(&cloud, &owner, &server).await;
+  let now = cloud.clock.now_ms();
+  let id = InviteId::generate();
+  let invite = json!({"invite": server.invite(id, "dana@example.test", now)});
+  let first = cloud.request("POST", "/invites", None, Some(invite.clone())).await;
+  assert_eq!(first.status, 202);
+  let answer: serde_json::Value = first.json();
+  assert_eq!(answer["server"]["address"], json!("https://orchester.kontur.test"));
+  let revocation = json!({"revocation": server.revocation(&server.key, id, now)});
+  let path = format!("/invites/{id}");
+  assert_eq!(cloud.request("DELETE", &path, None, Some(revocation)).await.status, 204);
+  let again = cloud.request("POST", "/invites", None, Some(invite.clone())).await;
+  assert_eq!((again.status, again.error()), (422, "invalid".into()));
+  cloud.clock.advance(8 * DAY);
+  cloud.cloud.sweep().await.expect("sweep");
+  cloud.finish().await;
+}
+
+/// Security review 1, M2: invite emails have buckets of their own, one a day per server and address and three a day
+/// per address, so invites neither spam an address nor use up its confirmation and reset emails.
+pub async fn invite_emails_have_their_own_buckets() {
+  let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
+  cloud.publish_keys().await;
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let dana = signed_in(&cloud, "dana@example.test").await;
+  let servers: Vec<TeamServer> = (0..5).map(|_| TeamServer::generate()).collect();
+  for server in &servers {
+    link(&cloud, &owner, server).await;
+  }
+  let now = cloud.clock.now_ms();
+  for server in &servers {
+    for _ in 0..2 {
+      let invite = server.invite(InviteId::generate(), "dana@example.test", now);
+      assert_eq!(deliver(&cloud, &invite, "203.0.113.20").await.status, 202);
+    }
+  }
+  let listed: CloudInvites = cloud.request("GET", "/invites", Some(&dana), None).await.json();
+  assert_eq!(listed.invites.len(), 10, "every invite is kept and listed");
+  tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+  assert_eq!(
+    cloud.mail.count("dana@example.test"),
+    1 + 3,
+    "the confirmation and three invite emails"
+  );
+  let reset = cloud
+    .request("POST", "/auth/reset", None, Some(json!({"email": "dana@example.test"})))
+    .await;
+  assert_eq!(reset.status, 202, "invites did not use up the address's own emails");
+  assert_eq!(
+    cloud.mail.nth("dana@example.test", 5).await.purpose,
+    EmailPurpose::Reset
+  );
+  cloud.finish().await;
+}
+
+/// Security review 1, M2: `POST /invites` is limited per client address, and the servers one account owns send at
+/// most 100 invites a day through the cloud.
+pub async fn invite_deliveries_are_limited_per_address_and_per_owner() {
+  let cloud = TestCloud::start_with(vec!["127.0.0.1".parse().expect("proxy")]).await;
+  cloud.publish_keys().await;
+  for _ in 0..60 {
+    assert_eq!(deliver(&cloud, "not.an.invite", "203.0.113.30").await.status, 422);
+  }
+  let limited = deliver(&cloud, "not.an.invite", "203.0.113.30").await;
+  assert_eq!((limited.status, limited.error()), (429, "rate_limited".into()));
+  assert_eq!(
+    deliver(&cloud, "not.an.invite", "203.0.113.31").await.status,
+    422,
+    "another address is not"
+  );
+  let owner = signed_in(&cloud, "ivan@example.test").await;
+  let servers: Vec<TeamServer> = (0..2).map(|_| TeamServer::generate()).collect();
+  for server in &servers {
+    link(&cloud, &owner, server).await;
+  }
+  let now = cloud.clock.now_ms();
+  let ids: Vec<InviteId> = (0..100).map(|_| InviteId::generate()).collect();
+  for (index, id) in ids.iter().enumerate() {
+    let invite = servers[index % 2].invite(*id, &format!("person{index}@example.test"), now);
+    let from = format!("198.51.100.{}", index / 50);
+    assert_eq!(deliver(&cloud, &invite, &from).await.status, 202, "invite {index}");
+  }
+  let over = servers[0].invite(InviteId::generate(), "one-more@example.test", now);
+  let refused = deliver(&cloud, &over, "198.51.100.9").await;
+  assert_eq!((refused.status, refused.error()), (429, "rate_limited".into()));
+  // Revoking invites gives none of the day's back.
+  for (index, id) in ids.iter().enumerate().take(10) {
+    revoke(&cloud, &servers[index % 2], *id, now).await;
+  }
+  let after = servers[1].invite(InviteId::generate(), "after-revoking@example.test", now);
+  assert_eq!(deliver(&cloud, &after, "198.51.100.9").await.status, 429);
+  cloud.finish().await;
+}

@@ -2,11 +2,12 @@
 
 use actix_web::{HttpRequest, HttpResponse, web};
 use orchester_api::cloud::{
-  CloudErrorCode, CloudInvites, InviteDelivered, InviteWithdrawn, ServerLink, ServerResponse, ServersResponse,
+  CloudErrorCode, CloudInvites, InviteDelivered, InviteReceived, InviteWithdrawn, ServerLink, ServerResponse,
+  ServersResponse,
 };
 use orchester_core::id::{InviteId, TeamServerId};
 
-use super::extract::{Device, SafeJson};
+use super::extract::{ClientAddress, Device, SafeJson};
 use crate::{Cloud, error::CloudError};
 
 type Answer = Result<HttpResponse, CloudError>;
@@ -27,9 +28,13 @@ pub(super) async fn servers(cloud: web::Data<Cloud>, device: Device) -> Answer {
   Ok(HttpResponse::Ok().json(ServersResponse { servers }))
 }
 
-pub(super) async fn receive_invite(cloud: web::Data<Cloud>, input: SafeJson<InviteDelivered>) -> Answer {
-  cloud.receive_invite(input.0).await?;
-  Ok(HttpResponse::Accepted().finish())
+pub(super) async fn receive_invite(
+  cloud: web::Data<Cloud>,
+  address: ClientAddress,
+  input: SafeJson<InviteDelivered>,
+) -> Answer {
+  let server = cloud.receive_invite(input.0, address.0).await?;
+  Ok(HttpResponse::Accepted().json(InviteReceived { server }))
 }
 
 pub(super) async fn withdraw_invite(

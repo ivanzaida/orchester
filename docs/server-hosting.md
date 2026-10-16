@@ -65,7 +65,9 @@ Failed joins are counted per address and hour in `failed_joins`, kept 90 days.
 
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
 the server admin to carry to Orchester Cloud. One person sends at most 30 invites by email in 24 hours (`429` with
-`Retry-After`). Invites list without their codes (`GET /invites`, `?project=<id>` for one project, `&recent=true` with
+`Retry-After`). Orchester Cloud adds its own limits: 100 new invites a day for all the servers one account owns, and
+at most one email a day per server and invitee, three a day per invitee; an invite over an email limit still reaches
+the invitee's app ([cloud-api.md](cloud-api.md#rate-limits)). Invites list without their codes (`GET /invites`, `?project=<id>` for one project, `&recent=true` with
 those that ended in the last 30 days and their `state`, `ended_at` and `ended_by`) and are revoked with
 `DELETE /invites/{id}`, which answers `{ revocation }`: for an invite by email, the revocation the server signed for the
 cloud. An ended invite forgets its email.

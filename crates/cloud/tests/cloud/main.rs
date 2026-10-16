@@ -55,6 +55,9 @@ const TESTS: &[(&str, Test)] = tests![
   registry::a_server_id_is_its_own_keys,
   registry::a_statement_works_once_and_a_newer_one_takes_the_server_back,
   registry::an_account_owns_at_most_five_servers,
+  registry::a_revoked_invite_cannot_be_delivered_again,
+  registry::invite_emails_have_their_own_buckets,
+  registry::invite_deliveries_are_limited_per_address_and_per_owner,
   registry::admin_tokens_are_issued_only_for_linked_servers,
   registry::invites_reach_the_invitee_once_and_end_when_revoked,
 ];

@@ -965,10 +965,10 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 | `GET /servers` | device | The team servers the account owns or joined, with address and fingerprint |
 | `POST /servers` | device | Links a team server: `{ link }`, the statement the team server signed at setup; `201 { server }` |
 | `PATCH /servers/{id}`, `DELETE /servers/{id}` | owner device, or the server's key | Address or name changed; unlink |
-| `POST /invites` | the team server's key | `{ invite }`, signed by the team server (sent by the server, or carried by the inviter's browser from the server admin) |
+| `POST /invites` | the team server's key | `{ invite }`, signed by the team server (sent by the server, or carried by the inviter's browser from the server admin); `202 { server }`, the server as registered. Limited per client address, 100 new invites a day per owning account, and invite emails in buckets of their own (1 a day per server and address, 3 a day per address; security review 1, M2) |
 | `GET /invites` | device | Invites waiting for this account |
 | `POST /invites/{id}/accept` | device | `{ server: { id, name, address, fingerprint }, project: { address, name }\|null, identity_token }` |
-| `DELETE /invites/{id}` | the team server's key | Revoked by the team server |
+| `DELETE /invites/{id}` | the team server's key | Revoked by the team server; the id stays revoked (`revoked_invites`) until the invite would have expired (security review 1, minor 1) |
 
 **Data** (PostgreSQL, row 54; ids `uuid`, times `timestamptz` written from the cloud's clock, payloads `jsonb`):
 `accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created; a
@@ -976,10 +976,11 @@ row exists only once an email is confirmed), `email_links` (hash, email, purpose
 reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
 name, address, fingerprint, public key, linked / unlinked), `server_accounts` (server, account, first joined),
 `invites` (id, server, project address, kind, email, inviter display name, project name, role, expires),
-`used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
+`revoked_invites` (id, server, until the invite would have expired), `used_link_statements` (a link statement's nonce
+until it is too old to be taken), `used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
 from the host's environment, not before / not after), `audit_events`, `schema_migrations`. Later: `providers`
-(account, provider, subject). Expired `email_links`, `used_tokens` and ended invites are deleted by a sweep every
-minute.
+(account, provider, subject). Expired `email_links`, `used_tokens`, `used_link_statements`, `revoked_invites` and
+ended invites are deleted by a sweep every minute.
 
 **How a team server reaches it.** A team server with the internet sends its invites and fetches `GET /keys` itself.
 A team server without it relies on its people: the inviter's browser carries the server-signed invite from the server

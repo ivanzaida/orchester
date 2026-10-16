@@ -80,9 +80,9 @@ Device     { id, name, platform, created_at, last_used_at, current: bool }
 | `POST /servers` | device | `{ link }`: the link statement the team server signed | `201 { server, root_key, key_set, identity_token, expires_at }` | `409 conflict` (a replayed or older statement), `409 too_many_servers`, `422 invalid` (also a `server` that is not its `public_key`'s id), `429`, `503 keys_unavailable` |
 | `GET /servers` | device | | `{ servers: [{ id, name, address, fingerprint, owner, joined_at }] }` | |
 | `GET /servers/{id}` | device | | `{ server: { id, name, address, fingerprint, check_code } }` | `404` (unknown or not linked) |
-| `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202`, empty | `422 invalid`, `429` |
+| `POST /invites` | the server's signature | `{ invite }`: an invite the team server signed | `202 { server: { id, name, address } }`: the inviting server as the cloud registered it | `422 invalid` (also an invite that was revoked, until it would have expired), `429` |
 | `GET /invites` | device | | `{ invites: [{ id, kind, role, server: { id, name, address }, project: { address, name } \| null, inviter_display_name, expires_at }] }` | |
-| `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204` | `422 invalid` |
+| `DELETE /invites/{id}` | the server's signature | `{ revocation }`: the team server's signed revocation | `204`; the id stays revoked until the invite would have expired | `422 invalid` |
 
 **Sign-up.** `202` means the request was taken. The answer is the same whether or not the email has an account, so
 a sign-up form shows one message: *Check your email*. What goes out, in the background:
@@ -158,9 +158,17 @@ never travels in a URL, a history or a log. Confirming uses the request up and b
 admin delivers it, from the host or from the inviter's browser through the web front's `/invites/deliver`. The cloud
 checks the signature with the key the server linked with, keeps the invite once (a second delivery changes nothing),
 and emails the invitee in its own words only (nothing the server chose: an account gets *open Orchester*, an address
-with no account `/signup?invite=<id>`). At most 200 invites a day per server and 5 emails an hour per address.
+with no account `/signup?invite=<id>`). The answer names the inviting server as registered (`202 { server }`).
 `GET /invites` lists them to the account with that email; a revocation (`orchester-invite-revocation+jws`,
-`{ id, server, issued_at }`) deletes one; expired invites are deleted by the minute's sweep.
+`{ id, server, issued_at }`) deletes one and keeps its id in `revoked_invites` until the invite would have expired
+(at most 8 days), so the same signed invite cannot be delivered again (security review 1, minor 1); expired invites
+and ended tombstones are deleted by the minute's sweep.
+
+**Invite limits** (security review 1, M2): deliveries are counted per client address before the signature is
+checked; the servers one account owns keep at most 100 new invites a day between them, and revoking gives none back;
+an invite's email has buckets of its own, apart from confirmation and reset emails: one a day per server and address
+and three a day per address. An invite over an email limit is still kept and listed in the invitee's app, without an
+email. Numbers in [Rate limits](#rate-limits).
 
 ## Rate limits
 
@@ -171,6 +179,10 @@ with no account `/signup?invite=<id>`). At most 200 invites a day per server and
 | Emails (sign-up, reset) | 5 an hour per email, 20 an hour per client address, 100 an hour per IPv6 /48 |
 | Failed `confirm` and `reset/finish` | 20 per client address and 100 per IPv6 /48 in 15 minutes; 5 an hour per link, each try counted before its password check |
 | Identity tokens | 60 an hour per device |
+| Invite deliveries (`POST /invites`) | 60 an hour per client address and 300 per IPv6 /48, counted before the signature is checked |
+| New invites | 100 a day for all the servers one account owns |
+| Invite emails | 1 a day per server and invitee address, 3 a day per invitee address; separate from the emails above |
+| Linked servers | 5 per account (`409 too_many_servers`), not a rate |
 
 The counters are in memory. A restart clears them; the cloud runs as one instance in v1. A client address is its
 IPv4 address or its IPv6 /64. Each counter tracks at most 100,000 keys. A new key beyond that evicts the oldest key that holds no count, block or

@@ -213,6 +213,13 @@ pub struct InviteDelivered {
   pub invite: String,
 }
 
+/// `202` of `POST /invites`: the server the invite is from, as the cloud registered it (its own address, for a page
+/// that leads back to its admin).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InviteReceived {
+  pub server: InvitingServer,
+}
+
 /// `DELETE /invites/{id}`: the team server's signed revocation (`statements::InviteRevocation`).
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
