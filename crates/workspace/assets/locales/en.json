@@ -525,7 +525,7 @@
       "taskMissing": "The task no longer exists.",
       "notQueued": "The task is not queued for a run.",
       "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying.",
-      "worktreeNotCreated": "The run failed before it started: its worktree could not be created. {{reason}} Fix the cause, then run the task again."
+      "worktreeNotCreated": "The run failed before it started: its worktree could not be created. Fix the cause, then run the task again. Reason: {{reason}}"
     },
     "limit": {
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",

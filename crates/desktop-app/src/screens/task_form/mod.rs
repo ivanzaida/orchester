@@ -39,6 +39,7 @@ use orchester_core::{
 use orchester_workspace::tasks::data::ProjectTasks;
 
 use self::{
+  actions::RunBegan,
   form::{FormProps, TaskForm},
   state::Subject,
 };
@@ -170,11 +171,16 @@ impl Nav {
       .go(self.route(ProjectPage::Task(key.clone(), TaskView::Summary)));
   }
 
-  /// The Conversation of the task whose run started, in the form's place.
-  pub fn started(&self, key: &TaskKey) {
+  /// The task whose run was asked to start, in the form's place: its Conversation, or its Summary, which says why,
+  /// when the run failed before it started.
+  pub fn started(&self, key: &TaskKey, began: RunBegan) {
+    let view = match began {
+      RunBegan::Yes => TaskView::Conversation,
+      RunBegan::FailedBeforeStart => TaskView::Summary,
+    };
     self
       .navigation
-      .replace(self.route(ProjectPage::Task(key.clone(), TaskView::Conversation)));
+      .replace(self.route(ProjectPage::Task(key.clone(), view)));
   }
 
   pub fn pipelines(&self) {
