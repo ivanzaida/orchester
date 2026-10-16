@@ -4,11 +4,11 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, SelectOption, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::SharedProject;
 use orchester_workspace::sharing::{RemoteMatch, ServerProject, project::discovery::ProjectDiscovery, remote_match};
@@ -21,13 +21,14 @@ use crate::{
     project_settings::page::{self, CONTROL_WIDTH},
     settings::orchester::{Said, shown_address},
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::{FieldInput, SelectField, field, field_error},
     form_section::{Label, Place, section, side_row},
     icon::{Icon, icon},
-    notice::{Notice, NoticeTone},
+    pressable::pressable,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -76,9 +77,9 @@ impl Link {
     )
     .on_click(move || answered.set(true));
     Some(
-      Notice::new(
+      Callout::new(
         "sharing-discovery",
-        NoticeTone::Info,
+        CalloutTone::Info,
         ctx.t("sharing.link.discovery.title"),
       )
       .icon(Icon::FileText)
@@ -168,9 +169,14 @@ impl Link {
       address,
       None,
     ));
+    let server = self.chosen_entry(props).map_or_else(
+      || ctx.t("sharing.connect.theServer").to_string(),
+      |entry| entry.stored.name.clone(),
+    );
     let description = ctx.t_args(
       "sharing.link.projectDescription",
       [
+        ("server", server),
         ("project", props.project.open.project.name().as_str().to_owned()),
         ("count", props.facts.tasks.to_string()),
       ],
@@ -183,7 +189,9 @@ impl Link {
     )
   }
 
-  /// A project to choose (`Kontur · orchester.kontur.dev/kontur · set up for …`), as a radio with its lines.
+  /// A project to choose (`Project · Kontur` in `bWD9q`): the radio, and 10 from it the name in 12.5/500, the address
+  /// in mono and whether it is empty with its repository hint, 2 apart; 8 over and under and 10 at the sides, and
+  /// the chosen one on `hover` in a `border_strong` stroke, radius 6.
   fn project_choice(&self, ctx: &Ctx, project: &ServerProject) -> Element {
     let id = project.project.id;
     let chosen = self.picked.get().0 == Some(id) && self.address.get().trim().is_empty();
@@ -195,23 +203,43 @@ impl Link {
           .to_string()
       },
     );
-    let (picked, address) = (self.picked.clone(), self.address.clone());
+    // The API names no task count; a project that never numbered a task is empty.
+    let tasks = if project.project.next_number <= 1 {
+      ctx.t("sharing.link.empty")
+    } else {
+      ctx.t("sharing.link.withTasks")
+    };
+    let line = ctx.t_args(
+      "sharing.link.projectLine",
+      [("tasks", tasks.to_string()), ("hint", hint)],
+    );
+    let pick = {
+      let (picked, address) = (self.picked.clone(), self.address.clone());
+      move || {
+        picked.set(Picked(Some(id)));
+        address.set(String::new());
+      }
+    };
+    let on_radio = pick.clone();
     let radio = Toggle::new(
       format!("sharing-project-{}", project.project.slug),
       ToggleKind::Radio,
       chosen,
       project.project.name.clone(),
     )
-    .on_change(move |_| {
-      picked.set(Picked(Some(id)));
-      address.set(String::new());
-    });
+    .hide_label()
+    .on_change(move |_| on_radio());
     let mut lines = Column::new()
       .flex(1.0)
-      .spacing(ExtraSpacing::Hair.role())
-      .child(radio)
+      .min_width(Dimension::Px(0.0))
+      .spacing(ExtraSpacing::Tight.role())
+      .child(Text::new(&project.project.name).variant(ExtraTypography::OptionTitle.role()))
       .child(Text::new(shown_address(&project.project.address)).variant(OrchesterText::Address.role()))
-      .child(Text::new(&hint).variant(ExtraTypography::Note.role()));
+      .child(
+        Text::new(&line)
+          .variant(ExtraTypography::Note.role())
+          .width(Dimension::Pct(100.0)),
+      );
     if project.checkout.is_some() {
       lines = lines.child(
         Text::new(&ctx.t("sharing.link.linkedElsewhere"))
@@ -219,15 +247,19 @@ impl Link {
           .color(PaletteColor::Warning),
       );
     }
-    let row = Row::new()
+    let row = pressable(pick)
+      .id(format!("sharing-project-{}-option", project.project.slug))
       .width(Dimension::Pct(100.0))
-      .padding(SpacingSize::Sm)
-      .rounded(ExtraRadius::Tile.role())
+      .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+      .spacing(ExtraSpacing::Loose.role())
+      .align_items(Alignment::Start)
+      .rounded(RadiusSize::Md)
+      .child(radio)
       .child(lines);
     if chosen {
       row
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .background(ExtraColor::Hover.role())
+        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
         .into()
     } else {
       row.into()
@@ -237,6 +269,13 @@ impl Link {
   /// The checkout's `origin` against the chosen project's hint (`Repository` in `bWD9q`).
   fn repository_row(&self, ctx: &mut Ctx, props: &Props, listed: Option<&Result<Listed, Said>>) -> Element {
     let picked = self.picked_project(listed);
+    let keys = ("sharing.link.repository", "sharing.link.repositoryDescription");
+    if props.facts.origin.is_none() {
+      let control = Column::new()
+        .width(Dimension::Px(CONTROL_WIDTH))
+        .child(no_origin(ctx, picked));
+      return page::row(ctx, "sharing-repository", keys, control.into(), Place::Within);
+    }
     let (glyph, color, words) = remote_words(ctx, props, picked);
     let control = Row::new()
       .id("sharing-remote")
@@ -251,13 +290,7 @@ impl Link {
           .color(color)
           .flex(1.0),
       );
-    page::row(
-      ctx,
-      "sharing-repository",
-      ("sharing.link.repository", "sharing.link.repositoryDescription"),
-      control.into(),
-      Place::Within,
-    )
+    page::row(ctx, "sharing-repository", keys, control.into(), Place::Within)
   }
 
   pub(super) fn picked_project<'a>(&self, listed: Option<&'a Result<Listed, Said>>) -> Option<&'a SharedProject> {
@@ -271,6 +304,26 @@ impl Link {
       .map(|project| &project.project)
       .find(|project| project.id == id)
   }
+}
+
+/// *This checkout has no origin remote* (`No origin to compare` in `N9NFio`): nothing to compare, and linking is still
+/// possible.
+fn no_origin(ctx: &Ctx, picked: Option<&SharedProject>) -> Element {
+  let body = match picked.and_then(|project| project.remote_hint.as_ref().map(|hint| (project, hint))) {
+    Some((project, hint)) => ctx.t_args(
+      "sharing.link.remote.noOriginHint",
+      [("project", project.name.as_str()), ("hint", hint.as_str())],
+    ),
+    None => ctx.t("sharing.link.remote.noOriginBody"),
+  };
+  Callout::new(
+    "sharing-no-origin",
+    CalloutTone::Neutral,
+    ctx.t("sharing.link.remote.noOrigin"),
+  )
+  .icon(Icon::GitBranch)
+  .body(body)
+  .into()
 }
 
 /// How the checkout's `origin` compares with `picked`'s hint, as an icon, its color and the words.
@@ -317,7 +370,7 @@ fn remote_words(ctx: &Ctx, props: &Props, picked: Option<&SharedProject>) -> (Ic
     RemoteMatch::NoOrigin => (
       Icon::GitBranch,
       PaletteColor::TextMuted,
-      ctx.t("sharing.link.remote.noOrigin").to_string(),
+      ctx.t("sharing.link.remote.noOriginBody").to_string(),
     ),
     RemoteMatch::NoHint => (
       Icon::Info,

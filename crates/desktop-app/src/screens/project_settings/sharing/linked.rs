@@ -16,6 +16,8 @@ use lurq::{
 use orchester_api::MemberRole;
 use orchester_workspace::sharing::project::{MemberChange, ProjectServer};
 
+mod rows;
+
 use super::Facts;
 use crate::{
   project::ShownProject,
@@ -26,10 +28,10 @@ use crate::{
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::field_error,
     form_section::{Label, Place, section, side_row},
     icon::Icon,
-    notice::{Notice, NoticeTone},
   },
 };
 
@@ -99,6 +101,8 @@ impl Component for Linked {
       None => ctx.t("sharing.linked.noRole"),
     }
     .to_string();
+    let entry = props.facts.linked_server();
+    let hint = rows::hint(ctx, link, entry);
     let state = shared_state(ctx, link, (&server, &role));
     let task_list = side_row(
       Label::new("sharing-task-list", ctx.t("sharing.link.taskList")).description(ctx.t_args(
@@ -109,21 +113,8 @@ impl Component for Linked {
       Place::Within,
       true,
     );
-    let address = link
-      .address
-      .clone()
-      .unwrap_or_else(|| ctx.t("sharing.linked.noAddress").to_string());
-    let address_row = side_row(
-      Label::new("sharing-address", ctx.t("sharing.linked.address"))
-        .description(ctx.t("sharing.linked.addressDescription")),
-      Column::new().width(Dimension::Px(CONTROL_WIDTH)).child(
-        lurq::components::Text::new(&address)
-          .id("sharing-address-value")
-          .variant(crate::theme::OrchesterText::Address.role()),
-      ),
-      Place::Last,
-      true,
-    );
+    let address_row = rows::address_row(ctx, link, entry);
+    let repository_row = rows::repository_row(ctx, &props, hint.as_ref(), (&name, &server));
     let mut column = Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
@@ -132,29 +123,29 @@ impl Component for Linked {
         "project-settings-sharing-task-list",
         &ctx.t("sharing.link.taskList"),
         None,
-        vec![task_list, address_row],
+        vec![task_list, address_row, repository_row],
       ));
     if link.removed_at.is_some() {
       column = column.child(
-        Notice::new(
+        Callout::new(
           "sharing-removed",
-          NoticeTone::Warning,
+          CalloutTone::Warning,
           ctx.t_args("sharing.linked.removed.title", [("project", name.as_str())]),
         )
         .icon(Icon::UserX)
         .body(ctx.t_args("sharing.linked.removed.body", [("project", name.as_str())])),
       );
     }
-    column.child(self.leave_section(ctx, &props, (&name, &server)))
+    column.child(self.leave_section(ctx, &props, (&name, &server), link.key.as_str()))
   }
 }
 
 impl Linked {
   /// *Leave or make local*: *Make local* (N2, not in this version) and *Leave Kontur*, asked in place.
-  fn leave_section(&self, ctx: &mut Ctx, props: &Props, (name, server): (&str, &str)) -> Element {
+  fn leave_section(&self, ctx: &mut Ctx, props: &Props, (name, server): (&str, &str), key: &str) -> Element {
     let make_local = side_row(
       Label::new("sharing-make-local", ctx.t("sharing.linked.makeLocal"))
-        .description(ctx.t_args("sharing.linked.makeLocalDescription", [("project", name)])),
+        .description(ctx.t_args("sharing.linked.makeLocalDescription", [("project", name), ("key", key)])),
       Column::new().width(Dimension::Px(CONTROL_WIDTH)).child(
         ActionButton::new(
           "sharing-make-local-button",
@@ -226,9 +217,9 @@ impl Linked {
       })
     };
     let keep = self.asking.clone();
-    Notice::new(
+    Callout::new(
       "sharing-leave-question",
-      NoticeTone::Warning,
+      CalloutTone::Warning,
       ctx.t_args("sharing.linked.leaveQuestion", [("project", name)]),
     )
     .icon(Icon::LogOut)
@@ -242,7 +233,6 @@ impl Linked {
       )
       .on_click(move || keep.set(false)),
     )
-    .stacked()
     .into()
   }
 }
@@ -265,6 +255,10 @@ fn shared_state(ctx: &Ctx, link: &orchester_store::SharingLink, (server, role): 
           ("key", link.key.as_str().to_owned()),
           ("day", crate::screens::settings::orchester::day_of(ctx, link.joined_at)),
           ("role", role.to_owned()),
+          (
+            "synced",
+            crate::screens::settings::orchester::moment(ctx, link.last_synced_at),
+          ),
         ],
       ),
     ))

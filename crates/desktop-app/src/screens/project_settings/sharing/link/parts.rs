@@ -6,7 +6,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Text},
+  components::{Column, Row, Text},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_workspace::sharing::ServerEntry;
@@ -14,13 +15,15 @@ use orchester_workspace::sharing::ServerEntry;
 use super::Props;
 use crate::{
   screens::project_settings::page::{self, CONTROL_WIDTH},
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     form_section::{Label, Place, section, side_row},
-    icon::Icon,
-    inspector::{self, PropertyValue},
+    icon::{Icon, icon},
   },
 };
+
+/// The label column of *What linking sends* (`Shared with members` in `Fy5KW`).
+const SENDS_LABEL: f32 = 180.0;
 
 /// The local task list (`Task list` in `bWD9q`): only on this computer, with its key and tasks.
 pub(super) fn task_list(ctx: &Ctx, props: &Props) -> Element {
@@ -35,7 +38,7 @@ pub(super) fn task_list(ctx: &Ctx, props: &Props) -> Element {
     .spacing(ExtraSpacing::Hair.role())
     .child(page::icon_note(
       "sharing-local",
-      Icon::HardDrive,
+      Icon::Monitor,
       &ctx.t("sharing.link.localOnly"),
     ))
     .child(page::note("sharing-local-tasks", &tasks));
@@ -74,28 +77,57 @@ pub(super) fn sends(ctx: &Ctx) -> Element {
   Column::new()
     .id("sharing-sends")
     .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Md)
+    .padding(ExtraSpacing::Inset.role())
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
-    .child(Text::new(&ctx.t("sharing.link.sends.title")).variant(ExtraTypography::Strong.role()))
-    .child(inspector::property(
+    .child(Text::new(&ctx.t("sharing.link.sends.title")).variant(OrchesterText::CardTitle.role()))
+    .child(sends_row(
       "sharing-sends-shared",
       &ctx.t("sharing.link.sends.shared"),
       &ctx.t("sharing.link.sends.sharedValue"),
-      PropertyValue::Plain,
     ))
-    .child(inspector::property(
+    .child(sends_row(
       "sharing-sends-stays",
       &ctx.t("sharing.link.sends.stays"),
       &ctx.t("sharing.link.sends.staysValue"),
-      PropertyValue::Plain,
     ))
-    .child(page::icon_note(
-      "sharing-sends-never",
-      Icon::Shield,
-      &ctx.t("sharing.link.sends.never"),
-    ))
+    .child(
+      Row::new()
+        .id("sharing-sends-never")
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
+        .child(
+          Text::new(&ctx.t("sharing.link.sends.never"))
+            .variant(ExtraTypography::Note.role())
+            .flex(1.0),
+        ),
+    )
     .into()
+}
+
+/// A line of the card: what, in a 180 column of `text_muted`, and the things, in `text_primary` (`Shared` `othgy`).
+fn sends_row(id: &str, label: &str, value: &str) -> Row {
+  Row::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Start)
+    .child(
+      Text::new(label)
+        .variant(ExtraTypography::Property.role())
+        .color(PaletteColor::TextMuted)
+        .width(Dimension::Px(SENDS_LABEL))
+        .flex_shrink(0.0),
+    )
+    .child(
+      Text::new(value)
+        .id(format!("{id}-value"))
+        .variant(ExtraTypography::Property.role())
+        .color(PaletteColor::TextPrimary)
+        .flex(1.0),
+    )
 }

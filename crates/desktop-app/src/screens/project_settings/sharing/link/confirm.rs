@@ -14,14 +14,14 @@ use crate::{
   routes::{OrchesterView, Route},
   screens::{
     project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::Said,
+    settings::orchester::{Said, shown_address},
   },
   ui::{
     button::{ActionButton, ButtonKind},
+    callout::{Callout, CalloutTone},
     field::field_error,
     form_section::{Label, Place, side_row},
     icon::Icon,
-    notice::{Notice, NoticeTone},
   },
 };
 
@@ -120,28 +120,34 @@ impl Link {
         ("hint", hint.as_str()),
       ],
     );
-    Notice::new(
+    Callout::new(
       "sharing-mismatch",
-      NoticeTone::Warning,
+      CalloutTone::Warning,
       ctx.t_args("sharing.link.mismatch.title", [("origin", checkout.as_str())]),
     )
     .icon(Icon::TriangleAlert)
     .body(body)
     .action(another)
     .action(anyway)
-    .stacked()
     .into()
   }
 
   /// What goes up, with *Link and upload N tasks* and *Cancel*.
   fn upload(&self, ctx: &Ctx, target: &Target, props: &Props, pending: bool) -> Element {
     let count = props.facts.tasks.to_string();
+    // The linked project takes the server project's key (`docs/architecture/server.md`, *Upload and numbers*).
+    let (local, key) = (props.project.open.project.key().as_str(), target.0.project.key.as_str());
     let body = ctx.t_args(
-      "sharing.link.upload.body",
+      if local == key {
+        "sharing.link.upload.body"
+      } else {
+        "sharing.link.upload.bodyRekeyed"
+      },
       [
         ("count", count.clone()),
-        ("key", props.project.open.project.key().as_str().to_owned()),
-        ("address", target.0.project.address.clone()),
+        ("key", key.to_owned()),
+        ("local", local.to_owned()),
+        ("address", shown_address(&target.0.project.address).to_owned()),
       ],
     );
     let (link, chosen, key) = (self.link.clone(), target.clone(), self.key.get());
@@ -163,9 +169,9 @@ impl Link {
       ctx.t("sharing.link.upload.cancel"),
     )
     .on_click(move || asking.set(Asking::Nothing));
-    Notice::new(
+    Callout::new(
       "sharing-upload",
-      NoticeTone::Info,
+      CalloutTone::Info,
       ctx.t_args(
         "sharing.link.upload.title",
         [("project", target.0.project.name.as_str())],
@@ -175,7 +181,6 @@ impl Link {
     .body(body)
     .action(confirm)
     .action(cancel)
-    .stacked()
     .into()
   }
 }
@@ -184,9 +189,9 @@ fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
   match problem {
     Problem::NotConnected(host) => {
       let navigation = Navigation::of(ctx);
-      Notice::new(
+      Callout::new(
         "sharing-not-connected",
-        NoticeTone::Info,
+        CalloutTone::Info,
         ctx.t_args("sharing.link.notConnected.title", [("host", host.as_str())]),
       )
       .icon(Icon::Server)
@@ -200,7 +205,6 @@ fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
         .icon(Icon::Plus)
         .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect()))),
       )
-      .stacked()
       .into()
     }
     Problem::NoProject(address) => field_error(
@@ -208,13 +212,12 @@ fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
       &ctx.t_args("sharing.link.noProject", [("address", address.as_str())]),
     )
     .into(),
-    Problem::Taken(project) => Notice::new(
+    Problem::Taken(project) => Callout::new(
       "sharing-taken",
-      NoticeTone::Warning,
+      CalloutTone::Warning,
       ctx.t_args("sharing.link.taken.title", [("project", project.as_str())]),
     )
     .body(ctx.t("sharing.link.taken.body"))
-    .stacked()
     .into(),
     Problem::Other(said) => field_error("sharing-link-error", &said.text(ctx)).into(),
   }
