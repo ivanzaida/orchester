@@ -5,6 +5,7 @@
 //! `cloud_account` row; its device token in the keychain, under this installation's id, so a development build or a
 //! QA copy never signs the installed app in or out. Team servers joined through the cloud keep working without it.
 
+mod accepting;
 mod error;
 mod invites;
 
@@ -22,10 +23,7 @@ use orchester_core::{
 use orchester_store::StoredCloudAccount;
 use tokio::sync::watch;
 
-pub use self::{
-  error::CloudError,
-  invites::{Accepted, ServerJoin},
-};
+pub use self::{accepting::Accepted, error::CloudError, invites::ServerJoin};
 use super::{Servers, device};
 use crate::{background, secrets::Vault, workspace::Workspace};
 
@@ -226,7 +224,10 @@ impl Cloud {
         Ok(()) | Err(VaultError::NotFound) => {}
         Err(error) => return Err(error.into()),
       }
-      workspace.db.lock().set_cloud_account(None)?;
+      let mut db = workspace.db.lock();
+      db.set_cloud_account(None)?;
+      // The invites accepted here belong to the account that accepted them.
+      db.forget_accepted_invites()?;
       Ok(())
     })
     .await?

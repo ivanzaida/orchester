@@ -31,6 +31,9 @@ pub enum CloudError {
   /// The invite ended before it was answered: accepted elsewhere, expired or revoked.
   #[error("the invite has ended")]
   InviteEnded,
+  /// The team server refused this computer's join: its approval was refused, or the account there is disabled.
+  #[error("the team server refused this computer")]
+  JoinRefused,
   /// The cloud lists no team server at that address for the account.
   #[error("the cloud lists no team server at that address for the account")]
   NoServer,

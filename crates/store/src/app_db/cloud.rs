@@ -1,7 +1,7 @@
 //! This computer's Orchester Cloud account (`docs/architecture/server.md`, "Desktop data", row 41): at most one row,
 //! the account signed in from this computer and the cloud's address it was signed in at; and the cloud address the
 //! person set in Settings › Orchester's advanced field, for a test cloud. The cloud device token is in the OS
-//! keychain (`orchester-cloud` / `device`), never here.
+//! keychain under this installation's id (`VaultKey::cloud_device`), never here.
 
 use orchester_core::{id::CloudAccountId, time::Timestamp};
 use rusqlite::{OptionalExtension, params};

@@ -166,7 +166,7 @@ fn cloud_account_accepting_an_invite_connects_with_the_pin_it_carries() {
 
   let invites = desktop.block_on(desktop.cloud.invites()).expect("invites");
   assert_eq!(invites.len(), 1);
-  let accepted = desktop.block_on(desktop.cloud.accept(invites[0].id)).expect("accept");
+  let accepted = desktop.block_on(desktop.cloud.accept(&invites[0])).expect("accept");
   assert!(matches!(accepted.joined, CloudJoined::Joined(_)), "{accepted:?}");
   let entry = desktop.servers.entries().expect("entries").remove(0);
   assert_eq!(
@@ -179,6 +179,13 @@ fn cloud_account_accepting_an_invite_connects_with_the_pin_it_carries() {
     Some(JoinedWith::Cloud(audience.parse().expect("id")))
   );
   assert!(desktop.block_on(desktop.cloud.invites()).expect("invites").is_empty());
+  assert!(
+    desktop
+      .block_on(desktop.cloud.accepted_invites())
+      .expect("kept")
+      .is_empty(),
+    "a join that finished keeps nothing"
+  );
 }
 
 #[test]
@@ -189,15 +196,22 @@ fn cloud_account_declining_an_invite_ends_it() {
   cloud.name_server(&audience, &server.url(), None);
   cloud.invite(&invite, None);
   let desktop = Desktop::signed_in(&cloud);
-  let id = desktop.block_on(desktop.cloud.invites()).expect("invites")[0].id;
-  desktop.block_on(desktop.cloud.decline(id)).expect("decline");
+  let listed = desktop.block_on(desktop.cloud.invites()).expect("invites").remove(0);
+  desktop.block_on(desktop.cloud.decline(listed.id)).expect("decline");
   assert_eq!(cloud.declined(), vec![invite]);
   assert!(
     desktop.servers.entries().expect("entries").is_empty(),
     "nothing was joined"
   );
-  let again = desktop.block_on(desktop.cloud.accept(id));
+  let again = desktop.block_on(desktop.cloud.accept(&listed));
   assert!(matches!(again, Err(CloudError::InviteEnded)), "{again:?}");
+  assert!(
+    desktop
+      .block_on(desktop.cloud.accepted_invites())
+      .expect("kept")
+      .is_empty(),
+    "an invite that ended is not kept"
+  );
 }
 
 #[test]

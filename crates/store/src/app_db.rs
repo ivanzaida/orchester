@@ -6,6 +6,7 @@
 
 mod accounts;
 mod cloud;
+mod cloud_joins;
 mod servers;
 mod settings;
 
@@ -16,6 +17,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 pub use self::{
   cloud::StoredCloudAccount,
+  cloud_joins::AcceptedInvite,
   servers::{JoinedWith, ServerAccount, StoredServer},
 };
 use crate::{
@@ -57,6 +59,7 @@ CREATE TABLE ui_state (
   servers::PIN_MIGRATION,
   settings::ORCHESTRATOR_PUBLISHES_MIGRATION,
   cloud::MIGRATION,
+  cloud_joins::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

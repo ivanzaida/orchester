@@ -277,6 +277,27 @@ impl TestServer {
     )
   }
 
+  /// Turns join approval on or off: a cloud join of an account the server knows then waits for one of that account's
+  /// computers, or an admin, to approve it.
+  pub fn set_join_approval(&self, on: bool) {
+    self.admin_request("PATCH", "/server/settings", &json!({ "join_approval": on }));
+  }
+
+  /// The first admin approves every join that waits for approval; answers how many.
+  pub fn approve_waiting(&self) -> usize {
+    let waiting = self.admin_request("GET", "/auth/approvals", &Value::Null);
+    let ids: Vec<String> = waiting["approvals"]
+      .as_array()
+      .expect("approvals")
+      .iter()
+      .filter_map(|approval| approval["id"].as_str().map(str::to_owned))
+      .collect();
+    for id in &ids {
+      self.admin_request("POST", &format!("/auth/approvals/{id}"), &json!({ "approve": true }));
+    }
+    ids.len()
+  }
+
   /// An invite to the server by email, which the cloud routes; returns its id.
   pub fn email_invite(&self, email: &str) -> String {
     let invite = self.admin_request(

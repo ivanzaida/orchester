@@ -32,9 +32,11 @@ const TOKEN: &str = "orcc_0123456789abcdef0123456789abcdef0123456789abcdef012345
 struct State {
   /// `{ id, name, address, fingerprint }` of the team server.
   server: Option<Value>,
-  /// Open invites, as `GET /invites` lists them.
+  /// Invites, as `GET /invites` lists them, with the invitee's `answer` once there is one.
   invites: Vec<Value>,
   declined: Vec<String>,
+  /// The invites that the tokens issued so far accept, one entry per token.
+  accepting: Vec<String>,
   signed_out: bool,
 }
 
@@ -107,6 +109,11 @@ impl AccountCloud {
     self.state.lock().declined.clone()
   }
 
+  /// How many tokens accepting `invite` were issued.
+  pub fn tokens_for(&self, invite: &str) -> usize {
+    self.state.lock().accepting.iter().filter(|id| *id == invite).count()
+  }
+
   pub fn signed_out(&self) -> bool {
     self.state.lock().signed_out
   }
@@ -147,7 +154,16 @@ fn route(
       state.lock().signed_out = true;
       ("204 No Content", None)
     }
-    "GET /api/v1/invites" => ("200 OK", Some(json!({"invites": state.lock().invites}))),
+    "GET /api/v1/invites" => {
+      let open: Vec<Value> = state
+        .lock()
+        .invites
+        .iter()
+        .filter(|invite| invite.get("answer").is_none())
+        .map(|invite| invite.clone())
+        .collect();
+      ("200 OK", Some(json!({"invites": open})))
+    }
     "GET /api/v1/servers" => {
       let servers: Vec<Value> = state
         .lock()
@@ -168,19 +184,19 @@ fn route(
   }
 }
 
-/// `POST /api/v1/identity-tokens`: a join token; with `invite`, one that accepts that open invite from the audience,
-/// whose copy here then ends. `None` for an invite that is not open.
+/// `POST /api/v1/identity-tokens`: a join token; with `invite`, one that accepts that invite from the audience, open
+/// or accepted before, which is then accepted and listed no more (`docs/cloud-api.md`). `None` for a declined one.
 fn issue(body: &str, state: &Mutex<State>, signing: &SigningKey) -> Option<Answer> {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
   let audience = request["audience"].as_str().unwrap_or_default().to_owned();
   let invite = request["invite"].as_str();
   if let Some(id) = invite {
     let mut state = state.lock();
-    let position = state
-      .invites
-      .iter()
-      .position(|open| open["id"] == id && open["server"]["id"] == audience.as_str())?;
-    state.invites.remove(position);
+    let found = state.invites.iter_mut().find(|answered| {
+      answered["id"] == id && answered["server"]["id"] == audience.as_str() && answered["answer"] != "declined"
+    })?;
+    found["answer"] = json!("accepted");
+    state.accepting.push(id.to_owned());
   }
   let token = identity_token(signing, &audience, invite);
   Some((
@@ -215,8 +231,11 @@ fn sign_in(body: &str) -> Answer {
 fn decline(path: &str, state: &Mutex<State>) -> Option<Answer> {
   let id = path.strip_prefix("POST /api/v1/invites/")?.strip_suffix("/decline")?;
   let mut state = state.lock();
-  let position = state.invites.iter().position(|invite| invite["id"] == id)?;
-  state.invites.remove(position);
+  let open = state
+    .invites
+    .iter_mut()
+    .find(|invite| invite["id"] == id && invite.get("answer").is_none())?;
+  open["answer"] = json!("declined");
   state.declined.push(id.to_owned());
   Some(("204 No Content", None))
 }
