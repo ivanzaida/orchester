@@ -29,6 +29,8 @@ pub enum CloudError {
   KeyEncryption,
   #[error("the key-encryption key does not open the root key in the database")]
   WrongKeyEncryptionKey,
+  #[error("the database holds signing keys or key sets but no root key")]
+  KeysWithoutRoot,
   #[error("identity token or key set refused: {0}")]
   Identity(#[from] IdentityError),
   #[error("cannot send email")]
@@ -66,6 +68,11 @@ impl std::fmt::Debug for CloudError {
 const WRONG_KEY_ENCRYPTION_KEY: &str =
   "ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY does not open the root key in the database; set the key it was made with";
 
+/// What the log says when the root row is gone but keys it vouched for are not: the cloud does not make a root
+/// beside them; emptying root_key, signing_keys and key_sets together starts over (docs/cloud-hosting.md).
+const KEYS_WITHOUT_ROOT: &str =
+  "the database holds signing keys or key sets but no root key: restore it, or empty signing_keys and key_sets too";
+
 impl CloudError {
   fn kind(&self) -> &'static str {
     match self {
@@ -80,6 +87,7 @@ impl CloudError {
       Self::StoredData => "StoredData",
       Self::KeyEncryption => "KeyEncryption",
       Self::WrongKeyEncryptionKey => "WrongKeyEncryptionKey",
+      Self::KeysWithoutRoot => "KeysWithoutRoot",
       Self::Identity(_) => "Identity",
       Self::Mail => "Mail",
       Self::Api(_) => "Api",
@@ -94,6 +102,7 @@ impl CloudError {
       Self::Io(error) => Some(format!("io_kind={:?}", error.kind())),
       Self::Configuration(reason) => Some((*reason).to_owned()),
       Self::WrongKeyEncryptionKey => Some(WRONG_KEY_ENCRYPTION_KEY.to_owned()),
+      Self::KeysWithoutRoot => Some(KEYS_WITHOUT_ROOT.to_owned()),
       Self::SchemaTooNew(version) => Some(format!("schema_version={version}")),
       Self::Identity(error) => Some(error.to_string()),
       Self::Api(code) => Some(format!("code={code:?}")),

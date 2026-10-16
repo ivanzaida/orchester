@@ -120,31 +120,102 @@ pub async fn a_changed_key_encryption_key_stops_the_start() {
   postgres().drop_database(&database).await;
 }
 
-/// A database from before the cloud kept its own root holds key sets an offline root signed and no root: the cloud
-/// makes its root, drops those key sets and serves its own.
-pub async fn a_database_from_an_offline_root_gets_its_own() {
+/// Signing keys or key sets with no root (the root row deleted alone) stop the start, whatever the key-encryption key:
+/// the cloud never makes a root beside keys another root vouched for.
+pub async fn keys_without_a_root_stop_the_start() {
   let database = postgres().create_database().await;
   let key = key_encryption_key();
   drop(open(&database, &key).await.expect("the first start"));
   let admin = postgres().database(&database).await;
   admin
-    .batch_execute(
-      "DELETE FROM root_key;
-       INSERT INTO key_sets (issued_at, expires_at, compact, published_at)
-       VALUES (now() + interval '1 year', now() + interval '2 years', 'signed.by.another-root', now());",
-    )
+    .batch_execute("DELETE FROM root_key")
     .await
-    .expect("a database of the offline ceremony");
-  drop(open(&database, &key).await.expect("a start on it"));
-  let root = stored_root(&admin).await.expect("a root of its own");
+    .expect("the root row deleted alone");
+  for key in [key, key_encryption_key()] {
+    let refused = open(&database, &key).await;
+    assert!(
+      matches!(refused, Err(CloudError::KeysWithoutRoot)),
+      "keys without a root are refused, got {:?}",
+      refused.map(|_| ())
+    );
+  }
+  assert_eq!(counts(&admin).await, (0, 1, 1), "no root is made beside the keys");
+  drop(admin);
+  postgres().drop_database(&database).await;
+}
+
+/// The procedure for a key-encryption key lost for good (docs/cloud-hosting.md): emptying the root, the signing keys
+/// and the key sets together lets a new key start the cloud with a new root.
+pub async fn losing_the_key_encryption_key_starts_over_with_a_new_root() {
+  let database = postgres().create_database().await;
+  drop(open(&database, &key_encryption_key()).await.expect("the first start"));
+  let admin = postgres().database(&database).await;
+  let lost = stored_root(&admin).await.expect("a root");
+  admin
+    .batch_execute("DELETE FROM key_sets; DELETE FROM signing_keys; DELETE FROM root_key;")
+    .await
+    .expect("the documented procedure");
+  drop(
+    open(&database, &key_encryption_key())
+      .await
+      .expect("a start with a new key"),
+  );
+  let root = stored_root(&admin).await.expect("a new root");
+  assert_ne!(root, lost);
+  assert_eq!(counts(&admin).await, (1, 1, 1));
   let compact: String = admin
-    .query_one("SELECT compact FROM key_sets ORDER BY issued_at DESC LIMIT 1", &[])
+    .query_one("SELECT compact FROM key_sets", &[])
     .await
     .expect("a key set")
     .get(0);
-  VerifiedKeySet::verify(&compact, &root, START / 1000).expect("the newest key set is the new root's");
+  VerifiedKeySet::verify(&compact, &root, START / 1000).expect("the key set is the new root's");
   drop(admin);
   postgres().drop_database(&database).await;
+}
+
+/// A root row that is not a sealed key is stored data gone bad, not a wrong key-encryption key.
+pub async fn a_corrupt_root_is_stored_data() {
+  let database = postgres().create_database().await;
+  let key = key_encryption_key();
+  drop(open(&database, &key).await.expect("the first start"));
+  let admin = postgres().database(&database).await;
+  admin
+    .batch_execute("UPDATE root_key SET sealed_private_key = '\\x00'")
+    .await
+    .expect("a corrupt root");
+  let refused = open(&database, &key).await;
+  assert!(
+    matches!(refused, Err(CloudError::StoredData)),
+    "a corrupt root is stored data, got {:?}",
+    refused.map(|_| ())
+  );
+  drop(admin);
+  postgres().drop_database(&database).await;
+}
+
+/// A key set dated in the future (a clock set back, a row written by hand) is neither served nor taken as the newest,
+/// so the cloud does not sign again every minute.
+pub async fn a_key_set_dated_in_the_future_is_ignored() {
+  let cloud = TestCloud::start().await;
+  let admin = postgres().database(&cloud.database).await;
+  let later = cloud.clock.now_ms() / 1000 + 365 * 24 * 60 * 60;
+  admin
+    .execute(
+      "INSERT INTO key_sets (issued_at, expires_at, compact, published_at)
+       VALUES (to_timestamp($1::bigint), to_timestamp($1::bigint + 86400), 'dated.in.the-future', now())",
+      &[&later],
+    )
+    .await
+    .expect("a key set dated a year ahead");
+  cloud.cloud.keep_keys().await.expect("keep the keys");
+  cloud.cloud.keep_keys().await.expect("keep the keys");
+  assert_eq!(counts(&admin).await, (1, 1, 2), "nothing is signed again");
+  let response = cloud.request("GET", "/keys", None, None).await;
+  assert_eq!(response.status, 200);
+  let served = response.json::<KeySetResponse>().key_set;
+  VerifiedKeySet::verify(&served, &cloud.root().await, cloud.clock.now_ms() / 1000).expect("the served set is current");
+  drop(admin);
+  cloud.finish().await;
 }
 
 pub async fn keys_verify_with_the_root_a_linked_server_pins() {

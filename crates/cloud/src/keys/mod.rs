@@ -12,7 +12,7 @@ use std::fmt;
 
 use orchester_api::{
   Credential,
-  identity::{KEY_LISTED_AFTER_SECS, KEY_SIGNS_SECS, PrivateKey},
+  identity::{CLOCK_SKEW_SECS, KEY_LISTED_AFTER_SECS, KEY_SIGNS_SECS, PrivateKey},
 };
 use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
 pub(crate) use root::open as open_root;
@@ -22,11 +22,15 @@ use crate::{clock::DAY_MS, error::CloudError, tokens::random_bytes};
 
 const SIGNS_MS: i64 = KEY_SIGNS_SECS * 1000;
 const LISTED_AFTER_MS: i64 = KEY_LISTED_AFTER_SECS * 1000;
-/// A rotated key waits this long before it signs, so team servers that refresh the key set daily have it by then
-/// (review 1, L4). The first key signs at once: no team server holds a key set before it.
+/// A key set dated later than this from now (a clock set back, or a row written by hand) is neither served nor taken
+/// as the newest: team servers would refuse it as not yet valid.
+const CLOCK_SKEW_MS: i64 = CLOCK_SKEW_SECS * 1000;
+/// A rotated key waits this long before it signs, so the apps and admin sign-ins that carry key sets to team servers
+/// bring it there first (review 1, L4). The first key signs at once: no team server holds a key set before it.
 const OVERLAP_MS: i64 = 2 * DAY_MS;
-/// A new signing key is made once no key would sign a week from now: early enough that a cloud stopped for a few days
-/// still finds the current key signing when it starts again.
+/// A new signing key is made once no key would sign a week from now, which leaves room for the two days' overlap. A
+/// cloud that was stopped past that point starts the new key when the current one stops signing, never later, so
+/// there is no time without a key that signs (`schedule::rotate_if_due`).
 const ROTATE_AHEAD_MS: i64 = 7 * DAY_MS;
 /// A new key set is signed at least this often; one lives 30 days (`orchester_api::identity::KEY_SET_LIFETIME_SECS`).
 const KEY_SET_EVERY_MS: i64 = 7 * DAY_MS;
@@ -81,12 +85,14 @@ impl KeySealing {
     Ok(stored)
   }
 
+  /// `StoredData` for a blob too short to be sealed at all; `KeyEncryption` when the key-encryption key does not open
+  /// it (another key, or a blob changed after sealing).
   fn open(&self, label: &str, stored: &[u8]) -> Result<PrivateKey, CloudError> {
-    if stored.len() <= NONCE_LEN {
-      return Err(CloudError::KeyEncryption);
+    if stored.len() <= NONCE_LEN + AES_256_GCM.tag_len() {
+      return Err(CloudError::StoredData);
     }
     let (nonce, sealed) = stored.split_at(NONCE_LEN);
-    let nonce = Nonce::try_assume_unique_for_key(nonce).map_err(|_| CloudError::KeyEncryption)?;
+    let nonce = Nonce::try_assume_unique_for_key(nonce).map_err(|_| CloudError::StoredData)?;
     let mut buffer = sealed.to_vec();
     let opened = self
       .0

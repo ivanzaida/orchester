@@ -27,7 +27,8 @@ pub(crate) async fn open(db: &Database, sealing: &KeySealing, now: i64) -> Resul
   Ok(root.public_key())
 }
 
-/// The stored root, opened with the key-encryption key; `None` before the first start made it.
+/// The stored root, opened with the key-encryption key; `None` before the first start made it. A key that does not
+/// open it is `WrongKeyEncryptionKey`; a row that is not a sealed root key is `StoredData`.
 pub(super) async fn load(client: &impl GenericClient, sealing: &KeySealing) -> Result<Option<RootKey>, CloudError> {
   let Some(row) = client
     .query_opt("SELECT public_key, sealed_private_key FROM root_key", &[])
@@ -35,18 +36,29 @@ pub(super) async fn load(client: &impl GenericClient, sealing: &KeySealing) -> R
   else {
     return Ok(None);
   };
-  let public = PublicKey::from_bytes(row.try_get(0)?)?;
-  let private = sealing
-    .open(&label(&public), row.try_get(1)?)
-    .map_err(|_| CloudError::WrongKeyEncryptionKey)?;
-  let root = RootKey::new(&private)?;
+  let public = PublicKey::from_bytes(row.try_get(0)?).map_err(|_| CloudError::StoredData)?;
+  let private = sealing.open(&label(&public), row.try_get(1)?).map_err(wrong_key)?;
+  let root = RootKey::new(&private).map_err(|_| CloudError::StoredData)?;
   if root.public_key() != public {
     return Err(CloudError::StoredData);
   }
   Ok(Some(root))
 }
 
+/// Makes the root of a database that holds no keys at all. Signing keys or key sets without a root mean the root row
+/// was lost or deleted alone: the cloud refuses rather than make a root beside keys another root vouched for
+/// (docs/cloud-hosting.md, "Losing the key-encryption key").
 async fn create(client: &impl GenericClient, sealing: &KeySealing, now: i64) -> Result<RootKey, CloudError> {
+  let keys: bool = client
+    .query_one(
+      "SELECT EXISTS (SELECT 1 FROM signing_keys) OR EXISTS (SELECT 1 FROM key_sets)",
+      &[],
+    )
+    .await?
+    .try_get(0)?;
+  if keys {
+    return Err(CloudError::KeysWithoutRoot);
+  }
   let private = PrivateKey::generate()?;
   let root = RootKey::new(&private)?;
   let public = root.public_key();
@@ -57,18 +69,16 @@ async fn create(client: &impl GenericClient, sealing: &KeySealing, now: i64) -> 
       &[&public.as_bytes().as_slice(), &sealed, &time(now)],
     )
     .await?;
-  // Key sets an earlier root signed (a database from before the cloud kept its own root) never verify with this
-  // one; the servers that pinned that root pin this one again.
-  let earlier = client.execute("DELETE FROM key_sets", &[]).await?;
-  if earlier > 0 {
-    tracing::warn!(
-      root_public_key = %public.encoded(),
-      root_fingerprint = %public.fingerprint(),
-      "key sets of an earlier root removed; team servers linked before must pin the new root"
-    );
-  }
   audit(client, None, "root_key_created", &public.fingerprint(), None, now).await?;
   Ok(root)
+}
+
+/// A sealed key the key-encryption key does not open means the key is not the one it was sealed with.
+fn wrong_key(error: CloudError) -> CloudError {
+  match error {
+    CloudError::KeyEncryption => CloudError::WrongKeyEncryptionKey,
+    other => other,
+  }
 }
 
 /// What the root's sealed private half is bound to, apart from every signing key's kid.

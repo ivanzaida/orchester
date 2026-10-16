@@ -65,10 +65,14 @@ nothing to run by hand:
   one row at most, and the root is made under a PostgreSQL advisory lock: replicas that start together make one root,
   and the others load it.
 - **Signing keys** sign for 30 days and stay listed 60 days longer. A new one is made once no key would sign a week
-  from now. While another key signs, the new one starts two days later, so team servers (which refresh the key set
-  daily) have it before any token signed with it arrives. The very first key signs at once.
+  from now. While another key signs, the new one starts two days later, so the key set listing it reaches team
+  servers first: a team server never calls the cloud, and gets newer key sets from the apps that sign in to it and
+  from its admin's cloud sign-ins ([server-hosting.md](server-hosting.md)). It never starts after the current key
+  stops signing, though: a cloud stopped past the week ahead starts the new key when the current one stops, so some
+  key always signs. The very first key signs at once.
 - **Key sets** are valid for 30 days. The cloud signs a new one after each rotation, at least weekly, and whenever
-  the newest no longer verifies with its root or names another `PUBLIC_URL`. `GET /keys` serves the newest.
+  the newest no longer verifies with its root or names another `PUBLIC_URL`. `GET /keys` serves the newest; a key set
+  dated in the future (more than the 2 minutes of clock skew) is ignored.
 
 The cloud keeps this schedule at its start, before it listens, and every minute while it serves, under the same
 lock, so each step happens once however many replicas run. It signs tokens only with a key the newest unexpired key
@@ -83,20 +87,14 @@ open the root key in the database*. It never makes a new root in its place: a ne
 team server that pinned the old one.
 
 - **Changed or mistyped:** set the key the database was first started with and start again.
-- **Lost for good:** the root cannot be recovered. To start over with a new root, delete it and the keys it sealed
-  (`DELETE FROM key_sets; DELETE FROM signing_keys; DELETE FROM root_key;`) and start the cloud with a new
-  key-encryption key; it makes a new root. Accounts, devices and linked servers stay, but every linked team server
+- **Lost for good:** the root cannot be recovered. To start over with a new root, empty the root, the signing keys and
+  the key sets together, in one go (`DELETE FROM key_sets; DELETE FROM signing_keys; DELETE FROM root_key;`), and
+  start the cloud with a new key-encryption key; it makes a new root. Deleting only the root row is not enough: a
+  database with signing keys or key sets but no root stops the start with `error_kind=KeysWithoutRoot`, since the
+  cloud never makes a root beside keys another root vouched for. Accounts, devices and linked servers stay, but every linked team server
   stops accepting cloud sign-ins until its admin pins the new root's public key from the log (the server admin's
   Orchester Cloud settings, *Pin another key…*, or `orchester-server cloud pin <root public key>`) or links the
   server again. Devices that already joined keep working.
-
-### Upgrading from an offline root
-
-Builds before 2026-10-16 used a root key kept offline and an `ORCHESTER_CLOUD_ROOT_PUBLIC_KEY` setting, now gone (a
-`root_public_key` left in `cloud.toml` is refused as an unknown setting; the environment variable is ignored). On
-its first start, the new build makes its own root and removes the key sets the offline root signed, and the log
-warns that team servers linked before must pin the new root. The signing keys stay. Re-pin or re-link those servers
-as above.
 
 ## Docker with Caddy
 

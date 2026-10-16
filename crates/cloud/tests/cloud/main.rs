@@ -63,6 +63,7 @@ const TESTS: &[(&str, Test)] = tests![
   identity::identity_token_verifies_with_the_published_key_set,
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
   identity::identity_key_sets_are_signed_weekly_and_renewed_after_a_stop,
+  identity::identity_keys_leave_no_gap_after_a_stop,
   identity::many_concurrent_identity_tokens_do_not_starve_the_pool,
   hosting::migrations_apply_once_and_a_newer_database_is_refused,
   hosting::migration_4_removes_servers_whose_id_is_not_their_keys,
@@ -86,7 +87,10 @@ const TESTS: &[(&str, Test)] = tests![
   root_key::a_restart_reuses_the_root,
   root_key::replicas_starting_together_make_one_root,
   root_key::a_changed_key_encryption_key_stops_the_start,
-  root_key::a_database_from_an_offline_root_gets_its_own,
+  root_key::keys_without_a_root_stop_the_start,
+  root_key::losing_the_key_encryption_key_starts_over_with_a_new_root,
+  root_key::a_corrupt_root_is_stored_data,
+  root_key::a_key_set_dated_in_the_future_is_ignored,
   root_key::keys_verify_with_the_root_a_linked_server_pins,
 ];
 

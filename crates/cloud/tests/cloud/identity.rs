@@ -4,7 +4,7 @@ use orchester_api::{
 };
 use serde_json::json;
 
-use crate::support::{DAY, PASSWORD, TestCloud, postgres, remember};
+use crate::support::{DAY, HOUR, PASSWORD, TestCloud, postgres, remember};
 
 const SERVER: &str = "0199f0a0-0000-7000-8000-00000000c10d";
 
@@ -156,6 +156,38 @@ pub async fn identity_key_rotation_keeps_the_previous_key_then_drops_it() {
     Err(IdentityError::UnknownKey)
   );
   identity_token(&cloud, device).await;
+  cloud.finish().await;
+}
+
+/// A cloud stopped from day 22 to day 29.5 finds a key that stops signing in half a day and none to follow: the new
+/// key starts when that one stops, not two days later, so some key signs all the way through.
+pub async fn identity_keys_leave_no_gap_after_a_stop() {
+  let cloud = TestCloud::start().await;
+  let email = "stopped@example.test";
+  cloud.register(email).await;
+  let signed = cloud.sign_in(email, PASSWORD, "Workstation").await;
+  let device = signed.token.expose();
+  let first = identity_token(&cloud, device).await;
+  cloud.clock.advance(22 * DAY);
+  cloud.cloud.keep_keys().await.expect("keep the keys");
+  assert_eq!(key_set(&cloud).await.statement().keys.len(), 1, "no rotation yet");
+
+  cloud.clock.advance(7 * DAY + 12 * HOUR);
+  cloud.cloud.keep_keys().await.expect("keep the keys after the stop");
+  let set = key_set(&cloud).await;
+  let keys = &set.statement().keys;
+  assert_eq!(keys.len(), 2);
+  let (old, new) = (&keys[0], &keys[1]);
+  assert_eq!(old.kid, kid(&first));
+  assert_eq!(
+    new.not_before, old.signs_until,
+    "the new key starts when the old one stops"
+  );
+  assert_eq!(kid(&identity_token(&cloud, device).await), old.kid);
+  cloud.clock.advance(12 * HOUR);
+  assert_eq!(kid(&identity_token(&cloud, device).await), new.kid);
+  cloud.clock.advance(DAY);
+  assert_eq!(kid(&identity_token(&cloud, device).await), new.kid);
   cloud.finish().await;
 }
 

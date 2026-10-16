@@ -1189,8 +1189,8 @@ Row 42; the rules here are the architect's.
   weekly and after every rotation, and rotates a signing key a week before it stops signing
   ([cloud-hosting.md](../cloud-hosting.md), "Keys"). A key-encryption key that does not open the stored root stops
   the cloud's start; it never makes a new root silently. A signing key signs identity tokens for 30 days and stays
-  listed 60 more, so a token signed just before a rotation still verifies. A new root is announced in a key set
-  signed by the old root; a team server follows it only then.
+  listed 60 more, so a token signed just before a rotation still verifies. The root does not roll over: a new root
+  (after a lost key-encryption key or a compromise) is pinned again on each team server by its owner.
 - **At link** (team server setup, below), the team server pins the root key's fingerprint; the owner sees it in
   Sharing and on the console (`orchester-server cloud show`).
 - **Caching.** The team server keeps the newest key set it verified with the pinned root. It replaces it from `GET

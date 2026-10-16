@@ -7,7 +7,9 @@ use std::time::SystemTime;
 use deadpool_postgres::GenericClient;
 use orchester_api::identity::{KeySetStatement, ListedKey, PrivateKey, PublicKey, RootKey, SigningKey, VerifiedKeySet};
 
-use super::{KEY_SET_EVERY_MS, KeySealing, LISTED_AFTER_MS, LOCK, OVERLAP_MS, ROTATE_AHEAD_MS, SIGNS_MS, root};
+use super::{
+  CLOCK_SKEW_MS, KEY_SET_EVERY_MS, KeySealing, LISTED_AFTER_MS, LOCK, OVERLAP_MS, ROTATE_AHEAD_MS, SIGNS_MS, root,
+};
 use crate::{
   Cloud,
   clock::seconds,
@@ -30,19 +32,24 @@ impl Cloud {
       let root = root::load(&transaction, &self.inner.sealing)
         .await?
         .ok_or(CloudError::StoredData)?;
-      self.publish(&transaction, &root, now).await?;
+      // A replica serves the root it loaded at its start: it never signs with another one.
+      if root.public_key() != self.inner.root {
+        return Err(CloudError::StoredData);
+      }
+      publish(&transaction, &root, &self.inner.config.public_url, now).await?;
     }
     transaction.commit().await?;
     Ok(())
   }
 
   /// True when there is no key set, the newest is a week old, or it does not verify with this cloud's root and name
-  /// its public URL.
+  /// its public URL. A key set dated in the future is not the newest: it would never verify, and the cloud would sign
+  /// again every minute.
   async fn key_set_due(&self, client: &impl GenericClient, now: i64) -> Result<bool, CloudError> {
     let Some(row) = client
       .query_opt(
-        "SELECT issued_at, compact FROM key_sets ORDER BY issued_at DESC LIMIT 1",
-        &[],
+        "SELECT issued_at, compact FROM key_sets WHERE issued_at <= $1 ORDER BY issued_at DESC LIMIT 1",
+        &[&time(now + CLOCK_SKEW_MS)],
       )
       .await?
     else {
@@ -55,52 +62,48 @@ impl Cloud {
       .is_ok_and(|set| set.statement().iss == self.inner.config.public_url);
     Ok(!current)
   }
-
-  /// Signs a key set of every key still listed, valid for 30 days from now, and publishes it.
-  async fn publish(&self, client: &impl GenericClient, root: &RootKey, now: i64) -> Result<(), CloudError> {
-    let statement = KeySetStatement::new(
-      self.inner.config.public_url.clone(),
-      listed_keys(client, now).await?,
-      seconds(now),
-    );
-    let compact = root.sign_key_set(&statement, seconds(now))?;
-    // A second key set in the same second (a clock set back) replaces the first; both are this root's.
-    client
-      .execute(
-        "INSERT INTO key_sets (issued_at, expires_at, compact, published_at) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (issued_at) DO UPDATE
-         SET expires_at = excluded.expires_at, compact = excluded.compact, published_at = excluded.published_at",
-        &[
-          &time(statement.issued_at * 1000),
-          &time(statement.expires_at * 1000),
-          &compact,
-          &time(now),
-        ],
-      )
-      .await?;
-    audit(
-      client,
-      None,
-      "key_set_published",
-      &statement.issued_at.to_string(),
-      None,
-      now,
-    )
-    .await
-  }
 }
 
-/// Makes a new signing key once no key would sign a week from now. While another key signs, the new one starts only
-/// two days later, so team servers have it before tokens signed with it arrive (review 1, L4); the previous key signs
-/// until then. True when it made one.
+/// Signs a key set of every key still listed, issued by `issuer` and valid for 30 days from now, and publishes it.
+async fn publish(client: &impl GenericClient, root: &RootKey, issuer: &str, now: i64) -> Result<(), CloudError> {
+  let statement = KeySetStatement::new(issuer.to_owned(), listed_keys(client, now).await?, seconds(now));
+  let compact = root.sign_key_set(&statement, seconds(now))?;
+  // A second key set in the same second (a clock set back) replaces the first; both are this root's.
+  client
+    .execute(
+      "INSERT INTO key_sets (issued_at, expires_at, compact, published_at) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (issued_at) DO UPDATE
+       SET expires_at = excluded.expires_at, compact = excluded.compact, published_at = excluded.published_at",
+      &[
+        &time(statement.issued_at * 1000),
+        &time(statement.expires_at * 1000),
+        &compact,
+        &time(now),
+      ],
+    )
+    .await?;
+  audit(
+    client,
+    None,
+    "key_set_published",
+    &statement.issued_at.to_string(),
+    None,
+    now,
+  )
+  .await
+}
+
+/// Makes a new signing key once no key would sign a week from now. While another key signs, the new one starts two
+/// days later, so team servers have it before tokens signed with it arrive (review 1, L4), and the previous key signs
+/// until then; but never after the previous key stops signing (a cloud stopped past the week ahead), so some key
+/// always signs. True when it made one.
 async fn rotate_if_due(client: &impl GenericClient, sealing: &KeySealing, now: i64) -> Result<bool, CloudError> {
-  if signing_at(client, now + ROTATE_AHEAD_MS).await? {
+  if signs_until(client, now + ROTATE_AHEAD_MS).await?.is_some() {
     return Ok(false);
   }
-  let not_before = if signing_at(client, now).await? {
-    now + OVERLAP_MS
-  } else {
-    now
+  let not_before = match signs_until(client, now).await? {
+    Some(until) => (now + OVERLAP_MS).min(until),
+    None => now,
   };
   let private = PrivateKey::generate()?;
   let key = SigningKey::new(&private)?;
@@ -124,14 +127,15 @@ async fn rotate_if_due(client: &impl GenericClient, sealing: &KeySealing, now: i
   Ok(true)
 }
 
-async fn signing_at(client: &impl GenericClient, at: i64) -> Result<bool, CloudError> {
+/// When the keys that sign at `at` stop signing, the last of them; `None` when no key signs then.
+async fn signs_until(client: &impl GenericClient, at: i64) -> Result<Option<i64>, CloudError> {
   let row = client
-    .query_opt(
-      "SELECT 1 FROM signing_keys WHERE not_before <= $1 AND signs_until > $1",
+    .query_one(
+      "SELECT max(signs_until) FROM signing_keys WHERE not_before <= $1 AND signs_until > $1",
       &[&time(at)],
     )
     .await?;
-  Ok(row.is_some())
+  row.try_get::<_, Option<SystemTime>>(0)?.map(millis).transpose()
 }
 
 /// Every key still listed at `now`, oldest first.
