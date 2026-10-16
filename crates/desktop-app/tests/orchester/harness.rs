@@ -104,21 +104,28 @@ pub fn block_on<T>(window: &Window, work: impl Future<Output = T>) -> T {
 /// A loopback port in front of `target` that records the request line of every HTTP request passing through.
 pub struct Recorder {
   pub port: u16,
-  lines: Arc<Mutex<Vec<String>>>,
+  shared: Arc<Shared>,
+}
+
+/// What the port's relays share.
+#[derive(Default)]
+struct Shared {
+  lines: Mutex<Vec<String>>,
   /// The server looks down: new connections are closed, and open ones end at their next request.
-  down: Arc<AtomicBool>,
+  down: AtomicBool,
+  /// The next request whose line starts with this ends without an answer, as if the server went away.
+  refuse: Mutex<Option<String>>,
 }
 
 impl Recorder {
   pub fn start(target: SocketAddr) -> Self {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listen");
     let port = listener.local_addr().expect("address").port();
-    let lines = Arc::new(Mutex::new(Vec::new()));
-    let down = Arc::new(AtomicBool::new(false));
-    let (recording, cut) = (lines.clone(), down.clone());
+    let shared = Arc::new(Shared::default());
+    let relaying = shared.clone();
     thread::spawn(move || {
       for client in listener.incoming().flatten() {
-        if cut.load(Ordering::SeqCst) {
+        if relaying.down.load(Ordering::SeqCst) {
           let _ = client.shutdown(Shutdown::Both);
           continue;
         }
@@ -127,15 +134,20 @@ impl Recorder {
           let _ = client.shutdown(Shutdown::Both);
           continue;
         };
-        relay(client, server, (&recording, &cut));
+        relay(client, server, &relaying);
       }
     });
-    Self { port, lines, down }
+    Self { port, shared }
   }
 
   /// From now on the server can't be reached through the port.
   pub fn go_down(&self) {
-    self.down.store(true, Ordering::SeqCst);
+    self.shared.down.store(true, Ordering::SeqCst);
+  }
+
+  /// The next request whose line starts with `line` (`POST /api/v1/auth/cloud`) ends without an answer.
+  pub fn refuse_once(&self, line: &str) {
+    *self.shared.refuse.lock() = Some(line.to_owned());
   }
 
   pub fn url(&self) -> String {
@@ -144,18 +156,18 @@ impl Recorder {
 
   /// The request lines so far, e.g. `POST /api/v1/auth/code`.
   pub fn lines(&self) -> Vec<String> {
-    self.lines.lock().clone()
+    self.shared.lines.lock().clone()
   }
 }
 
 /// Copies both ways, recording the request lines the client sends.
-fn relay(client: TcpStream, server: TcpStream, (lines, down): (&Arc<Mutex<Vec<String>>>, &Arc<AtomicBool>)) {
+fn relay(client: TcpStream, server: TcpStream, shared: &Arc<Shared>) {
   let (mut client_read, mut server_write) = (client.try_clone().expect("client"), server.try_clone().expect("server"));
-  let (lines, down) = (lines.clone(), down.clone());
+  let shared = shared.clone();
   thread::spawn(move || {
     let mut buffer = [0_u8; 16 * 1024];
     while let Ok(read) = client_read.read(&mut buffer) {
-      if down.load(Ordering::SeqCst) {
+      if shared.down.load(Ordering::SeqCst) || refused(&shared, &buffer[..read]) {
         let _ = client_read.shutdown(Shutdown::Both);
         break;
       }
@@ -166,7 +178,7 @@ fn relay(client: TcpStream, server: TcpStream, (lines, down): (&Arc<Mutex<Vec<St
       for line in text.lines() {
         let method = line.split(' ').next().unwrap_or_default();
         if ["GET", "POST", "PATCH", "PUT", "DELETE"].contains(&method) && line.ends_with("HTTP/1.1") {
-          lines.lock().push(line.trim_end_matches(" HTTP/1.1").to_owned());
+          shared.lines.lock().push(line.trim_end_matches(" HTTP/1.1").to_owned());
         }
       }
     }
@@ -184,6 +196,18 @@ fn relay(client: TcpStream, server: TcpStream, (lines, down): (&Arc<Mutex<Vec<St
     // The client sees the server go.
     let _ = client_write.shutdown(Shutdown::Write);
   });
+}
+
+/// Whether `chunk` starts the request the port refuses once; the refusal is used up then.
+fn refused(shared: &Shared, chunk: &[u8]) -> bool {
+  let mut refuse = shared.refuse.lock();
+  let hit = refuse
+    .as_deref()
+    .is_some_and(|line| String::from_utf8_lossy(chunk).starts_with(line));
+  if hit {
+    *refuse = None;
+  }
+  hit
 }
 
 /// Whether the request line `line` names an endpoint only the server admin calls: people, devices of others,

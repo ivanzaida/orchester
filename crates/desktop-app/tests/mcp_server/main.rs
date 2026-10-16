@@ -148,6 +148,15 @@ impl Endpoint {
   }
 
   fn tool_names(&self, session: &str) -> Vec<String> {
+    self
+      .tools(session)
+      .iter()
+      .filter_map(|tool| tool["name"].as_str().map(str::to_owned))
+      .collect()
+  }
+
+  /// The tools the server lists, with their descriptions and schemas.
+  fn tools(&self, session: &str) -> Vec<Value> {
     let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} });
     let response = post(
       self.port,
@@ -155,12 +164,7 @@ impl Endpoint {
       &list,
     );
     let message = response.message.expect("tools/list answers");
-    message["result"]["tools"]
-      .as_array()
-      .expect("a list of tools")
-      .iter()
-      .filter_map(|tool| tool["name"].as_str().map(str::to_owned))
-      .collect()
+    message["result"]["tools"].as_array().expect("a list of tools").clone()
   }
 }
 
@@ -258,6 +262,37 @@ fn every_lurq_tool_is_known_as_looking_or_input() {
       LOOKING.contains(&name.as_str()) || INPUT.contains(&name.as_str()),
       "{name} is neither known to only look nor to send input: classify it in mcp::input_gate"
     );
+  }
+}
+
+/// N1 security review 1, minor 2: the app's own tools word their descriptions and schemas without line breaks or
+/// runs of spaces that a continued string literal left in them.
+#[test]
+fn the_apps_own_tools_word_their_schemas_in_single_spaces() {
+  let served = Served::start(true);
+  let tools = served.endpoint().tools(&served.session());
+  for name in ["app_state", "navigate", "set_theme", "hold_reads"] {
+    let tool = tools
+      .iter()
+      .find(|tool| tool["name"] == name)
+      .unwrap_or_else(|| panic!("{name} is listed"));
+    let mut words = vec![tool["description"].as_str().unwrap_or_default().to_owned()];
+    collect_strings(&tool["inputSchema"], &mut words);
+    for text in words {
+      assert!(
+        !text.contains("  ") && !text.contains('\n'),
+        "{name} words its schema in single spaces: {text:?}"
+      );
+    }
+  }
+}
+
+fn collect_strings(value: &Value, into: &mut Vec<String>) {
+  match value {
+    Value::String(text) => into.push(text.clone()),
+    Value::Array(items) => items.iter().for_each(|item| collect_strings(item, into)),
+    Value::Object(fields) => fields.values().for_each(|field| collect_strings(field, into)),
+    _ => {}
   }
 }
 

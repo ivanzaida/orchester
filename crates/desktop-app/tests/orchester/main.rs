@@ -7,10 +7,13 @@
 //!
 //! `cargo test -p orchester-app --test orchester orchester_`
 
+mod accepting;
 #[path = "../../../workspace/tests/sharing_support/account_cloud.rs"]
 mod account_cloud;
+mod clipboard;
 mod design;
 mod harness;
+mod person_only;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
 #[path = "../support/mod.rs"]
@@ -188,6 +191,25 @@ fn link_kontur(window: &support::Window) -> orchester_workspace::sharing::Server
   let root = window.data.repo("repo-kontur");
   block_on(window, services.servers.link_first(&entry, &root, request)).expect("linked");
   entry
+}
+
+/// The window signed in to the stand-in `cloud`, at Settings › Orchester.
+fn signed_in(cloud: &AccountCloud) -> support::Window {
+  let mut window = window(None);
+  let services = window.launch.services().expect("services").clone();
+  let cloud_address = ServerAddress::parse(&cloud.url()).expect("cloud address");
+  block_on(&window, services.cloud.set_address(Some(cloud_address))).expect("a test cloud");
+  block_on(
+    &window,
+    services.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())),
+  )
+  .expect("signed in");
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::default()),
+    "orchester-cloud-details",
+  );
+  window
 }
 
 /// A plain server behind a recording port, with Kontur and Billing; Ivan joined from the window's computer through
