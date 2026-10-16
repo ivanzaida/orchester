@@ -40,12 +40,12 @@ pub(crate) enum Place {
 }
 
 impl Place {
-  /// How the section's line and buttons take a press: on the gate they are stops of its Tab order, and the open
-  /// section is a form whose address field Enter uses as *Use this address* does.
+  /// How the section's line takes a press: on the gate it is a stop of the gate's Tab order with a link's ring, since
+  /// it is only words; its buttons are the open section's form controls there.
   const fn focus(self) -> Focus {
     match self {
       Self::Settings => Focus::Pointer,
-      Self::Gate => Focus::Form,
+      Self::Gate => Focus::Link,
     }
   }
 }

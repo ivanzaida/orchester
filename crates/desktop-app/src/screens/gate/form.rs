@@ -449,7 +449,7 @@ fn page_button(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -
 
 /// A quiet link with the external glyph after it (`Link · Forgot password?` `KjUBG`), a stop of the card's Tab order.
 fn page_link(ctx: &mut Ctx, id: &str, label: &str, target: (&Form, WebPage)) -> Element {
-  Focus::Form
+  Focus::Link
     .apply(pressable(opener(ctx, target)))
     .id(id.to_owned())
     .spacing(ExtraSpacing::Pair.role())

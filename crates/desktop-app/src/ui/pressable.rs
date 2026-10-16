@@ -10,7 +10,7 @@ use lurq::{
   node::{CursorIcon, Style},
 };
 
-use crate::theme::ExtraShadow;
+use crate::theme::{ExtraRadius, ExtraShadow};
 
 /// lurq's tab index for a control Tab reaches in the order the window shows it.
 const TAB_STOP: i32 = 0;
@@ -48,6 +48,10 @@ pub enum Focus {
   /// A control outside forms the keyboard reaches too: a Tab stop that Enter or Space presses, with the
   /// focus ring only while the keyboard moved the focus there, never after a press.
   Keyboard,
+  /// A form control that is only words, with no padding of its own (a link, a disclosure line): a Tab stop that
+  /// Enter or Space presses, with the link's ring outside its words, corners rounded, only while the keyboard moved
+  /// the focus there (`Mjhop`). An inset ring would run through its words.
+  Link,
 }
 
 impl Focus {
@@ -65,6 +69,11 @@ impl Focus {
         .focusable(true)
         .tab_index(TAB_STOP)
         .focus_visible_style(Style::new().box_shadow(ExtraShadow::FocusRing.role())),
+      Self::Link => button.button().focusable(true).tab_index(TAB_STOP).focus_visible_style(
+        Style::new()
+          .box_shadow(ExtraShadow::LinkFocusRing.role())
+          .rounded(ExtraRadius::Link.role()),
+      ),
     }
   }
 }
