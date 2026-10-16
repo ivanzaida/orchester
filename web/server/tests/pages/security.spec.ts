@@ -38,6 +38,18 @@ test.describe("headers", () => {
     expect(post.headers().location ?? "").not.toContain(CLOUD);
   });
 
+  test("the HTTPS page names only the address the browser used, never one a link or a header put on it", async ({ page }) => {
+    // Security review 1, minor 2: `?origin=` and a client's own header of the proxy's are ignored.
+    await page.setExtraHTTPHeaders({ "x-forwarded-host": "10.0.4.20:8740", "x-forwarded-proto": "http",
+      "x-orchester-https-origin": "http://evil.example" });
+    for (const path of ["/admin/https?origin=http://evil.example", "/admin?origin=http://evil.example"]) {
+      await page.goto(path);
+      const text = await page.locator("body").innerText();
+      expect(text, path).toContain("https://10.0.4.20:8740/admin");
+      expect(text, path).not.toContain("evil.example");
+    }
+  });
+
   test("the page loads nothing from another site and runs under its CSP", async ({ page }) => {
     const violations: string[] = [];
     page.on("console", (message) => {

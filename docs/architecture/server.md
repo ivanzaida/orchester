@@ -1117,7 +1117,12 @@ certificate in every setup:
   to join), and a team server takes each only for its own use.
 - **Invites by email** are delivered to the cloud by the admin's own server side when the host has the internet, or
   posted from the inviter's browser to the cloud's web front (`/invites/deliver`) when it has not; the team server
-  itself never reaches the cloud.
+  itself never reaches the cloud. The browser's form carries only the signed invite: the cloud's page leads back to
+  the admin at the address it registered for the server, never to one the form or a link named (security review 1,
+  minor 2).
+- **The HTTPS page** (*This page needs HTTPS*) names the address the browser used, which `proxy.ts` passes to the page
+  in a request header it signs with the admin's secret (Next reaches itself again for the rewrite, so the forwarded
+  headers are its own by then); no `?origin=` or unsigned header puts words on it (security review 1, minor 2).
 - **Docker:** two containers in `deploy/server/compose.yaml`, `server` (Rust) and `admin` (the Next.js standalone
   build on Node 22), on a private network; only `server` is published, or Caddy in front of it for a public domain
   (`tls = "off"`, as before). Caddy routes everything to `server`.

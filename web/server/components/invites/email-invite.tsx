@@ -21,8 +21,6 @@ export interface EmailInviteProps {
   readonly csrf: string;
   readonly server: string;
   readonly reach: EmailReach;
-  /** This page's own address, for the cloud's *back to the admin* link after an invite sent through the browser. */
-  readonly back: string;
   /** The hidden fields that say who the invite is for (`kind`, `project`). */
   readonly scope: Readonly<Record<string, string>>;
   /** The fields beside the email: the role select, or *As an admin*. */
@@ -47,7 +45,6 @@ function Answer({ state, props }: { state: EmailState; props: EmailInviteProps }
     const send = (
       <form action={`${props.reach.cloud}/invites/deliver`} method="post">
         <Hidden name="invite" value={state.signed} />
-        <Hidden name="return" value={props.back} />
         <Submit kind="primary" row icon="send" label={t("invites.browserSend")} busyLabel={t("invites.sending")} />
       </form>
     );

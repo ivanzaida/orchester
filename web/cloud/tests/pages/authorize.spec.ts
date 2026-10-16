@@ -94,14 +94,17 @@ test("an answer goes back only to the server the request is about", async ({ pag
   expect(await signInPage.text()).not.toContain('name="next"');
 });
 
-test("an invite carried by the inviter's browser is delivered, and the page leads back to the admin", async ({ page }) => {
+test("an invite carried by the inviter's browser is delivered, and the page leads back to its server's admin", async ({ page }) => {
   await page.setContent(`<form method="post" action="http://localhost:4100/invites/deliver">
-    <input name="invite" value="a.b.c"><input name="return" value="${API}/admin/projects/kontur/invites">
+    <input name="invite" value="a.b.c"><input name="return" value="https://evil.example/admin">
     <button>Send</button></form>`);
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("heading", { name: "Invite delivered" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Back to 127.0.0.1:4110" })).toHaveAttribute("href",
-    `${API}/admin/projects/kontur/invites`);
+  await expect(page).toHaveURL("http://localhost:4100/invites/delivered");
+  // Security review 1, minor 2: back to the server the cloud registered, never to an address the post named.
+  await expect(page.getByRole("link", { name: "Back to 127.0.0.1:4110" })).toHaveAttribute("href", `${API}/admin`);
+  await page.goto("/invites/delivered?outcome=sent&return=https://evil.example/admin");
+  await expect(page.locator("a[href*='evil.example']")).toHaveCount(0);
   const delivered = (await apiRequests()).filter((request) => request.path === "/api/v1/invites" && request.method === "POST");
   expect(delivered.at(-1)?.body).toEqual({ invite: "a.b.c" });
 });

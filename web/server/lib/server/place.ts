@@ -46,3 +46,6 @@ export function needsHttps(place: Place): boolean {
 export function clientOf(headers: HeaderSource): string | undefined {
   return first(headers.get("x-forwarded-for")) ?? undefined;
 }
+
+/** The request header `proxy.ts` sets, signed, on its rewrite to the HTTPS page: the address the browser used. */
+export const HTTPS_ORIGIN_HEADER = "x-orchester-https-origin";

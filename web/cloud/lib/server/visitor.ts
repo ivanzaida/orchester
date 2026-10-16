@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import type { ApiFailure, CallOptions } from "@/lib/server/api";
 import { config } from "@/lib/server/config";
 import {
+  DELIVERED_COOKIE,
+  DELIVERED_SECONDS,
   AUTHORIZE_COOKIE,
   AUTHORIZE_SECONDS,
   FORGOT_FLOW_COOKIE,
@@ -19,7 +21,7 @@ import {
 } from "@/lib/server/cookie-options";
 import { csrfToken, originMatches, tokenMatches, type CsrfCookies } from "@/lib/server/csrf";
 import { readRequest, requestParams, type AuthorizeRequest } from "@/lib/authorize";
-import { deriveKey, open, seal } from "@/lib/server/seal";
+import { deriveKey, open, seal, sign, verify } from "@/lib/server/seal";
 import {
   openSession,
   readForgotFlow,
@@ -143,4 +145,32 @@ export async function authorizeRequest(): Promise<AuthorizeRequest | null> {
   const text = (name: string) => (typeof params[name] === "string" ? params[name] : undefined);
   return readRequest({ purpose: text("purpose"), server: text("server"), statement: text("statement"), state: text("state"),
     return: text("return") });
+}
+
+/** How a delivery from the inviter's browser went: its outcome, and the registered server's admin, if the cloud named it. */
+export interface Delivered {
+  readonly outcome: "sent" | "refused" | "unavailable";
+  readonly back: string | null;
+}
+
+export async function keepDelivered(delivered: Delivered): Promise<void> {
+  const value = sign(key("flow"), JSON.stringify({ ...delivered, expires: Date.now() + DELIVERED_SECONDS * 1000 }));
+  (await cookies()).set(DELIVERED_COOKIE, value, cookieOptions(DELIVERED_SECONDS));
+}
+
+export async function delivered(): Promise<Delivered | null> {
+  const value = (await cookies()).get(DELIVERED_COOKIE)?.value;
+  const payload = value === undefined ? null : verify(key("flow"), value);
+  if (payload === null) {
+    return null;
+  }
+  const flow = JSON.parse(payload) as Record<string, unknown>;
+  const outcome = flow.outcome;
+  if (typeof flow.expires !== "number" || flow.expires <= Date.now()) {
+    return null;
+  }
+  if (outcome !== "sent" && outcome !== "refused" && outcome !== "unavailable") {
+    return null;
+  }
+  return { outcome, back: typeof flow.back === "string" ? flow.back : null };
 }

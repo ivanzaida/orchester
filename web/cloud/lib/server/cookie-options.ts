@@ -14,6 +14,9 @@ export const FORGOT_FLOW_COOKIE = "__Host-orchester_forgot";
  * URL, and is used once (security review 1, B1).
  */
 export const AUTHORIZE_COOKIE = "__Host-orchester_authorize";
+/** How an invite carried by the inviter's browser went, and the server's own admin to go back to (signed). */
+export const DELIVERED_COOKIE = "__Host-orchester_delivered";
+export const DELIVERED_SECONDS = 10 * 60;
 /** As long as a link statement is fresh. */
 export const AUTHORIZE_SECONDS = 10 * 60;
 

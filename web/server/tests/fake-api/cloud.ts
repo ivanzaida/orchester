@@ -23,6 +23,9 @@ const IDENTITIES: readonly [email: string, name: string][] = [
   ["approval@example.com", "Approval Needed"],
 ];
 
+/** The address the cloud registered for the fake team server: the admin the page tests run. */
+const REGISTERED_ADMIN = "http://localhost:4200/admin";
+
 function escape(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
@@ -93,7 +96,10 @@ export function cloudRoute(request: IncomingMessage, response: ServerResponse, t
   if (url.pathname === "/invites/deliver" && request.method === "POST") {
     const fields = form(text);
     deliveries.push({ how: "browser", email: email(fields.invite) });
-    html(200, `<!doctype html><title>Delivered</title><p>Invite delivered.</p><a href="${escape(fields.return ?? "")}">Back</a>`);
+    // As the cloud does: back to the server it registered, never to an address the post named.
+    const fieldNames = escape(Object.keys(fields).sort().join(","));
+    html(200, `<!doctype html><title>Delivered</title><p>Invite delivered.</p><p data-fields="${fieldNames}"></p>`
+      + `<a href="${REGISTERED_ADMIN}">Back</a>`);
     return true;
   }
   if (/^\/api\/v1\/invites(\/[^/]+)?$/.test(url.pathname)) {

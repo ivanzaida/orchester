@@ -119,7 +119,8 @@ export async function call<T>(
     return { ok: false, error: await failure(response) };
   }
   // A body that is not JSON reads as `null`, which `read` refuses and which makes the answer `unexpected`.
-  const json: unknown = response.status === 204 || response.status === 202 ? null : await response.json().catch(() => null);
+  // A `202` may come with a body (`POST /invites` names the server) or without one (sign-up).
+  const json: unknown = response.status === 204 ? null : await response.json().catch(() => null);
   const value = request.read(json);
   return value === null ? { ok: false, error: { kind: "unexpected", status: response.status } } : { ok: true, value };
 }

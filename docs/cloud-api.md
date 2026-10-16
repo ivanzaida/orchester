@@ -170,6 +170,11 @@ an invite's email has buckets of its own, apart from confirmation and reset emai
 and three a day per address. An invite over an email limit is still kept and listed in the invitee's app, without an
 email. Numbers in [Rate limits](#rate-limits).
 
+**The web front's `/invites/deliver`** takes the signed invite in a form's body only, delivers it, and keeps the
+answer in a signed cookie for `/invites/delivered`, which leads back only to the admin at the address the cloud
+registered for that server (`<address>/admin`): nothing in the post or the page's address names where to go
+(security review 1, minor 2).
+
 ## Rate limits
 
 | What | Limit |

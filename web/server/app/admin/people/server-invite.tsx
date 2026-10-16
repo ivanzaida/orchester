@@ -22,7 +22,6 @@ interface Props {
   readonly csrf: string;
   readonly server: string;
   readonly reach: EmailReach;
-  readonly back: string;
   readonly address: string;
   readonly checkCode: string | null;
 }
@@ -52,7 +51,7 @@ export function ServerInvite(props: Props) {
   const ready = props.reach.kind === "ready";
   return (
     <InviteCard id="invite-server" icon="user-plus" title={t("people.inviteTitle")} text={t("people.inviteText")}>
-      <EmailInvite csrf={props.csrf} server={props.server} reach={props.reach} back={props.back} scope={scope}
+      <EmailInvite csrf={props.csrf} server={props.server} reach={props.reach} scope={scope}
         extra={ready ? asAdmin : null} beside={ready ? codeForm : undefined} sentText="people.sentText"
         sentTitle={(email, isAdmin) => (isAdmin ? t("people.sentTitleAdmin", { email }) : t("people.sentTitle", { email }))} />
       {!ready && (
