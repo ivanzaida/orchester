@@ -58,12 +58,14 @@ impl Cloud {
     device: Option<CloudDeviceId>,
   ) -> Result<(), CloudError> {
     let device = device.unwrap_or(auth.device);
+    // Its `401` says how it ended: by its own sign-out, or from another device (`docs/cloud-api.md`).
+    let reason = if device == auth.device { "signed_out" } else { "revoked" };
     let now = self.now();
     let client = self.inner.db.client().await?;
     let revoked = client
       .execute(
-        "UPDATE devices SET revoked_at = $1 WHERE id = $2 AND account = $3 AND revoked_at IS NULL",
-        &[&time(now), &device.as_uuid(), &auth.account.as_uuid()],
+        "UPDATE devices SET revoked_at = $1, revoked_reason = $4 WHERE id = $2 AND account = $3 AND revoked_at IS NULL",
+        &[&time(now), &device.as_uuid(), &auth.account.as_uuid(), &reason],
       )
       .await?;
     if revoked == 0 {

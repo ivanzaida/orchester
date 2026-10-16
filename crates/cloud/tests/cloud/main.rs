@@ -12,6 +12,7 @@ mod accounts;
 mod caps;
 mod deletion;
 mod desktop;
+mod ended;
 mod hosting;
 mod identity;
 mod limits;
@@ -59,6 +60,8 @@ const TESTS: &[(&str, Test)] = tests![
   sessions::devices_are_listed_and_revoked,
   sessions::web_sessions_end_twelve_hours_after_sign_in,
   sessions::a_sign_in_racing_a_reset_does_not_survive_it,
+  ended::a_refused_token_says_why_it_ended,
+  ended::tokens_of_a_deleted_account_say_so_until_they_would_have_ended,
   identity::identity_token_verifies_with_the_published_key_set,
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
   identity::many_concurrent_identity_tokens_do_not_starve_the_pool,

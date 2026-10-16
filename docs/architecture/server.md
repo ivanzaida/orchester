@@ -975,13 +975,13 @@ URL above) and from Settings › Orchester's advanced field, for a test cloud.
 **Data** (PostgreSQL, row 54; ids `uuid`, times `timestamptz` written from the cloud's clock, payloads `jsonb`):
 `accounts` (id, email stored lowercased with a unique index, confirmed at, display name, password hash, created; a
 row exists only once an email is confirmed), `email_links` (hash, email, purpose: confirm or reset, account for a
-reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked), `servers` (id, owner,
+reset, pending password hash and display name for a confirmation, expires, used), `devices` (account, name, platform, token hash, created / last used / revoked, and why: `revoked`, `password_reset` or `signed_out`), `ended_tokens` (a deleted account's token hashes with `account_deleted`, until they would have ended unused), `servers` (id, owner,
 name, address, fingerprint, public key, linked / unlinked), `server_accounts` (server, account, first joined),
 `invites` (id, server, project address, kind, email, inviter display name, project name, role, expires),
 `revoked_invites` (id, server, until the invite would have expired), `used_link_statements` (a link statement's nonce
 until it is too old to be taken), `used_tokens` (identity token id until its expiry), `signing_keys` (kid, public key, private key encrypted with a key
 from the host's environment, not before / not after), `audit_events`, `schema_migrations`. Later: `providers`
-(account, provider, subject). Expired `email_links`, `used_tokens`, `used_link_statements`, `revoked_invites` and
+(account, provider, subject). Expired `email_links`, `used_tokens`, `used_link_statements`, `revoked_invites`, `ended_tokens` and
 ended invites are deleted by a sweep every minute.
 
 **How a team server reaches it.** A team server with the internet sends its invites and fetches `GET /keys` itself.
