@@ -51,11 +51,10 @@ pub fn conversation(
      [Status page](http://status.kontur.local)."
   );
   let table = format!(
-    "Both runs, side by side:
-
-     | Task | Step | Tokens |
-     | --- | --- | --- |
-     | [{key} · {title}]({task}) | 05 Review | 2.4M |
+    "Both runs, side by side:\n\n\
+     | Task | Step | Tokens |\n\
+     | --- | --- | --- |\n\
+     | [{key} · {title}]({task}) | 05 Review | 2.4M |\n\
      | [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/summary) | 03 Implement | 0.8M |"
   );
   keep(
