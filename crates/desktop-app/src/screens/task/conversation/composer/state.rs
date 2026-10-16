@@ -26,7 +26,7 @@ use orchester_workspace::{
   messages::{self, Message},
   tasks::conversation::{
     composer::ComposerMode,
-    follow::{RunnerOf, Sent, Stored, follow, tell},
+    follow::{RunnerOf, Sent, Stored, follow_seen, tell},
     outgoing::{Action, Context, Way, plan_changes, prepare_in, store_in},
     send_after_turn_in,
   },
@@ -356,14 +356,14 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     run,
     key,
     pipeline: &pipeline,
-    revision: Some(request.revision),
   };
   let runner = (
     &services.runners,
     &services.servers,
     RunnerOf::Project(&request.project),
   );
-  let sent = follow(runner, &stored, then).await;
+  // On the task as the page showed it: Run again refuses one changed since.
+  let sent = follow_seen(runner, &stored, (then, Some(request.revision))).await;
   Ok(Outcome::Message {
     id,
     sent,

@@ -109,8 +109,6 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
     run,
     key,
     pipeline: &pipeline,
-    // The tool has no revision a person saw: the task runs again as it is now.
-    revision: None,
   };
   let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
   let sent = follow(runner, &stored, then).await;

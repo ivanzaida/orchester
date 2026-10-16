@@ -43,9 +43,20 @@ impl Runners {
 
   /// Asks the displayed project's runner to start the next run of task `task` after its latest
   /// run `after` failed or was cancelled (Run again), removing `remove_worktrees`, what `after`
-  /// left, first. Idempotent by `key`, like [`Runners::start_run`]. With `revision`, only for the task at it
-  /// (`Rejection::TaskChangedMeanwhile` otherwise).
+  /// left, first. Idempotent by `key`, like [`Runners::start_run`].
   pub async fn run_again(
+    &self,
+    key: IdempotencyKey,
+    task: TaskId,
+    after: RunId,
+    remove_worktrees: Option<Leftovers>,
+  ) -> Result<RunId, RunRequestError> {
+    self.run_again_at(key, (task, after, None), remove_worktrees).await
+  }
+
+  /// [`Runners::run_again`], with `revision` only for the task at it (`Rejection::TaskChangedMeanwhile`
+  /// otherwise).
+  pub async fn run_again_at(
     &self,
     key: IdempotencyKey,
     (task, after, revision): (TaskId, RunId, Option<TaskRevision>),

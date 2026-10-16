@@ -50,9 +50,6 @@ pub struct Stored<'a> {
   pub key: IdempotencyKey,
   /// The latest run's pipeline, which a refusal to run the task again names.
   pub pipeline: &'a str,
-  /// The task as the person saw it when they wrote: running it again is refused once it changed since. `None`
-  /// where the sender saw no revision (automation), which runs the task as it is now.
-  pub revision: Option<TaskRevision>,
 }
 
 impl RunnerOf<'_> {
@@ -70,16 +67,21 @@ impl RunnerOf<'_> {
     }
   }
 
-  async fn run_again(self, runners: &Runners, stored: &Stored<'_>) -> Result<(), RunRequestError> {
+  async fn run_again(
+    self,
+    runners: &Runners,
+    stored: &Stored<'_>,
+    revision: Option<TaskRevision>,
+  ) -> Result<(), RunRequestError> {
     let started = match self {
       Self::Displayed => {
         runners
-          .run_again(stored.key, (stored.task, stored.run, stored.revision), None)
+          .run_again_at(stored.key, (stored.task, stored.run, revision), None)
           .await
       }
       Self::Project(project) => {
         runners
-          .run_again_in(project, stored.key, (stored.task, stored.run, stored.revision))
+          .run_again_in(project, stored.key, (stored.task, stored.run, revision))
           .await
       }
     };
@@ -87,11 +89,18 @@ impl RunnerOf<'_> {
   }
 }
 
-/// What follows `stored` as `then` says, through `runner`.
-pub async fn follow(
+/// What follows `stored` as `then` says, through `runner`, for a sender that saw no revision of the task
+/// (automation): Run again runs the task as it is now.
+pub async fn follow(runner: (&Runners, &Servers, RunnerOf<'_>), stored: &Stored<'_>, then: Then) -> Sent {
+  follow_seen(runner, stored, (then, None)).await
+}
+
+/// [`follow`] for a person who wrote while the page showed the task at `revision`: Run again is refused once
+/// the task changed since.
+pub async fn follow_seen(
   (runners, servers, runner): (&Runners, &Servers, RunnerOf<'_>),
   stored: &Stored<'_>,
-  then: Then,
+  (then, revision): (Then, Option<TaskRevision>),
 ) -> Sent {
   let claimed = (servers, stored.root, stored.task);
   match then {
@@ -109,7 +118,7 @@ pub async fn follow(
           .next()
           .unwrap_or_else(|| control_message(error))
       };
-      go_on(claimed, || runner.run_again(runners, stored), refused).await
+      go_on(claimed, || runner.run_again(runners, stored, revision), refused).await
     }
   }
 }
