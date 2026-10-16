@@ -6,6 +6,7 @@
 
 mod blocks;
 mod buttons;
+mod chat_links;
 mod choices;
 mod fields;
 mod harness;

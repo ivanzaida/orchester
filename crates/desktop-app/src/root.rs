@@ -29,6 +29,7 @@ use crate::{
   services::Services,
   shell::needs_you::PanelOpen,
   startup::{self, Problem},
+  ui::chat::links::ChatLinks,
 };
 
 /// The element id of the window's content, whose size `app_state` reports.
@@ -120,6 +121,8 @@ struct SessionWindow {
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
   first_keys: FirstKeys,
+  /// The one handler every Markdown of the window follows its links with.
+  links: ChatLinks,
 }
 
 impl Component for SessionWindow {
@@ -144,6 +147,7 @@ impl Component for SessionWindow {
     ));
     Self {
       router,
+      links: ChatLinks::new(navigation.clone()),
       navigation,
       projects,
       needs_you: PanelOpen::new(ctx.signal(false)),
@@ -160,6 +164,7 @@ impl Component for SessionWindow {
     gate.bind_permissions(services.workspace.clone());
     ctx.provide(gate);
     ctx.provide(self.navigation.clone());
+    ctx.provide(self.links.clone());
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());

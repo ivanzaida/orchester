@@ -16,6 +16,7 @@ mod header;
 mod held;
 mod history;
 mod proposal;
+mod reply;
 mod send;
 mod settings;
 mod start;
@@ -49,6 +50,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
+  ui::{chat, markdown::LinkHandler},
 };
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, chat: OrchestratorChat) -> Element {
@@ -88,6 +90,8 @@ struct View {
   input: ElementRef,
   send: SendAction,
   stop: StopAction,
+  /// What a press on a link in a reply does; made once, so a reply is laid out again only when it changes.
+  links: LinkHandler,
 }
 
 struct OrchestratorScreen {
@@ -108,6 +112,7 @@ impl Component for OrchestratorScreen {
       input: ElementRef::new(),
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
+      links: chat::links(ctx),
     };
     let project = ctx.props::<Props>().project.open.project.id();
     let navigation = Navigation::of(ctx);

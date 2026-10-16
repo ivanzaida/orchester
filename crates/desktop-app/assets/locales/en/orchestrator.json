@@ -5,6 +5,11 @@
     "dash": "—",
     "date": "{{month}} {{day}}",
     "answerMeta": "{{model}} · {{time}}",
+    "link": {
+      "opensHere": "{{place}} · opens in this tab",
+      "inProject": "{{project}} › {{page}}",
+      "taskTab": "{{key}} › {{tab}}"
+    },
     "newTitle": "New conversation",
     "history": "History",
     "manageContext": "Manage context",

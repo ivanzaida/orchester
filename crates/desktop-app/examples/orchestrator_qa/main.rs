@@ -19,6 +19,7 @@ mod kontur;
 
 mod changes;
 mod data;
+mod links;
 mod refused;
 
 use std::{
@@ -74,10 +75,12 @@ enum State {
   Settings,
   /// `qAq0z` *No connection can run the Orchestrator*: only the seed's Codex connection, which says why it can't.
   SettingsNoConnection,
+  /// `w262B`, `agv8r`: replies with links in Kontur and in Atlas, to the web, and to addresses shown as text.
+  Links,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 13] = [
+  const ALL: [(&'static str, Self); 14] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -91,6 +94,7 @@ impl State {
     ("no-runner", Self::NoRunner),
     ("settings", Self::Settings),
     ("settings-no-connection", Self::SettingsNoConnection),
+    ("links", Self::Links),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -164,6 +168,7 @@ fn route(prepared: &data::Prepared, state: State) -> Route {
     }
     State::Changes => ProjectPage::Orchestrator(OrchestratorChat::Chat(chats.changes)),
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
+    State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
   };
   Route::Project(prepared.project, page)

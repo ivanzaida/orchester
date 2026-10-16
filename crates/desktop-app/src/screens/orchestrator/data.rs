@@ -1,18 +1,24 @@
-//! What the Orchestrator screen reads: what the Orchestrator runs on, History's conversations and the conversation
-//! shown, each again whenever the project's runner or the chat's tools change a conversation.
+//! What the Orchestrator screen reads: what the Orchestrator runs on, History's conversations, the conversation
+//! shown and the names of the projects the app knows (for what a link to another project's place says), each again
+//! whenever the project's runner or the chat's tools change a conversation.
 
-use std::path::{Path, PathBuf};
+use std::{
+  collections::HashMap,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::app::ctx::{Ctx, StreamEmitter};
-use orchester_core::id::ChatId;
+use orchester_core::id::{ChatId, ProjectId};
 use orchester_workspace::{
   background,
-  messages::Message,
+  messages::{self, Message},
   orchestrator::{
     chat::{ChatView, History, history_in},
     settings::OrchestratorSetup,
   },
   runner::Runners,
+  workspace::Workspace,
 };
 
 use crate::{project::hold::ReadHold, routes::OrchestratorChat, services::Services};
@@ -54,6 +60,19 @@ pub(super) struct Reads {
   /// The conversation the route names, or the latest when it names none; `None` for a new one.
   pub(super) target: Option<ChatId>,
   pub(super) shown: Shown,
+  pub(super) names: ProjectNames,
+}
+
+/// The names of the projects the app knows, by id; empty until they are read, or when they cannot be.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct ProjectNames(Arc<HashMap<ProjectId, Arc<str>>>);
+
+impl lurq::app::component::DevtoolsInspectable for ProjectNames {}
+
+impl ProjectNames {
+  pub(super) fn get(&self, project: ProjectId) -> Option<&str> {
+    self.0.get(&project).map(|name| &**name)
+  }
 }
 
 /// Reads what the screen of the project at `root` shows for `chat`.
@@ -75,6 +94,7 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
   };
   // Read on every pass, a new conversation's too, so the screen's hooks keep their order.
   let read = conversation(ctx, (root.to_path_buf(), target, revision), &hold);
+  let names = names(ctx, services.workspace, revision);
   let shown = match (chat, target) {
     (OrchestratorChat::Latest, None) if matches!(history, Read::Loading) => Shown::Loading,
     (_, None) => Shown::New,
@@ -85,7 +105,28 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
     history,
     target,
     shown,
+    names,
   }
+}
+
+/// The names of the projects `workspace` knows, read off the UI thread again whenever `revision` changes. Without
+/// them a link to another project's place names only the place, so a failed reading is logged and reads as none.
+fn names(ctx: &mut Ctx, workspace: Workspace, revision: u64) -> ProjectNames {
+  let state = ctx
+    .future((workspace, revision), |(workspace, _)| async move {
+      let projects = background::run(move || workspace.projects()).await?.map_err(|error| {
+        tracing::warn!(%error, "cannot read the projects' names for the chat's links");
+        messages::store_error(&error)
+      })?;
+      let names = projects
+        .into_iter()
+        .map(|project| (project.id, Arc::from(project.name.as_str())))
+        .collect();
+      Ok::<_, Message>(ProjectNames(Arc::new(names)))
+    })
+    .state()
+    .get();
+  state.data.unwrap_or_default()
 }
 
 /// How often the project's conversations changed.

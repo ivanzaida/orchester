@@ -78,6 +78,8 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# The host a chat shows beside a link to the web (`ui::chat::links`).
+url.workspace = true
 # The bearer token of the app's MCP server, from the OS random source.
 uuid.workspace = true
 # Wipes unsaved credential input when its inspector closes.

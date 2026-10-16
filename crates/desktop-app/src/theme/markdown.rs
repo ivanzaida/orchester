@@ -9,9 +9,9 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{MarkdownBlockStyle, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
+  app::theme::{MarkdownBlockStyle, MarkdownFocusRing, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
   layout::text_style::{FontFeature, FontFeatures, FontWeight},
-  node::color::Color,
+  node::{border::BorderRadius, color::Color, padding::Padding},
 };
 
 use super::{ExtraColor, fonts::MONO};
@@ -23,6 +23,17 @@ const ITEM_SPACING: f32 = 2.0;
 /// The room before a list item's text: a numeral with its period, a bullet.
 const ORDERED_MARKER: f32 = 20.0;
 const BULLET_MARKER: f32 = 12.0;
+/// A link's corners and its focus ring's (`Mjhop`, `K52XFs` in `agv8r`).
+pub const LINK_RADIUS: f32 = 3.0;
+/// A focused link's ring: 2 of `border_focus` outside its words (`Mjhop` in `agv8r`).
+const LINK_RING_WIDTH: f32 = 2.0;
+/// A link's tooltip, as the kit's (`Tooltip` `b6q3OZ`): 11/500 `text_inverse` on `text_primary`, radius 4, 4 over
+/// and under its words and 8 at their sides, 22 high.
+const TOOLTIP_SIZE: f32 = 11.0;
+const TOOLTIP_RADIUS: f32 = 4.0;
+const TOOLTIP_SIDES: f32 = 8.0;
+const TOOLTIP_ENDS: f32 = 4.0;
+const TOOLTIP_HEIGHT: f32 = 22.0;
 
 fn inline(configure: impl FnOnce(&mut MarkdownInlineStyle)) -> MarkdownInlineStyle {
   let mut style = MarkdownInlineStyle::new();
@@ -57,7 +68,7 @@ fn colored(color: Color) -> MarkdownInlineStyle {
   inline(|style| style.text.color = Some(color))
 }
 
-fn boxed(background: Option<Color>, border: Color, padding: Option<f32>) -> MarkdownBlockStyle {
+fn boxed(background: Option<Color>, border: Color, padding: Option<Padding>) -> MarkdownBlockStyle {
   MarkdownBlockStyle {
     background,
     border_color: Some(border),
@@ -106,20 +117,40 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
     code_block_box: boxed(
       Some(palette.get(ExtraColor::CodeBackground.role())),
       palette.border,
-      Some(CODE_PADDING),
+      Some(Padding::all(CODE_PADDING)),
     ),
-    blockquote_box: boxed(Some(palette.surface_raised), palette.border, Some(CODE_PADDING)),
+    blockquote_box: boxed(
+      Some(palette.surface_raised),
+      palette.border,
+      Some(Padding::all(CODE_PADDING)),
+    ),
     table_box: boxed(None, palette.border, None),
     table_header_box: MarkdownBlockStyle {
-      padding: Some(CODE_PADDING),
+      padding: Some(Padding::all(CODE_PADDING)),
       ..MarkdownBlockStyle::new()
     },
     table_cell_box: MarkdownBlockStyle {
-      padding: Some(CODE_PADDING),
+      padding: Some(Padding::all(CODE_PADDING)),
       ..MarkdownBlockStyle::new()
     },
     // A table's columns share the text's width, however narrow: it never runs past its text.
     table_cell_min_width: 0.0,
+    // Every link is a Tab stop: keyboard focus draws the design's ring, not lurq's.
+    link_focus_ring: Some(MarkdownFocusRing::new(LINK_RING_WIDTH, palette.border_focus).radius(LINK_RADIUS)),
+    link_radius: BorderRadius::all(LINK_RADIUS),
+    link_tooltip: inline(|style| {
+      style.text.font_size = Some(TOOLTIP_SIZE);
+      // One line of words fills the box between its ends.
+      style.text.line_height = Some((TOOLTIP_HEIGHT - 2.0 * TOOLTIP_ENDS) / TOOLTIP_SIZE);
+      style.text.weight = Some(FontWeight::Medium);
+      style.text.color = Some(palette.text_inverse);
+    }),
+    link_tooltip_box: MarkdownBlockStyle {
+      background: Some(palette.text_primary),
+      radius: Some(TOOLTIP_RADIUS),
+      padding: Some(Padding::symmetric(TOOLTIP_SIDES, TOOLTIP_ENDS)),
+      ..MarkdownBlockStyle::new()
+    },
     ..ThemeMarkdown::default()
   }
 }

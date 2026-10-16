@@ -23,8 +23,9 @@ use lurq::{
   node::{color::Color, dimension::Dimension},
 };
 use orchester_app::theme::{
-  self, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing, ExtraTypography, IconSize,
-  Mode, OrchesterSpacing, OrchesterText, OrchestratorSpacing, OrchestratorText, SHORTCUT_OPACITY, SettingsSpacing,
+  self, ChatLinkLooks, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraShadow, ExtraSpacing,
+  ExtraTypography, IconSize, Mode, OrchesterSpacing, OrchesterText, OrchestratorSpacing, OrchestratorText,
+  SHORTCUT_OPACITY, SettingsSpacing,
   SettingsText, ShellSpacing, ShellText, StartupSpacing, StartupText,
 };
 

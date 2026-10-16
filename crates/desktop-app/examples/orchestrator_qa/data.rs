@@ -37,6 +37,8 @@ pub struct Prepared {
   pub repo: PathBuf,
   pub project: ProjectId,
   pub conversations: Conversations,
+  /// Replies with links in the app, to another project, to the web and to addresses the chat does not follow.
+  pub links: ChatId,
   /// What the start prints: the scenario and the task the answered conversation created, with its state.
   pub shown: String,
 }
@@ -84,11 +86,20 @@ pub fn prepare(
     format!("{} · {} {} ({})", scenario.name(), task.key, task.title, task.state)
   });
   let conversations = conversations(&mut db, (&keys, connection.id()))?;
+  let atlas = super::links::register_atlas(&seeded.app_database, root)?;
+  let first = seeded.tasks.first().ok_or("the tasks scenario has tasks")?;
+  let links = super::links::conversation(
+    &mut db,
+    (seeded.project, atlas),
+    (&first.key, &first.title),
+    connection.id(),
+  )?;
   Ok(Prepared {
     database: seeded.app_database,
     repo: seeded.repo,
     project: seeded.project,
     conversations,
+    links,
     shown,
   })
 }

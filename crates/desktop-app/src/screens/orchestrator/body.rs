@@ -23,7 +23,7 @@ use orchester_workspace::{
 use super::{
   View,
   composer::{ComposerBox, Sending, composer, keys},
-  data::{Read, Reads, Shown},
+  data::{ProjectNames, Read, Reads, Shown},
   start::start,
   timeline::{TurnEnv, TurnRow, list},
   turns::{Turn, turns},
@@ -98,13 +98,13 @@ pub(super) fn main(
     Shown::New => conversation(
       ctx,
       view,
-      (project, None, pending.as_deref()),
+      (project, None, pending.as_deref(), &reads.names),
       (&state, readiness, [problem, not_ready]),
     ),
     Shown::Chat(shown) => conversation(
       ctx,
       view,
-      (project, Some(shown), pending.as_deref()),
+      (project, Some(shown), pending.as_deref(), &reads.names),
       (&state, readiness, [problem, not_ready]),
     ),
     Shown::Loading => loading(ctx, view),
@@ -156,7 +156,7 @@ fn held(ctx: &Ctx, (readiness, thinking): (Option<&Readiness>, bool)) -> Option<
 fn conversation(
   ctx: &mut Ctx,
   view: &View,
-  (project, shown, pending): (&ShownProject, Option<&ChatView>, Option<&str>),
+  (project, shown, pending, names): (&ShownProject, Option<&ChatView>, Option<&str>, &ProjectNames),
   (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 2]),
 ) -> Element {
   let mut all = shown.map(|shown| turns(&shown.entries)).unwrap_or_default();
@@ -171,7 +171,7 @@ fn conversation(
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
   };
-  let env = Arc::new(env(view, project, (chat, connection)));
+  let env = Arc::new(env(view, project, (chat, connection), names));
   let can_ask = matches!(state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
   let stopping = view.stop.state().get().is_pending();
   let count = all.len();
@@ -260,7 +260,12 @@ fn frame(content: Element) -> Element {
 }
 
 /// What the turns' rows need from the screen: the conversation `chat` and the connection the Orchestrator runs on.
-fn env(view: &View, project: &ShownProject, (chat, connection): (Option<ChatId>, Option<Arc<str>>)) -> TurnEnv {
+fn env(
+  view: &View,
+  project: &ShownProject,
+  (chat, connection): (Option<ChatId>, Option<Arc<str>>),
+  names: &ProjectNames,
+) -> TurnEnv {
   let open = project.open.clone();
   let stop = view.stop.clone();
   let ask_again = match chat {
@@ -285,6 +290,8 @@ fn env(view: &View, project: &ShownProject, (chat, connection): (Option<ChatId>,
       }
     }),
     ask_again,
+    links: view.links.clone(),
+    names: names.clone(),
   }
 }
 

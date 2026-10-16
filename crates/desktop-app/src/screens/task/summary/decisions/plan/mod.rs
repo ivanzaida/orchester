@@ -48,11 +48,7 @@ impl Component for PlanDecision {
       shown: ctx.signal(Shown(None)),
       note: ctx.signal(String::new()),
       asked: ctx.signal(None),
-      on_link: std::sync::Arc::new(|url: &str| {
-        if let Err(error) = orchester_exec::external::open_url(url) {
-          tracing::warn!(%error, "the plan's link was not opened");
-        }
-      }),
+      on_link: crate::ui::chat::links(ctx),
       pointing: Pointing::new(ctx),
     }
   }

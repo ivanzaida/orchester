@@ -16,7 +16,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     key: item.key.clone(),
     step: timeline.step_of(ctx, item.execution),
     step_label,
-    links: links(),
+    links: links(ctx),
     in_panel: false,
     conversation: None,
   };

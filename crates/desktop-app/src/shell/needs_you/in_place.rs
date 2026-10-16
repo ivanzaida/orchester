@@ -170,7 +170,7 @@ impl Component for InPlaceCard {
       key: props.key.clone(),
       step: props.step.as_ref().map(|(number, name)| step_label(ctx, *number, name)),
       step_label,
-      links: links(),
+      links: links(ctx),
       in_panel: true,
       conversation: hosts.then(|| props.conversation.clone()),
     };

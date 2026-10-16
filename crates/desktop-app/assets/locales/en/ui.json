@@ -3,6 +3,10 @@
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "tabCount": "{{label}} {{count}}",
+    "link": {
+      "addressNote": "({{address}})",
+      "opensBrowser": "Opens {{url}} in your browser"
+    },
     "status": {
       "withDetail": "{{status}} · {{detail}}",
       "draft": "Draft",

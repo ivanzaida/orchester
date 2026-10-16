@@ -1,4 +1,5 @@
-//! Values of the Orchestrator chat (`TrG83`) and its settings (`Xir64`) that no other screen uses.
+//! Values of the Orchestrator chat (`TrG83`) and its settings (`Xir64`) that no other screen uses; its replies'
+//! links (`Orchestrator · links · states` `agv8r`).
 
 use std::sync::Arc;
 
@@ -41,10 +42,19 @@ pub enum OrchestratorText {
   DiffNumber,
   /// Geist Mono 12 `text_primary`: a line of a draft's diff, and its sign (`VX2mn`, `OtSVu` in `kzMBc`).
   DiffCode,
+  /// 11.5 `text_muted`: the host after a link to the web (`zKxtr` in `agv8r`).
+  LinkHost,
+  /// Geist Mono 11.5 `text_muted`: the address after the words of a link the chat does not follow (`Suuac` in
+  /// `agv8r`).
+  LinkAddress,
+  /// 12 `text_muted`: what a link in a reply's labelled links is (`p0bb6` in `w262B`).
+  LinkLabel,
+  /// 12.5 `text_secondary`, 1.5: what a labelled link adds after it (`XosQ1` in `w262B`).
+  LinkDetail,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 13] = [
+  pub const ALL: [Self; 17] = [
     Self::PanelTitle,
     Self::Emphasis,
     Self::Eyebrow,
@@ -58,6 +68,10 @@ impl OrchestratorText {
     Self::DiffLabel,
     Self::DiffNumber,
     Self::DiffCode,
+    Self::LinkHost,
+    Self::LinkAddress,
+    Self::LinkLabel,
+    Self::LinkDetail,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -79,6 +93,10 @@ impl OrchestratorText {
       Self::DiffLabel => "orchestrator_diff_label",
       Self::DiffNumber => "orchestrator_diff_number",
       Self::DiffCode => "orchestrator_diff_code",
+      Self::LinkHost => "orchestrator_link_host",
+      Self::LinkAddress => "orchestrator_link_address",
+      Self::LinkLabel => "orchestrator_link_label",
+      Self::LinkDetail => "orchestrator_link_detail",
     }
   }
 
@@ -103,6 +121,10 @@ impl OrchestratorText {
       Self::DiffLabel => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::DiffNumber => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::DiffCode => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::LinkHost => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::LinkAddress => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
+      Self::LinkLabel => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::LinkDetail => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
     }
   }
 }
@@ -116,10 +138,12 @@ pub enum OrchestratorSpacing {
   SettingsPage,
   /// 18: over a day's label in History after the first (`kPs8W`: about 30 from the row before).
   HistoryDay,
+  /// 12: a labelled link's label, link and detail apart (`Link row · Task` `z7af5` in `w262B`).
+  LinkColumns,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 3] = [Self::Start, Self::SettingsPage, Self::HistoryDay];
+  pub const ALL: [Self; 4] = [Self::Start, Self::SettingsPage, Self::HistoryDay, Self::LinkColumns];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -130,6 +154,7 @@ impl OrchestratorSpacing {
       Self::Start => "orchestrator_start",
       Self::SettingsPage => "orchestrator_settings_page",
       Self::HistoryDay => "orchestrator_history_day",
+      Self::LinkColumns => "orchestrator_link_columns",
     }
   }
 
@@ -138,6 +163,7 @@ impl OrchestratorSpacing {
       Self::Start => 20.0,
       Self::SettingsPage => 40.0,
       Self::HistoryDay => 18.0,
+      Self::LinkColumns => 12.0,
     }
   }
 }
