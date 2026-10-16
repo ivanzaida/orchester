@@ -89,9 +89,11 @@ hyper-util = { version = "0.1", default-features = false, features = ["tokio", "
 keyring-core = "1"
 # 0.44: retained `TextInputController`, `InputTokens`, CRLF paragraph endings; 0.44.1: a queued scroll wins over the
 # `VirtualizedList` scroll anchor when row keys change (the chat's Jump to latest);
+# 0.46: Markdown link presentation and list views (the chat's reply links and labelled-link grid), padded link
+# tooltips and table cells, links kept in their bidi paragraph;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.45.0", default-features = false }
+lurq = { version = "0.46.0", default-features = false }
 # The deprecated app retains its existing create/render hook contract until it is replaced.
 lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
 # Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's
@@ -197,10 +199,3 @@ zstd = { version = "0.13", default-features = false }
 # dependency but not the workspace crates, which stay debuggable.
 [profile.dev.package."*"]
 opt-level = 2
-
-# TEMP: lurq 0.46.0 (Markdown link presentation and list views, dropdowns that switch in one press, padded link
-# tooltips and table cells, links in their bidi paragraph) from a local preview of its release (lurq e90fa1f, PRs
-# #53 to #55 merged) until it is published; replace with the published version, and the requirement above with
-# 0.46.0, then.
-[patch.crates-io]
-lurq = { path = "H:/projects/lurq/.tmp/worktrees/claude-046-preview/crates/lurq" }
