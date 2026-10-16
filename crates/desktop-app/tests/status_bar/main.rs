@@ -180,6 +180,7 @@ fn kontur(runner: RunnerFacts, tasks: ProjectTasks) -> ProjectFacts {
     read_failure: None,
     undecided_runs: 0,
     limits: Vec::new(),
+    revision: 0,
   }
 }
 
