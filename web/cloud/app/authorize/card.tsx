@@ -17,6 +17,8 @@ import styles from "./authorize.module.css";
 
 export interface AuthorizeProps {
   readonly csrf: string;
+  /** The digest of the request this page shows, which confirming must still find in the cookie. */
+  readonly request: string;
   readonly purpose: "admin" | "link";
   readonly person: { readonly name: string; readonly email: string; readonly initials: string };
   readonly server: ServerView;
@@ -106,6 +108,7 @@ export function AuthorizeCard(props: AuthorizeProps) {
           ) : (
             <CardForm action={action}>
               <CsrfField token={props.csrf} />
+              <Hidden name="request" value={props.request} />
               <div className={styles.buttons}>
                 {state.kind === "failed" && <ErrorLine message={state.error} />}
                 <Submit kind="primary" icon={admin ? undefined : "link"}

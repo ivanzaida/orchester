@@ -19,11 +19,20 @@ function escape(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${String(c.charCodeAt(0))};`);
 }
 
-/** What a team server's admin page does: a form posted to `/authorize/start`, the request in its body. */
-async function start(page: Page, params: Record<string, string>): Promise<void> {
+/**
+ * What a team server's admin page does: a form posted to `/authorize/start`, the request in its body, from a page on
+ * `from` (the admin's own origin, the callback's, unless a test says otherwise).
+ */
+async function start(page: Page, params: Record<string, string>, from = new URL(params.return ?? API).origin): Promise<void> {
   const fields = Object.entries(params).map(([name, value]) => `<input type="hidden" name="${name}" value="${escape(value)}">`);
-  await page.setContent(`<form method="post" action="http://localhost:4100/authorize/start">${fields.join("")}<button>Go</button></form>`);
+  const html = `<form method="post" action="http://localhost:4100/authorize/start">${fields.join("")}<button>Go</button></form>`;
+  await page.route(`${from}/__trip`, (route) => route.fulfill({ contentType: "text/html", body: html }));
+  await page.goto(`${from}/__trip`);
   await page.getByRole("button", { name: "Go" }).click();
+}
+
+async function linked() {
+  return (await apiRequests()).filter((request) => request.path === "/api/v1/servers" && request.method === "POST");
 }
 
 async function signIn(page: Page): Promise<void> {
@@ -70,6 +79,46 @@ test("linking shows the check code, posts the keys back, and the statement is in
     root_key: "fake-root-key" });
   const payload = signed.split(".")[1] ?? "-";
   expect(addresses.filter((url) => url.includes(payload))).toEqual([]);
+});
+
+test("a request another site swaps in after the page loaded is not confirmed", async ({ page, context }) => {
+  // Security review 2, 1: confirming acts on the request the page showed, not on whatever the cookie holds by then.
+  await page.goto("/signin");
+  await signIn(page);
+  await expect(page).toHaveURL(/\/account$/);
+  await start(page, { purpose: "link", statement: statement(API), state: STATE, return: CALLBACK });
+  await expect(page.getByRole("heading", { name: "Link Kontur team to your account?" })).toBeVisible();
+  // Another admin's page (on loopback here, as the test cloud is plain HTTP) posts its own statement meanwhile.
+  const attacker = await context.newPage();
+  const evil = "http://localhost:4111";
+  await start(attacker, { purpose: "link", statement: statement(evil), state: STATE, return: `${evil}/admin/auth/callback` });
+  await expect(attacker.getByRole("heading", { name: "Link Kontur team to your account?" })).toBeVisible();
+  await attacker.close();
+  const before = (await linked()).length;
+  await page.getByRole("button", { name: "Link Kontur team" }).click();
+  await expect(page.getByText("This page is out of date, open the link again.")).toBeVisible();
+  expect((await linked()).length).toBe(before);
+});
+
+test("a request posted from anywhere but the admin it answers is not kept", async ({ page }) => {
+  await page.goto("/signin");
+  await signIn(page);
+  await expect(page).toHaveURL(/\/account$/);
+  await start(page, { purpose: "link", statement: statement(API), state: STATE, return: CALLBACK });
+  await expect(page.getByRole("heading", { name: "Link Kontur team to your account?" })).toBeVisible();
+  const form = { purpose: "link", statement: statement(API), state: "another-state-0123456789abcdef", return: CALLBACK };
+  const posts: Record<string, string>[] = [{}, { origin: "https://evil.example" }, { origin: "null" }];
+  for (const headers of posts) {
+    const answer = await page.request.post("/authorize/start", { form, headers, maxRedirects: 0 });
+    expect(answer.status()).toBe(303);
+    expect(answer.headers().location).toBe("http://localhost:4100/authorize");
+  }
+  // This browser's own request is still the one the page shows and confirms.
+  await page.reload();
+  const before = (await callbacks()).length;
+  await page.getByRole("button", { name: "Link Kontur team" }).click();
+  await expect(page).toHaveURL(CALLBACK);
+  expect((await callbacks()).slice(before)[0]?.body).toMatchObject({ state: STATE });
 });
 
 test("a request in the address alone is not answered", async ({ page }) => {

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { cookies, headers } from "next/headers";
 
 import { CSRF_FIELD } from "@/lib/form";
@@ -21,7 +23,7 @@ import {
 } from "@/lib/server/cookie-options";
 import { csrfToken, originMatches, tokenMatches, type CsrfCookies } from "@/lib/server/csrf";
 import { readRequest, requestParams, type AuthorizeRequest } from "@/lib/authorize";
-import { deriveKey, open, seal, sign, verify } from "@/lib/server/seal";
+import { deriveKey, open, sameText, seal, sign, verify } from "@/lib/server/seal";
 import {
   openSession,
   readForgotFlow,
@@ -129,6 +131,20 @@ export async function leaveIfEnded(failure: ApiFailure): Promise<void> {
 export async function keepAuthorizeRequest(request: AuthorizeRequest): Promise<void> {
   const value = seal(key("authorize"), JSON.stringify({ ...requestParams(request), expires: Date.now() + AUTHORIZE_SECONDS * 1000 }));
   (await cookies()).set(AUTHORIZE_COOKIE, value, cookieOptions(AUTHORIZE_SECONDS));
+}
+
+/**
+ * The request a `/authorize` page was rendered for, as its confirm form carries it back: a digest of the request's own
+ * fields. Confirming acts only when the cookie still holds that request, so one another site posted to
+ * `/authorize/start` after the page loaded is not the one confirmed (security review 2, 1).
+ */
+export function authorizeDigest(request: AuthorizeRequest): string {
+  const fields = Object.entries(requestParams(request)).sort(([a], [b]) => a.localeCompare(b));
+  return createHash("sha256").update(JSON.stringify(fields)).digest("base64url");
+}
+
+export function sameAuthorizeRequest(request: AuthorizeRequest, shown: string): boolean {
+  return sameText(authorizeDigest(request), shown);
 }
 
 /** The request this browser brought to `/authorize`, while it is fresh. */

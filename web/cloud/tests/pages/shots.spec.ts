@@ -33,7 +33,11 @@ test("authorize screenshots", async ({ page }) => {
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
       const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${key}" value="${value}">`);
-      await page.setContent(`<form method="post" action="http://localhost:4100/authorize/start">${inputs.join("")}<button>Go</button></form>`);
+      const html = `<form method="post" action="http://localhost:4100/authorize/start">${inputs.join("")}<button>Go</button></form>`;
+      // From the admin's own origin, as `/authorize/start` takes a request only from there.
+      const trip = `${new URL(CALLBACK).origin}/__trip`;
+      await page.route(trip, (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(trip);
       await page.getByRole("button", { name: "Go" }).click();
       await page.waitForURL(/\/authorize\?return=/);
       await page.screenshot({ path: `${String(folder)}/cloud-${name}-${String(width)}.png`, fullPage: true });

@@ -8,7 +8,7 @@ import { t, type MessageKey } from "@/lib/i18n";
 import { me } from "@/lib/server/cloud";
 import { CloudUnavailableError } from "@/lib/server/failures";
 import { linkedServer } from "@/lib/server/registry";
-import { authorizeRequest, formToken, sessionEnded, signedIn } from "@/lib/server/visitor";
+import { authorizeDigest, authorizeRequest, formToken, sessionEnded, signedIn } from "@/lib/server/visitor";
 
 import { AuthorizeCard } from "./card";
 
@@ -82,7 +82,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Se
   const { displayName: name, email } = account.value;
   return (
     <Shell>
-      <AuthorizeCard csrf={await formToken()} purpose={request.purpose}
+      <AuthorizeCard csrf={await formToken()} request={authorizeDigest(request)} purpose={request.purpose}
         person={{ name, email, initials: initials(name) }} server={server} host={host(server.address)}
         notYou={signIn} cancel={`${request.returnTo.origin}/admin`} />
     </Shell>

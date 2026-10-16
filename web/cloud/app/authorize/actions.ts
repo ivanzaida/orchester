@@ -5,7 +5,8 @@ import { message, type Message } from "@/lib/i18n";
 import type { ApiFailure, ApiResult } from "@/lib/server/api";
 import { failureMessage } from "@/lib/server/failures";
 import { adminToken, keySet, linkedServer, linkServer, type Answer } from "@/lib/server/registry";
-import { anonymous, authorizeRequest, formIsGenuine, leaveIfEnded, signedIn } from "@/lib/server/visitor";
+import { anonymous, authorizeRequest, formIsGenuine, leaveIfEnded, sameAuthorizeRequest, signedIn } from "@/lib/server/visitor";
+import { field } from "@/lib/form";
 
 /**
  * Confirming on `/authorize`: the cloud issues what the server admin asked for, and the page carries it there with a
@@ -63,6 +64,10 @@ export async function authorizeAction(_previous: AuthorizeState, form: FormData)
   const request = await authorizeRequest();
   if (request === null) {
     return failed("authorize.invalid");
+  }
+  // Only the request the page showed: another one posted to `/authorize/start` since then is refused.
+  if (!sameAuthorizeRequest(request, field(form, "request"))) {
+    return failed("authorize.outOfDate");
   }
   if (request.purpose === "link") {
     const view = readStatement(request.statement);

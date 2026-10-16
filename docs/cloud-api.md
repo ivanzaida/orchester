@@ -152,6 +152,10 @@ signed, and an identity token with purpose `link` that links the admin's account
 (`purpose`, `server` or `statement`, `state`, `return`), keeps it sealed in this browser's `__Host-orchester_authorize`
 cookie for 10 minutes and shows `/authorize?return=<callback>`, whose address names only the callback: the statement
 never travels in a URL, a history or a log. Confirming uses the request up and binds it to the account signed in then.
+`/authorize/start` keeps a request only when the post's `Origin` is the callback's origin (the admin that asked);
+anything else leaves this browser's request as it was. The confirm form carries a digest of the request the page
+showed, and confirming refuses with *This page is out of date, open the link again* when the cookie holds another
+one by then, so a request another site posts after the page loaded is never the one confirmed (security review 2).
 
 **Invites in flight.** A team server signs each invite by email (`orchester-invite+jws`:
 `{ id, server, kind, email, project?, role?, inviter, expires_at, issued_at }`, times in milliseconds) and its server
