@@ -199,7 +199,10 @@ impl CodeIndex {
           props.project.feed.revision.get(),
           props.project.feed.outside.get().of(Outside::CodeIndex),
         ),
-        |(root, ..)| async move { background::run(move || code_index::list_in(&root).map(Listed)).await? },
+        |(root, ..)| {
+          tracing::trace!(target: crate::app_log::READ_LOG, read = "code index");
+          async move { background::run(move || code_index::list_in(&root).map(Listed)).await? }
+        },
       )
       .state()
       .get()

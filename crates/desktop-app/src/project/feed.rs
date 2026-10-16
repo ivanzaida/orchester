@@ -385,6 +385,7 @@ fn tasks(
 ) -> (TasksState, Option<Option<Message>>) {
   let (hold, programs) = (hold.clone(), programs.clone());
   let load = ctx.future(deps, move |(repo_root, ..)| {
+    tracing::trace!(target: crate::app_log::READ_LOG, read = "project tasks");
     let (hold, programs) = (hold.clone(), programs.clone());
     async move {
       hold.released().await;
@@ -411,6 +412,7 @@ fn tasks(
 fn usage(ctx: &mut Ctx, deps: (PathBuf, u64, (u64, u64), Timestamp), hold: &ReadHold) -> Option<ProjectUsage> {
   let hold = hold.clone();
   let load = ctx.future(deps, move |(repo_root, _, _, day_start)| {
+    tracing::trace!(target: crate::app_log::READ_LOG, read = "project usage");
     let hold = hold.clone();
     async move {
       hold.released().await;

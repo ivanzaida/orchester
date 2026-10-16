@@ -67,11 +67,14 @@ impl Component for ToolsScreen {
     let reading = ctx
       .future(
         (root, id, revision, outside, self.retry.get()),
-        |(root, id, revision, ..)| async move {
-          background::run(move || EditorData::load_in(&root, id))
-            .await?
-            .map(|data| (id, revision, data))
-            .map_err(|error| messages::store_error(&error))
+        |(root, id, revision, ..)| {
+          tracing::trace!(target: crate::app_log::READ_LOG, read = "tools");
+          async move {
+            background::run(move || EditorData::load_in(&root, id))
+              .await?
+              .map(|data| (id, revision, data))
+              .map_err(|error| messages::store_error(&error))
+          }
         },
       )
       .state()

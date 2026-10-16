@@ -51,6 +51,7 @@ pub struct ReadAgain {
 pub fn task(ctx: &mut Ctx, root: PathBuf, task: TaskId, again: ReadAgain) -> TaskRead {
   let programs = Services::of(ctx).programs;
   let load = ctx.future((root, task, again), move |(root, task, _)| {
+    tracing::trace!(target: crate::app_log::READ_LOG, read = "task");
     let programs = programs.clone();
     async move {
       background::run(move || TaskDetail::load_settled(&root, task, &programs))

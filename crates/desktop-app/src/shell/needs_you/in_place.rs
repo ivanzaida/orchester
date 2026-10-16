@@ -109,6 +109,7 @@ impl Component for InPlaceCard {
       props.waiting.clone(),
     );
     let read = ctx.future(deps, move |(root, task, ..): (PathBuf, TaskId, _, _)| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "in place");
       let hold = hold.clone();
       async move {
         hold.released().await;

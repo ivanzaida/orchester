@@ -96,10 +96,13 @@ pub fn action(ctx: &mut Ctx) -> Save {
 }
 pub fn load(ctx: &mut Ctx, root: PathBuf, revision: u64) -> FutureState<Read, Message> {
   let mut state = ctx
-    .future((root, revision), |(root, revision)| async move {
-      background::run(move || project_settings::load_in(&root).map(|settings| Read(settings, revision)))
-        .await?
-        .map_err(|e| messages::store_error(&e))
+    .future((root, revision), |(root, revision)| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "project settings");
+      async move {
+        background::run(move || project_settings::load_in(&root).map(|settings| Read(settings, revision)))
+          .await?
+          .map_err(|e| messages::store_error(&e))
+      }
     })
     .state()
     .get();

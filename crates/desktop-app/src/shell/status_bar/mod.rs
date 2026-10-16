@@ -159,27 +159,35 @@ impl DevtoolsInspectable for Used {}
 
 fn used_accounts(ctx: &mut Ctx, repo_root: Option<std::path::PathBuf>) -> Used {
   ctx
-    .future(repo_root, |repo_root| async move {
-      let Some(repo_root) = repo_root else {
-        return Ok(Used::default());
-      };
-      orchester_workspace::background::run(move || {
-        let connections = orchester_workspace::connections::data::ProjectConnections::load_in(&repo_root)
-          .map_err(|error| orchester_workspace::messages::store_error(&error))?;
-        let mut used: Vec<_> = connections
-          .connections
-          .iter()
-          .filter_map(|connection| connection.account().id(connection.provider()))
-          .collect();
-        used.dedup();
-        Ok::<_, orchester_workspace::messages::Message>(Used(used))
-      })
-      .await?
+    .future(repo_root, |repo_root| {
+      if repo_root.is_some() {
+        tracing::trace!(target: crate::app_log::READ_LOG, read = "used accounts");
+      }
+      used_in(repo_root)
     })
     .state()
     .get()
     .data
     .unwrap_or_default()
+}
+
+/// The accounts the connections of the project at `repo_root` run on; none without a project.
+async fn used_in(repo_root: Option<std::path::PathBuf>) -> Result<Used, orchester_workspace::messages::Message> {
+  let Some(repo_root) = repo_root else {
+    return Ok(Used::default());
+  };
+  orchester_workspace::background::run(move || {
+    let connections = orchester_workspace::connections::data::ProjectConnections::load_in(&repo_root)
+      .map_err(|error| orchester_workspace::messages::store_error(&error))?;
+    let mut used: Vec<_> = connections
+      .connections
+      .iter()
+      .filter_map(|connection| connection.account().id(connection.provider()))
+      .collect();
+    used.dedup();
+    Ok::<_, orchester_workspace::messages::Message>(Used(used))
+  })
+  .await?
 }
 
 /// The used accounts' readings, in the order the accounts are listed (by CLI, Default first).

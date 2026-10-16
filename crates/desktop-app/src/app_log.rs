@@ -17,6 +17,9 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 pub const DEFAULT_FILTER: &str = "info,lurq=warn";
 /// The name of the app's log files before their date, apart from the deprecated desktop's `orchester-`.
 pub const LOG_PREFIX: &str = "orchester-app-";
+/// The target of the TRACE lines that say a screen started reading project data, each with what it reads
+/// (`read`): what a change costs in reads (`RUST_LOG=info,orchester_app::read=trace`).
+pub const READ_LOG: &str = "orchester_app::read";
 
 /// Sends the log to today's file, to lurq's MCP log layer and, in debug builds, to the console; panics
 /// are logged too, since a release build has no console to print them to. Returns today's log file,

@@ -92,6 +92,7 @@ impl Component for InstructionsScreen {
     let hold = crate::services::Services::of(ctx).hold;
     let read = ctx
       .future(deps, move |(root, ..)| {
+        tracing::trace!(target: crate::app_log::READ_LOG, read = "instructions");
         let hold = hold.clone();
         async move {
           hold.released().await;

@@ -153,6 +153,7 @@ impl SkillsScreen {
           project.feed.tasks.get(),
         ),
         move |(root, _, reset, ..)| {
+          tracing::trace!(target: crate::app_log::READ_LOG, read = "skills");
           let generation = if reset > rejected { reset } else { accepted };
           let hold = hold.clone();
           async move {

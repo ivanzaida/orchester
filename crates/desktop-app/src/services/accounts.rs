@@ -52,6 +52,7 @@ pub fn listed(ctx: &mut Ctx) -> Accounts {
   let workspace = Services::of(ctx).workspace;
   ctx
     .future((), move |()| {
+      tracing::trace!(target: crate::app_log::READ_LOG, read = "accounts");
       let workspace = workspace.clone();
       async move {
         background::run(move || workspace.agent_accounts())

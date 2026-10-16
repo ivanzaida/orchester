@@ -86,6 +86,7 @@ impl Component for AgentsScreen {
     let hold = crate::services::Services::of(ctx).hold;
     let loaded = ctx
       .future((project.open.repo_root.clone(), dep), move |(root, (revision, ..))| {
+        tracing::trace!(target: crate::app_log::READ_LOG, read = "agents");
         let hold = hold.clone();
         async move {
           hold.released().await;
