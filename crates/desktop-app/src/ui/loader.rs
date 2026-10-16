@@ -18,9 +18,10 @@ use crate::theme::{LOADER_STEPS, LOADER_TURN};
 const TURN: KeyframesId = KeyframesId::new(1);
 
 /// Registers the loader's turn with a window's tree. Without it lurq would keep asking for frames for a
-/// loader that stands still.
+/// loader that stands still. Every loader turns on the tree's clock, in phase with the others however late
+/// it shows, so the window draws one frame per step whatever the number of loaders.
 pub fn install(tree: &mut Tree) {
-  tree.register_keyframes(
+  tree.register_keyframes_in_phase(
     Keyframes::new(TURN)
       .frame(0.0, |frame| {
         frame.set(AnimatableProperty::Transform, Decomposed::IDENTITY);
