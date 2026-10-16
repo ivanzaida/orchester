@@ -17,7 +17,7 @@ use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
 };
-use orchester_core::id::ServerId;
+use orchester_core::id::{ServerId, TeamServerId};
 use orchester_workspace::sharing::{
   CloudJoined, CodeRequest, Reaching, Trust,
   cloud::{CloudError, ServerJoin},
@@ -80,6 +80,8 @@ impl DevtoolsInspectable for Outcome {}
 #[derive(Clone)]
 pub(super) struct Request {
   address: ServerAddress,
+  /// The server's id at the cloud, as it names it at `GET /server`.
+  linked: Option<TeamServerId>,
   trust: Trust,
   method: Method,
   code: String,
@@ -113,7 +115,7 @@ impl Join {
         let (servers, cloud) = (servers.clone(), cloud.clone());
         async move {
           match request.method {
-            Method::Account => match cloud.join_server(&request.address).await {
+            Method::Account => match cloud.join_server(&request.address, request.linked).await {
               Ok(ServerJoin::Joined(CloudJoined::Joined(server))) => joined(&servers, server).await,
               Ok(ServerJoin::Joined(CloudJoined::Waiting(_))) => Ok(Outcome::Waiting),
               Ok(ServerJoin::NotInvited) => Ok(Outcome::NotInvited),
@@ -311,8 +313,15 @@ pub(super) fn username_step(ctx: &mut Ctx, page: &ConnectPage, found: &Found) ->
     column = column.child(field_error("orchester-connect-join-error", &reason.text(ctx)));
   }
   let trust = trust_of(join, found);
+  let linked = found
+    .reached
+    .info
+    .cloud
+    .as_ref()
+    .and_then(|cloud| cloud.server.parse().ok());
   let request = trust.map(|trust| Request {
     address: found.address.clone(),
+    linked,
     trust,
     method: join.method.get(),
     code: join.code.get(),

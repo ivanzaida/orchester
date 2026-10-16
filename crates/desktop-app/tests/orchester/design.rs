@@ -83,6 +83,16 @@ fn orchester_design_offline_server_lists_the_projects_linked_here() {
     Route::Orchester(OrchesterView::server(entry.stored.id)),
     "orchester-server-project-billing-link",
   );
+  window.until("the server's version", |window| {
+    window
+      .texts("orchester-server-header-facts")
+      .is_some_and(|texts| texts.join(" ").contains("Orchester server "))
+  });
+  let checkout = window.text("orchester-server-project-kontur-checkout");
+  assert!(
+    checkout.contains('…') && checkout.ends_with("repo-kontur") && checkout.chars().count() <= 40,
+    "a long checkout path is cut in its middle: {checkout}"
+  );
   recorder.go_down();
   // The monitor asks a connected server once a minute; *Try now* asks at once.
   services.servers.retry_now(entry.stored.id);
@@ -121,6 +131,11 @@ fn orchester_design_connect_ends_at_a_server_already_connected() {
   window.set("orchester-connect-address", &recorder.url());
   press(&mut window, "orchester-connect-continue");
   shows(&mut window, "orchester-connect-already");
+  let found = window.text("orchester-connect-found");
+  assert!(
+    found.contains("Orchester server ") && found.contains("API 3"),
+    "{found}"
+  );
   for later in [
     "orchester-connect-step-compare",
     "orchester-connect-step-join",

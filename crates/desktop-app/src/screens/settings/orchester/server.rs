@@ -131,11 +131,20 @@ impl Component for ServerPanel {
           .map_err(|error| sharing_error(&error))
       }
     });
+    // The server's id at the cloud, when this computer joined it through the cloud.
+    let linked = match props.entry.stored.joined_with {
+      Some(orchester_store::JoinedWith::Cloud(id)) => Some(id),
+      _ => None,
+    };
     let (cloud, address) = (services.cloud, props.entry.address);
     let join_again = ctx.future_action(move |(): ()| {
       let (cloud, address) = (cloud.clone(), address.clone());
       async move {
-        match cloud.join_server(&address).await.map_err(|error| cloud_error(&error))? {
+        match cloud
+          .join_server(&address, linked)
+          .await
+          .map_err(|error| cloud_error(&error))?
+        {
           ServerJoin::Joined(orchester_workspace::sharing::CloudJoined::Joined(_)) => Ok(JoinedAgain::Joined),
           ServerJoin::Joined(orchester_workspace::sharing::CloudJoined::Waiting(_)) => Ok(JoinedAgain::Waiting),
           ServerJoin::NotInvited => Ok(JoinedAgain::NotInvited),
@@ -163,7 +172,9 @@ impl Component for ServerPanel {
     let presented = presented(ctx, &props.entry);
     let entry = &props.entry;
     let look = server_look(entry);
-    let facts = [Fact::Plain(entry.address.authority())];
+    let facts: Vec<Fact> = std::iter::once(Fact::Plain(entry.address.authority()))
+      .chain(version(ctx, entry).map(Fact::Plain))
+      .collect();
     let mut head = header(
       ctx,
       "orchester-server-header",
@@ -263,6 +274,44 @@ fn projects(ctx: &mut Ctx, props: &Props) -> Option<Result<Projects, Said>> {
     _ => None,
   }
 }
+
+/// What the server says it runs, `Orchester server 0.4.0, API 3`, read while it is connected; nothing otherwise.
+fn version(ctx: &mut Ctx, entry: &ServerEntry) -> Option<String> {
+  let connected = matches!(entry.connection, Some(Connection::Connected)) && !entry.certificate_changed;
+  let servers = Services::of(ctx).servers;
+  let state = ctx
+    .future(
+      (entry.stored.id, connected, servers),
+      |(server, connected, servers)| async move {
+        if !connected {
+          return Ok::<_, ()>(Runs(None));
+        }
+        let entries = servers.clone();
+        let entry = orchester_workspace::background::run(move || entries.entries())
+          .await
+          .map_err(drop)?
+          .map_err(|error| tracing::warn!(%error, "the servers could not be read"))?
+          .into_iter()
+          .find(|entry| entry.stored.id == server)
+          .ok_or(())?;
+        let info = servers
+          .info(&entry)
+          .await
+          .map_err(|error| tracing::info!(%error, "the server's version could not be read"))?;
+        Ok(Runs(Some((info.version, info.api_version))))
+      },
+    )
+    .state()
+    .get();
+  let (version, api) = state.data?.0?;
+  Some(super::words::runs(ctx, &version, api))
+}
+
+/// The version and API a server says it runs, when it was asked.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Runs(Option<(String, u8)>);
+
+impl DevtoolsInspectable for Runs {}
 
 /// The certificate the server presents now, read only after it changed.
 fn presented(ctx: &mut Ctx, entry: &ServerEntry) -> Option<Result<Presented, Said>> {

@@ -27,7 +27,7 @@ use server_support::TestServer;
 
 fn main() {
   let out = PathBuf::from(std::env::args().nth(1).expect("the file to write the backends to"));
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let mut server = TestServer::start();
   server.create_user("alice", "Alice Moreau", true);
   let audience = server.link_cloud(&cloud.root_key, &cloud.key_set);

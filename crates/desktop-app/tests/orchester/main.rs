@@ -50,7 +50,7 @@ fn orchester_web_links_open_the_clouds_pages() {
 
 #[test]
 fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
-  let cloud = AccountCloud::start(true);
+  let cloud = AccountCloud::start();
   let mut server = TestServer::start();
   server.create_user("alice", "Alice Moreau", true);
   let audience = server.link_cloud(&cloud.root_key, &cloud.key_set);
@@ -275,6 +275,7 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
       device: "IVAN-LAPTOP · Windows".into(),
       username: None,
       display_name: None,
+      kind: orchester_api::DeviceKind::App,
     }))
     .expect("the second computer joins with the pairing code");
   assert_eq!(joined.user.username, "ivan");

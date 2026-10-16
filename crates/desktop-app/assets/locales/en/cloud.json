@@ -83,7 +83,6 @@
       },
       "lead": "Invites to projects and servers reach you here and by email. Accepting connects this computer to the server and opens the project's join review; nothing is uploaded before you confirm there.",
       "none": "No invites are waiting.",
-      "notOffered": "This Orchester Cloud doesn't deliver invites yet. An invite by email can't reach you here until it does; an invite code still works: Connect a server.",
       "toProject": "{{inviter}} invited you to {{project}} on {{server}}, as {{role}}",
       "toServer": "{{inviter}} invited you to {{server}}",
       "toAccount": "{{inviter}} invited you to link your Orchester account on {{server}}",
@@ -91,7 +90,7 @@
         "owner": "an owner",
         "member": "a member"
       },
-      "dates": "{{sent}} · expires {{expires}}",
+      "expires": "expires {{expires}}",
       "accept": "Accept",
       "decline": "Decline",
       "keep": "Keep it",
@@ -101,7 +100,7 @@
         "body": "If the server had already let this computer in, it shows under Team servers. Otherwise accept the invite again."
       },
       "declineQuestion": "Decline the invite to {{target}}?",
-      "declineBody": "The invite ends. {{inviter}} sees it was declined; nothing else is told.",
+      "declineBody": "The invite ends here and can't be accepted any more. {{inviter}} isn't told; their server keeps it until it expires.",
       "connecting": "Connecting to {{server}}… its certificate comes with the invite, so there's nothing to compare.",
       "joined": {
         "title": "Connected to {{server}}",
@@ -164,6 +163,8 @@
       }
     },
     "server": {
+      "runs": "Orchester server {{version}}, API {{api}}",
+      "api": "API {{api}}",
       "signOut": "Sign out…",
       "facts": {
         "address": "Address",
@@ -267,7 +268,6 @@
       "local": "Something on this computer failed; the log says what.",
       "address": "The Orchester Cloud address isn't an address. Fix it in Advanced · cloud address.",
       "signedOut": "You aren't signed in to Orchester Cloud on this computer.",
-      "notOffered": "This Orchester Cloud doesn't offer that yet. A server takes an invite code instead.",
       "noServer": "Orchester Cloud doesn't know a server of yours at that address.",
       "rateLimited": "Too many attempts. Try again in {{minutes}} min.",
       "busy": "Orchester Cloud is busy. Try again in a moment.",

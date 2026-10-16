@@ -45,7 +45,7 @@ use orchester_workspace::{
 
 pub use self::{
   notice::InvitesNotice,
-  words::{Said, day as day_of, moment, sharing_error as sharing_said, shown_address},
+  words::{Said, day as day_of, moment, runs, sharing_error as sharing_said, shown_address},
 };
 
 /// The cloud account as read, for a future's answer.
@@ -80,14 +80,26 @@ impl Snapshot {
 }
 
 /// The invites waiting for the account, as the cloud answered.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Invites {
   /// Nobody is signed in to the cloud.
   SignedOut,
   Listed(Arc<Vec<CloudInvite>>),
-  /// This cloud does not deliver invites yet.
-  NotOffered,
   Failed(Said),
+}
+
+impl PartialEq for Invites {
+  /// Lists are the same when they hold the same invites, by id.
+  fn eq(&self, other: &Self) -> bool {
+    match (self, other) {
+      (Self::SignedOut, Self::SignedOut) => true,
+      (Self::Listed(one), Self::Listed(two)) => {
+        one.len() == two.len() && one.iter().zip(two.iter()).all(|(one, two)| one.id == two.id)
+      }
+      (Self::Failed(one), Self::Failed(two)) => one == two,
+      _ => false,
+    }
+  }
 }
 
 impl DevtoolsInspectable for Invites {}
@@ -240,7 +252,6 @@ pub fn invites(ctx: &mut Ctx, revision: u64, cloud: &Cloud, account: Option<&Sto
         }
         Ok(match cloud.invites().await {
           Ok(invites) => Invites::Listed(Arc::new(invites)),
-          Err(CloudError::NotOffered) => Invites::NotOffered,
           Err(error) => {
             tracing::warn!(%error, "the cloud's invites could not be read");
             Invites::Failed(words::cloud_error(&error))

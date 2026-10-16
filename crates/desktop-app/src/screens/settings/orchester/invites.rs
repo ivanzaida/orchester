@@ -145,14 +145,6 @@ pub(super) fn waiting(ctx: &mut Ctx, invites: &Invites, answers: &Answers) -> El
   parts.extend(outcome(ctx, answers));
   match invites {
     Invites::SignedOut => {}
-    Invites::NotOffered => parts.push(
-      inspector::note(
-        "orchester-invites-not-offered",
-        Icon::Info,
-        &ctx.t("cloud.invites.notOffered"),
-      )
-      .into(),
-    ),
     Invites::Failed(reason) => parts.push(field_error("orchester-invites-failed", &reason.text(ctx)).into()),
     Invites::Listed(listed) if listed.is_empty() => {
       parts.push(inspector::note("orchester-invites-none", Icon::Mail, &ctx.t("cloud.invites.none")).into());
@@ -235,7 +227,7 @@ pub(super) fn notice_title(ctx: &Ctx, invite: &CloudInvite) -> String {
       .t_args(
         "cloud.notice.toProject",
         [
-          ("inviter", invite.inviter.as_str()),
+          ("inviter", invite.inviter_display_name.as_str()),
           ("project", project.name.as_str()),
           ("server", invite.server.name.as_str()),
         ],
@@ -247,7 +239,7 @@ pub(super) fn notice_title(ctx: &Ctx, invite: &CloudInvite) -> String {
 
 /// What an invite is to, in one sentence.
 pub(super) fn title(ctx: &Ctx, invite: &CloudInvite) -> String {
-  let (inviter, server) = (invite.inviter.as_str(), invite.server.name.as_str());
+  let (inviter, server) = (invite.inviter_display_name.as_str(), invite.server.name.as_str());
   match (&invite.project, invite.role, invite.kind) {
     (Some(project), Some(role), _) => ctx
       .t_args(
@@ -276,7 +268,7 @@ const fn role_key(role: MemberRole) -> &'static str {
   }
 }
 
-/// An invite (`Invite · Billing` `JgJbd`): the inviter's initials, what it is to, its address and dates, and the
+/// An invite (`Invite · Billing` `JgJbd`): the inviter's initials, what it is to, its address and expiry, and the
 /// answers; *Decline the invite?* in place under it while asked; *Connecting…* while it is accepted.
 fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
   let id = format!("orchester-invite-{}", invite.id);
@@ -284,12 +276,10 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
     .project
     .as_ref()
     .map_or_else(|| invite.server.address.clone(), |project| project.address.clone());
+  // The cloud lists no sending day, only the expiry.
   let dates = ctx.t_args(
-    "cloud.invites.dates",
-    [
-      ("sent", day(ctx, Timestamp::from_unix_millis(invite.created_at))),
-      ("expires", day(ctx, Timestamp::from_unix_millis(invite.expires_at))),
-    ],
+    "cloud.invites.expires",
+    [("expires", day(ctx, Timestamp::from_unix_millis(invite.expires_at)))],
   );
   let text = Column::new()
     .flex(1.0)
@@ -319,7 +309,10 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(person_avatar(&format!("{id}-avatar"), &initials(&invite.inviter)))
+    .child(person_avatar(
+      &format!("{id}-avatar"),
+      &initials(&invite.inviter_display_name),
+    ))
     .child(text)
     .with_children((!accepting && !declining).then(|| buttons(ctx, &id, invite.id, answers)));
   let mut card = Column::new()
@@ -439,9 +432,12 @@ pub(super) fn decline_question(ctx: &Ctx, id: &str, invite: &CloudInvite, answer
         .width(Dimension::Pct(100.0)),
     )
     .child(
-      Text::new(&ctx.t_args("cloud.invites.declineBody", [("inviter", invite.inviter.as_str())]))
-        .variant(ExtraTypography::Lead.role())
-        .width(Dimension::Pct(100.0)),
+      Text::new(&ctx.t_args(
+        "cloud.invites.declineBody",
+        [("inviter", invite.inviter_display_name.as_str())],
+      ))
+      .variant(ExtraTypography::Lead.role())
+      .width(Dimension::Pct(100.0)),
     )
     .child(
       Row::new().spacing(SpacingSize::Sm).child(confirm).child(

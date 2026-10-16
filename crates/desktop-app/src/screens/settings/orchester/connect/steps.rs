@@ -418,12 +418,11 @@ fn found_row(ctx: &Ctx, page: &ConnectPage, found: &Found) -> Row {
     )
     .on_click(move || stage.set(Stage::Address))
   };
+  let runs =
+    crate::screens::settings::orchester::runs(ctx, &found.reached.info.version, found.reached.info.api_version);
   let line = ctx.t_args(
     "sharing.connect.found.line",
-    [
-      ("address", found.address.as_str().to_owned()),
-      ("api", found.reached.info.api_version.to_string()),
-    ],
+    [("address", found.address.as_str().to_owned()), ("runs", runs)],
   );
   Row::new()
     .id("orchester-connect-found")

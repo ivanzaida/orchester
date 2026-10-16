@@ -7,12 +7,15 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::MemberRole;
-use orchester_workspace::sharing::{LinkedProject, ServerProject};
+use orchester_workspace::{
+  display::shorten_path,
+  sharing::{LinkedProject, ServerProject},
+};
 
 use super::{
   Said,
@@ -32,6 +35,9 @@ use crate::{
 
 /// The glyph tile of a project row (`ORDuC`).
 const PROJECT_TILE: f32 = 28.0;
+
+/// The most characters of a checkout's path a project row shows before it cuts the middle.
+const CHECKOUT_PATH: usize = 40;
 
 /// The section, as the server answered.
 pub(super) fn projects(ctx: &mut Ctx, props: &Props, projects: Option<&Result<Projects, Said>>) -> Element {
@@ -182,10 +188,13 @@ fn lines(ctx: &Ctx, id: &str, shown: &Shown<'_>) -> Column {
     MemberRole::Member => ctx.t("cloud.server.projects.member"),
   });
   let place = match shown.checkout {
-    Some(checkout) => Text::new(&checkout.repo_root.display().to_string())
+    // A long checkout path keeps its start and its last folders, cut in the middle (`H:\…\work\kontur`).
+    Some(checkout) => Text::new(&shorten_path(&checkout.repo_root, CHECKOUT_PATH))
+      .id(format!("{id}-checkout"))
       .variant(OrchesterText::Address.role())
       .color(PaletteColor::TextMuted)
-      .nowrap(),
+      .nowrap()
+      .text_overflow(TextOverflow::Elipsis),
     None => Text::new(&ctx.t("cloud.server.projects.notHere"))
       .variant(ExtraTypography::Note.role())
       .color(PaletteColor::Warning)

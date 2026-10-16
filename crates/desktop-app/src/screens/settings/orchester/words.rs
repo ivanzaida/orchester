@@ -112,7 +112,6 @@ pub fn cloud_error(error: &CloudError) -> Said {
     CloudError::Store(_) | CloudError::Vault(_) | CloudError::Interrupted => Said::new("cloud.errors.local"),
     CloudError::Address(_) => Said::new("cloud.errors.address"),
     CloudError::SignedOut => Said::new("cloud.errors.signedOut"),
-    CloudError::NotOffered => Said::new("cloud.errors.notOffered"),
     CloudError::InviteEnded => Said::new("cloud.invites.ended"),
     CloudError::NoServer => Said::new("cloud.errors.noServer"),
     CloudError::Join(error) => sharing_error(error),
@@ -209,6 +208,20 @@ pub fn moment(ctx: &Ctx, at: Timestamp) -> String {
     display::clock(at)
   } else {
     day_and_time(ctx, at)
+  }
+}
+
+/// What a server runs, `Orchester server 0.4.0, API 3`; `API 3` from a server that names no version.
+pub fn runs(ctx: &Ctx, version: &str, api: u8) -> String {
+  if version.is_empty() {
+    ctx.t_args("cloud.server.api", [("api", api.to_string())]).to_string()
+  } else {
+    ctx
+      .t_args(
+        "cloud.server.runs",
+        [("version", version.to_owned()), ("api", api.to_string())],
+      )
+      .to_string()
   }
 }
 
