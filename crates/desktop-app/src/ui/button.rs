@@ -128,6 +128,8 @@ pub struct ActionButton {
   /// 36 high with a 13/500 label.
   large: bool,
   bounded: bool,
+  /// Drawn pressed while what it opened shows.
+  held: bool,
   element: Option<ElementRef>,
 }
 
@@ -147,6 +149,7 @@ impl ActionButton {
       small: false,
       large: false,
       bounded: false,
+      held: false,
       element: None,
     }
   }
@@ -226,6 +229,13 @@ impl ActionButton {
   }
 
   /// `element` refers to the button, e.g. so a screen can move the focus to it.
+  /// Drawn in the `pressed` fill while what it opened shows: the cloud's *Sign out* while its question asks (`U0hgR` in
+  /// `p2VeL`).
+  pub fn held(mut self, held: bool) -> Self {
+    self.held = held;
+    self
+  }
+
   pub fn element_ref(mut self, element: ElementRef) -> Self {
     self.element = Some(element);
     self
@@ -341,6 +351,9 @@ impl From<ActionButton> for Element {
     });
     if button.kind == ButtonKind::Select {
       frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
+    }
+    if button.held {
+      frame = frame.background(ExtraColor::Pressed.role()).describe("held", "true");
     }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);

@@ -1,7 +1,9 @@
 //! *Advanced · cloud address* (`Ii4SE` in `Cu20b`, `Advanced · cloud address` in `Aowlk`): closed, the line with
 //! *default* or the cloud in use at its end; open, the address field with *Use this address* and *Back to the
 //! default*, and *Using a test cloud* while another cloud than the build's is set. Changing it signs out of
-//! Orchester Cloud; team servers keep working.
+//! Orchester Cloud; team servers keep working. The sign-in gate shows the same section (`Advanced · open` `cUVrD` in
+//! `S8aPFV`) without the line over it, with *test cloud* in `warning` at the line's end and no callout: the gate's
+//! footer names the test cloud.
 
 use lurq::{
   app::{
@@ -29,7 +31,14 @@ use crate::{
   },
 };
 
-pub(super) struct Advanced {
+/// Where the section shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Place {
+  Settings,
+  Gate,
+}
+
+pub(crate) struct Advanced {
   open: Signal<bool>,
   address: Signal<String>,
   /// `Some(address)` sets another cloud, `None` goes back to the build's.
@@ -42,7 +51,7 @@ const USE: &str = "orchester-advanced-use";
 const RESET: &str = "orchester-advanced-reset";
 
 impl Advanced {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
+  pub(crate) fn new(ctx: &mut Ctx) -> Self {
     let cloud = Services::of(ctx).cloud;
     let open = ctx.signal(false);
     let advanced = Self {
@@ -69,7 +78,7 @@ impl Advanced {
   }
 }
 
-pub(super) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced) -> Element {
+pub(crate) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced, place: Place) -> Element {
   let open = advanced.open.get();
   let toggle = {
     let flag = advanced.open.clone();
@@ -81,15 +90,21 @@ pub(super) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
       flag.update(|open| *open = !*open);
     }
   };
-  let meta = if address.default {
-    ctx.t("cloud.advanced.default").to_string()
-  } else {
-    address.address.authority()
+  let (meta, meta_color) = match (address.default, place) {
+    (true, _) => (ctx.t("cloud.advanced.default").to_string(), PaletteColor::TextMuted),
+    (false, Place::Settings) => (address.address.authority(), PaletteColor::TextMuted),
+    (false, Place::Gate) => (
+      ctx.t("cloud.advanced.testCloudState").to_string(),
+      PaletteColor::Warning,
+    ),
   };
   let line = pressable(toggle)
     .id("orchester-advanced")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Md))
+    .padding(match place {
+      Place::Settings => Padding::new().top(SpacingSize::Md),
+      Place::Gate => Padding::new(),
+    })
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .describe("state", if open { "open" } else { "closed" })
@@ -104,18 +119,22 @@ pub(super) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
     .child(
       Text::new(&meta)
         .id("orchester-advanced-meta")
-        .variant(ExtraTypography::Note.role()),
+        .variant(ExtraTypography::Note.role())
+        .color(meta_color),
     );
   let mut column = Column::new()
     .id("orchester-advanced-section")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(line);
+    .spacing(SpacingSize::Md);
+  column = match place {
+    Place::Settings => column.border_top(Border::inside(BorderSize::Sm, PaletteColor::Border)),
+    Place::Gate => column.padding(Padding::horizontal(SpacingSize::Xs)),
+  };
+  column = column.child(line);
   if open {
-    column = column.child(form(ctx, advanced));
+    column = column.child(form(ctx, advanced, place));
   }
-  if !address.default {
+  if !address.default && place == Place::Settings {
     column = column.child(
       Callout::new(
         "orchester-test-cloud",
@@ -129,14 +148,15 @@ pub(super) fn section(ctx: &mut Ctx, address: &CloudAddress, advanced: &Advanced
   column.into()
 }
 
-fn default_host() -> String {
+/// The build's own cloud, as its host names it: `orchester-cloud.lurq.dev`.
+pub(crate) fn default_host() -> String {
   ServerAddress::parse(orchester_workspace::sharing::cloud::BUILD_ADDRESS).map_or_else(
     |_| orchester_workspace::sharing::cloud::BUILD_ADDRESS.to_owned(),
     |address| address.authority(),
   )
 }
 
-fn form(ctx: &mut Ctx, advanced: &Advanced) -> Element {
+fn form(ctx: &mut Ctx, advanced: &Advanced, place: Place) -> Element {
   let state = advanced.set.state().get();
   let pending = state.is_pending();
   let input = FieldInput::new(
@@ -172,14 +192,23 @@ fn form(ctx: &mut Ctx, advanced: &Advanced) -> Element {
       })
     }
   };
+  let (spacing, hint) = match place {
+    Place::Settings => (SpacingSize::Sm, ctx.t("cloud.advanced.hint").to_string()),
+    Place::Gate => (
+      SpacingSize::Md,
+      ctx
+        .t_args("cloud.advanced.gateHint", [("host", default_host())])
+        .to_string(),
+    ),
+  };
   Column::new()
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+    .spacing(spacing)
     .child(field(
       "orchester-advanced-field",
       Some(&ctx.t("cloud.advanced.label")),
       input,
-      Some(&ctx.t("cloud.advanced.hint")),
+      Some(&hint),
     ))
     .with_children(
       state

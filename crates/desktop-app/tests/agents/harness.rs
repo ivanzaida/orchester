@@ -26,10 +26,10 @@ impl Agents {
   pub fn new(connection: bool) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
-    let data = Data {
-      dir: tempfile::tempdir_in(scratch).expect("test directory"),
-      runtime: tokio::runtime::Runtime::new().expect("runtime"),
-    };
+    let data = Data::at(
+      tempfile::tempdir_in(scratch).expect("test directory"),
+      tokio::runtime::Runtime::new().expect("runtime"),
+    );
     let launch = data.launch();
     let project = data.add_kontur(launch.workspace().expect("workspace"));
     let root = project.repo_root;

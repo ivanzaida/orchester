@@ -21,10 +21,10 @@ impl Instructions {
   pub fn new() -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/instructions");
     std::fs::create_dir_all(&scratch).expect("valid instruction fixture");
-    let data = Data {
-      dir: tempfile::tempdir_in(scratch).expect("valid instruction fixture"),
-      runtime: tokio::runtime::Runtime::new().expect("valid instruction fixture"),
-    };
+    let data = Data::at(
+      tempfile::tempdir_in(scratch).expect("valid instruction fixture"),
+      tokio::runtime::Runtime::new().expect("valid instruction fixture"),
+    );
     let launch = data.launch();
     let project = data.add_kontur(launch.workspace().expect("valid instruction fixture"));
     Self {

@@ -1,7 +1,8 @@
 //! The status bar (`Status bar` `sMpGe` of `q9mf0k`; handover §3.3), for the active tab's project: on the
 //! left the project, its folder in the name's tooltip, the runner and the activity slot; on the right the project's
 //! counts and tokens, the waiting requests with *Review* and the runs that auto-approve with *Stop* (`xommZ`),
-//! the team server's item (`X39PHh`), the app's MCP server and the version.
+//! the team server's item (`X39PHh`), Orchester Cloud while it cannot be reached (`ZSB6h`), the app's MCP server and
+//! the version. The sign-in gate has a bar of its own ([`gate()`]).
 //! Every item shows only measured data. A screen outside a project shows the activity and the app's items
 //! only, its events named by their project. A startup screen's bar has the version only.
 //!
@@ -11,8 +12,10 @@
 mod act;
 mod activity;
 mod approvals;
+mod cloud;
 mod counts;
 mod facts;
+mod gate;
 mod item;
 mod mcp;
 mod operations;
@@ -47,7 +50,9 @@ use self::{
   item::{frame, give_way, glyph, item, label},
 };
 pub use self::{
+  cloud::CloudFacts,
   facts::{AccountLimits, BarAction, BarFacts, Dispatch, ProjectFacts, ReadFailure, RunnerFacts, Stopping},
+  gate::gate,
   item::dot,
   mcp::from_scratch,
   server::{ServerFacts, ServerState},
@@ -125,6 +130,7 @@ impl Component for StatusBar {
       &services.servers,
       shown.as_ref().map(|(facts, _)| facts.repo_root.clone()),
     );
+    let cloud = cloud::cloud_facts(ctx, &services.cloud);
     let facts = BarFacts {
       project: shown.map(|(mut facts, _)| {
         facts.limits = limits(&listed, &readings, &used);
@@ -134,6 +140,7 @@ impl Component for StatusBar {
       mcp,
       stopping,
       servers,
+      cloud,
     };
     ctx.mount_keyed::<StatusBarView>("status-bar-view", BarProps { facts, dispatch })
   }
@@ -333,6 +340,7 @@ impl Component for StatusBarView {
       right.extend(plan_limits::item(ctx, &project.limits, &self.bar));
     }
     right.extend(server::item(ctx, &facts.servers, &dispatch));
+    right.extend(cloud::item(ctx, &facts.cloud, &dispatch));
     right.extend(counts::app(ctx, (&facts.mcp, &self.bar), &dispatch));
     Row::new()
       .id("status-bar")

@@ -67,6 +67,14 @@ impl Desktop {
   pub fn device_key(&self) -> VaultKey {
     VaultKey::cloud_device(self.workspace.installation_id().expect("installation"))
   }
+
+  /// Records the signed-in account as signed in at the cloud at `address`, as if the account's cloud moved there.
+  pub fn move_account_to(&self, address: &str) {
+    let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
+    let mut account = db.cloud_account().expect("account").expect("signed in");
+    account.cloud_address = address.to_owned();
+    db.set_cloud_account(Some(&account)).expect("moved");
+  }
 }
 
 /// A team server with Alice as its admin, linked to `cloud`; returns it and its id, the identity tokens' audience.

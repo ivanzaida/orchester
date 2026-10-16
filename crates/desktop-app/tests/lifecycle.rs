@@ -28,7 +28,7 @@ use std::{
 };
 
 use lurq::app::events::MouseButton;
-use orchester_app::{services::Services, startup::Launch};
+use orchester_app::services::Services;
 use orchester_core::{
   connection::stream::AgentEvent,
   id::{ProjectId, RunId},
@@ -89,10 +89,7 @@ impl Live {
       now: Timestamp::now(),
     };
     let seeded = kontur::seed(&request).expect("the scenario seeds");
-    let data = Data {
-      dir,
-      runtime: Runtime::new().expect("tokio runtime"),
-    };
+    let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
     let mut live = Self::open(data, &runner, seeded.project);
     live.repo = seeded.repo;
     live
@@ -100,7 +97,7 @@ impl Live {
 
   /// The window of a new session on `data`.
   fn open(data: Data, runner: &Path, project: ProjectId) -> Self {
-    let launch = Launch::begin_at(&data.database(), runner.to_path_buf(), data.runtime.handle(), None);
+    let launch = data.launch_with(runner.to_path_buf());
     let repo = data.dir.path().join("repo-lifecycle");
     Self {
       window: Window::of(data, launch),

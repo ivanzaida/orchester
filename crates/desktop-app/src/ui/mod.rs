@@ -23,6 +23,7 @@ pub mod field;
 pub mod filter;
 pub mod form_section;
 pub mod github_mark;
+pub mod hover_card;
 pub mod icon;
 pub mod icon_button;
 pub mod inspector;

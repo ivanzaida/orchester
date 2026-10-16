@@ -73,4 +73,28 @@ impl CloudError {
   pub fn unreachable(&self) -> bool {
     matches!(self, Self::Client(error) if error.is_connection())
   }
+
+  /// Whether the request went out and Orchester Cloud did not answer it: no connection, no answer in time, or
+  /// something else answering in its place (a redirect, a certificate the system does not trust, another server), as
+  /// on a network that needs a sign-in page first.
+  pub fn unanswered(&self) -> bool {
+    matches!(
+      self,
+      Self::Client(
+        ClientError::TimedOut
+          | ClientError::Unreachable
+          | ClientError::NotOrchester { .. }
+          | ClientError::Redirect { .. }
+          | ClientError::UntrustedCertificate
+      )
+    )
+  }
+
+  /// Why the cloud ended this computer's token, and when (milliseconds), when it refused it saying so.
+  pub fn ended(&self) -> Option<(orchester_api::cloud::SessionEnd, Option<i64>)> {
+    match self {
+      Self::Client(ClientError::Cloud { ended, .. }) => *ended,
+      _ => None,
+    }
+  }
 }

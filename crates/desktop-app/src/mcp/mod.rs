@@ -66,10 +66,12 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   approvals in the app; widening what agents may do (broader profile permissions or MCP servers, a CLI \
   program not found on the search path, environment variables that change program loading, adding or widening   an MCP server or turning one on) is refused as \
   person_only unless a person turned on Let automation change agent permissions in Settings › What automation may do. \
-  Narrowing is always allowed, and no tool takes or returns a secret's value.";
+  Narrowing is always allowed, and no tool takes or returns a secret's value. While Orchester is signed out of Orchester Cloud, every tool answers sign_in_required except sign_in_state; only a person signs in, in the window.";
 
 /// lurq's tools for `settings`, the app's tools on `link` and `appearance`, and, for a started session,
-/// the domain tools on its `services` (refusals worded by `i18n`) with `hold_reads` in debug builds.
+/// the domain tools on its `services` (refusals worded by `i18n`) with `sign_in_state`, and `hold_reads` in debug
+/// builds. While the session's cloud account is signed out, the gate refuses every tool but `sign_in_state`
+/// (`input_gate::signed_out`).
 pub fn config(
   settings: McpSettings,
   link: &WindowLink,
@@ -79,8 +81,14 @@ pub fn config(
 ) -> McpConfig {
   link.input_gate().bind_window_control(settings.window_control());
   let hold = session.map(|services| services.hold.clone());
+  let cloud = session.map(|services| services.cloud.clone());
+  if let Some(cloud) = &cloud {
+    link
+      .input_gate()
+      .bind_cloud(cloud.clone(), input_gate::signed_out::looks_on_gate(Build::this()));
+  }
   let domain = session.map(|services| domain::tools(services, i18n.clone()));
-  tools::all(link, appearance, settings, hold)
+  tools::all(link, appearance, settings, (hold, cloud))
     .into_iter()
     .chain(domain.into_iter().flatten())
     .fold(
