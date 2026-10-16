@@ -57,6 +57,14 @@ fn orchester_design_link_takes_the_server_projects_key() {
   });
   assert!(
     window
+      .text("sharing-task-list-description")
+      .starts_with("Kontur's tasks live in Billing on"),
+    "the server project by its name: {}",
+    window.text("sharing-task-list-description")
+  );
+  assert_eq!(window.text("sharing-leave-row-label"), "Leave Billing");
+  assert!(
+    window
       .text("sharing-repository-value")
       .contains("github.com/acme/billing"),
     "the project's hint: {}",

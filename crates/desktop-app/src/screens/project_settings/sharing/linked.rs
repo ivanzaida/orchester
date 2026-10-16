@@ -103,18 +103,28 @@ impl Component for Linked {
     .to_string();
     let entry = props.facts.linked_server();
     let hint = rows::hint(ctx, link, entry);
+    // The server project's name as the server answered; this project's own until it has (`Kontur` in both, in the
+    // design).
+    let shared = match &hint {
+      Some(Ok(hint)) => hint.name().to_owned(),
+      _ => name.clone(),
+    };
     let state = shared_state(ctx, link, (&server, &role));
     let task_list = side_row(
       Label::new("sharing-task-list", ctx.t("sharing.link.taskList")).description(ctx.t_args(
         "sharing.linked.taskListDescription",
-        [("project", name.as_str()), ("server", server.as_str())],
+        [
+          ("local", name.as_str()),
+          ("project", shared.as_str()),
+          ("server", server.as_str()),
+        ],
       )),
       state,
       Place::Within,
       true,
     );
     let address_row = rows::address_row(ctx, link, entry);
-    let repository_row = rows::repository_row(ctx, &props, hint.as_ref(), (&name, &server));
+    let repository_row = rows::repository_row(ctx, &props, hint.as_ref(), (&shared, &server));
     let mut column = Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
@@ -130,19 +140,26 @@ impl Component for Linked {
         Callout::new(
           "sharing-removed",
           CalloutTone::Warning,
-          ctx.t_args("sharing.linked.removed.title", [("project", name.as_str())]),
+          ctx.t_args("sharing.linked.removed.title", [("project", shared.as_str())]),
         )
         .icon(Icon::UserX)
-        .body(ctx.t_args("sharing.linked.removed.body", [("project", name.as_str())])),
+        .body(ctx.t_args("sharing.linked.removed.body", [("project", shared.as_str())])),
       );
     }
-    column.child(self.leave_section(ctx, &props, (&name, &server), link.key.as_str()))
+    column.child(self.leave_section(ctx, &props, (&name, &shared, &server), link.key.as_str()))
   }
 }
 
 impl Linked {
   /// *Leave or make local*: *Make local* (N2, not in this version) and *Leave Kontur*, asked in place.
-  fn leave_section(&self, ctx: &mut Ctx, props: &Props, (name, server): (&str, &str), key: &str) -> Element {
+  /// `name` is this project's, `shared` the server project's.
+  fn leave_section(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    (name, shared, server): (&str, &str, &str),
+    key: &str,
+  ) -> Element {
     let make_local = side_row(
       Label::new("sharing-make-local", ctx.t("sharing.linked.makeLocal"))
         .description(ctx.t_args("sharing.linked.makeLocalDescription", [("project", name), ("key", key)])),
@@ -166,7 +183,7 @@ impl Linked {
     if removed {
       control = control.child(page::note("sharing-left", &ctx.t("sharing.linked.left")));
     } else if self.asking.get() {
-      control = control.child(self.question(ctx, (name, server), state.is_pending()));
+      control = control.child(self.question(ctx, (shared, server), state.is_pending()));
     } else {
       let asking = self.asking.clone();
       control = control.child(
@@ -183,7 +200,7 @@ impl Linked {
     let leave = side_row(
       Label::new(
         "sharing-leave-row",
-        ctx.t_args("sharing.linked.leave", [("project", name)]),
+        ctx.t_args("sharing.linked.leave", [("project", shared)]),
       )
       .description(ctx.t_args("sharing.linked.leaveDescription", [("server", server)])),
       control,

@@ -34,11 +34,19 @@ use crate::{
 /// The linked project's repository hint as the server answered, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Hint {
+  name: String,
   hint: Option<RepositoryIdentity>,
   checked: Timestamp,
 }
 
 impl DevtoolsInspectable for Hint {}
+
+impl Hint {
+  /// The server project's name.
+  pub(super) fn name(&self) -> &str {
+    &self.name
+  }
+}
 
 /// The hint, read while `entry` is connected; why it is not known otherwise.
 pub(super) fn hint(ctx: &mut Ctx, link: &SharingLink, entry: Option<&ServerEntry>) -> Option<Result<Hint, Said>> {
@@ -77,6 +85,7 @@ pub(super) fn hint(ctx: &mut Ctx, link: &SharingLink, entry: Option<&ServerEntry
           .find(|listed| listed.project.id == project)
           .ok_or_else(|| Said::new("sharing.linked.repository.notListed"))?;
         Ok(Hint {
+          name: found.project.name,
           hint: found.project.remote_hint,
           checked: Timestamp::now(),
         })

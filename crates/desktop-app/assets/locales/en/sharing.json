@@ -184,7 +184,7 @@
       "owner": "you're an owner",
       "member": "you're a member",
       "noRole": "you're an admin there",
-      "taskListDescription": "{{project}}'s tasks live in {{project}} on {{server}}; every member's computer keeps a copy and keeps working offline. Runs stay on the computer that runs them.",
+      "taskListDescription": "{{local}}'s tasks live in {{project}} on {{server}}; every member's computer keeps a copy and keeps working offline. Runs stay on the computer that runs them.",
       "address": "Project address",
       "addressDescription": "The project this checkout is linked to. Its address is its identity and never changes.",
       "noAddress": "Not read from the server yet",

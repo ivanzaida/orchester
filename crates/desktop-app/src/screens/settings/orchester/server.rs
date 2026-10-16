@@ -211,17 +211,26 @@ impl Component for ServerPanel {
 /// with every attempt to reach it, and the projects linked here show without it.
 fn projects(ctx: &mut Ctx, props: &Props) -> Option<Result<Projects, Said>> {
   let entry = &props.entry;
+  // The words say the projects linked here are listed below only when there are some.
+  let none_here = props.linked.is_empty();
   if !entry.in_use() || matches!(entry.connection, Some(Connection::SignedOut)) {
-    return Some(Err(Said::new("cloud.server.projects.signedOut")));
+    return Some(Err(Said::new(if none_here {
+      "cloud.server.projects.signedOutNoneHere"
+    } else {
+      "cloud.server.projects.signedOut"
+    })));
   }
   if entry.certificate_changed {
     return Some(Err(Said::new("cloud.errors.certificateChanged")));
   }
   match entry.connection {
     Some(Connection::Reconnecting { .. } | Connection::Offline { .. }) => {
-      return Some(Err(
-        Said::new("cloud.server.projects.offline").with("server", entry.stored.name.clone()),
-      ));
+      let key = if none_here {
+        "cloud.server.projects.offlineNoneHere"
+      } else {
+        "cloud.server.projects.offline"
+      };
+      return Some(Err(Said::new(key).with("server", entry.stored.name.clone())));
     }
     Some(Connection::Checking) | None => return None,
     Some(Connection::Connected | Connection::SignedOut) => {}
