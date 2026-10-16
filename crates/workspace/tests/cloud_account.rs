@@ -123,6 +123,29 @@ fn cloud_account_accepting_an_invite_connects_with_the_pin_it_carries() {
   );
 }
 
+/// A server is set up after it starts presenting its own certificate, as `n1_backends` does in TLS mode (N1 design 3),
+/// and its invite is accepted with the pin the cloud names.
+#[test]
+fn cloud_account_a_server_on_its_own_certificate_is_set_up_and_joined() {
+  let cloud = AccountCloud::start();
+  let (mut server, audience) = linked_server(&cloud);
+  server.serve_self_signed();
+  let billing = server.create_named_project(("Billing", "BIL"), "billing", None);
+  let invite = server.project_email_invite(EMAIL, &billing);
+  server.set_join_approval(false);
+  let desktop = Desktop::signed_in(&cloud);
+  let address = ServerAddress::parse(&server.url()).expect("address");
+  let pin = desktop
+    .block_on(Client::presented_certificate(&address))
+    .expect("the server's certificate");
+  cloud.name_server(&audience, &server.url(), Some(&pin.to_hex()));
+  cloud.invite(&invite, Some(("Billing", &format!("{}/billing", server.url()))));
+  let invites = desktop.block_on(desktop.cloud.invites()).expect("invites");
+  let accepted = desktop.block_on(desktop.cloud.accept(&invites[0])).expect("accept");
+  assert!(matches!(accepted.joined, CloudJoined::Joined(_)), "{accepted:?}");
+  assert_eq!(accepted.project.as_deref(), Some("Billing"));
+}
+
 #[test]
 fn cloud_account_declining_an_invite_ends_it() {
   let cloud = AccountCloud::start();

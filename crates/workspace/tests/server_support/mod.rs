@@ -103,8 +103,8 @@ impl TestServer {
   }
 
   /// Starts the server again on the same data directory, at a new port, presenting its own generated certificate:
-  /// what was set up over plain HTTP (accounts, the cloud link, invites) stays. Set-up requests speak plain HTTP, so
-  /// a test sets up first.
+  /// what was set up over plain HTTP (accounts, the cloud link, invites) stays. Set-up requests from then on trust
+  /// exactly that certificate (N1 design 3: `n1_backends` sets up after the switch).
   pub fn serve_self_signed(&mut self) {
     if let Some(stop) = self.stop.take() {
       // The server may have stopped already; a new one takes its place either way.
@@ -112,6 +112,12 @@ impl TestServer {
     }
     let (server, address, stop) = serve(&self.runtime, &self._directory, (TlsMode::SelfSigned, None));
     (self.server, self.address, self.stop, self.tls) = (server, address, Some(stop), true);
+    let address = ServerAddress::parse(&self.url()).expect("address");
+    self.pin = Some(
+      self
+        .block_on(Client::presented_certificate(&address))
+        .expect("the server's certificate"),
+    );
   }
 
   /// The address as a person types it.
