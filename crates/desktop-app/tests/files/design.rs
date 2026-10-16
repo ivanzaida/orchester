@@ -45,6 +45,26 @@ fn files_say_why_open_in_editor_is_unavailable_on_a_line_of_its_own_under_the_bu
 }
 
 #[test]
+fn files_header_keeps_its_height_while_open_in_editor_says_why_it_is_unavailable() {
+  let mut files = Files::new();
+  files.open(Some("README.md"), Version::Checkout);
+  assert!(!files.exists("files-open-reason"));
+  let without = files.bounds("files-header").height;
+  files.open(Some("logo.png"), Version::Checkout);
+  files.window.until("the reason", |w| {
+    w.tree.get_element_by_id("files-open-reason").is_some()
+  });
+  let with = files.bounds("files-header").height;
+  near(without, 105.0, "the header without a reason (`TpYaM`)");
+  near(with, without, "the reason beside the meta line, as in `mQeh3`");
+  let (reason, meta) = (files.bounds("files-open-reason"), files.bounds("files-meta"));
+  assert!(
+    reason.x >= meta.x + meta.width - 0.5,
+    "the meta line ends before the reason: {meta:?}, {reason:?}"
+  );
+}
+
+#[test]
 fn files_header_tree_and_find_bar_have_the_designs_sizes() {
   let mut files = Files::new();
   files.open(Some("src/main.rs"), Version::Checkout);

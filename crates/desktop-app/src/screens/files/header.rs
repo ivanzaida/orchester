@@ -2,8 +2,10 @@
 //! it): the crumbs (the project, *Files*, the file's folders in Geist Mono), the title row (an 18 icon, the
 //! file's name in 20/600, then *Go to file…*, the version switch, *Copy lines* or *Copy file* and *Open in
 //! editor*) and a line saying where the file was read and what it is ("Run #12 worktree · ORC-24 · Rust ·
-//! 612 lines · 21.4 KB"). Why *Open in editor* is unavailable is a line of its own under the buttons, at their
-//! end (`Actions` `mQeh3`), so a long meta line never covers it. Every crumb is an ancestor of the file, all in
+//! 612 lines · 21.4 KB"). As the Tasks header (`mQeh3`) lays it out, the title and the meta line are a column on
+//! the left, the meta cut with an ellipsis when it is long, and the actions a column on the right with why *Open in
+//! editor* is unavailable under them, at their end: the reason sits beside the meta line, so the header keeps its
+//! height, and a long reason wraps inside its column. Every crumb is an ancestor of the file, all in
 //! `text_muted`. A path the page refuses is its title in Geist Mono with a `ban` icon (`S3Py8v`);
 //! with no file the title is *Files* (`o3iVXj`); a version that no longer exists says so in `warning`
 //! (`SyXwU`).
@@ -13,8 +15,8 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
-  layout::Alignment,
+  components::{Column, Row, Text, TextOverflow},
+  layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::{
@@ -35,7 +37,6 @@ use crate::{
     code_box::Copier,
     icon::{Icon, file_icon, icon},
     message::message_text,
-    unavailable::with_reason,
   },
 };
 
@@ -43,6 +44,8 @@ use crate::{
 const CRUMBS_HEIGHT: f32 = 16.0;
 const TITLE_HEIGHT: f32 = 28.0;
 const META_HEIGHT: f32 = 15.0;
+/// The most of the header's width the actions and their reason take; a longer reason wraps there.
+const ACTIONS_MAX_SHARE: f32 = 60.0;
 
 pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
   let (switch, menu) = version::switch(ctx, page);
@@ -59,17 +62,32 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
     .file()
     .filter(|_| shows_open(page, gone))
     .and_then(|file| open_unavailable(page, file));
-  let actions: Element = match reason {
-    Some(key) => with_reason(buttons, "files-open-reason", &ctx.t(key)).into(),
-    None => buttons.into(),
-  };
+  let reason = reason.map(|key| {
+    Text::new(&ctx.t(key))
+      .id("files-open-reason")
+      .variant(TypographyStyle::Caption)
+      .text_align(TextAlign::Right)
+      .describe("role", "unavailable-reason")
+  });
+  let actions = Column::new()
+    .id("files-actions-column")
+    .max_width(Dimension::Pct(ACTIONS_MAX_SHARE))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::End)
+    .child(buttons)
+    .with_children(reason);
+  let named = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Sm)
+    .child(title(ctx, page).height(Dimension::Px(TITLE_HEIGHT)))
+    .child(meta(ctx, page, gone));
   let title = Row::new()
     .id("files-title-row")
     .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
+    .spacing(SpacingSize::Lg)
     .align_items(Alignment::Start)
-    .child(title(ctx, page).height(Dimension::Px(TITLE_HEIGHT)))
-    .child(Row::new().flex(1.0))
+    .child(named)
     .child(actions);
   Column::new()
     .id("files-header")
@@ -85,7 +103,6 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(crumbs(ctx, page))
     .child(title)
-    .child(meta(ctx, page, gone))
     .with_children(menu)
     .into()
 }
@@ -184,7 +201,10 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
         .id("files-meta-text")
         .variant(ExtraTypography::Note.role())
         .color(color)
-        .nowrap(),
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
     .with_children(refusal)
     .with_children(stale)
