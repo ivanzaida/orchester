@@ -3,12 +3,12 @@ import { redirect } from "next/navigation";
 
 import { ButtonLink } from "@orchester/ui/components/button";
 import { Callout } from "@orchester/ui/components/callout";
-import { ErrorLine } from "@orchester/ui/components/status";
 import { Submit } from "@orchester/ui/components/submit";
 
 import { FirstVisitCheck } from "@/components/certificate";
 import { CsrfField, Hidden } from "@/components/hidden";
 import { CardHead, EntryCard, EntryShell, Pair, Small } from "@/components/page";
+import type { IconName } from "@orchester/ui/components/icon";
 import { t, type MessageKey } from "@/lib/i18n";
 import type { ServerInfo } from "@/lib/model";
 import { loadServer } from "@/lib/server/admin";
@@ -19,18 +19,36 @@ import styles from "./signin.module.css";
 
 export const metadata: Metadata = { title: t("signin.pageTitle") };
 
-/** What the trip back from Orchester Cloud ended with, as the sign-in page says it. Only these fixed words. */
-const FAILURES: Readonly<Record<string, MessageKey>> = {
-  not_invited: "signin.notInvited",
-  invalid_identity: "signin.invalidIdentity",
-  key_set_stale: "signin.keySetStale",
-  cloud_off: "signin.cloudOff",
-  approval_required: "signin.approvalRequired",
-  rate_limited: "signin.tooMany",
-  trip: "signin.tripLost",
-  expired: "error.formExpired",
-  unavailable: "signin.failed",
+interface Failure {
+  readonly tone: "warning" | "danger";
+  readonly icon: IconName;
+  readonly title: MessageKey;
+  readonly text: MessageKey;
+}
+
+/**
+ * What the trip back from Orchester Cloud ended with, as the sign-in page says it: a callout in the card, as
+ * `j8WujU` draws page-level messages (its *Sign-ins through Orchester Cloud are off*). Join approval is a warning, the
+ * way on; the rest went wrong. Only these fixed words.
+ */
+const FAILURES: Readonly<Record<string, Failure>> = {
+  approval_required: { tone: "warning", icon: "monitor-smartphone", title: "signin.approvalRequiredTitle", text: "signin.approvalRequiredText" },
+  not_invited: { tone: "danger", icon: "user-x", title: "signin.notInvitedTitle", text: "signin.notInvitedText" },
+  invalid_identity: { tone: "danger", icon: "shield-alert", title: "signin.invalidIdentityTitle", text: "signin.invalidIdentityText" },
+  key_set_stale: { tone: "danger", icon: "key-round", title: "signin.keySetStaleTitle", text: "signin.keySetStaleText" },
+  cloud_off: { tone: "danger", icon: "cloud-off", title: "signin.cloudOffTitle", text: "signin.cloudOffNow" },
+  rate_limited: { tone: "danger", icon: "clock", title: "signin.tooManyTitle", text: "signin.tooManyText" },
+  trip: { tone: "danger", icon: "refresh-cw", title: "signin.tripLostTitle", text: "signin.tripLostText" },
+  expired: { tone: "danger", icon: "refresh-cw", title: "signin.expiredTitle", text: "signin.expiredText" },
+  unavailable: { tone: "danger", icon: "circle-alert", title: "signin.failedTitle", text: "signin.failedText" },
 };
+
+function FailureCallout({ failure, server }: { failure: Failure; server: string }) {
+  return (
+    <Callout tone={failure.tone} icon={failure.icon} title={t(failure.title, { server })} body={t(failure.text, { server })}
+      role={failure.tone === "danger" ? "alert" : "status"} />
+  );
+}
 
 /** *Sign in with Orchester Cloud*, or why it is not offered now (`j8WujU`). */
 function CloudSignIn({ server, csrf }: { server: ServerInfo; csrf: string }) {
@@ -73,7 +91,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
       <Pair>
         <EntryCard>
           <CardHead title={t("signin.title", { server: server.name })} description={t("signin.description")} />
-          {failure !== undefined && <ErrorLine>{t(failure, { server: server.name })}</ErrorLine>}
+          {failure !== undefined && <FailureCallout failure={failure} server={server.name} />}
           <CloudSignIn server={server} csrf={await formToken()} />
           {cloudReady && (
             <div className={styles.or}>

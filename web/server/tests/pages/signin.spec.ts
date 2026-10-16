@@ -95,7 +95,10 @@ test.describe("sign in with Orchester Cloud", () => {
     await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
     await page.getByRole("button", { name: "Continue as stranger@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin/signin?failed=not_invited`);
-    await expect(page.getByText("There's no account on Kontur team for that Orchester account.", { exact: false })).toBeVisible();
+    // Design 1, M1: a page-level failure is a callout in the card (`j8WujU`), never a field error with no field.
+    const callout = page.getByRole("alert").filter({ hasText: "No account on Kontur team" });
+    await expect(callout.getByText("No account on Kontur team", { exact: true })).toBeVisible();
+    await expect(callout.getByText("That Orchester account has no account here. An admin can invite you.")).toBeVisible();
   });
 
   test("with join approval on, a cloud sign-in asks for a code from one of the person's computers", async ({ page }) => {
@@ -103,8 +106,9 @@ test.describe("sign in with Orchester Cloud", () => {
     await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
     await page.getByRole("button", { name: "Continue as approval@example.com" }).click();
     await expect(page).toHaveURL(`${ADMIN}/admin/signin?failed=approval_required`);
-    await expect(page.getByText("Join approval is on, so a sign-in through Orchester Cloud needs one of your computers",
-      { exact: false })).toBeVisible();
+    const callout = page.getByRole("status").filter({ hasText: "Join approval is on" });
+    await expect(callout.getByText("Join approval is on", { exact: true })).toBeVisible();
+    await expect(callout.getByText("Signing in through Orchester Cloud needs one of your computers", { exact: false })).toBeVisible();
   });
 
   test("nothing to manage names who the cloud vouched for", async ({ page }) => {
@@ -136,7 +140,8 @@ test.describe("the cloud sign-in's state", () => {
     expect(answer.headers().location).toContain("/admin/signin?failed=trip");
     expect((await apiRequests()).some((r) => r.path === "/api/v1/auth/cloud")).toBe(false);
     await page.goto("/admin/signin?failed=trip");
-    await expect(page.getByText("That sign-in took too long or came back to another browser.", { exact: false })).toBeVisible();
+    const callout = page.getByRole("alert").filter({ hasText: "That sign-in didn't come back" });
+    await expect(callout.getByText("It took too long, or came back to another browser. Start again.")).toBeVisible();
   });
 });
 
