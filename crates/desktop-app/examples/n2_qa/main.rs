@@ -80,10 +80,30 @@ pub enum State {
   Conflict,
   /// A shared task whose pipeline this computer lacks: its page (*This task*).
   MissingPipeline,
+  /// The first link's page after a task was added meanwhile: *Kontur's tasks changed…* with *Review again*.
+  UploadChanged,
+  /// The first link's page after an MCP client's press on the discovery switch: the person-only note under it.
+  UploadPersonOnly,
+  /// *Link to Kontur…* on a server that names another address for its projects: the link's error.
+  LinkForeign,
+  /// Linked as an owner, then signed out of the server: the members as last read, Manage unavailable.
+  MembersSignedOut,
+  /// Linked from another computer's list of servers, so this one doesn't have the project's server: the members as
+  /// last read, and *Write orchester.toml* pressed, with why it isn't written.
+  NoServer,
+  /// Removed from the project, then signed out: the removed notice and the members' note without a username.
+  RemovedSignedOut,
+  /// *Make local*'s question once this computer signed out: the claims unknown.
+  MakeLocalSignedOut,
+  /// *Make local* confirmed as the server went away: the success callout names the claims not released.
+  MadeLocalStale,
+  /// Linked as an owner with a project address on another server (a link from before the check): Manage
+  /// unavailable, and *Write orchester.toml* pressed, with why it isn't written.
+  DiscoveryForeign,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 17] = [
+  const ALL: [(&'static str, Self); 26] = [
     ("upload", Self::Upload),
     ("download", Self::Download),
     ("review", Self::Review),
@@ -101,6 +121,15 @@ impl State {
     ("discovery-unconnected", Self::DiscoveryUnconnected),
     ("conflict", Self::Conflict),
     ("missing-pipeline", Self::MissingPipeline),
+    ("upload-changed", Self::UploadChanged),
+    ("upload-person-only", Self::UploadPersonOnly),
+    ("link-foreign", Self::LinkForeign),
+    ("members-signed-out", Self::MembersSignedOut),
+    ("no-server", Self::NoServer),
+    ("removed-signed-out", Self::RemovedSignedOut),
+    ("make-local-signed-out", Self::MakeLocalSignedOut),
+    ("made-local-stale", Self::MadeLocalStale),
+    ("discovery-foreign", Self::DiscoveryForeign),
   ];
 
   fn named(name: &str) -> Option<Self> {

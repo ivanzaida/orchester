@@ -57,6 +57,8 @@ pub(super) struct Facts {
   pub tasks: usize,
   /// A linked project's `orchester.toml` against its address.
   pub linked_discovery: Option<LinkedDiscovery>,
+  /// A linked project's server as the list holds it, signed in to or not; `None` once it left the list.
+  pub linked: Option<ServerEntry>,
   /// A linked project's repository hint as last read, and when, for while the server doesn't say.
   pub cached_hint: Option<(Option<RepositoryIdentity>, orchester_core::time::Timestamp)>,
 }
@@ -66,8 +68,7 @@ impl DevtoolsInspectable for Facts {}
 impl Facts {
   /// The linked project's server, when it is still in the list.
   pub fn linked_server(&self) -> Option<&ServerEntry> {
-    let link = self.link.as_ref()?;
-    self.servers.iter().find(|entry| entry.stored.id == link.server)
+    self.linked.as_ref()
   }
 }
 
@@ -85,10 +86,18 @@ impl Component for Sharing {
   type Props = TabProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let (made_local, scroll) = (ctx.signal(make_local::Made::default()), ScrollState::new());
+    // What Make local did is said at the top of the page, which its question had scrolled to the bottom of.
+    let top = scroll.clone();
+    ctx.watch(&made_local, move |made| {
+      if made.0.is_some() {
+        top.scroll_to_top_pending();
+      }
+    });
     Self {
       revision: ctx.signal(0),
-      made_local: ctx.signal(make_local::Made::default()),
-      scroll: ScrollState::new(),
+      made_local,
+      scroll,
       scrolled: ctx.signal(false),
     }
   }
@@ -170,12 +179,11 @@ fn read(
     .as_ref()
     .and_then(|link| link.address.as_deref())
     .map(|address| discovery::inspect_linked(programs, root, address));
-  let servers = servers
-    .entries()
-    .map_err(|_| Said::new("cloud.errors.local"))?
-    .into_iter()
-    .filter(ServerEntry::in_use)
-    .collect();
+  let entries = servers.entries().map_err(|_| Said::new("cloud.errors.local"))?;
+  let linked = link
+    .as_ref()
+    .and_then(|link| entries.iter().find(|entry| entry.stored.id == link.server).cloned());
+  let servers = entries.into_iter().filter(ServerEntry::in_use).collect();
   Ok(Facts {
     link,
     servers,
@@ -183,6 +191,7 @@ fn read(
     discovery: discovery::project(root),
     tasks,
     linked_discovery,
+    linked,
     cached_hint,
   })
 }

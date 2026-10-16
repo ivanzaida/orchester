@@ -59,7 +59,7 @@ pub(super) struct Props {
   /// The server project's name, its address and the person's role there.
   pub shared: String,
   pub address: Option<String>,
-  /// The project's server while this computer is signed in to it: *Manage* opens its admin.
+  /// The project's server while it is in the list: *Manage* opens its admin while this computer is signed in to it.
   pub entry: Option<ServerEntry>,
   pub owner: bool,
   pub admin: bool,
@@ -274,6 +274,7 @@ fn admin_page(ctx: &Ctx, props: &Props) -> Result<(ServerEntry, String), std::sy
   let entry = props
     .entry
     .clone()
+    .filter(ServerEntry::in_use)
     .ok_or_else(|| ctx.t_args("sharing.members.manageNoServer", [server]))?;
   let text = props
     .address

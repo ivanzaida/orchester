@@ -153,7 +153,7 @@ impl Component for UploadPage {
           }
           Err(ShareError::Sharing(SharingError::ProjectChanged)) => Err(Failure::Changed),
           Err(ShareError::Taken { .. }) => Err(Failure::Other(Said::new("sharing.upload.taken"))),
-          Err(ShareError::Sharing(error)) => Err(Failure::Other(linking_said(&error))),
+          Err(ShareError::Sharing(error)) => Err(Failure::Other(sharing_said(&error))),
         }
       }
     });
@@ -361,7 +361,7 @@ async fn review_again(
   let plan = servers
     .link_plan(&upload.entry, root, upload.plan.project.clone())
     .await
-    .map_err(|error| linking_said(&error))?;
+    .map_err(|error| sharing_said(&error))?;
   if let LinkKind::Review { .. } = plan.kind {
     return Err(Said::new("sharing.upload.taken"));
   }
@@ -372,14 +372,6 @@ async fn review_again(
     key: IdempotencyKey::generate(),
   }))));
   Ok(())
-}
-
-/// What the page says about `error`; a project address on another server is named as such.
-fn linking_said(error: &SharingError) -> Said {
-  match error {
-    SharingError::ForeignAddress => Said::new("sharing.upload.foreignAddress"),
-    error => sharing_said(error),
-  }
 }
 
 /// Kontur › Project settings › Sharing › Link to Kontur team; the settings' crumbs put the page away with `close`.

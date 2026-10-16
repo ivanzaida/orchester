@@ -148,7 +148,7 @@ impl Component for Linked {
       discovery::Props {
         project: props.project.clone(),
         address: link.address.clone(),
-        server: entry.map(|entry| entry.address.clone()),
+        server: entry.map(|entry| (entry.stored.name.clone(), entry.address.clone())),
         discovery: props.facts.linked_discovery.clone(),
         revision: props.revision.clone(),
       },

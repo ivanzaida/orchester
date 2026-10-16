@@ -76,6 +76,17 @@ impl TestServer {
     server
   }
 
+  /// A server on plain HTTP that names `https://localhost:<its port>` as its address, as one behind a proxy that
+  /// announces another address than the one a computer reaches it by: the project addresses it reports are on another
+  /// server than the one that computer connected to.
+  pub fn start_announcing_another_address() -> Self {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+      .and_then(|listener| listener.local_addr())
+      .expect("a free port")
+      .port();
+    Self::open(TlsMode::Off, Some(port))
+  }
+
   fn with(tls: TlsMode) -> Self {
     Self::open(tls, None)
   }

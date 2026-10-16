@@ -41,8 +41,9 @@ use crate::{
 pub(super) struct Props {
   pub project: ShownProject,
   pub address: Option<String>,
-  /// The project's server while this computer is signed in to it; the address is written only on it.
-  pub server: Option<ServerAddress>,
+  /// The project's server while it is in the list, its name and address: the project's address is written only when
+  /// it is on that server.
+  pub server: Option<(String, ServerAddress)>,
   pub discovery: Option<LinkedDiscovery>,
   pub revision: Signal<u64>,
 }
@@ -81,11 +82,11 @@ impl Component for DiscoveryRow {
       let (root, address, server, revision) = (root.clone(), address.clone(), server.clone(), revision.clone());
       async move {
         let address = address.ok_or_else(|| Said::new("sharing.discovery.noAddress"))?;
-        let server = server.ok_or_else(|| Said::new("sharing.discovery.noServer"))?;
+        let (name, server) = server.ok_or_else(|| Said::new("sharing.discovery.noServer"))?;
         let address = ProjectAddress::reported(&address, &server)
           .map_err(|error| {
             tracing::warn!(%error, "orchester.toml was not written");
-            Said::new("sharing.discovery.foreignAddress").with("server", server.as_str())
+            Said::new("sharing.discovery.foreignAddress").with("server", name)
           })?
           .to_text();
         background::run(move || discovery::write(&root, &address))
