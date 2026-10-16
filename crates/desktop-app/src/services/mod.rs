@@ -1,8 +1,8 @@
 //! What a started session works with, shared by the window and the app's MCP tools: the workspace and
 //! its projects, the projects' runners, the session's background activity, the programs git work runs,
-//! the clock, the keychain, the shared servers and Orchester Cloud, where web pages open, what automation changed and is merging or removing, and
-//! the window's close flow and the start-up recovery of the runs the previous session left interrupted.
-//! They come from `orchester-workspace`, which the deprecated desktop shares; this app only puts them
+//! the clock, the keychain, the shared servers and Orchester Cloud, where web pages open, what automation changed and
+//! is merging or removing, and the window's close flow and the start-up recovery of the runs the previous session left
+//! interrupted. They come from `orchester-workspace`, which the deprecated desktop shares; this app only puts them
 //! together ([`Services::start`]) and hands them to its screens ([`Services::of`]).
 //!
 //! The shared servers' connection monitor and the shared projects' sync run on the app's runtime while

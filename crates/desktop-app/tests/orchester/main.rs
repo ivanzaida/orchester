@@ -61,7 +61,7 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
     .block_on(Client::presented_certificate(&address))
     .expect("certificate");
   cloud.name_server(&audience, &server.url(), Some(&pin.to_hex()));
-  cloud.invite(&invite, Some(&format!("{}/billing", server.url())));
+  cloud.invite(&invite, Some(("Billing", &format!("{}/billing", server.url()))));
 
   let mut window = window(None);
   let services = window.launch.services().expect("services").clone();

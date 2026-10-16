@@ -18,7 +18,7 @@ use super::{
   Said,
   parts::{hint, section, section_title},
   server::{Projects, Props},
-  words::counted,
+  words::{counted, shown_address},
 };
 use crate::{
   navigation::Navigation,
@@ -195,7 +195,7 @@ fn lines(ctx: &Ctx, id: &str, shown: &Shown<'_>) -> Column {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(
-      Text::new(&shown.address)
+      Text::new(shown_address(&shown.address))
         .variant(OrchesterText::Address.role())
         .nowrap(),
     )

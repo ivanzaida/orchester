@@ -269,10 +269,15 @@
       "tooManyCodes": "The server holds as many open codes as it allows. Try again once one is used or expires."
     },
     "notice": {
-      "body": "{{address}} · expires {{expires}}",
+      "body": "{{role}} · {{address}} · expires {{expires}}",
       "many": "{{count}} invites wait for you",
       "manyBody": "Invites to projects and servers, through Orchester Cloud.",
-      "review": "Review"
+      "review": "Review",
+      "role": {
+        "owner": "As an owner",
+        "member": "As a member",
+        "server": "To the server"
+      }
     }
   }
 }

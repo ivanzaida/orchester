@@ -64,10 +64,16 @@ impl InvitesNotice {
       .project
       .as_ref()
       .map_or_else(|| invite.server.address.clone(), |project| project.address.clone());
+    let role = ctx.t(match invite.role {
+      Some(orchester_api::MemberRole::Owner) => "cloud.notice.role.owner",
+      Some(orchester_api::MemberRole::Member) => "cloud.notice.role.member",
+      None => "cloud.notice.role.server",
+    });
     let body = ctx.t_args(
       "cloud.notice.body",
       [
-        ("address", address),
+        ("role", role.to_string()),
+        ("address", super::words::shown_address(&address).to_owned()),
         ("expires", day(ctx, Timestamp::from_unix_millis(invite.expires_at))),
       ],
     );

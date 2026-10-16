@@ -19,7 +19,7 @@ use crate::{
   routes::{OrchesterView, Route},
   screens::{
     project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::Said,
+    settings::orchester::{Said, shown_address},
   },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
@@ -210,7 +210,7 @@ impl Link {
       .flex(1.0)
       .spacing(ExtraSpacing::Hair.role())
       .child(radio)
-      .child(Text::new(&project.project.address).variant(OrchesterText::Address.role()))
+      .child(Text::new(shown_address(&project.project.address)).variant(OrchesterText::Address.role()))
       .child(Text::new(&hint).variant(ExtraTypography::Note.role()));
     if project.checkout.is_some() {
       lines = lines.child(

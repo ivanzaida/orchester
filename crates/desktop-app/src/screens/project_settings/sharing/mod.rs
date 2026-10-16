@@ -23,8 +23,10 @@ use orchester_workspace::{
   background,
   sharing::{
     ServerEntry, Servers,
-    project::discovery::{self, ProjectDiscovery},
-    project::link::checkout_origin,
+    project::{
+      discovery::{self, ProjectDiscovery},
+      link::checkout_origin,
+    },
   },
 };
 

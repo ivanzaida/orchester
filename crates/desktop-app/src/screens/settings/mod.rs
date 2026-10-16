@@ -1,9 +1,9 @@
 //! The app's settings: a header with its tabs (`General · Automation · Accounts · Orchester`, `t098v`, `lye6f` and
-//! `Cu20b`) over the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and *What automation may do*: the
-//! person's own switches for what automation may widen through the MCP server and whether the Orchestrator chat
-//! publishes its drafts itself, which no tool can change. *Accounts* (`accounts`, layer `hgOl2`) holds the person's
-//! agent CLI accounts. *Orchester* (`orchester`) holds the Orchester Cloud account and the team servers, and *Connect a
-//! server* replaces the whole page. *General* is not built in this app yet and says so.
+//! `Cu20b`) over the open tab. *Automation* (`lye6f`) holds *Orchester MCP server* (`server`) and *What automation may
+//! do*: the person's own switches for what automation may widen through the MCP server and whether the Orchestrator
+//! chat publishes its drafts itself, which no tool can change. *Accounts* (`accounts`, layer `hgOl2`) holds the
+//! person's agent CLI accounts. *Orchester* (`orchester`) holds the Orchester Cloud account and the team servers, and
+//! *Connect a server* replaces the whole page. *General* is not built in this app yet and says so.
 
 mod accounts;
 mod automation;

@@ -179,6 +179,12 @@ fn minutes(said: Said, retry_after: Option<u64>) -> Said {
   said.with("minutes", minutes.to_string())
 }
 
+/// A project's address as lists show it: without `https://`, `orchester.kontur.dev/billing`; a plain HTTP address
+/// keeps its scheme, so it never reads as an encrypted one.
+pub fn shown_address(address: &str) -> &str {
+  address.strip_prefix("https://").unwrap_or(address)
+}
+
 /// A day as the design writes it, `Oct 14`.
 pub fn day(ctx: &Ctx, at: Timestamp) -> String {
   let (month, day) = display::month_day(at);

@@ -21,7 +21,7 @@ use orchester_workspace::sharing::{CloudJoined, cloud::Accepted};
 use super::{
   Invites, Said,
   parts::{paragraph, section as part, section_title},
-  words::{cloud_error, counted, day},
+  words::{cloud_error, counted, day, shown_address},
 };
 use crate::{
   services::Services,
@@ -245,7 +245,11 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, answers: &Answers) -> Element {
       Row::new()
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(Text::new(&address).variant(OrchesterText::Address.role()).nowrap())
+        .child(
+          Text::new(shown_address(&address))
+            .variant(OrchesterText::Address.role())
+            .nowrap(),
+        )
         .child(Text::new(&ctx.t("cloud.factSeparator")).variant(ExtraTypography::Note.role()))
         .child(Text::new(&dates).variant(ExtraTypography::Note.role()).nowrap()),
     );

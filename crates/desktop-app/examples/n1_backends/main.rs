@@ -53,7 +53,7 @@ fn main() {
     )
   };
   cloud.name_server(&audience, &server.url(), pin.map(|pin| pin.to_hex()).as_deref());
-  cloud.invite(&invite, Some(&format!("{}/billing", server.url())));
+  cloud.invite(&invite, Some(("Billing", &format!("{}/billing", server.url()))));
   let backends = json!({
     "server": server.url(),
     "check_code": pin.map(|pin| pin.check_code()),

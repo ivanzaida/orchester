@@ -89,13 +89,13 @@ impl AccountCloud {
     }));
   }
 
-  /// An invite from Alice to the project `project` (its address) on the named server, carrying the team server's
-  /// invite id `invite`.
-  pub fn invite(&self, invite: &str, project: Option<&str>) {
+  /// An invite from Alice to `project` (its name and address) on the named server, or to the server alone, carrying
+  /// the team server's invite id `invite`.
+  pub fn invite(&self, invite: &str, project: Option<(&str, &str)>) {
     let mut state = self.state.lock();
     let server = state.server.clone().expect("the server is named first");
     let now = now() * 1000;
-    let project = project.map(|address| json!({"address": address, "name": "Kontur"}));
+    let project = project.map(|(name, address)| json!({"address": address, "name": name}));
     state.invites.push(json!({
       "id": invite, "server": server, "kind": if project.is_some() { "project" } else { "server" },
       "project": project, "role": project.as_ref().map(|_| "member"), "inviter": "Alice Moreau",
