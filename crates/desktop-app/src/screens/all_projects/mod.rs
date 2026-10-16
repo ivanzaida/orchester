@@ -118,6 +118,7 @@ impl Component for AllProjects {
       Some(Listing::Welcome) | None => Vec::new(),
     };
     let reports = reports(ctx, (&services.runners, &self.seen), &entries);
+    let work = reports.total();
     let data = read_data(ctx, (&services, &self.read), Entries(entries.clone(), reports));
     folder::follow(ctx, &open, &self.followed);
     let failed = listing.error.clone().filter(|_| !listing.is_pending());
@@ -198,6 +199,11 @@ impl DevtoolsInspectable for Reported {}
 impl Reported {
   fn of(&self, entry: &ProjectEntry) -> u64 {
     self.0.get(&entry.project.repo_root).copied().unwrap_or(0)
+  }
+
+  /// How often the listed projects' runners reported in all; it grows with each report, as no count goes back.
+  fn total(&self) -> u64 {
+    self.0.values().sum()
   }
 }
 
