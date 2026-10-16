@@ -19,6 +19,7 @@ mod project;
 mod seed;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
+mod two_factor;
 #[path = "../secrets_qa/vault.rs"]
 #[allow(dead_code, reason = "the secrets QA's delays and failures are not used here")]
 mod vault;
@@ -71,10 +72,23 @@ pub enum State {
   /// The same, then signed out and in as another Orchester Cloud account: Settings › Orchester and the status bar
   /// show none of the first account's servers (servers per account).
   OtherAccount,
+  /// Two-factor authentication off, the Billing invite waiting: *Turn on…* in the header, *Turn on two-factor
+  /// authentication* on the invite (`hC11x`, `qwDH9` cell 1).
+  TwoFactorOff,
+  /// Signed in without a code, *Accept* pressed and refused: *Sign in again to accept* (`rPG8h`).
+  SignInAgain,
+  /// Signed in without a code: *Sign in again* in *Accept*'s place, as after *Not now* (`qwDH9` cell 3).
+  NotNow,
+  /// All projects' notice with two-factor authentication off (`qwDH9` cell 2).
+  NoticeOff,
+  /// All projects' notice after its *Accept* was refused for want of a code (`qwDH9` cell 4).
+  NoticeRefused,
+  /// Signed in with a recovery code that left one: the warning in Settings › Orchester (no frame).
+  FewRecoveryCodes,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 12] = [
+  const ALL: [(&'static str, Self); 18] = [
     ("signed-in", Self::SignedIn),
     ("pending", Self::Pending),
     ("failed", Self::Failed),
@@ -87,6 +101,12 @@ impl State {
     ("link-confirm", Self::LinkConfirm),
     ("linked", Self::Linked),
     ("other-account", Self::OtherAccount),
+    ("two-factor-off", Self::TwoFactorOff),
+    ("sign-in-again", Self::SignInAgain),
+    ("not-now", Self::NotNow),
+    ("notice-off", Self::NoticeOff),
+    ("notice-refused", Self::NoticeRefused),
+    ("few-recovery-codes", Self::FewRecoveryCodes),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -94,6 +114,18 @@ impl State {
       .iter()
       .find(|(known, _)| *known == name)
       .map(|(_, state)| *state)
+  }
+
+  const fn two_factor(self) -> bool {
+    matches!(
+      self,
+      Self::TwoFactorOff
+        | Self::SignInAgain
+        | Self::NotNow
+        | Self::NoticeOff
+        | Self::NoticeRefused
+        | Self::FewRecoveryCodes
+    )
   }
 }
 
@@ -118,7 +150,15 @@ fn main() -> Result<(), Box<dyn Error>> {
   );
   let services = launch.services().ok_or("the QA session did not start")?.clone();
   let workspace = launch.workspace().ok_or("the QA session did not start")?.clone();
-  let route = seed::seed(state, (&backends, &services, &workspace), (&runtime, data.path()))?;
+  let (route, press) = if state.two_factor() {
+    seed::sign_in(&backends, &services, &runtime)?;
+    two_factor::seed(state, (&backends, &services, &workspace), (&runtime, data.path()))?
+  } else {
+    (
+      seed::seed(state, (&backends, &services, &workspace), (&runtime, data.path()))?,
+      None,
+    )
+  };
   let start = match launch.start() {
     Start::Ready(mut ready) => {
       ready.landing.route = route;
@@ -135,17 +175,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     scratch.join("mcp").display(),
     data.path().display()
   );
-  window(&runtime, (&launch, start), (position, sharing))?;
+  let press = press.as_ref().map(|press| (press, &backends.cloud));
+  window(&runtime, (&launch, start), (position, sharing, press))?;
   launch.end();
   Ok(())
 }
 
+/// A press of a two-factor state, at the stand-in cloud whose session it changes.
+type Pressing<'a> = Option<(&'a two_factor::Press, &'a account_cloud::AccountCloud)>;
+
 /// The window on `start` until it closes, with the app's MCP server in QA mode; `sharing`: the state to open
-/// Project settings › Sharing for, and the server ([`project::open_sharing`]).
+/// Project settings › Sharing for, and the server ([`project::open_sharing`]); `press`: a press of a two-factor state
+/// ([`two_factor::drive`]).
 fn window(
   runtime: &Runtime,
   (launch, start): (&Launch, Start),
-  (position, sharing): (Option<WindowPosition>, Option<(State, String)>),
+  (position, sharing, press): (Option<WindowPosition>, Option<(State, String)>, Pressing<'_>),
 ) -> Result<(), Box<dyn Error>> {
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
@@ -175,6 +220,10 @@ fn window(
   if let Some((state, server)) = sharing {
     tree.resize(1440, 900);
     project::open_sharing(&mut app, &mut tree, (state, &server))?;
+  }
+  if let Some(press) = press {
+    tree.resize(1440, 900);
+    two_factor::drive(&mut app, &mut tree, press)?;
   }
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let window = WinitWindow::new(app, tree)

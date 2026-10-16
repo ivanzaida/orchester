@@ -34,15 +34,7 @@ pub fn seed(
   (backends, services, workspace): (&Backends, &Services, &Workspace),
   (runtime, folder): (&Runtime, &Path),
 ) -> Result<Route, Box<dyn Error>> {
-  let repo = folder.join("repo-kontur");
-  std::fs::create_dir_all(&repo)?;
-  git(&repo, &["init", "-q"])?;
-  git(&repo, &["remote", "add", "origin", KONTUR_REMOTE])?;
-  let project = Project::new(ProjectId::generate(), ProjectKey::new("KON")?, Name::new("Kontur")?);
-  workspace.create(NewProject {
-    project: project.clone(),
-    repo_root: repo.clone(),
-  })?;
+  let (project, repo) = register_kontur(workspace, folder)?;
   let kontur = backends.invite_to("Kontur", &backends.kontur);
   let joined = runtime.block_on(async {
     let listed = services.cloud.invites().await?;
@@ -72,6 +64,21 @@ pub fn seed(
   })
 }
 
+/// Registers Kontur in a git repository in `folder` whose `origin` is the one Kontur on the team server names; the
+/// project and its repository.
+pub fn register_kontur(workspace: &Workspace, folder: &Path) -> Result<(Project, std::path::PathBuf), Box<dyn Error>> {
+  let repo = folder.join("repo-kontur");
+  std::fs::create_dir_all(&repo)?;
+  git(&repo, &["init", "-q"])?;
+  git(&repo, &["remote", "add", "origin", KONTUR_REMOTE])?;
+  let project = Project::new(ProjectId::generate(), ProjectKey::new("KON")?, Name::new("Kontur")?);
+  workspace.create(NewProject {
+    project: project.clone(),
+    repo_root: repo.clone(),
+  })?;
+  Ok((project, repo))
+}
+
 /// Opens Project settings › Sharing for `state`; for `link-confirm` also asks to link Kontur to `{server}/kontur`, as
 /// the person would before *Link and upload*: that press is the example's own, not an MCP client's.
 pub fn open_sharing(app: &mut App, tree: &mut Tree, (state, server): (State, &str)) -> Result<(), Box<dyn Error>> {
@@ -92,7 +99,7 @@ pub fn open_sharing(app: &mut App, tree: &mut Tree, (state, server): (State, &st
 }
 
 /// Lays the window out, delivering what its futures finished, until `id` shows; an error after 20 seconds.
-fn until(app: &mut App, tree: &mut Tree, id: &str) -> Result<(), Box<dyn Error>> {
+pub fn until(app: &mut App, tree: &mut Tree, id: &str) -> Result<(), Box<dyn Error>> {
   let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
   loop {
     tree.tick_futures();
@@ -108,7 +115,7 @@ fn until(app: &mut App, tree: &mut Tree, id: &str) -> Result<(), Box<dyn Error>>
 }
 
 /// Presses the middle of `id` with the pointer.
-fn press(app: &mut App, tree: &mut Tree, id: &str) -> Result<(), Box<dyn Error>> {
+pub fn press(app: &mut App, tree: &mut Tree, id: &str) -> Result<(), Box<dyn Error>> {
   let bounds = tree
     .get_element_by_id_mut(id)
     .and_then(|element| element.bounds())
