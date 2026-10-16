@@ -138,7 +138,7 @@ session's token that the cloud ended carries why and when (milliseconds):
 | `signed_out` | the device signed itself out (`DELETE /auth/sessions/current`) |
 
 Any other `401` has no `reason`: no token, one the cloud never issued, a desktop's token that ended after 90 days
-without use, a browser's after its 12 hours, or one revoked before migration 8. A client reads a reason it does not
+without use, a browser's after its 12 hours, or one revoked before migration 9. A client reads a reason it does not
 know as none and shows its general words. A revoked device keeps its reason in `devices.revoked_reason`. A deleted
 account's devices go with it, so the hashes of their tokens are kept in `ended_tokens` (the hash, the reason, when,
 and nothing that names the account) until they would have ended unused, 90 days later; the minute's sweep deletes
