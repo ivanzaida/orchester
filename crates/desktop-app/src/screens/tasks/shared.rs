@@ -22,7 +22,10 @@ use orchester_core::id::ProjectId;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
-  sharing::{Connection, project::state::ProjectSharing},
+  sharing::{
+    Connection,
+    project::state::{ProjectSharing, TaskListAccess},
+  },
 };
 
 use crate::{
@@ -56,7 +59,7 @@ impl DevtoolsInspectable for Shared {}
 impl Shared {
   /// Why nothing can be added, once the person is no longer a member.
   pub fn read_only(&self, ctx: &Ctx) -> Option<Arc<str>> {
-    self.sharing.link.removed_at.map(|_| ctx.t("tasks.shared.readOnly"))
+    matches!(self.sharing.access(), TaskListAccess::NotMember { .. }).then(|| ctx.t("tasks.shared.readOnly"))
   }
 }
 

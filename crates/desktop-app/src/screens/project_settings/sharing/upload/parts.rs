@@ -10,12 +10,12 @@ use lurq::{
 use orchester_core::project::TaskKey;
 use orchester_workspace::sharing::project::{discovery::DiscoveryState, first_link::LinkKind};
 
-use super::{super::confirm, Props, Upload};
+use super::{super::confirm, DISCOVERY, Props, Upload};
 use crate::{
   project::ShownProject,
   screens::{
     project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::shown_address,
+    settings::orchester::{PersonOnly, shown_address},
   },
   ui::{
     form_section::{Label, Place, section, side_row},
@@ -148,16 +148,17 @@ fn upload_rows(
   rows
 }
 
-/// *Discovery file* with *Write orchester.toml into the repository*: a switch while the repository has none, else
-/// what the file there says, which Orchester leaves as it is.
-pub(super) fn discovery(ctx: &mut Ctx, upload: &Upload, write: &Signal<bool>) -> Element {
+/// *Discovery file* with *Write orchester.toml into the repository*: a switch while the repository has none, which only
+/// a person turns (the file puts an address into the repository that colleagues trust), else what the file there says,
+/// which Orchester leaves as it is.
+pub(super) fn discovery(ctx: &mut Ctx, upload: &Upload, (write, person): (&Signal<bool>, &PersonOnly)) -> Element {
   let address = upload.plan.project.address.clone();
   let label = Label::new("sharing-upload-discovery", ctx.t("sharing.upload.discovery.write"))
     .description(ctx.t_args("sharing.upload.discovery.description", [("address", address.as_str())]));
   let control: Element = match upload.plan.discovery {
     DiscoveryState::Absent => {
       let on = write.get();
-      let set = write.clone();
+      let (set, allows) = (write.clone(), person.clone());
       let words = ctx.t(if on {
         "sharing.upload.discovery.on"
       } else {
@@ -166,9 +167,13 @@ pub(super) fn discovery(ctx: &mut Ctx, upload: &Upload, write: &Signal<bool>) ->
       Column::new()
         .width(Dimension::Px(CONTROL_WIDTH))
         .child(
-          Toggle::new("sharing-upload-discovery-switch", ToggleKind::Switch, on, words)
-            .on_change(move |on| set.set(on)),
+          Toggle::new(DISCOVERY, ToggleKind::Switch, on, words).on_change(move |on| {
+            if allows.allows(DISCOVERY) {
+              set.set(on);
+            }
+          }),
         )
+        .with_children(person.reason(ctx, DISCOVERY))
         .into()
     }
     DiscoveryState::Names => page::note(

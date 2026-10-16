@@ -1,8 +1,9 @@
 //! *Members*, read-only (`Section · Members` in `L5o9Xy`; *Members · as a member* and *Members · server offline* in
 //! `N9NFio`; `docs/architecture/server.md`, row 63): who is in the project and their roles, as the server lists them
-//! now or as last read while it cannot be reached. Owners and the server's admins get *Manage members and invites*,
-//! which opens the project's page in the server admin in the browser; a member is told to ask an owner. The app has no
-//! member or role control.
+//! now or as last read while it cannot be reached, once this computer is signed out of it or it left the list, and once
+//! the person is no longer a member. Owners and the server's admins get *Manage members and invites*, which opens the
+//! project's page in the server admin in the browser, only on the server the project's address names; a member is
+//! told to ask an owner. The app has no member or role control.
 
 use lurq::{
   app::{
@@ -18,19 +19,16 @@ use lurq::{
 use orchester_api::MemberRole;
 use orchester_core::{id::UserId, time::Timestamp};
 use orchester_store::SharedMember;
-use orchester_workspace::{
-  background,
-  sharing::{
-    ProjectAddress, SharingError,
-    project::{ProjectMembers, ProjectServer},
-  },
+use orchester_workspace::sharing::{
+  ProjectAddress, ServerEntry, SharingError,
+  project::{MembersRead, ProjectMembers},
 };
 
 use crate::{
   project::ShownProject,
   screens::{
     project_settings::page,
-    settings::orchester::{Said, day_of, moment, sharing_said},
+    settings::orchester::{Said, day_of, moment, sharing_said, shown_address},
   },
   services::Services,
   theme::{ExtraTypography, OrchesterText},
@@ -61,6 +59,8 @@ pub(super) struct Props {
   /// The server project's name, its address and the person's role there.
   pub shared: String,
   pub address: Option<String>,
+  /// The project's server while this computer is signed in to it: *Manage* opens its admin.
+  pub entry: Option<ServerEntry>,
   pub owner: bool,
   pub admin: bool,
   pub me: Option<UserId>,
@@ -108,13 +108,7 @@ impl Component for Members {
           props.server.clone(),
         ),
         |(root, servers, _, name)| async move {
-          let opened = servers.clone();
-          let server = background::run(move || ProjectServer::open(&opened, &root))
-            .await
-            .map_err(|_| Said::new("cloud.errors.local"))?
-            .map_err(|error| sharing_said(&error))?
-            .ok_or_else(|| Said::new("sharing.linked.notLinked"))?;
-          match server.current_members().await {
+          match servers.project_members(&root).await {
             Ok(members) => Ok(Read(members)),
             Err(SharingError::Offline) => Err(Said::new("sharing.members.unread").with("server", name)),
             Err(error) => Err(sharing_said(&error)),
@@ -138,8 +132,8 @@ impl Component for Members {
           .t_args("sharing.members.count", [("count", count.to_string())])
           .to_string(),
       };
-      match (&state.data, props.removed) {
-        (Some(Read(members)), Some(_)) => ctx
+      match &state.data {
+        Some(Read(members)) if not_member(&props, members) => ctx
           .t_args(
             "sharing.members.countAsOf",
             [("count", counted), ("time", moment(ctx, members.read_at))],
@@ -169,20 +163,21 @@ impl Members {
 
   /// The intro with *Manage members and invites*, the table, and where Manage leads.
   fn read(&self, ctx: &Ctx, props: &Props, members: &ProjectMembers) -> Vec<Element> {
-    let manages = (props.owner || props.admin) && props.removed.is_none();
+    let removed = not_member(props, members);
+    let manages = (props.owner || props.admin) && !removed;
     let mut rows = vec![self.intro(ctx, props, members, manages), header(ctx).into()];
-    let until = props.removed.map(|_| moment(ctx, members.read_at));
+    let until = removed.then(|| moment(ctx, members.read_at));
     rows.extend(members.members.iter().map(|member| {
       let me = (props.me == Some(member.user)).then_some(until.as_deref());
       member_row(ctx, member, me).into()
     }));
-    if props.removed.is_some() {
+    if removed {
       rows.push(removed_note(ctx, props, members));
     }
     if let Some(reason) = self.opened.get() {
       rows.push(field_error("sharing-members-open-failed", &reason.text(ctx)).into());
     }
-    if manages && let Some(url) = admin_url(props) {
+    if manages && let Ok((_, url)) = admin_page(ctx, props) {
       rows.push(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -214,12 +209,13 @@ impl Members {
         )
         .to_string()
     };
-    let text = match (members.live, manages) {
-      _ if props.removed.is_some() => names("sharing.members.introRemoved"),
-      (true, true) => names("sharing.members.intro"),
-      (true, false) => names("sharing.members.introMember"),
-      (false, true) => names("sharing.members.introOffline"),
-      (false, false) => names("sharing.members.introOfflineMember"),
+    let text = match (members.read, manages) {
+      _ if not_member(props, members) => names("sharing.members.introRemoved"),
+      (MembersRead::Live, true) => names("sharing.members.intro"),
+      (MembersRead::Live, false) => names("sharing.members.introMember"),
+      (MembersRead::NoServer, _) => names("sharing.members.introNoServer"),
+      (_, true) => names("sharing.members.introOffline"),
+      (_, false) => names("sharing.members.introOfflineMember"),
     };
     let mut row = Row::new()
       .id("sharing-members-intro")
@@ -234,25 +230,29 @@ impl Members {
           .flex(1.0),
       );
     if manages {
-      row = row.child(self.manage(ctx, props, members.live));
+      row = row.child(self.manage(ctx, props, members.read));
     }
     row.into()
   }
 
-  /// *Manage members and invites*: the project's page in the server admin, in the browser; unavailable while the
-  /// server cannot be reached.
-  fn manage(&self, ctx: &Ctx, props: &Props, live: bool) -> ActionButton {
+  /// *Manage members and invites*: the project's page in the server admin, in the browser; unavailable, with why, while
+  /// the server cannot be reached or this computer is signed out of it, and when the project's address is not on it.
+  fn manage(&self, ctx: &Ctx, props: &Props, read: MembersRead) -> ActionButton {
     let button = ActionButton::new(
       "sharing-members-manage",
       ButtonKind::Secondary,
       ctx.t("sharing.members.manage"),
     )
     .icon(Icon::ExternalLink);
-    let Some(url) = admin_url(props).filter(|_| live) else {
-      return button.unavailable(ctx.t_args("sharing.members.manageOffline", [("server", props.server.as_str())]));
+    let (entry, url) = match admin_page(ctx, props) {
+      Ok(page) => page,
+      Err(reason) => return button.unavailable(reason),
     };
+    if read != MembersRead::Live {
+      return button.unavailable(ctx.t_args("sharing.members.manageOffline", [("server", props.server.as_str())]));
+    }
     let (links, opened) = (self.links.clone(), self.opened.clone());
-    button.on_click(move || match links.open(&url) {
+    button.on_click(move || match links.open_server_page(&entry, &url) {
       Ok(()) => opened.set(None),
       Err(error) => {
         tracing::warn!(%error, "the server admin could not be opened");
@@ -262,15 +262,39 @@ impl Members {
   }
 }
 
-/// The project's page in its server's admin; `None` until the project's address was read.
-fn admin_url(props: &Props) -> Option<String> {
-  let address = ProjectAddress::parse(props.address.as_deref()?).ok()?;
-  Some(address.admin_url())
+/// Whether the person is no longer a member: the link says so, or the server no longer shows them the members.
+fn not_member(props: &Props, members: &ProjectMembers) -> bool {
+  props.removed.is_some() || members.read == MembersRead::NotMember
+}
+
+/// The project's page in its server's admin, with the server; why not while this computer is not signed in to it,
+/// until the project's address was read, and when the address is not on that server.
+fn admin_page(ctx: &Ctx, props: &Props) -> Result<(ServerEntry, String), std::sync::Arc<str>> {
+  let server = ("server", props.server.as_str());
+  let entry = props
+    .entry
+    .clone()
+    .ok_or_else(|| ctx.t_args("sharing.members.manageNoServer", [server]))?;
+  let text = props
+    .address
+    .as_deref()
+    .ok_or_else(|| ctx.t_args("sharing.members.manageNoAddress", [server]))?;
+  match ProjectAddress::reported(text, &entry.address) {
+    Ok(address) => Ok((entry, address.admin_url())),
+    Err(SharingError::ForeignAddress) => Err(ctx.t_args(
+      "sharing.members.manageForeign",
+      [("address", shown_address(text)), server],
+    )),
+    Err(error) => {
+      tracing::warn!(%error, "the project's address cannot be read");
+      Err(ctx.t_args("sharing.members.manageNoAddress", [server]))
+    }
+  }
 }
 
 /// An address as the note shows it, without `https://`.
 fn strip(url: &str) -> String {
-  crate::screens::settings::orchester::shown_address(url).to_owned()
+  shown_address(url).to_owned()
 }
 
 /// NAME, ROLE and ADDED, in 10.5/500 `text_muted` tracked 0.4, over a 1 `border` line.
@@ -299,21 +323,19 @@ fn header(ctx: &Ctx) -> Row {
 fn removed_note(ctx: &Ctx, props: &Props, members: &ProjectMembers) -> Element {
   let separator = ctx.t("sharing.members.or");
   let owners: Vec<&str> = members.owners().map(|owner| owner.display_name.as_str()).collect();
+  let names = [("owners", owners.join(&separator)), ("server", props.server.clone())];
+  // Once this computer signed out of the server, it no longer knows the person's username there.
+  let text = match props.username.clone() {
+    Some(username) => {
+      let [owners, server] = names;
+      ctx.t_args("sharing.members.comeBack", [owners, ("username", username), server])
+    }
+    None => ctx.t_args("sharing.members.comeBackNoName", names),
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(SpacingSize::Md))
-    .child(page::wide_note(
-      "sharing-members-come-back",
-      Icon::Info,
-      &ctx.t_args(
-        "sharing.members.comeBack",
-        [
-          ("owners", owners.join(&separator)),
-          ("username", props.username.clone().unwrap_or_default()),
-          ("server", props.server.clone()),
-        ],
-      ),
-    ))
+    .child(page::wide_note("sharing-members-come-back", Icon::Info, &text))
     .into()
 }
 

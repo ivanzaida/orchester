@@ -1,11 +1,13 @@
 //! `orchester.toml` prefills the project's address and is contacted only after the person confirms it (`N9NFio`,
 //! `oOGMT`): a file naming a project on a connected server is offered, and nothing asks for that project until the
 //! person takes the address and links; a file naming a server this computer isn't connected to asks step by step and
-//! sends nothing there at all.
+//! sends nothing there at all. A linked project's *Write orchester.toml* is a person's.
 
 use std::fs;
 
-use super::{KONTUR_REMOTE, harness, join, kontur_root, no_admin_endpoint, open_sharing, server};
+use lurq::app::events::with_synthetic_input;
+
+use super::{KONTUR_REMOTE, harness, join, kontur_root, link_kontur, no_admin_endpoint, open_sharing, server};
 use crate::harness::{Recorder, press, shows};
 
 /// Whether `recorder` passed a request that looks the project `slug` up.
@@ -68,4 +70,26 @@ fn shared_project_discovery_of_another_server_sends_nothing_there() {
     window.tree.get_element_by_id("sharing-unconnected").is_none()
   });
   assert!(watched.lines().is_empty(), "nothing was sent to the file's server");
+}
+
+#[test]
+fn shared_project_discovery_is_written_for_a_linked_project_only_by_a_person() {
+  let (server, kontur) = server();
+  let mut window = harness::window(Some(KONTUR_REMOTE));
+  let recorder = join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
+  link_kontur(&window);
+  let file = kontur_root(&window).join("orchester.toml");
+
+  open_sharing(&mut window, "sharing-discovery-write");
+  with_synthetic_input(|| window.press("sharing-discovery-write"));
+  shows(&mut window, "sharing-discovery-write-person-only");
+  assert!(!file.exists(), "an MCP client's press writes nothing");
+
+  press(&mut window, "sharing-discovery-write");
+  shows(&mut window, "sharing-discovery-file");
+  assert_eq!(
+    fs::read_to_string(&file).expect("orchester.toml"),
+    format!("project = \"{}/kontur\"\n", recorder.url())
+  );
+  no_admin_endpoint(&recorder);
 }

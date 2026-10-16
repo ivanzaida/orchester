@@ -1,8 +1,11 @@
 //! Members are read-only (`L5o9Xy`, `N9NFio`): a member is told to ask an owner and has no Manage; an owner's
 //! *Manage members and invites* opens the project's page in the server admin (recorded, never a browser); while the
 //! server cannot be reached the members show as last read, and Manage is unavailable. No member or role control exists.
+//! A server's page opens only on that server, over plain HTTP only where the app talks to it so.
 
-use super::{KONTUR_REMOTE, harness, join, link_kontur, no_admin_endpoint, open_sharing, server};
+use orchester_api::client::ServerAddress;
+
+use super::{KONTUR_REMOTE, entry, harness, join, link_kontur, no_admin_endpoint, open_sharing, server};
 use crate::harness::{press, shows};
 
 #[test]
@@ -62,4 +65,37 @@ fn shared_project_members_are_read_only_and_manage_opens_the_admin() {
     "Manage is unavailable while the server can't be reached"
   );
   no_admin_endpoint(&recorder);
+}
+
+#[test]
+fn shared_project_server_pages_open_only_on_their_server_and_its_scheme() {
+  let (server, kontur) = server();
+  let window = harness::window(Some(KONTUR_REMOTE));
+  join(&window, &server, &kontur, ("ivan", "Ivan Zaida"));
+  let links = window.launch.services().expect("services").links.clone();
+  let loopback = entry(&window);
+  let page = format!("{}/admin/projects/kontur", loopback.address.as_str());
+  links
+    .open_server_page(&loopback, &page)
+    .expect("a page of a server on this computer, over plain HTTP");
+  assert!(
+    links
+      .open_server_page(&loopback, "https://elsewhere.example/admin/projects/kontur")
+      .is_err(),
+    "a page of another server"
+  );
+
+  let mut remote = loopback;
+  remote.address = ServerAddress::parse("http://10.0.4.20:8740").expect("address");
+  remote.stored.plain_http_allowed = false;
+  let remote_page = "http://10.0.4.20:8740/admin/projects/kontur";
+  assert!(
+    links.open_server_page(&remote, remote_page).is_err(),
+    "plain HTTP the person didn't allow for the server"
+  );
+  remote.stored.plain_http_allowed = true;
+  links
+    .open_server_page(&remote, remote_page)
+    .expect("plain HTTP the person allowed");
+  assert_eq!(links.recorded(), [page, remote_page.to_owned()]);
 }

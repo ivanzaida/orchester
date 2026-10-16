@@ -148,6 +148,7 @@ impl Component for Linked {
       discovery::Props {
         project: props.project.clone(),
         address: link.address.clone(),
+        server: entry.map(|entry| entry.address.clone()),
         discovery: props.facts.linked_discovery.clone(),
         revision: props.revision.clone(),
       },
@@ -158,14 +159,13 @@ impl Component for Linked {
         .facts
         .linked_server()
         .and_then(|entry| entry.stored.account.as_ref())
-        .map(|account| account.username.clone())
-        .unwrap_or_default();
+        .map(|account| account.username.clone());
       let names = removed::Names {
         local: &name,
         shared: &shared,
         server: &server,
         tasks: props.facts.tasks,
-        username: &username,
+        username: username.as_deref(),
       };
       removed::notice(ctx, (link, &names), (&servers, &self.making_local))
     });
@@ -323,6 +323,7 @@ fn members_section(ctx: &mut Ctx, props: &Props, shared: &str, server: &str) -> 
       server: server.to_owned(),
       shared: shared.to_owned(),
       address: link.and_then(|link| link.address.clone()),
+      entry: entry.cloned(),
       owner: link.is_some_and(|link| link.role == Some(MemberRole::Owner)),
       admin: account.is_some_and(|account| account.admin),
       me: account.map(|account| account.user),

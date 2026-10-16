@@ -26,13 +26,13 @@ use crate::{
 };
 
 /// The names the notice says: this project's, the server project's and the server's, its key, how many tasks it
-/// keeps and the person's username there.
+/// keeps and the person's username there, which this computer forgets once it signed out of the server.
 pub(super) struct Names<'a> {
   pub local: &'a str,
   pub shared: &'a str,
   pub server: &'a str,
   pub tasks: usize,
-  pub username: &'a str,
+  pub username: Option<&'a str>,
 }
 
 /// *You're no longer a member of Kontur* with *Check again*, which asks the server at once, and *Make local…*, which
@@ -43,18 +43,22 @@ pub(super) fn notice(
   (servers, make_local): (&Servers, &Signal<bool>),
 ) -> Element {
   let since = link.removed_at.unwrap_or(link.last_synced_at);
-  let body = ctx.t_args(
-    "sharing.linked.removed.body",
-    [
-      ("server", names.server.to_owned()),
-      ("time", moment(ctx, since)),
-      ("project", names.shared.to_owned()),
-      ("key", link.key.as_str().to_owned()),
-      ("count", names.tasks.to_string()),
-      ("local", names.local.to_owned()),
-      ("username", names.username.to_owned()),
-    ],
-  );
+  let mut words = vec![
+    ("server", names.server.to_owned()),
+    ("time", moment(ctx, since)),
+    ("project", names.shared.to_owned()),
+    ("key", link.key.as_str().to_owned()),
+    ("count", names.tasks.to_string()),
+    ("local", names.local.to_owned()),
+  ];
+  let key = match names.username {
+    Some(username) => {
+      words.push(("username", username.to_owned()));
+      "sharing.linked.removed.body"
+    }
+    None => "sharing.linked.removed.bodyNoName",
+  };
+  let body = ctx.t_args(key, words);
   let servers = servers.clone();
   let check = ActionButton::new(
     "sharing-removed-check",

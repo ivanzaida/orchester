@@ -220,6 +220,7 @@
       "removed": {
         "title": "You're no longer a member of {{project}}",
         "body": "{{server}} answered at {{time}} that you aren't in {{project}} any more. This computer keeps {{key}}'s {{count}} tasks as they were then, read-only. Make {{local}} local to keep working here, or ask an owner to add {{username}} again.",
+        "bodyNoName": "{{server}} answered at {{time}} that you aren't in {{project}} any more. This computer keeps {{key}}'s {{count}} tasks as they were then, read-only. Make {{local}} local to keep working here, or ask an owner to add you again.",
         "check": "Check again",
         "state": "Not a member of {{project}} · read-only",
         "detail": "{{key}} · joined {{day}} · you were a member · last synced {{synced}}"
@@ -249,6 +250,10 @@
       "linking": "Linking…",
       "tryAgain": "Try again",
       "failed": "Couldn't link {{local}} to {{project}}",
+      "changed": "{{local}}'s tasks changed since this page opened",
+      "changedBody": "A task was added or removed meanwhile, so nothing was sent and {{local}} is still local. Review again reads what linking it to {{project}} does now.",
+      "reviewAgain": "Review again",
+      "foreignAddress": "The server named an address on another server for this project, so Orchester didn't use it and nothing was sent.",
       "taken": "The project got tasks of its own meanwhile, so linking this checkout is a join, with a review of what goes up. That review isn't in this version of the app yet; nothing was sent.",
       "whatGoesUp": "What is uploaded",
       "whatComesDown": "What comes down",
@@ -291,9 +296,13 @@
       "introMember": "Members of {{project}} on {{server}}. To add someone, ask an owner: {{owners}}.",
       "introOffline": "Members as of {{time}}, when {{server}} was last reached. Manage opens when it's back.",
       "introOfflineMember": "Members as of {{time}}, when {{server}} was last reached. To add someone, ask an owner: {{owners}}.",
+      "introNoServer": "Members as of {{time}}, as last read. This computer isn't signed in to {{server}} now, so the list doesn't change until it joins again.",
       "or": " or ",
       "manage": "Manage members and invites",
       "manageOffline": "{{server}} can't be reached now; the server admin opens when it's back.",
+      "manageNoServer": "This computer isn't signed in to {{server}} now; the server admin opens once it joins again.",
+      "manageNoAddress": "Opens once the project's address has been read from {{server}}.",
+      "manageForeign": "The project's address {{address}} isn't on {{server}}, so Orchester doesn't open it.",
       "manageNote": "Manage members and invites opens {{url}} in your browser, where owners and admins sign in with their Orchester account.",
       "openFailed": "The browser didn't open {{url}}. Open it yourself.",
       "name": "NAME",
@@ -305,7 +314,8 @@
       "introRemoved": "Members of {{project}} as of {{time}}, the last time you were one of them. {{server}} shows its members only to members, so this list no longer changes.",
       "countAsOf": "{{count}} · as of {{time}}",
       "youUntil": "· you, until {{time}}",
-      "comeBack": "To come back, ask an owner, {{owners}}, to add {{username}} in {{server}}'s server admin; Check again looks at once, and Orchester also checks every minute."
+      "comeBack": "To come back, ask an owner, {{owners}}, to add {{username}} in {{server}}'s server admin; Check again looks at once, and Orchester also checks every minute.",
+      "comeBackNoName": "To come back, ask an owner, {{owners}}, to add you again in {{server}}'s server admin; Check again looks at once, and Orchester also checks every minute."
     },
     "makeLocal": {
       "reading": "Reading what making it local changes…",
@@ -313,6 +323,7 @@
       "body": "{{local}} stops using {{server}} here. Nothing changes for the other members of {{key}}; you can join again later.",
       "bodyUnreachable": "{{server}} can't be reached, so your claims can't be released now. They go stale on their own 15 minutes after their last heartbeat, and others can then take them over.",
       "bodyRemoved": "You're no longer a member of {{key}}, so nothing is released there. {{local}} keeps its tasks as they were last synced at {{time}}.",
+      "bodySignedOut": "This computer isn't signed in to the project's server, so it can't tell which claims are yours or release them. Any you hold go stale on their own 15 minutes after their last heartbeat, and others can then take them over.",
       "tasksKey": "Tasks",
       "tasks": "All {{count}} stay as local tasks with their numbers",
       "tasksAsSynced": "All {{count}} stay as local tasks · as last synced at {{time}}",
@@ -321,6 +332,7 @@
       "claimsKey": "Your claims",
       "claimsReleased": "{{keys}} · released on {{server}} now",
       "claimsStale": "{{keys}} · not released, they go stale",
+      "claimsUnknown": "Unknown here · any you hold go stale",
       "noClaims": "None",
       "othersKey": "Others' claims and run status",
       "others": "Removed from this computer",
@@ -335,6 +347,7 @@
       "made": {
         "title": "{{local}} is local on this computer",
         "body": "Its {{count}} tasks are local tasks now, with their numbers.",
+        "stale": "{{body}} The claims on {{keys}} weren't released after all: the server didn't take it, so they go stale on their own.",
         "returned": "{{body}} The tasks kept Not shared returned: {{moved}}.",
         "moved": "{{before}} → {{after}}",
         "dismiss": "Dismiss"
@@ -353,7 +366,9 @@
       "write": "Write orchester.toml",
       "writeFailed": "orchester.toml couldn't be written; nothing was changed in the repository.",
       "other": "orchester.toml names another project or server; Orchester leaves it as it is.",
-      "noAddress": "Written once the project's address has been read from its server."
+      "noAddress": "Written once the project's address has been read from its server.",
+      "noServer": "Written once this computer is signed in to the project's server again: Orchester checks the address against it first.",
+      "foreignAddress": "The project's address isn't on {{server}}, so orchester.toml wasn't written."
     }
   }
 }

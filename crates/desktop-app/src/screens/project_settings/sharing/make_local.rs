@@ -18,7 +18,7 @@ use lurq::{
 use orchester_core::project::TaskKey;
 use orchester_workspace::{
   background,
-  sharing::project::{MadeLocal, MakeLocalPlan},
+  sharing::project::{ClaimRelease, MadeLocal, MakeLocalPlan},
 };
 
 use super::confirm::{QUESTION_KEY, pair, question};
@@ -177,10 +177,11 @@ impl MakeLocal {
       ("time", moment(ctx, plan.synced_at)),
     ];
     let body = ctx.t_args(
-      match (plan.member, plan.releases) {
-        (false, _) => "sharing.makeLocal.bodyRemoved",
-        (true, true) => "sharing.makeLocal.body",
-        (true, false) => "sharing.makeLocal.bodyUnreachable",
+      match (plan.member, plan.releases, plan.claims.is_some()) {
+        (false, ..) => "sharing.makeLocal.bodyRemoved",
+        (true, true, _) => "sharing.makeLocal.body",
+        (true, false, true) => "sharing.makeLocal.bodyUnreachable",
+        (true, false, false) => "sharing.makeLocal.bodySignedOut",
       },
       names.clone(),
     );
@@ -287,12 +288,15 @@ fn pairs(ctx: &Ctx, plan: &MakeLocalPlan, names: &[(&'static str, String); 4]) -
   rows
 }
 
-/// The person's claims and what becomes of them.
+/// The person's claims and what becomes of them; unknown once this computer no longer knows who the person is there.
 fn claims(ctx: &Ctx, plan: &MakeLocalPlan, server: (&'static str, String)) -> String {
-  if plan.claims.is_empty() {
+  let Some(claims) = &plan.claims else {
+    return ctx.t("sharing.makeLocal.claimsUnknown").to_string();
+  };
+  if claims.is_empty() {
     return ctx.t("sharing.makeLocal.noClaims").to_string();
   }
-  let keys = ("keys", keys(ctx, &plan.claims));
+  let keys = ("keys", keys(ctx, claims));
   if plan.releases {
     ctx.t_args("sharing.makeLocal.claimsReleased", [keys, server])
   } else {
@@ -310,12 +314,21 @@ fn keys(ctx: &Ctx, keys: &[TaskKey]) -> String {
     .join(&separator)
 }
 
-/// *Kontur is local on this computer*, with the tasks it kept and those that returned from *Not shared*, and *Dismiss*.
+/// *Kontur is local on this computer*, with the tasks it kept, the claims it could not release after all and the tasks
+/// that returned from *Not shared*, and *Dismiss*.
 pub(super) fn made(ctx: &Ctx, made: &Signal<Made>, local: &str) -> Option<Element> {
   let done = made.get().0?;
   let mut body = ctx
     .t_args("sharing.makeLocal.made.body", [("count", done.tasks.to_string())])
     .to_string();
+  if let ClaimRelease::Stale { tasks } = &done.claims {
+    body = ctx
+      .t_args(
+        "sharing.makeLocal.made.stale",
+        [("body", body), ("keys", keys(ctx, tasks))],
+      )
+      .to_string();
+  }
   if !done.returned.is_empty() {
     let separator = ctx.t("sharing.upload.separator");
     let moved: Vec<String> = done

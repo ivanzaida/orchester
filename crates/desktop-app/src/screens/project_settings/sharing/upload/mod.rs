@@ -3,7 +3,8 @@
 //! server ([`parts`]), whether to write `orchester.toml`, what linking sends, and *Link and upload*, which only a
 //! person presses. A checkout without tasks takes the project's tasks as they are, on the same page. Nothing is sent
 //! before; *Cancel* returns to Sharing with the project still local, and a link that failed says why and offers *Try
-//! again*.
+//! again*. When the project's tasks changed after the page read them (one was added in another tab or over MCP), the
+//! link sends nothing and the page offers *Review again*, which reads what linking does now.
 
 mod parts;
 
@@ -22,7 +23,7 @@ use lurq::{
 };
 use orchester_core::{id::IdempotencyKey, repository::RepositoryIdentity};
 use orchester_workspace::sharing::{
-  ServerEntry,
+  ServerEntry, Servers, SharingError,
   project::{
     ShareError,
     first_link::{LinkKind, LinkPlan, LinkRequest},
@@ -70,6 +71,18 @@ impl DevtoolsInspectable for LinkPage {}
 
 /// *Link and upload*, which only a person presses.
 const CONFIRM: &str = "sharing-link-confirm";
+/// *Write orchester.toml into the repository*, which only a person turns on or off.
+const DISCOVERY: &str = "sharing-upload-discovery-switch";
+
+/// Why the link did not go ahead.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Failure {
+  /// The project's tasks are no longer those the page shows: nothing was sent, and the page is read again.
+  Changed,
+  Other(Said),
+}
+
+impl DevtoolsInspectable for Failure {}
 
 #[derive(Clone)]
 struct Props {
@@ -88,8 +101,13 @@ impl DevtoolsInspectable for Props {}
 
 /// The page over Project settings for `upload`; *Cancel* and a finished link put it away through `page`.
 pub fn link_page(ctx: &mut Ctx, project: &ShownProject, upload: Arc<Upload>, page: &Signal<LinkPage>) -> Element {
+  // Keyed by the upload too: the page read again after *Review again* starts afresh.
   ctx.mount_keyed::<UploadPage>(
-    &format!("project-settings-link-page-{}", project.open.project.id()),
+    &format!(
+      "project-settings-link-page-{}-{}",
+      project.open.project.id(),
+      upload.key
+    ),
     Props {
       project: project.clone(),
       upload,
@@ -101,7 +119,9 @@ pub fn link_page(ctx: &mut Ctx, project: &ShownProject, upload: Arc<Upload>, pag
 struct UploadPage {
   /// Whether to write `orchester.toml` naming the project (on as `KSnOW` draws it).
   write: Signal<bool>,
-  link: FutureAction<(), (), Said>,
+  link: FutureAction<(), (), Failure>,
+  /// *Review again*: what linking does now, once the tasks changed.
+  review: FutureAction<(), (), Said>,
   person: PersonOnly,
 }
 
@@ -131,14 +151,22 @@ impl Component for UploadPage {
             page.set(LinkPage::default());
             Ok(())
           }
-          Err(ShareError::Taken { .. }) => Err(Said::new("sharing.upload.taken")),
-          Err(ShareError::Sharing(error)) => Err(sharing_said(&error)),
+          Err(ShareError::Sharing(SharingError::ProjectChanged)) => Err(Failure::Changed),
+          Err(ShareError::Taken { .. }) => Err(Failure::Other(Said::new("sharing.upload.taken"))),
+          Err(ShareError::Sharing(error)) => Err(Failure::Other(linking_said(&error))),
         }
       }
+    });
+    let props = ctx.props::<Props>().clone();
+    let (servers, root) = (Services::of(ctx).servers, props.project.open.repo_root.clone());
+    let review = ctx.future_action(move |(): ()| {
+      let (servers, root, upload, page) = (servers.clone(), root.clone(), props.upload.clone(), props.page.clone());
+      async move { review_again(&servers, &root, &upload, &page).await }
     });
     Self {
       write,
       link,
+      review,
       person: PersonOnly::new(ctx),
     }
   }
@@ -151,12 +179,12 @@ impl Component for UploadPage {
       .id("sharing-upload")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg);
-    if let Some(reason) = state.error.clone().filter(|_| !state.is_pending()) {
-      content = content.child(failed(ctx, &props, &reason));
+    if let Some(failure) = state.error.clone().filter(|_| !state.is_pending()) {
+      content = content.child(self.failed(ctx, &props, &failure));
     }
     content = content
       .child(parts::what_goes(ctx, &props.project, &props.upload))
-      .child(parts::discovery(ctx, &props.upload, &self.write))
+      .child(parts::discovery(ctx, &props.upload, (&self.write, &self.person)))
       .child(super::link::sends(ctx))
       .child(page::icon_note(
         "sharing-upload-nothing-yet",
@@ -250,9 +278,12 @@ impl UploadPage {
   }
 
   /// *Link and upload 24 tasks* (or *Link* when nothing goes up), *Linking…* while it runs, *Try again* after a
-  /// failure.
+  /// failure, and *Review again* once the project's tasks changed.
   fn confirm(&self, ctx: &Ctx, plan: &LinkPlan, pending: bool) -> ActionButton {
     let state = self.link.state().get();
+    if !pending && state.error == Some(Failure::Changed) {
+      return self.review_again(ctx);
+    }
     let failed = state.error.is_some() && !pending;
     let (label, glyph) = if pending {
       (ctx.t("sharing.upload.linking"), Icon::Upload)
@@ -271,6 +302,83 @@ impl UploadPage {
         link.run(());
       }
     })
+  }
+
+  /// *Review again*, which reads what linking does now and opens the page for it.
+  fn review_again(&self, ctx: &Ctx) -> ActionButton {
+    let button = ActionButton::new(
+      "sharing-upload-review-again",
+      ButtonKind::Primary,
+      ctx.t("sharing.upload.reviewAgain"),
+    )
+    .icon(Icon::RefreshCw);
+    if self.review.state().get().is_pending() {
+      return button.loading();
+    }
+    let review = self.review.clone();
+    button.on_click(move || review.run(()))
+  }
+
+  /// Why the link did not go ahead: the tasks changed since the page read them, or what failed.
+  fn failed(&self, ctx: &Ctx, props: &Props, failure: &Failure) -> Element {
+    let names = [
+      ("local", props.project.open.project.name().as_str()),
+      ("project", props.upload.plan.project.name.as_str()),
+    ];
+    let callout = match failure {
+      Failure::Changed => {
+        let review = self.review.state().get();
+        let body = match review.error.clone().filter(|_| !review.is_pending()) {
+          Some(reason) => reason.text(ctx),
+          None => ctx.t_args("sharing.upload.changedBody", names).to_string(),
+        };
+        Callout::new(
+          "sharing-upload-changed",
+          CalloutTone::Warning,
+          ctx.t_args("sharing.upload.changed", names),
+        )
+        .body(body)
+      }
+      Failure::Other(reason) => Callout::new(
+        "sharing-upload-failed",
+        CalloutTone::Danger,
+        ctx.t_args("sharing.upload.failed", names),
+      )
+      .body(reason.text(ctx)),
+    };
+    callout.into()
+  }
+}
+
+/// What linking does now for `upload`'s project, on a page of its own with a new upload key. A checkout that has
+/// tasks now, linked to a project with tasks, is a join, whose review this version doesn't have.
+async fn review_again(
+  servers: &Servers,
+  root: &std::path::Path,
+  upload: &Upload,
+  page: &Signal<LinkPage>,
+) -> Result<(), Said> {
+  let plan = servers
+    .link_plan(&upload.entry, root, upload.plan.project.clone())
+    .await
+    .map_err(|error| linking_said(&error))?;
+  if let LinkKind::Review { .. } = plan.kind {
+    return Err(Said::new("sharing.upload.taken"));
+  }
+  page.set(LinkPage(Some(Arc::new(Upload {
+    entry: upload.entry.clone(),
+    plan,
+    remote: upload.remote.clone(),
+    key: IdempotencyKey::generate(),
+  }))));
+  Ok(())
+}
+
+/// What the page says about `error`; a project address on another server is named as such.
+fn linking_said(error: &SharingError) -> Said {
+  match error {
+    SharingError::ForeignAddress => Said::new("sharing.upload.foreignAddress"),
+    error => sharing_said(error),
   }
 }
 
@@ -301,21 +409,4 @@ fn action_label(ctx: &Ctx, plan: &LinkPlan) -> Arc<str> {
     }
     _ => ctx.t("sharing.upload.confirmLink"),
   }
-}
-
-/// *Couldn't link Kontur to Kontur* with why (`Share failed` in `woioY`); nothing was linked.
-fn failed(ctx: &Ctx, props: &Props, reason: &Said) -> Element {
-  Callout::new(
-    "sharing-upload-failed",
-    CalloutTone::Danger,
-    ctx.t_args(
-      "sharing.upload.failed",
-      [
-        ("local", props.project.open.project.name().as_str()),
-        ("project", props.upload.plan.project.name.as_str()),
-      ],
-    ),
-  )
-  .body(reason.text(ctx))
-  .into()
 }

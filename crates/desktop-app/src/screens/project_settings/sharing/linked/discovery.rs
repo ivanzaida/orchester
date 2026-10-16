@@ -1,7 +1,8 @@
 //! *Discovery file* of a linked project (`Row · Discovery file` in `L5o9Xy`): whether `orchester.toml` at the
 //! repository root names the project's address, when it was written and whether it is committed. Without one,
 //! *Write orchester.toml* writes it, which only a person does: colleagues who open the checkout are offered the
-//! address. A file that names anything else is left as it is. Orchester never commits it.
+//! address, so it is written only on the server that reported it. A file that names anything else is left as it is.
+//! Orchester never commits it.
 
 use lurq::{
   app::{
@@ -13,9 +14,13 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
+use orchester_api::client::ServerAddress;
 use orchester_workspace::{
   background,
-  sharing::project::discovery::{self, DiscoveryState, LinkedDiscovery},
+  sharing::{
+    ProjectAddress,
+    project::discovery::{self, DiscoveryState, LinkedDiscovery},
+  },
 };
 
 use crate::{
@@ -36,13 +41,18 @@ use crate::{
 pub(super) struct Props {
   pub project: ShownProject,
   pub address: Option<String>,
+  /// The project's server while this computer is signed in to it; the address is written only on it.
+  pub server: Option<ServerAddress>,
   pub discovery: Option<LinkedDiscovery>,
   pub revision: Signal<u64>,
 }
 
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.address == other.address && self.discovery == other.discovery
+    self.project == other.project
+      && self.address == other.address
+      && self.server == other.server
+      && self.discovery == other.discovery
   }
 }
 
@@ -61,15 +71,23 @@ impl Component for DiscoveryRow {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
-    let (root, address, revision) = (
+    let (root, address, server, revision) = (
       props.project.open.repo_root.clone(),
       props.address.clone(),
+      props.server.clone(),
       props.revision,
     );
     let write = ctx.future_action(move |(): ()| {
-      let (root, address, revision) = (root.clone(), address.clone(), revision.clone());
+      let (root, address, server, revision) = (root.clone(), address.clone(), server.clone(), revision.clone());
       async move {
         let address = address.ok_or_else(|| Said::new("sharing.discovery.noAddress"))?;
+        let server = server.ok_or_else(|| Said::new("sharing.discovery.noServer"))?;
+        let address = ProjectAddress::reported(&address, &server)
+          .map_err(|error| {
+            tracing::warn!(%error, "orchester.toml was not written");
+            Said::new("sharing.discovery.foreignAddress").with("server", server.as_str())
+          })?
+          .to_text();
         background::run(move || discovery::write(&root, &address))
           .await
           .map_err(|_| Said::new("cloud.errors.local"))?
