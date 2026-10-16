@@ -34,6 +34,7 @@ use orchester_app::{
   shell::needs_you::PanelOpen,
   startup::Launch,
   theme::{self, Mode},
+  ui::chat::links::ChatLinks,
 };
 use orchester_core::{
   id::ProjectId,
@@ -103,6 +104,7 @@ struct ScreensRoot {
   navigation: Navigation,
   projects: Projects,
   needs_you: PanelOpen,
+  links: ChatLinks,
 }
 
 impl Component for ScreensRoot {
@@ -115,12 +117,13 @@ impl Component for ScreensRoot {
     *ctx.props::<RouterSlot>().0.lock() = Some(router.clone());
     Self {
       router,
-      navigation,
+      navigation: navigation.clone(),
       projects: Projects::new(
         Some((project, ProjectState::Open(kontur(project)))),
         ProjectJobs::default(),
       ),
       needs_you: PanelOpen::new(ctx.signal(false)),
+      links: ChatLinks::new(navigation.clone()),
     }
   }
 
@@ -133,6 +136,7 @@ impl Component for ScreensRoot {
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     ctx.provide(self.needs_you.clone());
+    ctx.provide(self.links.clone());
     Router::mount(ctx, self.router.clone())
   }
 }
