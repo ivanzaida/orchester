@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use orchester_api::TasksImport;
+use orchester_api::{ErrorCode, TasksImport};
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   project::TaskKey,
@@ -35,14 +35,31 @@ impl ProjectServer {
     self.writable()?;
     let root = self.repo_root.clone();
     let import = background::run(move || kept_upload(&root, task, key)).await??;
-    let created = self
+    let created = match self
       .call(|client, token, project| async move { client.import_tasks(&token, project, &import).await })
-      .await?;
+      .await
+    {
+      Ok(created) => created.tasks,
+      // A share whose answer was lost made the task the server's already: it is cached as the server holds it.
+      Err(error) if error.code() == Some(ErrorCode::IdTaken) => {
+        let held: Vec<_> = self
+          .call(|client, token, project| async move { client.tasks(&token, project).await })
+          .await?
+          .tasks
+          .into_iter()
+          .filter(|held| held.id == task)
+          .collect();
+        if held.is_empty() {
+          return Err(error);
+        }
+        held
+      }
+      Err(error) => return Err(error),
+    };
     let tags = self
       .call(|client, token, project| async move { client.tags(&token, project).await })
       .await?;
     let number = created
-      .tasks
       .first()
       .and_then(|task| std::num::NonZeroU32::new(task.number))
       .ok_or(SharingError::InvalidAnswer("imported task"))?;
@@ -51,7 +68,7 @@ impl ProjectServer {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
       store.db.cache_shared_tags(&tags)?;
-      store.cache(&created.tasks, None)
+      store.cache(&created, None)
     })
     .await??;
     self.servers.shared_changed();

@@ -11,6 +11,7 @@ use orchester_core::{
   id::{ProjectId, ServerId},
   name::Name,
   project::{Project, ProjectKey, TaskKey},
+  repository::RepositoryIdentity,
   store::TaskStore,
 };
 use orchester_exec::programs::Programs;
@@ -97,11 +98,59 @@ impl Landing {
     }
   }
 
-  /// `git clone` of the project's repository, for a computer without its checkout; `None` without a hint.
+  /// `git clone` of the project's repository, for a computer without its checkout; `None` without a hint, or for a
+  /// hint the command can't hold safely ([`clone_command`]).
   pub fn clone_command(&self) -> Option<String> {
-    let hint = self.project.remote_hint.as_ref()?;
-    Some(format!("git clone https://{}.git", hint.as_str()))
+    clone_command(self.project.remote_hint.as_ref()?)
   }
+}
+
+/// `git clone https://<identity>.git`, only for an identity made of a plain host (letters, digits, dots and hyphens with
+/// an optional port, or a bracketed IPv6 address) and path segments of letters, digits, dots, underscores and hyphens.
+/// The hint is the server's word, and a person may paste the command into a shell: anything else (`$(…)`, backticks,
+/// `;`, `|`, quotes, control characters) gets no command, and the hint shows as plain text.
+pub fn clone_command(identity: &RepositoryIdentity) -> Option<String> {
+  let (host, path) = identity.as_str().split_once('/')?;
+  let segment = |part: &str| {
+    !part.is_empty()
+      && part != "."
+      && part != ".."
+      && part
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+  };
+  (plain_host(host) && path.split('/').all(segment)).then(|| format!("git clone https://{}.git", identity.as_str()))
+}
+
+/// A host name or IPv4 address with an optional port, or a bracketed IPv6 address with one.
+fn plain_host(host: &str) -> bool {
+  let (name, port) = match host.strip_prefix('[') {
+    Some(rest) => match rest.split_once(']') {
+      Some((address, port)) => {
+        if address.is_empty()
+          || !address
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() || byte == b':' || byte == b'.')
+        {
+          return false;
+        }
+        return port.is_empty() || port.strip_prefix(':').is_some_and(digits);
+      }
+      None => return false,
+    },
+    None => host
+      .split_once(':')
+      .map_or((host, None), |(name, port)| (name, Some(port))),
+  };
+  !name.is_empty()
+    && name
+      .bytes()
+      .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.' || byte == b'-')
+    && port.is_none_or(digits)
+}
+
+fn digits(text: &str) -> bool {
+  !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 /// Why a chosen folder cannot be a checkout to link.

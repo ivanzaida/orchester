@@ -32,7 +32,11 @@ use orchester_core::{
 };
 use orchester_workspace::sharing::{
   ProjectAddress, RemoteMatch, SharingError,
-  project::{JoinReview, LinkFirst, ShareError, landing::CheckoutRefusal, lookup::Lookup},
+  project::{
+    JoinReview, LinkFirst, ShareError,
+    landing::{CheckoutRefusal, clone_command},
+    lookup::Lookup,
+  },
   remote_match,
 };
 use server_support::TestServer;
@@ -455,4 +459,80 @@ fn joined_the_invite_landing_finds_the_checkout_whose_origin_matches() {
   let direct = landing.direct().expect("the one checkout that matches");
   assert_eq!(direct.id, added.project.id());
   assert!(direct.tasks.is_empty(), "a new local project has no tasks");
+}
+
+/// The landing's `git clone` (N3 review, M3): only a hint of a plain host and plain path segments gets the command a
+/// person may paste into a shell; anything else is shown as text only.
+#[test]
+fn joined_the_clone_command_is_offered_only_for_a_plain_repository() {
+  let plain = RepositoryIdentity::parse("github.com/acme/kontur-app_2.x").expect("plain");
+  assert_eq!(
+    clone_command(&plain).as_deref(),
+    Some("git clone https://github.com/acme/kontur-app_2.x.git")
+  );
+  let with_port = RepositoryIdentity::parse("git.example.com:8443/team/kontur").expect("port");
+  assert!(clone_command(&with_port).is_some());
+  let ipv6 = RepositoryIdentity::from_remote_url("https://[::1]:3000/team/kontur.git").expect("ipv6");
+  assert!(clone_command(&ipv6).is_some());
+  for text in [
+    "github.com/acme/$(touch pwned)",
+    "github.com/acme/$(id)",
+    "github.com/acme/`id`",
+    "github.com/acme/kontur;id",
+    "github.com/acme/kontur|id",
+    "github.com/acme/kon\"tur",
+    "github.com/acme/kon'tur",
+    "github.com/acme/kon\u{7}tur",
+    "github.com/acme/kon\ntur",
+    "github.com/acme/kon&tur",
+    "evil$(id).com/acme/kontur",
+  ] {
+    if let Ok(identity) = RepositoryIdentity::parse(text) {
+      assert_eq!(clone_command(&identity), None, "{text:?} gets no command");
+    }
+  }
+}
+
+/// N3 review, M1: a checkout links to one project. Once Bohdan's Kontur joined ORC, neither a review, a link's plan nor
+/// a join of another project reads or sends anything for it: its tasks never go up into another project.
+#[test]
+fn joined_a_linked_checkout_uploads_nothing_into_another_project() {
+  let server = TestServer::start();
+  let alice = shared(&server);
+  let (bohdan, tasks) = bohdan(&server);
+  member(&alice, "bohdan");
+  let atlas = server.create_named_project(("Atlas", "ATL"), "atlas", None);
+  server.add_member(&atlas, "bohdan");
+  let before = review(&bohdan);
+  join(&bohdan, &tasks);
+
+  let refused = |result: Result<(), SharingError>| {
+    assert!(
+      matches!(
+        result,
+        Err(SharingError::Store(orchester_store::StoreError::AlreadyShared))
+      ),
+      "{result:?}"
+    );
+  };
+  let entry = bohdan.entry();
+  refused(
+    bohdan
+      .block_on(bohdan.servers.join_review_at(&entry, bohdan.root(), "atlas"))
+      .map(drop),
+  );
+  refused(
+    bohdan
+      .block_on(bohdan.servers.link_plan(&entry, bohdan.root(), atlas.clone()))
+      .map(drop),
+  );
+  // The review read before the join, confirmed again for the project it named: nothing goes up twice.
+  let again = bohdan.block_on(bohdan.servers.join(
+    &entry,
+    bohdan.root(),
+    &before,
+    (vec![tasks[0]], IdempotencyKey::generate()),
+  ));
+  refused(again.map(drop).map_err(|failed| failed.error));
+  assert!(server.task_keys(&atlas).is_empty(), "nothing went up into Atlas");
 }
