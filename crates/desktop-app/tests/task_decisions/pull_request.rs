@@ -38,11 +38,12 @@ use orchester_workspace::pull_requests::list::{PullRequestList, load_list_in};
 use parking_lot::Mutex;
 
 use super::{
-  Page,
+  Page, checkout_page,
   merge::{git, latest_run},
 };
 
 const READY: &str = "ready for review, merges cleanly";
+const CONFLICTS: &str = "ready for review, conflicts with main";
 const NO_BRANCH: &str = "ready for review, no branch to merge into";
 const SIGNED_IN: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"repo"}]}}"#;
 const OTHER_ACCOUNT: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivan-work","scopes":"repo"}]}}"#;
@@ -189,13 +190,26 @@ fn linked(fake: &Arc<FakeGitHub>) -> Page {
   page
 }
 
-/// Presses Create pull request once whether it can be used is read, until the fake sees the push.
+/// Presses Create pull request once whether it can be used is read, until the fake sees a new push.
 fn create(page: &mut Page, fake: &FakeGitHub) {
+  let before = fake.pushes();
   page.window.until("the branch to be pushed", |window| {
     if let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request") {
       button.click();
     }
-    fake.pushes() > 0
+    fake.pushes() > before
+  });
+}
+
+/// Presses Try again until the failure notice's title says `title`.
+fn retry_until(page: &mut Page, title: &str) {
+  page.window.until(title, |window| {
+    if let Some(mut retry) = window.tree.get_element_by_id_mut("task-pull-request-retry") {
+      retry.click();
+    }
+    window
+      .texts("task-pull-request-failure-title")
+      .is_some_and(|texts| texts.join(" ") == title)
   });
 }
 
@@ -227,6 +241,7 @@ fn knob_at_end(window: &mut super::support::Window) -> bool {
 
 #[test]
 fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
+  let _checkout = checkout_page();
   let fake = FakeGitHub::new();
   let mut page = linked(&fake);
   page.open(READY, "task-create-pull-request");
@@ -274,21 +289,8 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
     run.id(),
     "the Pull requests list links it to the task's run"
   );
-  page.click("task-review-pull-request");
-  assert_eq!(
-    page.window.navigation().route_now(),
-    Route::Project(
-      page.project,
-      ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number"))
-    )
-  );
-}
-
-#[test]
-fn decision_create_pull_request_ready_for_review_when_draft_is_off() {
-  let fake = FakeGitHub::new();
-  let mut page = linked(&fake);
-  page.open(READY, "task-create-pull-request");
+  // Another task's run, with Open as draft turned off, opens one ready for review.
+  page.open(CONFLICTS, "task-create-pull-request");
   assert!(knob_at_end(&mut page.window), "Open as draft is on by default");
   // The switch is fixed until whether a pull request can be created is read; once it can, a press turns it off.
   page.window.until("Open as draft to turn off", |window| {
@@ -302,10 +304,21 @@ fn decision_create_pull_request_ready_for_review_when_draft_is_off() {
   page.until_says("task-pull-request-opened", "Pull request #143 opened.");
   let (args, _) = fake.created.lock().clone().expect("gh pr create ran");
   assert!(!args.contains("--draft"), "{args}");
+  // The first run keeps its pull request, which Review PR opens.
+  page.open(READY, "task-pull-request-opened");
+  page.click("task-review-pull-request");
+  assert_eq!(
+    page.window.navigation().route_now(),
+    Route::Project(
+      page.project,
+      ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number"))
+    )
+  );
 }
 
 #[test]
 fn decision_create_pull_request_says_why_it_is_unavailable() {
+  let _checkout = checkout_page();
   let fake = FakeGitHub::new();
   let mut page = Page::seeded_with_programs("decisions", Programs::with_runner(fake.clone()));
   let reopen = |page: &mut Page, words: &str| {
@@ -363,8 +376,11 @@ fn decision_create_pull_request_says_why_it_is_unavailable() {
   assert_eq!(fake.pushes(), 0, "nothing was pushed");
 }
 
+/// One page through every failure, so the binary's tests in parallel stay within the harness's wait: a refused push,
+/// then `gh pr create` failing twice, then Try again opening it.
 #[test]
-fn decision_create_pull_request_refused_push_names_setup_git_and_tries_again() {
+fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
+  let _checkout = checkout_page();
   let fake = FakeGitHub::new();
   *fake.push.lock() = output(128, "", SIGN_IN_REFUSED);
   let mut page = linked(&fake);
@@ -389,6 +405,27 @@ fn decision_create_pull_request_refused_push_names_setup_git_and_tries_again() {
   assert!(!page.locked("task-merge"), "Merge into main stays offered");
   assert!(page.has("task-create-pull-request"), "and so does Create pull request");
   *fake.push.lock() = output(0, "", "");
+  *fake.create.lock() = output(
+    1,
+    "",
+    "pull request create failed: GraphQL: No commits between main and the branch (createPullRequest)\n",
+  );
+  retry_until(&mut page, "No pull request opened");
+  assert_eq!(
+    page.text("task-pull-request-failure-body"),
+    format!("GitHub found no commits on {branch} that main doesn't have, so there is nothing to review.")
+  );
+  assert!(
+    !page.has("task-pull-request-command"),
+    "only a refused sign-in names gh auth setup-git"
+  );
+  *fake.create.lock() = output(1, "", "HTTP 502: Server Error (https://api.github.com/graphql)\n");
+  retry_until(&mut page, "gh couldn't open the pull request");
+  assert_eq!(
+    page.text("task-pull-request-failure-body"),
+    "GitHub is having trouble. The branch was pushed; try again in a moment."
+  );
+  *fake.create.lock() = output(0, "https://github.com/ivanzaida/kontur/pull/143\n", "");
   page.window.until("Try again to open it", |window| {
     if let Some(mut retry) = window.tree.get_element_by_id_mut("task-pull-request-retry") {
       retry.click();
@@ -396,41 +433,4 @@ fn decision_create_pull_request_refused_push_names_setup_git_and_tries_again() {
     window.texts("task-pull-request-opened").is_some()
   });
   assert!(!page.has("task-pull-request-failure"));
-}
-
-#[test]
-fn decision_create_pull_request_failed_gh_says_why_in_place() {
-  let fake = FakeGitHub::new();
-  *fake.create.lock() = output(
-    1,
-    "",
-    "pull request create failed: GraphQL: No commits between main and the branch (createPullRequest)\n",
-  );
-  let mut page = linked(&fake);
-  page.open(READY, "task-create-pull-request");
-  create(&mut page, &fake);
-  page.until_says("task-pull-request-failure-title", "No pull request opened");
-  let branch = latest_run(&page, READY).branch().to_string();
-  assert_eq!(
-    page.text("task-pull-request-failure-body"),
-    format!("GitHub found no commits on {branch} that main doesn't have, so there is nothing to review.")
-  );
-  assert!(page.has("task-pull-request-retry"));
-  assert!(
-    !page.has("task-pull-request-command"),
-    "only a refused sign-in names gh auth setup-git"
-  );
-  *fake.create.lock() = output(1, "", "HTTP 502: Server Error (https://api.github.com/graphql)\n");
-  page.window.until("gh's trouble", |window| {
-    if let Some(mut retry) = window.tree.get_element_by_id_mut("task-pull-request-retry") {
-      retry.click();
-    }
-    window
-      .texts("task-pull-request-failure-title")
-      .is_some_and(|texts| texts.join(" ") == "gh couldn't open the pull request")
-  });
-  assert_eq!(
-    page.text("task-pull-request-failure-body"),
-    "GitHub is having trouble. The branch was pushed; try again in a moment."
-  );
 }

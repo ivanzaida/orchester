@@ -16,7 +16,7 @@ use orchester_core::{
     CreateFailure, NewPullRequest, OpenFailure, OpenedPullRequest, PullRequestState, Push, PushFailure, SyncScope,
     open_pull_request, task_link, task_pull_request,
   },
-  repository::{RemoteName, RepositoryError, RepositoryLink, read_remotes},
+  repository::{RemoteName, RepositoryError, RepositoryLink, read_git_dir_remotes},
   run::{BranchName, Run, RunStatus},
   store::{ConnectionStore, PullRequestStore, RepositoryStore, RunStore, TaskStore},
   time::Timestamp,
@@ -130,8 +130,10 @@ pub fn readiness_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result
 }
 
 /// Why an unlinked project cannot create one: its folder has a GitHub remote the project is not linked to, or none.
+/// Git reads them from the repository's metadata without running in the checkout, which the task page's reads of a
+/// local integration hold at the same time.
 fn unlinked(repo_root: &Path, programs: &Programs) -> Result<Unavailable, RepositoryError> {
-  let remotes = read_remotes(&programs.runner(), Path::new(GIT), repo_root)?;
+  let remotes = read_git_dir_remotes(&programs.runner(), Path::new(GIT), &repo_root.join(".git"))?;
   let on_github = remotes
     .iter()
     .any(|remote| remote.name().as_str() == RemoteName::ORIGIN && remote.github_repo().is_some());

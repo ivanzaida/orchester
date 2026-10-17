@@ -31,6 +31,15 @@ use tokio::runtime::Runtime;
 /// Why a decision waits: no runner is connected to carry it out (the header's own words).
 const OFFLINE: &str = "The runner is not connected; the run's controls return once it is online.";
 
+/// Held by each test whose Ready card reads or changes its checkout (local integration's reads, a merge, a pull
+/// request's push): run side by side in this one process, those pages' git work timed out the harness's wait.
+static CHECKOUT_PAGES: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+/// Waits until no other test's Ready card works in its checkout.
+fn checkout_page() -> parking_lot::MutexGuard<'static, ()> {
+  CHECKOUT_PAGES.lock()
+}
+
 /// The window on a seeded scenario's project, and the seeded tasks: key and state.
 struct Page {
   window: Window,

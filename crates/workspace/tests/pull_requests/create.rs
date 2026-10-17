@@ -104,7 +104,8 @@ impl CommandRunner for FakeGitHub {
     let args = command.args().join(" ");
     let output = match args.as_str() {
       "--version" => answer(0, "gh version 2.97.0 (2026-07-31)\n", ""),
-      "remote -v" => answer(0, self.remotes, ""),
+      // The remotes are read from the repository's metadata, outside its checkout.
+      args if args.starts_with("--git-dir ") && args.ends_with(" remote -v") => answer(0, self.remotes, ""),
       args if args.starts_with("auth status") => answer(0, self.auth, ""),
       args if args.starts_with("push ") => self.push.clone(),
       args if args.starts_with("pr create") => {
