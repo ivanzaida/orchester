@@ -89,7 +89,6 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
     if current {
       PageTab::current(id.to_owned(), label)
     } else {
-
       PageTab::to(id.to_owned(), label, false, navigation.to(route))
     }
   };

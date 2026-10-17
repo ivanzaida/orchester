@@ -2,12 +2,14 @@
 //! (`support::link_press`): a middle click and Ctrl+click (Cmd+click on macOS) in a background tab right of the active
 //! one, Ctrl+Shift+click in a new tab there it switches to, a plain click in the active tab as before. One control of
 //! each kind, on the QA seed's project (`examples/seed`): a sidebar entry, a task row, a breadcrumb, an Overview
-//! card, a status bar item and a project row of All projects; and an action inside a row that opens, which keeps a
-//! middle click to itself. Needs `git`, as the seed does.
+//! card, a status bar item and a project row of All projects, and Back after a plain click on each; an action inside
+//! a row that opens, which keeps a middle click to itself; and the kit's controls alone (`kit`): Ctrl+Enter on a
+//! focused button, and a middle click on a link inside a row that opens. Needs `git`, as the seed does.
 
 #[path = "../overview/harness.rs"]
 #[allow(dead_code, reason = "the Overview's harness serves its own tests; these use a part")]
 mod harness;
+mod kit;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers serve every scenario; these tests seed one")]
 mod kontur;

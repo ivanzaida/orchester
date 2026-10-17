@@ -6,6 +6,7 @@
 
 use lurq::{
   app::{
+    Tree,
     events::MouseButton,
     synthetic_input::{SyntheticInput, SyntheticModifiers, apply},
   },
@@ -51,21 +52,29 @@ pub fn press_control(window: &mut Window, id: &str, (presser, button): (Presser,
 }
 
 fn press_at(window: &mut Window, bounds: ElementRect, (presser, button): (Presser, MouseButton), keys: (bool, bool)) {
+  press_in(&mut window.tree, bounds, (presser, button), keys);
+  window.pass();
+}
+
+/// Presses the middle of `bounds` in `tree` as [`press_link`] presses a link, without laying the tree out again.
+pub fn press_in(tree: &mut Tree, bounds: ElementRect, (presser, button): (Presser, MouseButton), keys: (bool, bool)) {
   let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
   let m = modifiers(keys);
   match presser {
     Presser::Person => {
-      let tree = &mut window.tree;
       tree.mouse_move_with_meta(x, y, m.shift, m.ctrl, m.alt, m.meta);
       tree.mouse_down_with_meta(x, y, button, m.shift, m.ctrl, m.alt, m.meta);
       tree.mouse_up_with_meta(x, y, button, m.shift, m.ctrl, m.alt, m.meta);
     }
-    Presser::Synthetic => apply(
-      &mut window.tree,
-      &SyntheticInput::click_button(x, y, button).with_modifiers(m),
-    ),
+    Presser::Synthetic => apply(tree, &SyntheticInput::click_button(x, y, button).with_modifiers(m)),
   }
-  window.pass();
+}
+
+/// Presses Enter on the focused element of `tree`, holding the command key (Ctrl, Cmd on macOS) when `command`.
+pub fn enter_in(tree: &mut Tree, command: bool) {
+  let m = modifiers((command, false));
+  tree.key_down_with_meta("Enter".to_owned(), "Enter".to_owned(), m.shift, m.ctrl, m.alt, m.meta);
+  tree.key_up_with_meta("Enter".to_owned(), "Enter".to_owned(), m.shift, m.ctrl, m.alt, m.meta);
 }
 
 /// Waits until the element `id` is laid out and stays where it is; where it is then.
@@ -285,4 +294,10 @@ pub fn control_opens_by_browser_rules(window: &mut Window, id: &str, place: &Rou
   );
   assert_eq!(navigation.tabs_now().active().id(), home);
   assert_eq!(navigation.tabs_now().tabs().len(), expected.len(), "and no tab");
+  navigation.back();
+  assert_eq!(
+    navigation.route_now(),
+    here,
+    "Back after the plain click on {id} returns to where the tab was"
+  );
 }

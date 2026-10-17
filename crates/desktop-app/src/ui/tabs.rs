@@ -149,7 +149,6 @@ impl PageTab {
     let button = open
       .map_or_else(|| Button::empty().focusable(false), Press::button)
       .id(self.id.clone())
-
       .height(Dimension::Px(TAB_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
       .spacing(ExtraSpacing::Pair.role())

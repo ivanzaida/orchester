@@ -182,7 +182,6 @@ fn new_tab(ctx: &mut Ctx, row: &str, (navigation, route): (Navigation, Route), o
   let button = pressable(move || {
     open.set(false);
     navigation.open(route.clone(), OpenIn::NewTab);
-
   })
   .id(id.clone())
   .describe("a11y_name", label.clone())
