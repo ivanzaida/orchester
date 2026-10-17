@@ -33,7 +33,7 @@ use super::upload::{LinkPage, Upload, link_page};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{JoinTarget, ProjectPage, Route},
+  routes::{JoinTarget, ProjectPage, ProjectSettingsTab, Route},
   screens::{
     project_settings::page,
     settings::orchester::{Said, sharing_said},
@@ -114,7 +114,10 @@ impl Component for JoinPage {
     // The link's page put itself away: cancelled or linked.
     ctx.watch(&page, move |page: &LinkPage| {
       if page.0.is_none() {
-        navigation.replace(Route::Project(project, ProjectPage::Sharing { make_local: false }));
+        navigation.replace(Route::Project(
+          project,
+          ProjectPage::Settings(ProjectSettingsTab::Sharing),
+        ));
       }
     });
     Self {

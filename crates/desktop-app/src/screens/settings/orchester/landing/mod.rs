@@ -204,20 +204,15 @@ impl LandingPage {
   fn header(&self, ctx: &mut Ctx, landing: Option<&Landing>, target: &JoinTarget) -> Element {
     let navigation = Navigation::of(ctx);
     let server = target.server;
-    let to_orchester = {
-      let navigation = navigation.clone();
-      move || navigation.go(Route::Orchester(OrchesterView::server(server)))
-    };
+    let to_orchester = Route::Orchester(OrchesterView::server(server));
     let project = landing.map_or_else(|| target.slug().to_owned(), |landing| landing.project.name.clone());
     let crumbs = breadcrumb(
       ctx,
       "orchester-landing-crumbs",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t(Screen::Settings.title_key()), move || {
-          navigation.go(Route::Settings)
-        }),
-        Crumb::link(ctx.t("settings.tabs.orchester"), to_orchester.clone()),
+        Crumb::to(ctx.t(Screen::Settings.title_key()), navigation.to(Route::Settings)),
+        Crumb::to(ctx.t("settings.tabs.orchester"), navigation.to(to_orchester.clone())),
         Crumb::here(ctx.t_args("sharing.landing.crumb", [("project", project.as_str())])),
       ],
     );
@@ -227,7 +222,7 @@ impl LandingPage {
       ButtonKind::Ghost,
       ctx.t("sharing.landing.later"),
     )
-    .on_click(to_orchester);
+    .opens(navigation.to(to_orchester));
     let go_on = self.continue_button(ctx, landing, target);
     let column = Column::new()
       .width(Dimension::Px(HEAD_WIDTH))

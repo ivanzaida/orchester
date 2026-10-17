@@ -31,7 +31,7 @@ use super::{
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, NewConnection, ProjectPage, Route, Screen},
   services::{
@@ -223,19 +223,23 @@ impl ConnectionsScreen {
       .into()
   }
 
-  /// Opens a connection's inspector in place of the shown one.
-  fn open(
-    &self,
-    ctx: &mut Ctx,
-    project: &ShownProject,
-    view: ConnectionsView,
-  ) -> Arc<dyn Fn(ConnectionId) + Send + Sync> {
+  /// What opens a connection's inspector, a place of its own, by a browser's rules (`navigation::link`); in the
+  /// active tab it drops the question asked about the one shown.
+  fn open(&self, ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> table::OpenConnection {
     let navigation = Navigation::of(ctx);
     let (id, asking) = (project.open.project.id(), self.asking.clone());
     Arc::new(move |connection| {
-      asking.set(Asking(None));
-      let view = ConnectionsView::new(view.tab()).with_selected(connection);
-      navigation.replace(Route::Project(id, ProjectPage::Connections(view)));
+      let route = Route::Project(
+        id,
+        ProjectPage::Connections(ConnectionsView::new(view.tab()).with_selected(connection)),
+      );
+      let (navigation, asking) = (navigation.clone(), asking.clone());
+      Arc::new(move |at: OpenIn| {
+        if at == OpenIn::ActiveTab {
+          asking.set(Asking(None));
+        }
+        navigation.open(route.clone(), at);
+      })
     })
   }
 

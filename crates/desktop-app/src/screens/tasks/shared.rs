@@ -31,7 +31,7 @@ use orchester_workspace::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{OrchesterView, ProjectPage, Route},
+  routes::{OrchesterView, ProjectPage, ProjectSettingsTab, Route},
   screens::settings::orchester::{follow, follow_shared, moment, shown_address},
   services::Services,
   theme::{ExtraColor, ExtraRadius, IconSize, OrchesterText},
@@ -137,17 +137,20 @@ pub(super) fn line(ctx: &mut Ctx, project: ProjectId, shared: &Shared) -> Row {
         .nowrap(),
     );
   }
-  let settings = opening(navigation.to(Route::Project(project, ProjectPage::Sharing { make_local: false })))
-    .id("tasks-shared-settings")
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
-    .child(
-      Text::new(&ctx.t("tasks.shared.settings"))
-        .variant(TypographyStyle::Description)
-        .color(ExtraColor::AccentText.role())
-        .nowrap(),
-    )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, ExtraColor::AccentText.role()));
+  let settings = opening(navigation.to(Route::Project(
+    project,
+    ProjectPage::Settings(ProjectSettingsTab::Sharing),
+  )))
+  .id("tasks-shared-settings")
+  .spacing(SpacingSize::Xs)
+  .align_items(Alignment::Center)
+  .child(
+    Text::new(&ctx.t("tasks.shared.settings"))
+      .variant(TypographyStyle::Description)
+      .color(ExtraColor::AccentText.role())
+      .nowrap(),
+  )
+  .child(icon(Icon::ArrowUpRight, IconSize::Sm, ExtraColor::AccentText.role()));
   row
     .child(separator(ctx))
     .child(state(ctx, sharing))
@@ -317,7 +320,7 @@ pub(super) fn not_member(ctx: &mut Ctx, project: &ShownProject, shared: &Shared)
         ctx.t("tasks.shared.makeLocal"),
       )
       .icon(Icon::Unplug)
-      .opens(navigation.to(Route::Project(id, ProjectPage::Sharing { make_local: true }))),
+      .opens(navigation.to(Route::Project(id, ProjectPage::MakeLocal))),
     )
     .into(),
   )

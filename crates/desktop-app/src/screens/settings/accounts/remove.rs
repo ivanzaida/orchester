@@ -323,7 +323,7 @@ fn buttons(ctx: &mut Ctx, work: &Work, account: &AgentAccount, shown: &str, bloc
     .on_click(move || {
       removal.move_to.set(MoveChoice::Unset);
       removal.trash.set(false);
-      navigation.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::UsedBy)));
+      navigation.close_panel(Route::Accounts(AccountsView::of(id, AccountsPanel::UsedBy)));
     })
   };
   Row::new().spacing(SpacingSize::Sm).child(confirm).child(keep).into()

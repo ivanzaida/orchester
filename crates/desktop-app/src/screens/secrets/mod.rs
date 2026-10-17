@@ -22,10 +22,12 @@ use orchester_workspace::{
   secrets::data::ProjectSecrets,
   tasks::outside::Outside,
 };
-use state::{EnvironmentChoice, Panel, Selected, View};
+use state::{EnvironmentChoice, View};
 
 use crate::{
+  navigation::Navigation,
   project::ShownProject,
+  routes::{SecretsPanel, SecretsTab, SecretsView},
   services::Services,
   ui::{
     message::message_text,
@@ -34,13 +36,13 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq)]
-struct Props(ShownProject);
+struct Props(ShownProject, SecretsView);
 impl DevtoolsInspectable for Props {}
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, shown: SecretsView) -> Element {
   ctx.mount_keyed::<SecretsScreen>(
     &format!("secrets-{}", project.open.project.id()),
-    Props(project.clone()),
+    Props(project.clone(), shown),
   )
 }
 
@@ -51,23 +53,28 @@ struct SecretsScreen {
 impl Component for SecretsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      view: View {
-        selected: ctx.signal(Selected(None)),
-        panel: ctx.signal(Panel::Inspect),
-        environment: ctx.signal(EnvironmentChoice(None)),
-        revision: ctx.signal(0),
-      },
-    }
+    let Props(project, shown) = ctx.props::<Props>().clone();
+    let view = View {
+      project: project.open.project.id(),
+      navigation: Navigation::of(ctx),
+      environment: ctx.signal(EnvironmentChoice(shown.environment)),
+      revision: ctx.signal(0),
+    };
+    let chosen = view.clone();
+    ctx.watch(&view.environment, move |choice| chosen.filter(choice.0));
+    Self { view }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let project = ctx.props::<Props>().0.clone();
+    let Props(project, shown) = ctx.props::<Props>().clone();
+    // Back and Forward move the filter too: the select follows the route.
+    if self.view.environment.get_untracked().0 != shown.environment {
+      self.view.environment.set(EnvironmentChoice(shown.environment));
+    }
     let revision = self.view.revision.get() + project.feed.outside.get().of(Outside::Connections);
-    let selected = self.view.selected.get().0;
     let repo = project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
     let loaded = ctx
-      .future((repo, revision, selected), move |(repo, _, selected)| {
+      .future((repo, revision, shown.secret), move |(repo, _, selected)| {
         let hold = hold.clone();
         async move {
           hold.released().await;
@@ -84,8 +91,8 @@ impl Component for SecretsScreen {
     } else {
       loaded.data.as_ref().map(|listed| listed.in_environment(None).count())
     };
-    let page = page.child(page::tabs(ctx, &self.view, count));
-    if self.view.panel.get() == Panel::Usage {
+    let page = page.child(page::tabs(ctx, &self.view, shown.tab, count));
+    if shown.tab == SecretsTab::Usage {
       return page.child(page::usage(ctx));
     }
     if let Some(ref error) = loaded.error
@@ -99,7 +106,7 @@ impl Component for SecretsScreen {
         _ => loading("secrets-loading", &ctx.t("secrets.reading")).into(),
       });
     };
-    page.child(self.body(ctx, &project, &listed))
+    page.child(self.body(ctx, (&project, shown), &listed))
   }
 }
 
@@ -122,13 +129,10 @@ impl SecretsScreen {
       .into()
   }
 
-  fn body(&self, ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecrets) -> Element {
-    let environment = self.view.environment.get().0;
-    let secret = self
-      .view
-      .selected
-      .get()
-      .0
+  fn body(&self, ctx: &mut Ctx, (project, shown): (&ShownProject, SecretsView), listed: &ProjectSecrets) -> Element {
+    let environment = shown.environment;
+    let secret = shown
+      .secret
       .and_then(|id| listed.secret(id))
       .filter(|secret| environment.is_none_or(|environment| secret.environment() == environment))
       .or_else(|| listed.in_environment(environment).next());
@@ -140,8 +144,8 @@ impl SecretsScreen {
       .min_height(Dimension::Px(0.0))
       .spacing(SpacingSize::Xl)
       .child(list);
-    match (self.view.panel.get(), secret) {
-      (Panel::Add, _) => {
+    match (shown.panel, secret) {
+      (SecretsPanel::Add, _) => {
         body = body.child(ctx.mount_keyed::<form::SecretForm>(
           "secret-new-form",
           form::Props {
@@ -152,7 +156,7 @@ impl SecretsScreen {
           },
         ));
       }
-      (Panel::Replace, Some(secret)) => {
+      (SecretsPanel::Replace, Some(secret)) => {
         body = body.child(ctx.mount_keyed::<form::SecretForm>(
           &format!("secret-replace-{}", secret.id()),
           form::Props {
@@ -171,7 +175,7 @@ impl SecretsScreen {
             listed: listed.clone(),
             secret: secret.clone(),
             view: self.view.clone(),
-            archive: self.view.panel.get() == Panel::Archive,
+            archive: shown.panel == SecretsPanel::Archive,
           },
         ))
       }

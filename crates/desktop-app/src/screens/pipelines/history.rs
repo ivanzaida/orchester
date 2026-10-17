@@ -12,7 +12,7 @@ use orchester_workspace::{background, messages, pipelines::history::VersionHisto
 
 use super::{
   parts,
-  state::{Panel, State},
+  state::{Editing, State},
 };
 use crate::{
   project::ShownProject,
@@ -144,16 +144,16 @@ fn restore_button(ctx: &Ctx, state: &State, writing: bool) -> ActionButton {
   .bounded_label()
   .icon(crate::ui::icon::Icon::RotateCcw)
   .on_click(move || {
-    restore.update(|s| {
-      if writing {
-        return;
-      }
-      if s.opened.draft_saved_at.is_some() || s.dirty() || !s.errors.is_empty() {
-        s.restore_requested = true;
-      } else {
-        s.restore();
-      }
-    })
+    if writing {
+      return;
+    }
+    let editing = restore.get_untracked();
+    if editing.opened.draft_saved_at.is_some() || editing.dirty() || !editing.errors.is_empty() {
+      restore.update(|s| s.restore_requested = true);
+    } else {
+      restore.update(Editing::restore);
+      editing.panels.to_draft();
+    }
   });
   if writing { button.disabled() } else { button }
 }
@@ -230,6 +230,7 @@ fn version_row(
   );
   crate::ui::pressable::pressable(move || {
     if !selected {
+      // Shown at once; the route, which says what is viewed, follows.
       target.update(|s| {
         s.viewing = Some((*snapshot).clone());
         s.viewing_version = Some(number);
@@ -237,6 +238,7 @@ fn version_row(
         s.restore_requested = false;
         s.epoch += 1;
       });
+      target.get_untracked().panels.view(number);
     }
   })
   .id(format!("pipeline-version-{}", number.get()))
@@ -275,9 +277,9 @@ pub fn back(state: &State) {
     s.viewing_version = None;
     s.comparing = false;
     s.restore_requested = false;
-    s.panel = Panel::Pipeline;
     s.epoch += 1;
   });
+  state.get_untracked().panels.to_draft();
 }
 pub fn toolbar(ctx: &Ctx, state: &State) -> Element {
   let editing = state.get();

@@ -6,7 +6,7 @@ mod support;
 mod visual;
 use std::{fs, path::PathBuf};
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{ProjectPage, Route, SkillsFilter};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   id::ResourceId,
@@ -114,7 +114,7 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
   fs::write(folder.join("notes.md"), "Reference content").expect("reference");
   fs::write(s.repo.join("AGENTS.md"), "Read the project rules.").expect("instructions");
   fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   let empty = s.text("skills-empty");
   assert!(empty.contains(".claude/skills/checks") && empty.contains("AGENTS.md"));
   s.click("skills-import-open");
@@ -162,7 +162,7 @@ fn skills_empty_states_list_repository_sources_and_import_preview_and_result() {
 #[test]
 fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   let mut s = Skills::new();
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   assert!(s.text("skills-empty").contains("No skills in Kontur yet"));
   s.click("skills-new");
   s.set("skill-name", "run-checks");
@@ -232,14 +232,14 @@ fn skills_duplicate_name_is_not_saved_and_unsaved_departure_asks_in_place() {
   assert_eq!(s.entry(id).name.as_ref(), "checks");
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   assert!(s.text("skill-leave-question").contains("unsaved"));
   s.click("skill-leave-keep");
   assert!(s.window.tree.get_element_by_id("skill-editor").is_some());
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   s.click("skill-leave-confirm");
   s.window
@@ -250,7 +250,7 @@ fn skills_repository_files_enabling_asks_and_off_applies_without_publishing() {
   let mut s = Skills::new();
   let mut db = ProjectDb::open(&s.repo).expect("db");
   db.save_repository_agent_files(RepositoryAgentFiles::Off).expect("off");
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   s.click("skill-repository-files");
   s.window.until("question armed", |w| {
     w.tree.tick_futures();
@@ -399,7 +399,7 @@ fn skills_grouped_scope_picker_saves_an_agent_step_and_filters_the_library() {
       .is_some_and(|e| e.body.scope() == &scope)
   });
   s.settle(id, "Run checks before handing over.");
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   s.window.until("library reflects the saved scope", |w| {
     w.texts("skills-list").is_some_and(|t| t.join(" ").contains("Delivery"))
   });
@@ -430,7 +430,7 @@ fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_
   s.click("skill-scope-option-1");
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   assert!(s.text("skill-leave-question").contains("unsaved"));
   assert!(ProjectSkills::load_in(&s.repo).expect("skills").entries.is_empty());
@@ -439,7 +439,7 @@ fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_
   assert!(!s.text("skill-editor").contains("for the whole project"));
   s.click("skill-scope");
   s.click("skill-scope-option-0");
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   assert!(s.window.tree.get_element_by_id("skills-empty").is_some());
   assert!(s.window.tree.get_element_by_id("skill-leave-question").is_none());
   s.go(ProjectPage::NewSkill);
@@ -447,13 +447,13 @@ fn skills_new_scope_without_a_name_asks_before_leaving_and_reverting_clears_the_
   s.click("skill-scope-option-1");
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   s.click("skill-leave-keep");
   assert!(s.text("skill-scope").contains("Delivery"));
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   s.click("skill-leave-confirm");
   s.window.until("left scope-only form", |w| {
@@ -471,7 +471,7 @@ fn skills_clearing_all_existing_fields_still_asks_before_leaving() {
   s.set("skill-body", "");
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   assert!(s.text("skill-leave-question").contains("unsaved"));
   assert_eq!(s.entry(id).name.as_ref(), "checks");
@@ -479,7 +479,7 @@ fn skills_clearing_all_existing_fields_still_asks_before_leaving() {
   assert!(s.window.tree.get_element_by_id("skill-editor").is_some());
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
   s.click("skill-leave-confirm");
   s.window
@@ -510,4 +510,20 @@ fn skills_save_retry_saves_the_local_draft_without_a_publish_question() {
   s.settle(id, "My local draft.");
   assert!(s.window.tree.get_element_by_id("skill-save-error").is_none());
   assert!(s.entry(id).state.published().is_none());
+}
+
+/// The crumb back to the library returns to the filter the skill was opened from.
+#[test]
+fn skills_crumb_returns_to_the_library_filter_it_came_from() {
+  let mut s = Skills::new();
+  let id = s.seed("checks", true);
+  let library = Route::Project(project_id(), ProjectPage::Skills(SkillsFilter::Project));
+  s.window.navigation().go(library.clone());
+  s.go(ProjectPage::Skill(id));
+  s.window.until("the skill's crumb", |w| {
+    w.tree.get_element_by_id("skill-crumb-0").is_some()
+  });
+  s.click("skill-crumb-0");
+  s.window.pass();
+  assert_eq!(s.window.navigation().route_now(), library);
 }

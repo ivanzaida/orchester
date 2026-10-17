@@ -32,6 +32,7 @@ pub fn question(ctx: &Ctx, state: &State, writing: bool) -> Element {
   .on_click(move || {
     if !writing {
       replace.update(|s| s.restore());
+      replace.get_untracked().panels.to_draft();
     }
   });
   Column::new()

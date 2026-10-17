@@ -209,7 +209,7 @@ fn orchester_person_only_linking_and_uploading() {
   let (_server, recorder) = joined_through_recorder(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
@@ -235,7 +235,7 @@ fn orchester_person_only_leaving_and_signing_out_of_a_server() {
   let entry = link_kontur(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");

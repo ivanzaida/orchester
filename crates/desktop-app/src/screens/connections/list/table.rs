@@ -17,6 +17,7 @@ use orchester_core::{connection::GitHubState, id::ConnectionId};
 use orchester_workspace::connections::data::ProjectConnections;
 
 use crate::{
+  navigation::link::Open,
   screens::connections::{
     data::{Entry, github_state},
     inspector::status_line,
@@ -29,7 +30,7 @@ use crate::{
   theme::{ConnectionsText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::opening,
     table::HEADER_HEIGHT,
   },
 };
@@ -42,15 +43,15 @@ const USED_WIDTH: f32 = 80.0;
 const STATUS_WIDTH: f32 = 132.0;
 const OPEN_WIDTH: f32 = 14.0;
 
-/// The rows of `entries`, `selected` inspected; a press on a row runs `open` with its connection.
+/// What opens a connection's inspector.
+pub(super) type OpenConnection = std::sync::Arc<dyn Fn(ConnectionId) -> Open + Send + Sync>;
+
+/// The rows of `entries`, `selected` inspected; a press on a row opens its connection's inspector with `open`.
 pub(super) fn table(
   ctx: &Ctx,
   (listed, accounts): (&ProjectConnections, &Accounts),
   entries: &[Entry<'_>],
-  (selected, open): (
-    Option<ConnectionId>,
-    &std::sync::Arc<dyn Fn(ConnectionId) + Send + Sync>,
-  ),
+  (selected, open): (Option<ConnectionId>, &OpenConnection),
 ) -> Column {
   Column::new()
     .id("connections-list")
@@ -61,8 +62,7 @@ pub(super) fn table(
     .child(heading(ctx))
     .with_children(entries.iter().map(|entry| {
       let id = entry.id();
-      let open = open.clone();
-      row(ctx, (listed, accounts), *entry, Some(id) == selected, move || open(id))
+      row(ctx, (listed, accounts), *entry, Some(id) == selected, open(id))
     }))
 }
 
@@ -173,13 +173,7 @@ fn mcp_line(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer) -> S
   }
 }
 
-fn row(
-  ctx: &Ctx,
-  listed: (&ProjectConnections, &Accounts),
-  entry: Entry<'_>,
-  selected: bool,
-  open: impl Fn() + Send + Sync + 'static,
-) -> Element {
+fn row(ctx: &Ctx, listed: (&ProjectConnections, &Accounts), entry: Entry<'_>, selected: bool, open: Open) -> Element {
   let shape = shape(ctx, listed, entry);
   let id = format!("connection-row-{}", entry.id());
   let tile = Row::new()
@@ -240,7 +234,7 @@ fn row(
   } else {
     row
   };
-  pressable(open)
+  opening(open)
     .id(id)
     .width(Dimension::Pct(100.0))
     .describe("selected", if selected { "true" } else { "false" })

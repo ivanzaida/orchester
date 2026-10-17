@@ -87,7 +87,7 @@ fn value(s: &mut Skills, id: &str) -> String {
 fn leave(s: &mut Skills) {
   s.window
     .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Skills));
+    .go(Route::Project(project_id(), ProjectPage::Skills(Default::default())));
   s.window.pass();
 }
 #[test]

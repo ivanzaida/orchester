@@ -103,7 +103,7 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     }
     ProjectPage::EditTask(key) => insert("key", &key.to_string()),
     ProjectPage::PullRequests(tab) => insert("tab", tab.name()),
-    ProjectPage::PullRequest(number) => insert("number", &number.to_string()),
+    ProjectPage::PullRequest(number, _) => insert("number", &number.to_string()),
     ProjectPage::Usage(query) => {
       let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {

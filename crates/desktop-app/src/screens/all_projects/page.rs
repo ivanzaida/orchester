@@ -149,18 +149,17 @@ fn heading(ctx: &mut Ctx, open: &OpenAction) -> Row {
 /// *Projects* | *Usage* (`Tabs` `Uecqx`), `usage` the current one or not.
 fn tabs(ctx: &mut Ctx, usage: bool) -> Element {
   let navigation = Navigation::of(ctx);
-  let to_usage = navigation.clone();
-  let projects = PageTab::new(
+  let projects = PageTab::to(
     "all-projects-tab-projects",
     ctx.t("projects.tabs.projects"),
     !usage,
-    move || navigation.replace(Route::AllProjects),
+    navigation.to(Route::AllProjects),
   );
-  let usage = PageTab::new(
+  let usage = PageTab::to(
     "all-projects-tab-usage",
     ctx.t("projects.tabs.usage"),
     usage,
-    move || to_usage.replace(Route::Usage(Box::default())),
+    navigation.to(Route::Usage(Box::default())),
   );
   page_tabs(ctx, "all-projects-tabs", [projects, usage]).into()
 }

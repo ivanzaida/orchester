@@ -79,18 +79,25 @@ impl Navigation {
     self.tabs.with_untracked(|tabs| tabs.active().route().clone())
   }
 
-  /// Goes to `route` in the active tab, as a new history entry: another screen, or another tab of one
-  /// (the Tasks list's or the Overview's workflow tab, a task's Summary, Conversation or Changes).
+  /// Goes to `route` in the active tab, as a new history entry, as a browser does: for every place a
+  /// person chooses — another screen, another tab of one (`PageTab`), a filter, an item of a list or a
+  /// panel — so Back returns to the one before and Forward comes back.
   pub fn go(&self, route: Route) {
     self.change(|tabs| tabs.go(route));
   }
 
   /// Shows `route` in place of the active tab's current place, without a history entry and keeping the
-  /// places ahead: for what a screen refines while it stays on its tab, so Back leaves the screen rather
-  /// than stepping through it (the Tasks list's search `q` as it is typed and its `highlight`, the file
-  /// the Changes tab shows).
+  /// places ahead: only where no new place is chosen — a route the app corrects (a removed item, a saved
+  /// draft that got its id, a new tab's first place) and a search refined as it is typed, which would
+  /// otherwise add an entry per keystroke.
   pub fn replace(&self, route: Route) {
     self.change(|tabs| tabs.replace(route));
+  }
+
+  /// Closes a panel (*Cancel*, *Finish later*) for `route` without leaving a dead entry: back to `route`
+  /// when the panel was opened from it, dropping the panel's entry, and in the panel's place otherwise.
+  pub fn close_panel(&self, route: Route) {
+    self.change(|tabs| tabs.close_panel(route));
   }
 
   pub fn back(&self) {
@@ -170,7 +177,17 @@ impl Navigation {
 
   /// Holds departures while a mounted editor has work it must not lose.
   pub fn guard(&self, holds_edits: impl Fn() -> bool + Send + Sync + 'static) -> guard::LeaveGuard {
-    let guard = guard::LeaveGuard::new(holds_edits);
+    self.guard_within(holds_edits, |_| false)
+  }
+
+  /// Holds departures like [`guard`](Self::guard), but not a move in the same tab to a place `within` says
+  /// is the editor's own (another of its panels), which stays on its edits.
+  pub fn guard_within(
+    &self,
+    holds_edits: impl Fn() -> bool + Send + Sync + 'static,
+    within: impl Fn(&Route) -> bool + Send + Sync + 'static,
+  ) -> guard::LeaveGuard {
+    let guard = guard::LeaveGuard::new(holds_edits, Box::new(within));
     *self.guard.lock() = guard.downgrade();
     guard
   }
@@ -181,9 +198,12 @@ impl Navigation {
     if !change(&mut next) {
       return;
     }
-    let leaving = before.active().id() != next.active().id() || before.active().route() != next.active().route();
+    let other_tab = before.active().id() != next.active().id();
+    let leaving = other_tab || before.active().route() != next.active().route();
     let guard = self.guard.lock().upgrade();
-    if leaving && guard.is_some_and(|guard| guard.hold(next.clone())) {
+    if leaving
+      && guard.is_some_and(|guard| (other_tab || !guard.within(next.active().route())) && guard.hold(next.clone()))
+    {
       return;
     }
     self.apply(next);

@@ -18,10 +18,10 @@ impl Seeded {
 
   /// Opens pull request `number`'s page without waiting for its read.
   fn go_to(&mut self, number: u64) {
-    self
-      .window
-      .navigation()
-      .go(Route::Project(self.project, ProjectPage::PullRequest(nonzero(number))));
+    self.window.navigation().go(Route::Project(
+      self.project,
+      ProjectPage::PullRequest(nonzero(number), None),
+    ));
     self.window.pass();
   }
 

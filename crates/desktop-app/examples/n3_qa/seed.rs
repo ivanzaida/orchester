@@ -16,7 +16,7 @@ use orchester_api::{
   client::{PlainHttp, ServerAddress},
 };
 use orchester_app::{
-  routes::{JoinTarget, OrchesterView, ProjectPage, Route, TaskList},
+  routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route, TaskList},
   services::Services,
 };
 use orchester_core::{
@@ -122,7 +122,7 @@ fn kontur_route(
     State::JoinReview | State::JoinUnticked | State::JoinFailed | State::JoinPersonOnly => {
       return Ok(at(ProjectPage::Join(target.clone())));
     }
-    State::NotMember => return Ok(at(ProjectPage::Sharing { make_local: false })),
+    State::NotMember => return Ok(at(ProjectPage::Settings(ProjectSettingsTab::Sharing))),
     _ => {}
   }
   joined(&services.servers, runtime, (&repo, checkouts.workspace, project))?;
@@ -136,7 +136,7 @@ fn kontur_route(
     runtime.block_on(open.share_kept(task.id(), IdempotencyKey::generate()))?;
   }
   Ok(match state {
-    State::Joined => at(ProjectPage::Sharing { make_local: false }),
+    State::Joined => at(ProjectPage::Settings(ProjectSettingsTab::Sharing)),
     State::TasksNotShared => tasks(TaskList::default().with_not_shared(true)),
     State::TasksFormerKey => tasks(TaskList::default().with_search("KON-3")),
     State::TasksOnlyNotShared => tasks(TaskList::default().with_search("KON-5")),

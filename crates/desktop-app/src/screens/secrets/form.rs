@@ -23,7 +23,7 @@ use zeroize::Zeroize;
 
 use super::{
   inspector,
-  state::{EnvironmentChoice, KindChoice, Panel, View},
+  state::{EnvironmentChoice, KindChoice, View},
   work,
 };
 use crate::{
@@ -83,7 +83,7 @@ impl Component for SecretForm {
           value.update(Zeroize::zeroize);
           props
             .view
-            .reveal(id, environment.get().0.expect("the form selects an environment"));
+            .saved(id, environment.get().0.expect("the form selects an environment"));
           // Every screen that shows the project's secrets and connections reads them again, this one too.
           changes.record(project, Outside::Connections);
         }
@@ -125,10 +125,10 @@ impl Drop for SecretForm {
 }
 impl SecretForm {
   fn cancel(&self, props: &Props) -> Arc<dyn Fn() + Send + Sync> {
-    let (value, panel) = (self.value.clone(), props.view.panel.clone());
+    let (value, view) = (self.value.clone(), props.view.clone());
     Arc::new(move || {
       value.update(Zeroize::zeroize);
-      panel.set(Panel::Inspect);
+      view.close_panel();
     })
   }
   fn save(

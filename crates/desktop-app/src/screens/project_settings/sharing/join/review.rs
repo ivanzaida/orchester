@@ -28,7 +28,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::{Projects, ShownProject},
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::{
     project_settings::{page, sharing::linked::joined},
     settings::orchester::{PersonOnly, Said, sharing_said},
@@ -125,7 +125,10 @@ impl Component for Review {
         // The project has the server project's key now, and its tasks are the server's: both are read again.
         projects.retry(project);
         feed.saved();
-        navigation.replace(Route::Project(project, ProjectPage::Sharing { make_local: false }));
+        navigation.replace(Route::Project(
+          project,
+          ProjectPage::Settings(ProjectSettingsTab::Sharing),
+        ));
       }
     });
     Self {
@@ -177,15 +180,16 @@ impl Review {
     );
     let navigation = Navigation::of(ctx);
     let project = props.project.open.project.id();
-    let back = move || navigation.go(Route::Project(project, ProjectPage::Sharing { make_local: false }));
+    let sharing = Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::Sharing));
+    let settings = Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::default()));
     let crumbs = breadcrumb(
       ctx,
       "sharing-join-crumbs",
       CrumbSeparator::Chevron,
       vec![
         Crumb::here(local).ancestor(),
-        Crumb::link(ctx.t("project_settings.title"), back.clone()),
-        Crumb::link(ctx.t("project_settings.sharing"), back.clone()),
+        Crumb::to(ctx.t("project_settings.title"), navigation.to(settings)),
+        Crumb::to(ctx.t("project_settings.sharing"), navigation.to(sharing.clone())),
         Crumb::here(ctx.t_args("sharing.join.crumb", [("key", key.as_str())])),
       ],
     );
@@ -199,7 +203,7 @@ impl Review {
     let cancel = if pending {
       cancel.disabled()
     } else {
-      cancel.on_click(back)
+      cancel.opens(navigation.to(sharing))
     };
     let actions = Row::new()
       .spacing(SpacingSize::Sm)
