@@ -105,6 +105,8 @@ fn kept(
     .ok_or("the invite to Billing is listed")?;
   let kept = AcceptedInvite {
     asks: 1,
+    // Its last ask was refused for want of two-factor authentication.
+    needs_code: true,
     ..AcceptedInvite::new(
       (listed.id, listed.server.id, listed.server.name.clone()),
       listed.project.as_ref().map(|project| project.name.clone()),

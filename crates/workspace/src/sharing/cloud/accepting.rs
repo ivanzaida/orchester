@@ -111,6 +111,7 @@ impl Cloud {
         self
           .keep_accepted(AcceptedInvite {
             next_check_at: None,
+            needs_code: true,
             ..kept
           })
           .await?;

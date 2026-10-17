@@ -98,6 +98,8 @@ fn orchester_two_factor_a_kept_invite_asks_for_a_sign_in_with_a_code() {
   // An earlier ask took a token for it, so the cloud lists it no more: it is kept here only.
   let kept = AcceptedInvite {
     asks: 1,
+    // Its last ask was refused for want of two-factor authentication.
+    needs_code: true,
     ..AcceptedInvite::new(
       (listed.id, listed.server.id, listed.server.name.clone()),
       Some("Billing".into()),
@@ -123,6 +125,10 @@ fn orchester_two_factor_a_kept_invite_asks_for_a_sign_in_with_a_code() {
     "Accepting needs a sign-in with your code. This computer signed in before you turned on two-factor."
   );
 
+  assert_eq!(
+    window.text(&format!("{card}-two-factor-note")),
+    "Orchester locks until you're signed in again; runs keep going. The invite waits here."
+  );
   press(&mut window, &format!("{card}-sign-in-again"));
   shows(&mut window, "gate-notice");
   window.set("gate-password", PASSWORD);
@@ -136,6 +142,10 @@ fn orchester_two_factor_a_kept_invite_asks_for_a_sign_in_with_a_code() {
     &mut window,
     Route::Orchester(OrchesterView::default()),
     &format!("{card}-try-again"),
+  );
+  assert_eq!(
+    window.text(&format!("{card}-stopped-body")),
+    "You signed in with your code. Try again to finish joining Kontur team; nothing was uploaded."
   );
   press(&mut window, &format!("{card}-try-again"));
   shows(&mut window, "orchester-invite-finish-joined");

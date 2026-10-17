@@ -192,6 +192,7 @@ fn two_factor_a_kept_invite_refused_for_a_code_stays_until_a_sign_in_with_one() 
   let still = desktop.block_on(desktop.cloud.accepted_invites()).expect("kept");
   assert_eq!(still.len(), 1, "the invite is not lost");
   assert_eq!(still[0].next_check_at, None, "and not asked on its own");
+  assert!(still[0].needs_code, "until a sign-in with a code");
 
   cloud.require_codes();
   desktop

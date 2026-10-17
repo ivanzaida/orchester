@@ -564,7 +564,8 @@ fn why_the_last_cloud_sign_in_ended_is_one_row() {
 fn why_the_last_cloud_sign_in_ended_is_kept_through_the_two_factor_migration() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");
-  let before = current_schema_version() - 1;
+  // Before the two-factor migrations: the sign-in end, then the kept invites' refusal for want of a code.
+  let before = current_schema_version() - 2;
   let raw = AppDb::create_at_version(&path, before).expect("the schema before two-factor authentication");
   raw
     .execute(

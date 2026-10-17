@@ -79,11 +79,16 @@ fn needs_two_factor(ctx: &mut Ctx, invite: &AcceptedInvite, (need, answers): (Ne
     ctx.t("cloud.invites.joinStopped.later"),
   )
   .on_click(move || later.update(|later| later.0.push(kept)));
-  let (body, first) = if need == Need::TurnOn {
-    ("cloud.invites.twoFactor.off", two_factor::turn_on(ctx, &id, answers))
+  let (body, note, first) = if need == Need::TurnOn {
+    (
+      "cloud.invites.twoFactor.off",
+      "cloud.invites.twoFactor.keptTurnOnNote",
+      two_factor::turn_on(ctx, &id, answers),
+    )
   } else {
     (
       "cloud.invites.twoFactor.session",
+      "cloud.invites.twoFactor.signInNote",
       two_factor::sign_in_again(ctx, &id, to, answers),
     )
   };
@@ -101,6 +106,12 @@ fn needs_two_factor(ctx: &mut Ctx, invite: &AcceptedInvite, (need, answers): (Ne
       .body(ctx.t(body)),
     )
     .child(Row::new().spacing(SpacingSize::Sm).child(first).child(put_off))
+    .child(
+      Text::new(&ctx.t(note))
+        .id(format!("{id}-two-factor-note"))
+        .variant(ExtraTypography::Note.role())
+        .width(Dimension::Pct(100.0)),
+    )
     .with_children(answers.person.reason(ctx, &format!("{id}-sign-in-again")))
     .with_children(answers.person.reason(ctx, &format!("{id}-turn-on")))
     .into()
@@ -169,11 +180,18 @@ fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
     ctx.t("cloud.invites.joinStopped.later"),
   )
   .on_click(move || later.update(|later| later.0.push(kept)));
+  let (glyph, tone) = if invite.needs_code {
+    (Icon::ShieldCheck, CalloutTone::Neutral)
+  } else {
+    (Icon::WifiOff, CalloutTone::Warning)
+  };
   let body = if !may_ask(invite) {
     ctx.t_args(
       "cloud.invites.joinStopped.tooMany",
       [("server", server.to_owned()), ("count", MAX_ASKS.to_string())],
     )
+  } else if invite.needs_code {
+    ctx.t_args("cloud.invites.joinStopped.signedInWithCode", [("server", server)])
   } else if invite.approval.is_some() {
     ctx.t_args("cloud.invites.joinStopped.unanswered", [("server", server)])
   } else {
@@ -197,10 +215,10 @@ fn stopped(ctx: &Ctx, invite: &AcceptedInvite, answers: &Answers) -> Element {
     .child(
       Callout::new(
         format!("{id}-stopped"),
-        CalloutTone::Warning,
+        tone,
         ctx.t_args("cloud.invites.joinStopped.title", [("server", server)]),
       )
-      .icon(Icon::WifiOff)
+      .icon(glyph)
       .body(body),
     )
     .child(Row::new().spacing(SpacingSize::Sm).child(first).child(put_off))

@@ -143,7 +143,8 @@
         "unanswered": "{{server}} hasn't approved this computer yet, and Orchester stopped asking on its own so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Try again once it's approved.",
         "tooMany": "Orchester asked {{server}} for this invite {{count}} times and stops here, so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Ask an admin of {{server}} for a new invite.",
         "tryAgain": "Try again",
-        "later": "Later"
+        "later": "Later",
+        "signedInWithCode": "You signed in with your code. Try again to finish joining {{server}}; nothing was uploaded."
       },
       "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected.",
       "twoFactor": {
@@ -156,7 +157,8 @@
         "refusedTitle": "Sign in again to accept",
         "refusedBody": "This computer signed in before you turned on two-factor. Accepting needs a sign-in with your code.",
         "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here.",
-        "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser."
+        "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
+        "keptTurnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then try again."
       }
     },
     "signIn": {
