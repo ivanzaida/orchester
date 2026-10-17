@@ -125,7 +125,7 @@ impl Component for LibraryItem {
       words::version(ctx, entry.state),
       meta,
       props.edited == Some(id),
-      move || props.selection.open(View::rule(props.tab, Some(id))),
+      props.selection.to(View::rule(props.tab, Some(id))),
     );
     Element::from(if published {
       row.published()

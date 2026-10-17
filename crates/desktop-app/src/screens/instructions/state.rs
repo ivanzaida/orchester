@@ -1,12 +1,14 @@
 //! Presentation state for Instructions fePhH; instruction validation stays in workspace. The scope tab, the
 //! rule shown and the panel beside it are the route's ([`View`]), so Back and Forward step through them.
+use std::sync::Arc;
+
 use lurq::{app::component::DevtoolsInspectable, core::Signal};
 use orchester_core::{id::ProjectId, resource::InstructionScope};
 use orchester_workspace::instructions::data::InstructionEntry;
 
 pub use crate::routes::{InstructionsPanel as Panel, InstructionsTab as Tab, InstructionsView as View};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open, press::OpenIn},
   routes::{ProjectPage, Route},
 };
 
@@ -65,6 +67,15 @@ impl Selection {
     } else {
       self.show(view);
     }
+  }
+  /// What opens `view`, a place of its own, where a press asks (`navigation::link`): in the active tab as
+  /// [`open`](Self::open) does, in a new tab as it is.
+  pub fn to(&self, view: View) -> Open {
+    let selection = self.clone();
+    Arc::new(move |at| match at {
+      OpenIn::ActiveTab => selection.open(view),
+      at => selection.navigation.open(selection.route(view), at),
+    })
   }
   /// Goes to `view`, as a new entry of the tab's history.
   pub fn show(&self, view: View) {

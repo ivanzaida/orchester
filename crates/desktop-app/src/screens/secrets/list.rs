@@ -287,7 +287,7 @@ impl Component for SecretRow {
           })),
       );
     let (id, environment) = (secret.id(), secret.environment());
-    row = row.on_open(move || props.view.reveal(id, environment));
+    row = row.opens(props.view.reveal(id, environment));
     if props.selected == Some(id) {
       row = row.selected();
     }

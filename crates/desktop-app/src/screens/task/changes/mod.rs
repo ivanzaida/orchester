@@ -52,7 +52,7 @@ use self::{
 };
 use super::TaskContext;
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
   ui::message::message_text,
 };
@@ -348,15 +348,15 @@ impl ChangesTab {
     items
   }
 
-  /// Choosing a file shows it as a new entry of the tab's history.
+  /// Choosing a file opens it where the press asks; in the active tab as a new entry of its history.
   fn select(&self, props: &ChangesProps) -> files::SelectFile {
     let navigation = self.navigation.clone();
     let (project, key) = (props.project, props.detail.task.key().clone());
     Arc::new(
-      move |listed: &Listed| match ChangedFile::new(listed.path.to_string(), listed.source) {
+      move |listed: &Listed, at| match ChangedFile::new(listed.path.to_string(), listed.source) {
         Ok(file) => {
           let page = ProjectPage::Task(key.clone(), TaskView::Changes(Some(file)));
-          navigation.go(Route::Project(project, page));
+          navigation.open(Route::Project(project, page), at);
         }
         Err(error) => tracing::error!(%error, "a listed file has no path"),
       },
@@ -384,7 +384,7 @@ pub(crate) fn arrow_keys(
     };
     if let Some(file) = files.get(next) {
       event.prevent_default();
-      select(file);
+      select(file, OpenIn::ActiveTab);
     }
   }
 }

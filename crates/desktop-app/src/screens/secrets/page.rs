@@ -72,12 +72,11 @@ pub(super) fn header(ctx: &Ctx, project: &ShownProject, view: &View) -> Row {
 }
 pub(super) fn tabs(ctx: &mut Ctx, view: &View, tab: SecretsTab, count: Option<usize>) -> Element {
   let usage = tab == SecretsTab::Usage;
-  let (list, log) = (view.clone(), view.clone());
   page_tabs(
     ctx,
     "secrets-tabs",
     [
-      PageTab::new(
+      PageTab::to(
         "secrets-tab-list",
         match count {
           None => ctx.t("secrets.listUnknown"),
@@ -85,11 +84,14 @@ pub(super) fn tabs(ctx: &mut Ctx, view: &View, tab: SecretsTab, count: Option<us
           Some(count) => counted(ctx, &ctx.t("secrets.list"), count),
         },
         !usage,
-        move || list.tab(SecretsTab::List),
+        view.tab(SecretsTab::List),
       ),
-      PageTab::new("secrets-tab-usage", ctx.t("secrets.usage"), usage, move || {
-        log.tab(SecretsTab::Usage)
-      }),
+      PageTab::to(
+        "secrets-tab-usage",
+        ctx.t("secrets.usage"),
+        usage,
+        view.tab(SecretsTab::Usage),
+      ),
     ],
   )
   .into()

@@ -147,9 +147,9 @@ impl Component for PullRequestScreen {
     let id = project.open.project.id();
     let shown = body::Shown {
       selected: file,
-      select: Arc::new(move |listed: &Listed| {
+      select: Arc::new(move |listed: &Listed, at| {
         let page = ProjectPage::PullRequest(page_number, Some(listed.path.to_string()));
-        navigation.go(Route::Project(id, page));
+        navigation.open(Route::Project(id, page), at);
       }),
       find: self.find.clone(),
       open: actions.open.clone(),

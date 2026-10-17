@@ -1,5 +1,7 @@
 //! The page's tab, filter, chosen secret and panel live in its route ([`SecretsView`]); here are the moves
 //! between them and the form choices. No credential values.
+use std::sync::Arc;
+
 use lurq::{app::component::DevtoolsInspectable, core::Signal};
 use orchester_core::{
   id::{ProjectId, SecretId},
@@ -7,7 +9,7 @@ use orchester_core::{
 };
 
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, SecretsPanel, SecretsTab, SecretsView},
 };
 
@@ -38,14 +40,19 @@ impl View {
   fn route(&self, view: SecretsView) -> Route {
     Route::Project(self.project, ProjectPage::Secrets(view))
   }
-  /// A tab the person chose, with the list's inspector.
-  pub fn tab(&self, tab: SecretsTab) {
-    let view = SecretsView {
+  /// What opens the place `chosen` makes of the one shown as a press lands, where the press asks
+  /// (`navigation::link`).
+  fn to(&self, chosen: impl Fn(SecretsView) -> SecretsView + Send + Sync + 'static) -> Open {
+    let view = self.clone();
+    Arc::new(move |at| view.navigation.open(view.route(chosen(view.now())), at))
+  }
+  /// What opens a tab the person chose, with the list's inspector.
+  pub fn tab(&self, tab: SecretsTab) -> Open {
+    self.to(move |now| SecretsView {
       tab,
       panel: SecretsPanel::Inspect,
-      ..self.now()
-    };
-    self.navigation.go(self.route(view));
+      ..now
+    })
   }
   /// A panel the person opened: *New secret*, or *Replace value* or *Archive* of `secret`.
   pub fn open(&self, panel: SecretsPanel, secret: Option<SecretId>) {
@@ -72,13 +79,15 @@ impl View {
       self.navigation.go(self.route(SecretsView { environment, ..now }));
     }
   }
-  /// A secret the person chose, in its inspector; a filter that hides it shows its environment.
-  pub fn reveal(&self, id: SecretId, environment: Environment) {
-    self.navigation.go(self.route(self.revealed(id, environment)));
+  /// What opens a secret the person chose, in its inspector; a filter that hides it shows its environment.
+  pub fn reveal(&self, id: SecretId, environment: Environment) -> Open {
+    self.to(move |now| revealed(now, id, environment))
   }
   /// The secret a form saved, in the form's place: the route corrected, no place chosen.
   pub fn saved(&self, id: SecretId, environment: Environment) {
-    self.navigation.replace(self.route(self.revealed(id, environment)));
+    self
+      .navigation
+      .replace(self.route(revealed(self.now(), id, environment)));
   }
   /// The inspector again once an archive is done, in the panel's place.
   pub fn settled(&self) {
@@ -88,13 +97,14 @@ impl View {
     };
     self.navigation.replace(self.route(view));
   }
-  fn revealed(&self, id: SecretId, environment: Environment) -> SecretsView {
-    let now = self.now();
-    SecretsView {
-      environment: now.environment.map(|_| environment),
-      secret: Some(id),
-      panel: SecretsPanel::Inspect,
-      ..now
-    }
+}
+
+/// `now` showing secret `id` in its inspector, with its environment when a filter would hide it.
+fn revealed(now: SecretsView, id: SecretId, environment: Environment) -> SecretsView {
+  SecretsView {
+    environment: now.environment.map(|_| environment),
+    secret: Some(id),
+    panel: SecretsPanel::Inspect,
+    ..now
   }
 }
