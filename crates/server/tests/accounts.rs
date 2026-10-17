@@ -40,6 +40,8 @@ mod invites;
 mod join_limits;
 #[path = "accounts/proxies.rs"]
 mod proxies;
+#[path = "accounts/proxy_certificate.rs"]
+mod proxy_certificate;
 #[path = "accounts/proxy_connections.rs"]
 mod proxy_connections;
 #[path = "accounts/requests.rs"]

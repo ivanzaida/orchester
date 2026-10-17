@@ -101,6 +101,7 @@ impl Answers {
       server: id.parse().expect("a server id"),
       nonce: nonce.to_owned(),
       certificate: Some(orchester_api::certificate::CertificatePin::of(&certificate()).to_hex()),
+      previous_certificate: None,
       issued_at: 0,
     };
     let signed = self.key.sign_statement(KEY_PROOF_TYPE, &proof).expect("signed");

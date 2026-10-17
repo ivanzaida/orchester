@@ -25,7 +25,8 @@ pub fn key_proof_nonce() -> Result<String, IdentityError> {
 
 /// Whether `answer` proves that the server answering holds the key whose id is `server`, over a connection presenting
 /// the certificate `certificate` (SHA-256 in hex): the key's id is `server`, and that key signed a key proof naming
-/// `server`, `nonce` and that certificate. `WrongAudience` for a key or proof of another server or connection.
+/// `server`, `nonce` and that certificate, as its `certificate` or, just after its proxy renewed it, its
+/// `previous_certificate`. `WrongAudience` for a key or proof of another server or connection.
 pub fn verify_key_proof(
   answer: &KeyProofResponse,
   server: TeamServerId,
@@ -36,9 +37,10 @@ pub fn verify_key_proof(
     return Err(IdentityError::WrongAudience);
   }
   let proof: KeyProof = verify_statement(&answer.proof, KEY_PROOF_TYPE, &key)?;
-  let same_certificate = proof
-    .certificate
-    .is_some_and(|signed| signed.eq_ignore_ascii_case(certificate));
+  let same_certificate = [&proof.certificate, &proof.previous_certificate]
+    .into_iter()
+    .flatten()
+    .any(|signed| signed.eq_ignore_ascii_case(certificate));
   if proof.server != server || proof.nonce != nonce || !same_certificate {
     return Err(IdentityError::WrongAudience);
   }

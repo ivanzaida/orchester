@@ -151,12 +151,17 @@ impl Client {
     self.call(self.request(Method::GET, "/server")?).await
   }
 
-  /// `POST /server/key-proof`: the server's public key and its signature of `nonce`, which the caller verifies.
+  /// `POST /server/key-proof`: the server's public key and its signature of `nonce`, which the caller verifies. Names
+  /// the certificate this client's connections last presented, when it knows one ([`crate::PRESENTED_CERTIFICATE`]).
   pub async fn key_proof(&self, nonce: &str) -> Result<KeyProofResponse, ClientError> {
     let request = KeyProofRequest {
       nonce: nonce.to_owned(),
     };
-    self.call(self.json(Method::POST, "/server/key-proof", &request)?).await
+    let mut request = self.json(Method::POST, "/server/key-proof", &request)?;
+    if let Some(presented) = self.certificate() {
+      request = request.header(crate::PRESENTED_CERTIFICATE, presented.to_hex());
+    }
+    self.call(request).await
   }
 
   /// `POST /auth/code`: joins with a setup, invite, account or pairing code and returns this device's token.

@@ -156,7 +156,7 @@ orchester-app (desktop) ── HTTPS, pinned ──> orchester-server (team's ne
 | --- | --- | --- |
 | `orchester-core` | The shared-task rules (`sharing`), `TaskRevision`, `RepositoryIdentity`, ORC-39's `task::organization`, `ContentMerge` (`task::content`). New with 27–30: the outbox's ordering and holding rules (`sharing::outbox`), `TemporaryTaskKey`, the shared progress of a run (`sharing::progress`), and the references of a shared version (`sharing::references`, reusing `import`'s reference walk). No HTTP or database | as today |
 | `orchester-api` | The JSON contract of the team server and of the cloud (`cloud` module): request, response, error and event types. The `client` feature adds the HTTP clients, the event stream reader and the pinned-certificate verifier. The `identity` feature adds identity tokens and signed key sets (Ed25519 through `ring`), signing for the cloud and verifying for the team server. Gains the SSE parser, moved out of `orchester-agent` (see Dependencies) | core, serde; `client`: reqwest, rustls; `identity`: ring |
-| `orchester-server` | Binary `orchester-server`: HTTP API, SQLite storage, accounts, devices, codes and invites, its own certificate, the cloud link, event stream, host command line | core, api (`identity`), axum, rusqlite, rcgen |
+| `orchester-server` | Binary `orchester-server`: HTTP API, SQLite storage, accounts, devices, codes and invites, its own certificate, the cloud link, event stream, host command line; with `proxy_certificate = "auto"`, reading its proxy's certificate at its own address ([Codes](#codes)) | core, api (`client`, `identity`), axum, rusqlite, rcgen |
 | `orchester-cloud` (new, `crates/cloud`) | Binary `orchester-cloud` on `actix-web` (row 60): the JSON API; accounts with sign-up, sign-in by email and password, confirmation and reset by email, devices, the team server registry, invites in flight, the signing keys and identity tokens, email sending | core, api (`identity`), actix-web, tokio-postgres, deadpool-postgres, tokio-postgres-rustls, argon2, lettre; later reqwest |
 | `orchester-store` | The cache tables, the outbox, the shared-resource tables and bindings of the project database; the `servers` and `cloud_account` tables of the application database | as today |
 | `orchester-workspace` | The cloud session, invites and the device's servers (`sharing::cloud`, new), connecting a project and the connection monitor (`sharing`); shared projects, Share, Join, Make local, claims (`sharing::project`); the sync engine (`sharing::sync`, new): outbox sender, event stream, apply, temporary keys, run progress, shared configuration; the sync state the screens show | api (`client`), store |
@@ -167,8 +167,9 @@ orchester-app (desktop) ── HTTPS, pinned ──> orchester-server (team's ne
 another: a separate program, run by a different party (the person, not the team), on the internet, with its own
 data. Merging it into `orchester-server` would put internet-facing sign-in and email into every team's air-gapped
 binary. The contract is shared by the three programs, as `orchester-ipc` is between desktop and runner, so a change to
-it breaks the build on every side at once. The `client` feature keeps reqwest out of the server builds; the
-`identity` feature keeps signing and verifying out of the desktop, which only carries tokens.
+it breaks the build on every side at once. The `client` feature keeps reqwest out of the builds that need no client;
+the team server takes it for `proxy_certificate = "auto"`, which reads its own public address with the app's
+trust-store verifier. The `identity` feature keeps signing and verifying out of the desktop, which only carries tokens.
 
 **Core stays free of HTTP and databases.** The server reuses core's rules (task completeness, queueing, the edit
 lock, `Name`, `TaskLimits`, the organization rules, claim transitions, staleness, resource body validation per kind) by
@@ -186,7 +187,7 @@ to the cloud. The web front's Node packages are in `web/cloud/package.json`, out
 | `hyper`, `hyper-util` | server | HTTP/1 header/idle deadlines, bounded connections, Tokio timer/IO and the axum service adapter; already in the lock file |
 | `argon2` | ~~server~~ cloud | Password hashing (argon2id) moves with passwords from the team server (row 46) to the cloud (row 48); S1a's hashing pool and limiters move with it |
 | `tokio-rustls` | server | TLS; same `rustls` the client brings, no OpenSSL on any platform |
-| `reqwest` (rustls, OS trust store) | api `client`, cloud | The HTTP client already chosen for `orchester-agent`; later, the cloud uses it for Google's and GitHub's token endpoints |
+| `reqwest` (rustls, OS trust store) | api `client`, cloud, server | The HTTP client already chosen for `orchester-agent`; later, the cloud uses it for Google's and GitHub's token endpoints. The team server uses it through `orchester-api`'s client to read its proxy's certificate at its own address (`proxy_certificate = "auto"`) |
 | `rustls` | api `client` | Already a direct dependency for its certificate errors; now also the verifier that accepts exactly a pinned certificate (row 39) |
 | `ring` | api `identity` | Already in the lock file (rustls' provider): Ed25519 signing and verifying, HMAC for codes (later, RSA verifying of Google's ID tokens). No JWT crate: the token is a few lines of base64url JSON |
 | `rcgen` (new, ring backend) | server | Generates the team server's own certificate on first start (row 39); a certificate is not something to write by hand |
@@ -734,7 +735,7 @@ changes; the rest is built (S1a, S1b).
 | Method and path | Auth | Request | Response | Errors | Since |
 | --- | --- | --- | --- | --- | --- |
 | `GET /server` | none | | `{ name, api_version: 3, needs_setup, cloud: { root_fingerprint, accepting }\|null }` | | changed in 3 |
-| `POST /server/key-proof` | none | `{ nonce }` | `{ public_key, proof }`: the server's key, and its signature of its id and the nonce | `422 invalid` | new in 3 ([Codes](#codes)) |
+| `POST /server/key-proof` | none | `{ nonce }`; header `Orchester-Presented-Certificate` (optional): the SHA-256 hex of the certificate the app's connection presented | `{ public_key, proof }`: the server's key, and its signature of its id, the nonce and its certificate (with the header, also the one before a proxy's renewal) | `422 invalid` (also a header that is not 64 hex characters) | new in 3 ([Codes](#codes)); the header came with `proxy_certificate = "auto"`, and a server from before ignores it |
 | ~~`POST /auth/sessions`~~ | | | | | removed in 3 (row 46) |
 | `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity` (also a token whose `name` is blank or over 256 characters), `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
 | `POST /auth/code` | none | `{ code, device, username?, display_name? }` | `201 { token, session, user, joined }` | `401 invalid_code` (one answer for unknown, used and expired), `409 username_taken`, `422 invalid`, `429 rate_limited` | new in 3 (row 45) |
@@ -1352,18 +1353,41 @@ Row 45: address plus an 8-character code, for networks without the internet.
   it asks, the app sends the server a fresh nonce (`POST /server/key-proof { nonce }`, 16 to 64 base64url characters);
   the server answers its public key and a statement of type `orchester-key-proof+jws` naming its id, that nonce and
   the SHA-256 of the certificate its connections present, signed with that key: its own certificate, or with `tls =
-  "off"` the one its proxy presents, which the host configures (`proxy_certificate`, `docs/server-hosting.md`). The
-  app checks that the key's id is the id the server gives itself, that the signature holds, and that the certificate
+  "off"` the one its proxy presents, which the host configures or the server reads itself (`proxy_certificate`,
+  `docs/server-hosting.md`; see *A proxy's certificate* below). The app checks that the key's id is the id the server gives itself, that the signature holds, and that the certificate
   is the one of the very connection that carried the proof (the pinned one, or the leaf the trust store verified, chain and name, on that connection); otherwise it sends nothing (*the server didn't prove it is the
   server it says it is*). A server that names another's id cannot sign for it, and one that passes the nonce on to the
   other and returns that one's proof is caught by the certificate. The one case the check cannot tell apart is two
   servers presenting the same certificate (one certificate shared by several servers, or a proxy in front of several
   with one certificate): either could pass on the other's proof, so give each server a certificate of its own. A
   server with TLS off and no `proxy_certificate`, or one reached over plain HTTP, names no certificate the app can
-  compare, so the app asks for no token and the server takes no code but its setup code. A `GET /server`
+  compare, so the app asks for no token and the server takes no code but its setup code. An app that named its
+  connection's certificate also accepts a proof whose `previous_certificate` names it (below). A `GET /server`
   that names no `codes_need_two_factor` is a server from before two-factor authentication: the app sends it the code
   alone, since its `CodeJoin` refuses unknown fields; this server keeps refusing them too, so an app and a server that
   disagree on the contract fail at once rather than drop a field.
+- **A proxy's certificate.** Behind a proxy whose certificate renews on its own (Caddy or Traefik with Let's Encrypt,
+  about every 60 days), a fixed `proxy_certificate` stops matching at each renewal, and codes fail until the host sets
+  the new one. With `proxy_certificate = "auto"` (only with `tls = "off"` and an `https://` `address`) the server reads
+  the certificate itself: it connects to its own configured `address`, as an app does, through the API client's
+  verifier over the operating system's trust store, which checks the chain and the name, asks `GET /server`, and keeps
+  the leaf that connection presented. It reads it at start and every hour, before a proof when the last read is older
+  than ten minutes, and when an app names, in the header `Orchester-Presented-Certificate`, a certificate it has not
+  seen (at most twice a minute, so requests cannot make it connect out at will). After it sees a renewal, it still
+  names the certificate before it for an hour, as `previous_certificate`, but only to an app that sent the header, which
+  then accepts a proof that names its connection's certificate as either: an app's connection made just before the
+  proxy switched still presents the old one. An app from before sends no header and gets the statement it knows (its
+  `KeyProof` refuses unknown fields); a server from before ignores the header and names one certificate. A read that
+  fails (no route, no answer within ten seconds, a certificate the trust store does not accept for that name) forgets
+  both: proofs name none, so no app asks for a code's token, until a read succeeds. The server logs why, at most every
+  ten minutes; the reason names no secret. Security: a server that passes proofs on (A, relaying to B) cannot make B
+  read A's certificate, since B connects only to its own configured address, never to one a request names; the header
+  only makes B read that same address again sooner, and B names only certificates it read there itself. What remains
+  is a hijack of B's own name (DNS, or a route to B's address) by someone holding a certificate the trust store accepts
+  for that name: the same exposure every app connecting to B has. A wrong `address` (another server's name) would name
+  that server's certificate, as a wrong fixed fingerprint would. The server needs a route to its own public name: a
+  container behind a proxy on the same host may need hairpin NAT, or the proxy's address for the name (the Caddy
+  compose file maps the name to Caddy's address on its network).
 - **What it lasts.** A device token keeps `mfa` for as long as it lives: turning two-factor authentication off at the
   cloud is not seen here, and the device keeps making invites until an admin signs it out or it joins again. A server with no root pinned cannot check it
   and refuses those codes with `403 mfa_unverifiable`: it says so rather than let a code in without it. An air-gapped

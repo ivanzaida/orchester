@@ -41,6 +41,12 @@ pub struct CertificateInfo {
   pub mode: CertificateMode,
 }
 
+/// The header of `POST /server/key-proof` that names the certificate the app's connections to the server last
+/// presented (SHA-256, 64 hex characters). A server behind a proxy that reads its certificate itself reads it again
+/// when it does not know this one (the proxy renewed it), and names the one before a renewal in the proof's
+/// `previous_certificate`, which an app that sends this header accepts. A server from before ignores it.
+pub const PRESENTED_CERTIFICATE: &str = "orchester-presented-certificate";
+
 /// `POST /server/key-proof`: a nonce of the app's, 16 to 64 base64url characters.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

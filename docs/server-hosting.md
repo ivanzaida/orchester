@@ -120,7 +120,8 @@ While join approval is on, a sign-in to the server admin through Orchester Cloud
 from the host, signs the browser in instead. A browser signed in to the admin never lists or answers its own
 account's approvals; one of the account's own computers, or another admin, does (security review 1, B2).
 
-The server itself never reaches the cloud: it neither fetches key sets nor sends or revokes invites. The server
+The server itself never reaches the cloud: it neither fetches key sets nor sends or revokes invites (its only
+connection out is to its own public address, with `proxy_certificate = "auto"`). The server
 admin's own server side delivers invites and revocations to the cloud when the host has the internet, or the
 inviter's browser does; apps and cloud sign-ins to the admin carry newer key sets.
 
@@ -146,12 +147,28 @@ admin app at `admin_url` (default `http://127.0.0.1:3100`), setting `X-Forwarded
 Behind a proxy that holds the certificate (`tls = "off"`), the scheme is the one a proxy in `trusted_proxies` says in
 `X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `deploy/server/compose.yaml` does, or the admin
 answers every page with *This page needs HTTPS*. Without `address`, project addresses take that same scheme and the
-host the request named. Set `proxy_certificate` (`ORCHESTER_SERVER_PROXY_CERTIFICATE`) too: the SHA-256 fingerprint of
-the certificate the proxy presents, 64 hex characters, colons allowed (`openssl x509 -in cert.pem -noout -fingerprint
--sha256`). The server signs it into the key proof an app checks before it enters a code there
-([architecture/server.md](architecture/server.md), "Codes"); without it no app enters a code but the setup code, and
-after the proxy's certificate changes (a renewal) it must be set to the new one. Give each server a certificate of its
-own: servers that share one cannot be told apart by it.
+host the request named. Set `proxy_certificate` (`ORCHESTER_SERVER_PROXY_CERTIFICATE`) too: the server signs the
+certificate the proxy presents into the key proof an app checks before it enters a code there
+([architecture/server.md](architecture/server.md), "Codes"); without it no app enters a code but the setup code. Give
+each server a certificate of its own: servers that share one cannot be told apart by it. Two ways:
+
+- **`auto`** (the compose files' default): the server reads the certificate itself, by connecting to its own `address`
+  (which must then be `https://`) over TLS that the operating system's trust store checks, chain and name, as an app
+  does. It reads it at start, every hour, before a proof when the last read is older than ten minutes, and when an app
+  says its connection presented one the server has not seen yet; for an hour after a renewal it still accepts the one
+  before. So a proxy that renews its certificate (Caddy, Traefik with Let's Encrypt) needs nothing here. If a read
+  fails, proofs name no certificate and apps enter no codes until a read succeeds; the server's log says why, at most
+  every ten minutes. The server needs a route to its own public name: through the proxy's address for that name (the
+  Caddy compose file maps it to Caddy on the stack's network), or out and back in, which on some hosts needs hairpin
+  NAT. The server's image carries the system's certificate authorities for this. A server that passes apps' proofs on
+  from another cannot make this one read its certificate: the server connects only to its own configured address.
+  Someone who takes over this server's own name with a certificate the trust store accepts for it could, as they could
+  fool every app.
+- **A fingerprint:** the SHA-256 of the certificate the proxy presents, 64 hex characters, colons allowed (`openssl
+  x509 -in cert.pem -noout -fingerprint -sha256`). After the proxy's certificate changes (a renewal) it must be set to
+  the new one.
+
+An empty value is the same as none.
 The admin app's server side calls the API on a second, private listener, `admin_api_listen` (default
 `127.0.0.1:8741`, plain HTTP, `off` to turn it off), which takes the browser's address and host from the headers the
 admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. The server warns at start when
@@ -272,7 +289,7 @@ Environment overrides TOML: `ORCHESTER_SERVER_LISTEN`, `ORCHESTER_SERVER_DATA_DI
 `ORCHESTER_SERVER_ADMIN_URL`, `ORCHESTER_SERVER_ADMIN_API_LISTEN` (an address, or `off`),
 `ORCHESTER_SERVER_ADDRESS`, `ORCHESTER_SERVER_TLS` (`self_signed`, `pem`, `off`), `ORCHESTER_SERVER_TLS_NAMES`
 (comma-separated), `ORCHESTER_SERVER_TLS_CERT`, `ORCHESTER_SERVER_TLS_KEY` (both, and only, with `tls = "pem"`),
-`ORCHESTER_SERVER_PROXY_CERTIFICATE` (only with `tls = "off"`),
+`ORCHESTER_SERVER_PROXY_CERTIFICATE` (`auto` or a fingerprint, only with `tls = "off"`; empty is unset),
 `ORCHESTER_SERVER_TRUSTED_PROXIES` (comma-separated exact IPs or CIDR ranges, for example `172.29.0.2,10.20.0.0/16`).
 Only list proxy connection addresses or networks you control: forwarded addresses are ignored from other peers. The
 server combines all forwarding-header lines and walks the chain from the connection backwards; malformed lists use the

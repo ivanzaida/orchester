@@ -12,7 +12,9 @@ workspace = true
 [dependencies]
 # The design's face, inside the page the server answers without its admin app (`http::admin_unavailable`).
 base64.workspace = true
-orchester-api = { workspace = true, features = ["identity"] }
+# `client`: with `proxy_certificate = "auto"` the server reads its proxy's certificate at its own public address, as an
+# app does, through the API client's trust-store verifier that records the verified leaf (`presented::auto`).
+orchester-api = { workspace = true, features = ["client", "identity"] }
 orchester-core.workspace = true
 axum.workspace = true
 hyper.workspace = true
@@ -32,4 +34,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+# `trust_for_tests`: the `auto` tests' proxy presents certificates from a test authority.
+orchester-api = { workspace = true, features = ["client", "identity", "test-support"] }
 tempfile.workspace = true
