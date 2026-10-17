@@ -225,7 +225,10 @@ fn orchestrator_answers_agents_and_merges_runs_only_once_a_person_turned_each_on
   let mut db = AppDb::open(&path).expect("reopen");
   assert!(db.orchestrator_answers_agents().expect("read"));
   assert!(!db.orchestrator_merges_runs().expect("read"), "a setting of its own");
-  assert!(!db.orchestrator_publishes_drafts().expect("read"), "a setting of its own");
+  assert!(
+    !db.orchestrator_publishes_drafts().expect("read"),
+    "a setting of its own"
+  );
   db.set_orchestrator_merges_runs(true).expect("store");
   db.set_orchestrator_answers_agents(false).expect("store");
   assert!(db.orchestrator_merges_runs().expect("read"));

@@ -54,8 +54,10 @@ fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
   let text = MessageBody::new("Merge and answer for me").expect("text");
   let chat = Chat::start(ChatId::generate(), &text, Timestamp::now());
   let message = ChatMessageId::generate();
-  db.keep_chat_message(&chat, (message, &text), Timestamp::now()).expect("kept");
-  db.end_chat_turn(message, &TurnState::Answered, Timestamp::now()).expect("answered");
+  db.keep_chat_message(&chat, (message, &text), Timestamp::now())
+    .expect("kept");
+  db.end_chat_turn(message, &TurnState::Answered, Timestamp::now())
+    .expect("answered");
   let open = &served.services().workspace.projects().expect("projects")[0];
   ChatScope {
     project: open.id,
@@ -150,7 +152,10 @@ fn chat_reads_what_a_waiting_agent_wrote_and_the_tasks_conversation() {
   assert!(question["step"].is_string() && question["at"].is_i64(), "{question}");
   assert_eq!(entries.last(), Some(question), "newest last: {read}");
 
-  let page = served.ok("get_conversation", &json!({ "project": "Kontur", "task": key, "limit": 1 }));
+  let page = served.ok(
+    "get_conversation",
+    &json!({ "project": "Kontur", "task": key, "limit": 1 }),
+  );
   assert_eq!(page["entries"].as_array().map(Vec::len), Some(1));
   assert_eq!(page["more"], true, "older entries are left for the next page");
   let cursor = page["entries"][0]["cursor"].as_str().expect("a cursor").to_owned();
@@ -177,7 +182,10 @@ fn chat_merge_is_a_proposal_until_the_person_lets_the_orchestrator_merge() {
   let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
   let told = chat_call(&mut served, &scope, "merge_run", merge.clone()).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
-  assert!(db.run_merge(run.id()).expect("read").is_none(), "nothing merged on the agent's word");
+  assert!(
+    db.run_merge(run.id()).expect("read").is_none(),
+    "nothing merged on the agent's word"
+  );
   assert_eq!(actions(&db, &scope)[0].outcome, ActionOutcome::Waits);
 
   allow(&served, OrchestratorConsent::MergeRuns);
@@ -186,7 +194,10 @@ fn chat_merge_is_a_proposal_until_the_person_lets_the_orchestrator_merge() {
   assert!(db.run_merge(run.id()).expect("read").is_some(), "the run is merged");
   let kept = actions(&db, &scope).remove(1);
   assert_eq!(kept.outcome, ActionOutcome::Done, "kept as the chat's own action");
-  assert!(matches!(kept.change.map(|change| change.change), Some(Change::Merge { .. })));
+  assert!(matches!(
+    kept.change.map(|change| change.change),
+    Some(Change::Merge { .. })
+  ));
 }
 
 #[test]
@@ -209,7 +220,10 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
 
   allow(&served, OrchestratorConsent::AnswerAgents);
   let sent = chat_call(&mut served, &scope, "send_message", answer).expect("sent at once");
-  assert_eq!(sent["action"], "answer", "the composer's answer to the open question: {sent}");
+  assert_eq!(
+    sent["action"], "answer",
+    "the composer's answer to the open question: {sent}"
+  );
   let messages = db.messages(task.id()).expect("messages");
   let last = messages.last().expect("the answer");
   assert_eq!(last.body().as_str(), "Keep the HubSpot owner.");
@@ -255,10 +269,16 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     json!({ "project": "Kontur", "run": run.id().to_string(), "choices": ["Nowhere"] }),
   )
   .expect_err("an answer the question does not take is not proposed");
-  assert!(matches!(&unknown, ToolError::Refused { code, .. } if code == "unknown_choice"), "{unknown:?}");
+  assert!(
+    matches!(&unknown, ToolError::Refused { code, .. } if code == "unknown_choice"),
+    "{unknown:?}"
+  );
   let told = chat_call(&mut served, &scope, "answer_question", answer.clone()).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
-  assert!(db.questions(run.id()).expect("questions")[0].waits(), "nothing answered");
+  assert!(
+    db.questions(run.id()).expect("questions")[0].waits(),
+    "nothing answered"
+  );
   let proposed = actions(&db, &scope).remove(1);
   assert_eq!(proposed.outcome, ActionOutcome::Waits);
   assert!(matches!(
@@ -322,12 +342,11 @@ fn chat_keeps_the_waits_of_a_project_it_opens_with_their_cards() {
     orchester_app::routes::ProjectPage::Orchestrator(orchester_app::routes::OrchestratorChat::Chat(chat)),
   ));
   let card = format!("orchestrator-wait-wait-{seq}");
-  served.until("the wait's card", |served| served.tree.get_element_by_id(&card).is_some());
+  served.until("the wait's card", |served| {
+    served.tree.get_element_by_id(&card).is_some()
+  });
   assert!(
-    served
-      .tree
-      .get_element_by_id(&format!("{card}-open"))
-      .is_some(),
+    served.tree.get_element_by_id(&format!("{card}-open")).is_some(),
     "the card opens the task's conversation"
   );
 }

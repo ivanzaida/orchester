@@ -186,7 +186,11 @@ fn agent_author(agent: &str) -> Value {
 
 /// Who wrote a message: an agent, the person, or the Orchestrator chat on the person's side; and whom to.
 fn sender(message: &MessageEntry) -> Value {
-  let on_person_side = if message.by_orchestrator { "orchestrator" } else { "person" };
+  let on_person_side = if message.by_orchestrator {
+    "orchestrator"
+  } else {
+    "person"
+  };
   match &message.author {
     Author::Agent(agent) => agent_author(agent),
     Author::You => json!({ "kind": on_person_side }),

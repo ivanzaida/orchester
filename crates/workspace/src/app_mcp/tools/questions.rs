@@ -95,7 +95,8 @@ pub async fn list_questions(
     })
   })
   .await?;
-  let mut questions = read.items(|open, (asked, _)| asked.iter().map(|asked| listed(asked, open.project.id())).collect());
+  let mut questions =
+    read.items(|open, (asked, _)| asked.iter().map(|asked| listed(asked, open.project.id())).collect());
   oldest_first(&mut questions, "asked_at");
   let messages = read.items(|_, (_, messages)| messages.clone());
   Ok(json!({
@@ -214,7 +215,11 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
     .await
     .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
   if by == SentBy::Orchestrator {
-    let (root, run, request) = (project.repo_root.clone(), asked.request.run(), asked.request.id().to_owned());
+    let (root, run, request) = (
+      project.repo_root.clone(),
+      asked.request.run(),
+      asked.request.id().to_owned(),
+    );
     // The answer reached the agent; only the card's words depend on the mark, so a mark not kept is logged.
     let marked = blocking(move || Ok(ProjectDb::open(&root)?.mark_answered_by_orchestrator(run, &request)?)).await;
     if let Err(error) = marked {

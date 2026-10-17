@@ -45,7 +45,11 @@ fn waits_are_kept_once_and_read_back_as_waits() {
     db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(10))
       .expect("kept")
   );
-  assert_eq!(db.latest_chat().expect("read"), Some(chat.id()), "the wait opened the conversation");
+  assert_eq!(
+    db.latest_chat().expect("read"),
+    Some(chat.id()),
+    "the wait opened the conversation"
+  );
   let elsewhere = Chat::named(ChatId::generate(), "Another", at(11));
   assert!(
     !db
@@ -64,7 +68,10 @@ fn waits_are_kept_once_and_read_back_as_waits() {
   );
   assert!(db.kept_wait_keys().expect("keys").contains("message:x:1"));
   let listed = db.chats().expect("History");
-  assert_eq!(listed[0].messages, 0, "a wait is no message of the person's or the agent's");
+  assert_eq!(
+    listed[0].messages, 0,
+    "a wait is no message of the person's or the agent's"
+  );
 }
 
 #[test]
@@ -72,7 +79,10 @@ fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
   let (_repo, mut db, run, _execution) = started_run();
   let chat = Chat::named(ChatId::generate(), "Plan", at(10));
   let person = ChatMessageId::generate();
-  assert!(db.keep_chat_message(&chat, (person, &body("How is ORC-1?")), at(10)).expect("kept"));
+  assert!(
+    db.keep_chat_message(&chat, (person, &body("How is ORC-1?")), at(10))
+      .expect("kept")
+  );
   db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(11))
     .expect("kept");
   let waiting = db.waits_without_turn(chat.id()).expect("waits");
@@ -114,18 +124,32 @@ fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
 #[test]
 fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
   let (_repo, mut db, run, execution) = started_run();
-  let sent = Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body("Keep it."), at(20))
-    .sent_by_orchestrator()
-    .expect("a message on the person's side");
+  let sent = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Keep it."),
+    at(20),
+  )
+  .sent_by_orchestrator()
+  .expect("a message on the person's side");
   db.send_message(IdempotencyKey::generate(), &sent).expect("stored");
-  let own = Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body("Mine."), at(21));
+  let own = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Mine."),
+    at(21),
+  );
   db.send_message(IdempotencyKey::generate(), &own).expect("stored");
   let stored = db.messages(run.task()).expect("messages");
   assert_eq!(
     stored.iter().map(Message::by_orchestrator).collect::<Vec<_>>(),
     [true, false]
   );
-  let invocation = db.start_invocation(run.id(), execution, &model(), at(22)).expect("invocation");
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(22))
+    .expect("invocation");
   let reply = Message::from_agent(
     run.task(),
     run.id(),
@@ -134,7 +158,10 @@ fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
     body("Done."),
     at(23),
   );
-  assert!(reply.sent_by_orchestrator().is_err(), "an agent's message is never the chat's");
+  assert!(
+    reply.sent_by_orchestrator().is_err(),
+    "an agent's message is never the chat's"
+  );
 
   let question = Question::new(
     "Where?",

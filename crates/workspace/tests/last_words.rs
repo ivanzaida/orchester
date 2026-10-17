@@ -17,7 +17,10 @@ fn last_words_of_a_waiting_step_are_the_question_its_agent_asked() {
   let mut fixture = Fixture::new();
   let task = fixture.task("Add login", at(10));
   let mut run = fixture.started_run(task, at(20));
-  assert!(waiting_words(&fixture.db, &run).expect("read").is_empty(), "no step waits");
+  assert!(
+    waiting_words(&fixture.db, &run).expect("read").is_empty(),
+    "no step waits"
+  );
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run.wait_step(execution, WaitReason::Message, at(30)).expect("waits");
   fixture.record(&run, &events);

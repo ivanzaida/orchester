@@ -135,8 +135,14 @@ impl Consent {
 pub fn section(ctx: &mut Ctx) -> Element {
   let rows = [
     ("change-permissions", Consent::ChangePermissions),
-    ("publish-drafts", Consent::Orchestrator(OrchestratorConsent::PublishDrafts)),
-    ("answer-agents", Consent::Orchestrator(OrchestratorConsent::AnswerAgents)),
+    (
+      "publish-drafts",
+      Consent::Orchestrator(OrchestratorConsent::PublishDrafts),
+    ),
+    (
+      "answer-agents",
+      Consent::Orchestrator(OrchestratorConsent::AnswerAgents),
+    ),
     ("merge-runs", Consent::Orchestrator(OrchestratorConsent::MergeRuns)),
   ];
   let rows: Vec<Element> = rows

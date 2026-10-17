@@ -69,7 +69,10 @@ fn orchestrator_wait_raised_by_its_own_answer_is_known() {
   let run = RunId::generate();
   assert!(!raised_by_own(&[], run), "nothing answered yet");
   let sent = [entry(1, answered(run, true, ActionOutcome::Done))];
-  assert!(raised_by_own(&sent, run), "the chat sent the run's agents a message itself");
+  assert!(
+    raised_by_own(&sent, run),
+    "the chat sent the run's agents a message itself"
+  );
   let applied = [entry(1, answered(run, false, ActionOutcome::Applied))];
   assert!(raised_by_own(&applied, run), "the person applied the chat's answer");
   let proposed = [entry(1, answered(run, false, ActionOutcome::Waits))];

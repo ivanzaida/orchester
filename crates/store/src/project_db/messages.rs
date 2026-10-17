@@ -351,7 +351,9 @@ impl StoredRow {
       message.sent(timing).map_err(|error| corrupt("message", error))?
     };
     let message = if self.by_orchestrator {
-      message.sent_by_orchestrator().map_err(|error| corrupt("message", error))?
+      message
+        .sent_by_orchestrator()
+        .map_err(|error| corrupt("message", error))?
     } else {
       message
     };

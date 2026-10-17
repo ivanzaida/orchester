@@ -33,7 +33,12 @@ use crate::{
 
 /// The card of `wait`, kept at `at`, which started an Orchestrator turn by itself when `turned`; in project
 /// `project`; `id` names it.
-pub(super) fn card(ctx: &mut Ctx, id: &str, (wait, at, turned): (&AgentWait, Option<Timestamp>, bool), project: ProjectId) -> Element {
+pub(super) fn card(
+  ctx: &mut Ctx,
+  id: &str,
+  (wait, at, turned): (&AgentWait, Option<Timestamp>, bool),
+  project: ProjectId,
+) -> Element {
   let run = wait.number.to_string();
   let named = wait.agent.as_deref().or(wait.step.as_deref());
   let (glyph, title) = match (wait.kind, named) {

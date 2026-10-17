@@ -143,14 +143,21 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
     for asked in &choices {
       let request = &asked.request;
       let key = format!("question:{}:{}", view.id(), request.id());
-      waits.push((key, wait.of(WaitKind::Question, request.execution(), Some(request.agent()))));
+      waits.push((
+        key,
+        wait.of(WaitKind::Question, request.execution(), Some(request.agent())),
+      ));
     }
     for execution in view.run.awaiting_answer() {
       if choices.iter().any(|asked| asked.request.execution() == execution) {
         continue;
       }
-      let asked = latest_question(&messages, execution).map_or_else(|| "-".to_owned(), |question| question.id().to_string());
-      waits.push((format!("message:{execution}:{asked}"), wait.of(WaitKind::Message, execution, None)));
+      let asked =
+        latest_question(&messages, execution).map_or_else(|| "-".to_owned(), |question| question.id().to_string());
+      waits.push((
+        format!("message:{execution}:{asked}"),
+        wait.of(WaitKind::Message, execution, None),
+      ));
     }
     for execution in view.run.awaiting_plan() {
       let Some(plan) = Plan::latest_of(&view.plans, execution) else {

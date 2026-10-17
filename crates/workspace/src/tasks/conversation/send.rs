@@ -53,7 +53,13 @@ pub fn send_in(
   (recipient, timing): (Recipient, Timing),
   text: &str,
 ) -> Result<Message, SendError> {
-  send_as(repo_root, key, (task, run, recovery_after), (recipient, timing), (text, false))
+  send_as(
+    repo_root,
+    key,
+    (task, run, recovery_after),
+    (recipient, timing),
+    (text, false),
+  )
 }
 
 /// [`send_in`], for the project's Orchestrator chat when `by_orchestrator`: it wrote `text` on the person's side, and

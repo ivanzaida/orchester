@@ -274,9 +274,23 @@ async fn act(
   let acted = match name {
     RUN_TASK => start((services, translate), scope, arguments).await,
     CANCEL_RUN => propose_change(translate, scope, name, arguments).await,
-    MERGE_RUN => switched((services, translate), scope, (name, arguments), OrchestratorConsent::MergeRuns).await,
+    MERGE_RUN => {
+      switched(
+        (services, translate),
+        scope,
+        (name, arguments),
+        OrchestratorConsent::MergeRuns,
+      )
+      .await
+    }
     ANSWER_QUESTION | SEND_MESSAGE => {
-      switched((services, translate), scope, (name, arguments), OrchestratorConsent::AnswerAgents).await
+      switched(
+        (services, translate),
+        scope,
+        (name, arguments),
+        OrchestratorConsent::AnswerAgents,
+      )
+      .await
     }
     _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
     _ => Ok(Acted::done(

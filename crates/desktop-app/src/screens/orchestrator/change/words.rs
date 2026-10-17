@@ -141,7 +141,11 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
       number, choices, text, ..
     }) => {
       let separator = ctx.t("orchestrator.change.facts.separator");
-      let answer = choices.iter().map(String::as_str).chain(text.as_deref()).collect::<Vec<_>>();
+      let answer = choices
+        .iter()
+        .map(String::as_str)
+        .chain(text.as_deref())
+        .collect::<Vec<_>>();
       super::answer::answer(ctx, view, (*number, &answer.join(&separator)))
     }
     Some(Change::Message { number, text, .. }) => super::answer::message(ctx, view, (*number, text)),

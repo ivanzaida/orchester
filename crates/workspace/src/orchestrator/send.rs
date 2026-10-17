@@ -105,9 +105,10 @@ pub async fn answer_wait(
 pub async fn end_wait_turn(runners: &Runners, project: &OpenProject, message: ChatMessageId, reason: String) {
   let root = project.repo_root.clone();
   let failed = TurnState::Failed(TurnFailure::CannotStart { reason });
-  let ended =
-    background::run(move || ProjectDb::open(&root).and_then(|mut db| db.end_chat_turn(message, &failed, Timestamp::now())))
-      .await;
+  let ended = background::run(move || {
+    ProjectDb::open(&root).and_then(|mut db| db.end_chat_turn(message, &failed, Timestamp::now()))
+  })
+  .await;
   // A turn left thinking ends as interrupted once a runner attaches and does not answer it.
   match ended {
     Ok(Ok(_)) => {}

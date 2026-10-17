@@ -68,7 +68,11 @@ impl ProjectDb {
     )?;
     let rows = statement
       .query_map([chat.to_string()], |row| {
-        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        Ok((
+          row.get::<_, i64>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, String>(2)?,
+        ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
     rows

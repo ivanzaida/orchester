@@ -8,8 +8,9 @@
 mod support;
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog,
-    SignIn},
+  connection::{
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+  },
   conversation::{AgentMessage, Message, MessageBody},
   id::{ChatId, ChatMessageId, ConnectionId, ProjectId},
   name::Name,
@@ -50,7 +51,10 @@ fn ready(fixture: &mut Fixture) {
     .expect("check");
   fixture.db.create_connection(&connection).expect("connection");
   let settings = OrchestratorSettings::new(connection.id(), ModelId::new("haiku").expect("model"), None);
-  fixture.db.publish_orchestrator(&settings, Timestamp::now()).expect("published");
+  fixture
+    .db
+    .publish_orchestrator(&settings, Timestamp::now())
+    .expect("published");
 }
 
 /// A run of task "Add login" at work.
@@ -119,11 +123,23 @@ fn orchestrator_waits_keep_one_entry_per_wait_in_a_conversation_they_open() {
   assert_eq!(kept.len(), 1);
   let (wait, turn) = &kept[0];
   assert_eq!(
-    (wait.kind, wait.task.as_str(), wait.number, wait.step.as_deref(), wait.agent.as_deref()),
+    (
+      wait.kind,
+      wait.task.as_str(),
+      wait.number,
+      wait.step.as_deref(),
+      wait.agent.as_deref()
+    ),
     (WaitKind::Message, "ORC-1", 1, Some("Implement"), Some("Builder"))
   );
-  assert_eq!(wait.link, format!("/project/{}/tasks/ORC-1/conversation", project(&fixture)));
-  assert!(!wait.automatic && turn.is_none(), "the person's switch is off: the wait waits for them");
+  assert_eq!(
+    wait.link,
+    format!("/project/{}/tasks/ORC-1/conversation", project(&fixture))
+  );
+  assert!(
+    !wait.automatic && turn.is_none(),
+    "the person's switch is off: the wait waits for them"
+  );
   assert_eq!(follow(&fixture, false), Followed::default(), "kept once");
   assert_eq!(waits(&fixture).len(), 1);
 }
@@ -141,7 +157,11 @@ fn orchestrator_waits_start_one_turn_of_a_wait_while_answering_agents_is_on() {
   assert_eq!(kept[0].1.as_ref().map(|turn| turn.message), Some(started.message));
   let turn = fixture.db.chat_turn(started.message).expect("read").expect("the turn");
   assert_eq!(turn.turn, TurnState::Thinking);
-  assert!(turn.text.as_str().contains("waits for a message"), "{}", turn.text.as_str());
+  assert!(
+    turn.text.as_str().contains("waits for a message"),
+    "{}",
+    turn.text.as_str()
+  );
   // The turn ends; the wait still waits, and starts no second turn.
   fixture
     .db
@@ -159,7 +179,10 @@ fn orchestrator_waits_start_no_turn_without_what_the_orchestrator_runs_on() {
   assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
   assert!(waits(&fixture)[0].0.automatic, "it would start one");
   ready(&mut fixture);
-  assert!(follow(&fixture, true).turn.is_some(), "once the Orchestrator has what it runs on");
+  assert!(
+    follow(&fixture, true).turn.is_some(),
+    "once the Orchestrator has what it runs on"
+  );
 }
 
 #[test]
@@ -169,7 +192,10 @@ fn orchestrator_waits_queue_behind_the_persons_turn() {
   let chat = Chat::named(ChatId::generate(), "How is it going?", at(10));
   let person = ChatMessageId::generate();
   let text = MessageBody::new("How is it going?").expect("text");
-  fixture.db.keep_chat_message(&chat, (person, &text), at(10)).expect("kept");
+  fixture
+    .db
+    .keep_chat_message(&chat, (person, &text), at(10))
+    .expect("kept");
   let mut run = working(&mut fixture);
   ask(&mut fixture, &mut run);
   let followed = follow(&fixture, true);
@@ -180,7 +206,10 @@ fn orchestrator_waits_queue_behind_the_persons_turn() {
     .db
     .end_chat_turn(person, &TurnState::Answered, Timestamp::now())
     .expect("ended");
-  assert!(follow(&fixture, true).turn.is_some(), "it starts once the person's turn ended");
+  assert!(
+    follow(&fixture, true).turn.is_some(),
+    "it starts once the person's turn ended"
+  );
 }
 
 #[test]
@@ -191,7 +220,10 @@ fn orchestrator_waits_raised_by_its_own_answer_start_no_turn() {
   let chat = Chat::named(ChatId::generate(), "Answer the agents", at(10));
   let person = ChatMessageId::generate();
   let text = MessageBody::new("Answer them").expect("text");
-  fixture.db.keep_chat_message(&chat, (person, &text), at(10)).expect("kept");
+  fixture
+    .db
+    .keep_chat_message(&chat, (person, &text), at(10))
+    .expect("kept");
   let sent = ChatAction {
     change: Some(Box::new(ProposedChange {
       subject: "Add login".to_owned(),
@@ -228,7 +260,10 @@ fn orchestrator_waits_name_questions_with_suggested_answers_and_plans() {
     .start_invocation(run.id(), execution, &ModelId::new("gpt-5.5").expect("model"), at(21))
     .expect("invocation")
     .id;
-  let options = vec![QuestionOption::new("Top bar", None), QuestionOption::new("Sidebar", None)];
+  let options = vec![
+    QuestionOption::new("Top bar", None),
+    QuestionOption::new("Sidebar", None),
+  ];
   let asked = QuestionRequest::new(
     "ask-1".to_owned(),
     (run.id(), execution, invocation),

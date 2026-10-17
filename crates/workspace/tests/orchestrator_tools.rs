@@ -52,7 +52,11 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
       .find(|tool| tool.name == name)
       .and_then(|tool| tool.annotations.and_then(|hints| hints.read_only_hint))
   };
-  assert_eq!(read_only("get_conversation"), Some(true), "reading a conversation changes nothing");
+  assert_eq!(
+    read_only("get_conversation"),
+    Some(true),
+    "reading a conversation changes nothing"
+  );
 }
 
 #[test]

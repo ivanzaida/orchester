@@ -101,12 +101,8 @@ pub(super) fn answer_change(root: &Path, asked: Asked) -> Result<(ProposedChange
 /// Blocks on SQLite.
 pub(super) fn message_change(root: &Path, sending: Sending) -> Result<(ProposedChange, Option<String>), ToolError> {
   let Sending { run: named, text, now } = sending;
-  let text = MessageBody::new(&text).map_err(|_| {
-    ToolError::refused(
-      "blank_message",
-      vec![Message::new("conversation.errors.blank")],
-    )
-  })?;
+  let text = MessageBody::new(&text)
+    .map_err(|_| ToolError::refused("blank_message", vec![Message::new("conversation.errors.blank")]))?;
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &named)?;
   let prepared = prepare_in(root, (run.task(), Some(run.id())), (false, None)).map_err(outgoing_refusal)?;
