@@ -61,10 +61,11 @@ pub struct PullRequestRead {
 }
 
 /// Whether the task's latest run can have a pull request, read off the UI thread for each run and each time the
-/// task is read again; `None` while it is read, and without a run.
-pub fn read(ctx: &mut Ctx, task: &TaskContext) -> Option<Result<Readiness, Message>> {
+/// task is read again, once the page's other reads of the checkout `settled`; `None` while it is read, and
+/// without a run.
+pub fn read(ctx: &mut Ctx, task: &TaskContext, settled: bool) -> Option<Result<Readiness, Message>> {
   let programs = Services::of(ctx).programs;
-  let run = task.detail.run.as_ref().map(RunView::id);
+  let run = task.detail.run.as_ref().map(RunView::id).filter(|_| settled);
   let deps = (task.project.open.repo_root.clone(), run, task.project.feed.revision.get());
   let load = ctx.future(deps, move |(root, run, _)| {
     let programs = programs.clone();

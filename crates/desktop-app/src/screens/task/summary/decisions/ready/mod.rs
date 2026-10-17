@@ -42,19 +42,22 @@ impl Component for ReadyForReview {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TaskContext>().clone();
     let read = changed::read(ctx, &props);
-    // Read on every render, before the futures only some states ask for: lurq keeps them by their order.
-    let pull = PullRequestRead {
-      readiness: pull_request::read(ctx, &props),
-      draft: self.draft.clone(),
-    };
     let Some(run) = props.detail.run.as_ref() else {
       return Column::new().into();
+    };
+    // Read on every render, before the parts only some states build: lurq keeps futures by their order. Whether a
+    // pull request can be created is read once the checkout's own reads settled: they hold the checkout, and the
+    // remote's read runs git in it.
+    let (external, settled) = external::notice(ctx, &props);
+    let (reminder, reminded) = local::reminder(ctx, &props);
+    let pull = PullRequestRead {
+      readiness: pull_request::read(ctx, &props, settled && reminded),
+      draft: self.draft.clone(),
     };
     let now = Services::of(ctx).clock.now();
     let job = props.jobs.run(run.id());
     // A merge git made shows as soon as it is made, also while the task is not read again with it.
     let made = props.detail.merge.as_ref().or(job.merged.as_ref());
-    let external = external::notice(ctx, &props);
     let mut parts: Vec<Element> = match (made, &job.merge) {
       (Some(merge), JobState::Failed(problem)) if props.detail.merge.is_none() => {
         card::not_merged(ctx, &props, run, (problem, Some(merge)), (&job.conflicts, &pull))
@@ -75,7 +78,7 @@ impl Component for ReadyForReview {
       .chain(runs_section(ctx, &props))
       .collect(),
     };
-    if let Some(reminder) = local::reminder(ctx, &props) {
+    if let Some(reminder) = reminder {
       parts.insert(0, reminder);
     }
     let side = run_details(ctx, &props, run);
