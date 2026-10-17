@@ -154,7 +154,7 @@ each server a certificate of its own: servers that share one cannot be told apar
 
 - **`auto`** (the compose files' default): the server reads the certificate itself, by connecting to its own `address`
   (which must then be `https://`) over TLS that the operating system's trust store checks, chain and name, as an app
-  does. It reads it at start, every hour, before a proof when the last read is older than ten minutes, and when an app
+  does. It reads it at start, every hour (30 seconds after a read that failed), before a proof when the last read is older than ten minutes, and when an app
   says its connection presented one the server has not seen yet; for an hour after a renewal it still accepts the one
   before. So a proxy that renews its certificate (Caddy, Traefik with Let's Encrypt) needs nothing here. If a read
   fails, proofs name no certificate and apps enter no codes until a read succeeds; the server's log says why, at most

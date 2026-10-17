@@ -20,7 +20,10 @@ use super::Named;
 use crate::clock::Clock;
 
 /// How often the server reads it on its own.
-pub(super) const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
+const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
+/// How soon the server reads it again on its own after a read failed: at start the proxy may not route to this
+/// server yet, and without a read no app enters a code.
+const REFRESH_AFTER_FAILURE: Duration = Duration::from_secs(30);
 const MINUTE_MS: i64 = 60 * 1000;
 /// How old the last read may be when a proof is made before it is read again first.
 const FRESH_FOR_MS: i64 = 10 * MINUTE_MS;
@@ -59,9 +62,15 @@ impl AutoCertificate {
     self.seen.lock().named(self.clock.now_ms())
   }
 
-  /// Reads it now: the server's schedule.
-  pub async fn refresh(&self) {
+  /// Reads it now, and says how long the server's schedule waits before the next read: [`REFRESH_EVERY`] when this
+  /// one found a certificate, [`REFRESH_AFTER_FAILURE`] when it did not.
+  pub async fn refresh(&self) -> Duration {
     self.read(|_, _| true).await;
+    if self.seen.lock().current.is_some() {
+      REFRESH_EVERY
+    } else {
+      REFRESH_AFTER_FAILURE
+    }
   }
 
   /// Reads it if `due` still says so once no other read runs.

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use orchester_api::{certificate::CertificatePin, client::ServerAddress};
 use tokio::task::JoinHandle;
 
-use self::auto::{AutoCertificate, REFRESH_EVERY};
+use self::auto::AutoCertificate;
 use crate::{
   clock::Clock,
   config::{Config, ProxyCertificate},
@@ -69,8 +69,8 @@ impl Presented {
     }
   }
 
-  /// With `auto`, reads the proxy's certificate now and then every [`REFRESH_EVERY`], until the caller aborts the
-  /// task it returns, when it stops serving; `None` otherwise.
+  /// With `auto`, reads the proxy's certificate now and then again every hour, or 30 seconds after a read that failed,
+  /// until the caller aborts the task it returns, when it stops serving; `None` otherwise.
   pub fn start_schedule(&self) -> Option<JoinHandle<()>> {
     let Self::Auto(auto) = self else {
       return None;
@@ -78,8 +78,8 @@ impl Presented {
     let auto = auto.clone();
     Some(tokio::spawn(async move {
       loop {
-        auto.refresh().await;
-        tokio::time::sleep(REFRESH_EVERY).await;
+        let next = auto.refresh().await;
+        tokio::time::sleep(next).await;
       }
     }))
   }
