@@ -80,7 +80,7 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
 /// The task page's view the window's path names.
 fn route_view(ctx: &mut Ctx) -> Option<TaskView> {
   match Route::parse(&ctx.route_path()) {
-    Ok(Route::Project(_, ProjectPage::Task(_, view))) => Some(view),
+    Ok(Route::Project(_, page)) => page.task_view().map(|(_, view)| view.clone()),
     _ => None,
   }
 }
@@ -351,11 +351,15 @@ impl ChangesTab {
   /// Choosing a file opens it where the press asks; in the active tab as a new entry of its history.
   fn select(&self, props: &ChangesProps) -> files::SelectFile {
     let navigation = self.navigation.clone();
-    let (project, key) = (props.project, props.detail.task.key().clone());
+    let (project, key, kept) = (
+      props.project,
+      props.detail.task.key().clone(),
+      props.detail.not_shared(),
+    );
     Arc::new(
       move |listed: &Listed, at| match ChangedFile::new(listed.path.to_string(), listed.source) {
         Ok(file) => {
-          let page = ProjectPage::Task(key.clone(), TaskView::Changes(Some(file)));
+          let page = ProjectPage::task(key.clone(), TaskView::Changes(Some(file)), kept);
           navigation.open(Route::Project(project, page), at);
         }
         Err(error) => tracing::error!(%error, "a listed file has no path"),

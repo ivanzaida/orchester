@@ -11,6 +11,7 @@
 //! selection, the Status, Priority and Tags filters and Manage tags.
 
 mod header;
+mod not_shared;
 mod query;
 mod queue;
 
@@ -129,10 +130,21 @@ impl Component for TasksScreen {
       .child(header::header(ctx, id, queue(&project), shared.as_ref()))
       .with_children(not_member);
     match project.feed.tasks.get() {
-      TasksState::Ready(tasks) if tasks.tasks.is_empty() => page.child(states::empty_project(ctx, id)),
-      TasksState::Ready(tasks) => {
-        let (tasks, counts) = self.view.tasks(&tasks, online(&project));
-        self.list(ctx, page, (&project, &list), (&tasks, counts))
+      TasksState::Ready(tasks) if tasks.tasks.is_empty() && tasks.not_shared.is_empty() => {
+        page.child(states::empty_project(ctx, id))
+      }
+      TasksState::Ready(source) => {
+        // The filter is gone once no task is Not shared: the list is the shared one again.
+        let not_shared = list.not_shared() && !source.not_shared.is_empty();
+        let (tasks, counts) = self.view.tasks(&source, (online(&project), not_shared));
+        let shown = Shown {
+          project: &project,
+          list: &list,
+          source: &source,
+          shared: shared.as_ref(),
+          not_shared,
+        };
+        self.list(ctx, page, &shown, (&tasks, counts))
       }
       TasksState::Loading => page
         .child(header::tabs(ctx, id, &list, None))
@@ -153,12 +165,14 @@ impl TasksScreen {
     &self,
     ctx: &mut Ctx,
     page: Column,
-    (project, list): (&ShownProject, &TaskList),
+    shown: &Shown<'_>,
     (tasks, counts): (&ProjectTasks, TabCounts),
   ) -> Column {
+    let (project, list) = (shown.project, shown.list);
     let id = project.open.project.id();
     let key = RowsKey {
       tab: list.tab(),
+      not_shared: shown.not_shared,
       search: list.search().unwrap_or_default().to_owned(),
       pipeline: self.choices.pipeline.get(),
       sort: self.choices.sort.get(),
@@ -175,16 +189,37 @@ impl TasksScreen {
       };
       browse::rows(tasks, header::workspace_tab(key.tab), query, key.sort)
     });
+    let kept = shown.not_shared.then(|| {
+      let name = project.open.project.name().as_str();
+      not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
+    });
     let page = page
       .child(header::tabs(ctx, id, list, Some(counts)))
       .with_children(held_groups(ctx, project, tasks))
       .child(query::query(ctx, &self.choices, Some(tasks)))
+      .with_children(not_shared::filters(ctx, (id, list), shown.source.not_shared.len()))
+      .with_children(kept)
       .with_children(states::outside_tasks(ctx, list.tab(), tasks));
     if rows.is_empty() {
       // Rows that come back are placed afresh, at their top.
       *self.placed.lock() = None;
+      let found = if shown.not_shared {
+        Vec::new()
+      } else {
+        not_shared::matching(shown.source, &key.search, &separator)
+      };
+      if !found.is_empty() {
+        return page.child(not_shared::only_not_shared(ctx, (id, list), &found));
+      }
       return page.child(self.no_rows(ctx, list.tab(), counts.get(list.tab()), filtered));
     }
+    let count = if shown.not_shared {
+      table::Count::NotShared(shown.source.not_shared.len())
+    } else if found_by_former_key(&rows, &key.search) {
+      table::Count::FormerKey
+    } else {
+      table::Count::Tasks
+    };
     // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes:
     // a list keeps its top row in place while its rows change, which these must not.
     let list_key = format!("tasks-rows-{key:?}");
@@ -203,7 +238,7 @@ impl TasksScreen {
     };
     page
       .child(table::table(ctx, &shown))
-      .child(table::footer(ctx, &shown, filtered))
+      .child(table::footer(ctx, &shown, (filtered, count)))
   }
 
   /// Scrolls the rows when what they show changed: to the task a Create just added, or else to the top,
@@ -291,6 +326,30 @@ fn online(project: &ShownProject) -> bool {
     .as_ref()
     .map(|status: &RunnerStatus| status.state_for(root))
     == Some(RunnerState::Online)
+}
+
+/// What the list is drawn from: the project, its route, the feed's tasks, its sharing, and whether the *Not shared*
+/// filter is on.
+struct Shown<'a> {
+  project: &'a ShownProject,
+  list: &'a TaskList,
+  source: &'a ProjectTasks,
+  shared: Option<&'a shared::Shared>,
+  not_shared: bool,
+}
+
+/// Whether `search` found each of `rows` only by its key before joining (`T1ahf8`), which the count then says.
+fn found_by_former_key(rows: &[TaskRow], search: &str) -> bool {
+  let text = search.trim().to_lowercase();
+  !text.is_empty()
+    && rows.iter().all(|row| {
+      row
+        .former_key
+        .as_ref()
+        .is_some_and(|former| former.to_lowercase().contains(&text))
+        && !row.key.to_lowercase().contains(&text)
+        && !row.title.to_lowercase().contains(&text)
+    })
 }
 
 /// What the rows were last placed for, and whether the highlighted task, if any, was among them.

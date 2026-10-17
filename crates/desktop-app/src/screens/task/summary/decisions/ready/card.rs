@@ -251,7 +251,7 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   let navigation = crate::navigation::Navigation::of(ctx);
   let route = crate::routes::Route::Project(
     task.project.open.project.id(),
-    crate::routes::ProjectPage::Task(task.key.clone(), crate::routes::TaskView::LocalIntegration),
+    task.page(crate::routes::TaskView::LocalIntegration),
   );
   (button.opens(navigation.to(route)), None)
 }

@@ -39,6 +39,7 @@ pub(super) fn found(ctx: &mut Ctx, answers: &Answers) -> Vec<Element> {
           id: joined,
           server,
           project,
+          ..
         } => Some(approved(ctx, &id, (*joined, server, project.as_deref()), done)),
         Outcome::Refused { server } => Some(refused(ctx, &id, server, done)),
         Outcome::Waiting { .. } | Outcome::TwoFactorOff { .. } | Outcome::NeedsCode { .. } => None,

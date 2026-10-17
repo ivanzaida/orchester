@@ -17,6 +17,7 @@ mod conversation;
 mod header;
 mod local_integration;
 mod read;
+mod sharing;
 mod summary;
 
 use lurq::{
@@ -52,20 +53,24 @@ use crate::{
   },
 };
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, view: &TaskView) -> Element {
+/// The page of the task `key`; `kept`: the task kept *Not shared* with that key, which a shared task may have too.
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, (key, kept): (&TaskKey, bool), view: &TaskView) -> Element {
   let props = PageProps {
     project: project.clone(),
     key: key.clone(),
+    kept,
     tab: view.tab(),
   };
   // Keyed by the task, not the tab: the frame stays as the tabs switch.
-  ctx.mount_keyed::<TaskPage>(&format!("task-page-{key}"), props)
+  let place = if kept { "kept-" } else { "" };
+  ctx.mount_keyed::<TaskPage>(&format!("task-page-{place}{key}"), props)
 }
 
 #[derive(Clone, PartialEq)]
 struct PageProps {
   project: ShownProject,
   key: TaskKey,
+  kept: bool,
   tab: TaskTab,
 }
 
@@ -86,19 +91,27 @@ impl Component for TaskPage {
     let found = match props.project.feed.tasks.get() {
       TasksState::Loading => return page(loading("task-loading", &ctx.t("task.page.loading"))),
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
-      TasksState::Ready(tasks) => tasks
-        .tasks
-        .iter()
-        .find(|task| *task.key() == props.key)
-        .map(|task| task.id()),
+      // A task kept Not shared keeps its key from before the join, which a shared task may have too: its own
+      // address names it. A link to a key no shared task has still finds it.
+      TasksState::Ready(tasks) => {
+        let find =
+          |list: &[orchester_core::task::Task]| list.iter().find(|task| *task.key() == props.key).map(|task| task.id());
+        let kept = || find(&tasks.not_shared).map(|task| (task, true));
+        if props.kept {
+          kept()
+        } else {
+          find(&tasks.tasks).map(|task| (task, false)).or_else(kept)
+        }
+      }
     };
-    let Some(task) = found else {
+    let Some((task, kept)) = found else {
       return page(not_found(ctx, &props));
     };
     let frame = FrameProps {
       project: props.project,
       task,
       key: props.key,
+      kept,
       tab: props.tab,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
@@ -165,6 +178,8 @@ struct FrameProps {
   project: ShownProject,
   task: TaskId,
   key: TaskKey,
+  /// The task is one kept *Not shared*: its page's links keep its own address.
+  kept: bool,
   tab: TaskTab,
 }
 
@@ -215,6 +230,8 @@ pub struct PageState {
   pub discard: Signal<bool>,
   /// Where the Summary's column is scrolled, kept as the tabs switch.
   pub summary_scroll: ScrollState,
+  /// *Share task*'s question is open over the Summary of a task kept *Not shared*.
+  pub share: Signal<bool>,
 }
 
 impl PageState {
@@ -251,7 +268,7 @@ impl Component for TaskFrame {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<FrameProps>().clone();
-    let composer = conversation::ComposerState::new(ctx, &props.project, (props.task, &props.key));
+    let composer = conversation::ComposerState::new(ctx, &props.project, (props.task, &props.key, props.kept));
     Self {
       composer,
       retries: ctx.signal(0),
@@ -261,6 +278,7 @@ impl Component for TaskFrame {
         removal: ctx.signal(Removal::closed()),
         discard: ctx.signal(false),
         summary_scroll: ScrollState::new(),
+        share: ctx.signal(false),
       },
       live: ctx.signal(false),
     }

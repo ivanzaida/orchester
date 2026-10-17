@@ -102,7 +102,8 @@ impl Timeline {
 
   /// What opens `view` of the task where a press asks (`navigation::link`).
   fn open(&self, ctx: &mut Ctx, view: TaskView) -> Open {
-    Navigation::of(ctx).to(Route::Project(self.project, ProjectPage::Task(self.key.clone(), view)))
+    let page = ProjectPage::task(self.key.clone(), view, self.detail.not_shared());
+    Navigation::of(ctx).to(Route::Project(self.project, page))
   }
 
   /// "03 Implement", the step `execution` executed, while the run's pipeline has it.

@@ -260,6 +260,13 @@ N8: one slice per phase from N4 on
   tasks; a task with a running run cannot be unticked; the mapping shows and stays; a lost join answer does not
   upload twice (forwarder); Share task later. Workspace `joined_projects`.
 - **Depends on.** N2.
+- **Built (addresses and automation).** The join review is `/project/<id>/settings?tab=sharing&view=join&server=<server
+  id>&project=<slug>`, the invite landing `/settings/invite?server=…&project=…`, a task kept *Not shared*
+  `/project/<id>/tasks/kept/<key>/<tab>` (a shared task may have its key) and the list's filter `?show=not-shared`.
+  Opening the review or the landing reads the server (the project, its tasks, and nothing else) and only reads: it
+  is open to MCP clients like any other navigation. What sends is a person's only: *Join and upload*, the review's
+  ticks and *Share task*. A checkout linked already is never reviewed or joined again: the review's address shows the
+  Sharing of the project it is linked to, and refuses any other project before anything is read or sent.
 
 ### N4 · Live task list and claims (S2d) · server, non-UI and UI
 

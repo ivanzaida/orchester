@@ -28,7 +28,7 @@ pub fn before_showing(app: &mut App, tree: &mut Tree, (state, seeded): (State, &
         app,
         tree,
         match state {
-          State::Review => "sharing-taken",
+          State::Review => "sharing-join",
           State::LinkForeign => "sharing-link-error",
           _ => "sharing-upload",
         },

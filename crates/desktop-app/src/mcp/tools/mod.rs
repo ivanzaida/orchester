@@ -74,7 +74,12 @@ pub fn route_json(route: &Route) -> Value {
         params.insert("query".to_owned(), json!(query));
       }
     }
-    Route::AllProjects | Route::AddProject(_) | Route::Settings | Route::Accounts(_) | Route::Orchester(_) => {}
+    Route::AllProjects
+    | Route::AddProject(_)
+    | Route::Settings
+    | Route::Accounts(_)
+    | Route::Orchester(_)
+    | Route::Invite(_) => {}
   }
   json!({ "name": name, "path": route.path(), "params": params })
 }
@@ -121,7 +126,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       insert("tool", &tool.to_string());
       insert("tab", tab.name());
     }
-    ProjectPage::Task(key, view) => {
+    ProjectPage::Task(key, view) | ProjectPage::KeptTask(key, view) => {
+      if matches!(page, ProjectPage::KeptTask(..)) {
+        insert("kept", "true");
+      }
       insert("key", &key.to_string());
       insert("tab", view.tab().name());
       if let Some(file) = view.file() {

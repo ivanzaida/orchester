@@ -74,28 +74,46 @@ pub(super) fn admin_note(ctx: &Ctx, entry: Option<&ServerEntry>) -> Element {
 
 /// *What linking sends* (`What linking sends` in `bWD9q`).
 pub fn sends(ctx: &Ctx) -> Element {
+  card(
+    ctx,
+    "sharing-sends",
+    ("sharing.link.sends.title", "sharing.link.sends.sharedValue"),
+  )
+}
+
+/// *What joining sends* (`What joining sends` in `AiCwO`): the ticked tasks only.
+pub fn join_sends(ctx: &Ctx) -> Element {
+  card(
+    ctx,
+    "sharing-join-sends",
+    ("sharing.join.sends.title", "sharing.join.sends.sharedValue"),
+  )
+}
+
+/// The card `id`: its title and what is shared with members, by their keys, what stays here and what never goes.
+fn card(ctx: &Ctx, id: &str, (title, shared): (&str, &str)) -> Element {
   Column::new()
-    .id("sharing-sends")
+    .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Inset.role())
     .spacing(SpacingSize::Sm)
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
-    .child(Text::new(&ctx.t("sharing.link.sends.title")).variant(OrchesterText::CardTitle.role()))
+    .child(Text::new(&ctx.t(title)).variant(OrchesterText::CardTitle.role()))
     .child(sends_row(
-      "sharing-sends-shared",
+      &format!("{id}-shared"),
       &ctx.t("sharing.link.sends.shared"),
-      &ctx.t("sharing.link.sends.sharedValue"),
+      &ctx.t(shared),
     ))
     .child(sends_row(
-      "sharing-sends-stays",
+      &format!("{id}-stays"),
       &ctx.t("sharing.link.sends.stays"),
       &ctx.t("sharing.link.sends.staysValue"),
     ))
     .child(
       Row::new()
-        .id("sharing-sends-never")
+        .id(format!("{id}-never"))
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)

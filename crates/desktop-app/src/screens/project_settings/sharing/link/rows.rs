@@ -15,7 +15,7 @@ use orchester_workspace::sharing::{
   Connection, RemoteMatch, ServerEntry, ServerProject, project::discovery::ProjectDiscovery, remote_match,
 };
 
-use super::{Chosen, Link, Listed, Picked, Props};
+use super::{Chosen, Link, Listed, Picked, Problem, Props};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
@@ -43,6 +43,12 @@ impl Link {
     rows.push(self.project_row(ctx, props, listed));
     rows.push(self.repository_row(ctx, props, listed));
     rows.push(self.link_row(ctx, props, listed));
+    let resolving = self.resolve.state().get();
+    let pending = resolving.is_pending();
+    if let Some(Problem::NoProject(address, checked)) = resolving.error.filter(|_| !pending) {
+      let again = self.choice(props, listed);
+      rows.push(self.not_member(ctx, props, (&address, checked), again));
+    }
     section(
       "project-settings-sharing-link",
       &ctx.t("sharing.link.section"),

@@ -19,21 +19,27 @@ use orchester_api::cloud::CloudInvite;
 use orchester_core::id::{InviteId, ServerId};
 use orchester_store::AcceptedInvite;
 use orchester_workspace::sharing::{
-  CloudJoined,
+  CloudJoined, ProjectAddress,
   cloud::{Accepted, CloudError},
 };
 
 use super::{PersonOnly, Said, words::cloud_error};
-use crate::services::Services;
+use crate::{
+  navigation::Navigation,
+  routes::{JoinTarget, Route},
+  services::Services,
+};
 
 /// What accepting an invite, or asking again for one, came to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Outcome {
-  /// Joined the server, in the list as `id`; the project the invite was to, if any.
+  /// Joined the server, in the list as `id`; the project the invite was to, if any, and where to link its checkout
+  /// when this computer knows its address.
   Joined {
     id: ServerId,
     server: String,
     project: Option<String>,
+    landing: Option<JoinTarget>,
   },
   /// The server holds the join until another computer of the person's, or an admin, approves it.
   Waiting { server: String },
@@ -50,8 +56,17 @@ impl DevtoolsInspectable for Outcome {}
 impl Outcome {
   /// What asking for `invite`, to `server`, came to.
   pub(super) fn asked(asked: Result<Accepted, CloudError>, (invite, server): (InviteId, &str)) -> Result<Self, Said> {
+    Self::asked_for(asked, (invite, server), None)
+  }
+
+  /// [`Self::asked`] for an invite to the project at `address`, whose checkout is linked next.
+  fn asked_for(
+    asked: Result<Accepted, CloudError>,
+    (invite, server): (InviteId, &str),
+    address: Option<&str>,
+  ) -> Result<Self, Said> {
     match asked {
-      Ok(accepted) => Ok(Self::of(accepted)),
+      Ok(accepted) => Ok(Self::of(accepted, address)),
       Err(CloudError::JoinRefused) => Ok(Self::Refused {
         server: server.to_owned(),
       }),
@@ -61,13 +76,16 @@ impl Outcome {
     }
   }
 
-  fn of(accepted: Accepted) -> Self {
+  fn of(accepted: Accepted, address: Option<&str>) -> Self {
     let server = accepted.server.name;
     match accepted.joined {
       CloudJoined::Joined(id) => Self::Joined {
         id,
         server,
         project: accepted.project,
+        landing: address
+          .and_then(|address| ProjectAddress::parse(address).ok())
+          .and_then(|address| JoinTarget::new(id, address.slug())),
       },
       CloudJoined::Waiting(_) => Self::Waiting { server },
     }
@@ -119,12 +137,30 @@ pub(super) struct Answers {
 impl Answers {
   pub(super) fn new(ctx: &mut Ctx) -> Self {
     let cloud = Services::of(ctx).cloud;
+    let answers = Self::made(ctx, cloud);
+    // A project invite accepted goes on to link the project's checkout (`xeFRB`).
+    let navigation = Navigation::of(ctx);
+    ctx.watch(&answers.accept.state(), move |state| {
+      if let Some(Outcome::Joined {
+        landing: Some(target), ..
+      }) = state.data.as_ref().filter(|_| state.is_fulfilled())
+      {
+        navigation.go(Route::Invite(target.clone()));
+      }
+    });
+    answers
+  }
+
+  fn made(ctx: &mut Ctx, cloud: orchester_workspace::sharing::cloud::Cloud) -> Self {
     let (declining, finishing, aside, again) = (cloud.clone(), cloud.clone(), cloud.clone(), cloud.clone());
     Self {
       declining: ctx.signal(Asked(None)),
       accept: ctx.future_action(move |invite: CloudInvite| {
         let cloud = cloud.clone();
-        async move { Outcome::asked(cloud.accept(&invite).await, (invite.id, &invite.server.name)) }
+        async move {
+          let address = invite.project.as_ref().map(|project| project.address.as_str());
+          Outcome::asked_for(cloud.accept(&invite).await, (invite.id, &invite.server.name), address)
+        }
       }),
       decline: ctx.future_action(move |invite: InviteId| {
         let cloud = declining.clone();
