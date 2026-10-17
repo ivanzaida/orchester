@@ -89,8 +89,10 @@ fn failure(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatc
       (false, Target::RunnerLog) => "shell.status.runner.openLog",
       (false, _) => "shell.status.open.other",
     };
+    // *Open* resolves the item however it opens: in a background tab too, the person has taken it up.
     items.push(action(
       "status-activity-open",
+
       &ctx.t(key),
       open.press(dispatch, Some(BarAction::Resolve(id))),
     ));
