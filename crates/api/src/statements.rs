@@ -61,15 +61,20 @@ pub struct InviteRevocation {
 }
 
 /// The server's answer to an app's `nonce` (`POST /server/key-proof`): signed with the key whose id is `server`, with
-/// the SHA-256 (hex) of the certificate the server's connections present: its own, or with TLS off the one its proxy
-/// was configured with (`None` without either). An app that checks the signature with that key, the key's id against
-/// `server` and `certificate` against the certificate of its own connection knows the proof was made for a connection
-/// to that server, not passed on by another one. `issued_at` in seconds.
+/// the SHA-256 (hex) of the certificate the server's connections present: its own, or with TLS off its proxy's, as
+/// configured or as the server read it at its own address (`None` without one). An app that checks the signature with
+/// that key, the key's id against `server` and `certificate` against the certificate of its own connection knows the
+/// proof was made for a connection to that server, not passed on by another one. `issued_at` in seconds.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeyProof {
   pub server: TeamServerId,
   pub nonce: String,
   pub certificate: Option<String>,
+  /// The certificate the proxy presented before it renewed `certificate`, for a short while after the server saw the
+  /// renewal; only for an app that sent [`crate::PRESENTED_CERTIFICATE`], which accepts either. Others refuse unknown
+  /// fields, so they never get it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub previous_certificate: Option<String>,
   pub issued_at: i64,
 }

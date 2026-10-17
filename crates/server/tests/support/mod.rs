@@ -42,6 +42,7 @@ impl Clock for TestClock {
 pub mod admin_app;
 pub mod cloud;
 mod pinned;
+pub mod tls_proxy;
 
 pub struct TestServer {
   pub server: Server,
@@ -147,6 +148,11 @@ impl TestServer {
       std::future::pending(),
     ));
     address
+  }
+
+  /// Where the server's own (plain or TLS) listener is.
+  pub fn address(&self) -> SocketAddr {
+    self.address
   }
 
   pub async fn connect(&self) -> TcpStream {
