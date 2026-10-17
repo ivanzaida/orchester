@@ -307,9 +307,13 @@ locks (`orchester_core::integration`).
   the run from there: the branch's reflog names the commit the newest rebase put it onto, that commit
   descends from the recorded base and is below both the branch tip and the target, and no checkpoint
   of the run lies between the recorded base and it (else the target has work of the run's own). A
-  last checkpoint the rebase rewrote is read as the branch tip when their commits are each other's
-  rebased form, patch for patch. A run whose own commits the target has, picked or merged, still
-  shows as integrated.
+  last checkpoint the rebase rewrote is read as the branch tip when their commits are the same
+  patches, whitespace included (`git patch-id --verbatim`). Without a rebase, a run whose own
+  commits the target has, by ancestry, a pick or the same tree, still shows as integrated. After a
+  proven rebase, only the run's checkpointed commits the target has by ancestry stop the base from
+  moving: a commit of the run's the target has as a pick, or one never checkpointed, below the
+  commit the branch was rebased onto, is not told apart from the target's own (the rebase itself
+  leaves out of the branch a commit whose patch the target already has).
 - **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
   afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped

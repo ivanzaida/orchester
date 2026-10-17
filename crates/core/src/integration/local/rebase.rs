@@ -2,8 +2,9 @@
 //! as ORC-39's was. The run keeps the base it started from, so the commits between that base and
 //! the new one, which the target has, would read as the run's own work already integrated. A
 //! rebase recorded here moves the base external evidence reads the run's commits from, only when
-//! git proves it ([`RebaseEvidence`]); a run whose own commits are in the target still shows as
-//! integrated, wholly or in part.
+//! git proves it ([`RebaseEvidence`]). Of the run's own commits below the new base, only the
+//! checkpointed ones the target has by ancestry keep the base where it was; one the target has as a
+//! pick, or one never checkpointed, is not told apart from the target's own.
 
 use crate::{id::RunId, revision::Revision, time::Timestamp};
 

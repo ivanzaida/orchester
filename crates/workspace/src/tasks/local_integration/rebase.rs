@@ -111,8 +111,8 @@ fn newest_onto(main: &LocalGit, branch: &BranchName) -> Result<Option<Revision>,
 }
 
 /// The last checkpoint of `run`, when the rebase onto `onto` rewrote it into `tip`: it is no
-/// ancestor of the tip, each of its commits since the run's base has its rebased form at the tip,
-/// and the tip has no commit since `onto` that the checkpoint lacks.
+/// ancestor of the tip, and its commits since the run's base and the tip's since `onto` are the
+/// same patches, whitespace included (`git patch-id --verbatim`).
 fn rebased_checkpoint(
   main: &LocalGit,
   run: &Run,
@@ -124,10 +124,8 @@ fn rebased_checkpoint(
   if last == tip || !present(main, last)? || main.is_ancestor(last, tip)? {
     return Ok(None);
   }
-  let equivalent = |listed: &str| !listed.is_empty() && listed.lines().all(|line| line.starts_with("- "));
-  let old = main.text(&["cherry", tip, last, run.base().as_str()])?;
-  let new = main.text(&["cherry", last, tip, onto])?;
-  if !(equivalent(&old) && equivalent(&new)) {
+  let old = main.exact_patch_ids(run.base().as_str(), last)?;
+  if old.is_empty() || old != main.exact_patch_ids(onto, tip)? {
     return Ok(None);
   }
   let revision = |sha: &str| Revision::new(sha).map_err(|_| IntegrationError::from(LocalGitError::Data));

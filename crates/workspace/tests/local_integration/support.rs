@@ -34,10 +34,11 @@ impl Fixture {
   }
   /// A fixture whose run delivers on `branch`.
   pub fn branched(check_fails: bool, prefix: &str, branch: &str) -> Self {
-    Self::recorded(check_fails, prefix, branch, false)
+    Self::recorded(check_fails, prefix, branch, None)
   }
-  /// [`Self::branched`], whose run recorded its work as a checkpoint when `checkpoint` says so.
-  pub fn recorded(check_fails: bool, prefix: &str, branch: &str, checkpoint: bool) -> Self {
+  /// [`Self::branched`], whose run writes `task.txt` as `checkpointed` and records that as a checkpoint when it names
+  /// one.
+  pub fn recorded(check_fails: bool, prefix: &str, branch: &str, checkpointed: Option<&str>) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let repo = tempfile::Builder::new()
@@ -101,9 +102,9 @@ impl Fixture {
       repo.path(),
       &["worktree", "add", "-b", branch, task_root.to_str().expect("path")],
     );
-    fs::write(task_root.join("task.txt"), "delivered task\n").expect("task edit");
+    fs::write(task_root.join("task.txt"), checkpointed.unwrap_or("delivered task\n")).expect("task edit");
     git(&task_root, &["commit", "-am", "task work"]);
-    if checkpoint {
+    if checkpointed.is_some() {
       let head = Revision::new(&git(&task_root, &["rev-parse", "HEAD"])).expect("revision");
       let events = run.record_checkpoint(execution, head, at(9)).expect("checkpoint");
       db.append_events(&run, &events).expect("events");

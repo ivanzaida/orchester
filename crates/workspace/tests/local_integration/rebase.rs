@@ -21,7 +21,7 @@ fn commit(root: &Path, file: &str, content: &str, message: &str) -> String {
 
 #[test]
 fn local_integration_a_run_rebased_onto_newer_main_is_not_integrated_and_merges() {
-  let fixture = Fixture::recorded(false, "rebase-", "task", true);
+  let fixture = Fixture::recorded(false, "rebase-", "task", Some("delivered task\n"));
   let checkpoint = git(&fixture.task_root, &["rev-parse", "HEAD"]);
   let onto = commit(fixture.root(), "later.txt", "later main work\n", "later main work");
   git(&fixture.task_root, &["rebase", "main"]);
@@ -95,7 +95,7 @@ fn local_integration_a_commit_of_the_run_cherry_picked_into_main_still_shows() {
 
 #[test]
 fn local_integration_a_rebase_onto_main_that_holds_a_checkpoint_of_the_run_moves_no_base() {
-  let fixture = Fixture::recorded(false, "rebase-own-", "task", true);
+  let fixture = Fixture::recorded(false, "rebase-own-", "task", Some("delivered task\n"));
   git(fixture.root(), &["merge", "--ff-only", "task"]);
   commit(fixture.root(), "later.txt", "later main work\n", "later main work");
   commit(&fixture.task_root, "more.txt", "more task work\n", "more task work");
@@ -114,4 +114,27 @@ fn local_integration_a_rebase_onto_main_that_holds_a_checkpoint_of_the_run_moves
       .is_none(),
     "no base was moved over the run's own work"
   );
+}
+
+/// The reviewer's probe: a checkpoint that indents `return 1` under `if y:` and a tip that does
+/// not are different patches, though `git cherry` takes them as one.
+#[test]
+fn local_integration_a_rebase_that_changed_whitespace_of_the_checkpoint_does_not_stand_for_it() {
+  let fixture = Fixture::recorded(false, "rebase-space-", "task", Some("if y:\n        return 1\n"));
+  let checkpoint = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  commit(fixture.root(), "later.txt", "later main work\n", "later main work");
+  git(&fixture.task_root, &["rebase", "main"]);
+  fs::write(fixture.task_root.join("task.txt"), "if y:\nreturn 1\n").expect("dedent");
+  git(&fixture.task_root, &["commit", "--amend", "--all", "--no-edit"]);
+  let evidence = external_integration(fixture.root(), fixture.run)
+    .expect("evidence")
+    .expect("the checkpoint is not the tip");
+  assert_eq!(evidence.kind, ResultEvidenceKind::UnknownSource);
+  assert_eq!(evidence.source.as_str(), checkpoint);
+  let rebase = ProjectDb::open(fixture.root())
+    .expect("db")
+    .run_rebase(fixture.run)
+    .expect("read")
+    .expect("the rebase itself is proven");
+  assert_eq!(rebase.checkpoint(), None, "the tip does not stand for the checkpoint");
 }
