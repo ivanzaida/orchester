@@ -11,6 +11,7 @@ mod accepting;
 mod clipboard;
 mod design;
 mod harness;
+mod landing;
 mod person_only;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
@@ -82,7 +83,8 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
   invite_notice(&mut window, &invite);
   go(&mut window, Route::Orchester(OrchesterView::default()), &accept);
   press(&mut window, &accept);
-  shows(&mut window, "orchester-invite-joined");
+  // A project invite goes on to which checkout to link: Billing has none here, so its clone is offered.
+  shows(&mut window, "orchester-landing-none");
   username_suggested(&mut window);
 
   let entry = services.servers.entries().expect("entries").remove(0);
@@ -230,7 +232,12 @@ fn link_kontur(window: &support::Window) -> orchester_workspace::sharing::Server
 
 /// The window signed in to the stand-in `cloud`, at Settings › Orchester.
 fn signed_in(cloud: &AccountCloud) -> support::Window {
-  let mut window = window(None);
+  signed_in_with(cloud, None)
+}
+
+/// [`signed_in`] with Kontur's checkout's `origin` set to `origin`.
+fn signed_in_with(cloud: &AccountCloud, origin: Option<&str>) -> support::Window {
+  let mut window = window(origin);
   let services = window.launch.services().expect("services").clone();
   let cloud_address = ServerAddress::parse(&cloud.url()).expect("cloud address");
   block_on(&window, services.cloud.set_address(Some(cloud_address))).expect("a test cloud");

@@ -8,7 +8,7 @@ mod usage;
 use std::num::NonZeroU64;
 
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage, Route,
   RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
@@ -30,6 +30,11 @@ fn project() -> ProjectId {
 
 fn connection() -> ConnectionId {
   CONNECTION.parse().expect("a connection id")
+}
+
+/// Kontur on the server the list has as [`CONNECTION`]'s id.
+fn join_target() -> JoinTarget {
+  JoinTarget::new(CONNECTION.parse().expect("a server id"), "kontur").expect("a target")
 }
 
 fn pull_request() -> NonZeroU64 {
@@ -63,6 +68,9 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::Tasks(TaskList::default().with_search("retry"))),
     at(ProjectPage::Tasks(TaskList::default().with_search(AWKWARD))),
     at(ProjectPage::Tasks(TaskList::default().with_highlight(key("KON-13")))),
+    at(ProjectPage::Tasks(TaskList::default().with_search("KON-12").with_not_shared(true))),
+    at(ProjectPage::Join(join_target())),
+    Route::Invite(join_target()),
     at(ProjectPage::Tasks(
       TaskList::new(TaskListTab::InReview)
         .with_search("  spaced  ")
@@ -190,6 +198,18 @@ fn paths_are_the_documented_ones() {
     (
       at(ProjectPage::Sharing { make_local: true }),
       format!("{root}/settings/sharing?ask=make-local"),
+    ),
+    (
+      at(ProjectPage::Join(join_target())),
+      format!("{root}/settings/sharing/join?server={CONNECTION}&project=kontur"),
+    ),
+    (
+      Route::Invite(join_target()),
+      format!("/settings/invite?server={CONNECTION}&project=kontur"),
+    ),
+    (
+      at(ProjectPage::Tasks(TaskList::default().with_not_shared(true))),
+      format!("{root}/tasks?show=not-shared"),
     ),
   ];
   for (route, path) in paths {

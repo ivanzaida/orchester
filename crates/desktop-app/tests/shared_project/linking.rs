@@ -1,20 +1,16 @@
 //! The first checkout linked to an empty project uploads its tasks with their numbers on the first link's page
 //! (`KSnOW`), and writes `orchester.toml` when the person leaves the switch on; a later checkout without tasks takes
-//! the project's tasks as they are, and one with tasks gets new numbers (its review is N3's, so the window says so and
-//! sends nothing; the join runs through the workspace as that review will). Only a person confirms the link or turns
+//! the project's tasks as they are, and one with tasks gets new numbers after its review. Only a person confirms the link or turns
 //! the discovery switch, and a task added after the page read the project sends nothing and asks for a review again,
 //! which only a person asks for too. Under the server, the page says whether it answers now.
 
 use std::fs;
 
 use lurq::app::events::with_synthetic_input;
-use orchester_core::id::IdempotencyKey;
 use orchester_store::ProjectDb;
 
-use super::{
-  KONTUR_REMOTE, entry, harness, join, kontur_root, local_keys, local_tasks, no_admin_endpoint, open_sharing, server,
-};
-use crate::harness::{block_on, press, shows};
+use super::{KONTUR_REMOTE, entry, harness, join, kontur_root, local_keys, local_tasks, no_admin_endpoint, open_sharing, server};
+use crate::harness::{press, shows};
 
 #[test]
 fn shared_project_first_link_uploads_the_tasks_with_their_numbers() {
@@ -72,27 +68,18 @@ fn shared_project_later_checkouts_get_the_tasks_or_new_numbers() {
   assert_eq!(local_keys(&empty), ["KON-1", "KON-2", "KON-3"]);
   no_admin_endpoint(&recorder);
 
-  // A checkout with tasks joins with new numbers after its review, which is N3's: the window sends nothing.
+  // A checkout with tasks joins with new numbers after its review; nothing goes up before its confirm.
   let mut other = harness::window(Some(KONTUR_REMOTE));
   local_tasks(&other, &["Export invoices", "Retry exports"]);
   let recorder = join(&other, &server, &kontur, ("oleh", "Oleh Petrenko"));
   open_sharing(&mut other, "sharing-address");
   other.set("sharing-address", &format!("{}/kontur", recorder.url()));
   press(&mut other, "sharing-link-button");
-  shows(&mut other, "sharing-taken");
+  shows(&mut other, "sharing-join");
   assert_eq!(server.task_keys(&kontur).len(), 3, "nothing was uploaded");
-
-  let services = other.launch.services().expect("services").clone();
+  press(&mut other, "sharing-join-confirm");
+  shows(&mut other, "sharing-joined");
   let root = kontur_root(&other);
-  let review = block_on(&other, services.servers.join_review_at(&entry(&other), &root, "kontur")).expect("review");
-  let ticked = review.tasks.iter().map(|task| task.task.id()).collect();
-  block_on(
-    &other,
-    services
-      .servers
-      .join(&entry(&other), &root, &review, (ticked, IdempotencyKey::generate())),
-  )
-  .expect("joined");
   assert_eq!(server.task_keys(&kontur), ["KON-1", "KON-2", "KON-3", "KON-4", "KON-5"]);
   let former = ProjectDb::open(&root)
     .expect("database")
