@@ -450,9 +450,13 @@ impl FieldBox {
     } else {
       PaletteColor::TextPrimary
     };
-    let mut input = TextInput::styled(props.value.clone(), resolve(value, color))
+    let shown = resolve(value, color);
+    let tracking = shown.letter_spacing;
+    let mut input = TextInput::styled(props.value.clone(), shown)
       // A mono field's placeholder reads in its own type (`The worktree` in `M20DGB`).
       .placeholder_style(resolve(value, PaletteColor::TextMuted))
+      // The input takes the role's tracking only on its own, after the styles (a two-factor code's 2, `JQkW2`).
+      .letter_spacing(tracking)
       .caret_color(PaletteColor::TextPrimary)
       .id(props.id.to_string())
       .describe("a11y_name", props.name.clone())

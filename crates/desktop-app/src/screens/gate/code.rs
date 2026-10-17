@@ -54,6 +54,10 @@ const LOOK: Duration = Duration::from_secs(15);
 const PAUSE_DEFAULT: u64 = 15 * 60;
 /// The digits of a code from the app.
 const DIGITS: usize = 6;
+/// The account line over the divider (`Account` `Nm7zk`): as high as the email.
+const ACCOUNT_LINE: f32 = 16.0;
+/// *Use a recovery code instead* (`Link · Use a recovery code instead` `uIJ9l`).
+const SWITCH_LINE: f32 = 15.0;
 
 /// Why the cloud did not take a code, for the entry it was typed in.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,7 +247,7 @@ pub(super) fn card(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, host: &str) ->
     if held { row.opacity(DISABLED_OPACITY) } else { row }.into()
   };
   let said = said(form, entry, refusal.as_ref());
-  let field = faded(field(ctx, form, entry, said.is_some()));
+  let field = faded(field(ctx, form, entry, (said.is_some(), paused.is_some())));
   let said = said.map(|key| Element::from(field_error("gate-code-note", &ctx.t(key))));
   let checking = verifying.then(|| {
     Text::new(&ctx.t_args("gate.checking", [("host", host)]))
@@ -277,6 +281,7 @@ fn account(ctx: &Ctx, entry: &Entry) -> Element {
   Row::new()
     .id("gate-code-account")
     .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ACCOUNT_LINE))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(Icon::CircleUserRound, IconSize::Md, PaletteColor::TextMuted))
@@ -300,8 +305,8 @@ fn account(ctx: &Ctx, entry: &Entry) -> Element {
 }
 
 /// The field: six digits in mono, or a recovery code, masked; marked after a wrong one, which the card says under it
-/// ([`said`]).
-fn field(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, wrong: bool) -> Element {
+/// ([`said`]). After a refusal (`wrong`, or codes `paused`) it is blank, without its placeholder (`DtxLq`, `qZyaZ`).
+fn field(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, (wrong, paused): (bool, bool)) -> Element {
   let (label, placeholder) = if entry.recovery() {
     ("gate.code.recoveryLabel", "gate.code.recoveryPlaceholder")
   } else {
@@ -309,9 +314,11 @@ fn field(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, wrong: bool) -> Element 
   };
   let mut input = FieldInput::new("gate-code", ctx.t(label), form.code.clone())
     .text_style(GateText::Code.role())
-    .placeholder(ctx.t(placeholder))
     .element(form.input.clone())
     .tab_first(CODE_TAB);
+  if !(wrong || paused) {
+    input = input.placeholder(ctx.t(placeholder));
+  }
   if entry.recovery() {
     input = input.masked().no_trailing();
   }
@@ -409,6 +416,7 @@ fn switch(ctx: &Ctx, form: &CodeForm, entry: &Entry, held: bool) -> Element {
       }
     }))
     .id("gate-code-switch")
+    .height(Dimension::Px(SWITCH_LINE))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("a11y_name", label.to_string())
