@@ -349,31 +349,27 @@ async fn s1c_a_code_account_links_its_cloud_identity_and_an_account_invite_names
     .await
     .json();
   assert_eq!(again.user.id, admin.user.id);
-  // An invite code's identity token links the account it makes to that cloud identity at once.
+  // An invite code links no cloud identity: the account it makes links one from a device of its own.
   let carol = server.invited("carol", false).await;
-  assert!(carol.user.cloud);
-  let subject = crate::support::cloud::person("carol");
+  assert!(!carol.user.cloud);
   let identity = Identity {
     audience: &audience,
-    subject: &subject,
+    subject: "0191c7c0-0000-7000-8000-00000000c440",
     email: "carol@example.com",
     name: "Carol",
     invite: None,
   };
+  let body = json!({"identity_token": cloud.token(&identity, server.seconds()), "device": "Carol's laptop"});
+  let linked = server
+    .request("POST", "/auth/cloud", Some(&carol.token), Some(body))
+    .await;
+  assert_eq!(linked.status, 200);
   let again: Joined = cloud_join(&server, &cloud.token(&identity, server.seconds()), None)
     .await
     .json();
   assert_eq!(again.user.id, carol.user.id);
-  // Dave lost every device; an account invite by email links his account to his cloud identity. His account joined
-  // with a code before codes showed one, so it has none yet.
+  // Dave lost every device; an account invite by email links his account to his cloud identity.
   let dave = server.invited("dave", false).await;
-  server
-    .database()
-    .execute(
-      "UPDATE users SET cloud_subject=NULL WHERE id=?1",
-      [dave.user.id.to_string()],
-    )
-    .expect("an account from before");
   let invite = email_invite(
     &server,
     &admin.token,

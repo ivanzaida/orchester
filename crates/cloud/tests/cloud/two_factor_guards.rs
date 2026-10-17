@@ -1,5 +1,6 @@
 //! What guards two-factor authentication (`docs/cloud-api.md`, "Two-factor authentication", "Password change"): a
-//! daily cap on wrong codes that the quarter-hour limit does not lift, mailed at the tenth; a code spent once however
+//! daily cap on wrong codes that the quarter-hour limit does not lift, mailed at the tenth, which a device signed in
+//! without a code counts apart, so it cannot lock its owner out; a code spent once however
 //! many requests race with it; a challenge that spends one code when two finishes race; and the changes that a
 //! password alone does not make while two-factor authentication is on.
 
@@ -38,6 +39,35 @@ pub async fn wrong_codes_are_capped_a_day_and_the_tenth_is_mailed() {
   cloud.clock.advance(retry * 1000);
   let after = cloud.step_up(token, &authenticator.code(&cloud, 0)).await;
   assert_eq!(after.status, 200, "a new day");
+  cloud.finish().await;
+}
+
+pub async fn a_device_without_two_factor_counts_its_own_wrong_codes() {
+  let cloud = TestCloud::start().await;
+  let email = "own-count@example.test";
+  cloud.register(email).await;
+  let laptop = cloud.sign_in(email, PASSWORD, "Laptop").await;
+  let desktop = cloud.sign_in(email, PASSWORD, "Desktop").await;
+  let authenticator = cloud.enable_two_factor(laptop.token.expose()).await;
+  // The desktop signed in before two-factor authentication was on: its wrong codes are its own to count.
+  let desktop = desktop.token.expose();
+  for round in 0..4 {
+    for _ in 0..5 {
+      let wrong = cloud.step_up(desktop, "000000").await;
+      assert_eq!(wrong.error(), "invalid_code", "round {round}");
+    }
+    cloud.clock.advance(15 * MINUTE + 1000);
+  }
+  mailed(&cloud, email, EmailPurpose::TwoFactorFailures).await;
+  let capped = cloud.step_up(desktop, &authenticator.code(&cloud, 0)).await;
+  assert_eq!(
+    (capped.status, capped.error()),
+    (429, "rate_limited".into()),
+    "that device's day is spent"
+  );
+  let challenge = cloud.challenge(email, "Tablet").await;
+  let signed_in = cloud.finish_sign_in(&challenge, &authenticator.code(&cloud, 0)).await;
+  assert_eq!(signed_in.status, 201, "its owner still signs in with a code");
   cloud.finish().await;
 }
 

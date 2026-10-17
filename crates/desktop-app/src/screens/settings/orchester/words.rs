@@ -149,8 +149,7 @@ pub fn sharing_error(error: &SharingError) -> Said {
     }
     SharingError::TwoFactorOff => Said::new("sharing.connect.twoFactorOff"),
     SharingError::TwoFactorSession => Said::new("sharing.connect.twoFactorSession"),
-    SharingError::NotRegisteredServer => Said::new("sharing.connect.notRegisteredServer"),
-    SharingError::CodeUnbound => Said::new("sharing.connect.codeUnbound"),
+    SharingError::UnprovenServer => Said::new("sharing.connect.unprovenServer"),
     _ => Said::new("cloud.errors.local"),
   }
 }
@@ -171,6 +170,7 @@ pub fn server_client(error: &ClientError) -> Said {
       ErrorCode::InvalidIdentity => Said::new("sharing.connect.invalidIdentity"),
       ErrorCode::MfaRequired => Said::new("sharing.connect.twoFactorSession"),
       ErrorCode::MfaUnverifiable => Said::new("sharing.connect.twoFactorUnverifiable"),
+      ErrorCode::AccountExists => Said::new("sharing.connect.accountExists"),
       _ => Said::new("cloud.errors.serverRefused"),
     },
     ClientError::Cloud { .. } => cloud_client(error),

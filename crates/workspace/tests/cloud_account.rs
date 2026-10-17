@@ -1,8 +1,8 @@
 //! This computer's Orchester Cloud account and what it leads to (`docs/architecture/server.md`, "Orchester Cloud",
 //! "Invites", rows 39, 43, 49–50): signing in and out, invites accepted with the certificate pin the invite carries (no
 //! check code to compare) and declined, a cloud that does not deliver invites yet, joining a known server with the
-//! account, a code's identity token shown only to the server connected to, a pinned server that presents another
-//! certificate, and the linked projects signing out names.
+//! account, a code's identity token shown only to the server holding the key of its id, a pinned server that presents
+//! another certificate, and the linked projects signing out names.
 //!
 //! `cargo test -p orchester-workspace --test cloud_account cloud_account_`
 
@@ -10,6 +10,8 @@
 mod account_cloud;
 #[path = "sharing_support/desktop.rs"]
 mod desktop;
+#[path = "sharing_support/impostor.rs"]
+mod impostor;
 #[path = "server_support/mod.rs"]
 mod server_support;
 #[path = "sharing_support/project.rs"]
@@ -17,19 +19,19 @@ mod support;
 
 use account_cloud::{AccountCloud, EMAIL, PASSWORD};
 use desktop::{Desktop, linked_server};
+use impostor::{Claimed, Impostor};
 use orchester_api::{
   Credential,
-  client::{Client, CloudClient, PlainHttp, ServerAddress},
-  cloud::{CloudErrorCode, TokenPurpose},
-  identity::{IdentityClaims, VerifiedKeySet},
+  client::{Client, ServerAddress},
+  cloud::CloudErrorCode,
 };
 use orchester_core::{repository::RepositoryIdentity, secret::SecretVault};
 use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{
-  CloudIdentity, CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError, Trust,
+  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError,
   cloud::{CloudError, ServerJoin, SignInStep, WebPage},
 };
-use server_support::{TestServer, test_cloud};
+use server_support::TestServer;
 
 #[test]
 fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
@@ -204,100 +206,67 @@ fn cloud_account_joins_a_server_only_with_a_place_there() {
   );
 }
 
-/// The claims of the identity token Bohdan's signed-in desktop would show the server at `address`, whose identity
-/// tokens are for `audience`, with a code, as the server verifies them; or why it shows none.
-fn proof_claims(
-  (desktop, cloud): (&Desktop, &AccountCloud),
-  (address, audience): (&ServerAddress, &str),
-) -> Result<IdentityClaims, SharingError> {
-  let client = CloudClient::new(ServerAddress::parse(&cloud.url()).expect("cloud address")).expect("cloud client");
-  let device = desktop.vault.read(&desktop.device_key()).expect("signed in");
-  let identity = CloudIdentity {
-    cloud: &client,
-    device: &device,
-    account: account_cloud::ACCOUNT.parse().expect("Bohdan's account"),
-    invite: None,
-  };
-  let trust = if address.is_https() {
-    desktop
-      .block_on(PresentedCertificate::read(address))
-      .expect("certificate")
-      .confirm()
-  } else {
-    Trust::System(PlainHttp::NotAllowed)
-  };
-  let proof = desktop
-    .block_on(desktop.servers.code_proof(address, trust, identity))?
-    .expect("the server pinned the cloud's root");
-  let now = test_cloud::now();
-  let set = VerifiedKeySet::verify(
-    proof.key_set.as_deref().expect("a key set"),
-    &test_cloud::root().public_key(),
-    now,
-  )
-  .expect("the key set");
-  let claims = set
-    .verify_token(proof.identity_token.expose(), audience, now)
-    .expect("the token verifies")
-    .claims;
-  Ok(claims)
-}
-
 #[test]
-fn cloud_account_a_code_shows_its_identity_only_to_the_server_connected_to() {
+fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of_its_id() {
   let cloud = AccountCloud::start();
   let desktop = Desktop::new(&cloud.url());
   desktop
     .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
     .expect("sign in");
-  // A server Orchester Cloud does not know: the token is bound to the certificate checked here, and over plain HTTP
-  // there is none to bind it to.
-  let mut unknown = TestServer::start();
-  unknown.create_user("alice", "Alice Moreau", true);
-  let unknown_id = unknown.cloud_audience();
-  let plain = ServerAddress::parse(&unknown.url()).expect("address");
-  let unbound = proof_claims((&desktop, &cloud), (&plain, &unknown_id));
-  assert!(matches!(unbound, Err(SharingError::CodeUnbound)), "{unbound:?}");
-  unknown.serve_self_signed();
-  let address = ServerAddress::parse(&unknown.url()).expect("address");
-  let bound = proof_claims((&desktop, &cloud), (&address, &unknown_id)).expect("a proof");
-  assert_eq!(bound.purpose, Some(TokenPurpose::Code));
-  let own = unknown.server.certificate().expect("its own certificate").sha256;
-  assert_eq!(bound.certificate.as_deref(), Some(own.as_str()));
-
-  // A server the cloud registered under the id it gives itself must be the one registered: where it was registered,
-  // with the certificate registered. The token then names that server, and nothing more.
-  let mut known = TestServer::start();
-  known.create_user("alice", "Alice Moreau", true);
-  let audience = known.cloud_audience();
-  known.serve_self_signed();
-  let address = ServerAddress::parse(&known.url()).expect("address");
-  let certificate = known.server.certificate().expect("its own certificate").sha256;
-  cloud.name_server(&audience, "https://orchester.elsewhere.example", Some(&certificate));
-  let moved = proof_claims((&desktop, &cloud), (&address, &audience));
-  assert!(matches!(moved, Err(SharingError::NotRegisteredServer)), "{moved:?}");
-  cloud.name_server(&audience, &known.url(), Some(&"ab".repeat(32)));
-  let other = proof_claims((&desktop, &cloud), (&address, &audience));
-  assert!(matches!(other, Err(SharingError::NotRegisteredServer)), "{other:?}");
-  cloud.name_server(&audience, &known.url(), Some(&certificate));
-  let registered = proof_claims((&desktop, &cloud), (&address, &audience)).expect("a proof");
-  assert_eq!(
-    (registered.purpose, registered.certificate),
-    (Some(TokenPurpose::Code), None)
-  );
-  let request = CodeRequest {
-    code: known.code_for("bohdan", false),
+  let mut server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  let id = server.cloud_audience();
+  server.serve_self_signed();
+  let pinned = |url: &str| {
+    let address = ServerAddress::parse(url).expect("address");
+    let trust = desktop
+      .block_on(PresentedCertificate::read(&address))
+      .expect("certificate")
+      .confirm();
+    (address, trust)
+  };
+  let nonce = orchester_api::identity::key_proof_nonce().expect("a nonce");
+  let public_key = server
+    .block_on(server.client().key_proof(&nonce))
+    .expect("the server's key")
+    .public_key;
+  let request = |code: Credential| CodeRequest {
+    code,
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
     proof: None,
   };
-  let trust = desktop
-    .block_on(PresentedCertificate::read(&address))
-    .expect("certificate")
-    .confirm();
+  // A server that gives itself this server's id: with a key of its own, with this server's key it cannot sign with,
+  // or passing the nonce on to this server and returning its proof, which names this server's certificate.
+  let claims = [
+    Claimed::OwnKey,
+    Claimed::Borrowed(public_key),
+    Claimed::Relayed(server.client()),
+  ];
+  for claimed in claims {
+    let impostor = Impostor::start(&id, claimed);
+    let (address, trust) = pinned(&impostor.url());
+    let code = Credential::new("ABCD-EFGH".into());
+    let refused = desktop.block_on(desktop.cloud.join_with_code(&address, trust, request(code)));
+    assert!(
+      matches!(refused, Err(CloudError::Join(SharingError::UnprovenServer))),
+      "{refused:?}"
+    );
+    assert!(
+      !impostor.asked().iter().any(|asked| asked.contains("/auth/code")),
+      "no code was sent: {:?}",
+      impostor.asked()
+    );
+  }
+  // The server itself proves its key on the connection this computer checked, and takes the code with the token.
+  let (address, trust) = pinned(&server.url());
   desktop
-    .block_on(desktop.cloud.join_with_code(&address, trust, request))
-    .expect("joined with the code and the registered server's token");
+    .block_on(
+      desktop
+        .cloud
+        .join_with_code(&address, trust, request(server.code_for("bohdan", false))),
+    )
+    .expect("joined with the code and the token");
 }
 
 #[test]

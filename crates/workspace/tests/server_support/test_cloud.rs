@@ -80,7 +80,6 @@ pub fn code_token(audience: &str, username: &str) -> String {
     invite: None,
     purpose: Some(TokenPurpose::Code),
     mfa: true,
-    certificate: None,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

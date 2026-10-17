@@ -313,10 +313,7 @@ impl TestServer {
       invite: None,
     };
     let now = self.seconds();
-    (
-      self.cloud.code_token(&identity, (true, None), now),
-      self.cloud.key_set(now),
-    )
+    (self.cloud.code_token(&identity, true, now), self.cloud.key_set(now))
   }
 
   pub async fn redeem_with(

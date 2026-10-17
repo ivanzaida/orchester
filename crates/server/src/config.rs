@@ -58,6 +58,9 @@ pub struct Config {
   pub admin_url: String,
   /// The private plain-HTTP listener only the admin app's own server side calls the API on; `None` turns it off.
   pub admin_api_listen: Option<SocketAddr>,
+  /// With `tls = "off"`: the SHA-256 (64 hex characters) of the certificate the proxy in front presents, which the
+  /// server signs into its key proofs so apps can enter codes (`docs/server-hosting.md`, "Behind a proxy").
+  pub proxy_certificate: Option<String>,
 }
 
 impl Default for Config {
@@ -74,6 +77,7 @@ impl Default for Config {
       trusted_proxies: Vec::new(),
       admin_url: "http://127.0.0.1:3100".into(),
       admin_api_listen: Some(SocketAddr::from(([127, 0, 0, 1], 8741))),
+      proxy_certificate: None,
     }
   }
 }
@@ -119,6 +123,9 @@ impl Config {
     if let Some(value) = environment("TLS_KEY")? {
       self.tls_key = Some(value.into());
     }
+    if let Some(value) = environment("PROXY_CERTIFICATE")? {
+      self.proxy_certificate = Some(value);
+    }
     if let Some(value) = environment("ADMIN_URL")? {
       self.admin_url = value;
     }
@@ -155,6 +162,18 @@ impl Config {
         ));
       }
       _ => {}
+    }
+    if let Some(fingerprint) = &self.proxy_certificate {
+      if self.tls != TlsMode::Off {
+        return Err(ServerError::Configuration(
+          "PROXY_CERTIFICATE is used only with tls = \"off\"",
+        ));
+      }
+      if orchester_api::certificate::CertificatePin::parse(&fingerprint.replace(':', "")).is_none() {
+        return Err(ServerError::Configuration(
+          "PROXY_CERTIFICATE must be a SHA-256 fingerprint: 64 hex characters",
+        ));
+      }
     }
     if self.name.trim().is_empty() || self.data_dir.as_os_str().is_empty() {
       return Err(ServerError::Configuration("NAME and DATA_DIR must not be empty"));

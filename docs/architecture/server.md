@@ -734,6 +734,7 @@ changes; the rest is built (S1a, S1b).
 | Method and path | Auth | Request | Response | Errors | Since |
 | --- | --- | --- | --- | --- | --- |
 | `GET /server` | none | | `{ name, api_version: 3, needs_setup, cloud: { root_fingerprint, accepting }\|null }` | | changed in 3 |
+| `POST /server/key-proof` | none | `{ nonce }` | `{ public_key, proof }`: the server's key, and its signature of its id and the nonce | `422 invalid` | new in 3 ([Codes](#codes)) |
 | ~~`POST /auth/sessions`~~ | | | | | removed in 3 (row 46) |
 | `POST /auth/cloud` | none, or user (to link an account) | `{ identity_token, key_set?, device }` | `201 { token, session, user, joined: { project, role }\|null }` | `401 invalid_identity` (also a token whose `name` is blank or over 256 characters), `403 not_invited`, `403 cloud_off`, `409 key_set_stale`, `429 rate_limited` | new in 3 (row 42) |
 | `POST /auth/code` | none | `{ code, device, username?, display_name? }` | `201 { token, session, user, joined }` | `401 invalid_code` (one answer for unknown, used and expired), `409 username_taken`, `422 invalid`, `429 rate_limited` | new in 3 (row 45) |
@@ -786,6 +787,7 @@ changes; the rest is built (S1a, S1b).
 | `GET /projects/{id}/files/{sha256}` | member | | raw bytes | `404` | new in 3 (S5, row 37) |
 | `GET /projects/{id}/events` | member | `Last-Event-ID` header | `text/event-stream` | `401`, `403`, `429 rate_limited` | `resources` kind in 3 |
 | `GET /admin/users` | admin | | `{ users: [User] }` | | |
+| `DELETE /admin/users/{id}/cloud` | admin | | `{ user }`: the account linked to no cloud identity, audited | `404 not_found` | new in 3 ([Codes](#codes)) |
 | ~~`POST /admin/users`~~ | | | | | removed in 3: accounts come from invites |
 | `PATCH /admin/users/{id}` | admin | `{ display_name?, admin?, disabled? }` | `{ user }`; disabling revokes sessions and releases claims | `409 last_admin` | |
 | ~~`POST /admin/users/{id}/password`~~ | | | | | removed in 3: an account code replaces it |
@@ -1080,7 +1082,7 @@ like the cloud's web front, on the shared `web/ui` package ([The web workspace](
 | Projects | admins; owners for their projects | Create by name and slug (the slug fixed once created), rename, the repository remote hint | `POST /projects`, `PATCH /projects/{id}` |
 | Members and roles | owners, admins | Per project: members, roles, the last-owner refusal, removing | `…/members` |
 | Invites | owners (their projects), admins | By email through the cloud, or with a code without the internet; open invites, revoke | `/invites` |
-| People | admins | Accounts, disable or enable, account codes, admin flag | `/admin/users`, `/invites { kind: "account" }` |
+| People | admins | Accounts, disable or enable, account codes, admin flag, unlinking an Orchester Cloud identity | `/admin/users`, `/admin/users/{id}/cloud`, `/invites { kind: "account" }` |
 | Devices | admins | Every device joined to the server, with account, how it joined and last use; revoke. Under them, the browsers signed in to the admin; revoke (not drawn: the Joined section's frame) | `GET /admin/sessions`, `DELETE /admin/sessions/{id}`, `GET /admin/browsers`, `DELETE /admin/browsers/{id}` |
 | Settings | admins | Join approval (row 57), the cloud link and its root key fingerprint (on, off, re-pin, unlink), the certificate's check code | `/server/settings`, `/server/cloud` |
 
@@ -1310,7 +1312,7 @@ Row 45: address plus an 8-character code, for networks without the internet.
 | --- | --- | --- | --- |
 | Setup | The server, on first start and at each start until it has an admin; printed to its console (stdout), never to the log | 24 hours | The first admin account and a device token |
 | Invite | A project owner or an admin, in the server admin (*Invite with a code*) | 72 hours | A server account, or a project membership with a role, and a device token; a project invite opens the join review |
-| Account | An admin, for an existing account that lost every device and is not an admin (in the server admin), or anyone with the host for any account (`orchester-server account-code <username>`). An admin's own next device comes from their own devices (a pairing code) or the host, never from another admin | 24 hours | A device token for that account |
+| Account | An admin, for an existing account that lost every device and is not an admin (in the server admin), or anyone with the host for any account (`orchester-server account-code <username>`). An admin's own next device comes from their own devices (a pairing code) or the host, never from another admin | 24 hours | A device token for that account, which it links to the cloud identity it is entered with |
 | Pairing | A joined device, for the same account (Settings › Orchester, the server's entry) | 10 minutes | A device token for that account, or a sign-in to the server admin |
 
 - **Shape.** 8 characters of the Crockford base32 alphabet (40 bits), shown `ABCD-EFGH`, read without regard to case
@@ -1327,22 +1329,41 @@ Row 45: address plus an 8-character code, for networks without the internet.
   keeps the claim. No token, or one without the claim: `403 mfa_required`; a token the root does not vouch for, or one
   for another use (a join or admin token): `401 invalid_identity` (counted as a failed redemption); nothing is used up.
   A `code` token is taken nowhere else (`POST /auth/cloud` refuses it as `401 invalid_identity`).
-- **Whose identity.** The token's account must be the code's: an account or pairing code takes only the cloud account
-  its account is linked to, and links an account not linked yet to the first one shown (unless another account here is
-  linked to it already); an invite code links the new account to it, and is refused with `409 conflict` when that cloud
-  account has an account here already. A stolen account or pairing code shown with someone else's two-factor identity
-  is `401 invalid_identity`, and the code stays open.
-- **Which server.** The app never takes the server's id on the server's word alone, since a server could name another
-  one's and pass the token on. Linked to Orchester Cloud, the server must be the one the cloud's registry has under that
-  id (`GET /servers/{id}`): at the address the person connected to and, when the registry has its certificate
-  fingerprint, presenting that certificate; otherwise the app sends nothing. Not linked (the root pinned on the host),
-  the token carries the fingerprint of the certificate the person confirmed with the check code (claim `certificate`),
-  and the server takes it only while it presents that certificate itself: a token the app got for another server's
-  certificate is `401 invalid_identity`, and a server behind a proxy that holds the certificate cannot compare it
-  (`403 mfa_unverifiable`; link it to the cloud). Over plain HTTP an unlinked server gets no token, so it takes no code
-  but its setup code. A `GET /server` that names no `codes_need_two_factor` is a server from before two-factor
-  authentication: the app sends it the code alone, since its `CodeJoin` refuses unknown fields; this server keeps
-  refusing them too, so an app and a server that disagree on the contract fail at once rather than drop a field.
+- **Whose identity.** Redeeming a code links no cloud identity to an account, with one exception. A pairing code, made
+  by a signed-in device of the account, takes only the identity the account is linked to (`401 invalid_identity` for
+  another, and the code stays open), and with an account linked to none it links none: whoever redeems a leaked one
+  gets a device, never the account's identity, and the owner keeps linking their own. An invite code makes an account
+  linked to nothing; shown with an identity that an account here is linked to, it is refused with `409
+  account_exists` and stays open: that person has an account here, and joins with it (a pairing code from one of its
+  computers, their cloud identity, or an account code), not with a second one. The exception is the account code,
+  the host's or an admin's way back for a person who lost every device or whose cloud account was made anew: it links
+  the account to the identity shown, in place of the one before (audited `cloud_relinked`, or `cloud_linked` for an
+  account linked to none), unless another account here is linked to that identity (`401 invalid_identity`). Otherwise
+  an account is linked only from where its person is already signed in: a cloud join, or `POST /auth/cloud` from one
+  of its devices.
+- **Seeing and ending a link.** The server admin's People page shows how each account signs in and offers *Unlink
+  Orchester Cloud* (`DELETE /admin/users/{id}/cloud`, audited `cloud_unlinked`); on the host, `orchester-server
+  account-cloud <username>` prints the cloud account an account is linked to and `account-unlink <username>` ends the
+  link. Neither an unlink nor an account code's relink revokes a session: the account's computers stay joined, and a
+  computer that joined with the old identity keeps its device token until an admin signs it out (*Devices*) or the
+  account is disabled. The unlinked identity signs in to nothing here until it is linked again.
+- **Which server.** The app never asks the cloud for a token for an id on the server's word alone, since a server
+  could name another one's and pass the token on. A server's id is its public key's (`PublicKey::server_id`). Before
+  it asks, the app sends the server a fresh nonce (`POST /server/key-proof { nonce }`, 16 to 64 base64url characters);
+  the server answers its public key and a statement of type `orchester-key-proof+jws` naming its id, that nonce and
+  the SHA-256 of the certificate its connections present, signed with that key: its own certificate, or with `tls =
+  "off"` the one its proxy presents, which the host configures (`proxy_certificate`, `docs/server-hosting.md`). The
+  app checks that the key's id is the id the server gives itself, that the signature holds, and that the certificate
+  is the one of the connection the app itself uses; otherwise it sends nothing (*the server didn't prove it is the
+  server it says it is*). A server that names another's id cannot sign for it, and one that passes the nonce on to the
+  other and returns that one's proof is caught by the certificate. The one case the check cannot tell apart is two
+  servers presenting the same certificate (one certificate shared by several servers, or a proxy in front of several
+  with one certificate): either could pass on the other's proof, so give each server a certificate of its own. A
+  server with TLS off and no `proxy_certificate`, or one reached over plain HTTP, names no certificate the app can
+  compare, so the app asks for no token and the server takes no code but its setup code. A `GET /server`
+  that names no `codes_need_two_factor` is a server from before two-factor authentication: the app sends it the code
+  alone, since its `CodeJoin` refuses unknown fields; this server keeps refusing them too, so an app and a server that
+  disagree on the contract fail at once rather than drop a field.
 - **What it lasts.** A device token keeps `mfa` for as long as it lives: turning two-factor authentication off at the
   cloud is not seen here, and the device keeps making invites until an admin signs it out or it joins again. A server with no root pinned cannot check it
   and refuses those codes with `403 mfa_unverifiable`: it says so rather than let a code in without it. An air-gapped
@@ -1664,7 +1685,8 @@ environment, task and project sources, limits settings, and the code itself.
   `trusted_proxies`, `cloud` (the cloud's address, or `none` for a server that never links). Nothing in it needs the
   internet.
 - **Host commands** (API 3): `serve`, `backup`, `tls show`, `tls regenerate`, `setup-code` (a fresh setup code while
-  the server has no admin), `account-code <username>`, `cloud show|on|off|pin <fingerprint>|unlink`. Codes are printed
+  the server has no admin), `account-code <username>`, `account-cloud <username>`, `account-unlink <username>`,
+  `cloud show|on|off|pin <fingerprint>|unlink`. Codes are printed
   only to the command's own output.
 - **Cloud.** `orchester-cloud` and `web/cloud` run on Linux and Docker behind Caddy at the public URL from the
   environment (`orchester-cloud.lurq.dev` for now), with the PostgreSQL connection, the SMTP relay and the

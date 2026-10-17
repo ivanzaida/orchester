@@ -26,8 +26,6 @@ pub(crate) struct Claims {
   pub purpose: Option<TokenPurpose>,
   /// The cloud device signed in with two-factor authentication: a device token issued for it may send invites.
   pub mfa: bool,
-  /// For a code's token: the fingerprint (hex) of the certificate the server must present to take it.
-  pub certificate: Option<String>,
   pub jti: String,
   pub exp: i64,
   pub kid: String,
@@ -58,7 +56,6 @@ impl Claims {
       invite: claims.invite,
       purpose: claims.purpose,
       mfa: claims.mfa,
-      certificate: claims.certificate,
       jti: claims.jti,
       exp: claims.exp,
       kid,

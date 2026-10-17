@@ -60,6 +60,9 @@ pub enum ErrorCode {
   /// API 3: entering a code in the app needs a cloud identity with two-factor authentication, which this server cannot
   /// check: it has no Orchester Cloud root key pinned (`orchester-server cloud pin`, or linking it).
   MfaUnverifiable,
+  /// API 3: a code that makes an account, entered with a cloud identity that an account here is linked to already:
+  /// that person has an account on the server, and joins with it rather than with a second one.
+  AccountExists,
   RateLimited,
   Internal,
 }

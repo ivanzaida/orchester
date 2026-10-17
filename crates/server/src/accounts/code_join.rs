@@ -1,8 +1,8 @@
 //! Joining with a code (`POST /auth/code`) and making pairing codes (`POST /auth/pairings`). Every code but the setup
 //! code, entered in the app, needs the app's Orchester Cloud identity token for codes (purpose `code`) with the
-//! two-factor claim (`mfa`), verified here offline against the pinned root and the key set the app carries. The
-//! identity is the account's: an account or pairing code takes only the cloud account its account is linked to, and
-//! links one that is not; an invite code links the new account (`docs/architecture/server.md`, "Codes").
+//! two-factor claim (`mfa`), verified here offline against the pinned root and the key set the app carries. Redeeming
+//! a code links no cloud identity, but for an account code, the way back the host or an admin gives: it links the
+//! account to the identity shown, in place of the one before, and audits it (`docs/architecture/server.md`, "Codes").
 
 use std::net::IpAddr;
 
@@ -26,14 +26,13 @@ impl Server {
     devices::check_device(&input.device)?;
     let attempt = self.inner.limits.begin(JoinKind::Code, address, self.now())?;
     let state = self.inner.clone();
-    let certificate = state.tls.as_ref().map(|tls| tls.pin.to_hex());
     let result = self
       .account_write(move |db, now| {
         let code = codes::find(db, &state.keys, input.code.expose(), now)?
           .filter(|code| input.kind == DeviceKind::App || admin_sign_in::code_signs_in(code.kind))
           .ok_or(ErrorCode::InvalidCode)?;
         let proof = (input.kind == DeviceKind::App && code.kind != CodeKind::Setup)
-          .then(|| two_factor_proof(db, &state.keys, (&input, certificate.as_deref()), now))
+          .then(|| two_factor_proof(db, &state.keys, &input, now))
           .transpose()?;
         let (user, joined) = redeemed_account(db, &code, (&input, proof.as_ref()), now)?;
         let joined = issue(db, (&input, &code, proof.as_ref()), user, joined, now)?;
@@ -90,49 +89,50 @@ impl Server {
   }
 }
 
-/// The cloud identity a code join in the app shows: a token for this server issued for codes (purpose `code`), whose
-/// device signed in with two-factor authentication. Verified offline whether or not the server takes cloud identities
-/// to join with. A token bound to a certificate (`certificate`, for a server the cloud has not registered) is taken
-/// only while this server presents that certificate itself, so a token the app got for another server's certificate
-/// is refused here. A server with no root pinned, or one behind a proxy shown a bound token, cannot check it
-/// (`403 mfa_unverifiable`); a token without the claim, or none, is `403 mfa_required`; anything else the root does
-/// not vouch for is `401 invalid_identity`. Nothing is used up first.
-fn two_factor_proof(
-  db: &Connection,
-  keys: &ServerKeys,
-  (input, certificate): (&CodeJoin, Option<&str>),
-  now: i64,
-) -> Result<Claims, ServerError> {
+/// The cloud identity a code join in the app shows: a token for this server (its audience is this server's id, the
+/// id of its key, which the app had the server prove it holds before asking for the token) issued for codes (purpose
+/// `code`), whose device signed in with two-factor authentication. Verified offline whether or not the server takes
+/// cloud identities to join with. A server with no root pinned cannot check it (`403 mfa_unverifiable`); a token
+/// without the claim, or none, is `403 mfa_required`; anything else the root does not vouch for is `401
+/// invalid_identity`. Nothing is used up first.
+fn two_factor_proof(db: &Connection, keys: &ServerKeys, input: &CodeJoin, now: i64) -> Result<Claims, ServerError> {
   let mut link = Link::load(db)?.ok_or(ErrorCode::MfaUnverifiable)?;
   let token = input.identity_token.as_ref().ok_or(ErrorCode::MfaRequired)?;
   let claims = link.check(db, keys, token.expose(), input.key_set.as_deref(), now)?;
   claims.require(Some(TokenPurpose::Code))?;
-  match (claims.certificate.as_deref(), certificate) {
-    (None, _) => {}
-    (Some(_), None) => return Err(ErrorCode::MfaUnverifiable.into()),
-    (Some(bound), Some(own)) if bound != own => return Err(ErrorCode::InvalidIdentity.into()),
-    (Some(_), Some(_)) => {}
-  }
   if !claims.mfa {
     return Err(ErrorCode::MfaRequired.into());
   }
   Ok(claims)
 }
 
-/// The account of an account or pairing code proven with `claims`: one linked to a cloud account takes only that
-/// one; one that is not is linked to it now, unless another account here already is (`401 invalid_identity`).
-fn bind_identity(db: &Connection, user: User, claims: &Claims, now: i64) -> Result<User, ServerError> {
-  match db::cloud_subject(db, user.id)? {
-    Some(subject) if subject == claims.sub => Ok(user),
-    Some(_) => Err(ErrorCode::InvalidIdentity.into()),
-    None => {
-      if db::user_by_subject(db, &claims.sub)?.is_some() {
-        return Err(ErrorCode::InvalidIdentity.into());
-      }
-      db::link_subject(db, user.id, &claims.sub, now)?;
-      Ok(User { cloud: true, ..user })
-    }
+/// The account of an account or pairing code proven with `claims`. A pairing code, made by a signed-in device of the
+/// account, takes only the cloud identity the account is linked to (`401 invalid_identity` for another) and links
+/// none to an account that has none: whoever redeems a leaked one gets a device, never the account's identity. An
+/// account code, the host's or an admin's way back for a person who lost every device (or whose cloud account was
+/// made anew), links the account to the identity shown in place of the one before, audited, unless another account
+/// here is linked to that identity.
+fn code_identity(
+  db: &Connection,
+  (kind, user): (CodeKind, User),
+  claims: &Claims,
+  now: i64,
+) -> Result<User, ServerError> {
+  let linked = db::cloud_subject(db, user.id)?;
+  if linked.as_deref() == Some(claims.sub.as_str()) {
+    return Ok(user);
   }
+  if kind == CodeKind::Pairing {
+    return match linked {
+      Some(_) => Err(ErrorCode::InvalidIdentity.into()),
+      None => Ok(user),
+    };
+  }
+  if db::user_by_subject(db, &claims.sub)?.is_some() {
+    return Err(ErrorCode::InvalidIdentity.into());
+  }
+  db::relink_subject(db, user.id, &claims.sub, linked.is_some(), now)?;
+  Ok(User { cloud: true, ..user })
 }
 
 /// The device token a code join issues: a browser's admin sign-in, or an app's device, each keeping whether it came
@@ -163,8 +163,8 @@ fn issue(
   })
 }
 
-/// The account a code gives, made now for setup and invite codes, with the project membership an invite grants. The
-/// account is the cloud identity's that `proof` shows, when there is one ([`bind_identity`]).
+/// The account a code gives, made now for setup and invite codes, with the project membership an invite grants; for an
+/// account or pairing code, the one whose identity `proof` shows ([`code_identity`]).
 fn redeemed_account(
   db: &Connection,
   code: &OpenCode,
@@ -199,7 +199,7 @@ fn redeemed_account(
         .filter(|user| !user.disabled)
         .ok_or(ErrorCode::InvalidCode)?;
       let user = match proof {
-        Some(claims) => bind_identity(db, user, claims, now)?,
+        Some(claims) => code_identity(db, (code.kind, user), claims, now)?,
         None => user,
       };
       if let Some(invite) = code.invite.map(|id| invites::open(db, id, now)).transpose()?.flatten() {
@@ -210,7 +210,9 @@ fn redeemed_account(
   }
 }
 
-/// A new account, linked to the cloud identity a proof shows; that identity's account here already is `409 conflict`.
+/// A new account, linked to no cloud identity: an invite code is not a sign-in with one. A proof whose identity an
+/// account here is linked to is that person's: they join with their account (a pairing code from one of its devices,
+/// their cloud identity, or an account code), not with a second one (`409 account_exists`).
 fn new_account(
   db: &Connection,
   input: &CodeJoin,
@@ -220,11 +222,10 @@ fn new_account(
   let (Some(username), Some(display_name)) = (&input.username, &input.display_name) else {
     return Err(ErrorCode::Invalid.into());
   };
-  let cloud_subject = proof.map(|claims| claims.sub.as_str());
-  if let Some(subject) = cloud_subject
-    && db::user_by_subject(db, subject)?.is_some()
+  if let Some(claims) = proof
+    && db::user_by_subject(db, &claims.sub)?.is_some()
   {
-    return Err(ErrorCode::Conflict.into());
+    return Err(ErrorCode::AccountExists.into());
   }
   db::create_user(
     db,
@@ -232,7 +233,7 @@ fn new_account(
       username,
       display_name,
       admin,
-      cloud_subject,
+      cloud_subject: None,
     },
     None,
     now,

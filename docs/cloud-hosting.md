@@ -72,6 +72,18 @@ WITH removed AS (
 INSERT INTO audit_events (action, target, at) SELECT 'two_factor_removed_by_operator', account::text, now() FROM removed;
 ```
 
+When someone with the password spent the account's day of wrong codes and its owner, who changed the password, cannot
+wait for the day to end, the operator clears the count, again only after making sure it is them:
+
+```sql
+UPDATE two_factor SET failed_codes = 0, failures_since = NULL
+  WHERE account = (SELECT id FROM accounts WHERE email = lower('person@example.com'));
+UPDATE devices SET failed_codes = 0, failures_since = NULL
+  WHERE account = (SELECT id FROM accounts WHERE email = lower('person@example.com'));
+```
+
+The second statement clears the days of the account's devices that signed in without a code, which count their own.
+
 With `deploy/cloud`'s compose file: `docker compose exec postgres psql -U orchester_cloud orchester_cloud`. `INSERT 0 1`
 says it was on and is off now; `INSERT 0 0`, that the email has no account or it was off. The person signs in with
 their password, then turns two-factor authentication on again, on the web front's Account page under *Security*.

@@ -390,7 +390,7 @@ fn route(
   }
 }
 
-/// `POST /api/v1/identity-tokens`: a token about `holder` for its purpose, bound to the certificate it names; with
+/// `POST /api/v1/identity-tokens`: a token about `holder` for its purpose; with
 /// `invite`, one that accepts that invite from the audience, open or accepted before, which is then accepted and
 /// listed no more (`docs/cloud-api.md`). `None` for a declined one.
 fn issue(body: &str, (holder, state): (&Account, &Mutex<State>), signing: &SigningKey) -> Option<Answer> {
@@ -398,7 +398,6 @@ fn issue(body: &str, (holder, state): (&Account, &Mutex<State>), signing: &Signi
   let audience = request["audience"].as_str().unwrap_or_default().to_owned();
   let invite = request["invite"].as_str();
   let purpose = serde_json::from_value(request["purpose"].clone()).ok()?;
-  let certificate = request["certificate"].as_str().map(str::to_owned);
   let mfa = state.lock().factors.session(holder.is_bohdan());
   if let Some(id) = invite {
     let mut state = state.lock();
@@ -412,7 +411,7 @@ fn issue(body: &str, (holder, state): (&Account, &Mutex<State>), signing: &Signi
     found["answer"] = json!("accepted");
     state.accepting.push(id.to_owned());
   }
-  let token = identity_token(signing, (holder, &audience, mfa), (invite, purpose, certificate));
+  let token = identity_token(signing, (holder, &audience, mfa), (invite, purpose));
   Some((
     "201 Created",
     Some(json!({"identity_token": token, "expires_at": now() + 300})),
@@ -527,7 +526,7 @@ fn decline(path: &str, state: &Mutex<State>) -> Option<Answer> {
 fn identity_token(
   signing: &SigningKey,
   (holder, audience, mfa): (&Account, &str, bool),
-  (invite, purpose, certificate): (Option<&str>, Option<TokenPurpose>, Option<String>),
+  (invite, purpose): (Option<&str>, Option<TokenPurpose>),
 ) -> String {
   let iat = now();
   let claims = IdentityClaims {
@@ -543,7 +542,6 @@ fn identity_token(
     invite: invite.map(str::to_owned),
     purpose,
     mfa,
-    certificate,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

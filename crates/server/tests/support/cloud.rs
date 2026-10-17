@@ -115,18 +115,9 @@ impl TestCloud {
     Self::token_with(&self.signing, identity, (None, mfa), iat)
   }
 
-  /// A token for codes (purpose `code`) whose two-factor claim says `mfa`, bound to the certificate with the
-  /// fingerprint `certificate` (hex) when there is one, as the cloud binds it for a server it has not registered.
-  pub fn code_token(&self, identity: &Identity<'_>, (mfa, certificate): (bool, Option<&str>), iat: i64) -> String {
-    let mut claims = Self::claims(identity, (Some(TokenPurpose::Code), mfa), iat);
-    claims.certificate = certificate.map(str::to_owned);
-    self
-      .signing
-      .signing()
-      .sign_token(&claims)
-      .expect("token")
-      .expose()
-      .to_owned()
+  /// A token for codes (purpose `code`) whose two-factor claim says `mfa`.
+  pub fn code_token(&self, identity: &Identity<'_>, mfa: bool, iat: i64) -> String {
+    Self::token_with(&self.signing, identity, (Some(TokenPurpose::Code), mfa), iat)
   }
 
   fn token_with(key: &Key, identity: &Identity<'_>, (purpose, mfa): (Option<TokenPurpose>, bool), iat: i64) -> String {
@@ -148,7 +139,6 @@ impl TestCloud {
       invite: identity.invite.map(Into::into),
       purpose,
       mfa,
-      certificate: None,
       jti: IdempotencyKey::generate().to_string(),
       iat,
       exp: iat + 300,

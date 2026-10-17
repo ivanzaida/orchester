@@ -281,31 +281,18 @@ pub async fn an_operator_turns_it_off_with_the_documented_statement() {
   cloud.finish().await;
 }
 
-pub async fn tokens_for_codes_name_their_use_and_the_certificate_asked_for() {
+pub async fn tokens_for_codes_name_their_use() {
   let cloud = TestCloud::start().await;
   let person = signed_in(&cloud, "codes@example.test").await;
-  // Not linked here: what an app asks for a server the cloud does not know, bound to the certificate it pinned.
+  // Not linked here: the app asks only after the server proved it holds the key whose id is the audience.
   let server = TeamServer::generate();
-  let certificate = "ab".repeat(32);
-  let body = json!({"audience": server.id(), "purpose": "code", "certificate": certificate});
-  let bound = claims_of(&cloud, &person, &server, body).await;
-  assert_eq!(bound.purpose, Some(TokenPurpose::Code));
-  assert_eq!(bound.certificate.as_deref(), Some(certificate.as_str()));
-  assert!(!bound.mfa, "a session without two-factor authentication says so");
-  let unbound = claims_of(
-    &cloud,
-    &person,
-    &server,
-    json!({"audience": server.id(), "purpose": "code"}),
-  )
-  .await;
-  assert_eq!(unbound.certificate, None);
+  let body = json!({"audience": server.id(), "purpose": "code"});
+  let claims = claims_of(&cloud, &person, &server, body).await;
+  assert_eq!(claims.purpose, Some(TokenPurpose::Code));
+  assert!(!claims.mfa, "a session without two-factor authentication says so");
   for asked in [
-    json!({"audience": server.id(), "certificate": certificate}),
-    json!({"audience": server.id(), "purpose": "admin", "certificate": certificate}),
-    json!({"audience": server.id(), "purpose": "code", "certificate": "AB".repeat(32)}),
-    json!({"audience": server.id(), "purpose": "code", "certificate": "ab"}),
     json!({"audience": server.id(), "purpose": "code", "invite": InviteId::generate()}),
+    json!({"audience": server.id(), "purpose": "link"}),
   ] {
     let refused = cloud
       .request("POST", "/identity-tokens", Some(&person), Some(asked.clone()))

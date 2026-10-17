@@ -142,25 +142,22 @@ impl CloudClient {
       audience: audience.to_string(),
       purpose: None,
       invite,
-      certificate: None,
     };
     self.issue(device, &request).await
   }
 
   /// `POST /identity-tokens` with purpose `code`: a token that shows the team server `audience`, with a code entered
-  /// in the app, that this device signed in with two-factor authentication. `certificate` binds it to the certificate
-  /// the app pinned for a server the cloud has not registered (the fingerprint in hex).
+  /// in the app, that this device signed in with two-factor authentication. Ask for it only after the server proved it
+  /// holds the key whose id `audience` is ([`super::Client::key_proof`]).
   pub async fn code_token(
     &self,
     device: &SecretValue,
     audience: TeamServerId,
-    certificate: Option<String>,
   ) -> Result<IdentityTokenIssued, ClientError> {
     let request = IdentityTokenRequest {
       audience: audience.to_string(),
       purpose: Some(TokenPurpose::Code),
       invite: None,
-      certificate,
     };
     self.issue(device, &request).await
   }

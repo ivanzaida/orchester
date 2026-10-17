@@ -22,6 +22,16 @@ pub(super) async fn update(
   }))
 }
 
+pub(super) async fn unlink_cloud(
+  State(server): State<Server>,
+  Auth(auth): Auth,
+  Id(id): Id<UserId>,
+) -> Result<Json<UserResponse>, ServerError> {
+  Ok(Json(UserResponse {
+    user: server.unlink_user_cloud(auth, id).await?,
+  }))
+}
+
 pub(super) async fn revoke(
   State(server): State<Server>,
   Auth(auth): Auth,

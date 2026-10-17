@@ -24,7 +24,7 @@ devtools-inspect-legacy = ["dep:lurq_legacy"]
 # Local wall-clock time of status bar events and the local day of the daily project budget.
 chrono.workspace = true
 # Shared servers: the HTTP client of the server's API (`sharing`).
-orchester-api = { workspace = true, features = ["client"] }
+orchester-api = { workspace = true, features = ["client", "identity"] }
 orchester-core.workspace = true
 orchester-exec.workspace = true
 # Removes the codebase indexes of run worktrees it removes.

@@ -7,9 +7,10 @@ use orchester_api::{
   Credential,
   totp::{self, DIGITS},
 };
+use orchester_core::id::CloudDeviceId;
 use ring::hmac;
 
-use super::Authenticator;
+use super::{Authenticator, budget::Tally};
 use crate::{
   Cloud, accounts::rows::account, clock::seconds, db::time, error::CloudError, keys::derived_key, tokens::random_bytes,
 };
@@ -104,22 +105,24 @@ pub(super) enum Used {
 }
 
 impl Cloud {
-  /// Checks `code` for `authenticator` within the account's budget; `recovery` also takes a recovery code. A wrong or
-  /// used code is `invalid_code`, audited and counted; a right one is spent and gives its reservation back.
+  /// Checks `code`, entered on `device`, for `authenticator` within the account's budget; `recovery` also takes a
+  /// recovery code. A wrong or used code is `invalid_code`, audited and counted; a right one is spent and gives its
+  /// reservation back.
   pub(super) async fn check_code(
     &self,
     client: &impl GenericClient,
-    authenticator: &Authenticator,
+    (authenticator, device): (&Authenticator, CloudDeviceId),
     code: &Credential,
     recovery: bool,
   ) -> Result<Used, CloudError> {
-    let attempt = self.attempt_code(client, authenticator).await?;
+    let tally = Tally::of(client, device).await?;
+    let attempt = self.attempt_code(client, authenticator, tally).await?;
     match self.spend_code(client, authenticator, code, recovery).await? {
       Some(used) => {
         self.code_passed(client, authenticator, (attempt, used)).await?;
         Ok(used)
       }
-      None => Err(self.code_failed(client, authenticator).await?),
+      None => Err(self.code_failed(client, authenticator, &attempt).await?),
     }
   }
 

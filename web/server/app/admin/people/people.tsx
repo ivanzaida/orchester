@@ -28,7 +28,8 @@ interface RowProps {
   readonly csrf: string;
 }
 
-type Asking = "none" | "admin" | "disable" | "code";
+type Asking = "none" | "admin" | "disable" | "unlink" | "code";
+type Confirmed = "admin" | "disable" | "unlink";
 
 /** The hidden fields of a row's forms: who, and what to do. */
 function OpForm({ csrf, user, op, children }: { csrf: string; user: string; op: string; children: ReactNode }) {
@@ -50,7 +51,8 @@ function RoleBadge({ person }: { person: Account }) {
   return person.admin ? <Badge tone="info">{t("people.admin")}</Badge> : null;
 }
 
-/** The actions a row offers: an account code for someone who is not an admin, admin, disable, enable. */
+/** The actions a row offers: an account code for someone who is not an admin, admin, unlinking the Orchester Cloud
+ * identity of an account linked to one, disable, enable. */
 function Actions({ props, asking, ask, action }: {
   props: RowProps;
   asking: Asking;
@@ -80,6 +82,11 @@ function Actions({ props, asking, ask, action }: {
           {t("people.makeAdmin")}
         </ActionButton>
       )}
+      {person.cloud && (
+        <ActionButton kind="ghost" row expanded={asking === "unlink"} onClick={() => { ask("unlink"); }}>
+          {t("people.unlink")}
+        </ActionButton>
+      )}
       {!self && (
         <ActionButton kind="ghost" row expanded={asking === "disable"} onClick={() => { ask("disable"); }}>
           {t("people.disable")}
@@ -89,19 +96,31 @@ function Actions({ props, asking, ask, action }: {
   );
 }
 
-function Confirm({ props, asking, action, close }: { props: RowProps; asking: "admin" | "disable"; action: (form: FormData) => void; close: () => void }) {
-  const words = { name: props.person.displayName, server: props.server };
-  const admin = asking === "admin";
+/** The words and the button of each question asked in place. */
+function question(asking: Confirmed, words: { name: string; server: string }) {
+  switch (asking) {
+    case "admin":
+      return { title: t("people.makeAdminTitle", words), text: t("people.makeAdminText"), keep: t("people.keepAsIs"),
+        kind: "primary", icon: "shield", label: t("people.makeAdmin") } as const;
+    case "unlink":
+      return { title: t("people.unlinkTitle", words), text: t("people.unlinkText", words), keep: t("common.keep"),
+        kind: "danger", icon: "unlink", label: t("people.unlink") } as const;
+    case "disable":
+      return { title: t("people.disableTitle", words), text: t("people.disableText", words), keep: t("common.keep"),
+        kind: "danger", icon: "user-x", label: t("people.disable") } as const;
+  }
+}
+
+function Confirm({ props, asking, action, close }: { props: RowProps; asking: Confirmed; action: (form: FormData) => void; close: () => void }) {
+  const asked = question(asking, { name: props.person.displayName, server: props.server });
   return (
-    <InPlaceConfirm title={admin ? t("people.makeAdminTitle", words) : t("people.disableTitle", words)}
-      text={admin ? t("people.makeAdminText") : t("people.disableText", words)}>
+    <InPlaceConfirm title={asked.title} text={asked.text}>
       <ActionButton kind="secondary" row autoFocus onClick={close}>
-        {admin ? t("people.keepAsIs") : t("common.keep")}
+        {asked.keep}
       </ActionButton>
       <form action={action}>
         <OpForm csrf={props.csrf} user={props.person.id} op={asking}>
-          <Submit kind={admin ? "primary" : "danger"} row icon={admin ? "shield" : "user-x"}
-            label={admin ? t("people.makeAdmin") : t("people.disable")} busyLabel={t("people.working")} />
+          <Submit kind={asked.kind} row icon={asked.icon} label={asked.label} busyLabel={t("people.working")} />
         </OpForm>
       </form>
     </InPlaceConfirm>
@@ -118,7 +137,9 @@ function Under({ props, asking, state, action, close }: {
   const { person } = props;
   return (
     <>
-      {(asking === "admin" || asking === "disable") && <Confirm props={props} asking={asking} action={action} close={close} />}
+      {(asking === "admin" || asking === "disable" || asking === "unlink") && (
+        <Confirm props={props} asking={asking} action={action} close={close} />
+      )}
       {asking === "code" && (
         <div className={styles.under}>
           <CodeInvite csrf={props.csrf} scope={{ kind: "account", user: person.id }} kind="secondary" label={t("people.accountCode")}

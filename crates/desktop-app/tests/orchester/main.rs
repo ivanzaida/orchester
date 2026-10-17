@@ -134,6 +134,8 @@ fn orchester_connects_with_an_invite_code_after_the_check_code() {
   server.create_user("alice", "Alice Moreau", true);
   let kontur = server.create_named_project(("Kontur", "KTR"), "kontur", Some(KONTUR_REMOTE));
   let code = server.project_code(&kontur);
+  // Its admin pins the tests' cloud root, so the server checks the two-factor identity a code needs.
+  server.cloud_audience();
   server.serve_self_signed();
   let address = ServerAddress::parse(&server.url()).expect("address");
   let pin = server
@@ -178,6 +180,8 @@ fn orchester_refuses_a_code_without_a_two_factor_sign_in() {
   server.create_user("alice", "Alice Moreau", true);
   let kontur = server.create_named_project(("Kontur", "KTR"), "kontur", Some(KONTUR_REMOTE));
   let code = server.project_code(&kontur);
+  // Its admin pins the tests' cloud root, so the server checks the two-factor identity a code needs.
+  server.cloud_audience();
   server.serve_self_signed();
   let mut window = window(None);
   window.data.cloud.two_factor_off();

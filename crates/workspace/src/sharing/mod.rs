@@ -22,6 +22,7 @@ mod monitor;
 mod owners;
 mod password;
 pub mod project;
+mod server_key;
 pub mod trust;
 
 use std::{

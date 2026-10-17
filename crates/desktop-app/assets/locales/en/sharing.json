@@ -100,9 +100,9 @@
       "invalidIdentity": "The server didn't accept your Orchester Cloud identity. Try again.",
       "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account. Turn it on under Security on the cloud's Account page, then sign out here and sign in again with your code.",
       "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with your two-factor code. Sign out in Settings › Orchester and sign in again with your code.",
-      "twoFactorUnverifiable": "This server can't check two-factor authentication. Its admin links it to Orchester Cloud, or pins Orchester Cloud's root key on a server that holds its own certificate (orchester-server cloud pin).",
-      "notRegisteredServer": "Orchester Cloud has this server at another address or with another certificate, so your sign-in wasn't shown to it. Connect at the address Orchester Cloud lists for it, or ask its admin.",
-      "codeUnbound": "This server isn't linked to Orchester Cloud and is reached over plain HTTP, so your sign-in can't be shown to it safely. Connect to it over HTTPS, or ask its admin to link it to Orchester Cloud."
+      "twoFactorUnverifiable": "This server can't check two-factor authentication: its admin links it to Orchester Cloud, or pins Orchester Cloud's root key on the server (orchester-server cloud pin).",
+      "unprovenServer": "This server didn't prove it is the server it says it is on this connection, so your sign-in wasn't shown to it and the code wasn't sent. Connect to it over HTTPS; if a proxy holds its certificate, its admin sets that certificate's fingerprint on the server (proxy_certificate).",
+      "accountExists": "Your Orchester Cloud account already has an account on this server. Join with that account instead: with a code from one of its computers, or an account code from an admin. The invite code is still open."
     },
     "link": {
       "taskList": "Task list",

@@ -56,11 +56,7 @@ async fn s1c_an_account_invite_refuses_the_identity_of_another_account_and_stays
       |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .expect("invite and account");
-  // Carol's account keeps the identity her invite code showed.
-  assert_eq!(
-    (accepted, carol_linked),
-    (None, Some(crate::support::cloud::person("carol")))
-  );
+  assert_eq!((accepted, carol_linked), (None, None));
   let me: UserResponse = server.request("GET", "/auth/me", Some(&known.token), None).await.json();
   assert_eq!(me.user.id, known.user.id);
   server.finish().await;

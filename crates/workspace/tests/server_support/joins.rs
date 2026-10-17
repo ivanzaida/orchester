@@ -32,7 +32,25 @@ impl TestServer {
         key_set,
       }))
       .expect("join with a code");
+    if first {
+      // The first admin's device makes invites, which need a two-factor sign-in: marked as one here, so setting up
+      // pins no cloud root and links no identity, and a test may still link the server to a cloud of its own.
+      self.two_factor_session(&joined.token);
+      self.admin.lock().1 = Some(joined.token.expose().to_owned());
+    }
     joined.token
+  }
+
+  /// Marks the device token `token` as issued for a cloud identity that signed in with two-factor authentication, as
+  /// the server records it for a device that joined with one.
+  fn two_factor_session(&self, token: &Credential) {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(token.expose().as_bytes()).to_vec();
+    let database = rusqlite::Connection::open(self.data_dir().join("orchester-server.db")).expect("the database");
+    let marked = database
+      .execute("UPDATE sessions SET mfa=1 WHERE token_hash=?1", [hash])
+      .expect("mark the session");
+    assert_eq!(marked, 1, "the token is a session of the server");
   }
 
   /// What the app of `username`, signed in to Orchester Cloud with two-factor authentication, sends with a code: that

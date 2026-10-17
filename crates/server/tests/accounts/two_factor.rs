@@ -121,14 +121,14 @@ async fn two_factor_a_code_entered_in_an_app_needs_a_two_factor_identity() {
   refused(&redeem(&server, &code, None).await, 403, ErrorCode::MfaRequired);
   let cloud = server.cloud();
   let now = server.seconds();
-  let without = cloud.code_token(&bob(&audience, None), (false, None), now);
+  let without = cloud.code_token(&bob(&audience, None), false, now);
   refused(
     &redeem(&server, &code, Some((&without, &key_set))).await,
     403,
     ErrorCode::MfaRequired,
   );
   // A token for another server, or for another use than codes, is none for this code.
-  let elsewhere = cloud.code_token(&bob("0199f0a0-0000-7000-8000-00000000e15e", None), (true, None), now);
+  let elsewhere = cloud.code_token(&bob("0199f0a0-0000-7000-8000-00000000e15e", None), true, now);
   let to_join = cloud.token_mfa(&bob(&audience, None), true, now);
   let for_admin = cloud.two_factor_admin_token(&bob(&audience, None), now);
   for token in [elsewhere, to_join, for_admin] {
@@ -138,13 +138,6 @@ async fn two_factor_a_code_entered_in_an_app_needs_a_two_factor_identity() {
       ErrorCode::InvalidIdentity,
     );
   }
-  // Bound to a certificate, which this server, serving plain HTTP behind a proxy, cannot compare.
-  let bound = cloud.code_token(&bob(&audience, None), (true, Some(&"ab".repeat(32))), now);
-  refused(
-    &redeem(&server, &code, Some((&bound, &key_set))).await,
-    403,
-    ErrorCode::MfaUnverifiable,
-  );
   server
     .server
     .host_cloud(orchester_server::host::CloudCommand::Off)

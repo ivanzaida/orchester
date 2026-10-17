@@ -31,8 +31,9 @@ pub use self::{
   error::ClientError,
 };
 use crate::{
-  ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, PairingCode, ServerInfo, Session,
-  SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse, UsersResponse, certificate::CertificatePin,
+  ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, KeyProofRequest, KeyProofResponse,
+  PairingCode, ServerInfo, Session, SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse,
+  UsersResponse, certificate::CertificatePin,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -112,6 +113,14 @@ impl Client {
   /// `GET /server`: what answers at the address, asked before signing in.
   pub async fn server_info(&self) -> Result<ServerInfo, ClientError> {
     self.call(self.request(Method::GET, "/server")?).await
+  }
+
+  /// `POST /server/key-proof`: the server's public key and its signature of `nonce`, which the caller verifies.
+  pub async fn key_proof(&self, nonce: &str) -> Result<KeyProofResponse, ClientError> {
+    let request = KeyProofRequest {
+      nonce: nonce.to_owned(),
+    };
+    self.call(self.json(Method::POST, "/server/key-proof", &request)?).await
   }
 
   /// `POST /auth/code`: joins with a setup, invite, account or pairing code and returns this device's token.

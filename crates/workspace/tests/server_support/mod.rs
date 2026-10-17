@@ -137,6 +137,11 @@ impl TestServer {
     );
   }
 
+  /// The server's data directory.
+  fn data_dir(&self) -> &std::path::Path {
+    self._directory.path()
+  }
+
   /// The address as a person types it.
   pub fn url(&self) -> String {
     let scheme = if self.tls { "https" } else { "http" };
@@ -384,7 +389,7 @@ impl TestServer {
     invite["invite"]["id"].as_str().expect("invite id").to_owned()
   }
 
-  fn client(&self) -> Client {
+  pub fn client(&self) -> Client {
     if let Some(pin) = self.pin {
       return Client::pinned(ServerAddress::parse(&self.url()).expect("address"), pin).expect("client");
     }
@@ -438,7 +443,8 @@ impl TestServer {
       match token {
         Some(token) => token,
         None => {
-          // Joined with an account code and a two-factor identity ([`Self::code_proof`]), as inviting needs.
+          // A first admin who joined elsewhere than `create_user`: another device of theirs, joined with an account
+          // code and a two-factor identity ([`Self::code_proof`]), as inviting needs.
           let token = self.device_of(&username.expect("the first admin joined"));
           self.admin.lock().1 = Some(token.expose().to_owned());
           token.expose().to_owned()

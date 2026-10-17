@@ -26,6 +26,9 @@ CREATE TABLE recovery_codes (
 );
 
 ALTER TABLE devices ADD COLUMN two_factor uuid REFERENCES two_factor (id) ON DELETE SET NULL;
+-- A device that is not a two-factor session counts its own wrong codes for the day, apart from its account's.
+ALTER TABLE devices ADD COLUMN failed_codes integer NOT NULL DEFAULT 0;
+ALTER TABLE devices ADD COLUMN failures_since timestamptz;
 -- Deleting an authenticator empties its devices' column: found by this index, not by reading every device.
 CREATE INDEX devices_two_factor ON devices (two_factor) WHERE two_factor IS NOT NULL;
 
