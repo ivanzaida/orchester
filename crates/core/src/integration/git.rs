@@ -12,14 +12,20 @@ use crate::{
   run::BranchName,
 };
 
-/// Variables that would point git at another repository, index or object store than the folder it
-/// runs in, e.g. ones a hook that started Orchester's process passed on.
-const LOCATING: [&str; 5] = [
+/// Variables that would point git at another repository, index, object store or ref namespace than
+/// the folder it runs in, or give it configuration of the caller's, e.g. ones a hook that started
+/// Orchester's process passed on. Without `GIT_CONFIG_COUNT`, git reads no `GIT_CONFIG_KEY_<n>` or
+/// `GIT_CONFIG_VALUE_<n>`.
+const LOCATING: [&str; 9] = [
   "GIT_DIR",
   "GIT_WORK_TREE",
   "GIT_INDEX_FILE",
   "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
   "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_CONFIG_PARAMETERS",
+  "GIT_CONFIG_COUNT",
 ];
 
 pub(super) struct Git<'a, R: CommandRunner> {

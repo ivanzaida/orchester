@@ -211,18 +211,23 @@ fn merge_deletes_a_folder_git_does_not_know_where_its_temporary_worktree_goes() 
   assert_no_temporary(&repo);
 }
 
-/// Changes `a.txt` and `held.txt` on the run's branch, keeps `notes.txt` of the person's beside
-/// them, and fast-forwards while git cannot replace one of the run's files: `held.txt` held open on
-/// Windows, a new file in a folder without write permission elsewhere.
+/// Changes `a.txt` and `held.txt` on the run's branch and turns the file `docs` into a folder,
+/// keeps `notes.txt` of the person's beside them, and fast-forwards while git cannot replace one
+/// of the run's files: `held.txt` held open on Windows, a new file in a folder without write
+/// permission elsewhere.
 #[test]
 fn merge_puts_back_what_a_fast_forward_that_stopped_part_way_wrote() {
   let repo = Repo::new();
   fs::create_dir(repo.root.join("locked")).expect("folder");
   repo.commit(&repo.root, "a.txt", "base a\n", "a");
+  repo.commit(&repo.root, "docs", "base docs\n", "docs");
   repo.commit(&repo.root, "held.txt", "base held\n", "held");
   let base = repo.commit(&repo.root, "locked/kept.txt", "kept\n", "locked");
   let worktree = repo.worktree("run", RUN_BRANCH, &base);
   repo.commit(&worktree, "a.txt", "run a\n", "Implement: a");
+  git_in(&worktree, &["rm", "--quiet", "docs"]);
+  fs::create_dir(worktree.join("docs")).expect("docs becomes a folder");
+  repo.commit(&worktree, "docs/guide.md", "run guide\n", "Implement: docs");
   repo.commit(&worktree, "held.txt", "run held\n", "Implement: held");
   repo.commit(&worktree, "locked/new.txt", "run new\n", "Implement: new");
   repo.commit(&worktree, "z.txt", "run z\n", "Implement: z");
@@ -233,7 +238,11 @@ fn merge_puts_back_what_a_fast_forward_that_stopped_part_way_wrote() {
   };
   assert!(matches!(refused, Err(MergeError::Refused(_))), "{refused:?}");
   assert_eq!(repo.head(), base);
-  for (file, content) in [("a.txt", "base a\n"), ("held.txt", "base held\n")] {
+  for (file, content) in [
+    ("a.txt", "base a\n"),
+    ("held.txt", "base held\n"),
+    ("docs", "base docs\n"),
+  ] {
     assert_eq!(
       fs::read_to_string(repo.root.join(file)).expect("there"),
       content,
@@ -245,6 +254,30 @@ fn merge_puts_back_what_a_fast_forward_that_stopped_part_way_wrote() {
   assert_eq!(
     repo.git(&["status", "--porcelain", "--untracked-files=all"]),
     "?? notes.txt"
+  );
+}
+
+#[test]
+fn merge_puts_back_the_index_and_files_when_git_cannot_move_the_branch() {
+  let repo = Repo::new();
+  let base = repo.commit(&repo.root, "a.txt", "base a\n", "a");
+  let worktree = repo.worktree("run", RUN_BRANCH, &base);
+  repo.commit(&worktree, "a.txt", "run a\n", "Implement: a");
+  repo.commit(&worktree, "new.txt", "run new\n", "Implement: new");
+  fs::write(repo.root.join("notes.txt"), "the person's\n").expect("untracked");
+  // A stale lock of the branch's ref: git writes the index and the files, then cannot move main.
+  let lock = repo.root.join(".git/refs/heads/main.lock");
+  fs::write(&lock, "").expect("stale lock");
+  let refused = merge(&repo, &base);
+  fs::remove_file(&lock).expect("lock gone");
+  assert!(matches!(refused, Err(MergeError::Refused(_))), "{refused:?}");
+  assert_eq!(repo.head(), base);
+  assert_eq!(fs::read_to_string(repo.root.join("a.txt")).expect("there"), "base a\n");
+  assert!(!repo.root.join("new.txt").exists());
+  assert_eq!(
+    repo.git(&["status", "--porcelain", "--untracked-files=all"]),
+    "?? notes.txt",
+    "the index is the base's again"
   );
 }
 

@@ -53,11 +53,13 @@ fn merge_in<R: CommandRunner>(
   (base, head): (&str, &str),
   title: &str,
 ) -> Result<String, MergeError> {
-  // `--force` takes over the place of one a killed merge left registered with its folder gone.
+  // Twice `--force` takes over the place of one a killed merge left registered with its folder
+  // gone, locked as `worktree add` keeps it while it runs.
   git.stdout(&[
     "worktree",
     "add",
     "--quiet",
+    "--force",
     "--force",
     "--detach",
     "--no-checkout",
@@ -130,7 +132,7 @@ fn remove<R: CommandRunner>(git: &Git<'_, R>, path: &str) -> Result<(), String> 
   if !Path::new(path).exists() {
     return Ok(());
   }
-  let said = match git.output(&["worktree", "remove", "--force", path]) {
+  let said = match git.output(&["worktree", "remove", "--force", "--force", path]) {
     Ok(output) if output.success() => return Ok(()),
     Ok(output) => message(&output),
     Err(error) => error.to_string(),
@@ -145,7 +147,7 @@ fn remove<R: CommandRunner>(git: &Git<'_, R>, path: &str) -> Result<(), String> 
     .any(|worktree| worktree.path == path);
   if registered {
     git
-      .stdout(&["worktree", "remove", "--force", path])
+      .stdout(&["worktree", "remove", "--force", "--force", path])
       .map_err(|error| error.to_string())?;
   }
   Ok(())

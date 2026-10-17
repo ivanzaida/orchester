@@ -1428,7 +1428,7 @@
         "done": "Merged {{task}} run #{{run}} into {{branch}}",
         "failed": "Could not merge {{task}} run #{{run}} into {{branch}}",
         "notDone": "{{task}} run #{{run}} not merged",
-        "temporaryLeft": "{{task}} run #{{run}} was merged, but its temporary folder {{path}} could not be removed. Delete it with git worktree remove --force."
+        "temporaryLeft": "{{task}} run #{{run}} was merged, but Orchester couldn’t delete its temporary folder {{path}}. Delete that folder yourself."
       },
       "runCleanup": {
         "running": "Removing the worktrees of {{task}} run #{{run}}",
