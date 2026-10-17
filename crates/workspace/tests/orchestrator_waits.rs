@@ -11,8 +11,8 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
   },
-  conversation::{AgentMessage, Message, MessageBody},
-  id::{ChatId, ChatMessageId, ConnectionId, ProjectId},
+  conversation::{AgentMessage, Arrival, Message, MessageBody, Recipient},
+  id::{ChatId, ChatMessageId, ConnectionId, IdempotencyKey, InvocationId, ProjectId, StepExecutionId},
   name::Name,
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, OrchestratorSettings, TurnState, WaitKind, WaitTurn,
@@ -63,8 +63,9 @@ fn working(fixture: &mut Fixture) -> Run {
   fixture.started_run(task, at(50))
 }
 
-/// `run`'s agent asks "Keep email sign-in?" in the conversation, and its step waits for the answer.
-fn ask(fixture: &mut Fixture, run: &mut Run) {
+/// `run`'s agent asks "Keep email sign-in?" in the conversation, and its step waits for the answer; the agent's
+/// execution and invocation.
+fn ask(fixture: &mut Fixture, run: &mut Run) -> (StepExecutionId, InvocationId) {
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let invocation = fixture
     .db
@@ -82,14 +83,16 @@ fn ask(fixture: &mut Fixture, run: &mut Run) {
   fixture.db.add_agent_message(&question).expect("asked");
   let events = run.wait_step(execution, WaitReason::Message, at(60)).expect("waits");
   fixture.record(run, &events);
+  (execution, invocation)
 }
 
 fn project(fixture: &Fixture) -> ProjectId {
   fixture.db.project().id()
 }
 
+/// Follows the waits with the project's runner attached.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
-  follow_in(fixture.repo.path(), project(fixture), answers).expect("followed")
+  follow_in(fixture.repo.path(), project(fixture), (answers, true)).expect("followed")
 }
 
 /// The waits of the project's latest conversation, with their turns.
@@ -212,11 +215,8 @@ fn orchestrator_waits_queue_behind_the_persons_turn() {
   );
 }
 
-#[test]
-fn orchestrator_waits_raised_by_its_own_answer_start_no_turn() {
-  let mut fixture = Fixture::new();
-  ready(&mut fixture);
-  let mut run = working(&mut fixture);
+/// A conversation the person asked in at `at(10)` and whose answered turn sent `run`'s agents a message.
+fn answered_by_chat(fixture: &mut Fixture, run: &Run) -> Chat {
   let chat = Chat::named(ChatId::generate(), "Answer the agents", at(10));
   let person = ChatMessageId::generate();
   let text = MessageBody::new("Answer them").expect("text");
@@ -241,12 +241,107 @@ fn orchestrator_waits_raised_by_its_own_answer_start_no_turn() {
     .db
     .end_chat_turn(person, &TurnState::Answered, at(30))
     .expect("ended");
+  chat
+}
+
+#[test]
+fn orchestrator_waits_raised_by_its_own_answer_start_no_turn() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture);
+  answered_by_chat(&mut fixture, &run);
   // The agent got the chat's message and asks again.
   ask(&mut fixture, &mut run);
   let followed = follow(&fixture, true);
   assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
   let (wait, turn) = &waits(&fixture)[0];
   assert!(wait.own && !wait.automatic && turn.is_none(), "{wait:?}");
+}
+
+#[test]
+fn orchestrator_waits_raised_by_its_own_answer_in_an_older_conversation_start_no_turn() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture);
+  let older = answered_by_chat(&mut fixture, &run);
+  // The person starts another conversation before the agent asks again.
+  let newer = Chat::named(ChatId::generate(), "Anything else?", at(40));
+  let person = ChatMessageId::generate();
+  let text = MessageBody::new("Anything else?").expect("text");
+  fixture
+    .db
+    .keep_chat_message(&newer, (person, &text), at(40))
+    .expect("kept");
+  fixture
+    .db
+    .end_chat_turn(person, &TurnState::Answered, at(45))
+    .expect("ended");
+  ask(&mut fixture, &mut run);
+  let followed = follow(&fixture, true);
+  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert_ne!(older.id(), newer.id());
+  assert_eq!(fixture.db.latest_chat().expect("read"), Some(newer.id()));
+  let (wait, turn) = &waits(&fixture)[0];
+  assert!(wait.own && !wait.automatic && turn.is_none(), "{wait:?}");
+}
+
+#[test]
+fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture);
+  ask(&mut fixture, &mut run);
+  let detached = follow_in(fixture.repo.path(), project(&fixture), (true, false)).expect("followed");
+  assert_eq!(
+    detached,
+    Followed {
+      kept: true,
+      turn: None,
+      pending: true
+    },
+    "the wait is kept and its turn waits for the runner"
+  );
+  let (wait, turn) = &waits(&fixture)[0];
+  assert!(wait.automatic && turn.is_none(), "{wait:?}");
+  let attached = follow(&fixture, true);
+  assert!(
+    !attached.kept && !attached.pending && attached.turn.is_some(),
+    "{attached:?}"
+  );
+}
+
+#[test]
+fn orchestrator_waits_keep_a_new_entry_when_a_step_waits_for_a_message_again() {
+  let mut fixture = Fixture::new();
+  let mut run = working(&mut fixture);
+  let (execution, invocation) = ask(&mut fixture, &mut run);
+  assert!(follow(&fixture, false).kept);
+  // The person answers; the agent takes it and waits again without asking anything new.
+  let mut answer = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    MessageBody::new("Yes, keep it.").expect("text"),
+    at(62),
+  );
+  fixture
+    .db
+    .send_message(IdempotencyKey::generate(), &answer)
+    .expect("sent");
+  answer
+    .deliver(run.id(), (execution, invocation), at(63), Arrival::Prompt)
+    .expect("delivered");
+  fixture
+    .db
+    .save_deliveries(std::slice::from_ref(&answer))
+    .expect("saved");
+  let events = run.resume_step(execution, at(63)).expect("resumes");
+  fixture.record(&run, &events);
+  assert!(!follow(&fixture, false).kept, "the answered step waits for no one");
+  let events = run.wait_step(execution, WaitReason::Message, at(66)).expect("waits");
+  fixture.record(&run, &events);
+  assert!(follow(&fixture, false).kept, "a second wait is a new entry");
+  assert_eq!(waits(&fixture).len(), 2);
 }
 
 #[test]

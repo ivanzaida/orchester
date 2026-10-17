@@ -47,10 +47,10 @@ pub struct AgentWait {
   pub automatic: bool,
 }
 
-/// Whether a wait of `run` now was raised by the Orchestrator's own answer: in `entries`, the conversation it goes
-/// to, the newest entry about `run` is an answer or message the chat gave its agents (applied, or sent itself), not
-/// a wait. An agent the Orchestrator answered that asks again is answered by a person, or by an Orchestrator turn the
-/// person starts.
+/// Whether a wait of `run` now was raised by the Orchestrator's own answer: in `entries`, those of every conversation
+/// in the order they were kept (the person may have started another since), the newest entry about `run` is an
+/// answer or message the chat gave its agents (applied, or sent itself), not a wait. An agent the Orchestrator
+/// answered that asks again is answered by a person, or by an Orchestrator turn the person starts.
 pub fn raised_by_own(entries: &[ChatEntry], run: RunId) -> bool {
   for entry in entries.iter().rev() {
     match &entry.kind {

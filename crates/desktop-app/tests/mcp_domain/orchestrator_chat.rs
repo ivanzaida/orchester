@@ -3,20 +3,27 @@
 //! (`get_conversation`); the chat's `merge_run` and `send_message` are proposals until the person's switch lets the
 //! chat do them, then done at once and kept as its actions, a message named the Orchestrator's in the task's
 //! conversation; a message that would decide a plan is refused; and an opened project's waits are kept in the
-//! Orchestrator's conversation, each with its card.
+//! Orchestrator's conversation, each with its card, starting no turn while no runner attaches.
 
-use std::{thread, time::Duration};
+use std::{path::PathBuf, thread, time::Duration};
 
 use orchester_core::{
+  connection::{
+    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
+  },
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId},
-  orchestrator::{ActionOutcome, Chat, ChatAction, EntryKind, TurnState, WaitKind, change::Change},
+  id::{ChatId, ChatMessageId, ConnectionId},
+  name::Name,
+  orchestrator::{
+    ActionOutcome, Chat, ChatAction, EntryKind, OrchestratorSettings, TurnState, WaitKind, change::Change,
+  },
+  resource::ModelId,
   run::Run,
-  store::{ConversationStore, MergeStore, RunStore, TaskStore},
+  store::{ConnectionStore, ConversationStore, MergeStore, RunStore, TaskStore},
   task::Task,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   app_mcp::{self, ToolError, Translate},
   orchestrator::tools::{self, ChatScope},
@@ -297,6 +304,90 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     &actions(&db, &scope)[2],
     ChatAction { outcome: ActionOutcome::Refused { code, .. }, change: Some(_), .. } if code == "runner_unavailable"
   ));
+}
+
+/// Publishes a checked, signed-in Claude Code connection as what the Orchestrator of the project at `db` runs on.
+fn orchestrator_ready(db: &mut ProjectDb, program: PathBuf) {
+  let mut connection = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Claude · Kontur").expect("name"),
+    AgentProvider::ClaudeCodeCli,
+    program,
+    Timestamp::now(),
+  )
+  .expect("absolute program");
+  let haiku = CatalogModel::new(ModelId::new("haiku").expect("model"), Vec::new());
+  connection
+    .record_check(ConnectionCheck {
+      at: Timestamp::now(),
+      result: CheckResult::Available {
+        version: "2.1.89".into(),
+        sign_in: SignIn::SignedIn,
+        catalog: ModelCatalog::new(CatalogSource::Provider, vec![haiku]),
+      },
+    })
+    .expect("check");
+  db.create_connection(&connection).expect("connection");
+  let settings = OrchestratorSettings::new(connection.id(), ModelId::new("haiku").expect("model"), None);
+  db.publish_orchestrator(&settings, Timestamp::now()).expect("published");
+}
+
+/// The waits of the project's latest conversation, each with the message of its turn, if it has one.
+fn kept_waits(db: &ProjectDb) -> Vec<(String, Option<ChatMessageId>)> {
+  let Some(chat) = db.latest_chat().expect("read") else {
+    return Vec::new();
+  };
+  db.chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Wait { wait, turn } => Some((wait.title, turn.map(|turn| turn.message))),
+      _ => None,
+    })
+    .collect()
+}
+
+#[test]
+fn chat_starts_no_wait_turn_while_no_runner_attaches() {
+  let (folder, seeded) = Served::seed("tasks", None);
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  orchestrator_ready(&mut db, seeded.repo.join("claude.exe"));
+  // The person turned *Let the Orchestrator answer agents* on in an earlier session: the project's waits are followed
+  // from the start of this one.
+  AppDb::open(&seeded.app_database)
+    .expect("the app's database")
+    .set_orchestrator_answers_agents(true)
+    .expect("the person's choice is kept");
+  let runner = folder.path().join("no-runner").join("orchester-runner");
+  let mut served = Served::start(folder, &seeded.app_database, runner);
+  served.tasks_feed(seeded.project);
+  served.until("the waits to be kept", |_| {
+    kept_waits(&db).iter().any(|(title, _)| title == ASKING)
+  });
+  // The runner of this session never attaches: following again and again marks no turn thinking for it, so the wait
+  // keeps its one turn for a runner that does.
+  for _ in 0..200 {
+    served.pass();
+    thread::sleep(Duration::from_millis(5));
+  }
+  let kept = kept_waits(&db);
+  assert!(
+    kept.iter().all(|(_, turn)| turn.is_none()),
+    "no wait started a turn: {kept:?}"
+  );
+  let wait = db
+    .chat_entries(db.latest_chat().expect("read").expect("a conversation"))
+    .expect("entries")
+    .into_iter()
+    .find_map(|entry| match entry.kind {
+      EntryKind::Wait { wait, .. } if wait.title == ASKING => Some(wait),
+      _ => None,
+    })
+    .expect("the question's wait");
+  assert!(
+    wait.automatic,
+    "it still starts its turn once a runner attaches: {wait:?}"
+  );
 }
 
 #[test]
