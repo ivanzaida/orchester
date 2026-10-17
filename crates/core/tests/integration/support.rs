@@ -37,6 +37,9 @@ impl CommandRunner for Processes {
   fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
     let mut child = process::Command::new(command.program());
     child.args(command.args()).envs(command.env().iter().cloned());
+    for name in command.env_removed() {
+      child.env_remove(name);
+    }
     if let Some(directory) = command.current_dir() {
       child.current_dir(directory);
     }

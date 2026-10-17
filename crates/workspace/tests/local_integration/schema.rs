@@ -3,7 +3,7 @@ use orchester_core::{
   integration::local::{Checkout, LocalIntegrationStore, LocalOperation, LocalPath, LocalRecoveryStore, RecoveryLayer},
 };
 use orchester_exec::local_git::digest;
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ProjectMigration};
 
 use super::support::{Fixture, git};
 
@@ -29,9 +29,6 @@ fn local_integration_draft_migration_preserves_earlier_retained_originals_and_jo
     .expect("original");
   drop(db);
   let connection = rusqlite::Connection::open(fixture.root().join(".orchester/orchester.db")).expect("private db");
-  let version: u32 = connection
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
   connection.execute_batch("
     ALTER TABLE local_recovery_content RENAME TO recovery_fixture_current;
     CREATE TABLE local_recovery_content (
@@ -42,9 +39,7 @@ fn local_integration_draft_migration_preserves_earlier_retained_originals_and_jo
     INSERT INTO local_recovery_content SELECT * FROM recovery_fixture_current;
     DROP TABLE recovery_fixture_current;
   ").expect("earlier exact recovery schema");
-  connection
-    .pragma_update(None, "user_version", version - 1)
-    .expect("previous schema");
+  ProjectDb::apply_migration_for_test(&connection, ProjectMigration::EditorDrafts).expect("the drafts migration");
   drop(connection);
   let mut db = ProjectDb::open(fixture.root()).expect("forward migration");
   assert_eq!(db.local_operation(fixture.run).expect("journal"), Some(operation));
@@ -81,10 +76,7 @@ fn local_integration_master_account_schema_upgrade_keeps_runs_and_adds_durable_j
     .expect("run")
     .expect("recorded run");
   let connection = rusqlite::Connection::open(fixture.root().join(".orchester/orchester.db")).expect("private db");
-  let version: u32 = connection
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("version");
-  // Master has the account migration; these two unshipped integration migrations follow it.
+  // A schema without local integration: its two migrations applied again, by name.
   connection
     .execute_batch(
       "DROP TABLE local_integration_process;
@@ -92,9 +84,9 @@ fn local_integration_master_account_schema_upgrade_keeps_runs_and_adds_durable_j
        DROP TABLE local_integrations;",
     )
     .expect("master schema without integration tables");
-  connection
-    .pragma_update(None, "user_version", version - 2)
-    .expect("master schema version");
+  for migration in [ProjectMigration::LocalIntegration, ProjectMigration::EditorDrafts] {
+    ProjectDb::apply_migration_for_test(&connection, migration).expect("integration migration");
+  }
   drop(connection);
 
   let db = ProjectDb::open(fixture.root()).expect("upgrade from master");
