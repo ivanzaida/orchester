@@ -10,11 +10,16 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::pipelines::{
-  data::OpenedPipeline,
-  problems::problem_view,
-  widening::{draft_reasons, publish_reasons},
-  write::{Allowed, next_version},
+use orchester_core::resource::VersionNumber;
+use orchester_workspace::{
+  background, messages,
+  pipelines::{
+    data::OpenedPipeline,
+    history::VersionHistory,
+    problems::problem_view,
+    widening::{draft_reasons, publish_reasons},
+    write::{Allowed, next_version},
+  },
 };
 use parking_lot::Mutex;
 
@@ -41,6 +46,8 @@ pub struct EditorProps {
   pub opened: OpenedPipeline,
   /// The panel the route shows.
   pub panel: Panel,
+  /// The published version the route views, read-only; `None` for the draft.
+  pub version: Option<VersionNumber>,
   pub reload: Signal<u64>,
   pub loading: bool,
 }
@@ -49,6 +56,7 @@ impl PartialEq for EditorProps {
     self.project == other.project
       && self.opened == other.opened
       && self.panel == other.panel
+      && self.version == other.version
       && self.loading == other.loading
   }
 }
@@ -106,11 +114,12 @@ impl Component for Editor {
     }
     // First: lurq keeps a component's futures by the order it asks for them.
     self.autosave(ctx, &props, writing);
+    let reading_version = self.follow_version(ctx, &props);
     let opened = self.state.get().opened;
     props.project.feed.pipeline_named(opened.id, &opened.name);
     let editing = self.state.get();
-    let busy = action.state().get().is_pending() || self.confirm_save.get() || props.loading;
-    let locked = self.confirm_save.get() || props.loading;
+    let busy = action.state().get().is_pending() || self.confirm_save.get() || props.loading || reading_version;
+    let locked = self.confirm_save.get() || props.loading || reading_version;
     let head = self.header(ctx, &props, &action, busy);
     let content = if editing.panel == Panel::Settings {
       super::settings::page(ctx, &self.state, locked)
@@ -185,6 +194,57 @@ impl Editor {
       page = page.child(field_error("pipeline-rule-error", &message_text(ctx, &view.message)));
     }
     page
+  }
+  /// The published version shown is the route's: Back or Forward to a place of the draft shows the draft
+  /// again, editable, and to a place of a version reads that version once more. `true` while it is read;
+  /// the editor waits then. Second of the futures each render asks for.
+  fn follow_version(&self, ctx: &mut Ctx, props: &EditorProps) -> bool {
+    let shown = self.state.get_untracked().viewing_version;
+    let wanted = props.version.filter(|version| shown != Some(*version));
+    let read = ctx
+      .future(
+        (props.project.open.repo_root.clone(), props.opened.id, wanted),
+        |(root, id, wanted)| async move {
+          let Some(number) = wanted else {
+            return Ok(None);
+          };
+          background::run(move || {
+            VersionHistory::load_in(&root, id)
+              .map(|history| history.version(number).map(|version| (number, (*version.body).clone())))
+              .map_err(|e| messages::store_error(&e))
+          })
+          .await?
+        },
+      )
+      .state()
+      .get();
+    match props.version {
+      None if shown.is_some() => self.state.update(|s| {
+        s.viewing = None;
+        s.viewing_version = None;
+        s.comparing = false;
+        s.restore_requested = false;
+        s.epoch += 1;
+      }),
+      Some(version) if shown != Some(version) => {
+        let (pending, failed) = (read.is_pending(), read.error.is_some());
+        let Some(found) = read.data.filter(|_| !pending && !failed) else {
+          return !failed;
+        };
+        // A version the history no longer has shows the draft.
+        if let Some((number, body)) = found.filter(|(number, _)| *number == version) {
+          self.state.update(|s| {
+            s.viewing = Some(body);
+            s.viewing_version = Some(number);
+            s.comparing = false;
+            s.restore_requested = false;
+            s.epoch += 1;
+          });
+        }
+      }
+      _ => {}
+    }
+    false
   }
   /// Saves the fields once they rest valid and unchanged for a moment. The rest is the first future each
   /// render asks for, so lurq keeps its state across renders and following it once follows every rest.

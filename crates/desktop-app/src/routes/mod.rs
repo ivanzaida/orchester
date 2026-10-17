@@ -152,7 +152,7 @@ impl Route {
   pub fn pattern(&self) -> String {
     match self {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::Pipeline(..)) => PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Pipeline(..) | ProjectPage::PipelineVersion(..)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::PullRequest(..)) => PULL_REQUEST_PATTERN.to_owned(),

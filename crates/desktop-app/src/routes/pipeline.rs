@@ -1,8 +1,11 @@
 //! What a pipeline's editor shows beside its graph (`vEDYY`), kept in its route: the pipeline's summary, a
 //! step (`/project/<id>/pipelines/<id>?step=review`), or its settings, history or publish review
-//! (`?panel=history`).
+//! (`?panel=history`), of the draft or of a published version viewed from the history
+//! (`?version=1&panel=history`).
 
-use orchester_core::resource::StepKey;
+use std::num::NonZeroU32;
+
+use orchester_core::resource::{StepKey, VersionNumber};
 
 use super::{
   RouteError,
@@ -11,6 +14,7 @@ use super::{
 
 const STEP: &str = "step";
 const PANEL: &str = "panel";
+const VERSION: &str = "version";
 
 /// A panel of the pipeline editor; the pipeline's summary is the one it opens on.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -38,12 +42,20 @@ impl PipelinePanel {
     }
   }
 
-  pub(super) fn path(&self, pipeline: String) -> String {
+  /// The path of this panel of `pipeline`, of the draft or, with `version`, of that published version.
+  pub(super) fn path(&self, pipeline: String, version: Option<VersionNumber>) -> String {
+    let version = version.map(|v| v.get().to_string());
+    let version = (VERSION, version.as_deref());
     match self {
-      Self::Pipeline => pipeline,
-      Self::Step(key) => with_query(pipeline, &[(STEP, Some(key.as_str()))]),
-      panel => with_query(pipeline, &[(PANEL, panel.name())]),
+      Self::Pipeline => with_query(pipeline, &[version]),
+      Self::Step(key) => with_query(pipeline, &[version, (STEP, Some(key.as_str()))]),
+      panel => with_query(pipeline, &[version, (PANEL, panel.name())]),
     }
+  }
+
+  /// The published version a pipeline's path views, if any.
+  pub(super) fn take_version(params: &mut Params) -> Result<Option<VersionNumber>, RouteError> {
+    Ok(params.take_parsed::<NonZeroU32>(VERSION)?.map(VersionNumber::new))
   }
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {

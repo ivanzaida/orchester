@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt};
 use lurq::{app::component::DevtoolsInspectable, core::Signal};
 use orchester_core::{
   id::{ProjectId, ResourceId},
-  resource::{Pipeline, PipelineEdit, Step, StepKey},
+  resource::{Pipeline, PipelineEdit, Step, StepKey, VersionNumber},
 };
 use orchester_workspace::{messages::Message, pipelines::data::OpenedPipeline};
 
@@ -31,22 +31,49 @@ impl Panels {
       pipeline,
     }
   }
-  /// A panel the person chose, as a new entry of the tab's history.
+  /// A panel the person chose, as a new entry of the tab's history; of the published version viewed, if
+  /// any, but the publish review, which is the draft's.
   pub fn choose(&self, panel: Panel) {
-    self.navigation.go(self.route(panel));
+    let viewed = self.viewed().filter(|_| panel != Panel::Publish);
+    self.navigation.go(self.route(panel, viewed));
   }
-  /// *Cancel*, the close button, *Return to draft*, a removed step and a publish or restore done: back to the
-  /// pipeline's summary, leaving no entry for the panel closed.
+  /// A published version the person picked in the history, as a new entry of the tab's history.
+  pub fn view(&self, version: VersionNumber) {
+    self.navigation.go(self.route(Panel::History, Some(version)));
+  }
+  /// *Cancel*, the close button, a removed step and a publish done: back to the summary of what is shown,
+  /// the draft or the version viewed, leaving no entry for the panel closed.
   pub fn close(&self) {
-    self.navigation.close_panel(self.route(Panel::Pipeline));
+    self.navigation.close_panel(self.route(Panel::Pipeline, self.viewed()));
+  }
+  /// *Return to draft* and a restore done: back to the draft's summary, leaving no entry for the version.
+  pub fn to_draft(&self) {
+    self.navigation.close_panel(self.route(Panel::Pipeline, None));
+  }
+  /// The published version the route views, if it is this editor's.
+  fn viewed(&self) -> Option<VersionNumber> {
+    match self.navigation.route_now() {
+      Route::Project(project, ProjectPage::PipelineVersion(pipeline, version, _))
+        if project == self.project && pipeline == self.pipeline =>
+      {
+        Some(version)
+      }
+      _ => None,
+    }
   }
   /// Whether `route` is this editor's, on any panel: moving between panels leaves no edits behind.
   pub fn holds(&self, route: &Route) -> bool {
-    matches!(route, Route::Project(project, ProjectPage::Pipeline(pipeline, _))
+    matches!(route, Route::Project(project, ProjectPage::Pipeline(pipeline, _) | ProjectPage::PipelineVersion(pipeline, ..))
       if *project == self.project && *pipeline == self.pipeline)
   }
-  fn route(&self, panel: Panel) -> Route {
-    Route::Project(self.project, ProjectPage::Pipeline(self.pipeline, panel))
+  fn route(&self, panel: Panel, version: Option<VersionNumber>) -> Route {
+    Route::Project(
+      self.project,
+      match version {
+        Some(version) => ProjectPage::PipelineVersion(self.pipeline, version, panel),
+        None => ProjectPage::Pipeline(self.pipeline, panel),
+      },
+    )
   }
 }
 impl PartialEq for Panels {
@@ -73,8 +100,9 @@ pub struct Editing {
   pub panels: Panels,
   pub errors: BTreeMap<String, Message>,
   pub inputs: BTreeMap<String, String>,
+  /// The published version shown read-only, as the route names it ([`Panels::view`]).
   pub viewing: Option<Pipeline>,
-  pub viewing_version: Option<orchester_core::resource::VersionNumber>,
+  pub viewing_version: Option<VersionNumber>,
   pub epoch: u64,
   pub comparing: bool,
   pub restore_requested: bool,
@@ -123,7 +151,7 @@ impl Editing {
       }
     }
   }
-  /// Takes the version viewed into the draft; the caller then closes the history ([`Panels::close`]).
+  /// Takes the version viewed into the draft; the caller then returns to the draft ([`Panels::to_draft`]).
   pub fn restore(&mut self) {
     if let Some(body) = self.viewing.take() {
       self.edit = PipelineEdit::new(body);

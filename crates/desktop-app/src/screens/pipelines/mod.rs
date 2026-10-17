@@ -23,7 +23,7 @@ mod summary;
 mod work;
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::id::ResourceId;
+use orchester_core::{id::ResourceId, resource::VersionNumber};
 
 use crate::project::ShownProject;
 
@@ -37,13 +37,20 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
 pub fn new_pipeline(ctx: &mut Ctx, project: &ShownProject) -> Element {
   ctx.mount_keyed::<new_pipeline::NewPipeline>(&format!("pipeline-new-{}", project.open.project.id()), project.clone())
 }
-pub fn editor(ctx: &mut Ctx, project: &ShownProject, id: ResourceId, panel: state::Panel) -> Element {
+/// The editor of pipeline `id` on the route's panel, of the draft or of the published version viewed.
+pub fn editor(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  id: ResourceId,
+  (panel, version): (state::Panel, Option<VersionNumber>),
+) -> Element {
   ctx.mount_keyed::<load_editor::LoadEditor>(
     &format!("pipeline-{id}"),
     load_editor::LoadProps {
       project: project.clone(),
       id,
       panel,
+      version,
     },
   )
 }

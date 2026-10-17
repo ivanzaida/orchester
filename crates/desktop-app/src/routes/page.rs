@@ -3,6 +3,7 @@ use std::num::NonZeroU64;
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   project::TaskKey,
+  resource::VersionNumber,
 };
 use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
@@ -41,6 +42,9 @@ pub enum ProjectPage {
   NewEmptyPipeline,
   /// A pipeline's editor, with the panel it shows beside the graph.
   Pipeline(ResourceId, PipelinePanel),
+  /// A pipeline's editor showing a published version, read-only, picked in its history, with the panel
+  /// beside the graph; never the publish review.
+  PipelineVersion(ResourceId, VersionNumber, PipelinePanel),
   Agents,
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
@@ -111,7 +115,9 @@ impl ProjectPage {
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
       Self::Usage(_) => Screen::Usage,
-      Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) => Screen::Pipelines,
+      Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) | Self::PipelineVersion(..) => {
+        Screen::Pipelines
+      }
       Self::Agents | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
       Self::Memory => Screen::Memory,
@@ -152,7 +158,8 @@ impl ProjectPage {
       ),
       Self::NewPipeline => format!("{project_root}/pipelines/new"),
       Self::NewEmptyPipeline => format!("{project_root}/pipelines/new?start=empty"),
-      Self::Pipeline(id, panel) => panel.path(format!("{project_root}/pipelines/{id}")),
+      Self::Pipeline(id, panel) => panel.path(format!("{project_root}/pipelines/{id}"), None),
+      Self::PipelineVersion(id, version, panel) => panel.path(format!("{project_root}/pipelines/{id}"), Some(*version)),
       Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
@@ -215,7 +222,16 @@ impl ProjectPage {
       },
       ["pipelines", id] => {
         let id = id.parse().map_err(|_| RouteError::NoScreen)?;
-        PipelinePanel::take(params).map(|panel| Self::Pipeline(id, panel))
+        let version = PipelinePanel::take_version(params)?;
+        match (version, PipelinePanel::take(params)?) {
+          (None, panel) => Ok(Self::Pipeline(id, panel)),
+          // A published version is never published again.
+          (Some(_), PipelinePanel::Publish) => Err(RouteError::InvalidParam {
+            param: "panel".to_owned(),
+            value: "publish".to_owned(),
+          }),
+          (Some(version), panel) => Ok(Self::PipelineVersion(id, version, panel)),
+        }
       }
       ["agents", NEW] => AgentTab::take(params).map(Self::NewAgent),
       ["agents", id] => {

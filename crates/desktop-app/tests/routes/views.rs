@@ -1,11 +1,16 @@
 //! The tabs, filters, items and panels a screen keeps in its route, so each is an entry of a tab's history:
 //! Secrets, the Skills library, an agent profile, Instructions, a pipeline's editor and Project settings.
 
+use std::num::NonZeroU32;
+
 use orchester_app::routes::{
   AgentTab, InstructionsPanel, InstructionsTab, InstructionsView, PipelinePanel, ProjectPage, ProjectSettingsTab,
   Route, SecretsPanel, SecretsTab, SecretsView, SkillsFilter,
 };
-use orchester_core::{resource::StepKey, secret::Environment};
+use orchester_core::{
+  resource::{StepKey, VersionNumber},
+  secret::Environment,
+};
 
 use super::{CONNECTION, PROJECT, at};
 
@@ -62,6 +67,13 @@ pub(super) fn view_routes() -> Vec<Route> {
     PipelinePanel::History,
     PipelinePanel::Publish,
   ] {
+    if panel != PipelinePanel::Publish {
+      all.push(at(ProjectPage::PipelineVersion(
+        id,
+        VersionNumber::FIRST,
+        panel.clone(),
+      )));
+    }
     all.push(at(ProjectPage::Pipeline(id, panel)));
   }
   all.extend(ProjectSettingsTab::ALL.map(|tab| at(ProjectPage::Settings(tab))));
@@ -161,6 +173,23 @@ fn pipeline_panels_have_their_documented_paths() {
   ] {
     assert_eq!(at_panel(panel).path(), path);
   }
+  let viewed = |panel| {
+    at(ProjectPage::PipelineVersion(
+      CONNECTION.parse().expect("an id"),
+      VersionNumber::new(NonZeroU32::new(2).expect("two")),
+      panel,
+    ))
+  };
+  for (panel, path) in [
+    (PipelinePanel::Pipeline, format!("{pipeline}?version=2")),
+    (
+      PipelinePanel::Step(StepKey::new("review").expect("a step key")),
+      format!("{pipeline}?version=2&step=review"),
+    ),
+    (PipelinePanel::History, format!("{pipeline}?version=2&panel=history")),
+  ] {
+    assert_eq!(viewed(panel).path(), path);
+  }
 }
 
 /// A panel named in the query that is the tab's own reads as the rule without it.
@@ -194,6 +223,9 @@ fn views_refuse_what_they_do_not_name() {
     format!("{root}/pipelines/{id}?panel=steps"),
     format!("{root}/pipelines/{id}?step=Not%20a%20key"),
     format!("{root}/pipelines/{id}?step=review&panel=history"),
+    format!("{root}/pipelines/{id}?version=0&panel=history"),
+    format!("{root}/pipelines/{id}?version=latest"),
+    format!("{root}/pipelines/{id}?version=1&panel=publish"),
     format!("{root}/settings?tab=memory"),
   ] {
     assert!(Route::parse(&path).is_err(), "{path} names no view");
