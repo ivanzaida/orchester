@@ -171,13 +171,15 @@ impl Component for ServerPanel {
     let shown = (pairing.is_fulfilled() && self.showing.get())
       .then_some(pairing.data)
       .flatten();
-    let projects = projects(ctx, &props);
     let presented = presented(ctx, &props.entry);
     let entry = &props.entry;
     let look = server_look(entry);
     let facts: Vec<Fact> = std::iter::once(Fact::Plain(entry.address.authority()))
       .chain(version(ctx, entry).map(Fact::Plain))
       .collect();
+    // A future belongs to its place among the render's futures: the projects' is asked only while the server is in
+    // use and connected, so it comes after those asked in every render.
+    let projects = projects(ctx, &props);
     let mut head = header(
       ctx,
       "orchester-server-header",
