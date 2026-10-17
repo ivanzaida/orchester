@@ -1,10 +1,15 @@
 //! Merging a run that succeeded into the branch the user's checkout had when it started, in that
-//! checkout. It merges only a clean checkout on that branch with no merge, cherry-pick or revert
-//! in progress, and never stashes, resets or touches uncommitted work: anything else is refused
-//! with the reason. It fast-forwards when it can, else commits a merge ("Merge ORC-12 run #3")
-//! with the repository's git identity. A conflict, or a hook that refuses the merge commit, is
-//! undone with `git merge --abort`, which leaves the clean checkout as it was. The repository's
-//! hooks run: they are the user's.
+//! checkout. It merges only a checkout on that branch with no merge, cherry-pick or revert in
+//! progress, and never stashes, resets or touches uncommitted work: uncommitted changes and
+//! untracked files the merge does not reach stay as they are. It fast-forwards when it can, else
+//! commits a merge ("Merge ORC-12 run #3") with the repository's git identity in a temporary
+//! worktree ([`temporary`]), where a conflict or a hook that refuses the merge commit stops it
+//! without reaching the checkout. Either result reaches the checkout as a fast-forward
+//! ([`bring_in`]), which git refuses, changing nothing, when it would overwrite or remove a file
+//! with uncommitted changes, an untracked one or an ignored one; the refusal names exactly those.
+//! The repository's hooks run: they are the user's.
+
+mod temporary;
 
 use std::path::Path;
 
@@ -50,8 +55,8 @@ pub struct RunMerge {
   pub merged_at: Timestamp,
 }
 
-/// Why a run was not merged. Except for [`MergeError::Git`] after the merge started, nothing in
-/// the checkout changed.
+/// Why a run was not merged. Except for [`MergeError::Git`] while the checkout was being brought
+/// to the merge, nothing in the checkout changed.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum MergeError {
   #[error("only a run that succeeded can be merged")]
@@ -65,8 +70,10 @@ pub enum MergeError {
     expected: BranchName,
     current: Option<BranchName>,
   },
-  #[error("the checkout has uncommitted changes: {files:?}")]
-  Uncommitted { files: Vec<String> },
+  /// Bringing the merge into the checkout would overwrite or remove these files, which have
+  /// uncommitted changes there or are untracked or ignored. Uncommitted work elsewhere is no reason.
+  #[error("the merge would overwrite uncommitted changes in the checkout: {files:?}")]
+  UncommittedInTheWay { files: Vec<String> },
   #[error("a merge, cherry-pick or revert is in progress in the checkout")]
   InProgress,
   #[error("the run's branch {0} does not exist")]
@@ -146,30 +153,16 @@ fn merge(
     return Ok((revision(&base)?, MergeKind::AlreadyMerged));
   }
   if git.is_ancestor(&base, &head)? {
-    let output = git.output(&["merge", "--ff-only", "--no-edit", "--no-overwrite-ignore", &head])?;
-    if !output.success() {
-      return Err(MergeError::Refused(message(&output)));
-    }
+    bring_in(&git, &head)?;
     return Ok((revision(&head)?, MergeKind::FastForward));
   }
   let title = format!("Merge {task} run #{}", run.number().get());
-  let output = git.output(&[
-    "merge",
-    "--no-ff",
-    "--no-edit",
-    "--no-overwrite-ignore",
-    "-m",
-    &title,
-    &head,
-  ])?;
-  if !output.success() {
-    return Err(undo(&git, message(&output)));
-  }
-  let merged = git.stdout(&["rev-parse", "--verify", "HEAD"])?;
+  let merged = temporary::merge_commit(&git, run.id(), (&base, &head), &title)?;
+  bring_in(&git, &merged)?;
   Ok((revision(&merged)?, MergeKind::MergeCommit))
 }
 
-/// Refuses a checkout that is not on `into`, has uncommitted changes or an operation in progress.
+/// Refuses a checkout that is not on `into` or has an operation in progress.
 fn check_checkout<R: CommandRunner>(git: &Git<'_, R>, into: &BranchName) -> Result<(), MergeError> {
   let current = git.checked_out_branch()?;
   if current.as_ref() != Some(into) {
@@ -183,38 +176,38 @@ fn check_checkout<R: CommandRunner>(git: &Git<'_, R>, into: &BranchName) -> Resu
       return Err(MergeError::InProgress);
     }
   }
-  let files = git.uncommitted()?;
-  if !files.is_empty() {
-    return Err(MergeError::Uncommitted { files });
-  }
   Ok(())
 }
 
-/// Undoes a merge that stopped, naming the files that conflict. A merge refused before it began
-/// left nothing to undo.
-fn undo<R: CommandRunner>(git: &Git<'_, R>, said: String) -> MergeError {
-  let started = match git.succeeds(&["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]) {
-    Ok(started) => started,
-    Err(error) => return error.into(),
-  };
-  if !started {
-    return MergeError::Refused(said);
+/// Fast-forwards the checkout's branch, index and files to `commit`, a descendant of its HEAD. Git
+/// checks every path before it writes one, so a refusal changed nothing.
+fn bring_in<R: CommandRunner>(git: &Git<'_, R>, commit: &str) -> Result<(), MergeError> {
+  let output = git.output(&["merge", "--ff-only", "--no-edit", "--no-overwrite-ignore", commit])?;
+  if output.success() {
+    return Ok(());
   }
-  let conflicts = git.stdout(&["diff", "--name-only", "--diff-filter=U", "-z"]);
-  if let Err(error) = git.stdout(&["merge", "--abort"]) {
-    return error.into();
+  let files = in_the_way(&output.stderr);
+  if files.is_empty() {
+    return Err(MergeError::Refused(message(&output)));
   }
-  match conflicts {
-    Ok(files) if !files.is_empty() => MergeError::Conflict {
-      files: files
-        .split('\0')
-        .filter(|file| !file.is_empty())
-        .map(str::to_owned)
-        .collect(),
-    },
-    Ok(_) => MergeError::Refused(said),
-    Err(error) => error.into(),
+  Err(MergeError::UncommittedInTheWay { files })
+}
+
+/// The files git names when it refuses to update the checkout because that would lose what is in
+/// them: one per line after a tab, under a line that ends like "would be overwritten by merge:",
+/// "would be removed by merge:" or "would lose untracked files in them:" (git's messages are in
+/// English, [`crate::diff::git::git_command`]).
+fn in_the_way(stderr: &str) -> Vec<String> {
+  let mut files = Vec::new();
+  let mut listing = false;
+  for line in stderr.lines() {
+    match line.strip_prefix('\t') {
+      Some(file) if listing => files.push(file.to_owned()),
+      Some(_) => {}
+      None => listing = line.ends_with(" by merge:") || line.ends_with(" would lose untracked files in them:"),
+    }
   }
+  files
 }
 
 fn revision(sha: &str) -> Result<Revision, GitError> {

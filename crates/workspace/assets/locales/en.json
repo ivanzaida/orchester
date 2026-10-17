@@ -454,7 +454,7 @@
       "failure": {
         "wrongBranch": "Your checkout is on {{current}}, not {{branch}}. Switch it to {{branch}}, then merge again. Nothing was changed.",
         "detached": "Your checkout has a detached HEAD. Switch it to {{branch}}, then merge again. Nothing was changed.",
-        "uncommitted": "Your checkout has uncommitted changes: {{files}}. Commit or stash them yourself, then merge again. Nothing was changed.",
+        "uncommitted": "Your checkout has uncommitted changes the merge would overwrite: {{files}}. Commit, stash or move them yourself, then merge again. Nothing was changed.",
         "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
         "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",

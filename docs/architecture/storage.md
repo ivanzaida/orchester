@@ -275,14 +275,20 @@ none on a detached HEAD, and none for runs recorded before it was kept, which ca
 Orchester). All of it is git through `orchester-exec`, with git's messages in English and no optional
 locks (`orchester_core::integration`).
 
-- **Only a checkout that is ready.** The checkout must be on that branch, have no uncommitted
-  changes (untracked files included) and no merge, cherry-pick or revert in progress; otherwise the
-  merge is refused with the reason and nothing changes. Nothing is ever stashed, reset or discarded.
+- **Only a checkout that is ready.** The checkout must be on that branch and have no merge,
+  cherry-pick or revert in progress; otherwise the merge is refused with the reason and nothing
+  changes. Uncommitted changes and untracked files may be there: nothing is ever stashed, reset or
+  discarded, and what the merge does not reach stays as it is.
 - **Merging.** A fast-forward when the branch did not move since the run started, else a merge commit
-  *Merge ORC-12 run #3* with the repository's git identity. The repository's own hooks run: they are
-  the user's. A conflict, or a hook that refuses the merge commit, is undone with `git merge
-  --abort` — safe because the checkout was clean — and the conflicting files are named. A branch that
-  already holds every commit of the run is recorded as merged without a change.
+  *Merge ORC-12 run #3* with the repository's git identity, made in a temporary worktree
+  (`<git common dir>/orchester-merge-<run id>`, removed again on every path) so that the merge never
+  touches the checkout's files. The repository's own hooks run there: they are the user's. A
+  conflict, or a hook that refuses the merge commit, ends with the temporary worktree removed, the
+  checkout as it was, and the conflicting files named. Either result reaches the checkout as a
+  fast-forward (`git merge --ff-only`), which git refuses, changing nothing, when it would overwrite
+  or remove a file with uncommitted changes, an untracked file or an ignored one; the refusal names
+  exactly those files. A branch that already holds every commit of the run is recorded as merged
+  without a change.
 - **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
   afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped

@@ -149,7 +149,7 @@ fn merge_message(error: &MergeError, separator: &str) -> Message {
       expected,
       current: None,
     } => Message::new("runs.merge.failure.detached").with("branch", expected.to_string()),
-    MergeError::Uncommitted { files } => with_files("runs.merge.failure.uncommitted", files),
+    MergeError::UncommittedInTheWay { files } => with_files("runs.merge.failure.uncommitted", files),
     MergeError::InProgress => Message::new("runs.merge.failure.inProgress"),
     MergeError::BranchMissing(branch) => {
       Message::new("runs.merge.failure.branchMissing").with("branch", branch.to_string())
