@@ -8,8 +8,8 @@ mod usage;
 use std::num::NonZeroU64;
 
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage, Route,
-  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage,
+  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -68,7 +68,9 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::Tasks(TaskList::default().with_search("retry"))),
     at(ProjectPage::Tasks(TaskList::default().with_search(AWKWARD))),
     at(ProjectPage::Tasks(TaskList::default().with_highlight(key("KON-13")))),
-    at(ProjectPage::Tasks(TaskList::default().with_search("KON-12").with_not_shared(true))),
+    at(ProjectPage::Tasks(
+      TaskList::default().with_search("KON-12").with_not_shared(true),
+    )),
     at(ProjectPage::Join(join_target())),
     Route::Invite(join_target()),
     at(ProjectPage::Tasks(
@@ -199,6 +201,16 @@ fn paths_are_the_documented_ones() {
       at(ProjectPage::Sharing { make_local: true }),
       format!("{root}/settings/sharing?ask=make-local"),
     ),
+  ];
+  for (route, path) in paths {
+    assert_eq!(route.path(), path);
+  }
+}
+
+#[test]
+fn joining_paths_are_the_documented_ones() {
+  let root = format!("/project/{PROJECT}");
+  let paths = [
     (
       at(ProjectPage::Join(join_target())),
       format!("{root}/settings/sharing/join?server={CONNECTION}&project=kontur"),

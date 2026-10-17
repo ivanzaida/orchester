@@ -44,7 +44,11 @@ fn reviewing(server: &TestServer, kontur: &SharedProject) -> (Window, Recorder) 
   let mut window = harness::window(Some(KONTUR_REMOTE));
   local_tasks(
     &window,
-    &["Export invoices as PDF", "Add retry to webhook sender", "Paginate the webhook log"],
+    &[
+      "Export invoices as PDF",
+      "Add retry to webhook sender",
+      "Paginate the webhook log",
+    ],
   );
   let recorder = join(&window, server, kontur, ("oleh", "Oleh Petrenko"));
   open_sharing(&mut window, "sharing-address");
@@ -58,7 +62,11 @@ fn reviewing(server: &TestServer, kontur: &SharedProject) -> (Window, Recorder) 
 fn shared_project_join_review_uploads_the_ticked_tasks_and_keeps_the_mapping() {
   let (server, kontur) = ktr();
   let (mut window, recorder) = reviewing(&server, &kontur);
-  assert_eq!(server.task_keys(&kontur), ["KTR-1", "KTR-2"], "nothing goes up before the confirm");
+  assert_eq!(
+    server.task_keys(&kontur),
+    ["KTR-1", "KTR-2"],
+    "nothing goes up before the confirm"
+  );
   assert!(
     window
       .text("sharing-join-row-KON-1-similar")
@@ -75,7 +83,11 @@ fn shared_project_join_review_uploads_the_ticked_tasks_and_keeps_the_mapping() {
 
   with_synthetic_input(|| window.press("sharing-join-confirm"));
   shows(&mut window, "sharing-join-confirm-person-only");
-  assert_eq!(server.task_keys(&kontur).len(), 2, "an MCP client's press sends nothing");
+  assert_eq!(
+    server.task_keys(&kontur).len(),
+    2,
+    "an MCP client's press sends nothing"
+  );
 
   press(&mut window, "sharing-join-confirm");
   shows(&mut window, "sharing-joined");
@@ -136,11 +148,7 @@ fn reviewing_with_a_run(server: &TestServer, kontur: &SharedProject) -> (Window,
 fn working(root: &std::path::Path) {
   let mut db = ProjectDb::open(root).expect("database");
   crate::run_fixture::auto_run(&mut db);
-  let pipeline = db
-    .resources(ResourceKind::Pipeline)
-    .expect("pipelines")
-    .remove(0)
-    .id();
+  let pipeline = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
   let task = db.tasks().expect("tasks").remove(1);
   let complete = TaskDetails {
     brief: "Review what the regression changed.".into(),
@@ -166,7 +174,9 @@ fn shared_project_a_lost_join_answer_keeps_the_ticks_and_uploads_nothing_twice()
   press(&mut window, "sharing-join-confirm");
   shows(&mut window, "sharing-join-failed");
   assert!(
-    window.text("sharing-join-failed").contains("trying again doesn't upload them twice"),
+    window
+      .text("sharing-join-failed")
+      .contains("trying again doesn't upload them twice"),
     "the join says some may have gone up"
   );
   assert_eq!(server.task_keys(&kontur).len(), 4, "the import reached the server");
@@ -212,7 +222,10 @@ fn shared_project_a_not_shared_task_is_shared_later_from_its_page() {
     Route::Project(project, ProjectPage::Tasks(TaskList::default().with_search("KON-2"))),
     "task-row-KTR-3",
   );
-  assert_eq!(window.text("tasks-footer-text"), "1 task · found by its key before joining");
+  assert_eq!(
+    window.text("tasks-footer-text"),
+    "1 task · found by its key before joining"
+  );
   harness::go(
     &mut window,
     Route::Project(project, ProjectPage::Tasks(TaskList::default().with_search("KON-1"))),
@@ -225,7 +238,10 @@ fn shared_project_a_not_shared_task_is_shared_later_from_its_page() {
   // Its page: read-only, Share task asks in place, and only a person shares it.
   harness::go(
     &mut window,
-    Route::Project(project, ProjectPage::Task("KON-1".parse().expect("key"), TaskView::of(TaskTab::Summary))),
+    Route::Project(
+      project,
+      ProjectPage::Task("KON-1".parse().expect("key"), TaskView::of(TaskTab::Summary)),
+    ),
     "task-not-shared",
   );
   press(&mut window, "task-share");
@@ -235,7 +251,11 @@ fn shared_project_a_not_shared_task_is_shared_later_from_its_page() {
   });
   with_synthetic_input(|| window.press("task-share-confirm"));
   shows(&mut window, "task-share-confirm-person-only");
-  assert_eq!(server.task_keys(&kontur).len(), 4, "an MCP client's press shares nothing");
+  assert_eq!(
+    server.task_keys(&kontur).len(),
+    4,
+    "an MCP client's press shares nothing"
+  );
   press(&mut window, "task-share-confirm");
   shows(&mut window, "task-former-key");
   assert_eq!(window.text("task-former-key"), "was KON-1");

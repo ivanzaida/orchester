@@ -19,11 +19,9 @@ use orchester_api::cloud::CloudInvite;
 use orchester_core::id::{InviteId, ServerId};
 use orchester_store::AcceptedInvite;
 use orchester_workspace::sharing::{
-  CloudJoined,
+  CloudJoined, ProjectAddress,
   cloud::{Accepted, CloudError},
 };
-
-use orchester_workspace::sharing::ProjectAddress;
 
 use super::{PersonOnly, Said, words::cloud_error};
 use crate::{

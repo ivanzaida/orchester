@@ -1,9 +1,9 @@
 //! A task of a project that joined a server project, on its page. One kept *Not shared* (`R4elt`) says so over its
-//! Summary, read-only, with *Share task* in the header, which asks in place ([`question`], `TfVtK`); beside it, *On this
-//! computer only*: its key, when it was left out, the key it would become, the server's similar task and the server.
-//! One that went up with another key (`VuLYC`) shows *was KON-12* after its title and *On Kontur team* beside its
-//! Summary: its key now and before joining, when it was shared, who created it and changed it last, and why texts still
-//! say the old key.
+//! Summary, read-only, with *Share task* in the header, which asks in place ([`question`], `TfVtK`); beside it, *On
+//! this computer only*: its key, when it was left out, the key it would become, the server's similar task and the
+//! server. One that went up with another key (`VuLYC`) shows *was KON-12* after its title and *On Kontur team* beside
+//! its Summary: its key now and before joining, when it was shared, who created it and changed it last, and why texts
+//! still say the old key.
 
 pub mod question;
 
@@ -109,9 +109,10 @@ pub fn next_key(ctx: &mut Ctx, task: &TaskContext) -> Option<TaskKey> {
   }
   let (servers, root) = (Services::of(ctx).servers, task.project.open.repo_root.clone());
   let read = ctx
-    .future((root, servers, task.project.feed.revision.get()), |(root, servers, _)| async move {
-      Ok::<_, ()>(NextKey(ask_next(servers, root).await))
-    })
+    .future(
+      (root, servers, task.project.feed.revision.get()),
+      |(root, servers, _)| async move { Ok::<_, ()>(NextKey(ask_next(servers, root).await)) },
+    )
     .state()
     .get();
   read.data.and_then(|next| next.0)
@@ -139,31 +140,27 @@ async fn ask_next(servers: Servers, root: std::path::PathBuf) -> Option<TaskKey>
 pub fn notice(ctx: &Ctx, task: &TaskContext, linked: Option<&Linked>) -> Element {
   let key = task.detail.task.key().to_string();
   let names = names(task, linked);
-  Notice::new(
-    "task-not-shared",
-    NoticeTone::Info,
-    ctx.t("task.notShared.title"),
-  )
-  .icon(Icon::Archive)
-  .body(ctx.t_args(
-    "task.notShared.body",
-    [
-      ("task", key.clone()),
-      ("project", names.project.clone()),
-      ("key", names.key.clone()),
-      ("day", names.day(ctx)),
-      ("server", names.server),
-    ],
-  ))
-  .part(
-    Row::new()
-      .id("task-not-shared-locked")
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Center)
-      .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
-      .child(Text::new(&ctx.t_args("task.notShared.locked", [("task", key)])).variant(ExtraTypography::Note.role())),
-  )
-  .into()
+  Notice::new("task-not-shared", NoticeTone::Info, ctx.t("task.notShared.title"))
+    .icon(Icon::Archive)
+    .body(ctx.t_args(
+      "task.notShared.body",
+      [
+        ("task", key.clone()),
+        ("project", names.project.clone()),
+        ("key", names.key.clone()),
+        ("day", names.day(ctx)),
+        ("server", names.server),
+      ],
+    ))
+    .part(
+      Row::new()
+        .id("task-not-shared-locked")
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+        .child(Text::new(&ctx.t_args("task.notShared.locked", [("task", key)])).variant(ExtraTypography::Note.role())),
+    )
+    .into()
 }
 
 /// The names the words of a joined task use: the project, the server project's key, the server, and when it joined.
@@ -222,7 +219,15 @@ fn kept_section(ctx: &Ctx, task: &TaskContext, (linked, names): (&Linked, &Names
     |next| ctx.t_args("task.notShared.wouldValue", [("key", next.to_string())]),
   );
   let mut rows = vec![
-    row(ctx, "kept-key", ("task.notShared.key", &ctx.t_args("task.notShared.keyValue", [("key", key)])), DetailValue::Mono),
+    row(
+      ctx,
+      "kept-key",
+      (
+        "task.notShared.key",
+        &ctx.t_args("task.notShared.keyValue", [("key", key)]),
+      ),
+      DetailValue::Mono,
+    ),
     row(
       ctx,
       "kept-left-out",
@@ -230,7 +235,11 @@ fn kept_section(ctx: &Ctx, task: &TaskContext, (linked, names): (&Linked, &Names
         "task.notShared.leftOut",
         &ctx.t_args(
           "task.notShared.leftOutValue",
-          [("day", names.day(ctx)), ("project", names.project.clone()), ("key", names.key.clone())],
+          [
+            ("day", names.day(ctx)),
+            ("project", names.project.clone()),
+            ("key", names.key.clone()),
+          ],
         ),
       ),
       DetailValue::Text,
@@ -264,7 +273,12 @@ fn joined_section(ctx: &Ctx, task: &TaskContext, names: &Names, former: &str) ->
     ],
   );
   let mut rows = vec![
-    row(ctx, "joined-key", ("task.joined.key", &task.detail.task.key().to_string()), DetailValue::Mono),
+    row(
+      ctx,
+      "joined-key",
+      ("task.joined.key", &task.detail.task.key().to_string()),
+      DetailValue::Mono,
+    ),
     row(ctx, "joined-before", ("task.joined.before", former), DetailValue::Mono),
     row(
       ctx,
@@ -273,16 +287,30 @@ fn joined_section(ctx: &Ctx, task: &TaskContext, names: &Names, former: &str) ->
         "task.joined.shared",
         &ctx.t_args(
           "task.joined.sharedValue",
-          [("day", names.day(ctx)), ("project", names.project.clone()), ("key", names.key.clone())],
+          [
+            ("day", names.day(ctx)),
+            ("project", names.project.clone()),
+            ("key", names.key.clone()),
+          ],
         ),
       ),
       DetailValue::Text,
     ),
-    row(ctx, "joined-created", ("task.joined.created", &created), DetailValue::Text),
+    row(
+      ctx,
+      "joined-created",
+      ("task.joined.created", &created),
+      DetailValue::Text,
+    ),
   ];
   if let Some((by, at)) = info.and_then(|info| Some((info.updated_by.clone()?, info.updated_at?))) {
     let value = ctx.t_args("task.joined.changedValue", [("by", by), ("time", moment(ctx, at))]);
-    rows.push(row(ctx, "joined-changed", ("task.joined.changed", &value), DetailValue::Text));
+    rows.push(row(
+      ctx,
+      "joined-changed",
+      ("task.joined.changed", &value),
+      DetailValue::Text,
+    ));
   }
   rows.push(
     Row::new()

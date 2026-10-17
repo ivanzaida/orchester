@@ -14,10 +14,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{id::IdempotencyKey, project::TaskKey};
-use orchester_workspace::{
-  background,
-  sharing::project::ProjectServer,
-};
+use orchester_workspace::{background, sharing::project::ProjectServer};
 
 use super::Linked;
 use crate::{
@@ -87,7 +84,7 @@ impl Component for ShareQuestion {
     let (navigation, project, feed) = (
       Navigation::of(ctx),
       props.task.project.open.project.id(),
-      props.task.project.feed.clone(),
+      props.task.project.feed,
     );
     ctx.watch(&share.state(), move |state| {
       if let Some(SharedAs(key)) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
@@ -114,41 +111,17 @@ impl Component for ShareQuestion {
         (
           props.task.project.open.project.name().as_str().to_owned(),
           linked.sharing.link.key.as_str().to_owned(),
-          linked.sharing.server.as_ref().map(|(name, _)| name.clone()).unwrap_or_default(),
+          linked
+            .sharing
+            .server
+            .as_ref()
+            .map(|(name, _)| name.clone())
+            .unwrap_or_default(),
         )
       },
     );
     let next = props.next.as_ref().map(ToString::to_string);
-    let goes = match &next {
-      Some(next) => ctx.t_args(
-        "task.share.goes",
-        [("project", project.as_str()), ("server", server.as_str()), ("next", next.as_str())],
-      ),
-      None => ctx.t_args(
-        "task.share.goesNext",
-        [("project", project.as_str()), ("server", server.as_str()), ("key", key.as_str())],
-      ),
-    };
-    let mut lines = vec![line("task-share-goes", Icon::Upload, &goes)];
-    if let Some(similar) = props.linked.as_ref().and_then(|linked| linked.kept.as_ref()?.similar.as_ref()) {
-      let words = ctx.t_args(
-        "task.share.similar",
-        [
-          ("project", key.as_str()),
-          ("key", similar.key.as_str()),
-          ("title", similar.title.as_str()),
-          ("by", similar.created_by.as_str()),
-          ("task", local.as_str()),
-        ],
-      );
-      lines.push(line("task-share-similar", Icon::Copy, &words));
-    }
-    lines.push(line(
-      "task-share-tags",
-      Icon::Tag,
-      &ctx.t_args("task.share.tags", [("project", key.as_str())]),
-    ));
-    lines.push(line("task-share-stays", Icon::Archive, &ctx.t("task.share.stays")));
+    let lines = lines(ctx, &props, (&local, (&project, &key, &server)), next.as_deref());
     let state = self.share.state().get();
     let failure = state.error.clone().filter(|_| !state.is_pending());
     Column::new()
@@ -207,6 +180,51 @@ impl ShareQuestion {
   }
 }
 
+/// What the share does: where the task goes and as which key, the server's similar task, its tags and links, and what
+/// stays here.
+fn lines(
+  ctx: &Ctx,
+  props: &Props,
+  (local, (project, key, server)): (&str, (&str, &str, &str)),
+  next: Option<&str>,
+) -> Vec<Element> {
+  let goes = match next {
+    Some(next) => ctx.t_args(
+      "task.share.goes",
+      [("project", project), ("server", server), ("next", next)],
+    ),
+    None => ctx.t_args(
+      "task.share.goesNext",
+      [("project", project), ("server", server), ("key", key)],
+    ),
+  };
+  let mut lines = vec![line("task-share-goes", Icon::Upload, &goes)];
+  if let Some(similar) = props
+    .linked
+    .as_ref()
+    .and_then(|linked| linked.kept.as_ref()?.similar.as_ref())
+  {
+    let words = ctx.t_args(
+      "task.share.similar",
+      [
+        ("project", key),
+        ("key", similar.key.as_str()),
+        ("title", similar.title.as_str()),
+        ("by", similar.created_by.as_str()),
+        ("task", local),
+      ],
+    );
+    lines.push(line("task-share-similar", Icon::Copy, &words));
+  }
+  lines.push(line(
+    "task-share-tags",
+    Icon::Tag,
+    &ctx.t_args("task.share.tags", [("project", key)]),
+  ));
+  lines.push(line("task-share-stays", Icon::Archive, &ctx.t("task.share.stays")));
+  lines
+}
+
 /// One thing the share does, after its icon.
 fn line(id: &str, glyph: Icon, words: &str) -> Element {
   Row::new()
@@ -215,10 +233,6 @@ fn line(id: &str, glyph: Icon, words: &str) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
     .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
-    .child(
-      Text::new(words)
-        .variant(ExtraTypography::Prose.role())
-        .flex(1.0),
-    )
+    .child(Text::new(words).variant(ExtraTypography::Prose.role()).flex(1.0))
     .into()
 }

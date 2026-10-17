@@ -87,7 +87,12 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> 
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(Column::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(title))
+    .child(
+      Column::new()
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .child(title),
+    )
     .with_children(after);
   Row::new()
     .id("task-title-row")
@@ -142,8 +147,7 @@ fn share_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
     return None;
   }
   let share = PageState::of(ctx).share;
-  let button =
-    ActionButton::new("task-share", ButtonKind::Primary, ctx.t("task.notShared.share")).icon(Icon::Upload);
+  let button = ActionButton::new("task-share", ButtonKind::Primary, ctx.t("task.notShared.share")).icon(Icon::Upload);
   if share.get() {
     return Some(button.disabled());
   }

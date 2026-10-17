@@ -17,7 +17,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{id::IdempotencyKey, id::TaskId};
+use orchester_core::id::{IdempotencyKey, TaskId};
 use orchester_workspace::sharing::RemoteMatch;
 
 use super::{
@@ -119,7 +119,7 @@ impl Component for Review {
         }
       }
     });
-    let (navigation, projects, feed) = (Navigation::of(ctx), Projects::of(ctx), props.project.feed.clone());
+    let (navigation, projects, feed) = (Navigation::of(ctx), Projects::of(ctx), props.project.feed);
     ctx.watch(&join.state(), move |state| {
       if state.is_fulfilled() && state.error.is_none() {
         // The project has the server project's key now, and its tasks are the server's: both are read again.
@@ -189,32 +189,18 @@ impl Review {
         Crumb::here(ctx.t_args("sharing.join.crumb", [("key", key.as_str())])),
       ],
     );
-    let count = review.tasks.len();
-    let lead_key = if count == 1 {
-      "sharing.join.description.one"
-    } else {
-      "sharing.join.description.other"
-    };
-    let text = Column::new()
-      .flex(1.0)
-      .spacing(SpacingSize::Xs)
-      .child(
-        Text::new(&ctx.t_args(
-          "sharing.join.title",
-          [("key", key.as_str()), ("server", server.as_str())],
-        ))
-        .id("sharing-join-title")
-        .variant(TypographyStyle::Heading),
-      )
-      .child(
-        Text::new(&ctx.t_args(lead_key, [("key", key), ("count", count.to_string())]))
-          .id("sharing-join-lead")
-          .variant(TypographyStyle::Description)
-          .width(Dimension::Pct(100.0)),
-      );
+    let text = title(ctx, (&key, &server), review.tasks.len());
     let pending = self.join.state().get().is_pending();
-    let cancel = ActionButton::new("sharing-join-cancel", ButtonKind::Secondary, ctx.t("sharing.join.cancel"));
-    let cancel = if pending { cancel.disabled() } else { cancel.on_click(back) };
+    let cancel = ActionButton::new(
+      "sharing-join-cancel",
+      ButtonKind::Secondary,
+      ctx.t("sharing.join.cancel"),
+    );
+    let cancel = if pending {
+      cancel.disabled()
+    } else {
+      cancel.on_click(back)
+    };
     let actions = Row::new()
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
@@ -234,20 +220,7 @@ impl Review {
           .child(actions),
       )
       .with_children(self.person.reason(ctx, CONFIRM));
-    Column::new()
-      .id("sharing-join-head")
-      .width(Dimension::Pct(100.0))
-      .align_items(Alignment::Center)
-      .padding(
-        Padding::new()
-          .top(TaskFormSpacing::PageTop.role())
-          .left(SpacingSize::Xl)
-          .right(SpacingSize::Xl)
-          .bottom(ExtraSpacing::Section.role()),
-      )
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(column)
-      .into()
+    head(column)
   }
 
   /// *Join and upload 4* (*Join without uploading* when nothing goes up), *Joining…* while it runs, *Try again* after
@@ -275,6 +248,47 @@ impl Review {
       }
     })
   }
+}
+
+/// *Join KTR on Kontur team* over what joining does with the `count` local tasks.
+fn title(ctx: &Ctx, (key, server): (&str, &str), count: usize) -> Column {
+  let lead_key = if count == 1 {
+    "sharing.join.description.one"
+  } else {
+    "sharing.join.description.other"
+  };
+  Column::new()
+    .flex(1.0)
+    .spacing(SpacingSize::Xs)
+    .child(
+      Text::new(&ctx.t_args("sharing.join.title", [("key", key), ("server", server)]))
+        .id("sharing-join-title")
+        .variant(TypographyStyle::Heading),
+    )
+    .child(
+      Text::new(&ctx.t_args(lead_key, [("key", key.to_owned()), ("count", count.to_string())]))
+        .id("sharing-join-lead")
+        .variant(TypographyStyle::Description)
+        .width(Dimension::Pct(100.0)),
+    )
+}
+
+/// The page's head around `column`, a line under it (`Head` in `AiCwO`).
+fn head(column: Column) -> Element {
+  Column::new()
+    .id("sharing-join-head")
+    .width(Dimension::Pct(100.0))
+    .align_items(Alignment::Center)
+    .padding(
+      Padding::new()
+        .top(TaskFormSpacing::PageTop.role())
+        .left(SpacingSize::Xl)
+        .right(SpacingSize::Xl)
+        .bottom(ExtraSpacing::Section.role()),
+    )
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(column)
+    .into()
 }
 
 /// *4 of 6 ticked* with what that comes to (`Summary` `G9uMd`).

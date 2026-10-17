@@ -65,9 +65,9 @@ impl ListView {
   /// tabs' counts.
   pub(super) fn tasks(&self, source: &ProjectTasks, (online, not_shared): (bool, bool)) -> (ProjectTasks, TabCounts) {
     let mut kept = self.0.lock();
-    let current = kept.as_ref().is_some_and(|kept| {
-      kept.online == online && kept.not_shared == not_shared && same_reading(&kept.source, source)
-    });
+    let current = kept
+      .as_ref()
+      .is_some_and(|kept| kept.online == online && kept.not_shared == not_shared && same_reading(&kept.source, source));
     if !current {
       let listed = if not_shared {
         source.not_shared_view()

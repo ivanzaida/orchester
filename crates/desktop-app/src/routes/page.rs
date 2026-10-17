@@ -7,8 +7,8 @@ use orchester_core::{
 use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
 use super::{
-  CONNECTIONS, JoinTarget, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
-  PULL_REQUESTS, RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab,
+  CONNECTIONS, ConnectionsView, EDIT, FilesView, JoinTarget, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat,
+  OverviewTab, PULL_REQUESTS, RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
   query::{Params, with_query},

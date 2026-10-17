@@ -110,13 +110,13 @@ pub(super) enum Count {
 pub(super) fn footer(ctx: &Ctx, shown: &Rows<'_>, (filtered, kind): (bool, Count)) -> Row {
   let rows = shown.rows.len();
   let text = match kind {
-    Count::Tasks => message_text(
-      ctx,
-      &list::footer(rows, shown.tasks.runs_of(&shown.rows), filtered),
-    ),
+    Count::Tasks => message_text(ctx, &list::footer(rows, shown.tasks.runs_of(&shown.rows), filtered)),
     Count::FormerKey => counted(
       ctx,
-      ("tasks.notShared.foundByFormer.one", "tasks.notShared.foundByFormer.other"),
+      (
+        "tasks.notShared.foundByFormer.one",
+        "tasks.notShared.foundByFormer.other",
+      ),
       rows,
     ),
     Count::NotShared(total) if rows == total => counted(

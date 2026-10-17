@@ -53,7 +53,12 @@ const WITH_LEAD_WIDTH: f32 = 360.0;
 
 /// The panel around `rows`, `lead` above its title, scrolling when they are taller than the window; `section` above
 /// the title is the task's own (its project's link, `VuLYC`), which keeps the panel's width.
-pub(super) fn panel(id: &str, title: &str, rows: Vec<Element>, (lead, section): (Option<Element>, Option<Element>)) -> Element {
+pub(super) fn panel(
+  id: &str,
+  title: &str,
+  rows: Vec<Element>,
+  (lead, section): (Option<Element>, Option<Element>),
+) -> Element {
   let width = if lead.is_some() { WITH_LEAD_WIDTH } else { PANEL_WIDTH };
   let lead = lead.map(|lead| {
     Column::new()
@@ -352,7 +357,12 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
 }
 
 /// *This task* of a task without a run: the pipeline and limits its first run would use.
-pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice], section: Option<Element>) -> Element {
+pub fn this_task(
+  ctx: &mut Ctx,
+  detail: &TaskDetail,
+  pipelines: &[PipelineChoice],
+  section: Option<Element>,
+) -> Element {
   let details = detail.task.details();
   let missing = detail.missing_pipeline.as_ref().map(|slug| {
     let label = orchester_workspace::tasks::list::PipelineLabel::Missing {
@@ -378,7 +388,12 @@ pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice
   let pipeline = missing.unwrap_or(pipeline);
   let mut rows = vec![row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text)];
   rows.extend(limit_rows(ctx, details.limits));
-  panel("task-this-task", &ctx.t("summary.thisTask.title"), rows, (None, section))
+  panel(
+    "task-this-task",
+    &ctx.t("summary.thisTask.title"),
+    rows,
+    (None, section),
+  )
 }
 
 fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> [Element; 2] {

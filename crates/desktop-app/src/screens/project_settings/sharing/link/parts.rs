@@ -74,12 +74,20 @@ pub(super) fn admin_note(ctx: &Ctx, entry: Option<&ServerEntry>) -> Element {
 
 /// *What linking sends* (`What linking sends` in `bWD9q`).
 pub fn sends(ctx: &Ctx) -> Element {
-  card(ctx, "sharing-sends", ("sharing.link.sends.title", "sharing.link.sends.sharedValue"))
+  card(
+    ctx,
+    "sharing-sends",
+    ("sharing.link.sends.title", "sharing.link.sends.sharedValue"),
+  )
 }
 
 /// *What joining sends* (`What joining sends` in `AiCwO`): the ticked tasks only.
 pub fn join_sends(ctx: &Ctx) -> Element {
-  card(ctx, "sharing-join-sends", ("sharing.join.sends.title", "sharing.join.sends.sharedValue"))
+  card(
+    ctx,
+    "sharing-join-sends",
+    ("sharing.join.sends.title", "sharing.join.sends.sharedValue"),
+  )
 }
 
 /// The card `id`: its title and what is shared with members, by their keys, what stays here and what never goes.

@@ -156,7 +156,10 @@ impl Recorder {
 
   /// The next request whose line starts with `line` reaches the server, which does what it asks, but its answer never
   /// reaches the app: the connection ends instead.
-  #[allow(dead_code, reason = "the join's tests use it (`tests/shared_project`), which include this harness")]
+  #[allow(
+    dead_code,
+    reason = "the join's tests use it (`tests/shared_project`), which include this harness"
+  )]
   pub fn lose_answer_once(&self, line: &str) {
     *self.shared.lose.lock() = Some(line.to_owned());
   }

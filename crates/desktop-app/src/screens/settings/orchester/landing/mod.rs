@@ -155,7 +155,9 @@ impl Component for LandingPage {
     );
     let state = ctx
       .future(deps, |(_, target, (servers, programs))| async move {
-        read(&servers, &programs, &target).await.map(|landing| Read(Arc::new(landing)))
+        read(&servers, &programs, &target)
+          .await
+          .map(|landing| Read(Arc::new(landing)))
       })
       .state()
       .get();
@@ -212,38 +214,21 @@ impl LandingPage {
       "orchester-landing-crumbs",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t(Screen::Settings.title_key()), move || navigation.go(Route::Settings)),
+        Crumb::link(ctx.t(Screen::Settings.title_key()), move || {
+          navigation.go(Route::Settings)
+        }),
         Crumb::link(ctx.t("settings.tabs.orchester"), to_orchester.clone()),
         Crumb::here(ctx.t_args("sharing.landing.crumb", [("project", project.as_str())])),
       ],
     );
-    let (title, lead) = match landing {
-      Some(landing) => (
-        ctx.t_args(
-          "sharing.landing.title",
-          [("project", project.as_str()), ("server", landing.entry.stored.name.as_str())],
-        ),
-        rows::lead(ctx, landing),
-      ),
-      None => (ctx.t_args("sharing.landing.titlePending", [("project", project.as_str())]), None),
-    };
-    let later = ActionButton::new("orchester-landing-later", ButtonKind::Ghost, ctx.t("sharing.landing.later"))
-      .on_click(to_orchester);
+    let text = title(ctx, landing, &project);
+    let later = ActionButton::new(
+      "orchester-landing-later",
+      ButtonKind::Ghost,
+      ctx.t("sharing.landing.later"),
+    )
+    .on_click(to_orchester);
     let go_on = self.continue_button(ctx, landing, target);
-    let text = Column::new()
-      .flex(1.0)
-      .spacing(SpacingSize::Xs)
-      .child(
-        Text::new(&title)
-          .id("orchester-landing-title")
-          .variant(TypographyStyle::Heading),
-      )
-      .with_children(lead.map(|lead| {
-        Text::new(&lead)
-          .id("orchester-landing-lead")
-          .variant(TypographyStyle::Description)
-          .width(Dimension::Pct(100.0))
-      }));
     let column = Column::new()
       .width(Dimension::Px(HEAD_WIDTH))
       .spacing(SpacingSize::Sm)
@@ -282,14 +267,19 @@ impl LandingPage {
       ctx.t("sharing.landing.continue"),
     )
     .icon(Icon::ArrowRight);
-    let picked = self.picked.get().0.filter(|picked| {
-      landing.is_some_and(|landing| {
-        landing
-          .checkouts
-          .iter()
-          .any(|checkout| checkout.id == *picked && checkout.choosable())
-      })
-    });
+    let picked = self
+      .picked
+      .get()
+      .0
+      .or_else(|| landing.and_then(rows::first_match))
+      .filter(|picked| {
+        landing.is_some_and(|landing| {
+          landing
+            .checkouts
+            .iter()
+            .any(|checkout| checkout.id == *picked && checkout.choosable())
+        })
+      });
     match picked {
       Some(project) => {
         let navigation = Navigation::of(ctx);
@@ -298,6 +288,34 @@ impl LandingPage {
       None => button.unavailable(ctx.t("sharing.landing.pickFirst")),
     }
   }
+}
+
+/// *Join Kontur on Kontur team* and who this computer is there, once the project is read.
+fn title(ctx: &Ctx, landing: Option<&Landing>, project: &str) -> Column {
+  let (title, lead) = match landing {
+    Some(landing) => (
+      ctx.t_args(
+        "sharing.landing.title",
+        [("project", project), ("server", landing.entry.stored.name.as_str())],
+      ),
+      rows::lead(ctx, landing),
+    ),
+    None => (ctx.t_args("sharing.landing.titlePending", [("project", project)]), None),
+  };
+  Column::new()
+    .flex(1.0)
+    .spacing(SpacingSize::Xs)
+    .child(
+      Text::new(&title)
+        .id("orchester-landing-title")
+        .variant(TypographyStyle::Heading),
+    )
+    .with_children(lead.map(|lead| {
+      Text::new(&lead)
+        .id("orchester-landing-lead")
+        .variant(TypographyStyle::Description)
+        .width(Dimension::Pct(100.0))
+    }))
 }
 
 /// The header over the scrolled body.

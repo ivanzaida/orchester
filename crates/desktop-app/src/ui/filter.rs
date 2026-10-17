@@ -133,7 +133,12 @@ impl From<FilterToggle> for Element {
         Some(icon(Icon::X, IconSize::Base, PaletteColor::TextSecondary)),
       )
     } else {
-      (PaletteColor::SurfaceInput, PaletteColor::Border, PaletteColor::TextSecondary, None)
+      (
+        PaletteColor::SurfaceInput,
+        PaletteColor::Border,
+        PaletteColor::TextSecondary,
+        None,
+      )
     };
     let press = toggle.press.clone();
     pressable(move || press())

@@ -123,9 +123,9 @@ impl Component for Sharing {
         move |(_, root, servers, programs)| {
           let workspace = workspace.clone();
           async move {
-          background::run(move || read((&servers, &workspace), &programs, &root))
-            .await
-            .map_err(|_| Said::new("cloud.errors.local"))?
+            background::run(move || read((&servers, &workspace), &programs, &root))
+              .await
+              .map_err(|_| Said::new("cloud.errors.local"))?
           }
         },
       )

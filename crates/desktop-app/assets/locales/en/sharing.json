@@ -431,11 +431,11 @@
       "tick": "Upload {{task}}",
       "notShared": "Not shared",
       "similar": "Similar on {{project}}: {{key}} {{title}} · {{by}}",
-      "locked": "Can't be unticked: run #{{number}} hasn't ended. Work on a shared task needs a claim, so it is uploaded claimed for you.",
+      "locked": "Can't be unticked: run {{number}} hasn't ended. Work on a shared task needs a claim, so it is uploaded claimed for you.",
       "run": {
         "none": "No active run",
-        "active": "{{phase}} · run #{{number}}",
-        "ended": "Run #{{number}} · {{phase}}"
+        "active": "{{phase}} · run {{number}}",
+        "ended": "Run {{number}} · {{phase}}"
       },
       "note": "Similar titles are only a hint; nothing is merged. Status, priority, tags and links go with each task: tags match {{key}}'s tags by name (new names become {{key}} tags), and a link to a task that stays here is dropped. Runs, conversations and memory stay attached, and run branches keep their names.",
       "sends": {
@@ -481,7 +481,7 @@
       "pickFirst": "Pick a checkout first",
       "project": "Project",
       "server": "Server",
-      "serverValue": "{{server}} · connected, certificate pinned from the invite",
+      "serverValue": "{{server}} · connected",
       "hint": "Repository hint",
       "noHint": "None: the project names no repository",
       "role": "Your role",

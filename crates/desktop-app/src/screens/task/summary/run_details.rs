@@ -42,7 +42,12 @@ pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView, section: Op
     rows.push(row(ctx, "summary.runDetails.agents", &list, DetailValue::Text));
   }
   rows.extend(permissions(ctx, run));
-  panel("task-run-details", &ctx.t("summary.runDetails.title"), rows, (None, section))
+  panel(
+    "task-run-details",
+    &ctx.t("summary.runDetails.title"),
+    rows,
+    (None, section),
+  )
 }
 
 /// "38 min · 16:14 – 16:52": from its first agent's start to its end.

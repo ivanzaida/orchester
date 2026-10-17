@@ -411,8 +411,8 @@ fn joined_a_join_after_a_lost_answer_does_not_upload_twice() {
 }
 
 /// The invite landing (N3, `xeFRB`): the person's local projects as checkouts for the project, the one whose `origin`
-/// matches its hint opened at once; a folder that isn't a git checkout is refused, and a checkout Orchester doesn't know
-/// yet is added as a local project.
+/// matches its hint opened at once; a folder that isn't a git checkout is refused, and a checkout Orchester doesn't
+/// know yet is added as a local project.
 #[test]
 fn joined_the_invite_landing_finds_the_checkout_whose_origin_matches() {
   let server = TestServer::start();
@@ -447,9 +447,7 @@ fn joined_the_invite_landing_finds_the_checkout_whose_origin_matches() {
       .expect("git runs");
     assert!(status.success(), "git {args:?}");
   }
-  let added = bohdan
-    .block_on(bohdan.servers.add_checkout(clone.clone()))
-    .expect("added");
+  let added = bohdan.block_on(bohdan.servers.add_checkout(clone)).expect("added");
   assert_eq!(added.project.name().as_str(), "kontur");
   let landing = bohdan
     .block_on(bohdan.servers.landing(&bohdan.entry(), "kontur", &programs))

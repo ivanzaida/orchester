@@ -72,7 +72,7 @@ pub(super) fn body(
     .iter()
     .find(|checkout| Some(checkout.id) == added && !shown.iter().any(|one| one.id == checkout.id));
   shown.extend(extra);
-  let chosen = picked.get().0;
+  let chosen = picked.get().0.or_else(|| first_match(landing));
   let mut list = Column::new()
     .id("orchester-landing-checkouts")
     .width(Dimension::Pct(100.0))
@@ -82,9 +82,17 @@ pub(super) fn body(
   }
   for checkout in shown {
     let added = Some(checkout.id) == added;
-    list = list.child(checkout_row(ctx, landing, checkout, (chosen == Some(checkout.id), added), picked));
+    list = list.child(checkout_row(
+      ctx,
+      landing,
+      checkout,
+      (chosen == Some(checkout.id), added),
+      picked,
+    ));
   }
-  list = list.with_children(refused(ctx, landing, add)).child(add_row(ctx, landing, add));
+  list = list
+    .with_children(refused(ctx, landing, add))
+    .child(add_row(ctx, landing, add));
   Column::new()
     .id("orchester-landing")
     .width(Dimension::Pct(100.0))
@@ -97,6 +105,14 @@ pub(super) fn body(
     )
     .child(list)
     .into()
+}
+
+/// The checkout picked until the person picks one: the first that matches the project's hint (`xeFRB`).
+pub(super) fn first_match(landing: &Landing) -> Option<orchester_core::id::ProjectId> {
+  landing
+    .candidates()
+    .find(|checkout| checkout.choosable() && checkout.remote == RemoteMatch::Same)
+    .map(|checkout| checkout.id)
 }
 
 /// Project, Server, Repository hint and Your role (`Facts` in `xeFRB`).
@@ -169,6 +185,41 @@ fn checkout_row(
     let (picked, project) = (picked.clone(), checkout.id);
     radio = radio.on_change(move |_| picked.set(Picked(Some(project))));
   }
+  let lines = lines(ctx, (landing, checkout), (&id, added));
+  let card = Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .padding(ExtraSpacing::Inset.role())
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Start)
+    .background(if chosen {
+      PaletteColor::SurfaceRaised
+    } else {
+      PaletteColor::SurfaceBase
+    })
+    .border(Border::inside(
+      BorderSize::Sm,
+      if chosen {
+        PaletteColor::BorderStrong
+      } else {
+        PaletteColor::Border
+      },
+    ))
+    .rounded(ExtraRadius::Tile.role())
+    .child(radio)
+    .child(lines);
+  if checkout.choosable() {
+    card.into()
+  } else {
+    card
+      .opacity(crate::theme::DISABLED_OPACITY)
+      .describe("state", "unavailable")
+      .into()
+  }
+}
+
+/// The checkout's name and path, *Added* after a folder was added, how its `origin` compares, and what is next.
+fn lines(ctx: &Ctx, (landing, checkout): (&Landing, &Checkout), (id, added): (&str, bool)) -> Column {
   let top = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -184,9 +235,10 @@ fn checkout_row(
         .color(PaletteColor::TextMuted)
         .nowrap(),
     )
-    .with_children(added.then(|| badge(&format!("{id}-added"), BadgeTone::Info, &ctx.t("sharing.landing.added"))));
+    // One folder is added at a time.
+    .with_children(added.then(|| badge("orchester-landing-added", BadgeTone::Info, &ctx.t("sharing.landing.added"))));
   let (glyph, color, line) = compare(ctx, landing, checkout);
-  let lines = Column::new()
+  Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Fine.role())
@@ -197,48 +249,40 @@ fn checkout_row(
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(icon(glyph, IconSize::Sm, color.clone()))
-        .child(Text::new(&line).variant(ExtraTypography::Note.role()).color(color).flex(1.0)),
+        .child(
+          Text::new(&line)
+            .variant(ExtraTypography::Note.role())
+            .color(color)
+            .flex(1.0),
+        ),
     )
     .child(
       Text::new(&what_next(ctx, landing, checkout))
         .id(format!("{id}-next"))
         .variant(ExtraTypography::Note.role())
         .width(Dimension::Pct(100.0)),
-    );
-  let card = Row::new()
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .padding(ExtraSpacing::Inset.role())
-    .spacing(SpacingSize::Md)
-    .align_items(Alignment::Start)
-    .background(if chosen { PaletteColor::SurfaceRaised } else { PaletteColor::SurfaceBase })
-    .border(Border::inside(
-      BorderSize::Sm,
-      if chosen { PaletteColor::BorderStrong } else { PaletteColor::Border },
-    ))
-    .rounded(ExtraRadius::Tile.role())
-    .child(radio)
-    .child(lines);
-  if checkout.choosable() {
-    card.into()
-  } else {
-    card.opacity(crate::theme::DISABLED_OPACITY).describe("state", "unavailable").into()
-  }
+    )
 }
 
 /// How the checkout's `origin` compares with the project's hint, or what it is linked to.
 fn compare(ctx: &Ctx, landing: &Landing, checkout: &Checkout) -> (Icon, PaletteColor, Arc<str>) {
   if let Some(Linked::Other(address)) = &checkout.linked {
-    let address = address.as_deref().map_or_else(|| ctx.t("sharing.landing.anotherProject"), |address| {
-      Arc::from(shown_address(address))
-    });
+    let address = address.as_deref().map_or_else(
+      || ctx.t("sharing.landing.anotherProject"),
+      |address| Arc::from(shown_address(address)),
+    );
     return (
       Icon::Link,
       PaletteColor::TextMuted,
       ctx.t_args("sharing.landing.linkedElsewhere", [("address", address)]),
     );
   }
-  let hint = landing.project.remote_hint.as_ref().map(|hint| hint.as_str().to_owned()).unwrap_or_default();
+  let hint = landing
+    .project
+    .remote_hint
+    .as_ref()
+    .map(|hint| hint.as_str().to_owned())
+    .unwrap_or_default();
   match &checkout.remote {
     RemoteMatch::Same => (
       Icon::CircleCheck,
@@ -253,8 +297,16 @@ fn compare(ctx: &Ctx, landing: &Landing, checkout: &Checkout) -> (Icon, PaletteC
         [("origin", origin.as_str()), ("hint", hint.as_str())],
       ),
     ),
-    RemoteMatch::NoOrigin => (Icon::CircleDashed, PaletteColor::TextMuted, ctx.t("sharing.landing.noOrigin")),
-    RemoteMatch::NoHint => (Icon::CircleDashed, PaletteColor::TextMuted, ctx.t("sharing.landing.nothingToCompare")),
+    RemoteMatch::NoOrigin => (
+      Icon::CircleDashed,
+      PaletteColor::TextMuted,
+      ctx.t("sharing.landing.noOrigin"),
+    ),
+    RemoteMatch::NoHint => (
+      Icon::CircleDashed,
+      PaletteColor::TextMuted,
+      ctx.t("sharing.landing.nothingToCompare"),
+    ),
   }
 }
 
@@ -279,7 +331,11 @@ fn what_next(ctx: &Ctx, landing: &Landing, checkout: &Checkout) -> Arc<str> {
 /// No local project here has the project's repository: clone it first, then add the folder (`No checkout` in
 /// `d8oDsO`).
 fn no_checkout(ctx: &mut Ctx, landing: &Landing) -> Element {
-  let hint = landing.project.remote_hint.as_ref().map(|hint| hint.as_str().to_owned());
+  let hint = landing
+    .project
+    .remote_hint
+    .as_ref()
+    .map(|hint| hint.as_str().to_owned());
   let title = match &hint {
     Some(hint) => ctx.t_args("sharing.landing.noCheckout", [("hint", hint.as_str())]),
     None => ctx.t("sharing.landing.noCheckoutAny"),

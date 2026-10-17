@@ -161,7 +161,13 @@ impl Component for TasksScreen {
 impl TasksScreen {
   /// The tabs, the query and the tab's rows as searched, narrowed and ordered, with their count, or why
   /// there is none.
-  fn list(&self, ctx: &mut Ctx, page: Column, shown: &Shown<'_>, (tasks, counts): (&ProjectTasks, TabCounts)) -> Column {
+  fn list(
+    &self,
+    ctx: &mut Ctx,
+    page: Column,
+    shown: &Shown<'_>,
+    (tasks, counts): (&ProjectTasks, TabCounts),
+  ) -> Column {
     let (project, list) = (shown.project, shown.list);
     let id = project.open.project.id();
     let key = RowsKey {

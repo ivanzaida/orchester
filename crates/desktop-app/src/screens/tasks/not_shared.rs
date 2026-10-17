@@ -70,7 +70,12 @@ pub(super) fn notice(ctx: &Ctx, (kept, name): (&[Task], &str), shared: Option<&S
     || (String::new(), String::new(), String::new()),
     |shared| {
       let link = &shared.sharing.link;
-      let server = shared.sharing.server.as_ref().map(|(name, _)| name.clone()).unwrap_or_default();
+      let server = shared
+        .sharing
+        .server
+        .as_ref()
+        .map(|(name, _)| name.clone())
+        .unwrap_or_default();
       (link.key.as_str().to_owned(), server, day_of(ctx, link.joined_at))
     },
   );
@@ -79,7 +84,11 @@ pub(super) fn notice(ctx: &Ctx, (kept, name): (&[Task], &str), shared: Option<&S
   } else {
     ctx.t_args(
       "tasks.notShared.title.other",
-      [("count", kept.len().to_string().as_str()), ("project", name), ("key", key.as_str())],
+      [
+        ("count", kept.len().to_string().as_str()),
+        ("project", name),
+        ("key", key.as_str()),
+      ],
     )
   };
   let listed = keys.join(&ctx.t("tasks.notShared.and"));
@@ -87,12 +96,7 @@ pub(super) fn notice(ctx: &Ctx, (kept, name): (&[Task], &str), shared: Option<&S
     .icon(Icon::Archive)
     .body(ctx.t_args(
       "tasks.notShared.body",
-      [
-        ("keys", listed),
-        ("day", day),
-        ("server", server),
-        ("key", key),
-      ],
+      [("keys", listed), ("day", day), ("server", server), ("key", key)],
     ))
     .into()
 }
@@ -124,7 +128,10 @@ pub(super) fn only_not_shared(ctx: &mut Ctx, (project, list): (ProjectId, &TaskL
   let detail: Arc<str> = match found {
     [one] => ctx.t_args(
       "tasks.notShared.foundOne",
-      [("key", one.key().to_string()), ("title", one.details().title.as_str().to_owned())],
+      [
+        ("key", one.key().to_string()),
+        ("title", one.details().title.as_str().to_owned()),
+      ],
     ),
     many => ctx.t_args("tasks.notShared.foundMany", [("count", many.len().to_string())]),
   };

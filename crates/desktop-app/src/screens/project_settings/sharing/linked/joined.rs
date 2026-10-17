@@ -1,7 +1,7 @@
 //! After a join (`After joining` and `Keys before joining` in `oOGMT`): *You joined KTR on Kontur team* with how many
 //! tasks went up, how many were claimed and how many stay *Not shared*, the links the server dropped, *Open Tasks* and
-//! *Dismiss*; it stays in Sharing until dismissed, after a restart too, kept in the application database's window state.
-//! *Keys before joining* lists each local task's key then and now, and stays until *Make local*.
+//! *Dismiss*; it stays in Sharing until dismissed, after a restart too, kept in the application database's window
+//! state. *Keys before joining* lists each local task's key then and now, and stays until *Make local*.
 
 use lurq::{
   app::{
@@ -110,15 +110,15 @@ pub(in crate::screens::project_settings::sharing) fn callout(
       .iter()
       .map(|(task, blocking)| {
         ctx
-          .t_args("sharing.joined.link", [("task", task.as_str()), ("blocking", blocking.as_str())])
+          .t_args(
+            "sharing.joined.link",
+            [("task", task.as_str()), ("blocking", blocking.as_str())],
+          )
           .to_string()
       })
       .collect();
     let links = links.join(&ctx.t("sharing.joined.separator"));
-    body = format!(
-      "{body} {}",
-      ctx.t_args("sharing.joined.dropped", [("links", links)])
-    );
+    body = format!("{body} {}", ctx.t_args("sharing.joined.dropped", [("links", links)]));
   }
   let navigation = Navigation::of(ctx);
   Callout::new(
@@ -129,13 +129,21 @@ pub(in crate::screens::project_settings::sharing) fn callout(
   .icon(Icon::CircleCheck)
   .body(body)
   .action(
-    ActionButton::new("sharing-joined-dismiss", ButtonKind::Secondary, ctx.t("sharing.joined.dismiss"))
-      .on_click(dismiss),
+    ActionButton::new(
+      "sharing-joined-dismiss",
+      ButtonKind::Secondary,
+      ctx.t("sharing.joined.dismiss"),
+    )
+    .on_click(dismiss),
   )
   .action(
-    ActionButton::new("sharing-joined-open", ButtonKind::Secondary, ctx.t("sharing.joined.openTasks"))
-      .icon(Icon::ListChecks)
-      .opens(navigation.to(Route::Project(project, ProjectPage::Tasks(TaskList::default())))),
+    ActionButton::new(
+      "sharing-joined-open",
+      ButtonKind::Secondary,
+      ctx.t("sharing.joined.openTasks"),
+    )
+    .icon(Icon::ListChecks)
+    .opens(navigation.to(Route::Project(project, ProjectPage::Tasks(TaskList::default())))),
   )
   .into()
 }
@@ -179,7 +187,12 @@ pub(in crate::screens::project_settings::sharing) fn keys(ctx: &Ctx, joined: &[J
             .variant(ExtraTypography::Prose.role())
             .width(Dimension::Pct(100.0)),
         )
-        .child(Column::new().width(Dimension::Pct(100.0)).child(header).with_children(rows))
+        .child(
+          Column::new()
+            .width(Dimension::Pct(100.0))
+            .child(header)
+            .with_children(rows),
+        )
         .child(page::wide_note(
           "sharing-keys-branches",
           Icon::GitBranch,

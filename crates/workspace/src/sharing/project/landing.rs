@@ -186,7 +186,11 @@ impl Servers {
 }
 
 /// The project in `root` as a checkout for `project` on `server`.
-fn checkout(programs: &Programs, root: &Path, (server, project): (ServerId, &SharedProject)) -> Result<Checkout, StoreError> {
+fn checkout(
+  programs: &Programs,
+  root: &Path,
+  (server, project): (ServerId, &SharedProject),
+) -> Result<Checkout, StoreError> {
   let db = ProjectDb::open(root)?;
   let linked = db.sharing()?.map(|link| {
     if link.server == server && link.project == project.id {

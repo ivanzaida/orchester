@@ -1,15 +1,17 @@
 //! The first checkout linked to an empty project uploads its tasks with their numbers on the first link's page
 //! (`KSnOW`), and writes `orchester.toml` when the person leaves the switch on; a later checkout without tasks takes
-//! the project's tasks as they are, and one with tasks gets new numbers after its review. Only a person confirms the link or turns
-//! the discovery switch, and a task added after the page read the project sends nothing and asks for a review again,
-//! which only a person asks for too. Under the server, the page says whether it answers now.
+//! the project's tasks as they are, and one with tasks gets new numbers after its review. Only a person confirms the
+//! link or turns the discovery switch, and a task added after the page read the project sends nothing and asks for a
+//! review again, which only a person asks for too. Under the server, the page says whether it answers now.
 
 use std::fs;
 
 use lurq::app::events::with_synthetic_input;
 use orchester_store::ProjectDb;
 
-use super::{KONTUR_REMOTE, entry, harness, join, kontur_root, local_keys, local_tasks, no_admin_endpoint, open_sharing, server};
+use super::{
+  KONTUR_REMOTE, entry, harness, join, kontur_root, local_keys, local_tasks, no_admin_endpoint, open_sharing, server,
+};
 use crate::harness::{press, shows};
 
 #[test]
