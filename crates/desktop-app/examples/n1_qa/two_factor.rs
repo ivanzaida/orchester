@@ -11,6 +11,8 @@ use orchester_app::{
   routes::{OrchesterPanel, OrchesterView, Route},
   services::Services,
 };
+use orchester_core::time::Timestamp;
+use orchester_store::{AcceptedInvite, AppDb};
 use orchester_workspace::{
   sharing::cloud::{CodeKind, SignInStep},
   workspace::Workspace,
@@ -53,6 +55,13 @@ pub fn seed(
     sign_in_with_a_recovery_code(services, runtime)?;
     return Ok((settings, None));
   }
+  if matches!(
+    state,
+    State::KeptTwoFactorOff | State::KeptSignInAgain | State::KeptTryAgain
+  ) {
+    kept(state, (backends, services), (runtime, folder))?;
+    return Ok((settings, None));
+  }
   let invite = backends.invite_to_billing();
   let refused = |card: &str| Press {
     button: format!("{card}-accept"),
@@ -77,6 +86,60 @@ pub fn seed(
       Some(refused(&format!("all-projects-invite-{invite}"))),
     ),
     _ => return Err(format!("{state:?} is not a two-factor state").into()),
+  })
+}
+
+/// Keeps the Billing invite as an earlier ask left it (its token taken, so the cloud lists it no more), then leaves
+/// the account as `state` needs: two-factor authentication off, this computer signed in without a code, or signed in
+/// again with one.
+fn kept(
+  state: State,
+  (backends, services): (&Backends, &Services),
+  (runtime, folder): (&Runtime, &Path),
+) -> Result<(), Box<dyn Error>> {
+  let invite = backends.invite_to_billing();
+  let listed = runtime
+    .block_on(services.cloud.invites())?
+    .into_iter()
+    .find(|listed| listed.id.to_string() == invite)
+    .ok_or("the invite to Billing is listed")?;
+  let kept = AcceptedInvite {
+    asks: 1,
+    ..AcceptedInvite::new(
+      (listed.id, listed.server.id, listed.server.name.clone()),
+      listed.project.as_ref().map(|project| project.name.clone()),
+      Timestamp::from_unix_millis(listed.expires_at),
+      Timestamp::now(),
+    )
+  };
+  AppDb::open(&folder.join("orchester.db"))?.keep_accepted_invite(&kept)?;
+  let cloud = &backends.cloud;
+  match state {
+    State::KeptTwoFactorOff => cloud.two_factor_off(),
+    State::KeptSignInAgain => cloud.session_without_two_factor(),
+    _ => {
+      cloud.require_codes();
+      sign_in_with_the_apps_code(services, runtime, cloud)?;
+    }
+  }
+  Ok(())
+}
+
+/// Signs out, then in again with the password and the code the authenticator app shows.
+fn sign_in_with_the_apps_code(
+  services: &Services,
+  runtime: &Runtime,
+  stand_in: &AccountCloud,
+) -> Result<(), Box<dyn Error>> {
+  let cloud = &services.cloud;
+  runtime.block_on(async {
+    cloud.sign_out_for_code(None).await?;
+    let SignInStep::Code(challenge) = cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())).await? else {
+      return Err("the password was meant to answer a challenge".into());
+    };
+    let code = Credential::new(stand_in.next_code());
+    cloud.finish_sign_in(&challenge, (code, CodeKind::App)).await?;
+    Ok::<_, Box<dyn Error>>(())
   })
 }
 

@@ -88,16 +88,21 @@ impl Refusal {
   }
 }
 
-/// Until when the cloud paused codes for the account: for every code step of this gate, not only the one it said it in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct PausedUntil(Option<Timestamp>);
+/// The account whose codes the cloud paused, by its email, and until when: for every code step of this gate for that
+/// account, not only the one it said it in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct PausedUntil(Option<(String, Timestamp)>);
 
 impl DevtoolsInspectable for PausedUntil {}
 
 impl PausedUntil {
-  /// The time, while it is still to come.
-  fn now(self) -> Option<Timestamp> {
-    self.0.filter(|until| Timestamp::now() < *until)
+  /// The time, for the account of `email`, while it is still to come.
+  fn now(&self, email: &str) -> Option<Timestamp> {
+    self
+      .0
+      .as_ref()
+      .filter(|(paused, until)| paused == email && Timestamp::now() < *until)
+      .map(|(_, until)| *until)
   }
 }
 
@@ -156,7 +161,7 @@ impl CodeForm {
             let refusal = Refusal::of(&error);
             match refusal {
               Refusal::Ended => back(true),
-              Refusal::Paused(until) => paused.set(PausedUntil(Some(until))),
+              Refusal::Paused(until) => paused.set(PausedUntil(Some((entry.challenge.email().to_owned(), until)))),
               Refusal::Wrong | Refusal::Other(_) => {}
             }
             Refused(entry.id, refusal)
@@ -201,10 +206,11 @@ impl CodeForm {
       .map(|Refused(_, refusal)| refusal)
   }
 
-  /// Until when codes are paused, while that time is still to come: after *Back* or a timeout too.
-  fn paused(&self) -> Option<Timestamp> {
+  /// Until when codes are paused for the account of `entry`, while that time is still to come: after *Back* or a
+  /// timeout too.
+  fn paused(&self, entry: &Entry) -> Option<Timestamp> {
     self.tick.get();
-    self.pause.get().now()
+    self.pause.get().now(entry.challenge.email())
   }
 }
 
@@ -222,7 +228,8 @@ impl CodeForm {
     );
     let (entry, pause) = (entry.clone(), self.pause.clone());
     move || {
-      if action.state().get_untracked().is_pending() || pause.get_untracked().now().is_some() {
+      let paused = pause.get_untracked().now(entry.challenge.email()).is_some();
+      if action.state().get_untracked().is_pending() || paused {
         return;
       }
       let typed: String = code.get_untracked().chars().filter(|c| !c.is_whitespace()).collect();
@@ -257,7 +264,7 @@ pub(super) fn card(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, host: &str) ->
   form.look.start();
   form.take_focus(ctx, entry);
   let verifying = form.verifying();
-  let paused = form.paused();
+  let paused = form.paused(entry);
   let refusal = form.refusal(entry);
   let held = verifying || paused.is_some();
   let faded = |part: Element| -> Element {

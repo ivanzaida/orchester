@@ -85,10 +85,17 @@ pub enum State {
   NoticeRefused,
   /// Signed in with a recovery code that left one: the warning in Settings › Orchester (no frame).
   FewRecoveryCodes,
+  /// The Billing invite kept here after an earlier ask, whose ask again the cloud refuses with two-factor
+  /// authentication off: *Turn on two-factor authentication* and *Later* on the kept card.
+  KeptTwoFactorOff,
+  /// The same, signed in without a code: *Sign in again* and *Later* on the kept card.
+  KeptSignInAgain,
+  /// The same after a sign-in with a code: *Try again* and *Later* on the kept card.
+  KeptTryAgain,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 18] = [
+  const ALL: [(&'static str, Self); 21] = [
     ("signed-in", Self::SignedIn),
     ("pending", Self::Pending),
     ("failed", Self::Failed),
@@ -107,6 +114,9 @@ impl State {
     ("notice-off", Self::NoticeOff),
     ("notice-refused", Self::NoticeRefused),
     ("few-recovery-codes", Self::FewRecoveryCodes),
+    ("kept-two-factor-off", Self::KeptTwoFactorOff),
+    ("kept-sign-in-again", Self::KeptSignInAgain),
+    ("kept-try-again", Self::KeptTryAgain),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -125,6 +135,9 @@ impl State {
         | Self::NoticeOff
         | Self::NoticeRefused
         | Self::FewRecoveryCodes
+        | Self::KeptTwoFactorOff
+        | Self::KeptSignInAgain
+        | Self::KeptTryAgain
     )
   }
 }
