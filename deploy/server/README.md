@@ -208,6 +208,14 @@ workspace's (`Cargo.toml`): it builds both images for amd64 and arm64, pushes th
 digests and these files. It needs the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (an access token with Read &
 Write) and the variable `DOCKERHUB_NAMESPACE`.
 
+Each image builds once per platform, in its own job on a runner of that architecture (`ubuntu-latest` for amd64,
+GitHub's `ubuntu-24.04-arm` for arm64), so nothing is emulated and the Dockerfiles stay plain native builds. Each job
+pushes its image by digest only; a *Manifest* job then puts both platforms under the tags and checks that both are
+there. The build cache is kept per image and platform, but GitHub lets a tag's run read only its own cache and
+master's, so a release reuses the cache only when its run is re-run. *Run workflow* with *dry_run*, on any branch,
+builds both images for both platforms, checks each image's platform and that its executable (`orchester-server`,
+`node`) is built for it, and pushes and releases nothing; use it to test a change to the Dockerfiles or the workflow.
+
 **The Docker Hub page** is the self-hosters' whole guide. `DOCKERHUB.md` is its text; each line
 `<!-- inline: <file> -->` becomes that file of this folder, byte for byte, in a code block, so the page cannot drift
 from the files. Build it with `powershell -File tools/dockerhub-description.ps1` (it writes
