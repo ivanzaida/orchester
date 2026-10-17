@@ -1,6 +1,7 @@
 //! The router's table: every screen's pattern inside the shell, and a fallback inside the shell for
 //! paths that name nothing. Every entry shows `screens::screen`, which reads the whole path, query
-//! included, as a route or as why it names none.
+//! included, as a route or as why it names none; the code viewer's is a layout that shows it, whose
+//! routes only match the address.
 
 use lurq::{app::ctx::Ctx, node::Element, router::Routes};
 
