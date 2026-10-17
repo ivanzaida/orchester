@@ -6,6 +6,7 @@
 use std::num::NonZeroU64;
 
 use chrono::NaiveDate;
+use lurq::router::RouteMatch;
 use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, FilesView, OverviewTab, ProjectPage, Route, RouteError, TaskView,
   ToolTab, routes,
@@ -26,6 +27,11 @@ use orchester_workspace::{
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
+
+/// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
+fn matched(chain: &[RouteMatch]) -> String {
+  chain.iter().skip(1).map(RouteMatch::pattern_raw).collect()
+}
 
 /// How many kinds of link there are: one per variant of [`Link`].
 const KINDS: usize = 15;
@@ -239,8 +245,8 @@ fn links_resolve_to_their_screen_in_the_router_table() {
   for (link, route) in every_link() {
     let path = link.path();
     let chain = table.resolve(&path);
-    let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
-    assert_eq!(leaf.pattern_raw(), route.pattern(), "{path}");
+    assert!(!chain.is_empty(), "{path} resolves");
+    assert_eq!(matched(&chain), route.pattern(), "{path}");
   }
 }
 

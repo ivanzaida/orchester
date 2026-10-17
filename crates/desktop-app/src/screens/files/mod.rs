@@ -270,6 +270,9 @@ impl Component for FilesScreen {
       .wake(ctx, &props.project, (props.route.at(), view.retry.get()));
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
     let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
+    // A future belongs to its place among the render's futures: the tree's comes before those read only with a
+    // file, so selecting the first file does not read the tree again.
+    let list = reads::list(ctx, &root, props.route.at(), (wake, &self.following.list));
     let following = (
       wake,
       &self.following.file,
@@ -288,7 +291,6 @@ impl Component for FilesScreen {
       stale: stale.flatten(),
       view,
     };
-    let list = reads::list(ctx, &root, page.at(), (wake, &self.following.list));
     let gone = matches!(&list, Shown::Failed(failure) if failure.gone());
     let header = header::header(ctx, &page, gone);
     let body = if gone {

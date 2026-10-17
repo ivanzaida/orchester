@@ -1,6 +1,6 @@
 //! The code viewer's routes: a file at a version, on a range of its lines.
 
-use orchester_app::routes::{FilesView, ProjectPage, Route, RouteError};
+use orchester_app::routes::{FilesView, ProjectPage, Route, RouteError, routes};
 use orchester_core::{id::RunId, revision::Revision};
 use orchester_workspace::files::{LineRange, Version};
 
@@ -74,4 +74,19 @@ fn files_paths_name_the_file_its_version_and_lines() {
     Route::parse(&format!("{root}/README.md?file=x")),
     Err(RouteError::UnexpectedParam { .. })
   ));
+}
+
+#[test]
+fn files_keep_their_page_in_the_router_with_a_file_and_without() {
+  let table = routes();
+  let page = |file: Option<&str>| {
+    let path = at(ProjectPage::Files(FilesView::new(file, Version::Checkout))).path();
+    let chain = table.resolve(&path);
+    let page = chain
+      .get(1)
+      .unwrap_or_else(|| panic!("{path} resolves under the shell"));
+    page.route_index()
+  };
+  assert_eq!(page(None), page(Some("src/main.rs")), "selecting a file keeps the page");
+  assert_eq!(page(None), page(Some("src/ui/row.rs")));
 }
