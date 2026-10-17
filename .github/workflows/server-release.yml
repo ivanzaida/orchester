@@ -1,8 +1,9 @@
 # Publishes a release of the self-hosted team server (deploy/server/README.md): on a `server-v<version>` tag, builds
-# `orchester-server` (crates/server) and `orchester-server-admin` (web/server) for linux/amd64 and linux/arm64, pushes
-# them to Docker Hub, creates the GitHub Release with the images' digests and the quick start, and publishes the
-# self-hosting guide (deploy/server/DOCKERHUB.md with the compose files inlined, tools/dockerhub-description.ps1) as
-# both image repositories' Docker Hub description. The repository is private: that page is the guide self-hosters see.
+# `orchester-server` (crates/server) and `orchester-server-admin` (web/server) for linux/amd64 and linux/arm64, each
+# natively on a runner of that architecture, pushes them to Docker Hub, creates the GitHub Release with the images'
+# digests and the quick start, and publishes the self-hosting guide (deploy/server/DOCKERHUB.md with the compose files
+# inlined, tools/dockerhub-description.ps1) as both image repositories' Docker Hub description. The repository is
+# private: that page is the guide self-hosters see.
 # Orchester Cloud's images are not here: they stay private on GHCR (cloud-images.yml).
 #
 # Settings: the secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (an access token with Read & Write), the variable
@@ -14,11 +15,16 @@ on:
   push:
     tags: ['server-v*']
   # A release: run it on a tag (*Use workflow from* → *Tags* → server-v<version>). Only the Docker Hub description:
-  # tick `description_only`, on any branch or tag; the page is built from that ref's files.
+  # tick `description_only`, on any branch or tag; the page is built from that ref's files. A test of the build: tick
+  # `dry_run`, on any branch; it builds and checks both images for both platforms and pushes nothing.
   workflow_dispatch:
     inputs:
       description_only:
         description: Only update the Docker Hub descriptions from deploy/server (no images, no release)
+        type: boolean
+        default: false
+      dry_run:
+        description: Only build and check both images for both platforms, on any ref (nothing is pushed or released)
         type: boolean
         default: false
 
@@ -51,8 +57,13 @@ jobs:
         env:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
         run: |
-          if [ "$REF_TYPE" != tag ]; then
+          cargo="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          # A dry run builds any ref; its images are labelled with the workspace's version.
+          if [ "$DRY_RUN" = true ]; then
+            REF_NAME="server-v$cargo"
+          elif [ "$REF_TYPE" != tag ]; then
             echo "::error::Run this workflow on a server-v<version> tag (Use workflow from → Tags), not on $REF_NAME."
             exit 1
           fi
@@ -62,7 +73,6 @@ jobs:
           fi
           release="${BASH_REMATCH[1]}"
           # The server reports the workspace's version (GET /api/v1/server); the tag must name the same release.
-          cargo="$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
           if [ "$release" != "$cargo" ]; then
             echo "::error::The tag names $release, but Cargo.toml's workspace version is $cargo."
             exit 1
@@ -73,6 +83,7 @@ jobs:
             if [ -n "${BASH_REMATCH[4]}" ]; then echo "prerelease=true"; else echo "prerelease=false"; fi
           } >> "$GITHUB_OUTPUT"
       - name: Check the Docker Hub settings
+        if: ${{ !inputs.dry_run }}
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -96,33 +107,126 @@ jobs:
             }
           done
 
+  # One job per image and platform, each on a runner of that architecture, so nothing is emulated: arm64 builds on
+  # GitHub's arm64 runner (`ubuntu-24.04-arm`, also for private repositories). A release pushes each platform's image
+  # by digest only; `manifest` below joins the two under the tags. The build cache is kept per image and platform.
   images:
-    name: Image (${{ matrix.image }})
+    name: Image (${{ matrix.image }}, ${{ matrix.arch }})
     needs: prepare
-    runs-on: ubuntu-latest
-    # arm64 is built under QEMU, which makes the Rust build slow.
-    timeout-minutes: 300
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
+        image: [orchester-server, orchester-server-admin]
+        arch: [amd64, arm64]
         include:
           - image: orchester-server
             context: .
             file: deploy/server/Dockerfile
             title: Orchester team server
             description: The self-hosted Orchester team server (crates/server)
+            # The executable whose architecture the dry run checks.
+            binary: /usr/local/bin/orchester-server
           - image: orchester-server-admin
             context: web
             file: web/Dockerfile.server
             title: Orchester team server admin
             description: The web admin of the self-hosted Orchester team server (web/server)
+            binary: /usr/local/bin/node
+          - arch: amd64
+            runner: ubuntu-latest
+            # How `file` names the architecture.
+            machine: x86-64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            machine: ARM aarch64
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - if: ${{ !inputs.dry_run }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.NAMESPACE }}/${{ matrix.image }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+      # A dry run loads the image into this runner's Docker instead (without the provenance attestation, which the
+      # Docker image store does not take) and pushes nothing.
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: ${{ inputs.dry_run && format('type=docker,name={0}:dry-run', matrix.image) || format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', env.NAMESPACE, matrix.image) }}
+          provenance: ${{ inputs.dry_run && 'false' || '' }}
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.arch }},ignore-error=true
+      - if: ${{ !inputs.dry_run }}
+        name: Keep the digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - if: ${{ !inputs.dry_run }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+      - if: ${{ inputs.dry_run }}
+        name: Check the image's platform and executable
+        env:
+          IMAGE: ${{ matrix.image }}:dry-run
+          ARCH: ${{ matrix.arch }}
+          BINARY: ${{ matrix.binary }}
+          MACHINE: ${{ matrix.machine }}
+        run: |
+          set -euo pipefail
+          echo "Runner: $(uname -m)"
+          platform="$(docker image inspect "$IMAGE" --format '{{.Os}}/{{.Architecture}}')"
+          echo "Image platform: $platform"
+          container="$(docker create "$IMAGE")"
+          docker cp "$container:$BINARY" "$RUNNER_TEMP/binary"
+          docker rm "$container" > /dev/null
+          described="$(file -L "$RUNNER_TEMP/binary")"
+          echo "$BINARY: ${described#*: }"
+          if [ "$platform" != "linux/$ARCH" ] || [[ "$described" != *"$MACHINE"* ]]; then
+            echo "::error::$IMAGE is $platform with $BINARY built as \"${described#*: }\"; expected linux/$ARCH and $MACHINE."
+            exit 1
+          fi
+
+  manifest:
+    name: Manifest (${{ matrix.image }})
+    needs: [prepare, images]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [orchester-server, orchester-server-admin]
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-${{ matrix.image }}-*
+          merge-multiple: true
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
@@ -138,25 +242,32 @@ jobs:
             type=raw,value=${{ needs.prepare.outputs.version }}
             type=raw,value=${{ needs.prepare.outputs.minor }},enable=${{ needs.prepare.outputs.prerelease == 'false' }}
             type=raw,value=latest,enable=${{ needs.prepare.outputs.prerelease == 'false' }}
-          labels: |
-            org.opencontainers.image.title=${{ matrix.title }}
-            org.opencontainers.image.description=${{ matrix.description }}
-            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
-            org.opencontainers.image.licenses=MIT
-      - uses: docker/build-push-action@v7
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+      - name: Tag both platforms' images as one
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ env.NAMESPACE }}/${{ matrix.image }}
+          TAGS: ${{ steps.meta.outputs.json }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          digests=(*)
+          if [ "${#digests[@]}" -ne 2 ]; then
+            echo "::error::Expected the digests of 2 platforms, found ${#digests[@]}."
+            exit 1
+          fi
+          mapfile -t tags < <(jq -r '.tags[] | "--tag=" + .' <<< "$TAGS")
+          docker buildx imagetools create "${tags[@]}" "${digests[@]/#/$IMAGE@sha256:}"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
+          platforms="$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' \
+            | jq -r '[.manifests[].platform | select(.os != "unknown") | .os + "/" + .architecture] | sort | join(" ")')"
+          if [ "$platforms" != "linux/amd64 linux/arm64" ]; then
+            echo "::error::$IMAGE:$VERSION holds $platforms, not linux/amd64 and linux/arm64."
+            exit 1
+          fi
 
   release:
     name: GitHub Release
-    needs: [prepare, images]
+    needs: [prepare, manifest]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -239,8 +350,8 @@ jobs:
   # artifact `dockerhub-description`, to paste into Docker Hub by hand without the token.
   description:
     name: Docker Hub description
-    needs: [prepare, images]
-    if: ${{ !cancelled() && (inputs.description_only || (needs.images.result == 'success' && needs.prepare.outputs.prerelease == 'false')) }}
+    needs: [prepare, manifest]
+    if: ${{ !cancelled() && !inputs.dry_run && (inputs.description_only || (needs.manifest.result == 'success' && needs.prepare.outputs.prerelease == 'false')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
