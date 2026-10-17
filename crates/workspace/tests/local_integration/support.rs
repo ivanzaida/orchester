@@ -34,6 +34,11 @@ impl Fixture {
   }
   /// A fixture whose run delivers on `branch`.
   pub fn branched(check_fails: bool, prefix: &str, branch: &str) -> Self {
+    Self::recorded(check_fails, prefix, branch, None)
+  }
+  /// [`Self::branched`], whose run writes `task.txt` as `checkpointed` and records that as a checkpoint when it names
+  /// one.
+  pub fn recorded(check_fails: bool, prefix: &str, branch: &str, checkpointed: Option<&str>) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let repo = tempfile::Builder::new()
@@ -91,16 +96,21 @@ impl Fixture {
     let execution = run.current_attempt().expect("attempt").executions()[0].id();
     let events = run.start_step(execution, at(8)).expect("step");
     db.append_events(&run, &events).expect("events");
-    let events = run.complete_step(execution, at(9)).expect("pass");
-    db.append_events(&run, &events).expect("events");
     let task_root = repo.path().join(".orchester/worktrees").join(run.id().to_string());
     fs::create_dir_all(task_root.parent().expect("parent")).expect("parent");
     git(
       repo.path(),
       &["worktree", "add", "-b", branch, task_root.to_str().expect("path")],
     );
-    fs::write(task_root.join("task.txt"), "delivered task\n").expect("task edit");
+    fs::write(task_root.join("task.txt"), checkpointed.unwrap_or("delivered task\n")).expect("task edit");
     git(&task_root, &["commit", "-am", "task work"]);
+    if checkpointed.is_some() {
+      let head = Revision::new(&git(&task_root, &["rev-parse", "HEAD"])).expect("revision");
+      let events = run.record_checkpoint(execution, head, at(9)).expect("checkpoint");
+      db.append_events(&run, &events).expect("events");
+    }
+    let events = run.complete_step(execution, at(9)).expect("pass");
+    db.append_events(&run, &events).expect("events");
     Self {
       repo,
       run: run.id(),

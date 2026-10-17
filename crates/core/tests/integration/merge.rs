@@ -11,7 +11,7 @@ use orchester_core::{
 use crate::support::{Ending, Processes, RUN_BRANCH, Repo, git_in, git_program, now, run, task};
 
 /// A repository whose run branch, in its run worktree, has one commit on top of `main`.
-fn repo_with_run_work() -> (Repo, String, String) {
+pub fn repo_with_run_work() -> (Repo, String, String) {
   let repo = Repo::new();
   let base = repo.head();
   let worktree = repo.worktree("run", RUN_BRANCH, &base);
@@ -29,7 +29,8 @@ fn merge_fast_forwards_the_base_branch_when_it_did_not_move() {
     (&run(&base, Some("main"), Ending::Succeeded), &task()),
     now(),
   )
-  .expect("merged");
+  .expect("merged")
+  .merge;
   assert_eq!(merge.kind, MergeKind::FastForward);
   assert_eq!(merge.revision.as_str(), head);
   assert_eq!(merge.into.as_str(), "main");
@@ -54,7 +55,8 @@ fn merge_commits_when_the_base_branch_moved_meanwhile() {
     (&run(&base, Some("main"), Ending::Succeeded), &task()),
     now(),
   )
-  .expect("merged");
+  .expect("merged")
+  .merge;
   assert_eq!(merge.kind, MergeKind::MergeCommit);
   assert_eq!(merge.revision.as_str(), repo.head());
   assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "Merge ORC-12 run #3");
@@ -76,36 +78,10 @@ fn merge_records_a_run_the_base_branch_already_has() {
     (&run(&base, Some("main"), Ending::Succeeded), &task()),
     now(),
   )
-  .expect("recorded");
+  .expect("recorded")
+  .merge;
   assert_eq!(merge.kind, MergeKind::AlreadyMerged);
   assert_eq!(merge.revision.as_str(), head);
-}
-
-#[test]
-fn merge_refuses_a_checkout_with_uncommitted_changes_and_touches_nothing() {
-  let (repo, base, _) = repo_with_run_work();
-  let before = repo.head();
-  fs::write(repo.root.join("README.md"), "edited, not committed\n").expect("edit");
-  fs::write(repo.root.join("scratch.txt"), "untracked\n").expect("untracked file");
-  let refused = merge_run(
-    &Processes,
-    &git_program(),
-    &repo.root,
-    (&run(&base, Some("main"), Ending::Succeeded), &task()),
-    now(),
-  );
-  assert_eq!(
-    refused,
-    Err(MergeError::Uncommitted {
-      files: vec!["README.md".to_owned(), "scratch.txt".to_owned()]
-    })
-  );
-  assert_eq!(repo.head(), before);
-  assert_eq!(
-    fs::read_to_string(repo.root.join("README.md")).expect("still edited"),
-    "edited, not committed\n"
-  );
-  assert!(repo.root.join("scratch.txt").is_file());
 }
 
 #[test]
@@ -264,6 +240,7 @@ fn merge_at_a_reviewed_commit_refuses_a_branch_that_moved_since() {
     Some(&at_head),
     now(),
   )
-  .expect("merged at the commit asked for");
+  .expect("merged at the commit asked for")
+  .merge;
   assert_eq!(merged.revision.as_str(), later);
 }
