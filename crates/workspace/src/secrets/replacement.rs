@@ -12,7 +12,7 @@ pub(super) fn needs_person(db: &ProjectDb, id: SecretId) -> Result<bool, StoreEr
   if db
     .connections()?
     .iter()
-    .any(|connection| connection.endpoint().api().is_some_and(|api| api.key() == id))
+    .any(|connection| connection.key() == Some(id))
     || db.mcp_servers()?.iter().any(|server| server.secrets().contains(&id))
   {
     return Ok(true);

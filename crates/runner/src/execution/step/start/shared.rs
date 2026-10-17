@@ -54,7 +54,7 @@ impl RunTask {
     let Ok((_, connection)) = self.profile_and_connection(profile, &step.key) else {
       return false;
     };
-    let Some(account) = connection.account().id(connection.provider()) else {
+    let Some(account) = connection.plan_account() else {
       return false;
     };
     match self.db.last_account_reading(account) {
@@ -200,7 +200,7 @@ impl RunTask {
       .into_iter()
       .find(|(invocation, _)| *invocation == last.id)
       .map(|(_, account)| account);
-    let now = connection.account().id(connection.provider());
+    let now = connection.plan_account();
     if recorded.is_some() && recorded != now {
       continuation.session = None;
     }

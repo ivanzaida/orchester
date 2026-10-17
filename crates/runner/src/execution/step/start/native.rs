@@ -163,7 +163,7 @@ impl RunTask {
   /// The connection's API key, read from the keychain now; an archived or missing secret, or one the
   /// keychain does not give, keeps the agent from starting.
   fn api_key(&self, api: &ApiEndpoint) -> Result<Arc<SecretValue>, RunnerProblem> {
-    connection_check::api_key(&self.db, self.vault.as_ref(), api).map_err(problem)
+    connection_check::api_key(&self.db, self.vault.as_ref(), api.key()).map_err(problem)
   }
 
   /// The file scope, command policy and command host of the agent's permissions, and what it works

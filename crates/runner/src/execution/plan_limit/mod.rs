@@ -54,7 +54,7 @@ pub(super) fn continue_on(
     .ok_or(Rejection::NotAnotherAccount)?;
   let provider = stopped.provider();
   let another = chosen.provider() == provider
-    && chosen.account().id(provider) != stopped.account().id(provider)
+    && chosen.plan_account() != stopped.plan_account()
     && chosen.status().is_usable()
     && chosen
       .account()

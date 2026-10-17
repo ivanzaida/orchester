@@ -1,11 +1,12 @@
 //! The `connections` table. No credentials are stored: the agent CLIs and the GitHub CLI keep
-//! their own login, and a native agent connection names the project secret holding its key.
+//! their own login, and a native agent connection, or an agent CLI connection on an API provider, names the
+//! project secret holding its key.
 
 use std::path::PathBuf;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, CheckResult, Connection, ConnectionAccount,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, ApiProvider, CheckResult, Connection, ConnectionAccount,
     ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
   },
   id::ConnectionId,
@@ -23,13 +24,15 @@ use crate::{
   rows::{corrupt, decode_json, encode_json, parse, path_text},
 };
 
-const SELECT: &str = "SELECT id, kind, provider, name, settings, checked_at, last_check, created_at FROM connections";
+const SELECT: &str =
+  "SELECT id, kind, provider, name, settings, checked_at, last_check, created_at, api_provider FROM connections";
 const AGENT_PROVIDER: &str = "agent_provider";
 const GITHUB: &str = "github";
 /// The `provider` of a GitHub connection: the GitHub CLI is the only way to reach GitHub.
 const GH_CLI: &str = "gh_cli";
 const SETTINGS_SCHEMA: u32 = 1;
 const CHECK_SCHEMA: u32 = 1;
+const API_PROVIDER_SCHEMA: u32 = 1;
 
 /// Settings of an agent CLI connection.
 #[derive(Serialize, Deserialize)]
@@ -64,8 +67,9 @@ impl ConnectionStore for ProjectDb {
     let transaction = self.connection.transaction()?;
     ensure_name_free(&transaction, connection)?;
     transaction.execute(
-      "INSERT INTO connections (id, kind, provider, name, settings, status, checked_at, last_check, created_at) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+      "INSERT INTO connections \
+       (id, kind, provider, name, settings, status, checked_at, last_check, created_at, api_provider) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
       params![
         connection.id().to_string(),
         columns.kind,
@@ -75,7 +79,8 @@ impl ConnectionStore for ProjectDb {
         connection.status().as_str(),
         columns.checked_at,
         columns.last_check,
-        connection.created_at().unix_millis()
+        connection.created_at().unix_millis(),
+        columns.api_provider
       ],
     )?;
     transaction.commit()?;
@@ -94,15 +99,16 @@ impl ConnectionStore for ProjectDb {
     requirements.merge(connection.model_requirements());
     let columns = Columns::of(&connection.clone().with_model_requirements(requirements))?;
     transaction.execute(
-      "UPDATE connections SET name = ?2, settings = ?3, status = ?4, checked_at = ?5, last_check = ?6 \
-       WHERE id = ?1",
+      "UPDATE connections SET name = ?2, settings = ?3, status = ?4, checked_at = ?5, last_check = ?6, \
+       api_provider = ?7 WHERE id = ?1",
       params![
         connection.id().to_string(),
         connection.name().as_str(),
         columns.settings,
         connection.status().as_str(),
         columns.checked_at,
-        columns.last_check
+        columns.last_check,
+        columns.api_provider
       ],
     )?;
     transaction.commit()?;
@@ -163,6 +169,7 @@ struct Columns {
   settings: String,
   checked_at: Option<i64>,
   last_check: Option<String>,
+  api_provider: Option<String>,
 }
 
 impl Columns {
@@ -216,6 +223,10 @@ impl Columns {
       settings,
       checked_at: connection.last_check().map(|check| check.at().unix_millis()),
       last_check,
+      api_provider: connection
+        .api_provider()
+        .map(|provider| encode_json("connection API provider", API_PROVIDER_SCHEMA, provider))
+        .transpose()?,
     })
   }
 }
@@ -237,6 +248,7 @@ struct StoredRow {
   checked_at: Option<i64>,
   last_check: Option<String>,
   created_at: i64,
+  api_provider: Option<String>,
 }
 
 impl StoredRow {
@@ -250,10 +262,16 @@ impl StoredRow {
       checked_at: row.get(5)?,
       last_check: row.get(6)?,
       created_at: row.get(7)?,
+      api_provider: row.get(8)?,
     })
   }
 
   fn into_connection(self) -> Result<Connection, StoreError> {
+    let api_provider = self
+      .api_provider
+      .as_deref()
+      .map(|provider| decode_json::<ApiProvider>("connection API provider", API_PROVIDER_SCHEMA, provider))
+      .transpose()?;
     let ((kind, endpoint, last_check), requirements, account) = match self.kind.as_str() {
       AGENT_PROVIDER => self.agent_parts()?,
       GITHUB => (
@@ -272,6 +290,7 @@ impl StoredRow {
       Timestamp::from_unix_millis(self.created_at),
     )
     .and_then(|connection| connection.with_model_requirements(requirements).with_account(account))
+    .and_then(|connection| connection.with_api_provider(api_provider))
     .map_err(|error| corrupt("connection", error))
   }
 

@@ -3,13 +3,19 @@
 use std::{ops::Deref, path::PathBuf};
 
 use super::{
-  AgentEndpoint, AgentProvider, ApiEndpoint, Connection, ConnectionError, ConnectionKind, ConnectionStatus,
+  AgentEndpoint, AgentProvider, ApiEndpoint, ApiProvider, Connection, ConnectionError, ConnectionKind, ConnectionStatus,
   EndpointPreset, LastCheck, SignIn,
   catalog::{CatalogModel, ModelCatalog},
   compare_versions,
   model_requirements::CliTooOld,
 };
-use crate::{id::ConnectionId, name::Name, resource::ModelId, secret::Secret, time::Timestamp};
+use crate::{
+  id::{AgentAccountId, ConnectionId},
+  name::Name,
+  resource::ModelId,
+  secret::Secret,
+  time::Timestamp,
+};
 
 /// Who receives an agent's prompts, as its engine is named: see [`AgentConnection::vendor`].
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -143,6 +149,9 @@ impl AgentConnection {
   /// provider's official API, name the provider; another preset names itself (DeepSeek, whose data is
   /// stored in the PRC); a custom endpoint names its host.
   pub fn vendor(&self) -> EngineVendor {
+    if let Some(provider) = self.api_provider() {
+      return EngineVendor::Host(provider.base_url().host().to_owned());
+    }
     match self.api() {
       None => EngineVendor::Provider(self.provider()),
       Some(api) => match api.preset() {
@@ -171,6 +180,20 @@ impl AgentConnection {
     self.connection.set_account(account)
   }
 
+  /// See [`Connection::set_api_provider`].
+  pub fn set_api_provider(&mut self, provider: Option<ApiProvider>) -> Result<(), ConnectionError> {
+    self.connection.set_api_provider(provider)
+  }
+
+  /// The account whose plan limits the CLI's runs count against: none on an API provider, whose key runs them, nor
+  /// on a native connection.
+  pub fn plan_account(&self) -> Option<AgentAccountId> {
+    if self.api_provider().is_some() {
+      return None;
+    }
+    self.account().id(self.provider)
+  }
+
   /// The model API of a native connection.
   pub const fn api(&self) -> Option<&ApiEndpoint> {
     self.connection.endpoint.api()
@@ -185,12 +208,8 @@ impl AgentConnection {
   /// connection whose key secret is not among them reads *Key missing*, whatever its last check found,
   /// since nothing reaches the API without the key.
   pub fn status_with(&self, active: &[Secret]) -> ConnectionStatus {
-    match self.api() {
-      Some(api)
-        if !active
-          .iter()
-          .any(|secret| secret.id() == api.key() && !secret.is_archived()) =>
-      {
+    match self.key() {
+      Some(key) if !active.iter().any(|secret| secret.id() == key && !secret.is_archived()) => {
         ConnectionStatus::KeyMissing
       }
       _ => self.connection.status(),
@@ -209,8 +228,12 @@ impl AgentConnection {
     self.connection.record_check(LastCheck::Agent(check))
   }
 
-  /// Models found by the last successful check.
+  /// Models found by the last successful check; none on an API provider, whose models are typed
+  /// ([`Self::models`]).
   pub fn catalog(&self) -> Option<&ModelCatalog> {
+    if self.api_provider().is_some() {
+      return None;
+    }
     match &self.last_check()?.result {
       CheckResult::Available { catalog, .. } => Some(catalog),
       _ => None,
@@ -237,9 +260,12 @@ impl AgentConnection {
       })
   }
 
-  /// Models a profile can choose from on this connection, in catalog order.
+  /// Models a profile can choose from on this connection: an API provider's, else the catalog's, in their order.
   pub fn models(&self) -> &[CatalogModel] {
-    self.catalog().map_or(&[], ModelCatalog::models)
+    match self.api_provider() {
+      Some(provider) => provider.models(),
+      None => self.catalog().map_or(&[], ModelCatalog::models),
+    }
   }
 }
 

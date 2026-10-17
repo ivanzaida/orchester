@@ -5,11 +5,13 @@
 //! stores no credentials and never asks the programs for them. It holds the executable and what the last
 //! check found out about it. A native agent provider ([`AgentProvider::is_native`]) is reached at a model
 //! API instead ([`AgentEndpoint::Api`]), with its key in a project secret; this version stores and shows
-//! such connections but runs no agent on them.
+//! such connections but runs no agent on them. An agent CLI connection can instead run on an API provider
+//! ([`ApiProvider`]): a third-party model API reached with a key in a project secret.
 
 mod account;
 mod adapter;
 mod agent;
+mod api_provider;
 pub mod app_server;
 pub mod app_server_config;
 pub mod app_server_mcp;
@@ -41,6 +43,7 @@ pub use self::{
     parse_version,
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck, EngineVendor},
+  api_provider::{ApiProvider, ApiProviderError},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},
@@ -54,7 +57,11 @@ pub use self::{
   native_models::{Effort, ModelSource, NativeModel, NativeModels, NativeModelsError, ensure_used_kept, with_fetched},
   provider::{AgentProvider, AgentRuntime, WireApi},
 };
-use crate::{id::ConnectionId, name::Name, time::Timestamp};
+use crate::{
+  id::{ConnectionId, SecretId},
+  name::Name,
+  time::Timestamp,
+};
 
 /// What a connection connects to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -102,6 +109,12 @@ pub enum ConnectionError {
   NoAccounts(ConnectionId),
   #[error("the account is not one of this connection's CLI")]
   AccountOfOtherCli,
+  /// Only an agent CLI connection runs on an API provider (`docs/design/api-providers.md`).
+  #[error("connection {0} runs no agent CLI, so it runs on no API provider")]
+  NoApiProvider(ConnectionId),
+  /// A connection on an API provider runs on its key, not on a sign-in of its CLI.
+  #[error("a connection on an API provider runs on no account of its CLI")]
+  ApiProviderWithAccount,
 }
 
 /// Whether the CLI is signed in, as far as its own status command tells.
@@ -222,6 +235,8 @@ pub struct Connection {
   model_requirements: ModelRequirements,
   /// Whose sign-in an agent CLI connection runs on; Default for every other kind.
   account: ConnectionAccount,
+  /// The model API an agent CLI connection runs on instead of its CLI's own sign-in, if any.
+  api_provider: Option<ApiProvider>,
 }
 
 impl Connection {
@@ -243,6 +258,7 @@ impl Connection {
       created_at,
       model_requirements: ModelRequirements::default(),
       account: ConnectionAccount::Default,
+      api_provider: None,
     })
   }
 
@@ -275,6 +291,9 @@ impl Connection {
     if account == self.account {
       return Ok(());
     }
+    if self.api_provider.is_some() && !account.is_default() {
+      return Err(ConnectionError::ApiProviderWithAccount);
+    }
     let ConnectionKind::Agent(provider) = self.kind else {
       return Err(ConnectionError::NoAccounts(self.id));
     };
@@ -292,6 +311,46 @@ impl Connection {
       return Err(ConnectionError::AccountOfOtherCli);
     }
     self.set_account(ConnectionAccount::of(account))
+  }
+
+  /// This connection on the API provider it had recorded, with the check made on it.
+  pub fn with_api_provider(mut self, provider: Option<ApiProvider>) -> Result<Self, ConnectionError> {
+    self.set_api_provider(provider)?;
+    Ok(self)
+  }
+
+  /// The model API the connection's CLI runs on instead of its own sign-in.
+  pub const fn api_provider(&self) -> Option<&ApiProvider> {
+    self.api_provider.as_ref()
+  }
+
+  /// The project secret holding the key of the connection's model API: a native connection's, or an API
+  /// provider's.
+  pub fn key(&self) -> Option<SecretId> {
+    self
+      .endpoint
+      .api()
+      .map(ApiEndpoint::key)
+      .or_else(|| self.api_provider().map(ApiProvider::key))
+  }
+
+  /// Runs the connection's CLI on `provider`, or on its own sign-in again (`None`). Only an agent CLI connection
+  /// runs on one, and only on its CLI's Default account. The last check stays: it read the program, which does not
+  /// change.
+  pub fn set_api_provider(&mut self, provider: Option<ApiProvider>) -> Result<(), ConnectionError> {
+    if provider.is_some() {
+      let ConnectionKind::Agent(agent) = self.kind else {
+        return Err(ConnectionError::NoApiProvider(self.id));
+      };
+      if agent.provider_wire().is_none() {
+        return Err(ConnectionError::NoApiProvider(self.id));
+      }
+      if !self.account.is_default() {
+        return Err(ConnectionError::ApiProviderWithAccount);
+      }
+    }
+    self.api_provider = provider;
+    Ok(())
   }
 
   pub fn from_stored(
@@ -376,11 +435,17 @@ impl Connection {
     Ok(())
   }
 
+  /// The last check's status. A connection on an API provider does not use its CLI's own sign-in, so once the
+  /// check found the CLI it reads Connected whatever the sign-in was.
   pub fn status(&self) -> ConnectionStatus {
-    self
-      .last_check
-      .as_ref()
-      .map_or(ConnectionStatus::NotChecked, LastCheck::status)
+    match &self.last_check {
+      None => ConnectionStatus::NotChecked,
+      Some(LastCheck::Agent(ConnectionCheck {
+        result: CheckResult::Available { .. },
+        ..
+      })) if self.api_provider.is_some() => ConnectionStatus::Connected,
+      Some(check) => check.status(),
+    }
   }
 
   /// Program version found by the last successful check.

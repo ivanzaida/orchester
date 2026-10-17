@@ -133,6 +133,24 @@ impl Command {
     self
   }
 
+  /// Leaves `key` out of the program's environment, whether the caller's or one this command sets (compared
+  /// without regard to case).
+  #[must_use]
+  pub fn with_env_dropped(mut self, key: &str) -> Self {
+    self.env.retain(|(name, _)| !name.eq_ignore_ascii_case(key));
+    self
+      .secret_env
+      .retain(|existing| !existing.name().eq_ignore_ascii_case(key));
+    self.without_env(key)
+  }
+
+  /// `more` after the arguments the program already has.
+  #[must_use]
+  pub fn with_args(mut self, more: impl IntoIterator<Item = String>) -> Self {
+    self.args.extend(more);
+    self
+  }
+
   /// Gives the program exactly `variables` instead of the caller's environment.
   #[must_use]
   pub fn with_environment(mut self, variables: Vec<(String, String)>) -> Self {

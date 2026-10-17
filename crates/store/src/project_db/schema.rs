@@ -4,6 +4,7 @@
 mod agent_accounts;
 mod agent_files;
 mod agent_slots;
+mod api_providers;
 mod approval_choices;
 mod auto_mode;
 mod automation_answers;
@@ -560,6 +561,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   shared_members::READ_AS_MIGRATION,
   orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
+  api_providers::MIGRATION,
 ];
 
 /// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema

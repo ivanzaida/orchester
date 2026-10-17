@@ -86,6 +86,9 @@ pub(super) struct AppServerSetup {
   pub exemptions: InvocationExemptions,
   pub output_schema: Option<Value>,
   pub secrets: Vec<SecretVariable>,
+  /// The model provider the thread runs on when the connection runs on an API provider
+  /// (`docs/design/api-providers.md`): then Codex needs no sign-in of its own.
+  pub model_provider: Option<String>,
 }
 
 impl AppServerSetup {
@@ -350,7 +353,7 @@ impl AppServerSession {
         Ok(Vec::new())
       }
       (Phase::Account, 2) => {
-        if result.get("account").is_none_or(Value::is_null) {
+        if self.setup.model_provider.is_none() && result.get("account").is_none_or(Value::is_null) {
           return Err(AppServerFailure::NotSignedIn(
             "Codex is not signed in. Sign in to the normal Codex account and retry this step.".to_owned(),
           ));
@@ -474,12 +477,15 @@ impl AppServerSession {
     }});
     let cwd = self.setup.worktree.to_string_lossy();
     let config = Value::Object(thread_config(&self.turned_off));
-    let params = match &self.setup.resume {
+    let mut params = match &self.setup.resume {
       Some(thread) => json!({"threadId":thread,"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),
       None => json!({"cwd":cwd,"model":self.setup.model,
         "approvalPolicy":policy,"approvalsReviewer":"user","sandbox":sandbox,"config":config}),
     };
+    if let Some(provider) = &self.setup.model_provider {
+      params["modelProvider"] = json!(provider);
+    }
     let method = if self.setup.resume.is_some() {
       "thread/resume"
     } else {

@@ -22,6 +22,7 @@ use orchester_core::{
   command::{Command, SecretVariable},
   connection::{
     AgentConnection, REASONING_EFFORT,
+    invocation::OnProvider,
     mcp::InvocationExemptions,
     stream::{AgentEvent, ClaudeStream, RunnerProblem},
   },
@@ -39,6 +40,7 @@ use self::cli::Cli;
 use super::{
   super::{
     codebase_index::{AgentIndex, IndexTold, with_tools_on_path},
+    connection_check,
     run::RunTask,
   },
   Continuation,
@@ -182,6 +184,20 @@ impl<'a> StepAgent<'a> {
 }
 
 impl RunTask {
+  /// The API provider `connection` runs `model` on with its key read from the keychain now, if it runs on one; a
+  /// key secret that is archived, gone or not given by the keychain keeps the agent from starting.
+  fn on_provider<'a>(
+    &self,
+    connection: &'a AgentConnection,
+    model: &'a ModelId,
+  ) -> Result<Option<OnProvider<'a>>, RunnerProblem> {
+    let Some(provider) = connection.api_provider() else {
+      return Ok(None);
+    };
+    let key = connection_check::api_key(&self.db, self.vault.as_ref(), provider.key()).map_err(problem)?;
+    Ok(Some(OnProvider { provider, model, key }))
+  }
+
   /// The internal code index skill, placed among `placed` when the agent gets the index.
   fn place_code_map_for(
     &self,
@@ -283,12 +299,15 @@ impl RunTask {
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
     let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
-    let secrets = setup.claude_secrets();
+    let mut secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let checks = tools.checks().to_vec();
+    let on_provider = self.on_provider(connection, model)?;
+    secrets.extend(on_provider.as_ref().map(|on| on.key_variable(provider)));
     let cli = Cli {
       executable,
       account: connection.account(),
+      provider: on_provider.as_ref(),
       model,
       effort: reasoning_effort(body),
       enforced: &enforced,
@@ -322,7 +341,7 @@ impl RunTask {
       code_index: index.used,
       secrets,
       agent: body.role().as_str().to_owned(),
-      account: connection.account().id(provider),
+      account: connection.plan_account(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
       engine: None,

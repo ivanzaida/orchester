@@ -9,8 +9,8 @@ use std::{
 use orchester_core::{
   account::AgentAccount,
   connection::{
-    AgentConnection, AgentProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionError, GitHubConnection,
-    mcp::McpServer,
+    AgentConnection, AgentProvider, ApiProvider, Connection, ConnectionAccount, ConnectionCheck, ConnectionError,
+    GitHubConnection, mcp::McpServer,
   },
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -209,8 +209,10 @@ impl SaveError {
         | ConnectionError::PresetNotOffered
         | ConnectionError::FallbackNotOffered
         | ConnectionError::NoAccounts(_)
-        | ConnectionError::AccountOfOtherCli,
+        | ConnectionError::AccountOfOtherCli
+        | ConnectionError::NoApiProvider(_),
       ) => Message::new("errors.storage"),
+      Self::Connection(ConnectionError::ApiProviderWithAccount) => Message::new("errors.apiProviderWithAccount"),
       // Only a native connection has no program to point at.
       Self::Connection(ConnectionError::EndpointMismatch(_)) | Self::NativeNotAvailable => {
         Message::new("errors.nativeNotAvailable")
@@ -226,7 +228,7 @@ pub fn save<S>(store: &mut S, draft: ConnectionDraft, now: Timestamp) -> Result<
 where
   S: ConnectionStore<Error = StoreError>,
 {
-  save_with(store, draft, None, now)
+  save_with(store, draft, (None, None), now)
 }
 
 /// Adds or updates the connection in `draft` on `account`, with its check, which was made on that account
@@ -236,13 +238,20 @@ pub fn save_on_account_in(
   draft: ConnectionDraft,
   account: ConnectionAccount,
 ) -> Result<ConnectionId, SaveError> {
-  save_with(&mut ProjectDb::open(repo_root)?, draft, Some(account), Timestamp::now())
+  save_with(
+    &mut ProjectDb::open(repo_root)?,
+    draft,
+    (Some(account), Some(None)),
+    Timestamp::now(),
+  )
 }
 
-fn save_with<S>(
+/// Adds or updates the connection in `draft` with its check. `account` and `provider`, when given, replace what it
+/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account).
+pub(super) fn save_with<S>(
   store: &mut S,
   draft: ConnectionDraft,
-  account: Option<ConnectionAccount>,
+  (account, provider): (Option<ConnectionAccount>, Option<Option<ApiProvider>>),
   now: Timestamp,
 ) -> Result<ConnectionId, SaveError>
 where
@@ -259,9 +268,7 @@ where
       draft.executable,
       now,
     )?;
-    if let Some(account) = account.clone() {
-      connection.set_account(account)?;
-    }
+    runs_on(&mut connection, account, provider)?;
     connection.record_check(draft.check)?;
     store.create_connection(&connection)?;
     return Ok(connection.id());
@@ -270,12 +277,29 @@ where
   let mut connection = AgentConnection::try_from(stored)?;
   connection.rename(draft.name);
   connection.set_executable(draft.executable)?;
-  if let Some(account) = account {
-    connection.set_account(account)?;
-  }
+  runs_on(&mut connection, account, provider)?;
   connection.record_check(draft.check)?;
   store.save_connection(&connection)?;
   Ok(id)
+}
+
+/// Runs `connection` on `account` and `provider` where given. A provider leaves first and comes last, since a
+/// connection on one runs on no account but Default.
+fn runs_on(
+  connection: &mut AgentConnection,
+  account: Option<ConnectionAccount>,
+  provider: Option<Option<ApiProvider>>,
+) -> Result<(), ConnectionError> {
+  if provider.is_some() {
+    connection.set_api_provider(None)?;
+  }
+  if let Some(account) = account {
+    connection.set_account(account)?;
+  }
+  match provider {
+    Some(provider @ Some(_)) => connection.set_api_provider(provider),
+    _ => Ok(()),
+  }
 }
 
 /// Runs connection `id` of the project at `repo_root` on `account`, an account of its CLI, and checks it there: the
