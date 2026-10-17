@@ -143,6 +143,8 @@ fn orchester_two_factor_code_join_works_after_a_sign_in_with_a_code() {
   server.create_user("alice", "Alice Moreau", true);
   let kontur = server.create_named_project(("Kontur", "KTR"), "kontur", Some(KONTUR_REMOTE));
   let code = server.project_code(&kontur);
+  // Its admin pins the tests' cloud root, so the server checks the two-factor identity a code needs.
+  server.cloud_audience();
   server.serve_self_signed();
   let mut window = window(None);
   let cloud = &window.data.cloud;
