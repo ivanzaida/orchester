@@ -149,6 +149,7 @@ impl AgentsScreen {
           return lurq::components::Text::new(&ctx.t("agents.gone")).into();
         }
         let key = format!("agent-editor-{:?}-{revision}", entry.as_ref().map(|e| e.id));
+        let own_page = ctx.props::<Props>().selected.is_some();
         ctx.mount_keyed::<editor::Editor>(
           &key,
           editor::Props {
@@ -161,6 +162,7 @@ impl AgentsScreen {
             profiles: self.profiles.clone(),
             load_error,
             reading,
+            own_page,
           },
         )
       }
