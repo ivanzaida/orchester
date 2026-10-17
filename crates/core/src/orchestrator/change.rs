@@ -1,7 +1,8 @@
-//! A change the Orchestrator's agent proposed that only a person carries out (`docs/design/orchestrator-toolset.md`,
-//! "Decisions" 3 and 4): publishing a draft, canceling a run or merging one. It holds what the person reads before
-//! *Apply* and what *Apply* would change; a draft saved again, a version published meanwhile or a run with newer
-//! work needs a fresh proposal.
+//! A change the Orchestrator's agent proposed that only a person carries out, unless the person's switch lets the chat
+//! carry it out itself (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
+//! run, merging one, answering an agent's question or sending a run's agents a message. It holds what the person
+//! reads before *Apply* and what *Apply* would change; a draft saved again, a version published meanwhile or a run
+//! with newer work needs a fresh proposal.
 
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +40,44 @@ pub enum Change {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     into: Option<String>,
   },
+  /// Answer the question with suggested answers `request` (its id) an agent of run `run`, `#number`, waits with: the
+  /// labels `choices` of the options picked and/or `text`, in the Orchestrator's words.
+  Answer {
+    run: RunId,
+    number: u32,
+    request: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    choices: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+  },
+  /// Send `text` to the agents of run `run`, `#number`, its task's latest, as the task's composer sends it in the
+  /// run's state: the answer to an agent's question in the conversation among others; `now` to an agent at work
+  /// whose connection takes it mid-turn, else after its turn.
+  Message {
+    run: RunId,
+    number: u32,
+    text: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    now: bool,
+  },
+}
+
+impl Change {
+  /// The run it acts on; `None` for a publication.
+  pub const fn run(&self) -> Option<RunId> {
+    match self {
+      Self::Publish { .. } => None,
+      Self::Cancel { run, .. } | Self::Merge { run, .. } | Self::Answer { run, .. } | Self::Message { run, .. } => {
+        Some(*run)
+      }
+    }
+  }
+
+  /// Whether it answers a run's agents: an answer to a question, or a message.
+  pub const fn answers_agents(&self) -> bool {
+    matches!(self, Self::Answer { .. } | Self::Message { .. })
+  }
 }
 
 /// What kind of draft a publication publishes, and so which of Orchester's tools publishes it.

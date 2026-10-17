@@ -1618,7 +1618,10 @@
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
       "publishWaits": "Nothing is published yet: publishing {{name}} as v{{version}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to publish.",
       "cancelWaits": "Run #{{run}} goes on: canceling it waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to cancel.",
-      "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge."
+      "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge.",
+      "answerWaits": "Nothing is answered yet: your answer to the question in run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would answer and why.",
+      "messageWaits": "Nothing is sent yet: your message to the agents of run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would send and why.",
+      "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card."
     }
   }
 }

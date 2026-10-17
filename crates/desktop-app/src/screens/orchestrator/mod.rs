@@ -22,6 +22,7 @@ mod settings;
 mod start;
 mod timeline;
 mod turns;
+mod wait;
 
 use std::sync::Arc;
 

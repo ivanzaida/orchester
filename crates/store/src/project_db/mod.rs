@@ -24,6 +24,7 @@ mod messages;
 mod native;
 mod orchestrator;
 mod orchestrator_usage;
+mod orchestrator_waits;
 mod organization;
 mod organized_drafts;
 mod plan_limits;
@@ -74,6 +75,7 @@ pub use self::{
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
   resources::ResourceUpdate,
   runs::RunBranch,

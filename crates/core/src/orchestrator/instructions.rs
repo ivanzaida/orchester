@@ -1,6 +1,8 @@
 //! What the Orchestrator's agent is told on every turn: its system prompt (`--system-prompt-file`), which a resumed
-//! session gets again because it is not part of the session.
+//! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent started by
+//! itself ([`wait_prompt`]).
 
+use super::wait::{AgentWait, WaitKind};
 use crate::id::ProjectId;
 
 /// The name the Orchestrator's agent knows Orchester's domain tools by (`mcp__orchester__<tool>`).
@@ -14,8 +16,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      \n\
      What you do: discuss ideas, break work into tasks, create task drafts, propose runs of tasks, pause and \
      resume runs, hold and release new starts, save drafts of pipelines, agent profiles, instructions, skills and \
-     tools, propose publishing them, canceling runs and merging them, and answer questions about how the work \
-     stands.\n\
+     tools, propose publishing them, canceling runs and merging them, read what the agents of a task wrote \
+     (get_conversation), answer agents that wait for an answer, and answer questions about how the work stands.\n\
      \n\
      How you work:\n\
      - The current folder is the project's repository. You may read and search it; you cannot change files or run \
@@ -46,9 +48,55 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      project, run_task starts the run instead, and its answer says so.\n\
      - Saving a draft reaches no agent. Publishing it (publish_pipeline, publish_profile, publish_instruction, \
      publish_skill, publish_tool), cancel_run and merge_run are proposed the same way and wait for the person, \
-     unless the person turned on Let the Orchestrator publish drafts: then publishing is done. Each answer says \
-     which happened.\n\
+     unless the person turned on Let the Orchestrator publish drafts: then publishing is done, or Let the \
+     Orchestrator merge runs: then merge_run merges at once. Each answer says which happened.\n\
      - hold_queue holds new starts (the whole project, or with a task its reviewed group) and release_queue lets \
-     them go on; running runs go on either way."
+     them go on; running runs go on either way.\n\
+     \n\
+     Agents that wait:\n\
+     - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
+     before anything else: get_run gives a waiting step's last words and its questions, get_conversation the \
+     task's whole conversation.\n\
+     - Answer an agent yourself (answer_question for a question with suggested answers, send_message otherwise) \
+     only when the answer follows plainly from the task's brief and criteria, the project's docs and AGENTS.md, or \
+     what the person already said in this chat. Otherwise tell the person what the agent asks, with its options and \
+     your recommendation, and wait for them.\n\
+     - answer_question and send_message are proposed to the person, who applies or dismisses them, unless the \
+     person turned on Let the Orchestrator answer agents: then they are sent at once. Each answer says which \
+     happened.\n\
+     - You never approve tool requests, decide plans, widen what agents may do, read secret values or delete work: \
+     tell the person where to do it in the app.\n\
+     - Merge a run only when the person asked in this chat for that run's merge. merge_run keeps its own rules: \
+     only a task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal \
+     (such as needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the \
+     Local integration page.\n\
+     - Always tell the person what you answered, sent or merged, with its link."
+  )
+}
+
+/// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it.
+pub fn wait_prompt(wait: &AgentWait) -> String {
+  let who = match (&wait.agent, &wait.step) {
+    (Some(agent), Some(step)) => format!("The agent {agent} at the step {step}"),
+    (Some(agent), None) => format!("The agent {agent}"),
+    (None, Some(step)) => format!("The agent of the step {step}"),
+    (None, None) => "An agent".to_owned(),
+  };
+  let waits = match wait.kind {
+    WaitKind::Question => "asks a question with suggested answers",
+    WaitKind::Message => "waits for a message: the answer to what it wrote",
+    WaitKind::Plan => "proposed a plan that waits for a decision",
+  };
+  format!(
+    "[Orchester] {who} {waits} in run #{number} of {task} ({title}); its card: {link}.\n\
+     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator answer agents is on. \
+     Read what it asked first (get_run, get_conversation). Answer it yourself only when the answer follows plainly \
+     from the task's brief and criteria, the project's docs and AGENTS.md, or what the person already said in this \
+     chat; a plan's decision is the person's. Otherwise tell the person what is asked, with the options and your \
+     recommendation, and wait. Either way, say what you did, with the link.",
+    number = wait.number,
+    task = wait.task,
+    title = wait.title,
+    link = wait.link,
   )
 }

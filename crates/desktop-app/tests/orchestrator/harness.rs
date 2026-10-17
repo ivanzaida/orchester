@@ -32,7 +32,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb};
-use orchester_workspace::app_paths::runner_beside;
+use orchester_workspace::{app_paths::runner_beside, workspace::OrchestratorConsent};
 
 use super::support::{Data, Window, add_project};
 
@@ -458,14 +458,14 @@ the agent logged: {agent}"
       .get()
   }
 
-  /// The person's *Let the Orchestrator publish drafts*.
-  pub fn let_orchestrator_publish(&self, allowed: bool) {
+  /// The person's *Let the Orchestrator publish drafts*, *answer agents* or *merge runs* (`consent`).
+  pub fn let_orchestrator(&self, consent: OrchestratorConsent, allowed: bool) {
     self
       .window
       .launch
       .workspace()
       .expect("the session started")
-      .set_orchestrator_publishes_drafts(allowed)
+      .set_orchestrator_allows(consent, allowed)
       .expect("the person's choice is kept");
   }
 

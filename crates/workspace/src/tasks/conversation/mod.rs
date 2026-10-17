@@ -163,6 +163,9 @@ pub struct Entry {
   pub execution: Option<StepExecutionId>,
   /// A person's message sent now.
   pub sent_now: bool,
+  /// A message on the person's side that the project's Orchestrator chat wrote and sent: its heading names the
+  /// Orchestrator.
+  pub by_orchestrator: bool,
 }
 
 /// An agent at work on the run: its profile, its role, the execution it works on and whether its
@@ -435,6 +438,7 @@ fn entry(
     state,
     execution,
     sent_now,
+    by_orchestrator: message.by_orchestrator(),
   }
 }
 

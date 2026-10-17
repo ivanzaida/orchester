@@ -49,8 +49,9 @@ use crate::services::Services;
 
 /// What the chat's agent is told about the server.
 const INSTRUCTIONS: &str = "Orchester's tools for one project's Orchestrator chat: read the project's tasks, runs, \
-  approvals and pipelines, create and change task drafts, run a task, pause and resume a run. Name the project by \
-  its id or name. A refusal is a tool error with a stable `code` and the app's own explanation in `reasons`.";
+  tasks' conversations, approvals and pipelines, create and change task drafts, run a task, pause and resume a run, \
+  answer agents that wait and merge runs as each tool's description says. Name the project by its id or name. A \
+  refusal is a tool error with a stable `code` and the app's own explanation in `reasons`.";
 
 /// How long a served turn waits for a change before it is read once more: a runner that went away says nothing.
 const RECHECK: Duration = Duration::from_secs(5);

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, ChatEntry, EntryKind, TurnState},
+  orchestrator::{Chat, ChatEntry, TurnState},
 };
 use orchester_store::{ChatListing, ProjectDb};
 
@@ -42,12 +42,9 @@ impl ChatView {
     Ok(Some(Self { chat: found, entries }))
   }
 
-  /// The person's last message and its turn.
+  /// The last turn and where it stands: a person's message's, or one a wait of an agent started by itself.
   pub fn last_turn(&self) -> Option<(ChatMessageId, &TurnState)> {
-    self.entries.iter().rev().find_map(|entry| match &entry.kind {
-      EntryKind::Person { message, turn, .. } => Some((*message, turn)),
-      _ => None,
-    })
+    self.entries.iter().rev().find_map(|entry| entry.kind.turn())
   }
 
   /// Whether the agent is answering the last message.

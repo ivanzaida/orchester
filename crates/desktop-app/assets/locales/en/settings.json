@@ -17,6 +17,20 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
+      "answerAgents": {
+        "title": "Let the Orchestrator answer agents",
+        "description": "Lets the Orchestrator's chat answer agents' questions and send messages to a run's agents without your click, and start a turn by itself when an agent asks or waits for a message. Off: it proposes each answer as a card you apply, and tells you when an agent waits. Approvals and plan decisions stay yours. Only you can change this, here in the window.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
+      "mergeRuns": {
+        "title": "Let the Orchestrator merge runs",
+        "description": "Lets the Orchestrator's chat merge a run you asked it to merge, without your click: only a task's latest run that succeeded, and only when the main checkout needs no local integration. Off: it proposes each merge as a card you apply. Conflicts and approving a merged result stay yours, on the Local integration page. Only you can change this, here in the window.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
       "server": {
         "section": "Orchester MCP server",
         "meta": {
