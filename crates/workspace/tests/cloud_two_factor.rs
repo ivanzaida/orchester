@@ -15,12 +15,17 @@ mod server_support;
 #[path = "sharing_support/project.rs"]
 mod support;
 
-use account_cloud::{AccountCloud, EMAIL, PASSWORD, RECOVERY_CODES};
+use std::time::{Duration, Instant};
+
+use account_cloud::{AccountCloud, EMAIL, OTHER_EMAIL, PASSWORD, RECOVERY_CODES};
 use desktop::{Desktop, linked_server};
 use orchester_api::{Credential, cloud::CloudErrorCode};
-use orchester_core::secret::SecretVault;
-use orchester_store::CloudSignInEnd;
-use orchester_workspace::sharing::cloud::{Challenge, CloudError, CodeKind, FEW_RECOVERY_CODES, SignIn, SignInStep};
+use orchester_core::{secret::SecretVault, time::Timestamp};
+use orchester_store::{AcceptedInvite, CloudSignInEnd};
+use orchester_workspace::sharing::{
+  CloudJoined,
+  cloud::{CHALLENGE_LIFE, Challenge, CloudError, CodeKind, FEW_RECOVERY_CODES, SignIn, SignInStep},
+};
 
 /// Signs `desktop` in to `cloud` with the password; the challenge it answers.
 fn password_step(desktop: &Desktop) -> Challenge {
@@ -157,4 +162,99 @@ fn two_factor_signing_out_for_a_code_names_the_invite() {
   assert_eq!(ended.reason, CloudSignInEnd::TwoFactor);
   assert_eq!(ended.invite.as_deref(), Some("Billing"));
   assert_eq!(ended.email, EMAIL);
+}
+
+#[test]
+fn two_factor_a_kept_invite_refused_for_a_code_stays_until_a_sign_in_with_one() {
+  let cloud = AccountCloud::start();
+  let (server, audience) = linked_server(&cloud);
+  let invite = server.email_invite(EMAIL);
+  let desktop = Desktop::signed_in(&cloud);
+  cloud.name_server(&audience, &server.url(), None);
+  cloud.invite(&invite, None);
+  let listed = desktop.block_on(desktop.cloud.invites()).expect("invites").remove(0);
+  // An earlier ask took a token for it, so the cloud lists it no more: it is kept here only.
+  let kept = AcceptedInvite {
+    asks: 1,
+    ..AcceptedInvite::new(
+      (listed.id, audience.parse().expect("a server id"), "Kontur team".into()),
+      None,
+      Timestamp::from_unix_millis(listed.expires_at),
+      Timestamp::now(),
+    )
+  };
+  desktop.keep_accepted(&kept);
+  cloud.session_without_two_factor();
+  let refused = desktop
+    .block_on(desktop.cloud.finish_accept(listed.id))
+    .expect_err("refused");
+  assert!(matches!(refused, CloudError::TwoFactorSession), "{refused:?}");
+  let still = desktop.block_on(desktop.cloud.accepted_invites()).expect("kept");
+  assert_eq!(still.len(), 1, "the invite is not lost");
+  assert_eq!(still[0].next_check_at, None, "and not asked on its own");
+
+  cloud.require_codes();
+  desktop
+    .block_on(desktop.cloud.sign_out_for_code(Some("Kontur team".into())))
+    .expect("signed out");
+  assert_eq!(
+    desktop.block_on(desktop.cloud.accepted_invites()).expect("kept").len(),
+    1,
+    "kept through the sign-out for a code"
+  );
+  let challenge = password_step(&desktop);
+  finish(&desktop, &challenge, (&cloud.next_code(), CodeKind::App)).expect("signed in with a code");
+  let joined = desktop
+    .block_on(desktop.cloud.finish_accept(listed.id))
+    .expect("joined");
+  assert!(matches!(joined.joined, CloudJoined::Joined(_)), "{joined:?}");
+}
+
+#[test]
+fn two_factor_another_account_forgets_the_invites_kept_for_a_code() {
+  let cloud = AccountCloud::start();
+  let desktop = Desktop::signed_in(&cloud);
+  let kept = AcceptedInvite::new(
+    (
+      "0191c7c0-0000-7000-8000-00000000abcd".parse().expect("an invite id"),
+      "0191c7c0-0000-7000-8000-00000000dcba".parse().expect("a server id"),
+      "Kontur team".into(),
+    ),
+    None,
+    Timestamp::from_unix_millis(Timestamp::now().unix_millis() + 86_400_000),
+    Timestamp::now(),
+  );
+  desktop.keep_accepted(&kept);
+  desktop
+    .block_on(desktop.cloud.sign_out_for_code(None))
+    .expect("signed out");
+  desktop
+    .block_on(
+      desktop
+        .cloud
+        .sign_in(OTHER_EMAIL.into(), Credential::new(PASSWORD.into())),
+    )
+    .expect("another account");
+  assert!(
+    desktop
+      .block_on(desktop.cloud.accepted_invites())
+      .expect("kept")
+      .is_empty(),
+    "Bohdan's invite is not Olena's"
+  );
+}
+
+#[test]
+fn two_factor_a_challenge_ends_by_this_computers_clock() {
+  let cloud = AccountCloud::start();
+  cloud.require_codes();
+  let desktop = Desktop::new(&cloud.url());
+  let challenge = password_step(&desktop);
+  let now = Instant::now();
+  assert!(!challenge.ended_by(now), "it has just arrived");
+  assert!(!challenge.ended_by(now + CHALLENGE_LIFE - Duration::from_secs(5)));
+  assert!(
+    challenge.ended_by(now + CHALLENGE_LIFE),
+    "its five minutes, counted from its arrival"
+  );
 }

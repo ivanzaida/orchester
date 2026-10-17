@@ -173,12 +173,11 @@ impl Factors {
     })
   }
 
-  /// The next code of the app the stand-in takes at `now` (seconds): the earliest step not used yet.
+  /// The next code of the app the stand-in takes at `now` (seconds): the current step's, or the one after when that was
+  /// used. Never the step before, which a new half minute starting before the code arrives would leave behind.
   pub fn next_code(&self, now: i64) -> String {
     let step = totp::step(now);
-    let next = self
-      .last_step
-      .map_or(step.saturating_sub(1), |last| (last + 1).max(step.saturating_sub(1)));
+    let next = self.last_step.map_or(step, |last| (last + 1).max(step));
     assert!(next <= step + 1, "the codes of this half minute were used");
     totp::code(SECRET, next)
   }

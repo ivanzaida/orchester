@@ -172,6 +172,11 @@ impl AccountCloud {
     self.state.lock().factors.enabled = false;
   }
 
+  /// From now on Bohdan has two-factor authentication on again, as when he turned it on in the browser.
+  pub fn two_factor_on(&self) {
+    self.state.lock().factors.enabled = true;
+  }
+
   /// From now on Bohdan's password answers a challenge, which a code finishes.
   pub fn require_codes(&self) {
     self.state.lock().factors.codes_at_sign_in = true;

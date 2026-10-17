@@ -155,47 +155,7 @@ impl CloudPanel {
       .get()
       .error
       .map(|reason| crate::ui::field::field_error("orchester-cloud-sign-out-error", &reason.text(ctx)).into());
-    let this_device = ctx.t_args(
-      "cloud.account.deviceValue",
-      [("device", orchester_workspace::sharing::device::this_computer())],
-    );
-    let display_name = ctx.t_args("cloud.account.nameValue", [("name", account.display_name.as_str())]);
-    let facts = Column::new()
-      .id("orchester-cloud-facts")
-      .width(Dimension::Pct(100.0))
-      .child(inspector::property(
-        "orchester-cloud-email",
-        &ctx.t("cloud.account.signedInAs"),
-        &account.email,
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-name",
-        &ctx.t("cloud.account.displayName"),
-        &display_name,
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-device",
-        &ctx.t("cloud.account.thisDevice"),
-        &this_device,
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-signed-in",
-        &ctx.t("cloud.account.signedInAt"),
-        &ctx.t_args(
-          "cloud.account.signedInValue",
-          [("when", day_and_time(ctx, account.signed_in_at))],
-        ),
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-address",
-        &ctx.t("cloud.account.address"),
-        &account.cloud_address,
-        PropertyValue::Mono,
-      ));
+    let facts = facts(ctx, account);
     let signing_out = section(
       "orchester-cloud-signing-out",
       section_title(
@@ -217,8 +177,9 @@ impl CloudPanel {
     parts.extend(super::two_factor::recovery_warning(
       ctx,
       "orchester-cloud-recovery",
-      &self.invites,
+      (props.two_factor.as_ref(), &self.invites),
     ));
+    parts.extend(self.invites.person.reason(ctx, super::two_factor::TURN_ON_HEADER));
     parts.push(facts.into());
     parts.push(invites::waiting(
       ctx,
@@ -293,6 +254,52 @@ impl CloudPanel {
       .with_children(self.person.reason(ctx, SIGN_OUT_CONFIRM))
       .into()
   }
+}
+
+/// The account's facts (`Account details` `S9wde`): who is signed in, as what name, from which device, since when and
+/// at which cloud.
+fn facts(ctx: &Ctx, account: &StoredCloudAccount) -> Column {
+  let this_device = ctx.t_args(
+    "cloud.account.deviceValue",
+    [("device", orchester_workspace::sharing::device::this_computer())],
+  );
+  let display_name = ctx.t_args("cloud.account.nameValue", [("name", account.display_name.as_str())]);
+  Column::new()
+    .id("orchester-cloud-facts")
+    .width(Dimension::Pct(100.0))
+    .child(inspector::property(
+      "orchester-cloud-email",
+      &ctx.t("cloud.account.signedInAs"),
+      &account.email,
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-name",
+      &ctx.t("cloud.account.displayName"),
+      &display_name,
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-device",
+      &ctx.t("cloud.account.thisDevice"),
+      &this_device,
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-signed-in",
+      &ctx.t("cloud.account.signedInAt"),
+      &ctx.t_args(
+        "cloud.account.signedInValue",
+        [("when", day_and_time(ctx, account.signed_in_at))],
+      ),
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-address",
+      &ctx.t("cloud.account.address"),
+      &account.cloud_address,
+      PropertyValue::Mono,
+    ))
 }
 
 fn detail_tabs(ctx: &mut Ctx, props: &Props) -> Element {

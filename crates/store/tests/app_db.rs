@@ -559,3 +559,36 @@ fn why_the_last_cloud_sign_in_ended_is_one_row() {
   db.set_cloud_sign_in_ended(None).expect("signed in again");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
 }
+
+#[test]
+fn why_the_last_cloud_sign_in_ended_is_kept_through_the_two_factor_migration() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let before = current_schema_version() - 1;
+  let raw = AppDb::create_at_version(&path, before).expect("the schema before two-factor authentication");
+  raw
+    .execute(
+      "INSERT INTO cloud_sign_in_ended (id, email, reason, ended_at) VALUES (1, 'ivan@example.com', 'revoked', 7)",
+      [],
+    )
+    .expect("a row of that schema");
+  drop(raw);
+  let mut db = AppDb::open(&path).expect("migrate");
+  assert_eq!(
+    db.cloud_sign_in_ended().expect("kept"),
+    Some(EndedCloudSignIn {
+      email: "ivan@example.com".into(),
+      reason: CloudSignInEnd::Revoked,
+      ended_at: at(7),
+      invite: None,
+    })
+  );
+  let for_a_code = EndedCloudSignIn {
+    email: "ivan@example.com".into(),
+    reason: CloudSignInEnd::TwoFactor,
+    ended_at: at(8),
+    invite: Some("Billing".into()),
+  };
+  db.set_cloud_sign_in_ended(Some(&for_a_code)).expect("the new reason");
+  assert_eq!(db.cloud_sign_in_ended().expect("read"), Some(for_a_code));
+}

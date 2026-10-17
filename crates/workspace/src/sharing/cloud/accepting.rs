@@ -84,6 +84,8 @@ impl Cloud {
     if !may_ask(&kept) {
       return Err(CloudError::TooManyAsks);
     }
+    // No earlier ask took a token for it, so the cloud has not marked it accepted and still lists it.
+    let first = kept.asks == 0;
     let kept = asking(kept, asker);
     self.keep_accepted(kept.clone()).await?;
     let outcome = self.ask(&kept, now).await;
@@ -99,10 +101,20 @@ impl Cloud {
           self.keep_accepted(scheduled(waiting, now)).await?;
         }
       },
-      // Not accepted: the invite stays open, listed by the cloud again, to accept once the person has a code.
-      Err(
-        CloudError::InviteEnded | CloudError::JoinRefused | CloudError::TwoFactorOff | CloudError::TwoFactorSession,
-      ) => self.forget_accepted(kept.invite).await?,
+      Err(CloudError::InviteEnded | CloudError::JoinRefused) => self.forget_accepted(kept.invite).await?,
+      // A first accept refused for want of a code leaves the invite open, listed by the cloud again. One an earlier
+      // ask took a token for is listed there no more: it stays here, not asked on its own, until a sign-in with a code.
+      Err(CloudError::TwoFactorOff | CloudError::TwoFactorSession) if first => {
+        self.forget_accepted(kept.invite).await?
+      }
+      Err(CloudError::TwoFactorOff | CloudError::TwoFactorSession) => {
+        self
+          .keep_accepted(AcceptedInvite {
+            next_check_at: None,
+            ..kept
+          })
+          .await?;
+      }
       // Kept: asked again on its own while its approval is open, and by the person.
       Err(_) => self.keep_accepted(scheduled(kept, now)).await?,
     }

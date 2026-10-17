@@ -3,7 +3,11 @@
 //! app or a recovery code, which finishes the sign-in the password started ([`Challenge`]). The challenge stays in
 //! memory, with whoever holds it: it is never stored, logged or shown, and a new password step replaces it.
 
-use std::{fmt, sync::atomic::Ordering};
+use std::{
+  fmt,
+  sync::atomic::Ordering,
+  time::{Duration, Instant},
+};
 
 use orchester_api::{
   Credential,
@@ -11,7 +15,7 @@ use orchester_api::{
   cloud::{CloudSignIn, CloudSignedIn, TwoFactorSignIn},
 };
 use orchester_core::{secret::SecretValue, time::Timestamp};
-use orchester_store::StoredCloudAccount;
+use orchester_store::{CloudSignInEnd, StoredCloudAccount};
 
 use super::{Cloud, CloudError, SignIn, claiming, device_key, gate::Reach};
 use crate::{background, sharing::device};
@@ -24,11 +28,16 @@ pub enum SignInStep {
   Code(Challenge),
 }
 
-/// A sign-in the password started, waiting for a two-factor code: what the cloud gave for it, valid once and for five
-/// minutes (`expires_at`), on the cloud that gave it. Its `Debug` leaves the challenge out.
+/// How long the cloud takes codes for a challenge, from when it gave it (`docs/cloud-api.md`, "Signing in").
+pub const CHALLENGE_LIFE: Duration = Duration::from_secs(5 * 60);
+
+/// A sign-in the password started, waiting for a two-factor code: what the cloud gave for it, valid once and for
+/// [`CHALLENGE_LIFE`], on the cloud that gave it. Its `Debug` leaves the challenge out.
 pub struct Challenge {
   challenge: Credential,
-  expires_at: Timestamp,
+  /// When it arrived, on this computer's monotonic clock: its wall clock may be off from the cloud's, so the cloud's
+  /// `expires_at` is not compared with it.
+  received: Instant,
   email: String,
   device_name: String,
   address: ServerAddress,
@@ -40,9 +49,10 @@ impl Challenge {
     &self.email
   }
 
-  /// When the cloud takes no code for it any more.
-  pub const fn expires_at(&self) -> Timestamp {
-    self.expires_at
+  /// Whether its life has passed by `now`, counted from when it arrived; the cloud's `challenge_expired` says so as
+  /// well.
+  pub fn ended_by(&self, now: Instant) -> bool {
+    now.saturating_duration_since(self.received) >= CHALLENGE_LIFE
   }
 }
 
@@ -50,7 +60,6 @@ impl fmt::Debug for Challenge {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("Challenge")
       .field("email", &self.email)
-      .field("expires_at", &self.expires_at)
       .finish_non_exhaustive()
   }
 }
@@ -100,7 +109,7 @@ impl Cloud {
       }
       SignInAnswer::Challenged(challenge) => Ok(SignInStep::Code(Challenge {
         challenge: challenge.challenge,
-        expires_at: Timestamp::from_unix_millis(challenge.expires_at),
+        received: Instant::now(),
         email,
         device_name: device.name,
         address: cloud.address,
@@ -170,6 +179,11 @@ impl Cloud {
       let removed = {
         let mut db = inner.workspace.db.lock();
         inner.generation.fetch_add(1, Ordering::SeqCst);
+        // Invites kept through a sign-out for a code are that account's alone.
+        let ended = db.cloud_sign_in_ended()?;
+        if ended.is_some_and(|ended| ended.reason == CloudSignInEnd::TwoFactor && ended.email != kept.email) {
+          db.forget_accepted_invites()?;
+        }
         db.set_cloud_account(Some(&kept))?;
         db.set_cloud_sign_in_ended(None)?;
         // The projects added while no account was signed in, and those from before projects had owners, are its; the

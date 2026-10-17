@@ -62,9 +62,13 @@ impl InvitesNotice {
   /// The notice for `waiting`: few recovery codes left, what answering an invite came to, then the waiting invite or
   /// how many wait; `None` when there is nothing to show.
   pub fn notice(&self, ctx: &mut Ctx, waiting: &Waiting) -> Option<Element> {
-    let mut parts: Vec<Element> = two_factor::recovery_warning(ctx, "all-projects-recovery", &self.answers)
-      .into_iter()
-      .collect();
+    let mut parts: Vec<Element> = two_factor::recovery_warning(
+      ctx,
+      "all-projects-recovery",
+      (waiting.two_factor.as_ref(), &self.answers),
+    )
+    .into_iter()
+    .collect();
     parts.extend(invites::outcome(ctx, &self.answers, true));
     if let Invites::Listed(listed) = &waiting.invites {
       match listed.as_slice() {
@@ -108,7 +112,7 @@ impl InvitesNotice {
       ],
     );
     let declining = self.answers.declining.get().0 == Some(invite.id);
-    let need = two_factor::need(invite, status, &self.answers);
+    let need = two_factor::need((invite.id, invite.needs_two_factor), status, &self.answers);
     let text = Column::new()
       .id(format!("{id}-text"))
       .flex(1.0)
@@ -145,7 +149,8 @@ impl InvitesNotice {
       .with_children(self.refused(ctx, &id, invite, need))
       .with_children(note(ctx, &id, need))
       .with_children(self.answers.person.reason(ctx, &format!("{id}-accept")))
-      .with_children(self.answers.person.reason(ctx, &format!("{id}-sign-in-again")));
+      .with_children(self.answers.person.reason(ctx, &format!("{id}-sign-in-again")))
+      .with_children(self.answers.person.reason(ctx, &format!("{id}-turn-on")));
     if declining {
       column = column.child(invites::decline_question(ctx, &id, invite, &self.answers));
     }
@@ -162,7 +167,12 @@ impl InvitesNotice {
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(two_factor::sign_in_again(ctx, id, invite, &self.answers))
+        .child(two_factor::sign_in_again(
+          ctx,
+          id,
+          two_factor::invite_to(invite),
+          &self.answers,
+        ))
         .child(two_factor::not_now(ctx, id, invite, &self.answers))
         .into(),
     ]
@@ -179,7 +189,12 @@ impl InvitesNotice {
     match need {
       Need::TurnOn => return row.child(two_factor::turn_on(ctx, id, &self.answers)),
       Need::SignInAgain | Need::Refused => {
-        return row.child(two_factor::sign_in_again(ctx, id, invite, &self.answers));
+        return row.child(two_factor::sign_in_again(
+          ctx,
+          id,
+          two_factor::invite_to(invite),
+          &self.answers,
+        ));
       }
       Need::Accept => {}
     }

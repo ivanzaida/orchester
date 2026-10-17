@@ -18,6 +18,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_api::cloud::TwoFactorStatus;
 use orchester_core::time::Timestamp;
 use orchester_store::AcceptedInvite;
 use orchester_workspace::sharing::cloud::{Cloud, MAX_ASKS, may_ask, waits};
@@ -25,6 +26,7 @@ use orchester_workspace::sharing::cloud::{Cloud, MAX_ASKS, may_ask, waits};
 use super::{
   Kept,
   answers::{Answers, Outcome},
+  two_factor::{self, Need},
 };
 use crate::{
   theme::{AccountsSpacing, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
@@ -39,8 +41,13 @@ use crate::{
 /// ask takes an identity token.
 pub(super) const CHECK_EVERY: Duration = Duration::from_secs(30);
 
-/// The kept invites the person did not put off with *Later*.
-pub(super) fn kept(ctx: &Ctx, kept: &Kept, answers: &Answers) -> Vec<Element> {
+/// The kept invites the person did not put off with *Later*, for an account whose two-factor authentication is
+/// `status`.
+pub(super) fn kept(
+  ctx: &mut Ctx,
+  (kept, status): (&Kept, Option<&TwoFactorStatus>),
+  answers: &Answers,
+) -> Vec<Element> {
   let (later, now) = (answers.later.get(), Timestamp::now());
   kept
     .0
@@ -48,12 +55,55 @@ pub(super) fn kept(ctx: &Ctx, kept: &Kept, answers: &Answers) -> Vec<Element> {
     .filter(|invite| !later.0.contains(&invite.invite))
     .map(|invite| {
       if waits(invite, now) {
-        waiting(ctx, invite, answers)
-      } else {
-        stopped(ctx, invite, answers)
+        return waiting(ctx, invite, answers);
+      }
+      match two_factor::need((invite.invite, false), status, answers) {
+        Need::Accept => stopped(ctx, invite, answers),
+        need => needs_two_factor(ctx, invite, (need, answers)),
       }
     })
     .collect()
+}
+
+/// A kept invite whose join the cloud refuses for want of two-factor authentication (its earlier ask took a token, so
+/// the cloud lists it no more): why, with *Turn on two-factor authentication* or *Sign in again*, and *Later*. After a
+/// sign-in with a code it offers *Try again*.
+fn needs_two_factor(ctx: &mut Ctx, invite: &AcceptedInvite, (need, answers): (Need, &Answers)) -> Element {
+  let id = format!("orchester-accepted-{}", invite.invite);
+  let server = invite.server_name.as_str();
+  let to = invite.project_name.as_deref().unwrap_or(server);
+  let (later, kept) = (answers.later.clone(), invite.invite);
+  let put_off = ActionButton::new(
+    format!("{id}-later"),
+    ButtonKind::Ghost,
+    ctx.t("cloud.invites.joinStopped.later"),
+  )
+  .on_click(move || later.update(|later| later.0.push(kept)));
+  let (body, first) = if need == Need::TurnOn {
+    ("cloud.invites.twoFactor.off", two_factor::turn_on(ctx, &id, answers))
+  } else {
+    (
+      "cloud.invites.twoFactor.session",
+      two_factor::sign_in_again(ctx, &id, to, answers),
+    )
+  };
+  Column::new()
+    .id(id.clone())
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Section.role())
+    .child(
+      Callout::new(
+        format!("{id}-stopped"),
+        CalloutTone::Warning,
+        ctx.t_args("cloud.invites.joinStopped.title", [("server", server)]),
+      )
+      .icon(Icon::ShieldAlert)
+      .body(ctx.t(body)),
+    )
+    .child(Row::new().spacing(SpacingSize::Sm).child(first).child(put_off))
+    .with_children(answers.person.reason(ctx, &format!("{id}-sign-in-again")))
+    .with_children(answers.person.reason(ctx, &format!("{id}-turn-on")))
+    .into()
 }
 
 /// *Waiting for approval*: who approves, that nothing was uploaded, and *Cancel joining*.

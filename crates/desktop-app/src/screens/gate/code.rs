@@ -11,7 +11,7 @@
 //! input is refused and says so. A recovery code is typed masked: it works until it is used, so it never shows. The
 //! code is held outside the component's context, so DevTools never records it, and cleared after every answer.
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use lurq::{
   app::{
@@ -88,6 +88,19 @@ impl Refusal {
   }
 }
 
+/// Until when the cloud paused codes for the account: for every code step of this gate, not only the one it said it in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct PausedUntil(Option<Timestamp>);
+
+impl DevtoolsInspectable for PausedUntil {}
+
+impl PausedUntil {
+  /// The time, while it is still to come.
+  fn now(self) -> Option<Timestamp> {
+    self.0.filter(|until| Timestamp::now() < *until)
+  }
+}
+
 /// A refusal and the entry it is for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Refused(u64, Refusal);
@@ -104,6 +117,7 @@ pub(super) struct CodeForm {
   tick: Signal<u64>,
   /// The entry whose code was not sent because it is not six digits.
   unsent: Signal<Option<u64>>,
+  pause: Signal<PausedUntil>,
   /// The entry whose field took the focus.
   focused: Signal<Option<u64>>,
   input: ElementRef,
@@ -115,13 +129,23 @@ impl CodeForm {
   pub(super) fn new(ctx: &mut Ctx, step: Signal<Step>, to_password: ToPassword) -> Self {
     let cloud = Services::of(ctx).cloud;
     let code = Signal::new(String::new());
-    let (clear, back) = (code.clone(), to_password.clone());
+    let (unsent, pause) = (ctx.signal(None), ctx.signal(PausedUntil(None)));
+    // Back to the password, the code typed so far gone: the next code step may be one that shows what is typed.
+    let to_password: ToPassword = {
+      let (to_password, code, unsent) = (to_password, code.clone(), unsent.clone());
+      Arc::new(move |timed_out| {
+        code.set(String::new());
+        unsent.set(None);
+        to_password(timed_out);
+      })
+    };
+    let (clear, back, paused) = (code.clone(), to_password.clone(), pause.clone());
     let tick = ctx.signal(0_u64);
     let (next, watched, ended) = (tick.clone(), step.clone(), to_password.clone());
     Self {
       code,
       verify: ctx.future_action(move |(entry, typed): (Entry, String)| {
-        let (cloud, clear, back) = (cloud.clone(), clear.clone(), back.clone());
+        let (cloud, clear, back, paused) = (cloud.clone(), clear.clone(), back.clone(), paused.clone());
         async move {
           let finished = cloud
             .finish_sign_in(&entry.challenge, (Credential::new(typed), entry.kind))
@@ -130,8 +154,10 @@ impl CodeForm {
           finished.map(drop).map_err(|error| {
             tracing::info!(%error, "Orchester Cloud did not take the two-factor code");
             let refusal = Refusal::of(&error);
-            if refusal == Refusal::Ended {
-              back(true);
+            match refusal {
+              Refusal::Ended => back(true),
+              Refusal::Paused(until) => paused.set(PausedUntil(Some(until))),
+              Refusal::Wrong | Refusal::Other(_) => {}
             }
             Refused(entry.id, refusal)
           })
@@ -147,7 +173,8 @@ impl CodeForm {
         next.update(|tick| *tick += 1);
       }),
       tick,
-      unsent: ctx.signal(None),
+      unsent,
+      pause,
       focused: ctx.signal(None),
       input: ElementRef::new(),
       step,
@@ -174,19 +201,11 @@ impl CodeForm {
       .map(|Refused(_, refusal)| refusal)
   }
 
-  /// Until when codes are paused for `entry`, while that time is still to come.
-  fn paused(&self, entry: &Entry) -> Option<Timestamp> {
+  /// Until when codes are paused, while that time is still to come: after *Back* or a timeout too.
+  fn paused(&self) -> Option<Timestamp> {
     self.tick.get();
-    match self.refusal(entry) {
-      Some(Refusal::Paused(until)) if Timestamp::now() < until => Some(until),
-      _ => None,
-    }
+    self.pause.get().now()
   }
-}
-
-/// Whether `refused` paused the codes of the entry `id` until a time still to come.
-fn paused_now(refused: Option<&Refused>, id: u64) -> bool {
-  matches!(refused, Some(Refused(of, Refusal::Paused(until))) if *of == id && Timestamp::now() < *until)
 }
 
 impl CodeForm {
@@ -201,10 +220,9 @@ impl CodeForm {
       self.unsent.clone(),
       self.focused.clone(),
     );
-    let entry = entry.clone();
+    let (entry, pause) = (entry.clone(), self.pause.clone());
     move || {
-      let state = action.state().get_untracked();
-      if state.is_pending() || paused_now(state.error.as_ref(), entry.id) {
+      if action.state().get_untracked().is_pending() || pause.get_untracked().now().is_some() {
         return;
       }
       let typed: String = code.get_untracked().chars().filter(|c| !c.is_whitespace()).collect();
@@ -239,7 +257,7 @@ pub(super) fn card(ctx: &mut Ctx, form: &CodeForm, entry: &Entry, host: &str) ->
   form.look.start();
   form.take_focus(ctx, entry);
   let verifying = form.verifying();
-  let paused = form.paused(entry);
+  let paused = form.paused();
   let refusal = form.refusal(entry);
   let held = verifying || paused.is_some();
   let faded = |part: Element| -> Element {

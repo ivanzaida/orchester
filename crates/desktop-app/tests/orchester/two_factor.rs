@@ -6,6 +6,8 @@
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{OrchesterView, Route};
+use orchester_core::time::Timestamp;
+use orchester_store::{AcceptedInvite, AppDb};
 
 use super::{
   KONTUR_REMOTE,
@@ -49,6 +51,14 @@ fn orchester_two_factor_off_offers_turning_it_on() {
   );
   assert!(window.tree.get_element_by_id(&format!("{card}-accept")).is_none());
   assert!(window.tree.get_element_by_id(&format!("{card}-decline")).is_some());
+  for button in [
+    "orchester-cloud-two-factor-turn-on".to_owned(),
+    format!("{card}-turn-on"),
+  ] {
+    with_synthetic_input(|| window.press(&button));
+    shows(&mut window, &format!("{button}-person-only"));
+  }
+  assert!(recorded(&window).is_empty(), "synthetic input opens nothing");
   press(&mut window, "orchester-cloud-two-factor-turn-on");
   press(&mut window, &format!("{card}-turn-on"));
   assert_eq!(recorded(&window), vec![security.clone(), security]);
@@ -66,6 +76,69 @@ fn orchester_two_factor_off_offers_turning_it_on() {
   );
   press(&mut window, &format!("{notice}-turn-on"));
   assert_eq!(recorded(&window).len(), 3);
+
+  // Turned on in the browser: read again as Settings › Orchester opens, the cloud's word wins over what was shown.
+  // This computer signed in before, without a code, so the invite asks for a sign-in with one.
+  cloud.two_factor_on();
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::default()),
+    &format!("{card}-sign-in-again"),
+  );
+  assert_eq!(window.text("orchester-cloud-two-factor"), "Two-factor: on");
+}
+
+#[test]
+fn orchester_two_factor_a_kept_invite_asks_for_a_sign_in_with_a_code() {
+  let cloud = AccountCloud::start();
+  let (_server, invite) = invited(&cloud);
+  let mut window = signed_in(&cloud);
+  let services = window.launch.services().expect("services").clone();
+  let listed = block_on(&window, services.cloud.invites()).expect("invites").remove(0);
+  // An earlier ask took a token for it, so the cloud lists it no more: it is kept here only.
+  let kept = AcceptedInvite {
+    asks: 1,
+    ..AcceptedInvite::new(
+      (listed.id, listed.server.id, listed.server.name.clone()),
+      Some("Billing".into()),
+      Timestamp::from_unix_millis(listed.expires_at),
+      Timestamp::now(),
+    )
+  };
+  AppDb::open(&window.data.database())
+    .expect("database")
+    .keep_accepted_invite(&kept)
+    .expect("kept");
+  cloud.session_without_two_factor();
+  cloud.require_codes();
+  let card = format!("orchester-accepted-{invite}");
+  go(&mut window, Route::AllProjects, "all-projects-title");
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::default()),
+    &format!("{card}-sign-in-again"),
+  );
+  assert_eq!(
+    window.text(&format!("{card}-stopped-body")),
+    "Accepting needs a sign-in with your code. This computer signed in before you turned on two-factor."
+  );
+
+  press(&mut window, &format!("{card}-sign-in-again"));
+  shows(&mut window, "gate-notice");
+  window.set("gate-password", PASSWORD);
+  press(&mut window, "gate-sign-in");
+  shows(&mut window, "gate-code");
+  let code = cloud.next_code();
+  window.set("gate-code", &code);
+  press(&mut window, "gate-verify");
+  shows(&mut window, "content");
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::default()),
+    &format!("{card}-try-again"),
+  );
+  press(&mut window, &format!("{card}-try-again"));
+  shows(&mut window, "orchester-invite-finish-joined");
 }
 
 #[test]

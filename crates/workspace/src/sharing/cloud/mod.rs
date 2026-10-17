@@ -42,7 +42,7 @@ pub use self::{
   gate::{CHECK_EVERY, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait},
   invites::ServerJoin,
   seen::keep_activity_to_the_account,
-  signing_in::{Challenge, CodeKind, CodeSignedIn, SignInStep},
+  signing_in::{CHALLENGE_LIFE, Challenge, CodeKind, CodeSignedIn, SignInStep},
   two_factor::FEW_RECOVERY_CODES,
 };
 use super::Servers;
@@ -445,8 +445,11 @@ fn forget_account(
   if ended.is_some() {
     db.set_cloud_sign_in_ended(ended.as_ref())?;
   }
-  // The invites accepted here belong to the account that accepted them.
-  db.forget_accepted_invites()?;
+  // The invites accepted here belong to the account that accepted them. Signed out to sign in again with a code, the
+  // same person comes back for them; another account forgets them as it signs in ([`signing_in`]).
+  if reason != CloudSignInEnd::TwoFactor {
+    db.forget_accepted_invites()?;
+  }
   Ok(match ended {
     Some(ended) => Some(ended),
     None => db.cloud_sign_in_ended()?,

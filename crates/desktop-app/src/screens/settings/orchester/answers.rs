@@ -157,14 +157,11 @@ impl Answers {
     }
   }
 
-  /// Signs out to sign in again with a code for `invite`, naming what it is to, when a person pressed the button `id`.
-  pub(super) fn sign_in_again(&self, id: &str, invite: &CloudInvite) {
+  /// Signs out to sign in again with a code for an invite to `to`, which the gate names, when a person pressed the
+  /// button `id`.
+  pub(super) fn sign_in_again(&self, id: &str, to: &str) {
     if self.person.allows(id) {
-      let to = invite
-        .project
-        .as_ref()
-        .map_or(&invite.server.name, |project| &project.name);
-      self.sign_in_again.run(Some(to.clone()));
+      self.sign_in_again.run(Some(to.to_owned()));
     }
   }
 

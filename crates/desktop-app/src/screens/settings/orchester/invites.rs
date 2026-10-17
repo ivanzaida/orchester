@@ -55,7 +55,7 @@ pub(super) fn waiting(
   let mut parts: Vec<Element> = vec![paragraph("orchester-invites-lead", &ctx.t("cloud.invites.lead")).into()];
   parts.extend(outcome(ctx, answers, false));
   parts.extend(super::ended::found(ctx, answers));
-  parts.extend(accepted::kept(ctx, kept, answers));
+  parts.extend(accepted::kept(ctx, (kept, status), answers));
   match invites {
     Invites::SignedOut => {}
     Invites::Failed(reason) => parts.push(field_error("orchester-invites-failed", &reason.text(ctx)).into()),
@@ -241,7 +241,7 @@ fn card(ctx: &mut Ctx, invite: &CloudInvite, (status, answers): (Option<&TwoFact
     );
   let accepting = answers.connecting() && answers.accepting.get().0 == Some(invite.id);
   let declining = answers.declining.get().0 == Some(invite.id);
-  let need = two_factor::need(invite, status, answers);
+  let need = two_factor::need((invite.id, invite.needs_two_factor), status, answers);
   let top = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)

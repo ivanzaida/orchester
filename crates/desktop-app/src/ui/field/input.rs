@@ -435,15 +435,14 @@ impl FieldBox {
   fn input(&self, ctx: &Ctx, props: &FieldInput) -> TextInput {
     let theme = ctx.theme();
     let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
-    let value = if props.masked {
+    // A masked value takes the credential's type unless its design names another (a recovery code's, `JQkW2`).
+    let value = props.text_style.unwrap_or(if props.masked {
       SecretsText::Credential.role()
+    } else if props.mono {
+      TypographyStyle::Mono
     } else {
-      props.text_style.unwrap_or(if props.mono {
-        TypographyStyle::Mono
-      } else {
-        TypographyStyle::Description
-      })
-    };
+      TypographyStyle::Description
+    });
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let color = if props.locked {
       PaletteColor::TextSecondary

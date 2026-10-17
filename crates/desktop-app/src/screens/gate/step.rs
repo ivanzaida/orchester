@@ -2,13 +2,15 @@
 //! `hJ2yS`). The challenge stays in memory, in the gate's step only, whose signal is made outside the component's
 //! context so DevTools never records it; it is never logged, stored or shown.
 
-use std::sync::{
-  Arc,
-  atomic::{AtomicU64, Ordering},
+use std::{
+  sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+  },
+  time::Instant,
 };
 
 use lurq::app::component::DevtoolsInspectable;
-use orchester_core::time::Timestamp;
 use orchester_workspace::sharing::cloud::{Challenge, CodeKind};
 
 /// Numbers each code entry, so what an earlier one came to is not shown for a later one.
@@ -72,8 +74,8 @@ impl Entry {
     self.kind == CodeKind::Recovery
   }
 
-  /// Whether the cloud takes no code for it any more.
+  /// Whether the cloud takes no code for it any more, by this computer's monotonic clock.
   pub(super) fn expired(&self) -> bool {
-    Timestamp::now() >= self.challenge.expires_at()
+    self.challenge.ended_by(Instant::now())
   }
 }
