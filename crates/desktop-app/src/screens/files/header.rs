@@ -161,16 +161,16 @@ pub fn header(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Element {
 fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
   let navigation = Navigation::of(ctx);
   let project = page.project.open.project.id();
-  let overview = navigation.clone();
   let mut crumbs = vec![
-    Crumb::link(page.project.open.project.name().as_str().to_owned(), move || {
-      overview.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default())));
-    })
+    Crumb::to(
+      page.project.open.project.name().as_str().to_owned(),
+      navigation.to(Route::Project(project, ProjectPage::Overview(OverviewTab::default()))),
+    )
     .ancestor(),
   ];
   if page.route.file().is_some() {
     let root = page.route_to(None, page.at().clone());
-    crumbs.push(Crumb::link(ctx.t("files.title"), move || navigation.go(root.clone())).ancestor());
+    crumbs.push(Crumb::to(ctx.t("files.title"), navigation.to(root)).ancestor());
   }
   if let Some(file) = page.file() {
     for folder in file.folders() {

@@ -332,12 +332,10 @@ fn mcp(ctx: &mut Ctx, props: &Props, provider: Option<AgentProvider>) -> Element
         crate::ui::button::ButtonKind::Ghost,
         ctx.t("agents.addMcp"),
       )
-      .on_click(move || {
-        nav.go(crate::routes::Route::Project(
-          project,
-          crate::routes::ProjectPage::NewConnection(crate::routes::NewConnection::McpServer),
-        ))
-      })
+      .opens(nav.to(crate::routes::Route::Project(
+        project,
+        crate::routes::ProjectPage::NewConnection(crate::routes::NewConnection::McpServer),
+      )))
       .into(),
     );
   }

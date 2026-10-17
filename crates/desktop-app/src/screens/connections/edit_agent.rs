@@ -170,12 +170,13 @@ impl EditConnection {
     };
     Head {
       crumbs: vec![
-        Crumb::link(ctx.t("connections.title"), move || {
-          navigation.go(Route::Project(
+        Crumb::to(
+          ctx.t("connections.title"),
+          navigation.to(Route::Project(
             project,
             ProjectPage::Connections(ConnectionsView::default()),
-          ));
-        }),
+          )),
+        ),
         Crumb::here(title.clone()),
       ],
       title,

@@ -20,12 +20,15 @@ use orchester_workspace::{
 };
 
 use super::status::{account, minutes_until};
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  code_box::Copier,
-  command_row::CommandRow,
-  icon::Icon,
-  notice::{Notice, NoticeTone},
+use crate::{
+  navigation::link::Open,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    code_box::Copier,
+    command_row::CommandRow,
+    icon::Icon,
+    notice::{Notice, NoticeTone},
+  },
 };
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
@@ -34,7 +37,7 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 pub(super) struct NoticeActions {
   pub check_again: Option<Handler>,
   pub use_account: Option<Handler>,
-  pub open_connections: Handler,
+  pub open_connections: Open,
 }
 
 /// The notice for `list`'s failed sync, `project` the project's name; `None` after a sync that read it.
@@ -262,18 +265,15 @@ fn with_buttons(ctx: &Ctx, notice: Notice, remedy: &Remedy, actions: &NoticeActi
       };
       notice.action(check_again()).action(using)
     }
-    Remedy::CheckAgainOrConnections => {
-      let open = actions.open_connections.clone();
-      notice.action(check_again()).action(
-        ActionButton::new(
-          "pull-requests-open-connections",
-          ButtonKind::Secondary,
-          ctx.t("pull_requests.unavailable.openConnections"),
-        )
-        .icon(Icon::Plug)
-        .on_click(move || open()),
+    Remedy::CheckAgainOrConnections => notice.action(check_again()).action(
+      ActionButton::new(
+        "pull-requests-open-connections",
+        ButtonKind::Secondary,
+        ctx.t("pull_requests.unavailable.openConnections"),
       )
-    }
+      .icon(Icon::Plug)
+      .opens(actions.open_connections.clone()),
+    ),
   }
 }
 

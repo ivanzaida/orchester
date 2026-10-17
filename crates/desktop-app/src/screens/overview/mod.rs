@@ -40,7 +40,7 @@ use orchester_workspace::tasks::{attention, data::ProjectTasks};
 
 use crate::{
   lifecycle::recovery::RecoveryNotice,
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::{ShownProject, TasksState},
   routes::{OverviewTab, ProjectPage, Route, TaskTab, TaskView},
   theme::OverviewSpacing,
@@ -177,10 +177,8 @@ fn failed(ctx: &Ctx, project: &ShownProject, error: &orchester_workspace::messag
   )
 }
 
-/// Opens `task` of `project` on `tab`.
-fn open_task(ctx: &mut Ctx, project: ProjectId, task: &str, tab: TaskTab) -> impl Fn() + Send + Sync + 'static {
-  let navigation = Navigation::of(ctx);
+/// What opens `task` of `project` on `tab` where a press asks (`navigation::link`).
+fn open_task(ctx: &mut Ctx, project: ProjectId, task: &str, tab: TaskTab) -> Open {
   let task: TaskKey = task.parse().expect("a task's key reads back as a task key");
-  let route = Route::Project(project, ProjectPage::Task(task, TaskView::of(tab)));
-  move || navigation.go(route.clone())
+  Navigation::of(ctx).to(Route::Project(project, ProjectPage::Task(task, TaskView::of(tab))))
 }

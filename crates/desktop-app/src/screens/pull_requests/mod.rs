@@ -254,9 +254,7 @@ impl PullRequestsScreen {
     NoticeActions {
       check_again: run(&actions.sync),
       use_account: run(&actions.account),
-      open_connections: Arc::new(move || {
-        navigation.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())));
-      }),
+      open_connections: navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default()))),
     }
   }
 }

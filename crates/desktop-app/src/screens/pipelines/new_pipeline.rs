@@ -173,7 +173,7 @@ impl NewPipeline {
     parts::header()
       .spacing(ExtraSpacing::Snug.role())
       .child(
-        crate::ui::pressable::pressable(move || nav.go(Route::Project(id, ProjectPage::Pipelines)))
+        crate::ui::pressable::opening(nav.to(Route::Project(id, ProjectPage::Pipelines)))
           .id("pipeline-parent")
           .child(Text::new(&ctx.t("pipelines.title")).variant(TypographyStyle::Button)),
       )
@@ -425,7 +425,7 @@ fn collision_strip(
           ctx.t_args("pipelines.openPipeline", [("name", existing.name.to_string())]),
         )
         .icon(Icon::ArrowUpRight)
-        .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipeline(existing.id)))),
+        .opens(nav.to(Route::Project(id, ProjectPage::Pipeline(existing.id)))),
       )
       .into()
   })

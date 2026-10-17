@@ -357,8 +357,7 @@ fn plain_footer(
   let edit = if busy {
     edit.disabled()
   } else {
-    let open = actions.edit.clone();
-    edit.on_click(move || open(id))
+    edit.opens((actions.edit)(id))
   };
   let remove =
     ActionButton::new("connection-remove", ButtonKind::Ghost, ctx.t("connections.mcp.remove")).icon(Icon::Trash2);

@@ -8,6 +8,8 @@
 //! its object. Outside a project, an event names its project first. Words the bar shortens keep their
 //! full value in a tooltip.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -33,7 +35,7 @@ use crate::{
   routes::{ConnectionsView, OverviewTab, ProjectPage, Route, TaskList, TaskView},
   shell::clock::{Clock, clock},
   theme::ExtraSpacing,
-  ui::{icon::Icon, message::message_text},
+  ui::{icon::Icon, message::message_text, pressable::Press},
 };
 
 /// The slot's items for `slot` of `log`.
@@ -87,20 +89,23 @@ fn failure(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatc
       (false, Target::RunnerLog) => "shell.status.runner.openLog",
       (false, _) => "shell.status.open.other",
     };
-    let dispatch = dispatch.clone();
-    items.push(action("status-activity-open", &ctx.t(key), move || {
-      dispatch(BarAction::Resolve(id));
-      dispatch(open.clone());
-    }));
+    items.push(action(
+      "status-activity-open",
+      &ctx.t(key),
+      open.press(dispatch, Some(BarAction::Resolve(id))),
+    ));
   }
   // A waiting run's item goes once its task is opened from it or it no longer waits: it has no dismiss.
   if !decision {
     let dispatch = dispatch.clone();
     items.push(
-      pressed("status-activity-dismiss", move || dispatch(BarAction::Resolve(id)))
-        .describe("a11y_name", ctx.t("shell.status.dismiss"))
-        .child(glyph(Icon::X, PaletteColor::TextSecondary))
-        .into(),
+      pressed(
+        "status-activity-dismiss",
+        Press::run(move || dispatch(BarAction::Resolve(id))),
+      )
+      .describe("a11y_name", ctx.t("shell.status.dismiss"))
+      .child(glyph(Icon::X, PaletteColor::TextSecondary))
+      .into(),
     );
   }
   items
@@ -120,9 +125,11 @@ pub fn read_failure(ctx: &mut Ctx, failure: &ReadFailure, dispatch: &Dispatch) -
   let dispatch = dispatch.clone();
   vec![
     row.into(),
-    action("status-read-again", &ctx.t("shell.status.unread.tryAgain"), move || {
-      dispatch(BarAction::ReadAgain);
-    }),
+    action(
+      "status-read-again",
+      &ctx.t("shell.status.unread.tryAgain"),
+      Press::run(move || dispatch(BarAction::ReadAgain)),
+    ),
   ]
 }
 
@@ -170,17 +177,14 @@ fn latest(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatch
     .child(glyph(glyph_icon, PaletteColor::TextMuted))
     .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextMuted));
   let row: Element = match opening(event.target(), project) {
-    Some(open) => {
-      let dispatch = dispatch.clone();
-      pressed("status-activity", move || dispatch(open.clone()))
-        .padding(before_time())
-        .describe("state", "latest")
-        .flex_shrink(1.0)
-        .shrink_order(give_way::ACTIVITY)
-        .shrink_limit(ShrinkLimit::Content)
-        .child(content)
-        .into()
-    }
+    Some(open) => pressed("status-activity", open.press(dispatch, None))
+      .padding(before_time())
+      .describe("state", "latest")
+      .flex_shrink(1.0)
+      .shrink_order(give_way::ACTIVITY)
+      .shrink_limit(ShrinkLimit::Content)
+      .child(content)
+      .into(),
     None => item("status-activity")
       .padding(before_time())
       .describe("state", "latest")
@@ -235,15 +239,44 @@ pub(super) fn in_project(ctx: &Ctx, text: &str, named: Option<&str>, shown: Opti
   }
 }
 
+/// What opening an event's target asks for: the shown project's runner log, or a place of it.
+pub(super) enum Opening {
+  RunnerLog,
+  Place(Route),
+}
+
+impl Opening {
+  /// The press that opens it through `dispatch`, after `first` when there is one: the runner log on any press, the
+  /// place where the press asks (`navigation::link`).
+  fn press(self, dispatch: &Dispatch, first: Option<BarAction>) -> Press {
+    let dispatch = dispatch.clone();
+    let before = move |dispatch: &Dispatch| {
+      if let Some(first) = &first {
+        dispatch(first.clone());
+      }
+    };
+    match self {
+      Self::RunnerLog => Press::run(move || {
+        before(&dispatch);
+        dispatch(BarAction::OpenRunnerLog);
+      }),
+      Self::Place(route) => Press::Open(Arc::new(move |at| {
+        before(&dispatch);
+        dispatch(BarAction::Go(route.clone(), at));
+      })),
+    }
+  }
+}
+
 /// What opening `target` asks for, when it can be opened from here: the runner log of the shown project,
 /// or a place of it.
-pub(super) fn opening(target: &Target, project: Option<&ProjectFacts>) -> Option<BarAction> {
+pub(super) fn opening(target: &Target, project: Option<&ProjectFacts>) -> Option<Opening> {
   let project = project?;
   match target {
     Target::Nothing => None,
-    Target::RunnerLog => Some(BarAction::OpenRunnerLog),
+    Target::RunnerLog => Some(Opening::RunnerLog),
     Target::Project { repo_root, place } if *repo_root == project.repo_root => {
-      Some(BarAction::Go(Route::Project(project.id, page(*place, project)?)))
+      Some(Opening::Place(Route::Project(project.id, page(*place, project)?)))
     }
     Target::Project { .. } => None,
   }

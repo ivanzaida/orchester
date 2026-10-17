@@ -315,8 +315,8 @@ impl ConnectionsScreen {
     Actions {
       start,
       confirm: Arc::new(move |confirm| asking.set(Asking(confirm.map(|confirm| (inspected, confirm))))),
-      edit: Arc::new(move |id| edit.go(Route::Project(project_id, ProjectPage::EditConnection(id)))),
-      agents: Arc::new(move || navigation.go(Route::Project(project_id, ProjectPage::Agents))),
+      edit: Arc::new(move |id| edit.to(Route::Project(project_id, ProjectPage::EditConnection(id)))),
+      agents: navigation.to(Route::Project(project_id, ProjectPage::Agents)),
     }
   }
 }
@@ -358,10 +358,7 @@ fn ownership(ctx: &Ctx, project: &ShownProject) -> Row {
 fn no_connections(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let add = |kind: NewConnection| {
-    let navigation = navigation.clone();
-    move || navigation.go(Route::Project(id, ProjectPage::NewConnection(kind)))
-  };
+  let add = |kind: NewConnection| navigation.to(Route::Project(id, ProjectPage::NewConnection(kind)));
   let name = project.open.project.name().as_str();
   let empty = EmptyState::new(
     "connections-empty",
@@ -376,7 +373,7 @@ fn no_connections(ctx: &mut Ctx, project: &ShownProject) -> Element {
       ctx.t("connections.addAgent"),
     )
     .icon(Icon::Bot)
-    .on_click(add(NewConnection::AgentProvider)),
+    .opens(add(NewConnection::AgentProvider)),
   )
   .action(
     ActionButton::new(
@@ -394,7 +391,7 @@ fn no_connections(ctx: &mut Ctx, project: &ShownProject) -> Element {
       ctx.t("connections.mcp.add"),
     )
     .icon(Icon::Server)
-    .on_click(add(NewConnection::McpServer)),
+    .opens(add(NewConnection::McpServer)),
   );
   Column::new()
     .width(Dimension::Pct(100.0))

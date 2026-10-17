@@ -6,6 +6,7 @@
 pub mod accounts;
 pub mod guard;
 pub mod input;
+pub mod link;
 pub mod pointed;
 pub mod press;
 pub mod shortcuts;
@@ -149,8 +150,14 @@ impl Navigation {
   /// Goes to `route` like [`go`](Self::go), pointing at `card` on the page it opens; also when the active
   /// tab is there already. A departure an editor holds points at nothing.
   pub fn go_to_card(&self, route: &Route, card: Pointed) {
-    self.go(route.clone());
-    if self.route_now() == *route {
+    self.open_to_card(route, OpenIn::ActiveTab, card);
+  }
+
+  /// Opens `route` like [`open`](Self::open), pointing at `card` on the page it opens when the window shows it
+  /// then: a page opened in a background tab is not shown, and nothing points at its card.
+  pub fn open_to_card(&self, route: &Route, open: OpenIn, card: Pointed) {
+    self.open(route.clone(), open);
+    if open != OpenIn::BackgroundTab && self.route_now() == *route {
       let number = self.pointings.fetch_add(1, Ordering::Relaxed) + 1;
       self.pointed.set(Some((number, card)));
     }

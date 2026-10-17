@@ -498,12 +498,13 @@ fn head(ctx: &mut Ctx, props: &AddAgentProps, saving: &FutureState<Saved, Messag
   };
   Head {
     crumbs: vec![
-      Crumb::link(ctx.t("connections.title"), move || {
-        navigation.go(Route::Project(
+      Crumb::to(
+        ctx.t("connections.title"),
+        navigation.to(Route::Project(
           project,
           ProjectPage::Connections(ConnectionsView::default()),
-        ));
-      }),
+        )),
+      ),
       Crumb::here(ctx.t("connections.dialog.addTitle")),
     ],
     title: ctx.t("connections.dialog.addTitle"),

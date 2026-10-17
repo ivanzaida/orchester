@@ -17,10 +17,13 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::pressable,
+  pressable::Press,
   tooltip::Truncated,
 };
-use crate::theme::{ExtraSpacing, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraSpacing, IconSize},
+};
 
 /// The most room an ancestor crumb takes: a longer name is cut there with an ellipsis. Ancestors keep
 /// their room and the page's own crumb gives up what the row lacks, so no crumb is squeezed away.
@@ -39,17 +42,26 @@ pub enum CrumbSeparator {
 pub struct Crumb {
   label: Arc<str>,
   typography: TypographyStyle,
-  open: Option<Arc<dyn Fn() + Send + Sync>>,
+  open: Option<Press>,
   ancestor: bool,
 }
 
 impl Crumb {
-  /// A crumb that opens its page.
+  /// A crumb that opens its page, a place of the window, with `open` by a browser's rules (`navigation::link`).
+  pub fn to(label: impl Into<Arc<str>>, open: Open) -> Self {
+    Self::pressed(label, Press::Open(open))
+  }
+
+  /// A crumb that goes back to a panel of its page, which is no place of its own: the page shows it in place.
   pub fn link(label: impl Into<Arc<str>>, open: impl Fn() + Send + Sync + 'static) -> Self {
+    Self::pressed(label, Press::run(open))
+  }
+
+  fn pressed(label: impl Into<Arc<str>>, press: Press) -> Self {
     Self {
       label: label.into(),
       typography: TypographyStyle::Description,
-      open: Some(Arc::new(open)),
+      open: Some(press),
       ancestor: false,
     }
   }
@@ -101,7 +113,8 @@ impl Crumb {
         let text = Truncated::new(format!("{id}-label"), self.label, typography)
           .color(color)
           .render(ctx);
-        pressable(move || open())
+        open
+          .button()
           .id(id)
           .flex_shrink(0.0)
           .max_width(Dimension::Px(ANCESTOR_MAX_WIDTH))

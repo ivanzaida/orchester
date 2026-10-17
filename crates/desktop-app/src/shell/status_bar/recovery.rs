@@ -14,8 +14,9 @@ use super::{
   item::{action, cut, give_way, glyph, item},
 };
 use crate::{
+  navigation::press::OpenIn,
   routes::{OverviewTab, ProjectPage, Route},
-  ui::icon::Icon,
+  ui::{icon::Icon, pressable::Press},
 };
 
 /// The pinned item and *Review*; nothing when no run waits for the decision.
@@ -37,13 +38,14 @@ pub fn pinned(ctx: &mut Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec
   let review = action(
     "status-recovery-review",
     &ctx.t("shell.status.recovery.review"),
-    move || {
+    // Review marks the project's interrupted runs as under review as well as opening them: an action, not a link.
+    Press::run(move || {
       dispatch(BarAction::ReviewInterrupted(id));
-      dispatch(BarAction::Go(Route::Project(
-        id,
-        ProjectPage::Overview(OverviewTab::default()),
-      )));
-    },
+      dispatch(BarAction::Go(
+        Route::Project(id, ProjectPage::Overview(OverviewTab::default())),
+        OpenIn::ActiveTab,
+      ));
+    }),
   );
   vec![row.into(), review]
 }

@@ -257,18 +257,20 @@ const SUMMARY_HEIGHT: f32 = 24.0;
 fn head(ctx: &mut Ctx, project: &ShownProject, (publishing, save): (Option<&Publishing<'_>>, &Save)) -> Element {
   let id = project.open.project.id();
   let name = project.open.project.name().as_str();
-  let (overview, chat) = (Navigation::of(ctx), Navigation::of(ctx));
+  let navigation = Navigation::of(ctx);
   let crumbs = breadcrumb(
     ctx,
     "orchestrator-settings-crumbs",
     CrumbSeparator::Slash,
     vec![
-      Crumb::link(name, move || {
-        overview.go(Route::Project(id, ProjectPage::Overview(Default::default())))
-      }),
-      Crumb::link(ctx.t("orchestrator.title"), move || {
-        chat.go(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::Latest)));
-      }),
+      Crumb::to(
+        name,
+        navigation.to(Route::Project(id, ProjectPage::Overview(Default::default()))),
+      ),
+      Crumb::to(
+        ctx.t("orchestrator.title"),
+        navigation.to(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::Latest))),
+      ),
       Crumb::here(ctx.t("orchestrator.coordinator.settings")),
     ],
   );

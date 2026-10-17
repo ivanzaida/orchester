@@ -36,13 +36,12 @@ pub fn card(ctx: &mut Ctx, dashboard: &Dashboard) -> Element {
     .fill();
   let failed = &dashboard.report.efficiency.failed;
   let show = dashboard.failed_project().map(|project| {
-    let (navigation, route) = (
-      Navigation::of(ctx),
-      Route::Project(project, ProjectPage::Overview(OverviewTab::Failed)),
-    );
-    text_link("usage-show-failed", &ctx.t("usage.efficiency.showFailed"), move || {
-      navigation.go(route.clone());
-    })
+    let route = Route::Project(project, ProjectPage::Overview(OverviewTab::Failed));
+    text_link(
+      "usage-show-failed",
+      &ctx.t("usage.efficiency.showFailed"),
+      Navigation::of(ctx).to(route),
+    )
   });
   card.body(
     [figures(ctx, failed), split(ctx, failed)]

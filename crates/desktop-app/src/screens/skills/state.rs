@@ -3,7 +3,7 @@ use lurq::{app::component::DevtoolsInspectable, core::Signal};
 use orchester_core::id::{ProjectId, ResourceId};
 
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::own::OwnChanges,
   routes::{ProjectPage, Route},
 };
@@ -46,6 +46,11 @@ impl PanelNav {
   }
   pub fn set(&self, panel: Panel) {
     self.navigation.go(Route::Project(self.project, panel.page()));
+  }
+
+  /// What opens `panel`, a place of its own, where a press asks (`navigation::link`).
+  pub fn to(&self, panel: Panel) -> Open {
+    self.navigation.to(Route::Project(self.project, panel.page()))
   }
 }
 #[derive(Clone)]

@@ -63,7 +63,7 @@ pub(super) fn not_continued(
         ButtonKind::Secondary,
         ctx.t_args("lifecycle.recovery.partial.open", [("task", task.as_str())]),
       )
-      .on_click(move || navigation.go(route.clone())),
+      .opens(navigation.to(route)),
     );
   }
   notice.action(hide(ctx, recovery, project)).into()

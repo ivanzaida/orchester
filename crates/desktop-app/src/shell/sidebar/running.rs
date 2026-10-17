@@ -45,7 +45,7 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     nav_item::NAV_ITEM_HEIGHT,
-    pressable::pressable,
+    pressable::opening,
   },
 };
 
@@ -196,16 +196,13 @@ fn read_rows(repo_root: &Path, runs: &[UnderWay]) -> Result<Vec<RunningRow>, Sto
 /// The section and its rows, with the element id `running`.
 pub fn running_list(ctx: &mut Ctx, project: ProjectId, rows: &[RunningRow]) -> Element {
   let navigation = Navigation::of(ctx);
-  let overview = navigation.clone();
   let header = section_label(&ctx.t("shell.running.title")).child(
-    pressable(move || {
-      overview.go(Route::Project(project, ProjectPage::Overview(OverviewTab::Running)));
-    })
-    .id("running-all")
-    .describe("a11y_name", ctx.t("shell.running.all"))
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::List, IconSize::Sm, PaletteColor::TextMuted)),
+    opening(navigation.to(Route::Project(project, ProjectPage::Overview(OverviewTab::Running))))
+      .id("running-all")
+      .describe("a11y_name", ctx.t("shell.running.all"))
+      .rounded(RadiusSize::Sm)
+      .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+      .child(icon(Icon::List, IconSize::Sm, PaletteColor::TextMuted)),
   );
   let list = rows.iter().fold(
     Column::new()
@@ -242,11 +239,8 @@ fn running_row(ctx: &mut Ctx, navigation: &Navigation, project: ProjectId, row: 
       .variant(ExtraTypography::MonoNote.role())
       .into(),
   };
-  let (navigation, route) = (
-    navigation.clone(),
-    Route::Project(project, ProjectPage::Task(row.key.clone(), TaskView::Conversation)),
-  );
-  pressable(move || navigation.go(route.clone()))
+  let route = Route::Project(project, ProjectPage::Task(row.key.clone(), TaskView::Conversation));
+  opening(navigation.to(route))
     .id(id)
     .describe("state", state)
     .describe("a11y_name", label.clone())

@@ -9,10 +9,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    events::mouse_event::MouseEvent,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Button, Row, Text},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
@@ -21,9 +18,12 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, inert},
+  pressable::{Focus, Press, inert},
 };
-use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
+};
 
 /// The look of a button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -117,7 +117,7 @@ pub struct ActionButton {
   label: Arc<str>,
   icon: Option<Icon>,
   kind: ButtonKind,
-  action: Option<Arc<dyn Fn() + Send + Sync>>,
+  action: Option<Press>,
   hold: Option<Hold>,
   focus: Focus,
   /// As wide as its parent, its icon and label centered (`Allow retry` `ae0Pi`).
@@ -160,8 +160,19 @@ impl ActionButton {
   }
 
   /// What a press does, unless the button is loading, disabled or unavailable.
-  pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.action = Some(Arc::new(handler));
+  pub fn on_click(self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.press(Press::run(handler))
+  }
+
+  /// A button that navigates: a press opens its place with `open` by a browser's rules (`navigation::link`),
+  /// unless the button is loading, disabled or unavailable.
+  pub fn opens(self, open: Open) -> Self {
+    self.press(Press::Open(open))
+  }
+
+  /// What a press does, an action or a place to open, unless the button is loading, disabled or unavailable.
+  pub fn press(mut self, press: Press) -> Self {
+    self.action = Some(press);
     self
   }
 
@@ -362,15 +373,13 @@ impl From<ActionButton> for Element {
       frame = frame.describe("reason", reason.clone());
     }
     match (button.hold, button.action) {
-      (None, Some(handler)) => button
-        .focus
-        .apply(button.kind.interactive(frame))
-        .cursor(CursorIcon::Pointer)
-        // A press is the button's own: it does not also press a clickable row around it.
-        .on_click(move |event: MouseEvent| {
-          event.stop_propagation();
-          handler();
-        })
+      (None, Some(press)) => press
+        .on(
+          button
+            .focus
+            .apply(button.kind.interactive(frame))
+            .cursor(CursorIcon::Pointer),
+        )
         .into(),
       (Some(Hold::Loading), _) => inert(frame).cursor(CursorIcon::Progress).into(),
       _ => inert(frame).opacity(DISABLED_OPACITY).into(),

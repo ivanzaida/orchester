@@ -94,7 +94,7 @@ fn status_mcp_popover_names_the_address_the_agents_and_window_control() {
     assert!(popover.iter().any(|text| text == words), "{words} in {popover:?}");
   }
   bar.press("status-mcp-open-settings");
-  assert_eq!(bar.asked(), vec![BarAction::Go(Route::Settings)]);
+  assert_eq!(bar.asked(), vec![BarAction::Go(Route::Settings, OpenIn::ActiveTab)]);
   assert!(bar.texts("status-mcp-popover").is_none(), "it closes");
 }
 

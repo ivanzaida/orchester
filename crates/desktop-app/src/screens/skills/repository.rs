@@ -379,7 +379,7 @@ impl Import {
       "skill-import-crumb",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::Library)),
+        Crumb::to(ctx.t("skills.title"), back.to(Panel::Library)),
         Crumb::here(ctx.t("skills.import")),
       ],
     );

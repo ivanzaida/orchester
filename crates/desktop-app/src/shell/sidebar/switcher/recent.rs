@@ -1,7 +1,9 @@
 //! *RECENT* in the project switcher's menu: the five projects used last, most recent first, read from
 //! the workspace each time the menu opens, the shown one checked (`Switcher project row` `NUMiQ`). A row
-//! opens its project's Overview in the active tab; under the pointer it offers *Open in new tab*
-//! (`Open in new tab` `o4Lzf`).
+//! opens its project's Overview by a browser's rules (`navigation::link`); under the pointer it offers *Open in new
+//! tab* (`Open in new tab` `o4Lzf`).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -26,7 +28,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{opening, pressable},
     tooltip::Tooltip,
   },
 };
@@ -150,10 +152,11 @@ impl Component for RecentRow {
       })
     };
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
-    pressable(move || {
+    let to = navigation.to(route);
+    opening(Arc::new(move |at| {
       open.set(false);
-      navigation.go(route.clone());
-    })
+      to(at);
+    }))
     .id(id)
     .describe("current", if current { "true" } else { "false" })
     .describe("a11y_name", name)

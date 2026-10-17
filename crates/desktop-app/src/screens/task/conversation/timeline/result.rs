@@ -27,7 +27,7 @@ use crate::{
     icon::{Icon, icon},
     markdown::MarkdownView,
     message::message_text,
-    pressable::pressable,
+    pressable::opening,
   },
 };
 
@@ -147,7 +147,7 @@ fn meta(ctx: &Ctx, card: &ResultCard) -> std::sync::Arc<str> {
 /// A link to `view` of the task.
 fn link(ctx: &mut Ctx, timeline: &Timeline, (id, key): (&str, &str), view: TaskView) -> Element {
   let words = ctx.t(key);
-  pressable(timeline.open(ctx, view))
+  opening(timeline.open(ctx, view))
     .id(id.to_owned())
     .child(
       Text::new(&words)

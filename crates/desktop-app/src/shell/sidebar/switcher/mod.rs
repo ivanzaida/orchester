@@ -270,9 +270,11 @@ impl Switcher {
   fn panel(&self, ctx: &mut Ctx, project: Option<ProjectId>, picks: &Picks) -> Element {
     let recent = recent::rows(ctx, self.openings.get(), project, &self.open);
     let navigation = Navigation::of(ctx);
-    let all = MenuItem::new("switcher-all-projects", ctx.t("shell.screens.allProjects"), move || {
-      navigation.go(Route::AllProjects);
-    })
+    let all = MenuItem::opens(
+      "switcher-all-projects",
+      ctx.t("shell.screens.allProjects"),
+      navigation.to(Route::AllProjects),
+    )
     .icon(Icon::Folders)
     .detail(ctx.t("shell.switcher.allProjectsDetail"))
     .render(ctx, &self.open);
@@ -284,10 +286,11 @@ impl Switcher {
     .detail(ctx.t("shell.switcher.openFolderDetail"))
     .render(ctx, &self.open);
     let found = refusal::block(ctx, &self.folder.get(), picks);
-    let navigation = Navigation::of(ctx);
-    let add = MenuItem::new("switcher-add-project", ctx.t("shell.switcher.addProject"), move || {
-      navigation.go(Route::AddProject(None));
-    })
+    let add = MenuItem::opens(
+      "switcher-add-project",
+      ctx.t("shell.switcher.addProject"),
+      navigation.to(Route::AddProject(None)),
+    )
     .icon(Icon::Plus)
     .render(ctx, &self.open);
     menu_panel("project-switcher-menu")

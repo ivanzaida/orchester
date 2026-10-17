@@ -42,12 +42,10 @@ pub(super) fn unavailable(ctx: &mut Ctx, project: ProjectId, name: &str) -> Elem
     ctx.t("pull_requests.unavailable.openConnections"),
   )
   .icon(Icon::Plug)
-  .on_click(move || {
-    navigation.go(Route::Project(
-      project,
-      ProjectPage::Connections(ConnectionsView::default()),
-    ));
-  });
+  .opens(navigation.to(Route::Project(
+    project,
+    ProjectPage::Connections(ConnectionsView::default()),
+  )));
   let panel = EmptyState::new(
     "pull-requests-unavailable",
     Icon::Unplug,

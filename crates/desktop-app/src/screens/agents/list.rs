@@ -162,7 +162,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Si
         ctx.t("agents.openConnections"),
       )
       .icon(Icon::Plug)
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
+      .opens(nav.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
     );
   }
   empty.child(empty_connections(ctx, project, listed)).into()

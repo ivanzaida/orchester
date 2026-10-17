@@ -21,7 +21,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  facts::{BarAction, Dispatch},
+  facts::{Dispatch, go},
   item::{glyph, label, pressed},
 };
 use crate::{
@@ -163,9 +163,8 @@ pub fn item(ctx: &Ctx, facts: &ServerFacts, dispatch: &Dispatch) -> Option<Eleme
     ServerState::CertificateChanged => (Icon::ShieldAlert, PaletteColor::Danger),
   };
   let route = Route::Orchester(id.map_or_else(OrchesterView::default, OrchesterView::server));
-  let dispatch = dispatch.clone();
   Some(
-    pressed("status-server", move || dispatch(BarAction::Go(route.clone())))
+    pressed("status-server", go(dispatch, route))
       .describe("state", state.name())
       .describe("a11y_name", words.clone())
       .child(glyph(icon, color.clone()))

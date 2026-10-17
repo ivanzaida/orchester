@@ -83,7 +83,7 @@ impl Component for TaskListRow {
       )
       .cell(table::WORKFLOW, workflow_cell(ctx, row))
       .cell(table::READINESS, readiness_cell(ctx, row))
-      .on_open(move || navigation.go(open.clone()));
+      .opens(navigation.to(open));
     if props.highlighted { line.highlighted() } else { line }
   }
 }

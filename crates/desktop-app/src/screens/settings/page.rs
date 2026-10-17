@@ -1,6 +1,8 @@
 //! The header of Settings (`Header` `sr6zu` and `Tabs` `e6T2Vd` in `t098v`): the title over what Settings is, the open
 //! tab's action at the right (*Add account* on Accounts), and the tabs on their line.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text},
@@ -43,12 +45,10 @@ pub(super) fn header(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>) -
       ctx.t("accounts.addAccount"),
     )
     .icon(Icon::Plus)
-    .on_click(move || {
-      navigation.go(Route::Accounts(AccountsView {
-        account: None,
-        panel: AccountsPanel::Add,
-      }));
-    })
+    .opens(navigation.to(Route::Accounts(AccountsView {
+      account: None,
+      panel: AccountsPanel::Add,
+    })))
   });
   let action = action.or_else(|| {
     matches!(tab, SettingsTab::Orchester(_)).then(|| {
@@ -59,7 +59,7 @@ pub(super) fn header(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>) -
         ctx.t("settings.connectServer"),
       )
       .icon(Icon::Plus)
-      .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect())))
+      .opens(navigation.to(Route::Orchester(OrchesterView::connect())))
     })
   });
   let head = Row::new()
@@ -84,33 +84,33 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
     Some(count) => counted(ctx, &accounts_label, count),
     None => accounts_label,
   };
-  let to_automation = navigation.clone();
-  let to_accounts = navigation.clone();
-  let to_orchester = navigation.clone();
-  let on_accounts = matches!(tab, SettingsTab::Accounts(_));
-  let on_orchester = matches!(tab, SettingsTab::Orchester(_));
+  // Each tab is a place of its own; the current one keeps the panel it shows.
+  let tab_to = |id: &str, label: Arc<str>, current: bool, route: Route| {
+    if current {
+      PageTab::new(id.to_owned(), label, true, || {})
+    } else {
+      PageTab::to(id.to_owned(), label, false, navigation.to(route))
+    }
+  };
   let tabs = [
     PageTab::unavailable("settings-tab-general", ctx.t("settings.tabs.general"), not_built),
-    PageTab::new(
+    tab_to(
       "settings-tab-automation",
       ctx.t("settings.tabs.automation"),
       tab == SettingsTab::Automation,
-      move || to_automation.go(Route::Settings),
+      Route::Settings,
     ),
-    PageTab::new("settings-tab-accounts", accounts_label, on_accounts, move || {
-      if !on_accounts {
-        to_accounts.go(Route::Accounts(AccountsView::default()));
-      }
-    }),
-    PageTab::new(
+    tab_to(
+      "settings-tab-accounts",
+      accounts_label,
+      matches!(tab, SettingsTab::Accounts(_)),
+      Route::Accounts(AccountsView::default()),
+    ),
+    tab_to(
       "settings-tab-orchester",
       ctx.t("settings.tabs.orchester"),
-      on_orchester,
-      move || {
-        if !on_orchester {
-          to_orchester.go(Route::Orchester(OrchesterView::default()));
-        }
-      },
+      matches!(tab, SettingsTab::Orchester(_)),
+      Route::Orchester(OrchesterView::default()),
     ),
   ];
   page_tabs(ctx, "settings-tabs", tabs).into()

@@ -167,7 +167,7 @@ fn open_pipeline(ctx: &mut Ctx, props: &Props, index: usize, step: &PipelineUse,
   } else {
     let navigation = Navigation::of(ctx);
     let route = Route::Project(props.project.open.project.id(), ProjectPage::Pipeline(step.pipeline));
-    button.on_click(move || navigation.go(route.clone()))
+    button.opens(navigation.to(route))
   };
   button.render(ctx)
 }

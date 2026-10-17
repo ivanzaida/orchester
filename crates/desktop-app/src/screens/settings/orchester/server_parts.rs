@@ -198,12 +198,10 @@ fn signed_out(ctx: &mut Ctx, panel: &ServerPanel, entry: &ServerEntry) -> Elemen
     ctx.t("cloud.server.signedOut.code"),
   )
   .icon(Icon::KeyRound)
-  .on_click(move || {
-    navigation.go(Route::Orchester(OrchesterView {
-      server: Some(id),
-      panel: OrchesterPanel::Connect,
-    }));
-  });
+  .opens(navigation.to(Route::Orchester(OrchesterView {
+    server: Some(id),
+    panel: OrchesterPanel::Connect,
+  })));
   let mut column = Column::new()
     .id("orchester-server-signed-out")
     .width(Dimension::Pct(100.0))

@@ -10,9 +10,12 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::pressable,
+  pressable::opening,
 };
-use crate::theme::{ExtraColor, ExtraSpacing, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraColor, ExtraSpacing, IconSize},
+};
 
 /// `Nav item/*` height.
 pub const NAV_ITEM_HEIGHT: f32 = 28.0;
@@ -27,7 +30,8 @@ pub struct NavItem<'a> {
 }
 
 impl NavItem<'_> {
-  pub fn on_click(self, handler: impl Fn() + Send + Sync + 'static) -> Element {
+  /// The item, opening its screen with `open` by a browser's rules (`navigation::link`).
+  pub fn opens(self, open: Open) -> Element {
     let (color, label_style) = if self.selected {
       (PaletteColor::TextPrimary, TypographyStyle::Label)
     } else {
@@ -52,7 +56,7 @@ impl NavItem<'_> {
           .count
           .map(|count| Text::new(count).variant(TypographyStyle::Caption).nowrap()),
       );
-    let item = pressable(handler)
+    let item = opening(open)
       .id(self.id)
       .describe("a11y_name", self.label)
       .describe("state", if self.selected { "selected" } else { "enabled" })

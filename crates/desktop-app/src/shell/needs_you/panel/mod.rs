@@ -51,7 +51,7 @@ use crate::{
   project::Projects,
   screens::task::cards::Decisions,
   theme::{ExtraSpacing, NeedsYouShadow},
-  ui::icon::Icon,
+  ui::{icon::Icon, pressable::Press},
 };
 
 /// The panel's width (`BrP6i`).
@@ -304,7 +304,7 @@ impl NeedsYouPanel {
     };
     if !expanded && shown.waits {
       let (signal, reveal, at) = (self.expanded.clone(), self.reveal.clone(), at);
-      let press: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+      let press = Press::run(move || {
         reveal.want(at.clone());
         signal.set(Some(at.clone()));
       });
