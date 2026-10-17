@@ -66,8 +66,12 @@ fn assert_nothing_left(repo: &Repo, before: &str) {
   assert_eq!(refs(repo), before);
 }
 
+/// Merges `run`, whose temporary worktree, if it made one, went again.
 fn merge(repo: &Repo, run: &Run) -> Result<orchester_core::integration::RunMerge, MergeError> {
-  merge_run(&Processes, &git_program(), &repo.root, (run, &task()), now())
+  merge_run(&Processes, &git_program(), &repo.root, (run, &task()), now()).map(|outcome| {
+    assert_eq!(outcome.left, None, "the temporary worktree went");
+    outcome.merge
+  })
 }
 
 #[test]

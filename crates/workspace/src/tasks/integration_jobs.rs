@@ -365,7 +365,7 @@ impl RunJobs {
     } = args;
     let running = activity.start(operations::run_merge(&open, task, (&key, number), &branch));
     let not_done = Message::new("statusBar.operations.runMerge.notDone")
-      .with("task", key)
+      .with("task", key.clone())
       .with("run", number.to_string());
     let result = catch_unwind(AssertUnwindSafe(|| {
       if let Some(policy) = &policy {
@@ -388,8 +388,7 @@ impl RunJobs {
     let (mut conflicts, mut made) = (Vec::new(), None);
     let merged = match result {
       Ok(Ok(merged)) => {
-        running.finish();
-        made = Some(merged.merge);
+        made = Some(merged.finish(running, &activity, (&open, task, (&key, number))));
         JobState::Succeeded
       }
       Ok(Err(problem)) => {

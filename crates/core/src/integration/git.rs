@@ -1,6 +1,6 @@
 //! `git` in one directory, for integration: the user's checkout or a run's worktree. Commands run
-//! with git's messages in English and without optional locks ([`git_command`]); a failure is git's
-//! message without credentials.
+//! with git's messages in English, without optional locks ([`git_command`]) and without variables
+//! that locate another repository ([`LOCATING`]); a failure is git's message without credentials.
 
 use std::path::Path;
 
@@ -11,6 +11,16 @@ use crate::{
   repository::redact_userinfo,
   run::BranchName,
 };
+
+/// Variables that would point git at another repository, index or object store than the folder it
+/// runs in, e.g. ones a hook that started Orchester's process passed on.
+const LOCATING: [&str; 5] = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_COMMON_DIR",
+];
 
 pub(super) struct Git<'a, R: CommandRunner> {
   runner: &'a R,
@@ -28,12 +38,17 @@ impl<'a, R: CommandRunner> Git<'a, R> {
     Self::new(self.runner, self.program, dir)
   }
 
+  /// The directory git runs in.
+  pub(super) const fn dir(&self) -> &'a Path {
+    self.dir
+  }
+
   pub(super) fn output(&self, args: &[&str]) -> Result<CommandOutput, GitError> {
-    Ok(
-      self
-        .runner
-        .run(&git_command(self.program, self.dir, args.iter().copied()))?,
-    )
+    let command = LOCATING.iter().fold(
+      git_command(self.program, self.dir, args.iter().copied()),
+      |command, name| command.without_env(name),
+    );
+    Ok(self.runner.run(&command)?)
   }
 
   /// Whether the command exits with 0, for queries whose every failure means "no".

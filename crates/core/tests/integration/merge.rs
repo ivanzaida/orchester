@@ -29,7 +29,8 @@ fn merge_fast_forwards_the_base_branch_when_it_did_not_move() {
     (&run(&base, Some("main"), Ending::Succeeded), &task()),
     now(),
   )
-  .expect("merged");
+  .expect("merged")
+  .merge;
   assert_eq!(merge.kind, MergeKind::FastForward);
   assert_eq!(merge.revision.as_str(), head);
   assert_eq!(merge.into.as_str(), "main");
@@ -54,7 +55,8 @@ fn merge_commits_when_the_base_branch_moved_meanwhile() {
     (&run(&base, Some("main"), Ending::Succeeded), &task()),
     now(),
   )
-  .expect("merged");
+  .expect("merged")
+  .merge;
   assert_eq!(merge.kind, MergeKind::MergeCommit);
   assert_eq!(merge.revision.as_str(), repo.head());
   assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "Merge ORC-12 run #3");
@@ -76,7 +78,8 @@ fn merge_records_a_run_the_base_branch_already_has() {
     (&run(&base, Some("main"), Ending::Succeeded), &task()),
     now(),
   )
-  .expect("recorded");
+  .expect("recorded")
+  .merge;
   assert_eq!(merge.kind, MergeKind::AlreadyMerged);
   assert_eq!(merge.revision.as_str(), head);
 }
@@ -237,6 +240,7 @@ fn merge_at_a_reviewed_commit_refuses_a_branch_that_moved_since() {
     Some(&at_head),
     now(),
   )
-  .expect("merged at the commit asked for");
+  .expect("merged at the commit asked for")
+  .merge;
   assert_eq!(merged.revision.as_str(), later);
 }

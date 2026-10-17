@@ -6,6 +6,7 @@ mod cleanup;
 mod forgotten;
 mod merge;
 mod merge_beside;
+mod merge_guards;
 mod merged;
 mod recorded;
 mod support;

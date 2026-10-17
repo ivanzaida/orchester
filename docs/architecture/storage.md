@@ -281,14 +281,25 @@ locks (`orchester_core::integration`).
   discarded, and what the merge does not reach stays as it is.
 - **Merging.** A fast-forward when the branch did not move since the run started, else a merge commit
   *Merge ORC-12 run #3* with the repository's git identity, made in a temporary worktree
-  (`<git common dir>/orchester-merge-<run id>`, removed again on every path) so that the merge never
-  touches the checkout's files. The repository's own hooks run there: they are the user's. A
-  conflict, or a hook that refuses the merge commit, ends with the temporary worktree removed, the
-  checkout as it was, and the conflicting files named. Either result reaches the checkout as a
-  fast-forward (`git merge --ff-only`), which git refuses, changing nothing, when it would overwrite
-  or remove a file with uncommitted changes, an untracked file or an ignored one; the refusal names
-  exactly those files. A branch that already holds every commit of the run is recorded as merged
-  without a change.
+  (`<git common dir>/orchester-merge-<run id>`, removed again on every path; a folder git refuses to
+  remove or no longer knows goes as a folder, and one that still stays is reported beside the merge,
+  which stands) so that the merge never touches the checkout's files. A conflict, or a hook that
+  refuses the merge commit, ends with the temporary worktree removed, the checkout as it was, and the
+  conflicting files named. If the checkout moved to another branch, or its branch got a commit,
+  while the merge commit was made, the merge is dropped and refused.
+- **Hooks.** The repository's own hooks run: they are the user's. The merge commit's hooks
+  (`pre-merge-commit`, `prepare-commit-msg`, `commit-msg`, `post-merge`) come from the hooks folder
+  the checkout uses (`core.hooksPath`, a relative one resolved against the checkout) but run with the
+  temporary worktree as their working folder, which holds the tracked files only: nothing ignored,
+  untracked or uncommitted of the checkout's, so no installed tools. `post-merge` runs there and once
+  more in the checkout when the merge is brought in.
+- **Bringing it in.** Either result reaches the checkout as a fast-forward (`git merge --ff-only
+  --no-autostash`), which git refuses, changing nothing, when it would overwrite or remove a file
+  with uncommitted changes, an untracked file or an ignored one; the refusal names exactly those
+  files (or the folder that holds untracked files). `merge.autoStash` never stashes the person's
+  work. Should git still stop part way, e.g. at a file another program holds open, the files it
+  wrote are put back; any it could not put back are named. A branch that already holds every
+  commit of the run is recorded as merged without a change.
 - **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
   afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped
