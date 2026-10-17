@@ -20,6 +20,8 @@ pub fn routes() -> Routes {
       .route(super::FILE_PATTERN, screens::screen)
       .route(super::PULL_REQUEST_PATTERN, screens::screen)
       .route(super::SHARING_PATTERN, screens::screen)
+      .route(super::JOIN_PATTERN, screens::screen)
+      .route(super::INVITE_PATTERN, screens::screen)
       .route(super::TASK_SUMMARY_PATTERN, screens::screen)
       .route(super::EVERY_PROJECT_USAGE_PATTERN, screens::screen)
       .fallback(screens::screen)

@@ -98,7 +98,7 @@ fn task_notice(ctx: &Ctx, props: &TaskContext) -> Said {
 fn this_run_panel(ctx: &mut Ctx, props: &TaskContext, lead: Option<Element>) -> Option<Element> {
   let run = props.detail.run.as_ref()?;
   let lost = props.lost();
-  Some(this_run::this_run(ctx, run, &props.project.open.repo_root, lost, lead))
+  Some(this_run::this_run(ctx, run, (&props.project.open.repo_root, lost), (lead, None)))
 }
 
 /// *Runs of this task*, as the usual Summary ends.

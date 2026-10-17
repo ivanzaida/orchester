@@ -141,6 +141,11 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
   )
 }
 
+/// Joining the project `target` names (`AiCwO`), over Project settings › Sharing.
+pub fn join_screen(ctx: &mut Ctx, project: &ShownProject, target: &crate::routes::JoinTarget) -> Element {
+  sharing::join_screen(ctx, project, target)
+}
+
 /// Project settings open on Sharing, with *Make local*'s question open when `make_local` asks for it.
 pub fn sharing_screen(ctx: &mut Ctx, project: &ShownProject, make_local: bool) -> Element {
   ctx.mount_keyed::<SettingsScreen>(

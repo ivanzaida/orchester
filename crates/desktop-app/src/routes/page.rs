@@ -7,7 +7,7 @@ use orchester_core::{
 use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
 use super::{
-  CONNECTIONS, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
+  CONNECTIONS, JoinTarget, ConnectionsView, EDIT, FilesView, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab,
   PULL_REQUESTS, RouteError, SETTINGS, Screen, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
@@ -18,6 +18,8 @@ use super::{
 const SHARING: &str = "sharing";
 const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
+/// The join review under Sharing.
+const JOIN: &str = "join";
 
 /// A screen of one project, with what its path names besides the project.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -62,6 +64,8 @@ pub enum ProjectPage {
   Sharing {
     make_local: bool,
   },
+  /// The join review (`AiCwO`) of the project `JoinTarget` names, over Project settings › Sharing.
+  Join(JoinTarget),
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
 }
@@ -123,7 +127,7 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings | Self::Sharing { .. } => Screen::ProjectSettings,
+      Self::Settings | Self::Sharing { .. } | Self::Join(_) => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
     }
   }
@@ -168,6 +172,13 @@ impl ProjectPage {
         format!("{project_root}/{SETTINGS}/{SHARING}"),
         &[(ASK, make_local.then_some(MAKE_LOCAL))],
       ),
+      Self::Join(target) => {
+        let [server, project] = target.params();
+        with_query(
+          format!("{project_root}/{SETTINGS}/{SHARING}/{JOIN}"),
+          &[(server.0, Some(&server.1)), (project.0, Some(&project.1))],
+        )
+      }
       page => project_screen_path(project_root, page.screen()),
     }
   }
@@ -186,6 +197,7 @@ impl ProjectPage {
           value: value.to_owned(),
         }),
       },
+      [SETTINGS, SHARING, JOIN] => JoinTarget::take(params)?.map(Self::Join).ok_or(RouteError::NoScreen),
       [TASKS] => TaskList::take(params).map(Self::Tasks),
       [TASKS, NEW] => Ok(Self::NewTask),
       [TASKS, key, rest @ ..] => {

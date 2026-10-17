@@ -1,5 +1,6 @@
 //! *Link to Kontur…* and its question in place (`N9NFio`): the mismatch warning with *Choose another project* and
-//! *Link anyway…*, which opens what goes up on its page (`KSnOW`), and why a link did not go ahead.
+//! *Link anyway…*, which opens what goes up on its page (`KSnOW`) or the join review (`AiCwO`), and why a link did not
+//! go ahead: *No project you're a member of here* with *Ask for an invite* (`oOGMT`).
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -93,7 +94,7 @@ impl Link {
   }
 
   /// *This checkout's origin is github.com/acme/kontur* with *Choose another project* and *Link anyway…*.
-  fn mismatch(&self, ctx: &Ctx, target: &Target, props: &Props) -> Element {
+  fn mismatch(&self, ctx: &mut Ctx, target: &Target, props: &Props) -> Element {
     let RemoteMatch::Different { checkout, hint } = &target.0.remote else {
       return Column::new().into();
     };
@@ -107,7 +108,8 @@ impl Link {
       asking.set(Asking::Nothing);
       picked.set(Picked(None));
     });
-    let (asking, page, upload) = (self.asking.clone(), props.page.clone(), target.clone());
+    let (asking, page, chosen) = (self.asking.clone(), props.page.clone(), target.clone());
+    let (navigation, project) = (Navigation::of(ctx), props.project.open.project.id());
     let anyway = ActionButton::new(
       "sharing-link-anyway",
       ButtonKind::Ghost,
@@ -115,7 +117,7 @@ impl Link {
     )
     .on_click(move || {
       asking.set(Asking::Nothing);
-      page.set(upload.upload());
+      chosen.open(&page, (&navigation, project));
     });
     let body = ctx.t_args(
       "sharing.link.mismatch.body",
@@ -160,17 +162,15 @@ fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
       )
       .into()
     }
-    Problem::NoProject(address) => field_error(
+    // The server answers a non-member as if there were no project: nobody can be named, and nothing more is sent.
+    Problem::NoProject(address) => Callout::new(
       "sharing-no-project",
-      &ctx.t_args("sharing.link.noProject", [("address", address.as_str())]),
-    )
-    .into(),
-    Problem::Taken(project) => Callout::new(
-      "sharing-taken",
       CalloutTone::Warning,
-      ctx.t_args("sharing.link.taken.title", [("project", project.as_str())]),
+      ctx.t("sharing.link.notMember.title"),
     )
-    .body(ctx.t("sharing.link.taken.body"))
+    .icon(Icon::UserX)
+    .body(ctx.t_args("sharing.link.notMember.body", [("address", address.as_str())]))
+    .note(ctx.t("sharing.link.notMember.ask"))
     .into(),
     Problem::Other(said) => field_error("sharing-link-error", &said.text(ctx)).into(),
   }

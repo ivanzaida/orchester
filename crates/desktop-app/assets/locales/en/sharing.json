@@ -85,9 +85,8 @@
       },
       "joined": {
         "title": "Connected to {{server}} as {{username}}",
-        "body": "Link your project's checkout from its Project settings › Sharing.",
-        "review": "Open the join review",
-        "reviewLater": "The join review isn't in this version of the app yet; link the checkout from Project settings › Sharing.",
+        "body": "Pick the project to join there: Link a checkout… beside it opens the join review.",
+        "review": "Choose the project to join",
         "open": "Open its entry"
       },
       "notInvitedTitle": "{{server}} has no place for {{email}} yet",
@@ -158,10 +157,6 @@
         "another": "Choose another project",
         "anyway": "Link anyway…"
       },
-      "taken": {
-        "title": "{{project}} has tasks already",
-        "body": "Your checkout has tasks of its own, so linking it joins the project: your tasks get new numbers there, after a review of what goes up. That review isn't in this version of the app yet; nothing was sent."
-      },
       "notConnected": {
         "title": "{{host}} isn't connected",
         "body": "Connect this computer to {{host}} first; then link this project. Nothing was sent to it."
@@ -191,6 +186,11 @@
         "linkStep": "Link {{local}} to its project {{slug}} there, after Orchester shows what goes up",
         "chooseStep": "Choose your project there and link {{local}} to it, after Orchester shows what goes up",
         "connect": "Connect to {{host}}…"
+      },
+      "notMember": {
+        "title": "No project you're a member of here",
+        "body": "{{address}} answered as if it had no project: either there is none, or you aren't a member of it, and a server doesn't tell the two apart. Nothing was sent or uploaded.",
+        "ask": "Ask for an invite from whoever shared the address with you. It reaches you in Settings › Orchester, and accepting it opens the join review."
       }
     },
     "linked": {
@@ -271,7 +271,7 @@
       "changedBody": "A task was added or removed meanwhile, so nothing was sent and {{local}} is still local. Review again reads what linking it to {{project}} does now.",
       "reviewAgain": "Review again",
       "foreignAddress": "The server names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was sent. If {{own}} is how your team reaches the server, connect to it by that address.",
-      "taken": "The project got tasks of its own meanwhile, so linking this checkout is a join, with a review of what goes up. That review isn't in this version of the app yet; nothing was sent.",
+      "taken": "The project got tasks of its own meanwhile, so linking this checkout is a join, reviewed first. Nothing was sent: Cancel, then link again to open the join review.",
       "whatGoesUp": "What is uploaded",
       "whatComesDown": "What comes down",
       "project": "Project",
@@ -388,6 +388,128 @@
       "noServer": "Unavailable while the project's server isn't in Settings › Orchester: Orchester checks the address against that server before writing it.",
       "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester doesn't write it. If {{own}} is how your team reaches {{server}}, connect to it by that address.",
       "invalidAddress": "{{server}} answered with a project address Orchester can't read, so Orchester doesn't write it."
+    },
+    "join": {
+      "crumb": "Join {{key}}",
+      "title": "Join {{key}} on {{server}}",
+      "description": {
+        "one": "Your local task, ticked to start. Ticked, it is uploaded with a new {{key}} number and keeps its runs here. Untick it if {{key}} already has it: it stays on this computer as Not shared.",
+        "other": "Your {{count}} local tasks, all ticked to start. Ticked tasks are uploaded with new {{key}} numbers and keep their runs here. Untick the ones {{key}} already has: they stay on this computer as Not shared."
+      },
+      "loading": "Reading your tasks and the server's…",
+      "loadFailed": "The join can't be prepared",
+      "noServer": "This computer isn't connected to that server any more. Connect to it again in Settings › Orchester, then open the invite again.",
+      "noProject": "There's no project you're a member of at that address. Nothing was sent or uploaded; ask whoever shared it for an invite.",
+      "cancel": "Cancel",
+      "confirm": "Join and upload {{count}}",
+      "confirmNone": "Join without uploading",
+      "joining": "Joining…",
+      "tryAgain": "Try again",
+      "ticked": "{{ticked}} of {{total}} ticked",
+      "summary": {
+        "uploadedNone": "Nothing is uploaded",
+        "uploaded": {
+          "one": "1 is uploaded as {{key}}",
+          "other": "{{count}} are uploaded as {{first}} … {{last}}"
+        },
+        "kept": {
+          "one": "1 stays Not shared",
+          "other": "{{count}} stay Not shared"
+        },
+        "claimed": {
+          "one": "1 uploaded claimed for you",
+          "other": "{{count}} uploaded claimed for you"
+        },
+        "separator": " · "
+      },
+      "columns": {
+        "key": "LOCAL KEY",
+        "task": "TASK",
+        "workflow": "WORKFLOW / RUN",
+        "becomes": "BECOMES"
+      },
+      "tick": "Upload {{task}}",
+      "notShared": "Not shared",
+      "similar": "Similar on {{project}}: {{key}} {{title}} · {{by}}",
+      "locked": "Can't be unticked: run #{{number}} hasn't ended. Work on a shared task needs a claim, so it is uploaded claimed for you.",
+      "run": {
+        "none": "No active run",
+        "active": "{{phase}} · run #{{number}}",
+        "ended": "Run #{{number}} · {{phase}}"
+      },
+      "note": "Similar titles are only a hint; nothing is merged. Status, priority, tags and links go with each task: tags match {{key}}'s tags by name (new names become {{key}} tags), and a link to a task that stays here is dropped. Runs, conversations and memory stay attached, and run branches keep their names.",
+      "sends": {
+        "title": "What joining sends",
+        "sharedValue": "The tasks you keep ticked: title, brief, criteria, pipeline name, limits, status"
+      },
+      "failed": "Couldn't join {{key}}",
+      "failedNothing": "Nothing was uploaded and {{project}} is still local. Your ticks are kept; try again when {{server}} can be reached.",
+      "failedUploaded": "Your tasks reached {{server}}, but this computer couldn't finish joining. Your ticks are kept; trying again links them without uploading them twice.",
+      "failedUnknown": "{{project}} is still local. The connection was lost while your tasks were sent, so some may have reached {{server}}; trying again doesn't upload them twice."
+    },
+    "joined": {
+      "heading": "You joined {{key}} on {{server}}",
+      "detail": "{{uploaded}} tasks were uploaded with new numbers and {{claimed}} claimed for you; {{kept}} stay on this computer as Not shared. The project's key is now {{key}}. Searching the task list for a former key still finds the task.",
+      "dropped": "Links to tasks that stay here were dropped: {{links}}.",
+      "link": "{{task}} → {{blocking}}",
+      "separator": ", ",
+      "dismiss": "Dismiss",
+      "openTasks": "Open Tasks"
+    },
+    "mapping": {
+      "heading": "Keys before joining",
+      "detail": "Your local tasks got {{key}} numbers when you joined. Orchester doesn't rewrite text, so a brief or message that says {{before}} means {{now}}; each task's page shows was {{before}}.",
+      "detailNone": "None of your local tasks was uploaded when you joined: they stay on this computer as Not shared until you share them.",
+      "before": "BEFORE",
+      "now": "NOW",
+      "task": "TASK",
+      "notShared": "Not shared",
+      "claimed": "claimed for you · run #{{number}}",
+      "notSharedNote": "read-only · Share task on its page",
+      "branches": "Run branches keep the names they started with. The next run of a task is named by its new key."
+    },
+    "landing": {
+      "crumb": "Invite to {{project}}",
+      "title": "Join {{project}} on {{server}}",
+      "titlePending": "Join {{project}}",
+      "lead": "This computer is connected to {{server}} as {{username}}. Pick the checkout of {{project}} here; the next page shows what joining does before anything is sent.",
+      "reading": "Reading the project and your checkouts…",
+      "opening": "Opening the join review…",
+      "loadFailed": "The invite's project can't be read",
+      "later": "Later",
+      "continue": "Continue to the join review",
+      "pickFirst": "Pick a checkout first",
+      "project": "Project",
+      "server": "Server",
+      "serverValue": "{{server}} · connected, certificate pinned from the invite",
+      "hint": "Repository hint",
+      "noHint": "None: the project names no repository",
+      "role": "Your role",
+      "owner": "Owner",
+      "member": "Member",
+      "checkouts": "Checkout on this computer",
+      "pick": "Link {{project}}",
+      "added": "Added",
+      "matches": "origin {{origin}} matches the project's hint",
+      "differs": "origin {{origin}} differs from {{hint}}",
+      "noOrigin": "No origin remote: Orchester can't compare it with the project's hint",
+      "nothingToCompare": "The project names no repository; nothing to compare",
+      "linkedElsewhere": "Already linked to {{address}}",
+      "anotherProject": "another project",
+      "tasks": "{{count}} local tasks, {{first}} … {{last}}. You choose which go up on the next page.",
+      "oneTask": "1 local task, {{key}}. You choose whether it goes up on the next page.",
+      "noTasks": "A local project with no tasks yet: the review only shows what {{project}} brings.",
+      "differsNote": "You can still pick it; the warning stays visible in Sharing.",
+      "linkedNote": "A checkout links to one project. To link it here, make {{project}} local first in its Sharing; its tasks stay with it.",
+      "noCheckout": "No local project here has {{hint}}",
+      "noCheckoutAny": "No local project here can be linked to it yet",
+      "noCheckoutBody": "Clone it where you keep your code, then add that folder. Orchester never clones for you: the server holds tasks, not code. Continue to the join review stays unavailable until a checkout is picked.",
+      "cloneLabel": "Clone it first",
+      "add": "Add a checkout folder…",
+      "addTitle": "Choose the checkout folder",
+      "addHint": "For a folder Orchester doesn't know yet. Not cloned? Clone {{hint}} yourself first: the server never holds code.",
+      "notGit": "{{path}} can't be linked: Orchester needs a git checkout of {{hint}}, and there's no .git folder there. Pick the folder you cloned.",
+      "notAdded": "{{path}} couldn't be added. The reason is in Orchester's log; pick another folder."
     }
   }
 }

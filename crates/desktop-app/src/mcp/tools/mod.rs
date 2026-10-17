@@ -74,7 +74,7 @@ pub fn route_json(route: &Route) -> Value {
         params.insert("query".to_owned(), json!(query));
       }
     }
-    Route::AllProjects | Route::AddProject(_) | Route::Settings | Route::Accounts(_) | Route::Orchester(_) => {}
+    Route::AllProjects | Route::AddProject(_) | Route::Settings | Route::Accounts(_) | Route::Orchester(_) | Route::Invite(_) => {}
   }
   json!({ "name": name, "path": route.path(), "params": params })
 }

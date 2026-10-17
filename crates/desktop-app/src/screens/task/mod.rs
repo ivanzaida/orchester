@@ -17,6 +17,7 @@ mod conversation;
 mod header;
 mod local_integration;
 mod read;
+mod sharing;
 mod summary;
 
 use lurq::{
@@ -86,9 +87,11 @@ impl Component for TaskPage {
     let found = match props.project.feed.tasks.get() {
       TasksState::Loading => return page(loading("task-loading", &ctx.t("task.page.loading"))),
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
+      // A task kept Not shared keeps its key from before the join; its page is read-only.
       TasksState::Ready(tasks) => tasks
         .tasks
         .iter()
+        .chain(tasks.not_shared.iter())
         .find(|task| *task.key() == props.key)
         .map(|task| task.id()),
     };
@@ -215,6 +218,8 @@ pub struct PageState {
   pub discard: Signal<bool>,
   /// Where the Summary's column is scrolled, kept as the tabs switch.
   pub summary_scroll: ScrollState,
+  /// *Share task*'s question is open over the Summary of a task kept *Not shared*.
+  pub share: Signal<bool>,
 }
 
 impl PageState {
@@ -261,6 +266,7 @@ impl Component for TaskFrame {
         removal: ctx.signal(Removal::closed()),
         discard: ctx.signal(false),
         summary_scroll: ScrollState::new(),
+        share: ctx.signal(false),
       },
       live: ctx.signal(false),
     }

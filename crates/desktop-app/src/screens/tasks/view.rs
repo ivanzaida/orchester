@@ -39,15 +39,19 @@ impl TabCounts {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct RowsKey {
   pub tab: TaskListTab,
+  /// The *Not shared* tasks in place of the list's.
+  pub not_shared: bool,
   pub search: String,
   pub pipeline: PipelineFilter,
   pub sort: TaskSort,
 }
 
 struct Kept {
-  /// The feed's tasks they come from, and whether the runner served the project.
+  /// The feed's tasks they come from, whether the runner served the project, and whether they are the *Not shared*
+  /// ones.
   source: ProjectTasks,
   online: bool,
+  not_shared: bool,
   shown: ProjectTasks,
   counts: TabCounts,
   rows: Option<(RowsKey, Arc<Vec<TaskRow>>)>,
@@ -57,21 +61,24 @@ struct Kept {
 pub(super) struct ListView(Mutex<Option<Kept>>);
 
 impl ListView {
-  /// The feed's `source` tasks as they stand with the runner (`online` or not), with the tabs' counts.
-  pub(super) fn tasks(&self, source: &ProjectTasks, online: bool) -> (ProjectTasks, TabCounts) {
+  /// The feed's `source` tasks as they stand with the runner (`online` or not), or its *Not shared* ones, with the
+  /// tabs' counts.
+  pub(super) fn tasks(&self, source: &ProjectTasks, (online, not_shared): (bool, bool)) -> (ProjectTasks, TabCounts) {
     let mut kept = self.0.lock();
-    let current = kept
-      .as_ref()
-      .is_some_and(|kept| kept.online == online && same_reading(&kept.source, source));
+    let current = kept.as_ref().is_some_and(|kept| {
+      kept.online == online && kept.not_shared == not_shared && same_reading(&kept.source, source)
+    });
     if !current {
-      let shown = if online {
-        source.clone()
+      let listed = if not_shared {
+        source.not_shared_view()
       } else {
-        source.without_runner()
+        source.clone()
       };
+      let shown = if online { listed } else { listed.without_runner() };
       *kept = Some(Kept {
         source: source.clone(),
         online,
+        not_shared,
         counts: TabCounts::of(&shown),
         shown,
         rows: None,

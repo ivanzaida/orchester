@@ -52,6 +52,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
+    Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }
@@ -109,6 +110,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::EditConnection(id) => connections::edit_connection(ctx, project, *id),
     ProjectPage::Settings => project_settings::screen(ctx, project),
     ProjectPage::Sharing { make_local } => project_settings::sharing_screen(ctx, project, *make_local),
+    ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
   }
 }

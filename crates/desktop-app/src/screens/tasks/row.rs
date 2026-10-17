@@ -88,7 +88,8 @@ impl Component for TaskListRow {
   }
 }
 
-/// The title, cut to its room, then the first tags, how many more there are, and the New badge.
+/// The title, cut to its room, then *was KON-12* for a task that joined with another key (`Xr4Wb`), the first tags,
+/// how many more there are, and the New badge.
 fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
   let key = &row.key;
   let tags = row
@@ -118,6 +119,14 @@ fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
       )
       .render(ctx),
     )
+    .with_children(row.former_key.as_ref().map(|former| {
+      Text::new(&ctx.t_args("tasks.formerKey", [("key", &**former)]))
+        .id(format!("task-former-key-{key}"))
+        .variant(ExtraTypography::MonoKey.role())
+        .color(PaletteColor::TextMuted)
+        .nowrap()
+        .flex_shrink(0.0)
+    }))
     .with_children(tags)
     .with_children(more)
     .with_children(new)
