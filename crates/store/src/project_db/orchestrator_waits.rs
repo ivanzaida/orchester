@@ -17,7 +17,7 @@ use crate::{
   rows::{corrupt, parse},
 };
 
-/// A wait kept without a turn, which may start one, and the conversation it was kept in.
+/// A wait kept without a turn, which starts one by itself, and the conversation it was kept in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeptWait {
   pub chat: ChatId,
@@ -61,11 +61,11 @@ impl ProjectDb {
     Ok(kept == 1)
   }
 
-  /// The waits of every conversation that have no turn, oldest first.
-  pub fn waits_without_turn(&self) -> Result<Vec<KeptWait>, StoreError> {
+  /// The waits of every conversation that start a turn by themselves (`automatic`) and have none, oldest first.
+  pub fn automatic_waits_without_turn(&self) -> Result<Vec<KeptWait>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT chat_id, seq, wait_key, body FROM orchestrator_entries
-       WHERE kind = 'wait' AND message_id IS NULL ORDER BY seq",
+       WHERE kind = 'wait' AND message_id IS NULL AND json_extract(body, '$.automatic') = 1 ORDER BY seq",
     )?;
     let rows = statement
       .query_map([], |row| {

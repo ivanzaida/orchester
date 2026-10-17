@@ -85,7 +85,7 @@ fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
   );
   db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(11))
     .expect("kept");
-  let waiting = db.waits_without_turn().expect("waits");
+  let waiting = db.automatic_waits_without_turn().expect("waits");
   assert_eq!(waiting.len(), 1);
   assert_eq!(waiting[0].chat, chat.id(), "the conversation it was kept in");
   let seq = waiting[0].seq;
@@ -102,7 +102,7 @@ fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
       .expect("not again"),
     "a wait starts one turn"
   );
-  assert!(db.waits_without_turn().expect("waits").is_empty());
+  assert!(db.automatic_waits_without_turn().expect("waits").is_empty());
   let kept = db.chat_turn(turn).expect("read").expect("the turn");
   assert_eq!(kept.turn, TurnState::Thinking);
   assert!(
@@ -123,7 +123,7 @@ fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
 }
 
 #[test]
-fn waits_without_turn_are_those_of_every_conversation_oldest_first() {
+fn waits_without_turn_are_the_automatic_ones_of_every_conversation_oldest_first() {
   let (_repo, mut db, run, _execution) = started_run();
   let first = Chat::named(ChatId::generate(), "First", at(10));
   let second = Chat::named(ChatId::generate(), "Second", at(11));
@@ -131,8 +131,14 @@ fn waits_without_turn_are_those_of_every_conversation_oldest_first() {
     .expect("kept");
   db.keep_agent_wait(&first, ("message:x:2", &wait(run.id())), at(13))
     .expect("kept");
+  let waits_for_the_person = AgentWait {
+    automatic: false,
+    ..wait(run.id())
+  };
+  db.keep_agent_wait(&first, ("message:x:3", &waits_for_the_person), at(13))
+    .expect("kept");
   let waiting: Vec<(ChatId, String)> = db
-    .waits_without_turn()
+    .automatic_waits_without_turn()
     .expect("waits")
     .into_iter()
     .map(|kept| (kept.chat, kept.key))
@@ -147,7 +153,7 @@ fn waits_without_turn_are_those_of_every_conversation_oldest_first() {
   let person = ChatMessageId::generate();
   db.keep_chat_message(&first, (person, &body("How is ORC-1?")), at(14))
     .expect("kept");
-  let seq = db.waits_without_turn().expect("waits")[0].seq;
+  let seq = db.automatic_waits_without_turn().expect("waits")[0].seq;
   assert!(
     db.start_wait_turn((second.id(), seq), ChatMessageId::generate())
       .expect("started"),

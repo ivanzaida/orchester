@@ -484,3 +484,25 @@ fn orchestrator_waits_start_their_turn_in_their_conversation_while_another_think
   assert!(wait.automatic, "{wait:?}");
   assert_eq!(started.as_ref().map(|started| started.message), Some(turn.message));
 }
+
+#[test]
+fn orchestrator_waits_raised_by_its_own_answer_start_no_turn_in_the_conversation_that_dealt_with_them_since() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture);
+  let answering = answered_by_chat(&mut fixture, &run);
+  // After the chat's answer, another conversation updates the task, without answering its agents.
+  let since = acted_on(&mut fixture, "ORC-1", 40);
+  ask(&mut fixture, &mut run);
+  let followed = follow(&fixture, true);
+  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert!(
+    waits_in(&fixture, answering.id()).is_empty(),
+    "the newer conversation dealt with ORC-1 last"
+  );
+  let (wait, turn) = &waits_in(&fixture, since.id())[0];
+  assert!(
+    wait.own && !wait.automatic && turn.is_none(),
+    "the answer in the other conversation raised it: {wait:?}"
+  );
+}

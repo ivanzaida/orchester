@@ -42,10 +42,9 @@ person can click.
      conversations. With *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator turn by itself
      in its conversation: at most one per wait, never while another turn of that conversation runs (it waits for that
      turn to end; a turn of another conversation does not hold it), and none for a wait the Orchestrator's own answer
-     raised. In
-     that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the project's
-     docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is asked,
-     with options and its recommendation.
+     raised. In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
+     project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
+     asked, with options and its recommendation.
    - The chat may merge a run (`merge_run`): a proposal card by default; with the person-only switch *Let the
      Orchestrator merge runs* it merges at once, only a run the person asked it to merge. The merge keeps all of
      `merge_run`'s rules: only a task's latest run that succeeded, only when the main checkout needs no local

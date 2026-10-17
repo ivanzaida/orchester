@@ -136,9 +136,9 @@ fn keep_new(db: &mut ProjectDb, new: &[&(String, AgentWait)], answers: bool) -> 
 /// `waiting`), oldest first.
 fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<KeptWait>, StoreError> {
   Ok(
-    db.waits_without_turn()?
+    db.automatic_waits_without_turn()?
       .into_iter()
-      .filter(|kept| kept.wait.automatic && waiting.contains(kept.key.as_str()))
+      .filter(|kept| waiting.contains(kept.key.as_str()))
       .collect(),
   )
 }
