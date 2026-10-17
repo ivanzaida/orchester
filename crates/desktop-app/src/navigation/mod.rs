@@ -7,6 +7,7 @@ pub mod accounts;
 pub mod guard;
 pub mod input;
 pub mod pointed;
+pub mod press;
 pub mod shortcuts;
 pub mod tabs;
 pub mod waiting;
@@ -20,6 +21,7 @@ use lurq::{app::ctx::Ctx, core::Signal, router::RouterHandle};
 
 use self::{
   pointed::Pointed,
+  press::OpenIn,
   tabs::{TabId, TabSet},
 };
 use crate::routes::Route;
@@ -104,6 +106,18 @@ impl Navigation {
       tabs.open();
       true
     });
+  }
+
+  /// Opens `route` where `open` says: in the active tab as [`go`](Self::go) does, or in a new tab right of the
+  /// active one, in the background or switched to.
+  pub fn open(&self, route: Route, open: OpenIn) {
+    match open {
+      OpenIn::ActiveTab => self.go(route),
+      OpenIn::BackgroundTab | OpenIn::NewTab => self.change(|tabs| {
+        tabs.open_at(route, open == OpenIn::NewTab);
+        true
+      }),
+    }
   }
 
   pub fn select(&self, id: TabId) {

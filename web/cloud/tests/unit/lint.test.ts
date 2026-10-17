@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 /**
  * The literal rule of `web/eslint.config.mjs` also covers the text props of the UI kit's components (`label`,
@@ -15,6 +15,12 @@ async function restricted(code: string): Promise<string[]> {
 }
 
 describe("literal text in kit props", () => {
+  // ESLint loads its config, plugins and parser on the first lint, which takes seconds on a busy machine:
+  // done once here, under its own timeout, so no case below is charged for it.
+  beforeAll(async () => {
+    await restricted("export const x = 1;");
+  }, 60_000);
+
   it.each([
     '<Submit kind="primary" label="Save" busyLabel={t("a.b")} />',
     '<Head title="Welcome" />',

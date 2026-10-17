@@ -69,6 +69,9 @@ lurq = { workspace = true, features = [
   "canvas",
 ] }
 parking_lot.workspace = true
+# Where an agent's chat message has text outside code and links, by offset, for the places it names
+# (`ui::chat::references`); already built through lurq's `markdown`.
+pulldown-cmark.workspace = true
 # The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.
 rfd.workspace = true
 # Arguments and results of the app's MCP tools.

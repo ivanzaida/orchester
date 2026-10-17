@@ -113,7 +113,7 @@ impl Component for Gallery {
       menu_anchor: ctx.element_ref(),
       popover_open: ctx.signal(false),
       popover_anchor: ctx.element_ref(),
-      link: Arc::new(move |link: &str| link_pressed.set(format!("link {link}"))),
+      link: Arc::new(move |link: &str, _: &lurq::app::events::MouseEvent| link_pressed.set(format!("link {link}"))),
     };
     Self {
       section: ctx.signal(Section::Actions),

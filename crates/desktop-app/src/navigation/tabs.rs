@@ -160,9 +160,18 @@ impl TabSet {
 
   /// Opens a tab at All projects right of the active one and activates it.
   pub fn open(&mut self) -> TabId {
+    self.open_at(Route::AllProjects, true)
+  }
+
+  /// Opens a tab at `route` right of the active one; it becomes the active one when `switch`, and otherwise
+  /// waits in the background while the active tab stays as it is.
+  pub fn open_at(&mut self, route: Route, switch: bool) -> TabId {
     let id = self.new_id();
-    self.active += 1;
-    self.tabs.insert(self.active, Tab::new(id, Route::AllProjects));
+    let index = self.active + 1;
+    self.tabs.insert(index, Tab::new(id, route));
+    if switch {
+      self.active = index;
+    }
     id
   }
 
