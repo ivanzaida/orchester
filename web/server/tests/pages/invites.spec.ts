@@ -36,6 +36,26 @@ test.describe("invites", () => {
     await expect(page).toHaveURL(`${ADMIN}/admin`);
   });
 
+  test("an admin without a two-factor sign-in is told where to turn it on, and the address stays", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/admin/projects/kontur/invites");
+    await page.getByLabel("Email", { exact: true }).fill("no-mfa.person@example.com");
+    await page.getByRole("button", { name: "Send invite" }).click();
+    await expect(page.getByText("Two-factor authentication needed")).toBeVisible();
+    await expect(page.getByText("Turn on two-factor authentication in your Orchester Cloud account to send invites.", { exact: false })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Orchester Cloud security" })).toHaveAttribute("href", `${CLOUD}/account#security`);
+    await expect(page.getByLabel("Email", { exact: true })).toHaveValue("no-mfa.person@example.com");
+    expect((await deliveries()).some((delivery) => delivery.email === "no-mfa.person@example.com")).toBe(false);
+  });
+
+  test("making a code without a two-factor sign-in says how to get one", async ({ page }) => {
+    await reset("no-mfa");
+    await signIn(page);
+    await page.goto("/admin/projects/kontur/invites");
+    await page.getByRole("button", { name: "Make a code" }).click();
+    await expect(page.getByText("Making invites, codes too, needs two-factor authentication", { exact: false })).toBeVisible();
+  });
+
   test("the daily limit stops the button and says until when", async ({ page }) => {
     await signIn(page);
     await page.goto("/admin/projects/kontur/invites");

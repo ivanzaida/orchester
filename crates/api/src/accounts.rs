@@ -41,6 +41,20 @@ pub struct CertificateInfo {
   pub mode: CertificateMode,
 }
 
+/// `POST /server/key-proof`: a nonce of the app's, 16 to 64 base64url characters.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyProofRequest {
+  pub nonce: String,
+}
+
+/// The server's public key (base64url, whose id is the server's) and its signed [`crate::statements::KeyProof`].
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KeyProofResponse {
+  pub public_key: String,
+  pub proof: String,
+}
+
 /// What `GET /server` says about the cloud link, before anyone signs in.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CloudStatus {
@@ -51,6 +65,11 @@ pub struct CloudStatus {
   pub root_fingerprint: String,
   /// Whether the server accepts identity tokens now (the owner can turn it off).
   pub accepting: bool,
+  /// Every code but the setup code needs the app's identity token for codes with the two-factor claim
+  /// (`POST /auth/code`). A server from before two-factor authentication lacks this: it takes a code alone and
+  /// refuses a join that carries the token (its `CodeJoin` has no such fields), so the app sends none to it.
+  #[serde(default)]
+  pub codes_need_two_factor: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

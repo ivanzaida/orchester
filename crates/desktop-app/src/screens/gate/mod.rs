@@ -3,11 +3,15 @@
 //! the MCP server refusing (`crate::shell::status_bar::gate`). In the content panel: the gate's head (*Sign in to
 //! start* on a first run `Lpznn`, *Sign in again* when the gate came back `ztigw`), why it came back ([`ended`]), the
 //! sign-in card ([`form`]) and *Advanced · cloud address* (`S8aPFV`), centered; the footer under them says the
-//! internet is needed once (a first run) or that only a person signs in (the gate came back), and names the cloud.
-//! The same layout at 1440 and 960; the footer's words are shorter in a narrow window.
+//! internet is needed once (a first run, or signed out to sign in with a code `Nq3Mf`) or that only a person signs in
+//! (the gate came back), and names the cloud. For an account with two-factor authentication, the code step
+//! ([`code`]) takes the card's place, under a head of its own and without *Advanced* (`Tmwkg`). The same layout at 1440
+//! and 960; the footer's words are shorter in a narrow window.
 
+mod code;
 mod ended;
 mod form;
+mod step;
 
 use lurq::{
   app::{
@@ -16,14 +20,17 @@ use lurq::{
     theme::{BorderSize, Breakpoint, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
+  core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_store::{CloudSignInEnd, EndedCloudSignIn};
 use orchester_workspace::{
   background,
   sharing::cloud::{Cloud, CloudAddress, SignIn},
 };
 
+use self::{ended::Head, step::Step};
 use crate::{
   screens::settings::orchester::{Advanced, Place, advanced_section},
   services::Services,
@@ -51,7 +58,10 @@ impl DevtoolsInspectable for GateProps {}
 /// The gate in the content panel.
 pub struct SignInGate {
   form: form::Form,
+  code: code::CodeForm,
   advanced: Advanced,
+  /// Made outside the component's context, so DevTools never records the challenge it holds.
+  step: Signal<Step>,
 }
 
 impl Component for SignInGate {
@@ -62,9 +72,14 @@ impl Component for SignInGate {
       SignIn::SignedOut { ended: Some(ended), .. } => ended.email.clone(),
       SignIn::SignedOut { ended: None, .. } | SignIn::SignedIn { .. } => String::new(),
     };
+    let step = Signal::new(Step::Password { timed_out: false });
+    let form = form::Form::new(ctx, &email, step.clone());
+    let code = code::CodeForm::new(ctx, step.clone(), form.to_password());
     Self {
-      form: form::Form::new(ctx, &email),
+      form,
+      code,
       advanced: Advanced::new(ctx),
+      step,
     }
   }
 
@@ -84,27 +99,13 @@ impl Component for SignInGate {
       }
     };
     let host = address.address.authority();
-    let pending = self.form.pending();
-    let advanced = advanced_section(ctx, &address, &self.advanced, Place::Gate);
     let column = Column::new()
       .id("gate-column")
       .width(Dimension::Px(COLUMN_WIDTH))
       .spacing(GateSpacing::Column.role())
       // *Advanced*'s line ends the column; its ring shows past the column's edge (`Focus::Link`).
       .overflow_visible()
-      .child(ended::head(ctx, ended.is_some()))
-      .with_children(ended.as_ref().map(|ended| ended::notice(ctx, ended)))
-      .child(form::card(ctx, &self.form, &host))
-      .child(if pending {
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .opacity(DISABLED_OPACITY)
-          .overflow_visible()
-          .child(advanced)
-          .into()
-      } else {
-        advanced
-      });
+      .with_children(self.parts(ctx, (ended.as_ref(), &address), &host));
     let main = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(GateSpacing::Side.role(), SpacingSize::Section))
@@ -123,7 +124,52 @@ impl Component for SignInGate {
           .max_height(Dimension::Pct(100.0)),
       )
       .into();
-    panel(content, Some(footer(ctx, ended.is_some(), &address)))
+    let person_only = ended.is_some_and(|ended| ended.reason != CloudSignInEnd::TwoFactor);
+    panel(content, Some(footer(ctx, person_only, &address)))
+  }
+}
+
+impl SignInGate {
+  /// The column's parts: the head, the notice, and the card with *Advanced* under it, or the code step's card.
+  fn parts(
+    &self,
+    ctx: &mut Ctx,
+    (ended, address): (Option<&EndedCloudSignIn>, &CloudAddress),
+    host: &str,
+  ) -> Vec<Element> {
+    let step = self.step.get();
+    if let Step::Code(entry) = &step {
+      let head = ended::head(
+        ctx,
+        Head::Code {
+          recovery: entry.recovery(),
+        },
+      );
+      return vec![head, code::card(ctx, &self.code, entry, host)];
+    }
+    self.code.rest();
+    let head = ended::head(ctx, if ended.is_some() { Head::Again } else { Head::First });
+    let notice = if step == (Step::Password { timed_out: true }) {
+      Some(ended::timed_out(ctx))
+    } else {
+      ended.map(|ended| ended::notice(ctx, ended))
+    };
+    let advanced = advanced_section(ctx, address, &self.advanced, Place::Gate);
+    let advanced = if self.form.pending() {
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .opacity(DISABLED_OPACITY)
+        .overflow_visible()
+        .child(advanced)
+        .into()
+    } else {
+      advanced
+    };
+    let mut parts = vec![head];
+    parts.extend(notice);
+    parts.push(form::card(ctx, &self.form, host));
+    parts.push(advanced);
+    parts
   }
 }
 
@@ -142,11 +188,12 @@ fn panel(content: Element, footer: Option<Element>) -> Element {
     .into()
 }
 
-/// *Signing in needs the internet once…* on a first run, *Only you can sign in…* once the gate came back; the cloud's
-/// host at the end, in `warning` with *test cloud* while another cloud than the build's is set.
-fn footer(ctx: &mut Ctx, came_back: bool, address: &CloudAddress) -> Element {
+/// *Signing in needs the internet once…* on a first run, *Only you can sign in…* once the gate came back
+/// (`person_only`); the cloud's host at the end, in `warning` with *test cloud* while another cloud than the build's is
+/// set.
+fn footer(ctx: &mut Ctx, person_only: bool, address: &CloudAddress) -> Element {
   let narrow = ctx.breakpoint() < Some(Breakpoint::Xl);
-  let (glyph, key) = match (came_back, narrow) {
+  let (glyph, key) = match (person_only, narrow) {
     (true, _) => (Icon::UserLock, "gate.footer.personOnly"),
     (false, false) => (Icon::Wifi, "gate.footer.offline"),
     (false, true) => (Icon::Wifi, "gate.footer.offlineShort"),

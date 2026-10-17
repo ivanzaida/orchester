@@ -6,13 +6,30 @@ import { BINARY, SERVER, type Stack } from "./stack";
 
 /** What a person does in the browser in the end-to-end run, step by step, in the admin's own words (`locales/en.json`). */
 
-export async function signInAtCloud(page: Page, email: string): Promise<void> {
+/** The cloud's sign-in; `code` finishes it for an account with two-factor authentication. */
+export async function signInAtCloud(page: Page, email: string, code?: string): Promise<void> {
   await expect(page).toHaveURL(/localhost:4400\/signin\?next=/);
   // The form's fields are React's once the page has hydrated; typing before that is lost.
   await page.waitForLoadState("networkidle");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
+  if (code !== undefined) {
+    await expect(page).toHaveURL(/localhost:4400\/signin\/code$/);
+    await page.waitForLoadState("networkidle");
+    await page.getByLabel("Code").fill(code);
+    await page.getByRole("button", { name: "Sign in" }).click();
+  }
+}
+
+/** The admin's *Sign in with Orchester Cloud*, finished at the cloud with `code` for two-factor authentication. */
+export async function signInThroughCloud(page: Page, email: string, code: string): Promise<void> {
+  await page.goto(`${SERVER}/admin`);
+  await expect(page).toHaveURL(/\/admin\/signin$/);
+  await page.getByRole("button", { name: "Sign in with Orchester Cloud" }).click();
+  await signInAtCloud(page, email, code);
+  await page.getByRole("button", { name: "Sign in to the admin" }).click();
+  await expect(page).toHaveURL(`${SERVER}/admin`);
 }
 
 export async function setUp(page: Page, setupCode: string): Promise<void> {

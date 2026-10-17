@@ -118,6 +118,11 @@ fn join(
   address: IpAddr,
   now: i64,
 ) -> Result<CloudJoined, ServerError> {
+  // The cloud issues a token that accepts an invite only to a device that signed in with two-factor authentication;
+  // one without the claim is refused before anything is used (docs/architecture/server.md, "Invites").
+  if claims.invite.is_some() && !claims.mfa {
+    return Err(ErrorCode::MfaRequired.into());
+  }
   let invite = claims
     .invite
     .as_deref()
@@ -158,6 +163,7 @@ fn join(
     kind: DeviceKind::App,
     via: JoinedVia::Cloud,
     kid: Some(&claims.kid),
+    mfa: claims.mfa,
   };
   let (token, session) = devices::issue(db, &user, &issued, now)?;
   db::audit(

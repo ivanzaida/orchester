@@ -1,7 +1,9 @@
 /**
  * The fake cloud's signed-in side: accounts with devices, invites and servers, and the sessions that read them.
- * Two accounts (`web/cloud/README.md`): Mira with everything (`H47EAc`) and a new account (`Z4Q3F`).
+ * Three accounts (`web/cloud/README.md`): Mira with everything (`H47EAc`), a new account (`Z4Q3F`), and one with
+ * two-factor authentication on (`two-factor.ts`).
  */
+import { challengeFor, resetTwoFactor, routeTwoFactor, TWO_FACTOR, twoFactorOf } from "./two-factor.ts";
 
 export const RIGHT_PASSWORD = "correct horse battery";
 export const FULL = "mira.koval@example.com";
@@ -102,6 +104,7 @@ export function resetAccounts(): void {
   accounts.clear();
   sessions.clear();
   deleted.clear();
+  resetTwoFactor();
 }
 
 function account(email: string): FakeAccount | undefined {
@@ -110,6 +113,7 @@ function account(email: string): FakeAccount | undefined {
     const made: Record<string, () => FakeAccount> = {
       [FULL]: () => fullAccount(now),
       [NEW]: () => plainAccount("account-new", NEW, "Nova Lind"),
+      [TWO_FACTOR]: () => plainAccount("account-two-factor", TWO_FACTOR, "Theo Lind"),
     };
     const make = made[email];
     if (make !== undefined) {
@@ -130,6 +134,16 @@ export function signInAccount(email: unknown, password: unknown, device: unknown
   if (found === undefined || password !== found.password) {
     return refuse(401, "invalid_credentials");
   }
+  return challengeFor(found.email, device) ?? openSession(found, device);
+}
+
+/** Signs in an account whose password, and code when it has two-factor authentication on, were right. */
+export function signInChecked(email: string, device: unknown): Answer {
+  const found = account(email);
+  return found === undefined ? refuse(401, "challenge_expired") : openSession(found, device);
+}
+
+function openSession(found: FakeAccount, device: unknown): Answer {
   issued += 1;
   const token = `ocd_fake_web_token_${issued}`;
   const name = (device as { name?: unknown } | null)?.name;
@@ -207,16 +221,26 @@ export function routeSignedIn(method: string, path: string, body: Record<string,
   const session = token === null ? undefined : sessions.get(token);
   const a = session === undefined ? undefined : account(session.email);
   const key = `${method} ${path.replace(/\/(devices|invites)\/[^/]+/, "/$1/{id}")}`;
+  if (a !== undefined && token !== null) {
+    const answered = routeTwoFactor(key, body, { email: a.email, password: a.password, token });
+    if (answered !== undefined) {
+      return answered;
+    }
+  }
   const id = decodeURIComponent(path.split("/")[4] ?? "");
+  const own = token ?? "";
   const handlers: Record<string, (a: FakeAccount, current: string) => Answer> = {
-    "GET /api/v1/me": (x) => ({ status: 200, body: { account: wire(x) } }),
+    "GET /api/v1/me": (x) => ({ status: 200, body: { account: wire(x), two_factor: twoFactorOf(x.email, own) } }),
     "PATCH /api/v1/me": (x) => rename(x, body),
     "DELETE /api/v1/me": (x) => deleteAccount(x, body),
     "GET /api/v1/devices": devices,
     "DELETE /api/v1/devices/{id}": (x) => revoke(x, id),
     "DELETE /api/v1/auth/sessions/current": (x, current) => revoke(x, current),
     "POST /api/v1/auth/password": (x, current) => changePassword(x, body, current),
-    "GET /api/v1/invites": (x) => registry(x.invites, "invites"),
+    "GET /api/v1/invites": (x) => {
+      const needs = !twoFactorOf(x.email, own).this_session;
+      return registry(x.invites.map((invite) => ({ ...(invite as object), needs_two_factor: needs })), "invites");
+    },
     "GET /api/v1/servers": (x) => registry(x.servers, "servers"),
     "POST /api/v1/invites/{id}/decline": (x) => decline(x, id),
   };

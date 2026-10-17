@@ -43,13 +43,24 @@ function refusal(failure: ApiFailure): Message | null {
       return message("invites.tooManyCodes");
     case "cloud_off":
       return message("invites.unlinkedText");
+    // Invites with a code too are made only from a two-factor sign-in (`docs/architecture/server.md`, "Codes").
+    case "mfa_required":
+      return message("invites.mfaCodeText");
     default:
       return null;
   }
 }
 
 export type EmailState =
-  | { readonly view: "form"; readonly answer: number; readonly email: string; readonly error?: Message; readonly limited?: Message }
+  | {
+      readonly view: "form";
+      readonly answer: number;
+      readonly email: string;
+      readonly error?: Message;
+      readonly limited?: Message;
+      /** The server sends invites by email only for a sign-in through Orchester Cloud with two-factor authentication. */
+      readonly mfa?: true;
+    }
   | { readonly view: "sent"; readonly answer: number; readonly email: string; readonly expiresAt: number; readonly admin: boolean }
   /** This host could not reach the cloud: the page offers to send the signed invite from the browser. */
   | { readonly view: "browser"; readonly answer: number; readonly email: string; readonly signed: string }
@@ -61,6 +72,9 @@ async function made(options: CallOptions, form: FormData, email: string, answer:
     return { view: "form", answer, email, error: message("error.refused") };
   }
   const result = await createInvite({ ...target, delivery: "cloud", email }, options);
+  if (!result.ok && result.error.kind === "refused" && result.error.code === "mfa_required") {
+    return { view: "form", answer, email, mfa: true };
+  }
   if (!result.ok) {
     const limit = result.error.kind === "refused" && result.error.code === "rate_limited";
     const said = refusal(result.error) ?? (await failed(result.error));

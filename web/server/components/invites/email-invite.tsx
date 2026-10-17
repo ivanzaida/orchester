@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 
+import { ButtonLink } from "@orchester/ui/components/button";
 import { Callout } from "@orchester/ui/components/callout";
 import { Submit } from "@orchester/ui/components/submit";
 import { useCheckedForm } from "@orchester/ui/hooks/use-form";
@@ -60,7 +61,26 @@ function Answer({ state, props }: { state: EmailState; props: EmailInviteProps }
   if (state.view === "form" && state.limited !== undefined) {
     return <Callout tone="danger" icon="circle-alert" role="alert" title={t("invites.limitTitle")} body={<Say message={state.limited} />} />;
   }
+  if (state.view === "form" && state.mfa === true && props.reach.kind === "ready") {
+    return <TwoFactorNeeded cloud={props.reach.cloud} />;
+  }
   return null;
+}
+
+/**
+ * The server sends invites by email only for an admin signed in through Orchester Cloud with two-factor authentication
+ * (`403 mfa_required`): where to turn it on, and that this admin is then signed in to again.
+ */
+function TwoFactorNeeded({ cloud }: { cloud: string }) {
+  const open = (
+    <ButtonLink href={`${cloud}/account#security`} kind="secondary" row icon="shield">
+      {t("invites.mfaOpen")}
+    </ButtonLink>
+  );
+  return (
+    <Callout tone="warning" icon="shield-alert" role="alert" title={t("invites.mfaTitle")} body={t("invites.mfaText")}
+      action={open} />
+  );
 }
 
 function Unavailable({ reach, server }: { reach: EmailReach; server: string }) {

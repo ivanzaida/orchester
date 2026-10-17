@@ -36,6 +36,8 @@ fn join(served: &Served, services: &Services, server: &TestServer) {
     code: server.code_for("bohdan", true),
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
+    // The setup code, which needs no two-factor identity.
+    proof: None,
   };
   served
     .data

@@ -401,17 +401,18 @@ async fn declined_stays_declined(cloud: &TestCloud, dana: &str, (server, id): (&
   assert_eq!(cloud.request("POST", "/invites", None, Some(again)).await.status, 202);
   let listed: CloudInvites = cloud.request("GET", "/invites", Some(dana), None).await.json();
   assert!(listed.invites.is_empty(), "declined stays declined");
-  let accept = json!({"audience": server.id, "invite": id});
-  let token = cloud
-    .request("POST", "/identity-tokens", Some(dana), Some(accept))
-    .await;
-  assert_eq!(token.status, 404, "a declined invite issues no token");
   cloud.mail.nth("dana@example.test", 2).await;
   assert_eq!(
     cloud.mail.count("dana@example.test"),
     2,
     "the confirmation and one invite: delivering it again emails nothing"
   );
+  cloud.enable_two_factor(dana).await;
+  let accept = json!({"audience": server.id, "invite": id});
+  let token = cloud
+    .request("POST", "/identity-tokens", Some(dana), Some(accept))
+    .await;
+  assert_eq!(token.status, 404, "a declined invite issues no token");
 }
 
 pub(crate) async fn deliver(cloud: &TestCloud, invite: &str, from: &str) -> crate::support::http::Response {

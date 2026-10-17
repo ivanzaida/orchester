@@ -82,6 +82,7 @@ pub(super) fn asking(kept: AcceptedInvite, asker: Asker) -> AcceptedInvite {
     asks: kept.asks + 1,
     checks,
     next_check_at: None,
+    needs_code: false,
     ..kept
   }
 }

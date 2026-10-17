@@ -2,8 +2,13 @@
 
 The cloud's browser face (`docs/architecture/server.md`, "The cloud's web front"): sign-up, check your email,
 the confirmation landing, sign-in, forgot password and reset password, in the Pencil design (`data/orchester2.pen`,
-layer **Cloud**). Next.js App Router, rendered on the server; the browser only posts forms to server actions, and
+layer **Cloud**), and the Account page. The two-factor code step (`/signin/code`) and the Account page's *Security*
+have no drawn design yet and follow the pages beside them. Next.js App Router, rendered on the server; the browser only posts forms to server actions, and
 only the web server calls the cloud's API.
+
+Besides Next.js and React it depends on `qrcode-generator` (MIT, no dependencies of its own), which draws the QR
+code of the two-factor setup's `otpauth://` link on the server side as one SVG path: a QR encoder (Reed-Solomon error
+correction, masks, versions) is not a few lines of code. The page needs no script for it.
 
 ## Configuration
 
@@ -45,6 +50,11 @@ Open `http://localhost:4100` (not `127.0.0.1`: the address must match `ORCHESTER
 | --- | --- |
 | Sign in `mira.koval@example.com` / `correct horse battery` | Signed in: the full Account page (2 invites, 2 servers, 3 devices; a third invite, of kind `account`, is left out as the frames have no row for it) |
 | Sign in `new.account@example.com` / `correct horse battery` | A new account: no invites, no servers, one browser |
+| Sign in `two.factor@example.com` / `correct horse battery` | Two-factor authentication on: the code step (`/signin/code`) |
+| A two-factor code `123456` | Right, whenever one is asked (sign-in, *Turn on*, *Turn off*, new recovery codes, *Verify*) |
+| The recovery code `abcde-fghjk` | Right once per account; `000000` and any other code `401 invalid_code`, `999999` `429` |
+| *Turn on* with `correct horse battery` | The QR code and key; then `123456` turns it on and shows ten recovery codes |
+| `POST /__fake/two-factor-on?email=…` | Turns it on for that account from "another device", so this browser's session is not a two-factor one |
 | *Current password* other than `correct horse battery` | `401`: the current password is not right |
 | *Delete account* with `correct horse battery` | The account is deleted and signs in no more; any other password `401` |
 | Sign in with any other password or address | `401 invalid_credentials` |

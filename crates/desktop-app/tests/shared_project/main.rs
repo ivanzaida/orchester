@@ -65,6 +65,7 @@ fn join(window: &Window, server: &TestServer, kontur: &SharedProject, (username,
     code,
     username: Some(username.into()),
     display_name: Some(name.into()),
+    proof: Some(server.code_proof(username)),
   };
   block_on(
     window,

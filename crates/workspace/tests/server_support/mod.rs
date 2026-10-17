@@ -6,12 +6,18 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+mod joins;
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the tests' one cloud key, loaded by every support module that signs for it, whichever of them a test binary includes"
+)]
+pub mod test_cloud;
 mod tls;
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
-  CodeJoin, Credential, SharedProject, UserChanges,
+  Credential, SharedProject, UserChanges,
   certificate::CertificatePin,
   client::{Client, PlainHttp, ServerAddress},
 };
@@ -131,6 +137,11 @@ impl TestServer {
     );
   }
 
+  /// The server's data directory.
+  fn data_dir(&self) -> &std::path::Path {
+    self._directory.path()
+  }
+
   /// The address as a person types it.
   pub fn url(&self) -> String {
     let scheme = if self.tls { "https" } else { "http" };
@@ -159,41 +170,6 @@ impl TestServer {
       &json!({"kind":"server","delivery":"code","admin":admin}),
     );
     Credential::new(invite["code"].as_str().expect("invite code").into())
-  }
-
-  /// The account `username` joined on a test computer; returns that device's token. API 3 has no passwords: the
-  /// frozen `crates/desktop`'s tests use this name for what a first password was.
-  pub fn create_user(&self, username: &str, display_name: &str, admin: bool) -> Credential {
-    let code = self.code_for(username, admin);
-    let client = self.client();
-    let joined = self
-      .block_on(client.join_with_code(&CodeJoin {
-        code,
-        device: "test computer".into(),
-        username: Some(username.into()),
-        display_name: Some(display_name.into()),
-        kind: orchester_api::DeviceKind::App,
-      }))
-      .expect("join with a code");
-    joined.token
-  }
-
-  /// Another device of `username`, joined with an account code from the host: that device's token.
-  pub fn device_of(&self, username: &str) -> SecretValue {
-    let code = self
-      .block_on(self.server.host_account_code(username.into()))
-      .expect("account code");
-    let client = self.client();
-    let joined = self
-      .block_on(client.join_with_code(&CodeJoin {
-        code,
-        device: "BUILD-02 · Windows".into(),
-        username: None,
-        display_name: None,
-        kind: orchester_api::DeviceKind::App,
-      }))
-      .expect("join with an account code");
-    SecretValue::new(joined.token.expose().to_owned()).expect("a token")
   }
 
   /// Another computer of `username` (the passwords stand for nothing since API 3); returns its device token.
@@ -413,7 +389,7 @@ impl TestServer {
     invite["invite"]["id"].as_str().expect("invite id").to_owned()
   }
 
-  fn client(&self) -> Client {
+  pub fn client(&self) -> Client {
     if let Some(pin) = self.pin {
       return Client::pinned(ServerAddress::parse(&self.url()).expect("address"), pin).expect("client");
     }
@@ -467,6 +443,8 @@ impl TestServer {
       match token {
         Some(token) => token,
         None => {
+          // A first admin who joined elsewhere than `create_user`: another device of theirs, joined with an account
+          // code and a two-factor identity ([`Self::code_proof`]), as inviting needs.
           let token = self.device_of(&username.expect("the first admin joined"));
           self.admin.lock().1 = Some(token.expose().to_owned());
           token.expose().to_owned()

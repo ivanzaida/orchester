@@ -10,13 +10,17 @@ mod schedule;
 
 use std::fmt;
 
+pub(crate) use issue::TokenUse;
 use orchester_api::{
   Credential,
   identity::{CLOCK_SKEW_SECS, KEY_LISTED_AFTER_SECS, KEY_SIGNS_SECS, PrivateKey},
 };
-use ring::aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey};
+use ring::{
+  aead::{AES_256_GCM, Aad, LessSafeKey, NONCE_LEN, Nonce, UnboundKey},
+  hmac,
+};
 pub(crate) use root::open as open_root;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroizing;
 
 use crate::{clock::DAY_MS, error::CloudError, tokens::random_bytes};
 
@@ -52,6 +56,18 @@ pub(crate) fn key_encryption_key(key: &Credential) -> Result<Zeroizing<Vec<u8>>,
     .map_err(|_| invalid_key())
 }
 
+/// A key of its own for one use of the key-encryption key (HKDF-SHA256 with `info`), apart from sealing: the people's
+/// key, the recovery codes' key.
+pub(crate) fn derived_key(key: &Credential, info: &[u8]) -> Result<hmac::Key, CloudError> {
+  let bytes = key_encryption_key(key)?;
+  let extracted = ring::hkdf::Salt::new(ring::hkdf::HKDF_SHA256, &[]).extract(&bytes);
+  let info = [info];
+  let derived = extracted
+    .expand(&info, hmac::HMAC_SHA256)
+    .map_err(|_| CloudError::Configuration("a key cannot be derived from the key-encryption key"))?;
+  Ok(hmac::Key::from(derived))
+}
+
 const fn invalid_key() -> CloudError {
   CloudError::Configuration("ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY must be 64 hex characters")
 }
@@ -67,11 +83,24 @@ impl KeySealing {
     Ok(Self(LessSafeKey::new(key)))
   }
 
-  /// A fresh random nonce, then the ciphertext and tag; the key's label (a signing key's kid) is bound as associated
-  /// data.
+  /// The private half, sealed under the key's label (a signing key's kid).
   fn seal(&self, label: &str, private: &PrivateKey) -> Result<Vec<u8>, CloudError> {
+    self.seal_bytes(label, private.pkcs8())
+  }
+
+  /// `StoredData` for a blob too short to be sealed at all; `KeyEncryption` when the key-encryption key does not open
+  /// it (another key, or a blob changed after sealing).
+  fn open(&self, label: &str, stored: &[u8]) -> Result<PrivateKey, CloudError> {
+    let opened = self.open_bytes(label, stored)?;
+    // The `PrivateKey` wipes its own copy; `opened` wipes itself.
+    Ok(PrivateKey::from_pkcs8(opened.to_vec()))
+  }
+
+  /// A fresh random nonce, then the ciphertext and tag, with `label` bound as associated data: a key's, or a
+  /// two-factor secret bound to its account.
+  pub(crate) fn seal_bytes(&self, label: &str, secret: &[u8]) -> Result<Vec<u8>, CloudError> {
     let nonce = random_bytes::<NONCE_LEN>()?;
-    let mut sealed = private.pkcs8().to_vec();
+    let mut sealed = secret.to_vec();
     self
       .0
       .seal_in_place_append_tag(
@@ -85,23 +114,22 @@ impl KeySealing {
     Ok(stored)
   }
 
-  /// `StoredData` for a blob too short to be sealed at all; `KeyEncryption` when the key-encryption key does not open
-  /// it (another key, or a blob changed after sealing).
-  fn open(&self, label: &str, stored: &[u8]) -> Result<PrivateKey, CloudError> {
+  /// What `seal_bytes` sealed under `label`, wiped when dropped. `StoredData` for a blob too short to be sealed at
+  /// all; `KeyEncryption` when the key-encryption key does not open it (another key, or a blob changed after sealing).
+  pub(crate) fn open_bytes(&self, label: &str, stored: &[u8]) -> Result<Zeroizing<Vec<u8>>, CloudError> {
     if stored.len() <= NONCE_LEN + AES_256_GCM.tag_len() {
       return Err(CloudError::StoredData);
     }
     let (nonce, sealed) = stored.split_at(NONCE_LEN);
     let nonce = Nonce::try_assume_unique_for_key(nonce).map_err(|_| CloudError::StoredData)?;
-    let mut buffer = sealed.to_vec();
-    let opened = self
+    let mut buffer = Zeroizing::new(sealed.to_vec());
+    let length = self
       .0
-      .open_in_place(nonce, Aad::from(label.as_bytes()), &mut buffer)
-      .map_err(|_| CloudError::KeyEncryption)?;
-    let private = PrivateKey::from_pkcs8(opened.to_vec());
-    // The `PrivateKey` wipes its own copy; the scratch buffer is wiped here.
-    buffer.zeroize();
-    Ok(private)
+      .open_in_place(nonce, Aad::from(label.as_bytes()), &mut buffer[..])
+      .map_err(|_| CloudError::KeyEncryption)?
+      .len();
+    buffer.truncate(length);
+    Ok(buffer)
   }
 }
 

@@ -20,6 +20,8 @@ mod certificate;
 mod cloud;
 #[path = "accounts/cloud_accounts.rs"]
 mod cloud_accounts;
+#[path = "accounts/code_identity.rs"]
+mod code_identity;
 #[path = "accounts/codes.rs"]
 mod codes;
 #[path = "accounts/configuration.rs"]
@@ -48,3 +50,5 @@ mod security;
 mod server_identity;
 #[path = "accounts/transport.rs"]
 mod transport;
+#[path = "accounts/two_factor.rs"]
+mod two_factor;

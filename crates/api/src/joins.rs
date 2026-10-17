@@ -33,6 +33,13 @@ pub struct CodeJoin {
   /// `admin_web` for a sign-in to the server admin: with a setup, pairing or account code.
   #[serde(default)]
   pub kind: DeviceKind,
+  /// An app's Orchester Cloud identity token for this server (no purpose), whose `mfa` claim shows its person signed
+  /// in with two-factor authentication: every code but the setup code needs it in the app.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub identity_token: Option<Credential>,
+  /// The newest key set the app carries from the cloud, for a server that cannot reach the cloud itself.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub key_set: Option<String>,
 }
 
 /// `POST /auth/setup`: whether `code` is the server's open setup code, without using it up. The server admin asks

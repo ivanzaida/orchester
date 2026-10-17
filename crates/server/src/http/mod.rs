@@ -76,6 +76,7 @@ fn api(server: &Server) -> Router<Server> {
     .route("/admin/users", get(admin::users))
     .route("/admin/users/{id}", axum::routing::patch(admin::update))
     .route("/admin/users/{id}/sessions", delete(admin::revoke))
+    .route("/admin/users/{id}/cloud", delete(admin::unlink_cloud))
     .route("/admin/sessions", get(admin::sessions))
     .route("/admin/sessions/{id}", delete(admin::revoke_session))
     .route("/admin/browsers", get(admin::browsers))
@@ -91,6 +92,7 @@ fn api(server: &Server) -> Router<Server> {
     .route_layer(middleware::from_fn_with_state(server.clone(), authenticated));
   protected
     .route("/server", get(info))
+    .route("/server/key-proof", post(cloud::key_proof))
     .route("/auth/setup", post(auth::check_setup))
     .route("/auth/code", post(auth::join_with_code))
     .route("/auth/cloud", post(auth::join_with_cloud))

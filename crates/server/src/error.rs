@@ -196,6 +196,18 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
       StatusCode::FORBIDDEN,
       "Join approval is on: sign in to the admin with a code from one of your computers",
     ),
+    ErrorCode::MfaRequired => (
+      StatusCode::FORBIDDEN,
+      "Turn on two-factor authentication in Orchester Cloud and sign in with it to send invites",
+    ),
+    ErrorCode::MfaUnverifiable => (
+      StatusCode::FORBIDDEN,
+      "This server cannot check two-factor authentication: its admin pins Orchester Cloud's root key or links it",
+    ),
+    ErrorCode::AccountExists => (
+      StatusCode::CONFLICT,
+      "This Orchester Cloud identity has an account on this server already",
+    ),
     ErrorCode::NothingToManage => (StatusCode::FORBIDDEN, "The account is not an admin and owns no project"),
     ErrorCode::KeySetStale => (
       StatusCode::CONFLICT,

@@ -30,6 +30,10 @@ pub struct IdentityClaims {
   /// A team server accepts a token only for the use it was issued for.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub purpose: Option<TokenPurpose>,
+  /// The cloud device the token was issued to signed in with two-factor authentication, or turned it on itself.
+  /// Absent means not: a team server lets an admin send invites by email, and admits an invite's token, only with it.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub mfa: bool,
   /// Unique per token; a team server accepts each once.
   pub jti: String,
   pub iat: i64,
@@ -46,6 +50,7 @@ pub struct TokenSubject {
   pub device: DeviceInfo,
   pub invite: Option<String>,
   pub purpose: Option<TokenPurpose>,
+  pub mfa: bool,
 }
 
 impl IdentityClaims {
@@ -63,6 +68,7 @@ impl IdentityClaims {
       device: subject.device,
       invite: subject.invite,
       purpose: subject.purpose,
+      mfa: subject.mfa,
       jti: jws::encode(&jti),
       iat: now,
       exp: now + TOKEN_LIFETIME_SECS,

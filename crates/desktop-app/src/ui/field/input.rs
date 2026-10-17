@@ -435,24 +435,27 @@ impl FieldBox {
   fn input(&self, ctx: &Ctx, props: &FieldInput) -> TextInput {
     let theme = ctx.theme();
     let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
-    let value = if props.masked {
+    // A masked value takes the credential's type unless its design names another (a recovery code's, `JQkW2`).
+    let value = props.text_style.unwrap_or(if props.masked {
       SecretsText::Credential.role()
+    } else if props.mono {
+      TypographyStyle::Mono
     } else {
-      props.text_style.unwrap_or(if props.mono {
-        TypographyStyle::Mono
-      } else {
-        TypographyStyle::Description
-      })
-    };
+      TypographyStyle::Description
+    });
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let color = if props.locked {
       PaletteColor::TextSecondary
     } else {
       PaletteColor::TextPrimary
     };
-    let mut input = TextInput::styled(props.value.clone(), resolve(value, color))
+    let shown = resolve(value, color);
+    let tracking = shown.letter_spacing;
+    let mut input = TextInput::styled(props.value.clone(), shown)
       // A mono field's placeholder reads in its own type (`The worktree` in `M20DGB`).
       .placeholder_style(resolve(value, PaletteColor::TextMuted))
+      // The input takes the role's tracking only on its own, after the styles (a two-factor code's 2, `JQkW2`).
+      .letter_spacing(tracking)
       .caret_color(PaletteColor::TextPrimary)
       .id(props.id.to_string())
       .describe("a11y_name", props.name.clone())

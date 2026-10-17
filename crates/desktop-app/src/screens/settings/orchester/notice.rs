@@ -2,21 +2,27 @@
 //! invited the person to what, with *Decline* (asked in place) and *Accept*, the same answers as Settings ›
 //! Orchester › Invites; more than one invite says how many and opens that tab. All projects keeps the notice's reads
 //! and answers and puts the notice in its page only while it has something to show, so an empty notice takes no
-//! room in the page's spaced column (`S5HDKf`) and an answer under way outlives the notice.
+//! room in the page's spaced column (`S5HDKf`) and an answer under way outlives the notice. An invite that needs
+//! two-factor authentication says why under its line and offers the step that fixes it (`qwDH9` cells 2 and 4,
+//! [`super::two_factor`]); few recovery codes left after a sign-in with one are said here too.
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, RadiusSize, SpacingSize},
+    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_api::cloud::CloudInvite;
+use orchester_api::cloud::{CloudInvite, TwoFactorStatus};
 use orchester_core::time::Timestamp;
 
-use super::{Invites, follow, invites, words::day};
+use super::{
+  Invites, Waiting, follow, invites,
+  two_factor::{self, Need},
+  words::day,
+};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterPanel, OrchesterView, Route},
@@ -41,24 +47,33 @@ impl InvitesNotice {
     }
   }
 
-  /// The invites waiting for the cloud account, read again when a server's connection or the account changes. The
-  /// page asks for them in every render, before what it asks only sometimes: lurq keeps a component's futures by the
-  /// order it asks for them.
-  pub fn read(ctx: &mut Ctx) -> Invites {
+  /// The invites waiting for the cloud account and its two-factor authentication, read again when a server's
+  /// connection or the account changes. The page asks for them in every render, before what it asks only sometimes:
+  /// lurq keeps a component's futures by the order it asks for them.
+  pub fn read(ctx: &mut Ctx) -> Waiting {
     let services = Services::of(ctx);
     let revision = follow(ctx, (&services.servers, &services.cloud));
     let account = account(ctx, revision);
-    super::invites(ctx, revision, &services.cloud, account.as_ref())
+    let invites = super::invites(ctx, revision, &services.cloud, account.as_ref());
+    let two_factor = two_factor::read(ctx, revision, &services.cloud, account.as_ref());
+    Waiting { invites, two_factor }
   }
 
-  /// The notice for `listed`: what answering an invite came to, then the waiting invite or how many wait; `None` when
-  /// there is nothing to show.
-  pub fn notice(&self, ctx: &mut Ctx, listed: &Invites) -> Option<Element> {
-    let mut parts = invites::outcome(ctx, &self.answers, true);
-    if let Invites::Listed(waiting) = listed {
-      match waiting.as_slice() {
+  /// The notice for `waiting`: few recovery codes left, what answering an invite came to, then the waiting invite or
+  /// how many wait; `None` when there is nothing to show.
+  pub fn notice(&self, ctx: &mut Ctx, waiting: &Waiting) -> Option<Element> {
+    let mut parts: Vec<Element> = two_factor::recovery_warning(
+      ctx,
+      "all-projects-recovery",
+      (waiting.two_factor.as_ref(), &self.answers),
+    )
+    .into_iter()
+    .collect();
+    parts.extend(invites::outcome(ctx, &self.answers, true));
+    if let Invites::Listed(listed) = &waiting.invites {
+      match listed.as_slice() {
         [] => {}
-        [invite] => parts.push(self.one(ctx, invite)),
+        [invite] => parts.push(self.one(ctx, invite, waiting.two_factor.as_ref())),
         several => parts.push(many(ctx, several.len())),
       }
     }
@@ -74,8 +89,10 @@ impl InvitesNotice {
 
   /// The notice (`All projects notice` `p4WXZT`): a 16 `info` mail icon centred beside who invited the person to
   /// what in 13/600 and, 3 under it, the role, the address and the expiry in 12.5 `text_secondary`, with *Decline*
-  /// and *Accept* at the end; `info_muted`, radius 10, 12 over and under and 14 at its sides, no stroke.
-  fn one(&self, ctx: &mut Ctx, invite: &CloudInvite) -> Element {
+  /// and *Accept* at the end; `info_muted`, radius 10, 12 over and under and 14 at its sides, no stroke. While it needs
+  /// two-factor authentication, why is under its second line and the step that fixes it takes *Accept*'s place; after
+  /// a refused accept, *Sign in again to accept* follows it with its buttons.
+  fn one(&self, ctx: &mut Ctx, invite: &CloudInvite, status: Option<&TwoFactorStatus>) -> Element {
     let id = format!("all-projects-invite-{}", invite.id);
     let address = invite
       .project
@@ -95,6 +112,7 @@ impl InvitesNotice {
       ],
     );
     let declining = self.answers.declining.get().0 == Some(invite.id);
+    let need = two_factor::need((invite.id, invite.needs_two_factor), status, &self.answers);
     let text = Column::new()
       .id(format!("{id}-text"))
       .flex(1.0)
@@ -111,7 +129,8 @@ impl InvitesNotice {
           .id(format!("{id}-body"))
           .variant(ExtraTypography::Lead.role())
           .width(Dimension::Pct(100.0)),
-      );
+      )
+      .with_children(two_factor::reason(ctx, &id, need));
     let notice = Row::new()
       .id(id.clone())
       .width(Dimension::Pct(100.0))
@@ -122,27 +141,63 @@ impl InvitesNotice {
       .rounded(RadiusSize::Lg)
       .child(icon(Icon::Mail, IconSize::Lg, PaletteColor::Info).id(format!("{id}-icon")))
       .child(text)
-      .with_children((!declining).then(|| self.buttons(ctx, &id, invite)));
+      .with_children((!declining && need != Need::Refused).then(|| self.buttons(ctx, &id, invite, need)));
     let mut column = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Section.role())
       .child(notice)
-      .with_children(self.answers.person.reason(ctx, &format!("{id}-accept")));
+      .with_children(self.refused(ctx, &id, invite, need))
+      .with_children(note(ctx, &id, need))
+      .with_children(self.answers.person.reason(ctx, &format!("{id}-accept")))
+      .with_children(self.answers.person.reason(ctx, &format!("{id}-sign-in-again")))
+      .with_children(self.answers.person.reason(ctx, &format!("{id}-turn-on")));
     if declining {
       column = column.child(invites::decline_question(ctx, &id, invite, &self.answers));
     }
     column.into()
   }
 
-  /// *Decline*, asked in place, and *Accept*.
-  fn buttons(&self, ctx: &Ctx, id: &str, invite: &CloudInvite) -> Row {
-    let (declining, invite_id) = (self.answers.declining.clone(), invite.id);
-    let decline = ActionButton::new(
-      format!("{id}-decline"),
-      ButtonKind::Ghost,
-      ctx.t("cloud.invites.decline"),
-    )
-    .on_click(move || declining.set(invites::Asked(Some(invite_id))));
+  /// *Sign in again to accept* after a refused accept, with *Sign in again* and *Not now* (`qwDH9` cell 4).
+  fn refused(&self, ctx: &Ctx, id: &str, invite: &CloudInvite, need: Need) -> Vec<Element> {
+    if need != Need::Refused {
+      return Vec::new();
+    }
+    vec![
+      two_factor::refused(ctx, id),
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(two_factor::sign_in_again(
+          ctx,
+          id,
+          two_factor::invite_to(invite),
+          &self.answers,
+        ))
+        .child(two_factor::not_now(ctx, id, invite, &self.answers))
+        .into(),
+    ]
+  }
+
+  /// *Decline*, asked in place, and *Accept*, or the step two-factor authentication needs in its place.
+  fn buttons(&self, ctx: &mut Ctx, id: &str, invite: &CloudInvite, need: Need) -> Row {
+    let decline = two_factor::decline(ctx, id, invite, &self.answers);
+    let row = Row::new()
+      .flex_shrink(0.0)
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(decline);
+    match need {
+      Need::TurnOn => return row.child(two_factor::turn_on(ctx, id, &self.answers)),
+      Need::SignInAgain | Need::Refused => {
+        return row.child(two_factor::sign_in_again(
+          ctx,
+          id,
+          two_factor::invite_to(invite),
+          &self.answers,
+        ));
+      }
+      Need::Accept => {}
+    }
     let accept = ActionButton::new(
       format!("{id}-accept"),
       ButtonKind::Primary,
@@ -155,13 +210,24 @@ impl InvitesNotice {
       let (answers, invite, button) = (self.answers.clone(), invite.clone(), format!("{id}-accept"));
       accept.on_click(move || answers.accept(&button, &invite))
     };
-    Row::new()
-      .flex_shrink(0.0)
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(decline)
-      .child(accept)
+    row.child(accept)
   }
+}
+
+/// What the step two-factor authentication needs does, under the notice.
+fn note(ctx: &Ctx, id: &str, need: Need) -> Option<Element> {
+  let key = match need {
+    Need::Accept => return None,
+    Need::TurnOn => "cloud.notice.twoFactor.turnOnNote",
+    Need::SignInAgain | Need::Refused => "cloud.notice.twoFactor.signInNote",
+  };
+  Some(
+    Text::new(&ctx.t(key))
+      .id(format!("{id}-two-factor-note"))
+      .variant(TypographyStyle::Description)
+      .width(Dimension::Pct(100.0))
+      .into(),
+  )
 }
 
 /// *3 invites wait for you* with *Review*, which opens Settings › Orchester › Invites.

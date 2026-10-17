@@ -14,13 +14,15 @@ use crate::{
 
 impl Cloud {
   /// Changes the password with the current one and signs out the account's other devices. Failed current passwords
-  /// count against the account as sign-in failures count against an email.
+  /// count against the account as sign-in failures count against an email. With two-factor authentication on, only a
+  /// two-factor session changes it.
   pub(crate) async fn change_password(
     &self,
     auth: Authenticated,
     input: PasswordChange,
     address: IpAddr,
   ) -> Result<(), CloudError> {
+    super::require_session_when_on(&self.inner.db.client().await?, auth.device).await?;
     let attempt = self.inner.limits.sign_in.password(auth.account, self.now())?;
     let previous = account(&self.inner.db.client().await?, auth.account).await?.hash;
     let (verified, attempt) = self

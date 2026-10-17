@@ -22,6 +22,15 @@ export function updatePerson(id: string, changes: { admin?: boolean; disabled?: 
   return call("PATCH", `/admin/users/${encodeURIComponent(id)}`, { body: changes, expected: 200, read }, options);
 }
 
+/** Ends the account's link to its Orchester Cloud identity (`DELETE /admin/users/{id}/cloud`); its computers stay. */
+export function unlinkPerson(id: string, options: CallOptions): Promise<ApiResult<true>> {
+  if (!isId(id)) {
+    return Promise.resolve(NOT_AN_ID);
+  }
+  const read = (json: unknown) => (field(json, "user", readUser) === null ? null : true);
+  return call("DELETE", `/admin/users/${encodeURIComponent(id)}/cloud`, { expected: 200, read }, options);
+}
+
 const VIAS = new Set<unknown>(["cloud", "code", "before_3"]);
 
 function readDevice(json: unknown): Device | null {

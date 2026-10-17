@@ -9,7 +9,7 @@ pub const SIGN_IN_STATE: &str = "sign_in_state";
 const DESCRIPTION: &str = "Whether Orchester is signed in to Orchester Cloud on this computer. While it is not, the \
   window shows only the sign-in and every other tool answers sign_in_required; only a person signs in, in the window, \
   never over MCP. Answers `signed_in`, and while signed out `reason`: why the last sign-in here ended (revoked, \
-  password_reset, account_deleted, signed_out, other), or null on a computer never signed in. No email, no token.";
+  password_reset, account_deleted, signed_out, two_factor to sign in again with a code, other), or null on a computer never signed in. No email, no token.";
 
 pub fn tool(cloud: Cloud) -> McpTool {
   McpTool::new(SIGN_IN_STATE)
@@ -40,6 +40,7 @@ const fn reason(end: CloudSignInEnd) -> &'static str {
     CloudSignInEnd::PasswordReset => "password_reset",
     CloudSignInEnd::AccountDeleted => "account_deleted",
     CloudSignInEnd::SignedOut => "signed_out",
+    CloudSignInEnd::TwoFactor => "two_factor",
     CloudSignInEnd::Other => "other",
   }
 }

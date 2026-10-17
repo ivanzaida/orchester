@@ -54,7 +54,7 @@ async fn s1c_setup_code_needs_a_username_and_keeps_the_code_on_a_refusal() {
     .await
     .expect("setup")
     .expect("no admin yet");
-  assert_eq!(server.redeem(&code, None, "laptop").await.status, 422);
+  assert_eq!(server.redeem_with(&code, None, "laptop", None).await.status, 422);
   assert_eq!(server.redeem(&code, Some("not a name"), "laptop").await.status, 422);
   let blank = server
     .request(
@@ -133,9 +133,9 @@ async fn s1c_an_account_holds_three_open_pairing_codes_which_expire_after_ten_mi
   assert_eq!(fourth.status, 429);
   assert!(fourth.headers.contains_key("retry-after"));
   assert_eq!(codes[0].expires_at, server.clock.now_ms() + 10 * 60 * 1000);
-  server.join(&codes[0].code, None, "phone").await;
+  server.join_as(&codes[0].code, "alice", "phone").await;
   server.clock.advance(10 * 60 * 1000);
-  assert_eq!(server.redeem(&codes[1].code, None, "tablet").await.status, 401);
+  assert_eq!(server.redeem_as(&codes[1].code, "alice", "tablet").await.status, 401);
   assert_eq!(
     server
       .request("POST", "/auth/pairings", Some(&admin.token), None)

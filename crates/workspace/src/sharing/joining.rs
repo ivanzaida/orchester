@@ -10,7 +10,7 @@ use orchester_api::{
   cloud::CloudServer,
 };
 use orchester_core::{
-  id::{ApprovalId, CloudAccountId, InviteId, ServerId},
+  id::{ApprovalId, CloudAccountId, InviteId, ServerId, TeamServerId},
   secret::SecretValue,
   time::Timestamp,
 };
@@ -20,10 +20,20 @@ use super::{ServerEntry, Servers, SharingError, account::account, device, trust:
 use crate::background;
 
 /// What a code redeems; `username` and `display_name` only when the code makes an account (setup and invite codes).
+/// `proof` shows the person signed in with two-factor authentication, which every code but the setup code needs.
 pub struct CodeRequest {
   pub code: Credential,
   pub username: Option<String>,
   pub display_name: Option<String>,
+  pub proof: Option<CodeProof>,
+}
+
+/// This computer's Orchester Cloud identity token for the server, whose `mfa` claim shows it signed in with two-factor
+/// authentication, and the key set that vouches for it, for a server that cannot reach the cloud
+/// (`docs/architecture/server.md`, "Codes").
+pub struct CodeProof {
+  pub identity_token: Credential,
+  pub key_set: Option<String>,
 }
 
 /// How a cloud join ended.
@@ -48,7 +58,7 @@ pub struct CloudIdentity<'a> {
 
 impl Servers {
   /// Joins the team server at `address`, trusted as `trust`, with a code, and keeps the device token. The server is
-  /// added to the list when it is not in it yet.
+  /// added to the list of the account signed in now when it is not in it yet.
   pub async fn join_with_code(
     &self,
     address: &ServerAddress,
@@ -56,9 +66,24 @@ impl Servers {
     request: CodeRequest,
   ) -> Result<ServerId, SharingError> {
     let owner = self.joining_account().await?;
+    self.join_with_code_for(address, trust, request, owner).await
+  }
+
+  /// [`Self::join_with_code`] for the cloud account `owner`, read from the same stored sign-in that asked for the
+  /// code's proof: the server goes into its list, whoever is signed in once the join finished, as a cloud join's does.
+  pub(crate) async fn join_with_code_for(
+    &self,
+    address: &ServerAddress,
+    trust: Trust,
+    request: CodeRequest,
+    owner: Option<CloudAccountId>,
+  ) -> Result<ServerId, SharingError> {
     let client = trust.client(address.clone())?;
     // The certificate is checked by this first request, before the code is sent.
     let name = client.server_info().await.map_err(|error| trust.refusal(error))?.name;
+    let (identity_token, key_set) = request
+      .proof
+      .map_or((None, None), |proof| (Some(proof.identity_token), proof.key_set));
     let joined = client
       .join_with_code(&CodeJoin {
         code: request.code,
@@ -66,11 +91,53 @@ impl Servers {
         username: request.username,
         display_name: request.display_name,
         kind: DeviceKind::App,
+        identity_token,
+        key_set,
       })
       .await?;
     self
       .keep_join((address, owner), (trust, JoinedWith::Code), name, joined)
       .await
+  }
+
+  /// What a code needs from the cloud for the server at `address`: `None` when the server pins no cloud root and so
+  /// cannot check it (it then takes only its setup code), or is from before two-factor authentication and takes a code
+  /// alone. Otherwise the account must have two-factor authentication on
+  /// and this computer must have signed in with it, checked before the code is sent ([`SharingError::TwoFactorOff`],
+  /// [`SharingError::TwoFactorSession`]). The server's certificate is checked first, before anything of the cloud.
+  ///
+  /// The token is for codes only (purpose `code`), and asked for only after the server proved it holds the key whose
+  /// id it gives itself on this connection ([`super::server_key::proven`]).
+  pub async fn code_proof(
+    &self,
+    address: &ServerAddress,
+    trust: Trust,
+    identity: CloudIdentity<'_>,
+  ) -> Result<Option<CodeProof>, SharingError> {
+    let client = trust.client(address.clone())?;
+    let info = client.server_info().await.map_err(|error| trust.refusal(error))?;
+    // A server from before two-factor authentication takes the code alone, and would refuse the token's fields.
+    let Some(said) = info
+      .cloud
+      .filter(|cloud| cloud.codes_need_two_factor)
+      .and_then(|cloud| cloud.server.parse::<TeamServerId>().ok())
+    else {
+      return Ok(None);
+    };
+    let two_factor = identity.cloud.me(identity.device).await?.two_factor;
+    if !two_factor.enabled {
+      return Err(SharingError::TwoFactorOff);
+    }
+    if !two_factor.this_session {
+      return Err(SharingError::TwoFactorSession);
+    }
+    super::server_key::proven(&client, said).await?;
+    let key_set = identity.cloud.key_set().await?.key_set;
+    let issued = identity.cloud.code_token(identity.device, said).await?;
+    Ok(Some(CodeProof {
+      identity_token: issued.identity_token,
+      key_set: Some(key_set),
+    }))
   }
 
   /// Joins `server`, as Orchester Cloud names it, with a cloud identity: at the address the cloud has for it and

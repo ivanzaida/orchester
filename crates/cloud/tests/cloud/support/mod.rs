@@ -4,6 +4,7 @@ pub mod log;
 pub mod mailer;
 pub mod postgres;
 pub mod relay;
+pub mod two_factor;
 
 use std::{
   net::SocketAddr,

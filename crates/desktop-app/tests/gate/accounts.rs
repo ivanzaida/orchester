@@ -77,6 +77,8 @@ fn gate_another_account_sees_none_of_the_first_accounts_servers() {
     code: server.code_for("bohdan", true),
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
+    // The setup code, which needs no two-factor identity.
+    proof: None,
   };
   let kontur = window
     .data

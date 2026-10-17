@@ -34,6 +34,34 @@
       "body": "Orchester Cloud can't be reached from this computer. Connect to the internet, then sign in. After this first sign-in, Orchester works offline.",
       "when": "{{host}} didn't answer · {{time}}"
     },
+    "code": {
+      "eyebrow": "TWO-FACTOR AUTHENTICATION",
+      "title": "Enter your code",
+      "lead": "Your account has two-factor authentication on. Enter the 6-digit code from your authenticator app.",
+      "recoveryTitle": "Enter a recovery code",
+      "recoveryLead": "Use one of the recovery codes you saved when you turned on two-factor. Each code works once.",
+      "passwordAccepted": "Password accepted",
+      "label": "6-digit code",
+      "placeholder": "000 000",
+      "recoveryLabel": "Recovery code",
+      "recoveryPlaceholder": "xxxxx-xxxxx",
+      "back": "Back",
+      "verify": "Verify",
+      "verifying": "Verifying…",
+      "useRecovery": "Use a recovery code instead",
+      "useApp": "Use your authenticator app instead",
+      "wrong": "That code is not right. Enter the newest code from your app.",
+      "wrongRecovery": "That recovery code is not right, or it was used already. Check it and try again.",
+      "sixDigits": "A code from your app has 6 digits.",
+      "paused": {
+        "title": "Too many attempts",
+        "body": "Sign-in for this account is paused. Try again at {{time}}."
+      },
+      "timedOut": {
+        "title": "Sign-in timed out",
+        "body": "The code wasn't entered in time. Enter your password again, then your code."
+      }
+    },
     "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
     "footer": {
       "offline": "Signing in needs the internet once. After that, Orchester works offline and checks your sign-in when it can reach Orchester Cloud.",
@@ -57,6 +85,11 @@
       "signedOut": {
         "title": "You signed out",
         "body": "Orchester stays locked on this computer until you sign in again."
+      },
+      "twoFactor": {
+        "title": "Sign in with your code to accept invites",
+        "body": "This computer signed in before you turned on two-factor. Sign in again; the invite to {{invite}} waits in Settings › Orchester.",
+        "bodyNoInvite": "This computer signed in before you turned on two-factor. Sign in again; the invite waits in Settings › Orchester."
       },
       "other": {
         "title": "Your sign-in ended",

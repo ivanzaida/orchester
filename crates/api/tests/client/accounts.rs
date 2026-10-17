@@ -27,6 +27,8 @@ async fn client_joins_with_a_code_and_a_wrong_code_answers_invalid_code() {
       username: Some("bohdan".into()),
       display_name: Some("Bohdan".into()),
       kind: DeviceKind::App,
+      identity_token: None,
+      key_set: None,
     })
     .await
     .expect_err("no such code");
@@ -39,7 +41,7 @@ async fn client_joins_with_a_code_and_a_wrong_code_answers_invalid_code() {
     }
   ));
   let code = server.server.host_setup_code().await.expect("setup").expect("no admin");
-  let joined = server.join(&code, Some("bohdan")).await;
+  let joined = server.join(&code, "bohdan").await;
   assert!(joined.user.admin);
   assert_eq!(joined.session.via, JoinedVia::Code);
   let device = token(&joined.token);
@@ -58,13 +60,14 @@ async fn client_signs_out_and_revokes_another_device() {
   let client = server.client();
   let pairing = server.post(&here, "/auth/pairings", serde_json::json!({})).await;
   let laptop = server
-    .join(
+    .join_as(
       &Credential::new(pairing["code"].as_str().expect("pairing code").into()),
-      None,
+      "alice",
     )
     .await;
   let laptop_token = token(&laptop.token);
-  assert_eq!(client.sessions(&here).await.expect("sessions").len(), 2);
+  // The setup computer, this one ([`TestServer::admin`]) and the laptop.
+  assert_eq!(client.sessions(&here).await.expect("sessions").len(), 3);
   client.revoke_session(&here, laptop.session.id).await.expect("revoke");
   assert_eq!(
     client.me(&laptop_token).await.expect_err("revoked").code(),
