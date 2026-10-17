@@ -22,16 +22,17 @@ use desktop::{Desktop, linked_server};
 use impostor::{Claimed, Impostor};
 use orchester_api::{
   Credential,
-  client::{Client, ServerAddress},
+  client::{Client, PlainHttp, ServerAddress},
   cloud::CloudErrorCode,
 };
 use orchester_core::{repository::RepositoryIdentity, secret::SecretVault};
 use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{
-  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError,
+  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError, Trust,
   cloud::{CloudError, ServerJoin, WebPage},
 };
 use server_support::TestServer;
+use tokio_rustls::rustls::pki_types::{CertificateDer, pem::PemObject};
 
 #[test]
 fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
@@ -257,6 +258,29 @@ fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of
       impostor.asked()
     );
   }
+  // Under the trust store: the impostor's certificate comes from an authority this test trusts, and the proof it passes
+  // on names the server's certificate, not the one of the connection that carried it.
+  let authority = CertificateDer::from_pem_slice(include_bytes!("../../server/tests/fixtures/ca.pem")).expect("the CA");
+  orchester_api::client::trust_for_tests(vec![authority]);
+  let impostor = Impostor::start(&id, Claimed::Relayed(server.client()));
+  let address = ServerAddress::parse(&impostor.url()).expect("address");
+  let code = Credential::new("ABCD-EFGH".into());
+  let trust = Trust::System(PlainHttp::NotAllowed);
+  let refused = desktop.block_on(desktop.cloud.join_with_code(&address, trust, request(code)));
+  assert!(
+    matches!(refused, Err(CloudError::Join(SharingError::UnprovenServer))),
+    "{refused:?}"
+  );
+  let asked = impostor.asked();
+  assert!(
+    asked.iter().any(|asked| asked.ends_with("/server/key-proof")),
+    "trusted and asked: {asked:?}"
+  );
+  assert!(
+    !asked.iter().any(|asked| asked.contains("/auth/code")),
+    "no code was sent: {asked:?}"
+  );
+
   // The server itself proves its key on the connection this computer checked, and takes the code with the token.
   let (address, trust) = pinned(&server.url());
   desktop

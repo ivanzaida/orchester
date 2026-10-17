@@ -131,7 +131,7 @@ impl Servers {
     if !two_factor.this_session {
       return Err(SharingError::TwoFactorSession);
     }
-    super::server_key::proven(&client, said, (address, trust)).await?;
+    super::server_key::proven(&client, said).await?;
     let key_set = identity.cloud.key_set().await?.key_set;
     let issued = identity.cloud.code_token(identity.device, said).await?;
     Ok(Some(CodeProof {

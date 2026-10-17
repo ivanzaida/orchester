@@ -106,18 +106,6 @@ impl Trust {
     }
   }
 
-  /// The SHA-256 (hex) of the certificate the server at `address` presents as this computer trusts it: the pinned one,
-  /// or for the trust store the one it presents now, read without sending anything; `None` over plain HTTP.
-  pub(super) async fn certificate(self, address: &ServerAddress) -> Result<Option<String>, ClientError> {
-    match self {
-      Self::Pinned(pin) => Ok(Some(pin.0.to_hex())),
-      Self::System(_) if address.is_https() => Client::presented_certificate(address)
-        .await
-        .map(|pin| Some(pin.to_hex())),
-      Self::System(_) => Ok(None),
-    }
-  }
-
   pub(super) fn client(self, address: ServerAddress) -> Result<Client, ClientError> {
     match self {
       Self::Pinned(pin) => Client::pinned(address, pin.0),

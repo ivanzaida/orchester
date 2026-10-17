@@ -9,6 +9,7 @@ mod address;
 mod cloud;
 mod error;
 mod pinned;
+mod recorded;
 mod sharing;
 
 use std::time::Duration;
@@ -25,6 +26,8 @@ use reqwest::{
 use serde::{Serialize, de::DeserializeOwned};
 use zeroize::Zeroize;
 
+#[cfg(feature = "test-support")]
+pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
   cloud::CloudClient,
@@ -46,6 +49,16 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct Client {
   http: reqwest::Client,
   address: ServerAddress,
+  certificate: Certificate,
+}
+
+/// What a client knows of the certificate its connections present.
+#[derive(Clone)]
+enum Certificate {
+  /// Exactly this one, pinned.
+  Pinned(CertificatePin),
+  /// The leaf of the last connection the trust store accepted; `None` before one, or over plain HTTP.
+  Recorded(recorded::Presented),
 }
 
 impl std::fmt::Debug for Client {
@@ -64,8 +77,17 @@ impl Client {
     // reqwest's rustls takes the process's crypto provider; ring is the one the workspace builds.
     // Installing fails only when a provider is installed already, which then serves as well.
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let http = builder().build().map_err(|error| ClientError::transport(&error))?;
-    Ok(Self { http, address })
+    let presented = recorded::Presented::default();
+    let tls = recorded::Recorded::config(presented.clone()).map_err(|_| ClientError::Setup)?;
+    let http = builder()
+      .tls_backend_preconfigured(tls)
+      .build()
+      .map_err(|error| ClientError::transport(&error))?;
+    Ok(Self {
+      http,
+      address,
+      certificate: Certificate::Recorded(presented),
+    })
   }
 
   /// A client of the team server at the `https` `address` that accepts exactly the certificate `pin` names: the
@@ -79,7 +101,11 @@ impl Client {
       .tls_backend_preconfigured(tls)
       .build()
       .map_err(|error| ClientError::transport(&error))?;
-    Ok(Self { http, address })
+    Ok(Self {
+      http,
+      address,
+      certificate: Certificate::Pinned(pin),
+    })
   }
 
   /// The certificate the team server at the `https` `address` presents, read without trusting it, for the person to
@@ -108,6 +134,16 @@ impl Client {
 
   pub fn address(&self) -> &ServerAddress {
     &self.address
+  }
+
+  /// The certificate this client's connections present: the pinned one, or the leaf of the last connection the
+  /// operating system's store accepted (its chain and name checked); `None` before any, or over plain HTTP. Read after
+  /// a request, it is that request's connection's.
+  pub fn certificate(&self) -> Option<CertificatePin> {
+    match &self.certificate {
+      Certificate::Pinned(pin) => Some(*pin),
+      Certificate::Recorded(presented) => *presented.lock(),
+    }
   }
 
   /// `GET /server`: what answers at the address, asked before signing in.
