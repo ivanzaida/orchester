@@ -11,8 +11,6 @@
 mod orchestrator_consent;
 mod servers;
 
-pub use self::orchestrator_consent::OrchestratorConsent;
-
 use std::{
   collections::{HashMap, HashSet},
   path::{Path, PathBuf},
@@ -31,6 +29,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, PreviousSession, ProjectDb, RegisteredProject, SessionEnd, SessionId, StoreError};
 use parking_lot::Mutex;
 
+pub use self::orchestrator_consent::OrchestratorConsent;
 use crate::{
   messages::{self, Message},
   project_setup::NewProject,

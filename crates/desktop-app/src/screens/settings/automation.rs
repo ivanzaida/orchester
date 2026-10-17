@@ -1,12 +1,12 @@
 //! *What automation may do* (`Form section title` `De1nE`) with a row (`Form row` `XaNIz` with a switch) per consent
 //! only a person gives: *Let automation change agent permissions*, *Let the Orchestrator publish drafts*, *Let the
-//! Orchestrator answer agents* and *Let the Orchestrator merge runs* (the same row; `docs/design/orchestrator-toolset.md`,
-//! "Decisions" 3 and 5). Each is an application setting that is off until a person turns it on here. While the first
-//! is off, the MCP server's setup tools refuse whatever would widen what agents may do (`person_only`), including
-//! matching window confirmations; while one of the Orchestrator's is off, the Orchestrator chat proposes what it names
-//! to the person. A setting is read and saved off the UI thread; while either runs, its switch cannot be flipped.
-//! While a row is mounted, the app's MCP server refuses window input (`mcp::input_gate`), and the row refuses lurq's
-//! synthetic input, so only a person flips it.
+//! Orchestrator answer agents* and *Let the Orchestrator merge runs* (the same row;
+//! `docs/design/orchestrator-toolset.md`, "Decisions" 3 and 5). Each is an application setting that is off until a
+//! person turns it on here. While the first is off, the MCP server's setup tools refuse whatever would widen what
+//! agents may do (`person_only`), including matching window confirmations; while one of the Orchestrator's is off, the
+//! Orchestrator chat proposes what it names to the person. A setting is read and saved off the UI thread; while either
+//! runs, its switch cannot be flipped. While a row is mounted, the app's MCP server refuses window input
+//! (`mcp::input_gate`), and the row refuses lurq's synthetic input, so only a person flips it.
 
 use lurq::{
   app::{

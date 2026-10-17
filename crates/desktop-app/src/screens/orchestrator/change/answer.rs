@@ -1,7 +1,7 @@
-//! What a card of an answer or a message the Orchestrator gives a run's agents says (`docs/design/orchestrator-toolset.md`,
-//! "Decisions" 5), in the frame and states of the cancel and merge cards (`b55NqO`, `UKgrR`): its icon and title,
-//! where it stands, what it sends or sent (the task's conversation names the Orchestrator as its sender), and the
-//! person's action while it waits. No Pencil frame draws these two yet.
+//! What a card of an answer or a message the Orchestrator gives a run's agents says
+//! (`docs/design/orchestrator-toolset.md`, "Decisions" 5), in the frame and states of the cancel and merge cards
+//! (`b55NqO`, `UKgrR`): its icon and title, where it stands, what it sends or sent (the task's conversation names the
+//! Orchestrator as its sender), and the person's action while it waits. No Pencil frame draws these two yet.
 
 use std::sync::Arc;
 
