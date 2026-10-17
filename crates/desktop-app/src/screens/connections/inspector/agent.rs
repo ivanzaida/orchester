@@ -98,7 +98,7 @@ fn cli(
   let (edit, id) = (actions.edit.clone(), connection.id());
   let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
     .icon(Icon::Pencil)
-    .on_click(move || edit(id));
+    .opens(edit(id));
   // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
   // chooses one.
   if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
@@ -513,10 +513,10 @@ fn open_in_settings(ctx: &mut Ctx, account: &orchester_core::account::AgentAccou
   )
   .icon(Icon::ArrowUpRight)
   .bounded_label()
-  .on_click(move || {
-    navigation.go(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
+  .opens(
+    navigation.to(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
       id,
       crate::routes::AccountsPanel::Account,
-    )));
-  })
+    ))),
+  )
 }

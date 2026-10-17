@@ -39,7 +39,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     notice::{Notice, NoticeTone},
-    pressable::pressable,
+    pressable::opening,
   },
 };
 
@@ -112,8 +112,7 @@ pub(super) fn line(ctx: &mut Ctx, project: ProjectId, shared: &Shared) -> Row {
   let sharing = &shared.sharing;
   let navigation = Navigation::of(ctx);
   let server_view = OrchesterView::server(sharing.link.server);
-  let to_server = navigation.clone();
-  let server = pressable(move || to_server.go(Route::Orchester(server_view)))
+  let server = opening(navigation.to(Route::Orchester(server_view)))
     .id("tasks-shared-server")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -138,7 +137,7 @@ pub(super) fn line(ctx: &mut Ctx, project: ProjectId, shared: &Shared) -> Row {
         .nowrap(),
     );
   }
-  let settings = pressable(move || navigation.go(Route::Project(project, ProjectPage::Sharing { make_local: false })))
+  let settings = opening(navigation.to(Route::Project(project, ProjectPage::Sharing { make_local: false })))
     .id("tasks-shared-settings")
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
@@ -221,7 +220,7 @@ fn action(ctx: &mut Ctx, id: &str, key: &str, server: orchester_core::id::Server
   let navigation = Navigation::of(ctx);
   ActionButton::new(id.to_owned(), ButtonKind::Ghost, ctx.t(key))
     .compact()
-    .on_click(move || navigation.go(Route::Orchester(OrchesterView::server(server))))
+    .opens(navigation.to(Route::Orchester(OrchesterView::server(server))))
 }
 
 fn label(words: &str, color: PaletteColor) -> Text {
@@ -318,7 +317,7 @@ pub(super) fn not_member(ctx: &mut Ctx, project: &ShownProject, shared: &Shared)
         ctx.t("tasks.shared.makeLocal"),
       )
       .icon(Icon::Unplug)
-      .on_click(move || navigation.go(Route::Project(id, ProjectPage::Sharing { make_local: true }))),
+      .opens(navigation.to(Route::Project(id, ProjectPage::Sharing { make_local: true }))),
     )
     .into(),
   )

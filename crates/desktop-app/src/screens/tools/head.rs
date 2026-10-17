@@ -29,18 +29,12 @@ pub(super) fn head(
   actions: Vec<Element>,
   reason: Option<&str>,
 ) -> Column {
-  let nav = Navigation::of(ctx);
-  let project = p.project.open.project.id();
+  let tools = Navigation::of(ctx).to(Route::Project(p.project.open.project.id(), ProjectPage::Tools));
   let crumbs = breadcrumb(
     ctx,
     "tool-crumbs",
     CrumbSeparator::Chevron,
-    vec![
-      Crumb::link(ctx.t("tools.title"), move || {
-        nav.go(Route::Project(project, ProjectPage::Tools))
-      }),
-      Crumb::here(title),
-    ],
+    vec![Crumb::to(ctx.t("tools.title"), tools), Crumb::here(title)],
   );
   let kind = p
     .entry
@@ -120,20 +114,20 @@ fn tabs(ctx: &mut Ctx, p: &EditorProps) -> Element {
   let tabs = ToolTab::ALL
     .into_iter()
     .map(|tab| {
-      let nav = nav.clone();
       let label = ctx.t(&format!("tools.tabs.{}", tab.name()));
       let key = format!("tool-tab-{}", tab.name());
       let Some(id) = p.entry.as_ref().map(|e| e.id) else {
         if tab != ToolTab::Configuration {
           return PageTab::unavailable(key, label, ctx.t("tools.saveFirst"));
         }
-        return PageTab::new(key, label, true, move || {
-          nav.go(Route::Project(project, ProjectPage::NewTool))
-        });
+        return PageTab::to(key, label, true, nav.to(Route::Project(project, ProjectPage::NewTool)));
       };
-      let item = PageTab::new(key, label, tab == current, move || {
-        nav.go(Route::Project(project, ProjectPage::Tool(id, tab)))
-      });
+      let item = PageTab::to(
+        key,
+        label,
+        tab == current,
+        nav.to(Route::Project(project, ProjectPage::Tool(id, tab))),
+      );
       match tab {
         ToolTab::InputsOutputs | ToolTab::UsageLog => item.explanation(ctx.t("tools.locked")),
         _ => item,

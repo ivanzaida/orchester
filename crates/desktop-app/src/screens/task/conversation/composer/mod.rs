@@ -60,7 +60,7 @@ use self::{
 };
 use super::{TaskContext, timeline::Follow};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
@@ -95,14 +95,12 @@ pub(super) struct Composing {
 }
 
 impl Composing {
-  /// Goes to `view` of the task, in the active tab.
-  fn open(&self, ctx: &mut Ctx, view: TaskView) -> impl Fn() + Send + Sync + 'static {
-    let navigation = Navigation::of(ctx);
-    let route = Route::Project(
+  /// What opens `view` of the task where a press asks (`navigation::link`).
+  fn open(&self, ctx: &mut Ctx, view: TaskView) -> Open {
+    Navigation::of(ctx).to(Route::Project(
       self.project.open.project.id(),
       ProjectPage::Task(self.key.clone(), view),
-    );
-    move || navigation.go(route.clone())
+    ))
   }
 }
 

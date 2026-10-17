@@ -191,7 +191,7 @@ impl HeldCard {
       ctx.t("orchestrator.held.openQueue"),
     )
     .icon(Icon::ArrowUpRight)
-    .on_click(move || navigation.go(route.clone()));
+    .opens(navigation.to(route));
     Row::new()
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)

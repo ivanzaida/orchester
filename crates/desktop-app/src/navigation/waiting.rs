@@ -11,6 +11,7 @@ use orchester_workspace::{
 use super::{
   Navigation,
   pointed::{Pointed, PointedCard},
+  press::OpenIn,
 };
 use crate::routes::{ProjectPage, Route, TaskTab, TaskView};
 
@@ -52,11 +53,11 @@ impl Destination {
     })
   }
 
-  /// Goes there, pointing at its card.
-  pub fn go(&self, navigation: &Navigation) {
+  /// Opens it where a press asks (`navigation::link`), pointing at its card when it opens in sight.
+  pub fn open(&self, navigation: &Navigation, at: OpenIn) {
     match &self.pointed {
-      Some(card) => navigation.go_to_card(&self.route, card.clone()),
-      None => navigation.go(self.route.clone()),
+      Some(card) => navigation.open_to_card(&self.route, at, card.clone()),
+      None => navigation.open(self.route.clone(), at),
     }
   }
 }

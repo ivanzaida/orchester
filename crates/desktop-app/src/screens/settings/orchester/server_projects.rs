@@ -141,16 +141,16 @@ fn project_row(ctx: &Ctx, shown: &Shown<'_>, navigation: &Navigation) -> Element
     shown.address.rsplit('/').next().unwrap_or_default()
   );
   let action = match shown.checkout {
-    Some(checkout) => {
-      let (navigation, project) = (navigation.clone(), checkout.id);
-      ActionButton::new(
-        format!("{id}-open"),
-        ButtonKind::Ghost,
-        ctx.t("cloud.server.projects.open"),
-      )
-      .icon(Icon::ArrowUpRight)
-      .on_click(move || navigation.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default()))))
-    }
+    Some(checkout) => ActionButton::new(
+      format!("{id}-open"),
+      ButtonKind::Ghost,
+      ctx.t("cloud.server.projects.open"),
+    )
+    .icon(Icon::ArrowUpRight)
+    .opens(navigation.to(Route::Project(
+      checkout.id,
+      ProjectPage::Overview(OverviewTab::default()),
+    ))),
     // Cloning and linking from here is a later phase's; the button stays, unavailable with what to do instead.
     None => ActionButton::new(
       format!("{id}-link"),

@@ -393,12 +393,10 @@ fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
       .icon(Icon::KeyRound)
       .compact()
       .in_form()
-      .on_click(move || {
-        nav.go(crate::routes::Route::Project(
-          project,
-          crate::routes::ProjectPage::Secrets,
-        ))
-      }),
+      .opens(nav.to(crate::routes::Route::Project(
+        project,
+        crate::routes::ProjectPage::Secrets,
+      ))),
     )
     .into()
 }

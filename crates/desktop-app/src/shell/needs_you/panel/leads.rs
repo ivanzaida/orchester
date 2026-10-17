@@ -13,8 +13,8 @@ use orchester_workspace::tasks::{
 
 use super::super::item::Action;
 use crate::{
-  navigation::{Navigation, waiting::Destination},
-  ui::{icon::Icon, message::message_text},
+  navigation::{Navigation, link::Open, press::OpenIn, waiting::Destination},
+  ui::{icon::Icon, message::message_text, pressable::Press},
 };
 
 /// How an item is told from the others while the panel shows, and its element id's end: its card's key when
@@ -54,20 +54,19 @@ pub(super) fn action(
       } else {
         Icon::ArrowUpRight
       };
-      Action::Press(glyph, go(navigation, open, destination))
+      Action::Press(glyph, Press::Open(go(navigation, open, destination)))
     }
   }
 }
 
-/// Goes to `destination`, pointing at its card, and closes the panel, which the page opening takes the place of.
-pub(super) fn go(
-  navigation: &Navigation,
-  open: &Signal<bool>,
-  destination: Destination,
-) -> Arc<dyn Fn() + Send + Sync> {
+/// Opens `destination` where a press asks (`navigation::link`), pointing at its card, and closes the panel, which
+/// the page opening takes the place of; a page opened in a background tab leaves the panel open.
+pub(super) fn go(navigation: &Navigation, open: &Signal<bool>, destination: Destination) -> Open {
   let (navigation, open) = (navigation.clone(), open.clone());
-  Arc::new(move || {
-    destination.go(&navigation);
-    open.set(false);
+  Arc::new(move |at| {
+    destination.open(&navigation, at);
+    if at != OpenIn::BackgroundTab {
+      open.set(false);
+    }
   })
 }

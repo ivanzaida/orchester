@@ -246,12 +246,10 @@ fn many(ctx: &mut Ctx, count: usize) -> Element {
       ButtonKind::Secondary,
       ctx.t("cloud.notice.review"),
     )
-    .on_click(move || {
-      navigation.go(Route::Orchester(OrchesterView {
-        server: None,
-        panel: OrchesterPanel::Invites,
-      }));
-    }),
+    .opens(navigation.to(Route::Orchester(OrchesterView {
+      server: None,
+      panel: OrchesterPanel::Invites,
+    }))),
   )
   .into()
 }

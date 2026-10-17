@@ -18,7 +18,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  facts::{BarAction, Dispatch},
+  facts::{Dispatch, go},
   item::{glyph, label, pressed},
 };
 use crate::{
@@ -84,14 +84,11 @@ pub fn item(ctx: &mut Ctx, facts: &CloudFacts, dispatch: &Dispatch) -> Option<El
     return None;
   };
   let words = ctx.t("shell.status.cloudOffline").to_string();
-  let dispatch = dispatch.clone();
-  let anchor = pressed("status-cloud", move || {
-    dispatch(BarAction::Go(Route::Orchester(OrchesterView::default())));
-  })
-  .describe("state", "offline")
-  .describe("a11y_name", words.clone())
-  .child(glyph(Icon::CloudOff, PaletteColor::TextMuted))
-  .child(label(&words, PaletteColor::TextMuted).id("status-cloud-text"));
+  let anchor = pressed("status-cloud", go(dispatch, Route::Orchester(OrchesterView::default())))
+    .describe("state", "offline")
+    .describe("a11y_name", words.clone())
+    .child(glyph(Icon::CloudOff, PaletteColor::TextMuted))
+    .child(label(&words, PaletteColor::TextMuted).id("status-cloud-text"));
   let card = CardWords {
     id: "status-cloud-card".into(),
     title: ctx.t("shell.cloud.title").to_string(),

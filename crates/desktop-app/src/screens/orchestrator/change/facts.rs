@@ -34,7 +34,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView, ToolTab},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
-  ui::pressable::pressable,
+  ui::pressable::opening,
 };
 
 /// A fact's key column (`u5vGv`).
@@ -93,14 +93,11 @@ fn row(id: &str, key: &str, parts: Vec<Part>, navigation: &Navigation) -> Row {
 
 fn part_element(part: Part, navigation: &Navigation) -> Element {
   match part {
-    Part::Link(words, route) => {
-      let navigation = navigation.clone();
-      pressable(move || navigation.go(route.clone()))
-        .padding_bottom(ExtraSpacing::Hair.role())
-        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted))
-        .child(Text::new(&words).variant(OrchestratorText::FactLink.role()).nowrap())
-        .into()
-    }
+    Part::Link(words, route) => opening(navigation.to(route))
+      .padding_bottom(ExtraSpacing::Hair.role())
+      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted))
+      .child(Text::new(&words).variant(OrchestratorText::FactLink.role()).nowrap())
+      .into(),
     Part::Value(words) => Text::new(&words)
       .variant(OrchestratorText::FactValue.role())
       .flex_shrink(1.0)

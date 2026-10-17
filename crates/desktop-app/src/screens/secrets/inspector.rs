@@ -1,6 +1,4 @@
 //! Inline metadata, Used by links and archive confirmation (DrLE6, K2epbr).
-use std::sync::Arc;
-
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -362,14 +360,11 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
         ProjectPage::Connections(ConnectionsView::new(ConnectionsTab::McpServers).with_selected(id)),
       ),
     };
-    let (navigation, project_id) = (navigation.clone(), project.open.project.id());
     section = section.child(inspector::used_by_link(
       &format!("secret-use-{:?}", used.kind),
       glyph,
       &label,
-      Some(Arc::new(move || {
-        navigation.go(Route::Project(project_id, page.clone()))
-      })),
+      Some(navigation.to(Route::Project(project.open.project.id(), page))),
     ));
   }
   let key = match (counts.tools, counts.mcp_servers) {

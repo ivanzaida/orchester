@@ -57,7 +57,7 @@ impl Component for Library {
     let id = project.open.project.id();
     let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
       .icon(Icon::Plus)
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::NewPipeline)));
+      .opens(nav.to(Route::Project(id, ProjectPage::NewPipeline)));
     let header = Row::new()
       .align_items(lurq::layout::Alignment::Start)
       .width(Dimension::Pct(100.0))
@@ -176,7 +176,7 @@ impl Component for LibraryRow {
       )
       .cell(ColumnWidth::Fixed(USED), parts::caption(&used))
       .cell(ColumnWidth::Fixed(PUBLISHED), parts::caption(&published))
-      .on_open(move || nav.go(Route::Project(props.project, ProjectPage::Pipeline(entry.id))))
+      .opens(nav.to(Route::Project(props.project, ProjectPage::Pipeline(entry.id))))
   }
 }
 fn row_words(ctx: &Ctx, entry: &LibraryEntry) -> (LibraryEntry, String, String, String) {
@@ -359,10 +359,7 @@ fn empty(ctx: &mut Ctx, project: orchester_core::id::ProjectId, page: Column) ->
               ctx.t("pipelines.createFromStarter"),
             )
             .icon(Icon::Sparkles)
-            .on_click({
-              let nav = nav.clone();
-              move || nav.go(Route::Project(project, ProjectPage::NewPipeline))
-            }),
+            .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline))),
           )
           .child(
             ActionButton::new(
@@ -371,7 +368,7 @@ fn empty(ctx: &mut Ctx, project: orchester_core::id::ProjectId, page: Column) ->
               ctx.t("pipelines.startEmpty"),
             )
             .icon(Icon::Plus)
-            .on_click(move || nav.go(Route::Project(project, ProjectPage::NewEmptyPipeline))),
+            .opens(nav.to(Route::Project(project, ProjectPage::NewEmptyPipeline))),
           )
           .child(parts::caption(&ctx.t("pipelines.emptyCreationHint"))),
       ),

@@ -215,7 +215,7 @@ fn status_counts_open_tasks_and_the_overview() {
   ))));
   bar.press("status-needs-you");
   bar.press("status-queued");
-  let at = |page| BarAction::Go(Route::Project(project_id(), page));
+  let at = |page| BarAction::Go(Route::Project(project_id(), page), OpenIn::ActiveTab);
   assert_eq!(
     bar.asked(),
     [
@@ -252,10 +252,10 @@ fn status_review_opens_the_requests_conversation_and_stop_ends_auto_approval() {
   assert_eq!(
     bar.asked(),
     [
-      BarAction::Go(Route::Project(
-        project_id(),
-        ProjectPage::Task(key, TaskView::Conversation)
-      )),
+      BarAction::Go(
+        Route::Project(project_id(), ProjectPage::Task(key, TaskView::Conversation)),
+        OpenIn::ActiveTab
+      ),
       BarAction::StopAutoApproving(vec![auto.run]),
     ]
   );

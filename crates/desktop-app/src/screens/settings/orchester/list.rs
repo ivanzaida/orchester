@@ -336,12 +336,10 @@ fn no_servers(ctx: &Ctx, navigation: &Navigation) -> Element {
         ctx.t("settings.connectServer"),
       )
       .icon(Icon::Plus)
-      .on_click(move || {
-        navigation.go(Route::Orchester(OrchesterView {
-          server: None,
-          panel: OrchesterPanel::Connect,
-        }));
-      }),
+      .opens(navigation.to(Route::Orchester(OrchesterView {
+        server: None,
+        panel: OrchesterPanel::Connect,
+      }))),
     )
     .into()
 }

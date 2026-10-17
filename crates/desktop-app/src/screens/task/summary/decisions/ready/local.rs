@@ -52,7 +52,7 @@ pub(super) fn reminder(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
           ButtonKind::Primary,
           ctx.t("local_integration.title"),
         )
-        .on_click(move || navigation.go(route.clone())),
+        .opens(navigation.to(route)),
       )
       .into(),
   )

@@ -122,7 +122,7 @@ fn not_found(ctx: &mut Ctx, props: &PageProps) -> Element {
   let project = props.project.open.project.id();
   let back =
     crate::ui::button::ActionButton::new("task-not-found-tasks", crate::ui::button::ButtonKind::Secondary, tasks)
-      .on_click(move || navigation.go(Route::Project(project, ProjectPage::Tasks(Default::default()))));
+      .opens(navigation.to(Route::Project(project, ProjectPage::Tasks(Default::default()))));
   let name = props.project.open.project.name().as_str().to_owned();
   let card = EmptyState::new(
     "task-not-found",

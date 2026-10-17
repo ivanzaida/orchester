@@ -84,12 +84,9 @@ pub(super) fn list(ctx: &mut Ctx, uses: Option<&AccountUses>) -> Element {
   }
   for used in &uses.connections {
     let label = label(ctx, used);
-    let navigation = navigation.clone();
     let (project, connection) = (used.project, used.connection);
-    let open = std::sync::Arc::new(move || {
-      let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(connection);
-      navigation.go(Route::Project(project, ProjectPage::Connections(view)));
-    });
+    let view = ConnectionsView::new(ConnectionsTab::AgentProviders).with_selected(connection);
+    let open = navigation.to(Route::Project(project, ProjectPage::Connections(view)));
     list = list.child(used_by_link(
       &format!("account-used-by-{connection}"),
       Icon::Bot,

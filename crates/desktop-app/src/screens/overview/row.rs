@@ -29,7 +29,7 @@ use crate::{
     chip::TagChip,
     icon::{Icon, icon},
     message::message_text,
-    pressable::pressable,
+    pressable::opening,
     status::{Status, StatusChip, priority_look, workflow_key},
     tooltip::Truncated,
     unavailable::reason_line,
@@ -100,7 +100,7 @@ pub(super) fn row(ctx: &mut Ctx, project: ProjectId, row: &TaskRow) -> Button {
   let key = &row.key;
   let open = open_task(ctx, project, key, TaskTab::Summary);
   let (priority, ..) = priority_look(row.organization.priority());
-  pressable(open)
+  opening(open)
     .id(format!("overview-row-{key}"))
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(

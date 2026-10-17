@@ -10,10 +10,13 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::pressable,
+  pressable::opening,
   table::{ColumnWidth, table_header},
 };
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+};
 
 pub const ROW_HEIGHT: f32 = 56.0;
 const GLYPH: f32 = 28.0;
@@ -40,7 +43,8 @@ pub struct ToolRow {
   pub detail: Arc<str>,
   pub detail_mono: bool,
   pub cells: Vec<Element>,
-  pub on_open: Arc<dyn Fn() + Send + Sync>,
+  /// What opens the tool's page where a press asks (`navigation::link`).
+  pub on_open: Open,
 }
 impl From<ToolRow> for Element {
   fn from(row: ToolRow) -> Self {
@@ -81,7 +85,7 @@ impl From<ToolRow> for Element {
       .into_iter()
       .zip(WIDTHS)
       .map(|(cell, w)| Row::new().width(Dimension::Px(w)).flex_shrink(0.0).child(cell));
-    pressable(move || (row.on_open)())
+    opening(row.on_open)
       .id(row.id)
       .width(Dimension::Pct(100.0))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))

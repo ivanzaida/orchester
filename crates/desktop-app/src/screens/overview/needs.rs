@@ -4,6 +4,8 @@
 //! (`Empty` `yZd0J`); while the tasks are read, a reading line in an outlined card (`R` `NpDgz`). What
 //! waits, and in which order, is `orchester_workspace::tasks::attention`.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -117,7 +119,7 @@ fn need_card(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
   match Destination::of(project, item) {
     Ok(destination) => {
       let navigation = Navigation::of(ctx);
-      card.child(Row::new().child(button.on_click(move || destination.go(&navigation))))
+      card.child(Row::new().child(button.opens(Arc::new(move |at| destination.open(&navigation, at)))))
     }
     Err(reason) => {
       let reason = message_text(ctx, &reason);

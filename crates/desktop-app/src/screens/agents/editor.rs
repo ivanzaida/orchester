@@ -46,6 +46,9 @@ pub struct Props {
   pub profiles: OwnChanges,
   pub load_error: Option<orchester_workspace::messages::Message>,
   pub reading: bool,
+  /// The editor is the profile's own page (`ProjectPage::Agent`), a place whose crumb opens the list; otherwise it
+  /// is the list's own editor, which shows the list in place.
+  pub own_page: bool,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
@@ -54,6 +57,7 @@ impl PartialEq for Props {
       && self.entry == other.entry
       && self.load_error == other.load_error
       && self.reading == other.reading
+      && self.own_page == other.own_page
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -404,19 +408,11 @@ fn agents_crumb(ctx: &mut Ctx, props: &Props) -> Crumb {
   let view = props.view.clone();
   let navigation = crate::navigation::Navigation::of(ctx);
   let project = props.project.open.project.id();
-  Crumb::link(ctx.t("agents.title"), move || {
-    if matches!(
-      navigation.route_now(),
-      crate::routes::Route::Project(_, crate::routes::ProjectPage::Agent(_))
-    ) {
-      navigation.go(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::Agents,
-      ));
-    } else {
-      view.set(View::List);
-    }
-  })
+  if props.own_page {
+    let list = crate::routes::Route::Project(project, crate::routes::ProjectPage::Agents);
+    return Crumb::to(ctx.t("agents.title"), navigation.to(list));
+  }
+  Crumb::link(ctx.t("agents.title"), move || view.set(View::List))
 }
 
 fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {

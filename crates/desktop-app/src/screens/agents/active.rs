@@ -17,7 +17,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, agents::active_task_text},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::opening,
     tooltip::Truncated,
   },
 };
@@ -77,7 +77,7 @@ fn run_row(ctx: &mut Ctx, props: &Props, index: usize, run: &ActiveUse) -> Eleme
     Some(name) => ctx.t_args("agents.activeProfile", [("name", name.as_ref()), ("version", &version)]),
     None => ctx.t_args("agents.activeVersion", [("version", &version)]),
   };
-  pressable(move || navigation.go(route.clone()))
+  opening(navigation.to(route))
     .id(format!("agent-active-{index}"))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ROW_HEIGHT))

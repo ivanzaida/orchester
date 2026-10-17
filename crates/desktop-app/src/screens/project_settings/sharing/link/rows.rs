@@ -125,7 +125,7 @@ impl Link {
         ctx.t("settings.connectServer"),
       )
       .icon(Icon::Plus)
-      .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect())));
+      .opens(navigation.to(Route::Orchester(OrchesterView::connect())));
       let control = Column::new()
         .width(Dimension::Px(CONTROL_WIDTH))
         .spacing(SpacingSize::Sm)

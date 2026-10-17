@@ -97,12 +97,10 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
       )
       .icon(Icon::Plug)
       .in_form()
-      .on_click(move || {
-        nav.go(crate::routes::Route::Project(
-          project,
-          crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
-        ));
-      }),
+      .opens(nav.to(crate::routes::Route::Project(
+        project,
+        crate::routes::ProjectPage::Connections(crate::routes::ConnectionsView::default()),
+      ))),
     );
   page::row(
     ctx,

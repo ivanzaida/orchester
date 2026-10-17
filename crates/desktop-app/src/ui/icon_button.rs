@@ -7,7 +7,6 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    events::mouse_event::MouseEvent,
     theme::{PaletteColor, RadiusSize},
   },
   components::Button,
@@ -18,10 +17,13 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, inert},
+  pressable::{Focus, Press, inert},
   tooltip::Tooltip,
 };
-use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, IconSize},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IconButtonSize {
@@ -64,7 +66,7 @@ pub struct IconButton {
   icon: Icon,
   label: Arc<str>,
   size: IconButtonSize,
-  action: Option<Arc<dyn Fn() + Send + Sync>>,
+  action: Option<Press>,
   focus: Focus,
   active: bool,
   element: Option<ElementRef>,
@@ -107,7 +109,13 @@ impl IconButton {
   }
 
   pub fn on_click(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
-    self.action = Some(Arc::new(handler));
+    self.action = Some(Press::run(handler));
+    self
+  }
+
+  /// A button that navigates: a press opens its place with `open` by a browser's rules (`navigation::link`).
+  pub fn opens(mut self, open: Open) -> Self {
+    self.action = Some(Press::Open(open));
     self
   }
 
@@ -154,17 +162,15 @@ impl IconButton {
       None => button,
     };
     let button = match self.action {
-      Some(handler) => self
-        .focus
-        .apply(button)
-        .cursor(CursorIcon::Pointer)
-        .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-        .active_style(Style::new().background(ExtraColor::Pressed.role()))
-        .describe("state", "enabled")
-        .on_click(move |event: MouseEvent| {
-          event.stop_propagation();
-          handler();
-        }),
+      Some(press) => press.on(
+        self
+          .focus
+          .apply(button)
+          .cursor(CursorIcon::Pointer)
+          .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+          .active_style(Style::new().background(ExtraColor::Pressed.role()))
+          .describe("state", "enabled"),
+      ),
       None => inert(button).opacity(DISABLED_OPACITY).describe("state", "disabled"),
     };
     if self.active {

@@ -27,7 +27,7 @@ use crate::{
     card::{CardSurface, card_frame},
     icon::icon,
     message::message_text,
-    pressable::pressable,
+    pressable::opening,
     status::Status,
   },
 };
@@ -72,7 +72,7 @@ fn entry(ctx: &mut Ctx, project: ProjectId, run: &RecentRun) -> Button {
     "overview.activity.meta",
     [("task", run.key.to_string()), ("time", display::clock(run.at))],
   );
-  pressable(open_task(ctx, project, &run.key, TaskTab::Summary))
+  opening(open_task(ctx, project, &run.key, TaskTab::Summary))
     .id(format!("overview-event-{}", run.key))
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(SpacingSize::Sm))

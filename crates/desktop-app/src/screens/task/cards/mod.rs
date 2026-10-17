@@ -34,7 +34,7 @@ use orchester_workspace::{
 
 pub use self::decisions::Decisions;
 use super::conversation::ComposerState;
-use crate::{project::Projects, ui::markdown::LinkHandler};
+use crate::{navigation::link::Open, project::Projects, ui::markdown::LinkHandler};
 
 /// How a step is named in the conversation: "03 Implement" for step 3, Implement.
 pub type StepLabel = fn(&Ctx, usize, &str) -> Arc<str>;
@@ -57,7 +57,7 @@ pub struct Place {
   pub in_panel: bool,
   /// In the panel, what opens the card in its task's conversation: a waiting question's answers row carries
   /// it (`Open conversation` `D4BZ8a` in `Z4HeE3`).
-  pub conversation: Option<Press>,
+  pub conversation: Option<Open>,
 }
 
 /// What a press does.

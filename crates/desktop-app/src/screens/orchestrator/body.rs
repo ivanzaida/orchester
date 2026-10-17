@@ -337,7 +337,7 @@ fn missing(ctx: &mut Ctx, project: &ShownProject, name: &str) -> Element {
     ctx.t("orchestrator.newConversation"),
   )
   .icon(Icon::MessageSquarePlus)
-  .on_click(move || navigation.go(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::New))));
+  .opens(navigation.to(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::New))));
   Column::new()
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(COLUMN_WIDTH))
@@ -369,7 +369,7 @@ fn not_ready(ctx: &mut Ctx, project: &ShownProject, readiness: &Readiness) -> El
     ctx.t("orchestrator.notReady.openSettings"),
   )
   .icon(Icon::Settings)
-  .on_click(move || navigation.go(Route::Project(id, ProjectPage::OrchestratorSettings)));
+  .opens(navigation.to(Route::Project(id, ProjectPage::OrchestratorSettings)));
   Notice::new(
     "orchestrator-not-ready",
     NoticeTone::Warning,
