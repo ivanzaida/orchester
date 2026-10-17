@@ -4,6 +4,7 @@
 
 mod files;
 mod usage;
+mod views;
 
 use std::num::NonZeroU64;
 
@@ -17,7 +18,7 @@ use orchester_core::{
 };
 use orchester_workspace::pull_requests::list::PullRequestTab;
 
-use self::{files::files_routes, usage::usage_query};
+use self::{files::files_routes, usage::usage_query, views::view_routes};
 
 const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
@@ -73,8 +74,14 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::ImportSkills),
     at(ProjectPage::NewPipeline),
     at(ProjectPage::NewEmptyPipeline),
-    at(ProjectPage::Pipeline(PROJECT.parse().expect("a resource id"))),
-    at(ProjectPage::Agent(CONNECTION.parse().expect("an agent resource id"))),
+    at(ProjectPage::Pipeline(
+      PROJECT.parse().expect("a resource id"),
+      Default::default(),
+    )),
+    at(ProjectPage::Agent(
+      CONNECTION.parse().expect("an agent resource id"),
+      Default::default(),
+    )),
     at(ProjectPage::EditTask(key("KON-7"))),
     at(ProjectPage::Usage(Box::new(usage_query()))),
     at(ProjectPage::EditConnection(connection())),
@@ -86,10 +93,10 @@ fn every_route() -> Vec<Route> {
   all.extend(NewConnection::ALL.map(|kind| at(ProjectPage::NewConnection(kind))));
   all.extend(TaskTab::ALL.map(|tab| at(ProjectPage::Task(key("KON-12"), TaskView::of(tab)))));
   all.extend(files_routes());
+  all.extend(view_routes());
   all.extend(PullRequestTab::ALL.map(|tab| at(ProjectPage::PullRequests(tab))));
-  all.push(at(ProjectPage::PullRequest(pull_request())));
-  all.push(at(ProjectPage::Sharing { make_local: false }));
-  all.push(at(ProjectPage::Sharing { make_local: true }));
+  all.push(at(ProjectPage::PullRequest(pull_request(), None)));
+  all.push(at(ProjectPage::PullRequest(pull_request(), Some(AWKWARD.to_owned()))));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));
@@ -179,17 +186,16 @@ fn paths_are_the_documented_ones() {
       format!("{root}/pull-requests?tab=needs_review"),
     ),
     (
-      at(ProjectPage::PullRequest(pull_request())),
+      at(ProjectPage::PullRequest(pull_request(), None)),
       format!("{root}/pull-requests/142"),
     ),
-    (at(ProjectPage::Settings), format!("{root}/settings")),
     (
-      at(ProjectPage::Sharing { make_local: false }),
-      format!("{root}/settings/sharing"),
+      at(ProjectPage::PullRequest(pull_request(), Some("src/a b.rs".to_owned()))),
+      format!("{root}/pull-requests/142?file=src/a%20b.rs"),
     ),
     (
-      at(ProjectPage::Sharing { make_local: true }),
-      format!("{root}/settings/sharing?ask=make-local"),
+      at(ProjectPage::Settings(Default::default())),
+      format!("{root}/settings"),
     ),
   ];
   for (route, path) in paths {
@@ -440,7 +446,7 @@ fn pipelines_pages_have_their_own_paths_and_select_pipelines() {
   let id = PROJECT.parse().expect("resource id");
   for (page, suffix) in [
     (ProjectPage::NewPipeline, "new".to_owned()),
-    (ProjectPage::Pipeline(id), id.to_string()),
+    (ProjectPage::Pipeline(id, Default::default()), id.to_string()),
   ] {
     let route = at(page);
     assert_eq!(route.path(), format!("/project/{PROJECT}/pipelines/{suffix}"));
@@ -452,7 +458,7 @@ fn pipelines_pages_have_their_own_paths_and_select_pipelines() {
 #[test]
 fn agents_pages_have_exact_current_resource_paths_and_select_agents() {
   let id = CONNECTION.parse().expect("a resource id");
-  let route = at(ProjectPage::Agent(id));
+  let route = at(ProjectPage::Agent(id, Default::default()));
   assert_eq!(route.path(), format!("/project/{PROJECT}/agents/{CONNECTION}"));
   assert_eq!(Route::parse(&route.path()), Ok(route.clone()));
   assert_eq!(route.nav_screen(), Screen::Agents);

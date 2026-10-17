@@ -1,15 +1,16 @@
 //! View state of the Skills page, carried by its route.
-use lurq::{app::component::DevtoolsInspectable, core::Signal};
+use lurq::core::Signal;
 use orchester_core::id::{ProjectId, ResourceId};
 
 use crate::{
   navigation::{Navigation, link::Open},
   project::own::OwnChanges,
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, SkillsFilter},
 };
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Panel {
-  Library,
+  /// The library, with its filter.
+  Library(SkillsFilter),
   New,
   Edit(ResourceId),
   Import,
@@ -17,7 +18,7 @@ pub enum Panel {
 impl Panel {
   fn page(self) -> ProjectPage {
     match self {
-      Self::Library => ProjectPage::Skills,
+      Self::Library(filter) => ProjectPage::Skills(filter),
       Self::New => ProjectPage::NewSkill,
       Self::Edit(id) => ProjectPage::Skill(id),
       Self::Import => ProjectPage::ImportSkills,
@@ -28,9 +29,12 @@ impl Panel {
       ProjectPage::NewSkill => Self::New,
       ProjectPage::Skill(id) => Self::Edit(*id),
       ProjectPage::ImportSkills => Self::Import,
-      _ => Self::Library,
+      ProjectPage::Skills(filter) => Self::Library(*filter),
+      _ => Self::Library(SkillsFilter::default()),
     }
   }
+  /// The library as it opens, on every skill.
+  pub const LIBRARY: Self = Self::Library(SkillsFilter::All);
 }
 #[derive(Clone)]
 pub struct PanelNav {
@@ -38,16 +42,17 @@ pub struct PanelNav {
   pub navigation: Navigation,
 }
 impl PanelNav {
-  pub fn get(&self) -> Panel {
-    match self.navigation.route_now() {
-      Route::Project(_, page) => Panel::of(&page),
-      _ => Panel::Library,
+  /// *Cancel*: shows `panel`, leaving no entry for the page it closes.
+  pub fn close(&self, panel: Panel) {
+    self.navigation.close_panel(Route::Project(self.project, panel.page()));
+  }
+  /// The library a page was opened from, with its filter; on every skill when the page was not.
+  pub fn library(&self) -> Panel {
+    match self.navigation.tabs_now().active().behind() {
+      Some(Route::Project(project, ProjectPage::Skills(filter))) if *project == self.project => Panel::Library(*filter),
+      _ => Panel::LIBRARY,
     }
   }
-  pub fn set(&self, panel: Panel) {
-    self.navigation.go(Route::Project(self.project, panel.page()));
-  }
-
   /// What opens `panel`, a place of its own, where a press asks (`navigation::link`).
   pub fn to(&self, panel: Panel) -> Open {
     self.navigation.to(Route::Project(self.project, panel.page()))
@@ -62,11 +67,3 @@ pub struct View {
   pub reset: Signal<u64>,
   pub reload_requested: Signal<bool>,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Filter {
-  All,
-  Project,
-  Roles,
-  Pipelines,
-}
-impl DevtoolsInspectable for Filter {}

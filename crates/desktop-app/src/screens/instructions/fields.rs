@@ -357,7 +357,7 @@ impl Fields {
   pub fn prompt(
     &self,
     ctx: &Ctx,
-    panel: Signal<super::panels::Panel>,
+    panel: super::state::SidePanel,
     errors: Option<&FormErrors>,
     (locked, unavailable): (bool, &[Variable]),
   ) -> Element {
@@ -445,7 +445,7 @@ impl Fields {
     };
     Some(field_error("instruction-insert-error", &ctx.t(key)).into())
   }
-  fn prompt_toolbar(&self, ctx: &Ctx, panel: Signal<super::panels::Panel>) -> Row {
+  fn prompt_toolbar(&self, ctx: &Ctx, panel: super::state::SidePanel) -> Row {
     Row::new()
       .width(Dimension::Pct(100.0))
       .align_items(Alignment::Center)
@@ -471,7 +471,7 @@ impl Fields {
         .icon(Icon::Braces)
         .small()
         .compact()
-        .on_click(move || panel.set(super::panels::Panel::Variables)),
+        .on_click(move || panel.choose(super::state::Panel::Variables)),
       )
   }
 }

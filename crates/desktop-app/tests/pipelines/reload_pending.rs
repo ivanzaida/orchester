@@ -101,9 +101,14 @@ fn pending_reload(page: Page) {
     "pending reload must refuse real typing"
   );
   attempt_controls(&mut editor, page, field);
-  editor.until("successful reload accepted", |e| {
-    !e.exists("pipeline-loading") && e.value("pipeline-description") == "External successful reload"
-  });
+  editor.until("successful reload accepted", |e| !e.exists("pipeline-loading"));
+  // The reloaded editor keeps the panel the route shows; the summary holds the description.
+  match page {
+    Page::Empty => {}
+    Page::Settings => editor.click("pipeline-back-steps"),
+    Page::Step | Page::Remove | Page::Dependencies => editor.click("pipeline-inspector-close"),
+  }
+  assert_eq!(editor.value("pipeline-description"), "External successful reload");
   assert!(!editor.exists("pipeline-write-error"));
   assert_eq!(
     editor

@@ -172,9 +172,10 @@ fn secrets_loading_can_be_held_then_released() {
   s.window.pass();
   let hold = s.window.launch.services().expect("services").hold.clone();
   hold.set(true);
-  s.window
-    .navigation()
-    .go(Route::Project(super::support::project_id(), ProjectPage::Secrets));
+  s.window.navigation().go(Route::Project(
+    super::support::project_id(),
+    ProjectPage::Secrets(Default::default()),
+  ));
   s.until("held read", |s| s.exists("secrets-loading"));
   assert!(s.text("secrets-loading").contains("Reading the secrets"));
   hold.set(false);
@@ -202,9 +203,10 @@ fn secrets_read_failure_explains_it_and_retry_reads_the_repaired_database() {
     }
   });
   std::fs::create_dir(&database).expect("make its path unreadable to SQLite");
-  s.window
-    .navigation()
-    .go(Route::Project(super::support::project_id(), ProjectPage::Secrets));
+  s.window.navigation().go(Route::Project(
+    super::support::project_id(),
+    ProjectPage::Secrets(Default::default()),
+  ));
   s.until("failed read", |s| s.exists("secrets-load-error"));
   assert!(s.text("secrets-load-error").contains("Secrets could not be read"));
   std::fs::remove_dir(&database).expect("remove the empty test directory");

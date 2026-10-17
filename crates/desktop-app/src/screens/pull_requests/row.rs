@@ -77,7 +77,7 @@ impl Component for PullRequestRow {
     let number = pull_request.number();
     let navigation = Navigation::of(ctx);
     let page = NonZeroU64::new(number).expect("a pull request's constructor refuses number 0");
-    let opened = Route::Project(props.project, ProjectPage::PullRequest(page));
+    let opened = Route::Project(props.project, ProjectPage::PullRequest(page, None));
     let url: Arc<str> = Arc::from(pull_request.url());
     let open = props.open.clone();
     let github = ActionButton::new(

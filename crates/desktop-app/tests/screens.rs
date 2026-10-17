@@ -278,17 +278,21 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     (
       at(ProjectPage::PullRequest(
         NonZeroU64::new(142).expect("a pull request number"),
+        None,
       )),
       Vec::new(),
     ),
     (at(ProjectPage::Usage(Box::new(filtered_usage()))), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
-    (at(ProjectPage::Instructions), placeholder("Instructions")),
+    (
+      at(ProjectPage::Instructions(Default::default())),
+      placeholder("Instructions"),
+    ),
     (at(ProjectPage::Memory), placeholder("Memory")),
-    (at(ProjectPage::Skills), placeholder("Skills")),
+    (at(ProjectPage::Skills(Default::default())), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
-    (at(ProjectPage::Secrets), placeholder("Secrets")),
+    (at(ProjectPage::Secrets(Default::default())), placeholder("Secrets")),
     (
       at(ProjectPage::Connections(ConnectionsView::new(
         ConnectionsTab::McpServers,
@@ -305,7 +309,10 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       )),
       placeholder("Edit connection"),
     ),
-    (at(ProjectPage::Settings), placeholder("Project settings")),
+    (
+      at(ProjectPage::Settings(Default::default())),
+      placeholder("Project settings"),
+    ),
     (
       at(ProjectPage::Files(FilesView::new(Some("src/a b.rs"), Version::Base))),
       Vec::new(),

@@ -11,6 +11,7 @@ mod accepting;
 mod clipboard;
 mod design;
 mod harness;
+mod history;
 mod person_only;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
@@ -281,7 +282,7 @@ fn orchester_links_by_address_warning_on_a_remote_mismatch() {
   let (_server, recorder) = joined_through_recorder(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");

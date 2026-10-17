@@ -249,7 +249,7 @@ fn page_header(ctx: &mut Ctx) -> Element {
     ButtonKind::Ghost,
     ctx.t("sharing.connect.cancel"),
   )
-  .on_click(move || navigation.replace(Route::Orchester(OrchesterView::default())));
+  .on_click(move || navigation.close_panel(Route::Orchester(OrchesterView::default())));
   Row::new()
     .id("orchester-connect-header")
     .width(Dimension::Pct(100.0))

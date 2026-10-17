@@ -3,6 +3,7 @@
 //! the sign-in step, renaming, and removing with its connections moved. Stand-in CLIs answer (see `harness`).
 
 mod harness;
+mod history;
 
 use std::{env, fs};
 

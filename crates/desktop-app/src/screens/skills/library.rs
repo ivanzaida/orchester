@@ -1,4 +1,4 @@
-//! Library Syllb and empty states WMT1W/F8mJNd.
+//! Library Syllb and empty states WMT1W/F8mJNd. The filter tabs are the route's ([`SkillsFilter`]).
 use lurq::{
   app::{
     component::Component,
@@ -6,17 +6,13 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text, VirtualizedList},
-  core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::resource::InstructionScope;
 
-use super::{
-  PageProps, guidance, repository,
-  state::{Filter, Panel},
-  words,
-};
+use super::{PageProps, guidance, repository, state::Panel, words};
 use crate::{
+  routes::SkillsFilter,
   theme::{ConnectionsSpacing, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -31,15 +27,11 @@ const ROW_HEIGHT: f32 = skill_row::ROW_HEIGHT;
 const HOW_WIDTH: f32 = 300.0;
 /// F8mJNd's first-skill card; sources grow the found variant from its content.
 const EMPTY_HEIGHT: f32 = 216.0;
-pub struct Library {
-  filter: Signal<Filter>,
-}
+pub struct Library;
 impl Component for Library {
   type Props = PageProps;
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      filter: ctx.signal(Filter::All),
-    }
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<PageProps>().clone();
@@ -92,24 +84,24 @@ impl Component for Library {
       .height(Dimension::Pct(100.0))
   }
 }
-fn accepts(filter: Filter, scope: &InstructionScope) -> bool {
+fn accepts(filter: SkillsFilter, scope: &InstructionScope) -> bool {
   match filter {
-    Filter::All => true,
-    Filter::Project => matches!(scope, InstructionScope::Project),
-    Filter::Roles => matches!(scope, InstructionScope::AgentRole { .. }),
-    Filter::Pipelines => matches!(scope, InstructionScope::Pipeline { .. } | InstructionScope::Step { .. }),
+    SkillsFilter::All => true,
+    SkillsFilter::Project => matches!(scope, InstructionScope::Project),
+    SkillsFilter::Roles => matches!(scope, InstructionScope::AgentRole { .. }),
+    SkillsFilter::Pipelines => matches!(scope, InstructionScope::Pipeline { .. } | InstructionScope::Step { .. }),
   }
 }
 impl Library {
   fn tabs(&self, ctx: &mut Ctx, p: &PageProps) -> Element {
     let tabs = [
-      (Filter::All, "skills.tabs.all"),
-      (Filter::Project, "skills.tabs.project"),
-      (Filter::Roles, "skills.tabs.roles"),
-      (Filter::Pipelines, "skills.tabs.pipelines"),
+      (SkillsFilter::All, "skills.tabs.all"),
+      (SkillsFilter::Project, "skills.tabs.project"),
+      (SkillsFilter::Roles, "skills.tabs.roles"),
+      (SkillsFilter::Pipelines, "skills.tabs.pipelines"),
     ]
     .map(|(filter, key)| {
-      let value = self.filter.clone();
+      let panel = p.view.panel.clone();
       let count = p
         .data
         .listed
@@ -117,11 +109,11 @@ impl Library {
         .iter()
         .filter(|e| accepts(filter, e.body.scope()))
         .count();
-      PageTab::new(
+      PageTab::to(
         format!("skills-tab-{filter:?}"),
         counted(ctx, &ctx.t(key), count),
-        self.filter.get() == filter,
-        move || value.set(filter),
+        p.filter == filter,
+        panel.to(Panel::Library(filter)),
       )
     });
     page_tabs(ctx, "skills-tabs", tabs).into()
@@ -132,7 +124,7 @@ impl Library {
       .listed
       .entries
       .iter()
-      .filter(|e| accepts(self.filter.get(), e.body.scope()))
+      .filter(|e| accepts(p.filter, e.body.scope()))
       .cloned()
       .collect::<Vec<_>>();
     let headings = [

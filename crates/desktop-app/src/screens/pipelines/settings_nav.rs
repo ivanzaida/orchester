@@ -12,7 +12,7 @@ use lurq::{
   node::{border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::state::{Panel, State};
+use super::state::State;
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -51,7 +51,7 @@ impl Sections {
     self.targets[key].clone()
   }
   pub fn navigation(&self, ctx: &Ctx, state: &State, changed: bool) -> Column {
-    let back = state.clone();
+    let back = state.get().panels;
     Column::new()
       .width(Dimension::Px(212.0))
       .height(Dimension::Pct(100.0))
@@ -61,7 +61,7 @@ impl Sections {
       .child(
         ActionButton::new("pipeline-back-steps", ButtonKind::Secondary, ctx.t("pipelines.back"))
           .icon(Icon::ChevronLeft)
-          .on_click(move || back.update(|s| s.panel = Panel::Pipeline)),
+          .on_click(move || back.close()),
       )
       .child(Spacer::new().height(Dimension::Px(14.0)))
       .child(Text::new(&ctx.t("pipelines.settingsNav")).variant(ExtraTypography::ColumnHeading.role()))

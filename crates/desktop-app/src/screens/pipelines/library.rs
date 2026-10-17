@@ -19,7 +19,7 @@ use super::parts;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route},
+  routes::{PipelinePanel, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -176,7 +176,10 @@ impl Component for LibraryRow {
       )
       .cell(ColumnWidth::Fixed(USED), parts::caption(&used))
       .cell(ColumnWidth::Fixed(PUBLISHED), parts::caption(&published))
-      .opens(nav.to(Route::Project(props.project, ProjectPage::Pipeline(entry.id))))
+      .opens(nav.to(Route::Project(
+        props.project,
+        ProjectPage::Pipeline(entry.id, PipelinePanel::default()),
+      )))
   }
 }
 fn row_words(ctx: &Ctx, entry: &LibraryEntry) -> (LibraryEntry, String, String, String) {

@@ -1,7 +1,7 @@
 //! Actual current-profile navigation keeps pending decisions and unsaved Pipeline fields intact.
 use std::collections::BTreeSet;
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{PipelinePanel, ProjectPage, Route};
 use orchester_core::{
   id::{ConnectionId, ResourceId},
   name::Name,
@@ -81,7 +81,7 @@ fn stored(editor: &Editor, id: ResourceId) -> Draft<Pipeline> {
 fn current_agent(editor: &mut Editor, profile: ResourceId, role: &str) {
   assert_eq!(
     editor.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Agent(profile))
+    Route::Project(project_id(), ProjectPage::Agent(profile, Default::default()))
   );
   editor.window.until("current assigned Agent editor", |w| {
     w.tree.get_element_by_id("agent-role").is_some()
@@ -91,9 +91,10 @@ fn current_agent(editor: &mut Editor, profile: ResourceId, role: &str) {
   assert!(editor.text("agent-model").contains("test-model"));
 }
 fn stays(editor: &Editor, id: ResourceId) {
+  let step = PipelinePanel::Step(StepKey::new("research").expect("valid step key"));
   assert_eq!(
     editor.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipeline(id))
+    Route::Project(project_id(), ProjectPage::Pipeline(id, step))
   );
 }
 
@@ -105,10 +106,10 @@ fn pipelines_profile_link_opens_exact_current_agent_and_different_identity_remou
   editor.click("step-open-profile");
   current_agent(&mut editor, assigned, "Explorer");
   assert_eq!(stored(&editor, id), before, "navigation does not save a pipeline");
-  editor
-    .window
-    .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Agent(other)));
+  editor.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Agent(other, Default::default()),
+  ));
   editor.window.until("other current Agent resource", |w| {
     w.tree
       .get_element_by_id("agent-role")
@@ -152,10 +153,10 @@ fn pipelines_profile_link_and_leave_confirm_wait_for_actual_save_completion() {
     !editor.exists("pipeline-leave-question"),
     "the busy link has no departure handler"
   );
-  editor
-    .window
-    .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Agent(assigned)));
+  editor.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Agent(assigned, Default::default()),
+  ));
   editor.window.pass();
   assert!(editor.exists("pipeline-leave-question"));
   editor.click("pipeline-leave-confirm");
@@ -170,10 +171,10 @@ fn pipelines_profile_link_and_leave_confirm_wait_for_actual_save_completion() {
     !editor.exists("step-open-profile"),
     "the accepted read now knows the profile is published"
   );
-  editor
-    .window
-    .navigation()
-    .go(Route::Project(project_id(), ProjectPage::Agent(assigned)));
+  editor.window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::Agent(assigned, Default::default()),
+  ));
   current_agent(&mut editor, assigned, "Explorer");
 }
 

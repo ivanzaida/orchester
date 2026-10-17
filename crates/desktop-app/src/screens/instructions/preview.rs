@@ -17,8 +17,9 @@ use orchester_workspace::instructions::{
 };
 
 use super::{
-  panels::{Panel, Panels, Props},
+  panels::{Panels, Props},
   sources,
+  state::Panel,
 };
 use crate::{
   theme::{ExtraSpacing, instructions},
@@ -95,7 +96,7 @@ pub fn panel(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalog)
             ctx.t("instructions.viewPrompt"),
           )
           .icon(Icon::Eye)
-          .on_click(move || open.set(Panel::Full)),
+          .on_click(move || open.choose(Panel::Full)),
         )
         .child(copy_button),
     )

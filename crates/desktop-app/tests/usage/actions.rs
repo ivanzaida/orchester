@@ -1,7 +1,7 @@
 //! What the Usage page's controls do (`Usage · interactions` `p732q`): a filter's menu chooses and a chip lets
 //! go, a *Where tokens go* row filters by its profile, the period and *Group by* change the query, *Custom…*
 //! takes typed days and refuses a reversed range, and the warning threshold is saved for every project. Each
-//! change is the route's query, in the tab's current entry.
+//! change is the route's query, as a new entry of the tab's history.
 
 use orchester_core::usage::{GroupBy, Period};
 use orchester_workspace::usage::UsageQuery;

@@ -43,7 +43,7 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq)]
-pub struct Props(pub ShownProject);
+pub struct Props(pub ShownProject, pub View);
 impl DevtoolsInspectable for Props {}
 pub struct InstructionsScreen {
   selection: Selection,
@@ -53,10 +53,10 @@ pub struct InstructionsScreen {
   reloads: Signal<u64>,
   leave: crate::navigation::guard::LeaveGuard,
 }
-pub fn screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: View) -> Element {
   ctx.mount_keyed::<InstructionsScreen>(
     &format!("instructions-{}", project.open.project.id()),
-    Props(project.clone()),
+    Props(project.clone(), view),
   )
 }
 impl Component for InstructionsScreen {
@@ -65,16 +65,21 @@ impl Component for InstructionsScreen {
     let dirty = ctx.signal(false);
     let busy = ctx.signal(false);
     let (edits, writing) = (dirty.clone(), busy.clone());
-    let leave = crate::navigation::Navigation::of(ctx).guard(move || edits.get_untracked() || writing.get_untracked());
+    let selection = Selection {
+      project: ctx.props::<Props>().0.open.project.id(),
+      navigation: crate::navigation::Navigation::of(ctx),
+      pending: ctx.signal(None),
+      created: ctx.signal(state::Saved::default()),
+      dirty,
+      busy,
+    };
+    let rule = selection.clone();
+    let leave = selection.navigation.guard_within(
+      move || edits.get_untracked() || writing.get_untracked(),
+      move |route| rule.holds(route),
+    );
     Self {
-      selection: Selection {
-        view: ctx.signal(View::Rule(Tab::Project, None)),
-        pending: ctx.signal(None),
-        created: ctx.signal(state::Saved::default()),
-        dirty,
-        busy,
-        full: ctx.signal(false),
-      },
+      selection,
       retry: ctx.signal(0),
       reloads: ctx.signal(0),
       leave,
@@ -125,20 +130,26 @@ impl Component for InstructionsScreen {
     let Some(data) = read.data else {
       return page;
     };
-    let tab = self.selection.view.get().tab();
+    let view = ctx.props::<Props>().1;
     page
       .with_children(
-        tab
-          .filter(|_| !self.selection.full.get())
+        view
+          .tab()
+          .filter(|_| view.panel() != Some(state::Panel::Full))
           .map(|tab| frame::header(ctx, &project, &data, tab, &self.selection)),
       )
       .with_children(leaving::question(ctx, &self.selection, &self.leave))
-      .child(self.content(ctx, project, data, reading))
+      .child(self.content(ctx, (project, view), data, reading))
   }
 }
 impl InstructionsScreen {
-  fn content(&self, ctx: &mut Ctx, project: ShownProject, data: ProjectInstructions, reading: bool) -> Element {
-    let view = self.selection.view.get();
+  fn content(
+    &self,
+    ctx: &mut Ctx,
+    (project, view): (ShownProject, View),
+    data: ProjectInstructions,
+    reading: bool,
+  ) -> Element {
     match view.tab() {
       None => ctx.mount_keyed::<import::Import>(
         "instruction-import",
@@ -153,7 +164,7 @@ impl InstructionsScreen {
           self.selection.created.set(state::Saved::default());
         }
         let entry = match view {
-          View::Rule(_, selected) => selected
+          View::Rule(_, selected, _) => selected
             .and_then(|id| {
               data
                 .entry(id)
@@ -163,8 +174,8 @@ impl InstructionsScreen {
             .cloned(),
           _ => None,
         };
-        if entry.is_none() && !matches!(view, View::New(_)) {
-          return frame::empty(ctx, &project, &data, &self.selection);
+        if entry.is_none() && !matches!(view, View::New(..)) {
+          return frame::empty(ctx, &project, (&data, tab), &self.selection);
         }
         let key = format!("instruction-editor-{tab:?}-{:?}", entry.as_ref().map(|entry| entry.id));
         ctx.mount_keyed::<editor::Editor>(
@@ -174,6 +185,7 @@ impl InstructionsScreen {
             data,
             entry,
             tab,
+            panel: view.panel().unwrap_or(tab.panel()),
             selection: self.selection.clone(),
             reloads: self.reloads.clone(),
             reading,

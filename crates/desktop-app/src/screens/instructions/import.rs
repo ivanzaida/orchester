@@ -24,7 +24,7 @@ use orchester_workspace::{
 
 use super::{
   import_rows::{Unchosen, Viewed},
-  state::{Selection, Tab, View},
+  state::Selection,
 };
 use crate::{
   project::ShownProject,
@@ -186,14 +186,14 @@ impl Import {
     for draft in created {
       page = page.child(Text::new(draft.resource.name().as_str()).variant(TypographyStyle::Description));
     }
-    let selection = props.selection.clone();
+    let selection = &props.selection;
     page.child(
       ActionButton::new(
         "instruction-import-back",
         ButtonKind::Primary,
         ctx.t("instructions.back"),
       )
-      .on_click(move || selection.open(View::Rule(Tab::Project, None))),
+      .opens(selection.to(selection.opened_from())),
     )
   }
   fn review(&self, ctx: &mut Ctx, scan: &RepositoryScan, busy: bool) -> Element {
@@ -234,7 +234,7 @@ impl Import {
       ButtonKind::Secondary,
       ctx.t("instructions.cancel"),
     )
-    .on_click(move || cancel.open(View::Rule(Tab::Project, None)));
+    .on_click(move || cancel.close(cancel.opened_from()));
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(IMPORT_FOOTER_HEIGHT))
@@ -299,26 +299,23 @@ const IMPORT_LIST_WIDTH: f32 = 460.0;
 const IMPORT_FOOTER_HEIGHT: f32 = 56.0;
 
 fn header(ctx: &mut Ctx, props: &Props) -> Element {
-  let back = props.selection.clone();
+  let back = &props.selection;
   let crumbs = breadcrumb(
     ctx,
     "instruction-import-crumbs",
     CrumbSeparator::Chevron,
     vec![
-      Crumb::link(ctx.t("instructions.title"), move || {
-        back.open(View::Rule(Tab::Project, None))
-      }),
+      Crumb::to(ctx.t("instructions.title"), back.to(back.opened_from())),
       Crumb::here(ctx.t("instructions.import")),
     ],
   );
-  let back = props.selection.clone();
   let back = IconButton::new(
     "instruction-import-return",
     Icon::ArrowLeft,
     ctx.t("instructions.backInstructions"),
   )
   .small()
-  .on_click(move || back.open(View::Rule(Tab::Project, None)))
+  .opens(back.to(back.opened_from()))
   .render(ctx);
   Column::new()
     .width(Dimension::Pct(100.0))
