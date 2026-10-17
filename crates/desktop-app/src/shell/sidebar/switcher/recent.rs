@@ -22,7 +22,7 @@ use orchester_workspace::{background, messages};
 
 use super::{glyph_tile, initial};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   routes::{OverviewTab, ProjectPage, Route},
   services::Services,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText},
@@ -181,8 +181,8 @@ fn new_tab(ctx: &mut Ctx, row: &str, (navigation, route): (Navigation, Route), o
   let label = ctx.t("shell.switcher.openInNewTab");
   let button = pressable(move || {
     open.set(false);
-    navigation.open_tab();
-    navigation.replace(route.clone());
+    navigation.open(route.clone(), OpenIn::NewTab);
+
   })
   .id(id.clone())
   .describe("a11y_name", label.clone())
