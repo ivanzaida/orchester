@@ -59,6 +59,8 @@ windows-sys = { workspace = true, features = ["Wdk_Foundation", "Wdk_Storage_Fil
 
 [dev-dependencies]
 orchester-workspace = { workspace = true, features = ["test-support"] }
+# A test team server with a certificate from the tests' authority, trusted besides the store (`tests/cloud_account.rs`).
+orchester-api = { workspace = true, features = ["client", "identity", "test-support"] }
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
 rusqlite.workspace = true
 tempfile.workspace = true

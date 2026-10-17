@@ -1354,7 +1354,7 @@ Row 45: address plus an 8-character code, for networks without the internet.
   the SHA-256 of the certificate its connections present, signed with that key: its own certificate, or with `tls =
   "off"` the one its proxy presents, which the host configures (`proxy_certificate`, `docs/server-hosting.md`). The
   app checks that the key's id is the id the server gives itself, that the signature holds, and that the certificate
-  is the one of the connection the app itself uses; otherwise it sends nothing (*the server didn't prove it is the
+  is the one of the very connection that carried the proof (the pinned one, or the leaf the trust store verified, chain and name, on that connection); otherwise it sends nothing (*the server didn't prove it is the
   server it says it is*). A server that names another's id cannot sign for it, and one that passes the nonce on to the
   other and returns that one's proof is caught by the certificate. The one case the check cannot tell apart is two
   servers presenting the same certificate (one certificate shared by several servers, or a proxy in front of several
