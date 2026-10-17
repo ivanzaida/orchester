@@ -1,9 +1,9 @@
 //! The conversation (`Chat` in `ZJzV0`): one row per turn, newest last, in a list that keeps the rows out of view
 //! unbuilt and opens on the newest turn. A turn is the person's message (`Your message` `mr4lC`) with where it stands
 //! (*Sending…*, then *Delivered* and when, `check-check` in `success`), the Orchestrator's answer
-//! (`Agent message` `dcd0m` with `waypoints`: its replies as Markdown with their links, `reply`, and its actions as
-//! cards, `action`), and how the
-//! turn ended: while it thinks, the working line with *Stop response* (`Thinking` `PR7nz`); stopped or cut short, an
+//! (`Agent message` `dcd0m` with `waypoints`: its replies as every chat draws what an agent wrote,
+//! `ui::chat::agent_text`, and its actions as cards, `action`), and how the turn ended: while it thinks, the working
+//! line with *Stop response* (`Thinking` `PR7nz`); stopped or cut short, an
 //! event line (`Event divider` `YKpmi`) and *Ask again*; failed, a danger notice with *Retry* (and *Open
 //! Connections* or *Open settings* when the connection is why), or for an earlier turn an event line.
 
@@ -32,7 +32,6 @@ use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
 use super::{
   change::{ChangeCard, ChangeProps},
-  data::ProjectNames,
   held::{HeldCard, HeldProps},
   proposal::{ProposalProps, StartProposal},
   turns::{Part, Turn},
@@ -43,7 +42,7 @@ use crate::{
   theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    chat::{Avatar, chat_row, delivery_line, person_message},
+    chat::{Avatar, agent_text, chat_row, delivery_line, names::ProjectNames, person_message},
     icon::{Icon, icon},
     markdown::LinkHandler,
     notice::{Notice, NoticeTone},
@@ -192,7 +191,7 @@ fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
     .iter()
     .enumerate()
     .map(|(index, part)| match part {
-      Part::Reply { text: said, .. } => super::reply::reply(
+      Part::Reply { text: said, .. } => agent_text(
         ctx,
         &format!("orchestrator-reply-{key}-{index}"),
         said,

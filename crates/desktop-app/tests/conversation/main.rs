@@ -5,6 +5,7 @@
 //! ([`states`]). The window's runner program does not exist, so a run recorded as running reads as
 //! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
+mod agent_text;
 mod denied;
 mod jump;
 #[allow(

@@ -1,6 +1,6 @@
-//! A reply's labelled links as their grid (`Links` `ZZbyh` in `w262B`): a row per link, 8 apart with 2 over and under
-//! the grid, each its label in 12 `text_muted` in an 84 column, then the link, then its detail in 12.5
-//! `text_secondary`, 12 apart. The rule for which list is one is `ui::chat::labelled`'s.
+//! An agent's labelled links as their grid (`Links` `ZZbyh` in `w262B`): a row per link, 8 apart with 2 over and
+//! under the grid, each its label in 12 `text_muted` in an 84 column, then the link, then its detail in 12.5
+//! `text_secondary`, 12 apart. The rule for which list is one is [`super::labelled`]'s.
 
 use lurq::{
   app::theme::SpacingSize,
@@ -9,10 +9,8 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use crate::{
-  theme::{ExtraSpacing, OrchestratorSpacing, OrchestratorText},
-  ui::chat::labelled::{LabelledLink, labelled_links},
-};
+use super::labelled::{LabelledLink, labelled_links};
+use crate::theme::{ExtraSpacing, OrchestratorSpacing, OrchestratorText};
 
 /// The label's column (`p0bb6` in `w262B`).
 const LABEL_WIDTH: f32 = 84.0;
@@ -25,7 +23,7 @@ pub(super) fn grid(list: &MarkdownList<'_>) -> Option<Element> {
   let rows = labelled_links(list.items())?;
   let grid = Column::new()
     .overflow_visible()
-    .class("orchestrator-link-grid")
+    .class("chat-link-grid")
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()

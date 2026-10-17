@@ -16,7 +16,6 @@ mod header;
 mod held;
 mod history;
 mod proposal;
-mod reply;
 mod send;
 mod settings;
 mod start;
