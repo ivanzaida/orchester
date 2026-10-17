@@ -2,7 +2,7 @@
 //! git 2.46 write (every other git command runs for real in the seeded repository): offered beside Merge into main,
 //! under way while the branch is pushed, opened as a draft with its number and Review PR, or ready for review; why it
 //! is unavailable (no GitHub remote, no usable connection, another account, a missing scope, no base branch, an open
-//! one already); and a refused push or a failed `gh pr create` with the recovery and Try again. GitHub is never
+//! one already); and a refused push or GitHub refusing to open it, with the recovery and Try again. GitHub is never
 //! reached.
 
 use std::{
@@ -36,6 +36,7 @@ use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_store::ProjectDb;
 use orchester_workspace::pull_requests::list::{PullRequestList, load_list_in};
 use parking_lot::Mutex;
+use serde_json::{Value, json};
 
 use super::{
   Page, checkout_page,
@@ -49,6 +50,11 @@ const SIGNED_IN: &str = r#"{"hosts":{"github.com":[{"state":"success","active":t
 const OTHER_ACCOUNT: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivan-work","scopes":"repo"}]}}"#;
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"read:org"}]}}"#;
 const SIGN_IN_REFUSED: &str = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n";
+/// The request opening a pull request on `ivanzaida/kontur`, and GitHub's answer.
+const CREATE: &str = "api --method POST --hostname github.com repos/ivanzaida/kontur/pulls --input -";
+const CREATED: &str = r#"{"number":143,"html_url":"https://github.com/ivanzaida/kontur/pull/143","draft":true}"#;
+/// GitHub refusing a pull request without commits, as `gh api` writes it.
+const NO_COMMITS: &str = r#"{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"No commits between main and the branch"}]}"#;
 
 fn output(code: i32, stdout: &str, stderr: &str) -> CommandOutput {
   CommandOutput {
@@ -67,8 +73,8 @@ struct FakeGitHub {
   create: Mutex<CommandOutput>,
   held: AtomicBool,
   pushes: AtomicUsize,
-  /// The arguments and standard input of the last `gh pr create`, and the branch it opened 143 from.
-  created: Mutex<Option<(String, String)>>,
+  /// The request of the last pull request GitHub was asked to open, and the branch it opened 143 from.
+  created: Mutex<Option<Value>>,
   opened: Mutex<Option<String>>,
 }
 
@@ -78,7 +84,7 @@ impl FakeGitHub {
       real: ProcessRunner::new(Duration::from_secs(60)),
       auth: Mutex::new(SIGNED_IN),
       push: Mutex::new(output(0, "", "")),
-      create: Mutex::new(output(0, "https://github.com/ivanzaida/kontur/pull/143\n", "")),
+      create: Mutex::new(output(0, CREATED, "")),
       held: AtomicBool::new(false),
       pushes: AtomicUsize::new(0),
       created: Mutex::new(None),
@@ -90,18 +96,27 @@ impl FakeGitHub {
     self.pushes.load(Ordering::SeqCst)
   }
 
+  /// The request of the last pull request GitHub was asked to open.
+  fn request(&self) -> Value {
+    self
+      .created
+      .lock()
+      .clone()
+      .expect("GitHub was asked to open a pull request")
+  }
+
   fn gh(&self, command: &Command) -> CommandOutput {
     let args = command.args().join(" ");
     match args.as_str() {
       "--version" => output(0, "gh version 2.97.0 (2026-07-31)\n", ""),
       args if args.starts_with("auth status") => output(0, &self.auth.lock(), ""),
-      args if args.starts_with("pr create") => {
+      CREATE => {
         let answer = self.create.lock().clone();
-        *self.created.lock() = Some((args.to_owned(), command.stdin().unwrap_or_default().to_owned()));
+        let request: Value = serde_json::from_str(command.stdin().unwrap_or_default()).expect("a JSON request");
         if answer.success() {
-          let head = command.args().iter().skip_while(|arg| *arg != "--head").nth(1).cloned();
-          *self.opened.lock() = head;
+          *self.opened.lock() = request["head"].as_str().map(str::to_owned);
         }
+        *self.created.lock() = Some(request);
         answer
       }
       args if args.starts_with("pr list") && args.contains("--state open") => output(0, &self.open_list(), ""),
@@ -270,12 +285,12 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   assert!(!page.has("task-review-pull-request-reason"));
   assert!(!page.locked("task-review-pull-request"));
   let run = latest_run(&page, READY);
-  let (args, body) = fake.created.lock().clone().expect("gh pr create ran");
-  let branch = run.branch().as_str();
-  assert!(
-    args.contains(&format!("--base main --head {branch}")) && args.ends_with("--draft"),
-    "{args}"
+  let request = fake.request();
+  assert_eq!(
+    (&request["base"], &request["head"], &request["draft"]),
+    (&json!("main"), &json!(run.branch().as_str()), &json!(true))
   );
+  let body = request["body"].as_str().expect("a body");
   assert!(body.contains("## Acceptance criteria"), "{body}");
   let PullRequestList::Linked(list) = load_list_in(&page.repo).expect("the pull requests") else {
     panic!("the project is linked");
@@ -302,8 +317,7 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   });
   create(&mut page, &fake);
   page.until_says("task-pull-request-opened", "Pull request #143 opened.");
-  let (args, _) = fake.created.lock().clone().expect("gh pr create ran");
-  assert!(!args.contains("--draft"), "{args}");
+  assert_eq!(fake.request()["draft"], json!(false), "ready for review is asked for");
   // The first run keeps its pull request, which Review PR opens.
   page.open(READY, "task-pull-request-opened");
   page.click("task-review-pull-request");
@@ -377,7 +391,7 @@ fn decision_create_pull_request_says_why_it_is_unavailable() {
 }
 
 /// One page through every failure, so the binary's tests in parallel stay within the harness's wait: a refused push,
-/// then `gh pr create` failing twice, then Try again opening it.
+/// then GitHub refusing to open it twice, then Try again opening it.
 #[test]
 fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
   let _checkout = checkout_page();
@@ -405,11 +419,7 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
   assert!(!page.locked("task-merge"), "Merge into main stays offered");
   assert!(page.has("task-create-pull-request"), "and so does Create pull request");
   *fake.push.lock() = output(0, "", "");
-  *fake.create.lock() = output(
-    1,
-    "",
-    "pull request create failed: GraphQL: No commits between main and the branch (createPullRequest)\n",
-  );
+  *fake.create.lock() = output(1, NO_COMMITS, "gh: Validation Failed (HTTP 422)\n");
   retry_until(&mut page, "No pull request opened");
   assert_eq!(
     page.text("task-pull-request-failure-body"),
@@ -419,13 +429,13 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
     !page.has("task-pull-request-command"),
     "only a refused sign-in names gh auth setup-git"
   );
-  *fake.create.lock() = output(1, "", "HTTP 502: Server Error (https://api.github.com/graphql)\n");
+  *fake.create.lock() = output(1, "", "gh: Server Error (HTTP 502)\n");
   retry_until(&mut page, "gh couldn't open the pull request");
   assert_eq!(
     page.text("task-pull-request-failure-body"),
     "GitHub is having trouble. The branch was pushed; try again in a moment."
   );
-  *fake.create.lock() = output(0, "https://github.com/ivanzaida/kontur/pull/143\n", "");
+  *fake.create.lock() = output(0, CREATED, "");
   page.window.until("Try again to open it", |window| {
     if let Some(mut retry) = window.tree.get_element_by_id_mut("task-pull-request-retry") {
       retry.click();

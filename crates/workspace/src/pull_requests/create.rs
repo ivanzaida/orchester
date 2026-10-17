@@ -201,13 +201,28 @@ impl From<StoreError> for CreateProblem {
 /// `draft`, then syncs the pull requests.
 pub fn create_in(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> Result<Created, CreateProblem> {
   let outcome = open(repo_root, programs, (run, draft));
-  if matches!(&outcome, Ok(_) | Err(CreateProblem::AlreadyOpen { .. })) {
-    // The pull request stands either way; the Pull requests page says why a sync failed.
-    if let Err(error) = sync_scope_in(repo_root, programs, SyncScope::OpenAndClosed) {
-      tracing::warn!(%error, "cannot sync the pull requests after creating one");
-    }
+  if !matches!(&outcome, Ok(_) | Err(CreateProblem::AlreadyOpen { .. })) {
+    return outcome;
   }
-  outcome
+  // The pull request stands either way; the Pull requests page says why a sync failed.
+  if let Err(error) = sync_scope_in(repo_root, programs, SyncScope::OpenAndClosed) {
+    tracing::warn!(%error, "cannot sync the pull requests after creating one");
+  }
+  match outcome {
+    // GitHub names the branch of the one already open, not its number: the sync just stored it.
+    Err(CreateProblem::AlreadyOpen { number: None }) => Err(CreateProblem::AlreadyOpen {
+      number: stored_open(repo_root, run),
+    }),
+    outcome => outcome,
+  }
+}
+
+/// The open pull request of run `run`'s branch the last sync stored, if it can be read.
+fn stored_open(repo_root: &Path, run: RunId) -> Option<u64> {
+  let db = ProjectDb::open(repo_root).ok()?;
+  let link = db.repository_link().ok()??;
+  let run = db.run(run).ok()??;
+  open_for(&db, &link, run.branch()).ok()?
 }
 
 fn open(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> Result<Created, CreateProblem> {

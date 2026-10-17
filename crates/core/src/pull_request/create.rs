@@ -1,11 +1,14 @@
-//! Opening a pull request with `gh pr create -R <host/owner/name> --base <base> --head <head> --title <title>
-//! --body-file - [--draft]` (`docs/design/orchester-workspace.md`, "GitHub", rule 7: a draft unless asked
-//! otherwise), and what it says: the new pull request's address, or why it opened none. The body goes on
-//! standard input, so free-form text never passes through a command script's arguments. What a pull request
-//! of a task says is [`task_pull_request`]'s: the task's key and title, the first paragraph of its brief,
-//! its acceptance criteria and where the task is in Orchester.
+//! Opening a pull request with `gh api --method POST --hostname <host> repos/<owner>/<name>/pulls --input -`
+//! (`docs/design/orchester-workspace.md`, "GitHub", rule 7: a draft unless asked otherwise), and what GitHub
+//! answers: the new pull request, or why it opened none. The title, body, branches and draft choice are the
+//! request's JSON body on standard input, never arguments: a `gh` started through a `.cmd` script only gets
+//! arguments `cmd.exe` passes on unchanged, and a title such as `KEY · Title` is not one. What a pull request
+//! of a task says is [`task_pull_request`]'s: the task's key and title, the first paragraph of its brief, its
+//! acceptance criteria and where the task is in Orchester.
 
 use std::path::Path;
+
+use serde::Deserialize;
 
 use super::is_pull_request_url;
 use crate::{
@@ -18,8 +21,8 @@ use crate::{
   task::TaskDetails,
 };
 
-/// What `gh` writes when the head branch already has an open pull request into the base, followed by its
-/// address on the next line.
+/// What GitHub says when the head branch already has an open pull request into the base (`A pull request
+/// already exists for owner:branch.`).
 const ALREADY_EXISTS: &str = "already exists";
 /// What GitHub says when the head has no commits the base lacks.
 const NO_COMMITS: &str = "no commits between";
@@ -43,10 +46,10 @@ pub struct OpenedPullRequest {
   pub url: String,
 }
 
-/// Why `gh pr create` opened no pull request.
+/// Why GitHub opened no pull request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CreateFailure {
-  /// The head branch already has an open pull request into the base: `number`, when `gh` named it.
+  /// The head branch already has an open pull request into the base: `number`, when GitHub named it.
   AlreadyExists { number: Option<u64> },
   /// The head has no commits the base lacks.
   NoCommits,
@@ -54,63 +57,79 @@ pub enum CreateFailure {
   Repository(RepositoryError),
 }
 
-/// `gh pr create` of `new` on `repo`, its body on standard input.
-pub fn gh_pr_create_command(executable: &Path, repo: &GitHubRepo, new: &NewPullRequest) -> Command {
-  let mut args = vec![
-    "pr".to_owned(),
-    "create".to_owned(),
-    "-R".to_owned(),
-    repo.to_string(),
-    "--base".to_owned(),
-    new.base.to_string(),
-    "--head".to_owned(),
-    new.head.to_string(),
-    "--title".to_owned(),
-    new.title.clone(),
-    "--body-file".to_owned(),
-    "-".to_owned(),
-  ];
-  if new.draft {
-    args.push("--draft".to_owned());
-  }
-  gh_command(executable, args).with_stdin(new.body.clone())
+/// The fields of GitHub's answer Orchester reads.
+#[derive(Deserialize)]
+struct Answer {
+  number: u64,
+  html_url: String,
 }
 
-/// Reads `gh pr create` output for `repo`: the new pull request's address, the last line it prints.
+/// The REST request opening `new` on `repo`, with `new` as its body on standard input.
+pub fn gh_pr_create_command(executable: &Path, repo: &GitHubRepo, new: &NewPullRequest) -> Command {
+  let body = serde_json::json!({
+    "title": new.title,
+    "body": new.body,
+    "head": new.head.as_str(),
+    "base": new.base.as_str(),
+    "draft": new.draft,
+  });
+  let path = format!("repos/{}/{}/pulls", repo.owner(), repo.name());
+  let args = [
+    "api",
+    "--method",
+    "POST",
+    "--hostname",
+    repo.host().as_str(),
+    &path,
+    "--input",
+    "-",
+  ];
+  gh_command(executable, args.map(str::to_owned).to_vec()).with_stdin(body.to_string())
+}
+
+/// Reads GitHub's answer to [`gh_pr_create_command`] for `repo`: the new pull request's number and page.
 pub fn parse_gh_pr_create(repo: &GitHubRepo, output: &CommandOutput) -> Result<OpenedPullRequest, CreateFailure> {
   if !output.success() {
-    return Err(create_failure(repo, &output.stderr));
+    return Err(create_failure(repo, output));
   }
-  output
-    .stdout
-    .lines()
-    .rev()
-    .find_map(|line| pull_request_at(repo, line.trim()))
-    .ok_or_else(|| CreateFailure::Repository(unrecognized(&output.stdout)))
+  let answer: Answer = serde_json::from_str(output.stdout.trim())
+    .map_err(|error| CreateFailure::Repository(unrecognized(&error.to_string())))?;
+  if !is_pull_request_url(repo, answer.number, &answer.html_url) {
+    return Err(CreateFailure::Repository(unrecognized(&answer.html_url)));
+  }
+  Ok(OpenedPullRequest {
+    number: answer.number,
+    url: answer.html_url,
+  })
 }
 
-fn create_failure(repo: &GitHubRepo, stderr: &str) -> CreateFailure {
-  let lower = stderr.to_ascii_lowercase();
+/// Why GitHub refused: `gh api` writes the answer's `message` to standard error (`gh: Validation Failed (HTTP
+/// 422)`) and the answer itself to standard output, whose `errors` say what failed validation.
+fn create_failure(repo: &GitHubRepo, output: &CommandOutput) -> CreateFailure {
+  let details = error_messages(&output.stdout);
+  let lower = format!("{}\n{details}", output.stderr).to_ascii_lowercase();
   if lower.contains(ALREADY_EXISTS) {
-    let number = stderr
-      .lines()
-      .find_map(|line| pull_request_at(repo, line.trim()))
-      .map(|opened| opened.number);
-    return CreateFailure::AlreadyExists { number };
+    // GitHub names the branch, not the pull request: the sync that follows finds it.
+    return CreateFailure::AlreadyExists { number: None };
   }
   if lower.contains(NO_COMMITS) {
     return CreateFailure::NoCommits;
   }
-  CreateFailure::Repository(classify_failure(repo, &redact_userinfo(stderr)))
+  CreateFailure::Repository(classify_failure(repo, &redact_userinfo(&output.stderr)))
 }
 
-/// The pull request whose address is `text`, if it is one of `repo`'s host.
-fn pull_request_at(repo: &GitHubRepo, text: &str) -> Option<OpenedPullRequest> {
-  let number: u64 = text.rsplit_once("/pull/")?.1.parse().ok()?;
-  is_pull_request_url(repo, number, text).then(|| OpenedPullRequest {
-    number,
-    url: text.to_owned(),
-  })
+/// The `message` of each of the `errors` of GitHub's error answer `stdout`, one a line; none when it is not one.
+fn error_messages(stdout: &str) -> String {
+  let Ok(answer) = serde_json::from_str::<serde_json::Value>(stdout.trim()) else {
+    return String::new();
+  };
+  answer["errors"]
+    .as_array()
+    .into_iter()
+    .flatten()
+    .filter_map(|error| error["message"].as_str().or_else(|| error.as_str()))
+    .collect::<Vec<_>>()
+    .join("\n")
 }
 
 /// Where task `key` of project `project` is in Orchester, as the app's links name it.

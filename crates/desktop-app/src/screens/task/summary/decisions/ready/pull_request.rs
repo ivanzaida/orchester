@@ -4,7 +4,7 @@
 //! operations; unavailable with why when the project has no usable GitHub connection, the folder no GitHub remote,
 //! `gh` acts as another account or lacks the `repo` scope, the run recorded no base branch, or the branch has an
 //! open pull request already. Once opened, the card says so with its number and *Review PR* opens it; a refused
-//! push or a failed `gh pr create` says why in place, with the recovery the rules name (06.B `YDKJS`) and *Try
+//! push or GitHub refusing to open it says why in place, with the recovery the rules name (06.B `YDKJS`) and *Try
 //! again*.
 
 use std::{num::NonZeroU64, sync::Arc};
@@ -379,7 +379,7 @@ fn push_words(ctx: &Ctx, failure: &PushFailure, (branch, remote, host): (&str, &
   }
 }
 
-/// What a failed `gh pr create` means.
+/// What GitHub refusing to open the pull request means.
 fn github_words(ctx: &Ctx, error: &RepositoryError) -> Arc<str> {
   match error {
     RepositoryError::Network { .. } => ctx.t("decisions.ready.pullRequest.failure.unreachable"),

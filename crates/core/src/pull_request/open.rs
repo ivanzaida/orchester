@@ -1,7 +1,7 @@
 //! Opening a pull request for a run's branch on the project's linked repository (`docs/design/
 //! orchester-workspace.md`, "GitHub", rules 4 to 7): `gh` must act as the account the link expects, with the
-//! `repo` scope; then the branch is pushed with git's own credentials, and `gh pr create` opens the pull
-//! request. Orchester never signs in, switches accounts or changes git config on the way.
+//! `repo` scope; then the branch is pushed with git's own credentials, and `gh api` asks GitHub to open the
+//! pull request. Orchester never signs in, switches accounts or changes git config on the way.
 
 use std::path::Path;
 

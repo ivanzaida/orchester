@@ -1,7 +1,7 @@
-//! Opening a pull request for a run's branch: `git push` of the branch to the link's remote, then `gh pr create`,
-//! against synthetic output in the shapes git 2.46 and gh 2.97 write (a sign-in git lacks cannot be produced on
-//! demand, nor can GitHub's refusals): what each says, that nothing is pushed for an account the project does not
-//! expect, and that no command sets an upstream, changes git config or touches gh's sign-in.
+//! Opening a pull request for a run's branch: `git push` of the branch to the link's remote, then `gh api` asking
+//! GitHub to open it, against synthetic output in the shapes git 2.46 and gh 2.97 write (a sign-in git lacks cannot
+//! be produced on demand, nor can GitHub's refusals): what each says, that nothing is pushed for an account the
+//! project does not expect, and that no command sets an upstream, changes git config or touches gh's sign-in.
 
 use orchester_core::{
   command::{CommandError, CommandOutput},
@@ -18,6 +18,7 @@ use orchester_core::{
   run::BranchName,
   task::{TaskDetails, TaskLimits},
 };
+use serde_json::{Value, json};
 
 use crate::{
   connection::github_connection,
@@ -27,8 +28,11 @@ use crate::{
 const VERSION: &str = "--version";
 const AUTH_STATUS: &str = "auth status --hostname github.com --json hosts";
 const PUSH: &str = "push origin refs/heads/orchester/kon-12-run-1:refs/heads/orchester/kon-12-run-1";
-const CREATE_DRAFT: &str = "pr create -R github.com/ivanzaida/kontur --base main --head orchester/kon-12-run-1 \
-                            --title KON-12 · Add retry --body-file - --draft";
+const CREATE: &str = "api --method POST --hostname github.com repos/ivanzaida/kontur/pulls --input -";
+/// Besides letters and digits, what a `gh` started through a `.cmd` script may get in an argument: what `cmd.exe`
+/// passes on unchanged (`orchester_exec::launch::passes_through_cmd`, whose Windows tests run this command through
+/// a script).
+const THROUGH_CMD: &str = " -_.,/:=@+";
 
 fn repo() -> GitHubRepo {
   GitHubRepo::new(GitHubHost::github_com(), "ivanzaida", "kontur").expect("valid repository")
@@ -71,19 +75,40 @@ fn failed_with(code: i32, stderr: &str) -> CommandOutput {
   }
 }
 
+/// `gh api`'s output when GitHub refused with HTTP 422: the answer `body` on standard output.
+fn refused(body: &str) -> CommandOutput {
+  CommandOutput {
+    code: Some(1),
+    stdout: body.to_owned(),
+    stderr: fixture!("gh_api_pulls_create_synthetic_422.stderr").to_owned(),
+  }
+}
+
+/// The JSON request body `command` sends on standard input.
+fn request(command: &orchester_core::command::Command) -> Value {
+  serde_json::from_str(command.stdin().expect("a request body")).expect("JSON")
+}
+
 #[test]
-fn pr_create_opens_a_draft_from_the_head_into_the_base_with_the_body_on_standard_input() {
+fn pr_create_opens_a_draft_from_the_head_into_the_base_with_the_request_on_standard_input() {
   let command = gh_pr_create_command(&gh(), &repo(), &new(true));
-  assert_eq!(command.args().join(" "), CREATE_DRAFT);
-  assert_eq!(command.stdin(), Some(new(true).body.as_str()));
+  assert_eq!(command.args().join(" "), CREATE);
+  assert_eq!(
+    request(&command),
+    json!({
+      "title": "KON-12 · Add retry",
+      "body": new(true).body,
+      "head": "orchester/kon-12-run-1",
+      "base": "main",
+      "draft": true,
+    })
+  );
   assert!(command.env().contains(&("GH_PROMPT_DISABLED".into(), "1".into())));
   let ready = gh_pr_create_command(&gh(), &repo(), &new(false));
-  assert!(
-    !ready.args().contains(&"--draft".to_owned()),
-    "ready for review is asked for"
-  );
+  assert_eq!(ready.args(), command.args());
+  assert_eq!(request(&ready)["draft"], json!(false), "ready for review is asked for");
   assert_eq!(
-    parse_gh_pr_create(&repo(), &ok(fixture!("gh_pr_create_synthetic.stdout"))),
+    parse_gh_pr_create(&repo(), &ok(fixture!("gh_api_pulls_create_synthetic.json"))),
     Ok(OpenedPullRequest {
       number: 143,
       url: "https://github.com/ivanzaida/kontur/pull/143".to_owned(),
@@ -91,15 +116,49 @@ fn pr_create_opens_a_draft_from_the_head_into_the_base_with_the_body_on_standard
   );
 }
 
+/// A `gh` installed as a `.cmd` script gets only arguments `cmd.exe` passes on unchanged; the title's `·`, the
+/// body's line breaks and any branch name stay on standard input.
+#[test]
+fn pr_create_arguments_pass_through_a_command_script() {
+  let odd = NewPullRequest {
+    base: branch("release/a&b(1)!"),
+    title: "KON-12 · \"Retry\" 50% & more".to_owned(),
+    ..new(true)
+  };
+  let command = gh_pr_create_command(&gh(), &repo(), &odd);
+  for arg in command.args() {
+    assert!(
+      !arg.is_empty()
+        && arg
+          .chars()
+          .all(|c| c.is_ascii_alphanumeric() || THROUGH_CMD.contains(c)),
+      "`{arg}` in {:?}",
+      command.args()
+    );
+  }
+  assert_eq!(request(&command)["base"], json!("release/a&b(1)!"));
+  assert_eq!(request(&command)["title"], json!(odd.title));
+}
+
 #[test]
 fn pr_create_failures_name_an_open_pull_request_no_commits_and_github_errors() {
   assert_eq!(
-    parse_gh_pr_create(&repo(), &failed(fixture!("gh_pr_create_synthetic_exists.stderr"))),
-    Err(CreateFailure::AlreadyExists { number: Some(141) })
+    parse_gh_pr_create(&repo(), &refused(fixture!("gh_api_pulls_create_synthetic_exists.json"))),
+    Err(CreateFailure::AlreadyExists { number: None })
   );
   assert_eq!(
-    parse_gh_pr_create(&repo(), &failed(fixture!("gh_pr_create_synthetic_no_commits.stderr"))),
+    parse_gh_pr_create(
+      &repo(),
+      &refused(fixture!("gh_api_pulls_create_synthetic_no_commits.json"))
+    ),
     Err(CreateFailure::NoCommits)
+  );
+  assert!(
+    matches!(
+      parse_gh_pr_create(&repo(), &refused("{\"message\":\"Validation Failed\",\"errors\":[]}")),
+      Err(CreateFailure::Repository(RepositoryError::Unrecognized { .. }))
+    ),
+    "another refusal is GitHub's"
   );
   assert_eq!(
     parse_gh_pr_create(&repo(), &failed(fixture!("gh_repo_view_rate_limited.stderr"))),
@@ -111,14 +170,17 @@ fn pr_create_failures_name_an_open_pull_request_no_commits_and_github_errors() {
   ));
   assert!(
     matches!(
-      parse_gh_pr_create(&repo(), &ok("Creating pull request…\n")),
+      parse_gh_pr_create(&repo(), &ok("{\"number\":143}\n")),
       Err(CreateFailure::Repository(RepositoryError::Unrecognized { .. }))
     ),
     "an answer without the pull request's address opened nothing Orchester can name"
   );
   assert!(
     matches!(
-      parse_gh_pr_create(&repo(), &ok("https://ghe.example.com/ivanzaida/kontur/pull/9\n")),
+      parse_gh_pr_create(
+        &repo(),
+        &ok("{\"number\":9,\"html_url\":\"https://ghe.example.com/ivanzaida/kontur/pull/9\"}\n")
+      ),
       Err(CreateFailure::Repository(RepositoryError::Unrecognized { .. }))
     ),
     "an address on another host is not this repository's pull request"
@@ -176,7 +238,7 @@ fn opening_pushes_the_branch_then_creates_the_pull_request() {
     (VERSION, Ok(ok(fixture!("gh_version.stdout")))),
     (AUTH_STATUS, Ok(ok(fixture!("gh_auth_status_signed_in.stdout")))),
     (PUSH, Ok(ok(""))),
-    (CREATE_DRAFT, Ok(ok(fixture!("gh_pr_create_synthetic.stdout")))),
+    (CREATE, Ok(ok(fixture!("gh_api_pulls_create_synthetic.json")))),
   ]);
   let connection = github_connection();
   let github = GhCli::new(&runner, &connection);
@@ -188,7 +250,7 @@ fn opening_pushes_the_branch_then_creates_the_pull_request() {
   let attempt = open_pull_request(&github, push, (&link("ivanzaida"), &new(true)), now());
   assert_eq!(attempt.outcome.map(|opened| opened.number), Ok(143));
   let ran: Vec<String> = runner.ran().iter().map(|command| command.args().join(" ")).collect();
-  assert_eq!(ran, [VERSION, AUTH_STATUS, PUSH, CREATE_DRAFT]);
+  assert_eq!(ran, [VERSION, AUTH_STATUS, PUSH, CREATE]);
 }
 
 #[test]

@@ -1,8 +1,8 @@
 //! Create pull request from a task's latest succeeded run, through a fake `gh` and `git` that answer in the shapes
 //! gh 2.97 and git 2.46 write: whether a run can have one (no GitHub remote, no usable connection, another account,
 //! a missing scope, no base branch, an open one already), creating it (the branch pushed, a draft from it into the
-//! base with the task's words, then the sync that links it to the task and run), a refused push and a failed
-//! `gh pr create`, and the job on the project's shared operations that does not open a second one.
+//! base with the task's words, then the sync that links it to the task and run), a refused push and GitHub refusing
+//! to open it, and the job on the project's shared operations that does not open a second one.
 
 use std::{
   sync::Arc,
@@ -39,6 +39,10 @@ const OTHER_ACCOUNT: &str = r#"{"hosts":{"github.com":[{"state":"success","activ
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"read:org"}]}}"#;
 const ORIGIN_ON_GITHUB: &str =
   "origin\thttps://github.com/ivanzaida/kontur.git (fetch)\norigin\thttps://github.com/ivanzaida/kontur.git (push)\n";
+/// The request opening a pull request on `ivanzaida/kontur`, and GitHub's answer.
+const CREATE: &str = "api --method POST --hostname github.com repos/ivanzaida/kontur/pulls --input -";
+const CREATED: &str = r#"{"number":143,"html_url":"https://github.com/ivanzaida/kontur/pull/143","draft":true}"#;
+const VALIDATION_FAILED: &str = "gh: Validation Failed (HTTP 422)\n";
 
 fn answer(code: i32, stdout: &str, stderr: &str) -> CommandOutput {
   CommandOutput {
@@ -46,6 +50,15 @@ fn answer(code: i32, stdout: &str, stderr: &str) -> CommandOutput {
     stdout: stdout.to_owned(),
     stderr: stderr.to_owned(),
   }
+}
+
+/// GitHub refusing with HTTP 422 because `message`, as `gh api` writes it.
+fn refused(message: &str) -> CommandOutput {
+  let body = serde_json::json!({
+    "message": "Validation Failed",
+    "errors": [{ "resource": "PullRequest", "code": "custom", "message": message }],
+  });
+  answer(1, &body.to_string(), VALIDATION_FAILED)
 }
 
 /// `gh` and `git` as the person's computer has them: the sign-in `auth`, the folder's `remotes`, and what a push
@@ -66,7 +79,7 @@ impl FakeGitHub {
       auth: SIGNED_IN,
       remotes: ORIGIN_ON_GITHUB,
       push: answer(0, "", "To https://github.com/ivanzaida/kontur.git\n * [new branch]\n"),
-      create: answer(0, "https://github.com/ivanzaida/kontur/pull/143\n", ""),
+      create: answer(0, CREATED, ""),
       head: head.to_owned(),
       ran: Mutex::new(Vec::new()),
       opened: Mutex::new(false),
@@ -108,8 +121,8 @@ impl CommandRunner for FakeGitHub {
       args if args.starts_with("--git-dir ") && args.ends_with(" remote -v") => answer(0, self.remotes, ""),
       args if args.starts_with("auth status") => answer(0, self.auth, ""),
       args if args.starts_with("push ") => self.push.clone(),
-      args if args.starts_with("pr create") => {
-        *self.opened.lock() = self.create.code == Some(0);
+      CREATE => {
+        *self.opened.lock() |= self.create.code == Some(0);
         self.create.clone()
       }
       args if args.starts_with("pr list") && args.contains("--state open") => answer(0, &self.open_list(), ""),
@@ -228,14 +241,19 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
     push.args().join(" "),
     format!("push origin refs/heads/{branch}:refs/heads/{branch}")
   );
-  let create = fake.ran_one("pr create").expect("gh pr create ran");
+  let create = fake.ran_one(CREATE).expect("GitHub was asked to open it");
+  let request: serde_json::Value =
+    serde_json::from_str(create.stdin().expect("the request on standard input")).expect("JSON");
   assert_eq!(
-    create.args().join(" "),
-    format!(
-      "pr create -R github.com/ivanzaida/kontur --base main --head {branch} --title KON-1 · Typed errors --body-file - --draft"
+    (&request["title"], &request["head"], &request["base"], &request["draft"]),
+    (
+      &serde_json::json!("KON-1 · Typed errors"),
+      &serde_json::json!(branch),
+      &serde_json::json!("main"),
+      &serde_json::json!(true)
     )
   );
-  let body = create.stdin().expect("the body on standard input");
+  let body = request["body"].as_str().expect("a body");
   assert!(
     body.starts_with("Sign in with a password.\n\n## Acceptance criteria\n\n1. A person can sign in"),
     "{body}"
@@ -247,10 +265,7 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
   );
   let ran = fake.ran();
   let pushed = ran.iter().position(|args| args.starts_with("push")).expect("pushed");
-  let opened = ran
-    .iter()
-    .position(|args| args.starts_with("pr create"))
-    .expect("opened");
+  let opened = ran.iter().position(|args| args == CREATE).expect("opened");
   assert!(
     pushed < opened,
     "the branch is on GitHub before the pull request asks for it"
@@ -287,19 +302,15 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
       ..
     })
   ));
-  assert!(fake.ran_one("pr create").is_none(), "GitHub was asked nothing");
+  assert!(fake.ran_one(CREATE).is_none(), "GitHub was asked nothing");
   let mut fake = FakeGitHub::new(run.branch().as_str());
-  fake.create = answer(
-    1,
-    "",
-    "pull request create failed: GraphQL: No commits between main and the branch (createPullRequest)\n",
-  );
+  fake.create = refused(&format!("No commits between main and {}", run.branch()));
   assert_eq!(
     create_in(&root, &programs(&Arc::new(fake)), (run.id(), true)),
     Err(CreateProblem::NoCommits)
   );
   let mut fake = FakeGitHub::new(run.branch().as_str());
-  fake.create = answer(1, "", "HTTP 502: Server Error (https://api.github.com/graphql)\n");
+  fake.create = answer(1, "", "gh: Server Error (HTTP 502)\n");
   assert!(matches!(
     create_in(&root, &programs(&Arc::new(fake)), (run.id(), false)),
     Err(CreateProblem::GitHub(RepositoryError::ServerError {
@@ -322,18 +333,16 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
   let mut fixture = Fixture::keyed("KON");
   let run = finished(&mut fixture);
   link(&mut fixture);
+  // GitHub has one the last sync did not see; its answer names the branch, and the sync after it the number.
   let mut fake = FakeGitHub::new(run.branch().as_str());
-  fake.create = answer(
-    1,
-    "",
-    &format!(
-      "a pull request for branch \"{}\" into branch \"main\" already exists:\nhttps://github.com/ivanzaida/kontur/pull/141\n",
-      run.branch()
-    ),
-  );
+  fake.create = refused(&format!(
+    "A pull request already exists for ivanzaida:{}.",
+    run.branch()
+  ));
+  *fake.opened.lock() = true;
   assert_eq!(
     create_in(fixture.repo.path(), &programs(&Arc::new(fake)), (run.id(), true)),
-    Err(CreateProblem::AlreadyOpen { number: Some(141) })
+    Err(CreateProblem::AlreadyOpen { number: Some(143) })
   );
   fixture
     .db
