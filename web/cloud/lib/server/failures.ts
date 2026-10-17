@@ -9,8 +9,9 @@ export function waitMessage(key: MessageKey, retryAfter: number, now: number): M
 }
 
 /**
- * Any other failure. `rate_limited` reads as `limitKey`; a refused input reads as *did not accept this*; everything
- * else (no answer, an internal error, an answer this site does not understand) as *not answering*.
+ * Any other failure. `rate_limited` reads as `limitKey`; a change that needs a sign-in with two-factor authentication
+ * says so; a refused input reads as *did not accept this*; everything else (no answer, an internal error, an answer
+ * this site does not understand) as *not answering*.
  */
 export function failureMessage(failure: ApiFailure, limitKey: MessageKey, now: number): Message {
   if (failure.kind !== "refused") {
@@ -18,6 +19,9 @@ export function failureMessage(failure: ApiFailure, limitKey: MessageKey, now: n
   }
   if (failure.code === "rate_limited") {
     return waitMessage(limitKey, failure.retryAfter ?? 60, now);
+  }
+  if (failure.code === "session_without_mfa") {
+    return message("error.sessionWithoutMfa");
   }
   return failure.code === "invalid" || failure.code === "bad_request"
     ? message("error.refused")

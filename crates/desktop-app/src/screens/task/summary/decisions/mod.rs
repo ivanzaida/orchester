@@ -36,7 +36,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::task::{PageState, TaskContext},
   theme::DecisionText,
-  ui::pressable::pressable,
+  ui::pressable::opening,
 };
 
 /// A divider's thickness.
@@ -125,7 +125,7 @@ fn tab_link(ctx: &mut Ctx, props: &TaskContext, (id, label): (&str, &str), tab: 
     props.project.open.project.id(),
     ProjectPage::Task(props.detail.task.key().clone(), TaskView::of(tab)),
   );
-  pressable(move || navigation.go(route.clone()))
+  opening(navigation.to(route))
     .id(id.to_owned())
     .child(Text::new(&ctx.t(label)).variant(DecisionText::Link.role()).nowrap())
     .into()

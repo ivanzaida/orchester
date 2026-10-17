@@ -43,7 +43,7 @@ use orchester_workspace::files::{
 
 use self::reads::Shown;
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{FilesView, ProjectPage, Route},
 };
@@ -175,11 +175,9 @@ impl Page<'_> {
     )
   }
 
-  /// Opens `file` at the version shown, as a new entry of the tab's history.
-  pub fn open_file(&self, ctx: &mut Ctx, file: &str) -> impl Fn() + Send + Sync + 'static + use<> {
-    let navigation = Navigation::of(ctx);
-    let route = self.route_to(Some(file), self.at().clone());
-    move || navigation.go(route.clone())
+  /// What opens `file` at the version shown where a press asks; in the active tab, as a new entry of its history.
+  pub fn open_file(&self, ctx: &mut Ctx, file: &str) -> Open {
+    Navigation::of(ctx).to(self.route_to(Some(file), self.at().clone()))
   }
 
   /// Shows the same file and lines at `at`, as a new entry of the tab's history.

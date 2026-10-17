@@ -1,7 +1,8 @@
 //! This computer's Orchester Cloud account and what it leads to (`docs/architecture/server.md`, "Orchester Cloud",
 //! "Invites", rows 39, 43, 49–50): signing in and out, invites accepted with the certificate pin the invite carries (no
 //! check code to compare) and declined, a cloud that does not deliver invites yet, joining a known server with the
-//! account, a pinned server that presents another certificate, and the linked projects signing out names.
+//! account, a code's identity token shown only to the server holding the key of its id, a pinned server that presents
+//! another certificate, and the linked projects signing out names.
 //!
 //! `cargo test -p orchester-workspace --test cloud_account cloud_account_`
 
@@ -9,6 +10,8 @@
 mod account_cloud;
 #[path = "sharing_support/desktop.rs"]
 mod desktop;
+#[path = "sharing_support/impostor.rs"]
+mod impostor;
 #[path = "server_support/mod.rs"]
 mod server_support;
 #[path = "sharing_support/project.rs"]
@@ -16,18 +19,20 @@ mod support;
 
 use account_cloud::{AccountCloud, EMAIL, PASSWORD};
 use desktop::{Desktop, linked_server};
+use impostor::{Claimed, Impostor};
 use orchester_api::{
   Credential,
-  client::{Client, ServerAddress},
+  client::{Client, PlainHttp, ServerAddress},
   cloud::CloudErrorCode,
 };
 use orchester_core::{repository::RepositoryIdentity, secret::SecretVault};
 use orchester_store::JoinedWith;
 use orchester_workspace::sharing::{
-  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError,
-  cloud::{CloudError, ServerJoin, WebPage},
+  CloudJoined, CodeRequest, Connection, PresentedCertificate, RemoteMatch, Servers, SharingError, Trust,
+  cloud::{CloudError, ServerJoin, SignInStep, WebPage},
 };
 use server_support::TestServer;
+use tokio_rustls::rustls::pki_types::{CertificateDer, pem::PemObject};
 
 #[test]
 fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
@@ -42,9 +47,10 @@ fn cloud_account_signs_in_keeps_its_token_in_the_keychain_and_signs_out() {
   assert_eq!(refused.cloud_code(), Some(CloudErrorCode::InvalidCredentials));
   assert!(desktop.cloud.account().expect("account").is_none());
 
-  let account = desktop
-    .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
-    .expect("sign in");
+  let signed_in = desktop.block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())));
+  let Ok(SignInStep::SignedIn(account)) = signed_in else {
+    panic!("signed in with the password: {signed_in:?}");
+  };
   assert_eq!(account.email, EMAIL);
   assert_eq!(desktop.cloud.account().expect("account"), Some(account));
   let stored = desktop
@@ -202,6 +208,92 @@ fn cloud_account_joins_a_server_only_with_a_place_there() {
 }
 
 #[test]
+fn cloud_account_a_code_shows_its_identity_only_to_the_server_holding_the_key_of_its_id() {
+  let cloud = AccountCloud::start();
+  let desktop = Desktop::new(&cloud.url());
+  desktop
+    .block_on(desktop.cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())))
+    .expect("sign in");
+  let mut server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  let id = server.cloud_audience();
+  server.serve_self_signed();
+  let pinned = |url: &str| {
+    let address = ServerAddress::parse(url).expect("address");
+    let trust = desktop
+      .block_on(PresentedCertificate::read(&address))
+      .expect("certificate")
+      .confirm();
+    (address, trust)
+  };
+  let nonce = orchester_api::identity::key_proof_nonce().expect("a nonce");
+  let public_key = server
+    .block_on(server.client().key_proof(&nonce))
+    .expect("the server's key")
+    .public_key;
+  let request = |code: Credential| CodeRequest {
+    code,
+    username: Some("bohdan".into()),
+    display_name: Some("Bohdan Koval".into()),
+    proof: None,
+  };
+  // A server that gives itself this server's id: with a key of its own, with this server's key it cannot sign with,
+  // or passing the nonce on to this server and returning its proof, which names this server's certificate.
+  let claims = [
+    Claimed::OwnKey,
+    Claimed::Borrowed(public_key),
+    Claimed::Relayed(server.client()),
+  ];
+  for claimed in claims {
+    let impostor = Impostor::start(&id, claimed);
+    let (address, trust) = pinned(&impostor.url());
+    let code = Credential::new("ABCD-EFGH".into());
+    let refused = desktop.block_on(desktop.cloud.join_with_code(&address, trust, request(code)));
+    assert!(
+      matches!(refused, Err(CloudError::Join(SharingError::UnprovenServer))),
+      "{refused:?}"
+    );
+    assert!(
+      !impostor.asked().iter().any(|asked| asked.contains("/auth/code")),
+      "no code was sent: {:?}",
+      impostor.asked()
+    );
+  }
+  // Under the trust store: the impostor's certificate comes from an authority this test trusts, and the proof it passes
+  // on names the server's certificate, not the one of the connection that carried it.
+  let authority = CertificateDer::from_pem_slice(include_bytes!("../../server/tests/fixtures/ca.pem")).expect("the CA");
+  orchester_api::client::trust_for_tests(vec![authority]);
+  let impostor = Impostor::start(&id, Claimed::Relayed(server.client()));
+  let address = ServerAddress::parse(&impostor.url()).expect("address");
+  let code = Credential::new("ABCD-EFGH".into());
+  let trust = Trust::System(PlainHttp::NotAllowed);
+  let refused = desktop.block_on(desktop.cloud.join_with_code(&address, trust, request(code)));
+  assert!(
+    matches!(refused, Err(CloudError::Join(SharingError::UnprovenServer))),
+    "{refused:?}"
+  );
+  let asked = impostor.asked();
+  assert!(
+    asked.iter().any(|asked| asked.ends_with("/server/key-proof")),
+    "trusted and asked: {asked:?}"
+  );
+  assert!(
+    !asked.iter().any(|asked| asked.contains("/auth/code")),
+    "no code was sent: {asked:?}"
+  );
+
+  // The server itself proves its key on the connection this computer checked, and takes the code with the token.
+  let (address, trust) = pinned(&server.url());
+  desktop
+    .block_on(
+      desktop
+        .cloud
+        .join_with_code(&address, trust, request(server.code_for("bohdan", false))),
+    )
+    .expect("joined with the code and the token");
+}
+
+#[test]
 fn cloud_account_a_pinned_server_with_another_certificate_reads_changed() {
   let mut server = TestServer::start();
   server.create_user("alice", "Alice Moreau", true);
@@ -216,15 +308,13 @@ fn cloud_account_a_pinned_server_with_another_certificate_reads_changed() {
     code,
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
+    proof: Some(server.code_proof("bohdan")),
   };
   let id = desktop
     .block_on(desktop.servers.join_with_code(&address, presented.confirm(), request))
     .expect("join with a code");
   // As if the server had made a new certificate: this computer's pin no longer matches it.
-  desktop
-    .workspace
-    .set_server_trust(id, Some(&"ab".repeat(32)), false)
-    .expect("another pin");
+  desktop.pin_server(id, &"ab".repeat(32));
   let entry = || desktop.servers.entries().expect("entries").remove(0);
   let answer = desktop.block_on(desktop.servers.me(&entry()));
   assert!(matches!(answer, Err(SharingError::CertificateChanged)), "{answer:?}");

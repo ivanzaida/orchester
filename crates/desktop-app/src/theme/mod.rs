@@ -21,6 +21,7 @@ mod decisions;
 mod files;
 mod fonts;
 mod form;
+mod gate;
 pub mod instructions;
 mod lifecycle;
 mod local_integration;
@@ -64,6 +65,7 @@ pub use self::{
   decisions::{DecisionSpacing, DecisionText},
   files::{FilesRadius, FilesText},
   fonts::mono_space,
+  gate::{GateSpacing, GateText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
@@ -95,6 +97,9 @@ pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 pub const SHORTCUT_OPACITY: f32 = 0.6;
 /// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.
 pub const LOADER_TURN: Duration = Duration::from_secs(1);
+/// The poses of a loader's turn, 30° apart. lurq draws a frame only when the pose changes, so a turning
+/// loader costs 12 frames a second instead of one every display refresh.
+pub const LOADER_STEPS: u32 = 12;
 
 /// Loads the fonts and fills every role for `mode`.
 pub fn install(app: &mut App, mode: Mode) {
@@ -109,6 +114,7 @@ pub fn install(app: &mut App, mode: Mode) {
   settings::install(theme);
   accounts::install(theme);
   orchester::install(theme);
+  gate::install(theme);
   task::install(theme);
   decisions::install(theme);
   task_form::install(theme);

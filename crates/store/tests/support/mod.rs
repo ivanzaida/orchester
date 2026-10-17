@@ -49,12 +49,25 @@ pub fn started_run_without_limits() -> (TempDir, ProjectDb, Run, StepExecutionId
   run_of_one_step(false, TaskLimits::NONE)
 }
 
+/// A recorded run of [`started_run`]'s one step that has not started.
+pub fn pending_run() -> (TempDir, ProjectDb, Run) {
+  recorded_run(false, limits())
+}
+
 /// 1M tokens and 30 minutes.
 fn limits() -> TaskLimits {
   TaskLimits::new(Some(budget(1_000_000)), Some(Duration::from_secs(1_800))).expect("limits")
 }
 
 fn run_of_one_step(approval_gate: bool, limits: TaskLimits) -> (TempDir, ProjectDb, Run, StepExecutionId) {
+  let (repo, mut db, mut run) = recorded_run(approval_gate, limits);
+  let events = run.start(at(7)).expect("start");
+  db.append_events(&run, &events).expect("append");
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  (repo, db, run, execution)
+}
+
+fn recorded_run(approval_gate: bool, limits: TaskLimits) -> (TempDir, ProjectDb, Run) {
   let repo = tempfile::tempdir().expect("temporary directory");
   fs::create_dir(repo.path().join(".git")).expect("create .git");
   let project = Project::new(
@@ -127,11 +140,8 @@ fn run_of_one_step(approval_gate: bool, limits: TaskLimits) -> (TempDir, Project
     budget: limits.budget(),
     max_duration: limits.max_duration(),
   };
-  let mut run = db.create_run(IdempotencyKey::generate(), new, at(6)).expect("run");
-  let events = run.start(at(7)).expect("start");
-  db.append_events(&run, &events).expect("append");
-  let execution = run.current_attempt().expect("attempt").executions()[0].id();
-  (repo, db, run, execution)
+  let run = db.create_run(IdempotencyKey::generate(), new, at(6)).expect("run");
+  (repo, db, run)
 }
 
 pub fn budget(tokens: u64) -> TokenBudget {

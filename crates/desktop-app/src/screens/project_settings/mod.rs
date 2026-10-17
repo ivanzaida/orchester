@@ -1,4 +1,5 @@
-//! Project settings (RExz4): four autosaving sections, with widening questions in place, and Sharing (`bWD9q`).
+//! Project settings (RExz4): four autosaving sections, with widening questions in place, and Sharing (`bWD9q`), whose
+//! first link opens its own page over the tabs (`KSnOW`).
 mod environment;
 mod general;
 mod index;
@@ -21,8 +22,9 @@ use crate::{project::ShownProject, routes::ProjectSettingsTab as Tab};
 #[derive(Clone, PartialEq)]
 pub struct Props {
   pub project: ShownProject,
-  /// The tab the route names.
+  /// The tab the route names, and whether Sharing opens *Make local*'s question.
   pub tab: Tab,
+  pub make_local: bool,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -30,6 +32,10 @@ impl DevtoolsInspectable for Props {}
 pub(super) struct TabProps {
   pub project: ShownProject,
   pub status: Signal<Status>,
+  /// The first link's page, which Sharing opens over the tabs.
+  pub link_page: Signal<sharing::LinkPage>,
+  /// Sharing opens with *Make local*'s question.
+  pub make_local: bool,
 }
 impl PartialEq for TabProps {
   fn eq(&self, other: &Self) -> bool {
@@ -81,19 +87,30 @@ impl Tab {
 }
 struct SettingsScreen {
   status: Signal<Status>,
+  link_page: Signal<sharing::LinkPage>,
 }
 impl Component for SettingsScreen {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       status: ctx.signal(Status::Saved),
+      link_page: ctx.signal(sharing::LinkPage::default()),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, tab } = ctx.props::<Props>().clone();
+    let Props {
+      project,
+      tab,
+      make_local,
+    } = ctx.props::<Props>().clone();
+    if let (Tab::Sharing, Some(upload)) = (tab, self.link_page.get().0) {
+      return sharing::link_page(ctx, &project, upload, &self.link_page);
+    }
     let props = TabProps {
       project: project.clone(),
       status: self.status.clone(),
+      link_page: self.link_page.clone(),
+      make_local,
     };
     let header = page::header(ctx, (&project, tab), &self.status);
     let content = match tab {
@@ -112,6 +129,20 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: Tab) -> Element {
     Props {
       project: project.clone(),
       tab,
+      make_local: false,
+    },
+  )
+}
+
+/// Project settings on Sharing with *Make local*'s question open: a mount of its own, so the question opens
+/// each time the page is reached.
+pub fn make_local_screen(ctx: &mut Ctx, project: &ShownProject) -> Element {
+  ctx.mount_keyed::<SettingsScreen>(
+    &format!("project-settings-{}-make-local", project.open.project.id()),
+    Props {
+      project: project.clone(),
+      tab: Tab::Sharing,
+      make_local: true,
     },
   )
 }

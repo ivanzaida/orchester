@@ -92,7 +92,7 @@ pub(super) fn tasks(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> 
         NoticeKind::Unreadable => (Icon::CircleHelp, ctx.t("overview.notices.openTask"), "unreadable"),
       };
       let id = format!("overview-notice-{}-{kind}", notice.key);
-      let open = ActionButton::new(format!("{id}-open"), ButtonKind::Secondary, label).on_click(open_task(
+      let open = ActionButton::new(format!("{id}-open"), ButtonKind::Secondary, label).opens(open_task(
         ctx,
         project,
         &notice.key,

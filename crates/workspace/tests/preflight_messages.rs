@@ -1,11 +1,14 @@
 use std::num::NonZeroU32;
 
-use orchester_core::run::{AcceptRefusal, PreflightProblem};
+use orchester_core::{
+  id::RunId,
+  run::{AcceptRefusal, GitMessage, PreflightProblem, WorktreeFailure},
+};
 use orchester_ipc::Rejection;
 use orchester_workspace::{
   i18n::{FALLBACK_LOCALE, LOCALES},
   runner::{RequestError, RunRequestError},
-  tasks::run::{StartOutcome, control_message, preflight_message},
+  tasks::run::{StartOutcome, control_message, preflight_message, start_messages, worktree_failure_message},
 };
 use serde_json::Value;
 
@@ -93,4 +96,33 @@ fn preflight_a_refused_acceptance_says_why_in_the_persons_words() {
       "{key} has words"
     );
   }
+}
+
+#[test]
+fn a_run_that_could_not_start_says_why_wherever_it_was_started() {
+  let why = WorktreeFailure::Git(GitMessage::new("fatal: disk full"));
+  let error = RunRequestError::Rejected(Rejection::RunNotStarted {
+    run: RunId::generate(),
+    why: why.clone(),
+  });
+  // The new-task form, Run again and `run_task` read the start messages: what happened, then why.
+  let said = start_messages(&error);
+  assert_eq!(said[0].key, "runs.start.worktreeNotCreated");
+  assert_eq!(said[1], worktree_failure_message(&why));
+  assert_eq!(said[1].key, "runs.notStarted.git");
+  assert_eq!(said[1].args, vec![("detail", "fatal: disk full".to_owned())]);
+  // The task's Start run reads the control one; its Summary says why.
+  assert_eq!(control_message(&error).key, "runs.start.worktreeNotCreated");
+  assert_eq!(
+    worktree_failure_message(&WorktreeFailure::NotIgnored).key,
+    "runs.notStarted.notIgnored"
+  );
+  let silent = worktree_failure_message(&WorktreeFailure::Git(GitMessage::new(
+    "Preparing worktree (new branch 'x')",
+  )));
+  assert_eq!(
+    silent.key, "runs.notStarted.gitSilent",
+    "no \"Git refused:\" with nothing after it"
+  );
+  assert!(silent.args.is_empty());
 }

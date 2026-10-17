@@ -165,7 +165,6 @@ impl Items<'_> {
 
   fn item(&self, ctx: &mut Ctx, screen: Screen, route: Route) -> Element {
     let label = ctx.t(screen.title_key());
-    let navigation = self.navigation.clone();
     NavItem {
       id: format!("nav-{}", screen.name()),
       icon: screen_icon(screen),
@@ -177,7 +176,7 @@ impl Items<'_> {
         .map(|(_, count)| count.as_str()),
       selected: self.selected == Some(screen),
     }
-    .on_click(move || navigation.go(route.clone()))
+    .opens(self.navigation.to(route))
   }
 }
 

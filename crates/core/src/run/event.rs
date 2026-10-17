@@ -114,6 +114,11 @@ pub struct PlannedExecution {
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum RunEventKind {
   Created(Box<RunCreated>),
+  /// A branch of the pending run's name existed in its repository when its worktree was made, so
+  /// the run works on `branch`, a free name, instead ([`super::Run::choose_branch`]).
+  BranchChosen {
+    branch: BranchName,
+  },
   Started,
   /// A person asked to pause; the run keeps working until its active step reaches a checkpoint.
   PauseRequested,
@@ -277,6 +282,7 @@ impl RunEventKind {
   pub const fn name(&self) -> &'static str {
     match self {
       Self::Created(_) => "created",
+      Self::BranchChosen { .. } => "branch_chosen",
       Self::Started => "started",
       Self::PauseRequested => "pause_requested",
       Self::Paused { .. } => "paused",

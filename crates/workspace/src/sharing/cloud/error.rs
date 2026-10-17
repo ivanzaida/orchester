@@ -37,6 +37,14 @@ pub enum CloudError {
   /// This computer asked for the invite as often as it does ([`super::MAX_ASKS`]); each ask takes an identity token.
   #[error("asked for this invite as often as Orchester does")]
   TooManyAsks,
+  /// Accepting the invite needs two-factor authentication on the account, which is off (`403 mfa_required`); the invite
+  /// stays open.
+  #[error("accepting the invite needs two-factor authentication on the account")]
+  TwoFactorOff,
+  /// Accepting the invite needs this computer signed in with a two-factor code, and it signed in without one
+  /// (`403 session_without_mfa`); the invite stays open.
+  #[error("accepting the invite needs a sign-in with a two-factor code")]
+  TwoFactorSession,
   /// The cloud lists no team server at that address for the account.
   #[error("the cloud lists no team server at that address for the account")]
   NoServer,
@@ -72,5 +80,29 @@ impl CloudError {
   /// Whether the cloud could not be reached at all.
   pub fn unreachable(&self) -> bool {
     matches!(self, Self::Client(error) if error.is_connection())
+  }
+
+  /// Whether the request went out and Orchester Cloud did not answer it: no connection, no answer in time, or
+  /// something else answering in its place (a redirect, a certificate the system does not trust, another server), as
+  /// on a network that needs a sign-in page first.
+  pub fn unanswered(&self) -> bool {
+    matches!(
+      self,
+      Self::Client(
+        ClientError::TimedOut
+          | ClientError::Unreachable
+          | ClientError::NotOrchester { .. }
+          | ClientError::Redirect { .. }
+          | ClientError::UntrustedCertificate
+      )
+    )
+  }
+
+  /// Why the cloud ended this computer's token, and when (milliseconds), when it refused it saying so.
+  pub fn ended(&self) -> Option<(orchester_api::cloud::SessionEnd, Option<i64>)> {
+    match self {
+      Self::Client(ClientError::Cloud { ended, .. }) => *ended,
+      _ => None,
+    }
   }
 }

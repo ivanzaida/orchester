@@ -24,7 +24,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize, LifecycleText},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::opening,
     table::{ColumnWidth, table_header},
   },
 };
@@ -218,11 +218,7 @@ fn worktree(ctx: &Ctx, (project, navigation): (ProjectId, &Navigation), run: &In
   let view = run.uncommitted_file.as_deref().map(|file| {
     let view = ChangedFile::new(file, ChangeSource::Worktree)
       .map_or(TaskView::of(TaskTab::Changes), |file| TaskView::Changes(Some(file)));
-    let (navigation, route) = (
-      navigation.clone(),
-      Route::Project(project, ProjectPage::Task(run.task_key.clone(), view)),
-    );
-    pressable(move || navigation.go(route.clone()))
+    opening(navigation.to(Route::Project(project, ProjectPage::Task(run.task_key.clone(), view))))
       .id(format!("recovery-view-changes-{}", run.run))
       .cursor(CursorIcon::Pointer)
       .spacing(ExtraSpacing::Snug.role())

@@ -16,6 +16,8 @@ use crate::{
 /// A desktop's token ends after 90 days without use, as team servers' device tokens do; a browser's (`web`) 12 hours
 /// after it signed in (`docs/architecture/server.md`, "The cloud's web front").
 const DEVICE_IDLE_MS: i64 = 90 * DAY_MS;
+/// How long a deleted account's token still answers with its reason: as long as it would have lasted unused.
+pub(super) const ENDED_KEPT_MS: i64 = DEVICE_IDLE_MS;
 const WEB_SESSION_MS: i64 = 12 * HOUR_MS;
 
 /// The condition of a device that is still signed in, given `$2` and `$3` from `active_since`.
@@ -92,7 +94,7 @@ pub(super) fn device_row(row: &Row, current: CloudDeviceId) -> Result<CloudDevic
   })
 }
 
-/// Revokes every device of the account but `keep`.
+/// Revokes every device of the account but `keep`, after a reset or a change of its password.
 pub(super) async fn revoke_devices(
   client: &impl GenericClient,
   account: CloudAccountId,
@@ -102,7 +104,8 @@ pub(super) async fn revoke_devices(
   Ok(
     client
       .execute(
-        "UPDATE devices SET revoked_at = $1 WHERE account = $2 AND revoked_at IS NULL AND id IS DISTINCT FROM $3",
+        "UPDATE devices SET revoked_at = $1, revoked_reason = 'password_reset'
+         WHERE account = $2 AND revoked_at IS NULL AND id IS DISTINCT FROM $3",
         &[&time(now), &account.as_uuid(), &keep.map(CloudDeviceId::as_uuid)],
       )
       .await?,

@@ -288,12 +288,10 @@ impl Fields {
             ctx.t("agents.openConnection"),
           )
           .icon(Icon::Plug)
-          .on_click(move || {
-            nav.go(Route::Project(
-              project,
-              ProjectPage::Connections(ConnectionsView::default().with_selected(connection)),
-            ))
-          }),
+          .opens(nav.to(Route::Project(
+            project,
+            ProjectPage::Connections(ConnectionsView::default().with_selected(connection)),
+          ))),
         );
         Column::new()
           .padding(lurq::node::padding::Padding::new().bottom(SpacingSize::Md))

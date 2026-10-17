@@ -1,6 +1,7 @@
 //! Background operations of the application, for the status bar (`docs/design/
 //! orchester-workspace.md`, "Status bar"): one app-wide [`Activity`] that screens and automation
-//! report their work to and the status bar watches.
+//! report their work to and the status bar watches. It holds only what the signed-in Orchester Cloud account may see:
+//! nothing of another account's projects ([`Activity::hide_projects`]).
 
 pub mod bar;
 pub mod code_index_operations;
@@ -9,10 +10,13 @@ pub mod operations;
 pub mod skill_operations;
 
 use std::{
+  collections::HashSet,
+  path::PathBuf,
   sync::Arc,
   time::{Instant, SystemTime},
 };
 
+use parking_lot::RwLock;
 use tokio::sync::watch;
 
 pub use self::log::{ActivityLog, Event, Operation, OperationId, OperationSpec, Outcome, Place, Slot, Target};
@@ -22,6 +26,8 @@ use crate::messages::Message;
 #[derive(Clone)]
 pub struct Activity {
   log: watch::Sender<ActivityLog>,
+  /// The folders of the projects the signed-in account does not see.
+  hidden: Arc<RwLock<HashSet<PathBuf>>>,
 }
 
 impl PartialEq for Activity {
@@ -34,6 +40,7 @@ impl Default for Activity {
   fn default() -> Self {
     Self {
       log: watch::Sender::new(ActivityLog::default()),
+      hidden: Arc::default(),
     }
   }
 }
@@ -51,10 +58,27 @@ impl Activity {
     self.log.borrow().clone()
   }
 
+  /// Keeps nothing of the projects in the folders `hidden` (another account's): what is known of them goes now, and
+  /// nothing more of them is recorded, until the next call names other folders.
+  pub fn hide_projects(&self, hidden: HashSet<PathBuf>) {
+    let mut kept = self.hidden.write();
+    *kept = hidden;
+    self
+      .log
+      .send_if_modified(|log| log.forget(|target| hides(&kept, target)));
+  }
+
+  /// Whether `target` is in a project the signed-in account does not see.
+  fn hidden(&self, target: &Target) -> bool {
+    hides(&self.hidden.read(), target)
+  }
+
   /// Lists the operation until the returned handle finishes, fails or is dropped.
   pub fn start(&self, spec: OperationSpec) -> Running {
     let mut id = None;
-    self.log.send_modify(|log| id = Some(log.start(spec, Instant::now())));
+    if !self.hidden(spec.opens()) {
+      self.log.send_modify(|log| id = Some(log.start(spec, Instant::now())));
+    }
     Running {
       activity: self.clone(),
       id,
@@ -90,6 +114,9 @@ impl Activity {
   /// Something that finished without being started here, e.g. the runner reconnecting or a run
   /// proposing a plan in `project`.
   pub fn record(&self, project: Option<Arc<str>>, title: Message, target: Target) {
+    if self.hidden(&target) {
+      return;
+    }
     self
       .log
       .send_modify(|log| log.record(project, title, target, SystemTime::now()));
@@ -97,6 +124,9 @@ impl Activity {
 
   /// A run of `project` waits for the user's decision.
   pub fn record_needs_you(&self, project: Option<Arc<str>>, title: Message, target: Target) {
+    if self.hidden(&target) {
+      return;
+    }
     self
       .log
       .send_modify(|log| log.record_needs_you(project, title, target, SystemTime::now()));
@@ -111,6 +141,10 @@ impl Activity {
   pub fn resolve(&self, id: OperationId) {
     self.log.send_modify(|log| log.resolve(id));
   }
+}
+
+fn hides(hidden: &HashSet<PathBuf>, target: &Target) -> bool {
+  matches!(target, Target::Project { repo_root, .. } if hidden.contains(repo_root))
 }
 
 /// An operation in progress. Dropping it without an outcome (the screen that ran it closed)

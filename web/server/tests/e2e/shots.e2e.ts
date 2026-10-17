@@ -1,8 +1,8 @@
 import { test, type Browser, type Page } from "@playwright/test";
 
-import { cloudAccount, joinWithCode } from "./accounts";
+import { cloudAccount, cloudTwoFactor, codeProof, joinWithCode } from "./accounts";
 import { SERVER, startStack, type Stack } from "./stack";
-import { createProject, inviteWithCode, setUp, signInAtCloud } from "./steps";
+import { createProject, inviteWithCode, setUp, signInAtCloud, signInThroughCloud } from "./steps";
 
 /**
  * Screenshots of every admin page on the real team server, at the frames' 1440 and a phone's 390, for the design
@@ -15,6 +15,9 @@ test.describe.configure({ mode: "serial" });
 
 let stack: Stack;
 let page: Page;
+/** Ivan's recovery codes, each of which finishes one of his cloud sign-ins; Oleh's two-factor cloud device. */
+let recovery: string[] = [];
+let olehDevice = "";
 
 async function shoot(name: string, path: string): Promise<void> {
   for (const width of [1440, 390]) {
@@ -33,6 +36,9 @@ test.beforeAll(async ({ browser }) => {
   test.setTimeout(300_000);
   stack = await startStack({ cloud: true });
   await cloudAccount(stack, "ivan@example.test", "Ivan Zaida");
+  await cloudAccount(stack, "oleh@example.test", "Oleh Bondar");
+  recovery = (await cloudTwoFactor("ivan@example.test")).recovery;
+  olehDevice = (await cloudTwoFactor("oleh@example.test")).device;
   page = await open(browser);
 });
 
@@ -45,7 +51,7 @@ test("setup and sign-in pages", async ({ browser }) => {
   await setUp(page, stack.setupCode);
   await shoot("setup-cloud", "/admin/setup/cloud");
   await page.getByRole("button", { name: "Link to Orchester Cloud" }).click();
-  await signInAtCloud(page, "ivan@example.test");
+  await signInAtCloud(page, "ivan@example.test", recovery[0]);
   await page.getByRole("button", { name: "Link Kontur team" }).click();
   await page.waitForURL(/\/admin\/setup\/done$/);
   await shoot("setup-done", "/admin/setup/done");
@@ -59,11 +65,14 @@ test("setup and sign-in pages", async ({ browser }) => {
   }
 });
 
-test("the admin's pages with a project, people and a computer", async () => {
+test("the admin's pages with a project, people and a computer", async ({ browser }) => {
+  // Invites are made from a sign-in through the cloud with two-factor authentication.
+  page = await open(browser);
+  await signInThroughCloud(page, "ivan@example.test", recovery[1] ?? "");
   await shoot("new-project", "/admin/projects/new");
   await createProject(page);
   const code = await inviteWithCode(page);
-  await joinWithCode(code, "oleh", "oleh-pc");
+  await joinWithCode(code, "oleh", "oleh-pc", await codeProof(olehDevice));
   await inviteWithCode(page);
   for (const [name, path] of [["projects", "/admin"], ["members", "/admin/projects/kontur"],
     ["invites", "/admin/projects/kontur/invites"], ["project-settings", "/admin/projects/kontur/settings"],

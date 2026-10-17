@@ -18,7 +18,10 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ResourceId;
-use orchester_workspace::tasks::data::{PipelineChoice, PipelineStepChoice};
+use orchester_workspace::tasks::{
+  data::{PipelineChoice, PipelineStepChoice},
+  list::PipelineLabel,
+};
 
 use super::{Nav, state::View};
 use crate::{
@@ -82,13 +85,12 @@ fn control(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Elemen
   let name = ctx.t("task_form.fields.pipeline.label");
   if view.no_pipelines() {
     let box_text = Signal::new(ctx.t("task_form.fields.pipeline.none").to_string());
-    let nav = nav.clone();
     let open = ActionButton::new(
       "task-form-open-pipelines",
       ButtonKind::Ghost,
       ctx.t("task_form.fields.pipeline.open"),
     )
-    .on_click(move || nav.pipelines());
+    .opens(nav.to_pipelines());
     return Column::new()
       .width(Dimension::Px(SELECT_WIDTH))
       .spacing(ExtraSpacing::Snug.role())
@@ -125,10 +127,33 @@ fn control(ctx: &mut Ctx, view: &View, pick: &Signal<Pick>, nav: &Nav) -> Elemen
       SelectOption::new(Pick(Some(choice.id)), choice_label(ctx, choice)).detail(option_detail(ctx, choice))
     })
     .collect();
-  SelectField::new("task-form-pipeline-input", name, pick.clone(), options)
+  let select = SelectField::new("task-form-pipeline-input", name, pick.clone(), options)
     .placeholder(ctx.t("task_form.fields.pipeline.placeholder"))
     .width(Dimension::Px(SELECT_WIDTH))
-    .render(ctx)
+    .render(ctx);
+  match view.missing_pipeline.as_deref().filter(|_| pick.get().0.is_none()) {
+    Some(slug) => Column::new()
+      .width(Dimension::Px(SELECT_WIDTH))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(select)
+      .child(
+        Text::new(&message_text(
+          ctx,
+          &PipelineLabel::Missing { slug: Arc::from(slug) }.message(),
+        ))
+        .id("task-form-pipeline-missing")
+        .variant(TypographyStyle::Caption)
+        .color(PaletteColor::Warning),
+      )
+      .child(
+        Text::new(&ctx.t("task_form.fields.pipeline.missingKept"))
+          .id("task-form-pipeline-missing-kept")
+          .variant(ExtraTypography::Note.role())
+          .width(Dimension::Pct(100.0)),
+      )
+      .into(),
+    None => select,
+  }
 }
 
 /// What an option says under its name: its version, its steps and where it waits for approval.
@@ -169,13 +194,12 @@ fn gates(ctx: &Ctx, steps: &[PipelineStepChoice]) -> Option<String> {
 }
 
 fn plan(ctx: &mut Ctx, choice: &PipelineChoice, nav: &Nav) -> Element {
-  let nav = nav.clone();
   let view_pipeline = ActionButton::new(
     "task-form-view-pipeline",
     ButtonKind::Ghost,
     ctx.t("task_form.plan.view"),
   )
-  .on_click(move || nav.pipelines());
+  .opens(nav.to_pipelines());
   let meta = ctx.t_args(
     "task_form.plan.meta",
     [

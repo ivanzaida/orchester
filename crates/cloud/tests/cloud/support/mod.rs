@@ -4,6 +4,7 @@ pub mod log;
 pub mod mailer;
 pub mod postgres;
 pub mod relay;
+pub mod two_factor;
 
 use std::{
   net::SocketAddr,
@@ -14,11 +15,7 @@ use std::{
   time::Duration,
 };
 
-use orchester_api::{
-  Credential,
-  cloud::CloudSignedIn,
-  identity::{PrivateKey, RootKey},
-};
+use orchester_api::{Credential, cloud::CloudSignedIn, identity::PublicKey};
 use orchester_cloud::{Cloud, addresses::TrustedProxy, clock::Clock, config::Config, error::CloudError, mail::Mailer};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -78,16 +75,21 @@ pub struct TestCloud {
   pub cloud: Cloud,
   pub clock: Arc<TestClock>,
   pub mail: Arc<RecordingMailer>,
-  pub root: RootKey,
   pub database: String,
   address: SocketAddr,
   stop: Option<oneshot::Sender<()>>,
   task: Option<JoinHandle<Result<(), CloudError>>>,
 }
 
-pub fn config(database: &str, root: &RootKey, trusted_proxies: Vec<TrustedProxy>) -> Config {
-  let key_encryption_key = uuid::Uuid::new_v4().simple().to_string() + &uuid::Uuid::new_v4().simple().to_string();
-  remember(&key_encryption_key);
+/// A new key-encryption key: 64 hex characters, which the run's log must not contain.
+pub fn key_encryption_key() -> String {
+  let key = uuid::Uuid::new_v4().simple().to_string() + &uuid::Uuid::new_v4().simple().to_string();
+  remember(&key);
+  key
+}
+
+/// The configuration of a cloud on `database`; every start on one database takes the same `key_encryption_key`.
+pub fn config(database: &str, key_encryption_key: &str, trusted_proxies: Vec<TrustedProxy>) -> Config {
   Config {
     listen: "127.0.0.1:0".parse().expect("loopback"),
     public_url: BASE_URL.into(),
@@ -95,8 +97,7 @@ pub fn config(database: &str, root: &RootKey, trusted_proxies: Vec<TrustedProxy>
     // The tests' cloud sends through `RecordingMailer`; the URL is only validated.
     smtp_url: Credential::new("smtp://127.0.0.1:25".into()),
     smtp_from: "Orchester <no-reply@cloud.example.test>".into(),
-    key_encryption_key: Credential::new(key_encryption_key),
-    root_public_key: root.public_key(),
+    key_encryption_key: Credential::new(key_encryption_key.to_owned()),
     trusted_proxies,
   }
 }
@@ -120,17 +121,9 @@ impl TestCloud {
 
   async fn open(trusted_proxies: Vec<TrustedProxy>, mailer: Arc<dyn Mailer>, mail: Arc<RecordingMailer>) -> Self {
     let database = postgres().create_database().await;
-    let private = PrivateKey::generate().expect("root key");
-    remember(
-      &private
-        .pkcs8()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>(),
-    );
-    let root = RootKey::new(&private).expect("root");
     let clock = Arc::new(TestClock(AtomicI64::new(1_791_000_000_000)));
-    let cloud = Cloud::open(config(&database, &root, trusted_proxies), clock.clone(), mailer)
+    let config = config(&database, &key_encryption_key(), trusted_proxies);
+    let cloud = Cloud::open(config, clock.clone(), mailer)
       .await
       .expect("open the cloud");
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listen on loopback");
@@ -144,12 +137,17 @@ impl TestCloud {
       cloud,
       clock,
       mail,
-      root,
       database,
       address,
       stop: Some(stop),
       task: Some(task),
     }
+  }
+
+  /// The root key the cloud made at its start, as its database holds it.
+  pub async fn root(&self) -> PublicKey {
+    let admin = postgres().database(&self.database).await;
+    stored_root(&admin).await.expect("the cloud made its root at its start")
   }
 
   pub fn address(&self) -> SocketAddr {
@@ -243,21 +241,18 @@ impl TestCloud {
     remember(signed.token.expose());
     signed
   }
+}
 
-  /// The whole key ceremony: a new signing key, its statement signed by the root, published. Returns what was
-  /// published.
-  pub async fn publish_keys(&self) -> String {
-    self.cloud.host_rotate_keys().await.expect("rotate");
-    self.publish_key_set().await
-  }
-
-  /// The weekly ceremony without a rotation.
-  pub async fn publish_key_set(&self) -> String {
-    let statement = self.cloud.host_prepare_key_set().await.expect("prepare");
-    let signed = self.root.sign_key_set(&statement, statement.issued_at).expect("sign");
-    self.cloud.host_publish_key_set(&signed).await.expect("publish");
-    signed
-  }
+/// The root key of the database `admin` is connected to, if the cloud made one.
+pub async fn stored_root(admin: &tokio_postgres::Client) -> Option<PublicKey> {
+  let rows = admin
+    .query("SELECT public_key FROM root_key", &[])
+    .await
+    .expect("the root key table");
+  assert!(rows.len() <= 1, "a database holds one root key at most");
+  rows
+    .first()
+    .map(|row| PublicKey::from_bytes(row.get(0)).expect("a stored root key"))
 }
 
 impl Drop for TestCloud {

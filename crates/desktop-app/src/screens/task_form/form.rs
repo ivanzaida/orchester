@@ -44,6 +44,8 @@ pub struct FormProps {
   pub subject: Subject,
   /// The published pipelines; `None` while the project's tasks are read.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
+  /// A shared task's pipeline, by its slug, that this computer has no pipeline for.
+  pub missing_pipeline: Option<Arc<str>>,
   /// The project's tasks, whose kept edits stay; those of other tasks are removed.
   pub tasks: Arc<[TaskId]>,
   /// When the task was last saved, as the project's tasks were read.
@@ -251,6 +253,7 @@ impl TaskForm {
       ready,
       missing,
       pipelines: props.pipelines.clone(),
+      missing_pipeline: props.missing_pipeline.clone(),
       kept_at: self.kept_at.get().map(|at| at.0),
       failure,
       retrying: self.retrying.get(),

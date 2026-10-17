@@ -381,6 +381,7 @@
       "cancelledAt": "Canceled at {{step}}",
       "cancelled": "Canceled",
       "cancelledBeforeStart": "Canceled before it started",
+      "worktreeNotCreated": "Failed before it started · no worktree",
       "atWork": "{{step}} · {{agent}} at work",
       "stepAtWork": "{{step}} at work",
       "notMerged": "Every step passed · not merged",
@@ -523,7 +524,19 @@
       "lost": "The runner stopped answering. The run may have started. Retry uses the same request, so it will not create a second run.",
       "taskMissing": "The task no longer exists.",
       "notQueued": "The task is not queued for a run.",
-      "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying."
+      "failed": "The runner reported a problem while starting the run. Check the task and runner log before retrying.",
+      "worktreeNotCreated": "The run failed before it started: its worktree could not be created. Fix the cause, then run the task again."
+    },
+    "notStarted": {
+      "notIgnored": "Git does not ignore .orchester/ in this repository, so a worktree there would show in your checkout. Add .orchester/ to .git/info/exclude.",
+      "noFreeBranch": "A branch of the run's name exists, and so does each of its numbered names. Delete the branches you no longer need.",
+      "gitUnavailable": "Git could not be started. Check that git is installed and on the search path.",
+      "unknownBase": "The commit the run starts from is not in the repository.",
+      "invalidBranch": "Git does not accept the run's branch name.",
+      "folderInTheWay": "A folder that is not a worktree of the repository is where the run's worktree goes, in .orchester/worktrees/. Move it away.",
+      "git": "Git refused: {{detail}}",
+      "gitSilent": "Git refused without saying why. The runner's log has the details.",
+      "unexpected": "Something unexpected stopped it. The runner's log has the details."
     },
     "limit": {
       "notRaised": "The run stopped at its limit. Raise the limit to continue.",
@@ -867,6 +880,7 @@
     "notAGitRepository": "This folder is not the root of a git repository.",
     "alreadyInitialized": "This repository already contains an Orchester project.",
     "projectMissing": "The repository no longer contains its Orchester project. It may have been moved or deleted.",
+    "anotherAccountsProject": "This folder's project belongs to another Orchester account on this computer. Sign in with that account to open it.",
     "newerSchema": "The data was written by a newer version of Orchester.",
     "unsupportedPath": "This folder path cannot be stored. Choose a folder whose path uses standard characters.",
     "unstorableValue": "A value is too large to be stored. The log has the details.",
@@ -1512,14 +1526,19 @@
       "alreadyShared": "This project's task list is shared already.",
       "offline": "{{server}} can't be reached, so nothing was sent. The list is read-only until it answers.",
       "notMember": "You are no longer a member of this project on the server, so nothing was sent.",
-      "serverMissing": "The server this project is shared on is no longer in Settings › Servers.",
+      "serverMissing": "The server this project is shared on is no longer in Settings › Orchester.",
       "invalidAnswer": "The server answered with something Orchester can't use; nothing was changed here.",
       "keptChanging": "The task kept changing on the server while Orchester merged your change. Open it again and save once more.",
       "unavailable": "The server of this shared project can't be asked now.",
       "notEditable": "The server didn't take the change: the task can't be edited in its state.",
       "organization": "The server didn't take the status, priority, tags or links: they break a rule of the task list.",
       "shareInProgress": "This project is being shared right now, so nothing was changed. Try again once sharing has finished.",
-      "noProject": "The server has no project at this address that you're a member of. Ask whoever shared it for an invite."
+      "noProject": "The server has no project at this address that you're a member of. Ask whoever shared it for an invite.",
+      "projectChanged": "This project's tasks changed since you reviewed the link, so nothing was sent. Review what linking does again.",
+      "foreignAddress": "{{server}} names this project at {{own}}, not at the address this computer connected to, so Orchester didn't use it and nothing was changed. If {{own}} is how your team reaches this server, connect to it by that address.",
+      "twoFactorOff": "Entering a code needs two-factor authentication on your Orchester Cloud account; nothing was sent.",
+      "twoFactorSession": "Entering a code needs this computer signed in to Orchester Cloud with two-factor authentication; nothing was sent.",
+      "unprovenServer": "The server didn't prove it is the server it says it is; nothing was sent."
     },
     "members": {
       "noSuchUser": "The server has no user with this username. Usernames are exact; an admin of the server creates accounts.",

@@ -73,6 +73,9 @@ export function Invites(props: { listing: Listing<Invite>; email: string; csrf: 
           <EmptyState icon="mail" {...emptyWords("invites", listing.kind, props.email)} />
         )}
       </Panel>
+      {listing.kind === "list" && listing.items.some((invite) => invite.needsTwoFactor) && (
+        <Note icon="shield">{t("account.invites.needsTwoFactor")}</Note>
+      )}
     </Section>
   );
 }

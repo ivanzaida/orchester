@@ -12,15 +12,20 @@ mod accounts;
 mod caps;
 mod deletion;
 mod desktop;
+mod ended;
 mod hosting;
 mod identity;
 mod limits;
 mod links;
 mod registry;
+mod root_key;
 mod sessions;
 mod support;
+mod two_factor;
+mod two_factor_guards;
+mod two_factor_sign_in;
 
-use std::{future::Future, pin::Pin, process::ExitCode};
+use std::{future::Future, pin::Pin, process::ExitCode, sync::Arc};
 
 use support::{Postgres, args::Selection, log::Capture};
 
@@ -59,8 +64,13 @@ const TESTS: &[(&str, Test)] = tests![
   sessions::devices_are_listed_and_revoked,
   sessions::web_sessions_end_twelve_hours_after_sign_in,
   sessions::a_sign_in_racing_a_reset_does_not_survive_it,
+  ended::a_refused_token_says_why_it_ended,
+  ended::tokens_of_a_deleted_account_say_so_until_they_would_have_ended,
+  ended::tokens_ended_before_the_account_was_deleted_say_nothing,
   identity::identity_token_verifies_with_the_published_key_set,
   identity::identity_key_rotation_keeps_the_previous_key_then_drops_it,
+  identity::identity_key_sets_are_signed_weekly_and_renewed_after_a_stop,
+  identity::identity_keys_leave_no_gap_after_a_stop,
   identity::many_concurrent_identity_tokens_do_not_starve_the_pool,
   hosting::migrations_apply_once_and_a_newer_database_is_refused,
   hosting::migration_4_removes_servers_whose_id_is_not_their_keys,
@@ -80,7 +90,34 @@ const TESTS: &[(&str, Test)] = tests![
   registry::invites_reach_the_invitee_once_and_end_when_revoked,
   registry::invites_are_declined_by_the_invitee,
   accept::invites_are_accepted_with_a_token_that_names_them,
+  root_key::the_first_start_makes_the_root,
+  root_key::a_restart_reuses_the_root,
+  root_key::replicas_starting_together_make_one_root,
+  root_key::a_changed_key_encryption_key_stops_the_start,
+  root_key::keys_without_a_root_stop_the_start,
+  root_key::losing_the_key_encryption_key_starts_over_with_a_new_root,
+  root_key::a_corrupt_root_is_stored_data,
+  root_key::a_key_set_dated_in_the_future_is_ignored,
+  root_key::keys_verify_with_the_root_a_linked_server_pins,
+  two_factor::turning_it_on_takes_the_password_and_a_code_and_upgrades_that_session,
+  two_factor::a_code_works_once_within_its_window,
+  two_factor::recovery_codes_work_once_and_are_replaced_with_a_code,
+  two_factor::turning_it_off_takes_the_password_and_a_code,
+  two_factor_sign_in::the_password_step_answers_a_challenge_that_one_code_finishes,
+  two_factor_sign_in::code_tries_are_limited_per_challenge_and_per_account,
+  two_factor_sign_in::a_password_change_ends_a_challenge,
+  two_factor_sign_in::invites_need_a_two_factor_session_and_tokens_say_so,
+  two_factor_sign_in::an_operator_turns_it_off_with_the_documented_statement,
+  two_factor_sign_in::tokens_for_codes_name_their_use,
+  two_factor_guards::wrong_codes_are_capped_a_day_and_the_tenth_is_mailed,
+  two_factor_guards::a_device_without_two_factor_counts_its_own_wrong_codes,
+  two_factor_guards::a_code_is_spent_once_by_requests_that_race,
+  two_factor_guards::a_password_alone_changes_nothing_sensitive_while_it_is_on,
 ];
+
+/// Tests that run at once: each holds a few connections, some many more, and PostgreSQL allows 100 by default (CI's
+/// service container keeps the default).
+const PARALLEL: usize = 16;
 
 /// Runs after the tests: what they logged holds none of their passwords, tokens, links, keys or emails.
 const LOG_CHECK: &str = "logs::no_secret_in_the_whole_log";
@@ -129,10 +166,15 @@ async fn run(tests: &[&'static (&'static str, Test)], capture: &Capture) -> usiz
   };
   println!("running {} tests", tests.len() + 1);
   let mut running = tokio::task::JoinSet::new();
+  let slots = Arc::new(tokio::sync::Semaphore::new(PARALLEL));
   for (name, test) in tests {
     let name = *name;
     let test = *test;
-    running.spawn(async move { (name, tokio::spawn(test()).await.is_ok()) });
+    let slots = Arc::clone(&slots);
+    running.spawn(async move {
+      let _slot = slots.acquire_owned().await.expect("the runner never closes its slots");
+      (name, tokio::spawn(test()).await.is_ok())
+    });
   }
   let mut failed = 0;
   while let Some(finished) = running.join_next().await {

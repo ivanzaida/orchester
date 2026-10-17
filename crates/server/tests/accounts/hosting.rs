@@ -60,7 +60,7 @@ async fn s1c_host_cli_prints_setup_and_account_codes_only_to_its_output_while_th
   assert!(account.status.success());
   let code = printed_code(&account, "Account code:");
   assert!(!String::from_utf8_lossy(&account.stderr).contains(&code));
-  let again = server.join(&credential(&code), None, "new laptop").await;
+  let again = server.join_as(&credential(&code), "cli_admin", "new laptop").await;
   assert_eq!(again.user.id, admin.user.id);
   let missing = command(&["account-code", "nobody"]);
   assert!(!missing.status.success());

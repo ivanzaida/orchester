@@ -109,11 +109,11 @@ impl Library {
         .iter()
         .filter(|e| accepts(filter, e.body.scope()))
         .count();
-      PageTab::new(
+      PageTab::to(
         format!("skills-tab-{filter:?}"),
         counted(ctx, &ctx.t(key), count),
         p.filter == filter,
-        move || panel.set(Panel::Library(filter)),
+        panel.to(Panel::Library(filter)),
       )
     });
     page_tabs(ctx, "skills-tabs", tabs).into()
@@ -188,14 +188,15 @@ fn header(ctx: &Ctx, p: &PageProps) -> Row {
     .child(
       ActionButton::new("skills-import-open", ButtonKind::Secondary, ctx.t("skills.import"))
         .icon(Icon::Download)
-        .on_click(move || import.set(Panel::Import)),
+        .opens(import.to(Panel::Import)),
     )
     .child(
       ActionButton::new("skills-new", ButtonKind::Primary, ctx.t("skills.new"))
         .icon(Icon::Plus)
-        .on_click(move || new.set(Panel::New)),
+        .opens(new.to(Panel::New)),
     )
 }
+
 fn empty(ctx: &mut Ctx, p: &PageProps) -> Column {
   let found = !p.data.repository.items.is_empty();
   let mut card = Column::new()
@@ -308,7 +309,7 @@ impl Component for SkillRow {
         words::scope(ctx, &p.data, entry.body.scope()),
         published,
       ],
-      move || panel.set(Panel::Edit(id)),
+      panel.to(Panel::Edit(id)),
     )
     .marks(version_mark, scope_mark)
   }
@@ -322,7 +323,7 @@ fn empty_actions(ctx: &Ctx, p: &PageProps) -> Row {
     actions = actions.child(
       ActionButton::new("skills-empty-import", ButtonKind::Primary, ctx.t("skills.import"))
         .icon(Icon::Download)
-        .on_click(move || import.set(Panel::Import)),
+        .opens(import.to(Panel::Import)),
     );
   }
   actions = actions.child(
@@ -336,7 +337,7 @@ fn empty_actions(ctx: &Ctx, p: &PageProps) -> Row {
       ctx.t("skills.new"),
     )
     .icon(Icon::Plus)
-    .on_click(move || new.set(Panel::New)),
+    .opens(new.to(Panel::New)),
   );
   if !found {
     actions = actions.child(

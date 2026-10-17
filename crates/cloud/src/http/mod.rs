@@ -62,7 +62,9 @@ fn routes(config: &mut web::ServiceConfig) {
     .service(resource("/auth/confirm/resend").route(web::post().to(h::resend_confirmation)))
     .service(resource("/auth/links/inspect").route(web::post().to(h::inspect_link)))
     .service(resource("/auth/sessions").route(web::post().to(h::sign_in)))
+    .service(resource("/auth/sessions/two-factor").route(web::post().to(h::finish_sign_in)))
     .service(resource("/auth/sessions/current").route(web::delete().to(h::sign_out)))
+    .service(resource("/auth/sessions/current/two-factor").route(web::post().to(h::step_up)))
     .service(resource("/auth/reset").route(web::post().to(h::request_reset)))
     .service(resource("/auth/reset/finish").route(web::post().to(h::finish_reset)))
     .service(resource("/auth/password").route(web::post().to(h::change_password)))
@@ -72,6 +74,13 @@ fn routes(config: &mut web::ServiceConfig) {
         .route(web::patch().to(h::change_me))
         .route(web::delete().to(h::delete_me)),
     )
+    .service(
+      resource("/me/two-factor")
+        .route(web::post().to(h::start_two_factor))
+        .route(web::delete().to(h::turn_off_two_factor)),
+    )
+    .service(resource("/me/two-factor/confirm").route(web::post().to(h::confirm_two_factor)))
+    .service(resource("/me/two-factor/recovery-codes").route(web::post().to(h::new_recovery_codes)))
     .service(resource("/devices").route(web::get().to(h::devices)))
     .service(resource("/devices/{id}").route(web::delete().to(h::revoke_device)))
     .service(resource("/keys").route(web::get().to(h::keys)))

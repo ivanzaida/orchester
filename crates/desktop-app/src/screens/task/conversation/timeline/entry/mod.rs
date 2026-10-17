@@ -41,7 +41,7 @@ use crate::{
   },
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{opening, pressable},
   },
 };
 
@@ -139,7 +139,7 @@ fn pressed(ctx: &mut Ctx, timeline: &Timeline, (key, shown, open): (&Arc<str>, &
     && let Ok(file) = ChangedFile::new(path.to_string(), ChangeSource::Checkpoint)
   {
     let go = timeline.open(ctx, TaskView::Changes(Some(file)));
-    return pressable(go)
+    return opening(go)
       .id(format!("conversation-{key}-open"))
       .width(Dimension::Pct(100.0))
       .child(line)

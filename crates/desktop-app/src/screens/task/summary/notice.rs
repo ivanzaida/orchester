@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   id::StepExecutionId,
-  run::{PauseReason, RunLimit, RunStatus, Stuck},
+  run::{PauseReason, RunFailure, RunLimit, RunStatus, Stuck},
   task::TaskStatus,
   tokens::compact_tokens,
 };
@@ -19,11 +19,13 @@ use orchester_workspace::{
     approvals::ShownApproval,
     delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
+    run::worktree_failure_message,
   },
 };
 
 use crate::ui::{
   icon::Icon,
+  message::message_text,
   notice::{Notice, NoticeTone},
 };
 
@@ -388,6 +390,17 @@ fn settled(ctx: &Ctx, detail: &TaskDetail, run: &RunView) -> Said {
       let (icon, title) = waiting_words(stuck);
       Said::new(NoticeTone::Warning, icon, text(title, "summary.notice.stuckBody"))
     }
+    RunStatus::Failed(RunFailure::WorktreeNotCreated(reason)) => Said::new(
+      NoticeTone::Danger,
+      Icon::CircleX,
+      (
+        ctx.t("summary.notice.notStartedTitle"),
+        ctx.t_args(
+          "summary.notice.notStartedBody",
+          [("reason", message_text(ctx, &worktree_failure_message(reason)))],
+        ),
+      ),
+    ),
     RunStatus::Failed(_) if run.current_step().is_some_and(|step| step.tool_step) => Said::new(
       NoticeTone::Danger,
       Icon::CircleX,

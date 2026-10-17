@@ -1,28 +1,32 @@
 //! The application database next to the executable: known projects, the session log used to
-//! detect that the previous run of Orchester ended abnormally, the state of the window
-//! (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and the
-//! application's own settings ([`settings`]), among them the Usage dashboard's warning threshold, and the person's
-//! agent CLI accounts ([`accounts`]).
+//! detect that the previous run of Orchester ended abnormally, whose each project is ([`owners`]), the state of the
+//! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
+//! is ([`server_owners`]), the application's own settings ([`settings`]), among them the Usage dashboard's warning
+//! threshold, and the person's agent CLI accounts ([`accounts`]).
 
 mod accounts;
 mod cloud;
+mod cloud_ended;
 mod cloud_joins;
+mod owners;
+mod server_owners;
 mod servers;
 mod settings;
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::ProjectId, name::Name, project::Project, time::Timestamp};
+use orchester_core::{id::ProjectId, name::Name, time::Timestamp};
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub use self::{
   cloud::StoredCloudAccount,
+  cloud_ended::{CloudSignInEnd, EndedCloudSignIn},
   cloud_joins::AcceptedInvite,
   servers::{JoinedWith, ServerAccount, StoredServer},
 };
 use crate::{
   StoreError, migrate,
-  rows::{corrupt, parse, path_text},
+  rows::{corrupt, parse},
 };
 
 const MIGRATIONS: &[&str] = &[
@@ -61,6 +65,11 @@ CREATE TABLE ui_state (
   cloud::MIGRATION,
   cloud_joins::MIGRATION,
   cloud_joins::ASKS_MIGRATION,
+  cloud_ended::MIGRATION,
+  owners::MIGRATION,
+  server_owners::MIGRATION,
+  cloud_ended::TWO_FACTOR_MIGRATION,
+  cloud_joins::NEEDS_CODE_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.
@@ -128,60 +137,6 @@ impl AppDb {
       });
     };
     migrate::open(path, migrations)
-  }
-
-  /// Adds the project or, if it is already known, updates its name, location and last use.
-  pub fn register_project(&mut self, project: &Project, repo_root: &Path, now: Timestamp) -> Result<(), StoreError> {
-    self.connection.execute(
-      "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES (?1, ?2, ?3, ?4, ?4) \
-       ON CONFLICT (id) DO UPDATE SET name = excluded.name, repo_root = excluded.repo_root, \
-       last_opened_at = excluded.last_opened_at",
-      params![
-        project.id().to_string(),
-        project.name().as_str(),
-        path_text("repository path", repo_root)?,
-        now.unix_millis(),
-      ],
-    )?;
-    Ok(())
-  }
-
-  /// Forgets the project: it is no longer listed. Only this database changes; the project's
-  /// folder and its `.orchester` data stay as they are, so opening the folder again brings the
-  /// project back. Forgetting a project that is not known changes nothing.
-  pub fn forget_project(&mut self, project: ProjectId) -> Result<(), StoreError> {
-    self
-      .connection
-      .execute("DELETE FROM projects WHERE id = ?1", [project.to_string()])?;
-    Ok(())
-  }
-
-  /// Known projects, most recently opened first.
-  pub fn projects(&self) -> Result<Vec<RegisteredProject>, StoreError> {
-    let mut statement = self
-      .connection
-      .prepare("SELECT id, name, repo_root, last_opened_at FROM projects ORDER BY last_opened_at DESC")?;
-    let rows = statement
-      .query_map([], |row| {
-        Ok((
-          row.get::<_, String>(0)?,
-          row.get::<_, String>(1)?,
-          row.get::<_, String>(2)?,
-          row.get::<_, i64>(3)?,
-        ))
-      })?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows
-      .into_iter()
-      .map(|(id, name, repo_root, last_opened_at)| {
-        Ok(RegisteredProject {
-          id: parse("project id", &id)?,
-          name: Name::new(&name).map_err(|error| corrupt("project name", error))?,
-          repo_root: PathBuf::from(repo_root),
-          last_opened_at: Timestamp::from_unix_millis(last_opened_at),
-        })
-      })
-      .collect()
   }
 
   /// Records a new session and reports how the previous one ended. A previous session with
@@ -268,6 +223,22 @@ impl AppDb {
     )?;
     Ok(())
   }
+}
+
+/// A row of `projects`: id, name, repo root and last use.
+type ProjectRow = (String, String, String, i64);
+
+fn project_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ProjectRow> {
+  Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+}
+
+fn registered((id, name, repo_root, last_opened_at): ProjectRow) -> Result<RegisteredProject, StoreError> {
+  Ok(RegisteredProject {
+    id: parse("project id", &id)?,
+    name: Name::new(&name).map_err(|error| corrupt("project name", error))?,
+    repo_root: PathBuf::from(repo_root),
+    last_opened_at: Timestamp::from_unix_millis(last_opened_at),
+  })
 }
 
 const fn end_text(end: SessionEnd) -> &'static str {

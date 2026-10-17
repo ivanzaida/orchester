@@ -52,9 +52,27 @@ pub enum SharingError {
   /// A server whose own certificate this computer pinned presents another one; nothing was sent to it.
   #[error("the server presents a different certificate")]
   CertificateChanged,
+  /// A code needs two-factor authentication on the person's Orchester Cloud account, which is off; nothing was sent.
+  #[error("the cloud account has two-factor authentication off")]
+  TwoFactorOff,
+  /// A code needs this computer to have signed in to Orchester Cloud with two-factor authentication; nothing was sent.
+  #[error("this computer signed in to Orchester Cloud without two-factor authentication")]
+  TwoFactorSession,
+  /// The server did not prove it holds the key whose id it gives itself: no token was asked for and nothing was sent.
+  #[error("the server did not prove it holds the key of the id it gives itself")]
+  UnprovenServer,
   /// The server has no project at the address, or the person is not a member of it; it answers both alike.
   #[error("no project the person is a member of at this address")]
   NoProject,
+  /// The checkout's tasks are no longer those the person reviewed before confirming the link: nothing was sent, and
+  /// the link is reviewed again.
+  #[error("the project's tasks changed since the link was reviewed")]
+  ProjectChanged,
+  /// The server reported an address for one of its projects that is on another server, `own`: Orchester neither keeps
+  /// it, writes it into a repository nor opens it. A server reached by another address than the one it names itself
+  /// by does this; the person connects to it by `own`.
+  #[error("the server reported a project address on another server, {own}")]
+  ForeignAddress { own: ServerAddress },
 }
 
 impl From<Message> for SharingError {
@@ -92,6 +110,13 @@ impl SharingError {
         Message::new("servers.errors.certificateChanged").with("host", address.host().to_owned())
       }
       Self::NoProject => Message::new("sharing.errors.noProject"),
+      Self::ProjectChanged => Message::new("sharing.errors.projectChanged"),
+      Self::ForeignAddress { own } => Message::new("sharing.errors.foreignAddress")
+        .with("server", address.as_str().to_owned())
+        .with("own", own.as_str().to_owned()),
+      Self::TwoFactorOff => Message::new("sharing.errors.twoFactorOff"),
+      Self::TwoFactorSession => Message::new("sharing.errors.twoFactorSession"),
+      Self::UnprovenServer => Message::new("sharing.errors.unprovenServer"),
     }
   }
 }

@@ -28,10 +28,14 @@ pub async fn serve(
   let tls = server.inner.tls.as_ref().map(|tls| tls.acceptor.clone());
   let proxies = server.inner.config.trusted_proxies.clone();
   let limits = ConnectionLimit::new(256, 64, proxies.clone());
+  let schedule = server.inner.presented.start_schedule();
   let app = crate::http::router(server);
   match tls {
     Some(acceptor) => serve_listener(TlsListener::new(listener, acceptor, proxies), app, shutdown, limits).await,
     None => serve_listener(listener, app, shutdown, limits).await,
+  }
+  if let Some(schedule) = schedule {
+    schedule.abort();
   }
   Ok(())
 }

@@ -31,6 +31,7 @@ mod questions;
 mod queue_holds;
 mod recovery;
 mod reviewer_usage;
+mod shared_members;
 mod sharing;
 mod sources;
 mod steering;
@@ -41,6 +42,7 @@ mod task_groups;
 mod token_budgets;
 mod tool_approvals;
 mod unverified_steps;
+mod worktree_not_created;
 mod worktree_removals;
 
 pub(super) const MIGRATIONS: &[&str] = &[
@@ -551,4 +553,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   editor_drafts::MIGRATION,
   sharing::ADDRESS_MIGRATION,
   pull_request_syncs::MIGRATION,
+  worktree_not_created::MIGRATION,
+  shared_members::MIGRATION,
+  shared_members::READ_AS_MIGRATION,
 ];

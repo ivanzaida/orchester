@@ -16,7 +16,7 @@ use tokio::runtime::Runtime;
 
 use super::{
   State,
-  account_cloud::{EMAIL, PASSWORD},
+  account_cloud::{EMAIL, OTHER_EMAIL, PASSWORD},
   backends::Backends,
   project,
 };
@@ -27,17 +27,22 @@ pub fn seed(
   (backends, services, workspace): (&Backends, &Services, &Workspace),
   (runtime, folder): (&Runtime, &Path),
 ) -> Result<Route, Box<dyn Error>> {
+  sign_in(backends, services, runtime)?;
   let cloud = &services.cloud;
-  runtime.block_on(async {
-    cloud
-      .set_address(Some(ServerAddress::parse(&backends.cloud.url())?))
-      .await?;
-    cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())).await?;
-    Ok::<_, Box<dyn Error>>(())
-  })?;
   let settings = |panel| Route::Orchester(OrchesterView { server: None, panel });
   if matches!(state, State::Project | State::LinkConfirm | State::Linked) {
     return project::seed(state, (backends, services, workspace), (runtime, folder));
+  }
+  if state == State::OtherAccount {
+    project::seed(State::Linked, (backends, services, workspace), (runtime, folder))?;
+    runtime.block_on(async {
+      cloud.sign_out().await?;
+      cloud
+        .sign_in(OTHER_EMAIL.into(), Credential::new(PASSWORD.into()))
+        .await?;
+      Ok::<_, Box<dyn Error>>(())
+    })?;
+    return Ok(settings(OrchesterPanel::Account));
   }
   if state == State::SignedIn {
     backends.invite_to_billing();
@@ -83,6 +88,18 @@ pub fn seed(
     _ => {}
   }
   Ok(settings(OrchesterPanel::Invites))
+}
+
+/// Signs the window in to the stand-in cloud of `backends`, as the person would at the gate.
+pub fn sign_in(backends: &Backends, services: &Services, runtime: &Runtime) -> Result<(), Box<dyn Error>> {
+  let cloud = &services.cloud;
+  runtime.block_on(async {
+    cloud
+      .set_address(Some(ServerAddress::parse(&backends.cloud.url())?))
+      .await?;
+    cloud.sign_in(EMAIL.into(), Credential::new(PASSWORD.into())).await?;
+    Ok::<_, Box<dyn Error>>(())
+  })
 }
 
 /// Accepts the Billing invite while the cloud names an address where nothing listens: the join fails after the

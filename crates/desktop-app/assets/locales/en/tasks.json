@@ -80,6 +80,32 @@
     "outsideTasks": {
       "body": "This list shows tasks only. The Needs you panel lists everything that waits for you.",
       "open": "Open Needs you"
+    },
+    "shared": {
+      "on": "Shared on {{server}}",
+      "synced": "Synced {{time}}",
+      "reconnecting": "Reconnecting · try {{attempt}}",
+      "offline": "Offline since {{time}}",
+      "tryNow": "Try now",
+      "signedOut": "Signed out",
+      "joinAgain": "Join again",
+      "certificateChanged": "Certificate changed · nothing sent",
+      "checkCode": "Check the new code",
+      "notMember": "Not a member since {{time}} · read-only",
+      "member": "You're a member",
+      "owner": "You're an owner",
+      "admin": "You're an admin there",
+      "wasMember": "You were a member",
+      "settings": "Sharing settings",
+      "readOnly": "Read-only: you're not a member.",
+      "removedTitle": "You're no longer a member of {{project}} on {{server}}",
+      "removedBody": "{{server}} answered at {{time}} that you aren't in {{project}} any more. This computer keeps {{key}}'s {{count}} tasks as they were then, read-only. Runs already going here finish; none can start. Make {{project}} local to keep working here, or ask an owner, {{owners}}, to add you again.",
+      "or": " or ",
+      "anOwner": "one of its owners",
+      "checkAgain": "Check again",
+      "makeLocal": "Make local…",
+      "separator": "·",
+      "withName": "{{role}} · {{username}}"
     }
   }
 }

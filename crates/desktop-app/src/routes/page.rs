@@ -18,6 +18,9 @@ use super::{
 
 /// The query parameter of the file a pull request's page shows.
 const FILE: &str = "file";
+/// What Project settings' Sharing tab asks once open.
+const ASK: &str = "ask";
+const MAKE_LOCAL: &str = "make-local";
 
 /// A screen of one project, with what its path names besides the project.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -64,6 +67,9 @@ pub enum ProjectPage {
   /// Edit MCP server, the server's id.
   EditConnection(ConnectionId),
   Settings(ProjectSettingsTab),
+  /// Project settings on its Sharing tab with *Make local*'s question open (the task list's *no longer a
+  /// member* notice).
+  MakeLocal,
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
 }
@@ -127,7 +133,7 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings(_) => Screen::ProjectSettings,
+      Self::Settings(_) | Self::MakeLocal => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
     }
   }
@@ -178,6 +184,10 @@ impl ProjectPage {
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
+      Self::MakeLocal => with_query(
+        segment(Screen::ProjectSettings),
+        &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
+      ),
       page => segment(page.screen()),
     }
   }
@@ -240,7 +250,7 @@ impl ProjectPage {
       }
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
-      [SETTINGS] => ProjectSettingsTab::take(params).map(Self::Settings),
+      [SETTINGS] => settings(params),
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
       )),
@@ -268,4 +278,17 @@ fn task_key(value: &str) -> Result<TaskKey, RouteError> {
     value: value.to_owned(),
     source,
   })
+}
+
+/// Project settings on the tab the query names, or *Make local*'s question on Sharing (`ask=make-local`).
+fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
+  let tab = ProjectSettingsTab::take(params)?;
+  match (tab, params.take(ASK)?) {
+    (_, None) => Ok(ProjectPage::Settings(tab)),
+    (ProjectSettingsTab::Sharing, Some(ask)) if ask == MAKE_LOCAL => Ok(ProjectPage::MakeLocal),
+    (_, Some(value)) => Err(RouteError::InvalidParam {
+      param: ASK.to_owned(),
+      value,
+    }),
+  }
 }

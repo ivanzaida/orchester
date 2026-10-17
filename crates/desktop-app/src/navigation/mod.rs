@@ -1,11 +1,14 @@
 //! Moving around the window: the tabs (`tabs`), each with its own history, and the router that shows
 //! the active tab's place. Every navigation goes through [`Navigation`], which changes the tabs and then
 //! has the router show the active tab's route; the router keeps no history of its own (it is always
-//! replaced), so Back and Forward are the active tab's.
+//! replaced), so Back and Forward are the active tab's. Each Orchester Cloud account has tabs of its own (`accounts`).
 
+pub mod accounts;
 pub mod guard;
 pub mod input;
+pub mod link;
 pub mod pointed;
+pub mod press;
 pub mod shortcuts;
 pub mod tabs;
 pub mod waiting;
@@ -19,6 +22,7 @@ use lurq::{app::ctx::Ctx, core::Signal, router::RouterHandle};
 
 use self::{
   pointed::Pointed,
+  press::OpenIn,
   tabs::{TabId, TabSet},
 };
 use crate::routes::Route;
@@ -112,6 +116,18 @@ impl Navigation {
     });
   }
 
+  /// Opens `route` where `open` says: in the active tab as [`go`](Self::go) does, or in a new tab right of the
+  /// active one, in the background or switched to.
+  pub fn open(&self, route: Route, open: OpenIn) {
+    match open {
+      OpenIn::ActiveTab => self.go(route),
+      OpenIn::BackgroundTab | OpenIn::NewTab => self.change(|tabs| {
+        tabs.open_at(route, open == OpenIn::NewTab);
+        true
+      }),
+    }
+  }
+
   pub fn select(&self, id: TabId) {
     self.change(|tabs| tabs.select(id));
   }
@@ -130,11 +146,20 @@ impl Navigation {
     self.change(|tabs| tabs.close(tabs.active().id()));
   }
 
-  /// Goes to `route` like [`go`](Self::go), pointing at `card` on the page it opens; also when the active
-  /// tab is there already. A departure an editor holds points at nothing.
-  pub fn go_to_card(&self, route: &Route, card: Pointed) {
-    self.go(route.clone());
-    if self.route_now() == *route {
+  /// Shows `tabs` in place of the window's tabs, whatever those hold, and returns them: the tabs of another account
+  /// signing in take the place of the last one's (`root`), with no leave guard, which held that account's edits.
+  pub fn swap_tabs(&self, tabs: TabSet) -> TabSet {
+    let before = self.tabs_now();
+    self.apply(tabs);
+    before
+  }
+
+  /// Opens `route` like [`open`](Self::open), pointing at `card` on the page it opens when the window shows it
+  /// then, also when the active tab is there already: a page opened in a background tab is not shown, and nothing
+  /// points at its card. A departure an editor holds points at nothing.
+  pub fn open_to_card(&self, route: &Route, open: OpenIn, card: Pointed) {
+    self.open(route.clone(), open);
+    if open != OpenIn::BackgroundTab && self.route_now() == *route {
       let number = self.pointings.fetch_add(1, Ordering::Relaxed) + 1;
       self.pointed.set(Some((number, card)));
     }

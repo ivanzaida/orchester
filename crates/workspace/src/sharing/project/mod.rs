@@ -8,6 +8,7 @@ mod automatic;
 mod claims;
 pub mod convert;
 pub mod discovery;
+pub mod first_link;
 mod join;
 pub mod link;
 pub mod lookup;
@@ -33,10 +34,11 @@ use orchester_store::{ProjectDb, SharingLink};
 pub use self::{
   claims::{WorkClaim, WorkRefusal},
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
-  members::MemberChange,
+  make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
+  members::{MemberChange, MembersRead, ProjectMembers},
   share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
 };
-use super::{Connection, ServerEntry, Servers, SharingError};
+use super::{Behalf, Connection, ServerEntry, Servers, SharingError};
 
 /// A shared project's server project and the server it is on.
 #[derive(Clone)]
@@ -45,25 +47,49 @@ pub struct ProjectServer {
   entry: ServerEntry,
   link: SharingLink,
   repo_root: PathBuf,
+  /// For the signed-in account, or for the background work that keeps every account's shared projects in step.
+  behalf: Behalf,
 }
 
 impl ProjectServer {
-  /// The server project of the project at `repo_root`; `None` while the project is local. Blocking.
+  /// The server project of the project at `repo_root`, on one of the signed-in account's servers; `None` while the
+  /// project is local. A link to a server that is not the account's, gone or another account's, finds none
+  /// ([`SharingError::ServerMissing`]). Blocking.
   pub fn open(servers: &Servers, repo_root: &Path) -> Result<Option<Self>, SharingError> {
+    Self::among(servers, &servers.entries()?, repo_root, Behalf::Account)
+  }
+
+  /// [`Self::open`] among `entries`, the servers of the account whose project is at `repo_root`, for the background
+  /// work, while that account or another is signed in. Blocking.
+  pub(crate) fn in_background(
+    servers: &Servers,
+    entries: &[ServerEntry],
+    repo_root: &Path,
+  ) -> Result<Option<Self>, SharingError> {
+    Self::among(servers, entries, repo_root, Behalf::Background)
+  }
+
+  fn among(
+    servers: &Servers,
+    entries: &[ServerEntry],
+    repo_root: &Path,
+    behalf: Behalf,
+  ) -> Result<Option<Self>, SharingError> {
     let db = ProjectDb::open(repo_root)?;
     let Some(link) = db.sharing()? else {
       return Ok(None);
     };
-    let entry = servers
-      .entries()?
-      .into_iter()
+    let entry = entries
+      .iter()
       .find(|entry| entry.stored.id == link.server)
+      .cloned()
       .ok_or(SharingError::ServerMissing)?;
     Ok(Some(Self {
       servers: servers.clone(),
       entry,
       link,
       repo_root: repo_root.to_owned(),
+      behalf,
     }))
   }
 
@@ -105,7 +131,7 @@ impl ProjectServer {
     let project = self.link.project;
     self
       .servers
-      .with_token(&self.entry, |client, token| call(client, token, project))
+      .with_token_for(self.behalf, &self.entry, |client, token| call(client, token, project))
       .await
   }
 }

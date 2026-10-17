@@ -163,12 +163,10 @@ fn profile_action(ctx: &mut Ctx, props: &Props, profile: &DraftProfileChoice) ->
     .expect("a pipeline editor belongs to a project");
   let id = profile.id;
   button
-    .on_click(move || {
-      navigation.go(crate::routes::Route::Project(
-        project,
-        crate::routes::ProjectPage::Agent(id, crate::routes::AgentTab::default()),
-      ))
-    })
+    .opens(navigation.to(crate::routes::Route::Project(
+      project,
+      crate::routes::ProjectPage::Agent(id, crate::routes::AgentTab::default()),
+    )))
     .into()
 }
 

@@ -121,7 +121,7 @@ fn heading(ctx: &mut Ctx, open: &OpenAction) -> Row {
   let navigation = Navigation::of(ctx);
   let add = ActionButton::new("all-projects-add", ButtonKind::Primary, ctx.t("projects.add"))
     .icon(Icon::Plus)
-    .on_click(move || navigation.go(Route::AddProject(None)));
+    .opens(navigation.to(Route::AddProject(None)));
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
@@ -223,7 +223,7 @@ fn empty(ctx: &mut Ctx, open: &OpenAction) -> Element {
   let navigation = Navigation::of(ctx);
   let add = ActionButton::new("all-projects-empty-add", ButtonKind::Primary, ctx.t("projects.add"))
     .icon(Icon::Plus)
-    .on_click(move || navigation.go(Route::AddProject(None)));
+    .opens(navigation.to(Route::AddProject(None)));
   EmptyState::new(
     "all-projects-empty",
     Icon::Folders,

@@ -4,6 +4,7 @@ import { apiRequests, reset, signIn } from "./support";
 
 const OLEH = "0199f0a0-0000-7000-8000-000000000003";
 const DANA = "0199f0a0-0000-7000-8000-000000000005";
+const MARIA = "0199f0a0-0000-7000-8000-000000000004";
 
 test.beforeEach(async () => {
   await reset();
@@ -36,6 +37,18 @@ test.describe("people", () => {
     await page.getByRole("group", { name: "Disable Oleh Petrenko's account?" }).getByRole("button", { name: "Keep" }).click();
     await page.getByRole("button", { name: "Enable" }).click();
     await expect.poll(async () => (await apiRequests()).find((r) => r.method === "PATCH")).toMatchObject({ path: `/api/v1/admin/users/${DANA}`, body: { disabled: false } });
+  });
+
+  test("unlinking an account's Orchester Cloud asks in place", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/admin/people");
+    const maria = page.getByRole("row").filter({ hasText: "Maria Lind" });
+    await maria.getByRole("button", { name: "Unlink Orchester Cloud" }).click();
+    const question = page.getByRole("group", { name: "Unlink Maria Lind's Orchester Cloud account?" });
+    await question.getByRole("button", { name: "Unlink Orchester Cloud" }).click();
+    await expect.poll(async () => (await apiRequests()).find((r) => r.method === "DELETE")).toMatchObject({ path: `/api/v1/admin/users/${MARIA}/cloud` });
+    await expect(maria.getByRole("button", { name: "Unlink Orchester Cloud" })).toHaveCount(0);
+    await expect(maria.getByText("Codes", { exact: true })).toBeVisible();
   });
 
   test("an account code is shown once under the account", async ({ page }) => {

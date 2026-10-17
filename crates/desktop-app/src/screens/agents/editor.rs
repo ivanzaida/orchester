@@ -262,10 +262,7 @@ impl Editor {
       ),
     ]
     .into_iter()
-    .map(|(tab, id, text)| {
-      let (nav, shown) = (props.nav.clone(), props.shown(tab));
-      PageTab::new(id, text, props.tab == tab, move || nav.show(shown))
-    })
+    .map(|(tab, id, text)| PageTab::to(id, text, props.tab == tab, props.nav.to(props.shown(tab))))
     .collect::<Vec<_>>()
   }
   fn buttons(
@@ -416,8 +413,7 @@ impl Editor {
   }
 }
 fn agents_crumb(ctx: &mut Ctx, props: &Props) -> Crumb {
-  let nav = props.nav.clone();
-  Crumb::link(ctx.t("agents.title"), move || nav.show(Shown::List))
+  Crumb::to(ctx.t("agents.title"), props.nav.to(Shown::List))
 }
 
 fn save_status(status: &str, state: VersionState, dirty: bool) -> Row {

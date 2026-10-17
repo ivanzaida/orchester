@@ -112,10 +112,10 @@ impl Secrets {
   pub fn new() -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/secrets-tests");
     fs::create_dir_all(&scratch).expect("test scratch");
-    let data = Data {
-      dir: TempDir::new_in(scratch).expect("test data"),
-      runtime: Runtime::new().expect("runtime"),
-    };
+    let data = Data::at(
+      TempDir::new_in(scratch).expect("test data"),
+      Runtime::new().expect("runtime"),
+    );
     let launch = data.launch();
     let open = data.add_kontur(launch.workspace().expect("session"));
     let vault = Arc::new(MemoryVault::default());

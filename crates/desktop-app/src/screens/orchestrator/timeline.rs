@@ -100,7 +100,9 @@ impl PartialEq for TurnRow {
 
 impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 
-/// The list of `rows`, opening on the newest.
+/// The list of `rows`, opening on the newest. lurq reveals a key once, when it changes, so the list shows a new
+/// turn when it comes and otherwise stays where the person scrolled it; a turn taller than the view is revealed at
+/// its top.
 pub(super) fn list(ctx: &mut Ctx, rows: Vec<TurnRow>) -> Element {
   let newest = rows.last().map(|row| row.turn.key());
   // The thumb keeps a lane of its own, so it never covers a message's end.
@@ -499,7 +501,7 @@ impl Fix {
     Some(
       ActionButton::new(id, ButtonKind::Primary, ctx.t(key))
         .icon(Icon::ArrowUpRight)
-        .on_click(move || navigation.go(route.clone())),
+        .opens(navigation.to(route)),
     )
   }
 }

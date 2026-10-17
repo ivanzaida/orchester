@@ -21,6 +21,8 @@ mod changes;
 mod data;
 mod links;
 mod refused;
+#[path = "../../tests/support/signed_in.rs"]
+mod signed_in;
 
 use std::{
   env,
@@ -37,7 +39,7 @@ use orchester_app::{
   mcp::{self, AppMcp, McpLink, McpMode, McpSettings, WindowLink},
   root::{Root, RootProps, Start},
   routes::{OrchestratorChat, ProjectPage, Route},
-  startup::{Launch, WindowPosition},
+  startup::WindowPosition,
   theme::{self, Mode},
   ui::loader,
 };
@@ -177,7 +179,9 @@ fn route(prepared: &data::Prepared, state: State) -> Route {
 /// The window on the seeded data at `state`, its project's runner `runner`; returns once it closed.
 fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch: &Path) -> Result<(), Box<dyn Error>> {
   let runtime = Runtime::new()?;
-  let launch = Launch::begin_at(&prepared.database, runner, runtime.handle(), None);
+  // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
+  let cloud = signed_in::account_cloud::AccountCloud::start();
+  let launch = signed_in::launch(&prepared.database, runner, runtime.handle(), &cloud);
   let start = match launch.start() {
     Start::Ready(mut ready) => {
       ready.landing.route = route(prepared, state);

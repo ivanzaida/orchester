@@ -46,7 +46,7 @@ impl SecretVault for MemoryVault {
 }
 
 /// The window of a new data folder with Kontur in a git repository whose `origin` is `origin`, a keychain in memory
-/// and links recorded instead of opened.
+/// and links recorded instead of opened, signed in past the sign-in gate to the data folder's stand-in cloud.
 pub fn window(origin: Option<&str>) -> Window {
   let data = Data::new();
   let vault = Arc::new(MemoryVault::default());
@@ -63,7 +63,9 @@ pub fn window(origin: Option<&str>) -> Window {
     git(&repo, &["remote", "add", "origin", origin]);
   }
   data.add_kontur(launch.workspace().expect("the session started"));
-  launch.services().expect("services").links.record_instead();
+  let services = launch.services().expect("services");
+  services.links.record_instead();
+  super::support::signed_in::sign_in(services, data.runtime.handle(), &data.cloud);
   let mut window = Window::of(data, launch);
   window.tree.resize(1440, HEIGHT);
   window.pass();

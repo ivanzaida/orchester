@@ -6,6 +6,8 @@
 use orchester_api::client::{AddressError, ServerAddress};
 use orchester_core::{repository::RepositoryIdentity, resource::Slug};
 
+use super::SharingError;
+
 /// Why a typed project address is not one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProjectAddressError {
@@ -39,6 +41,17 @@ impl ProjectAddress {
     })
   }
 
+  /// `text`, the address the server at `server` reported for one of its projects, when it is on that server. An
+  /// address on another server is never kept, written into a repository or opened in the browser
+  /// ([`SharingError::ForeignAddress`]).
+  pub fn reported(text: &str, server: &ServerAddress) -> Result<Self, SharingError> {
+    let address = Self::parse(text).map_err(|_| SharingError::InvalidAnswer("project address"))?;
+    if address.server() != server {
+      return Err(SharingError::ForeignAddress { own: address.server });
+    }
+    Ok(address)
+  }
+
   pub fn server(&self) -> &ServerAddress {
     &self.server
   }
@@ -50,6 +63,12 @@ impl ProjectAddress {
   /// The address as people share it, `https://orchester.example.com/kontur`.
   pub fn to_text(&self) -> String {
     format!("{}/{}", self.server.as_str(), self.slug.as_str())
+  }
+
+  /// Where the project's owners manage its members, roles and invites: its page in the server admin
+  /// (`docs/architecture/server.md`, rows 62–63), `https://orchester.example.com/admin/projects/kontur`.
+  pub fn admin_url(&self) -> String {
+    format!("{}/admin/projects/{}", self.server.as_str(), self.slug.as_str())
   }
 }
 

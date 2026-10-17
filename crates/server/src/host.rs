@@ -44,6 +44,7 @@ impl Server {
           invite: None,
           user: None,
           made_by: None,
+          mfa: false,
         };
         let (code, _) = codes::create(db, &state.keys, &new, now)?;
         db::audit(db, None, "code_made", "setup", None, now)?;
@@ -65,10 +66,25 @@ impl Server {
           invite: None,
           user: Some(user.id),
           made_by: None,
+          mfa: false,
         };
         let (code, _) = codes::create(db, &state.keys, &new, now)?;
         db::audit(db, None, "code_made", &format!("account:{}", user.id), None, now)?;
         Ok(code)
+      })
+      .await
+  }
+
+  /// `orchester-server account-cloud <username>`: whether the account is linked to an Orchester Cloud identity, and
+  /// which (the cloud account's id); with `unlink`, ends that link first (`account-unlink`), audited.
+  pub async fn host_account_cloud(&self, username: String, unlink: bool) -> Result<Option<String>, ServerError> {
+    self
+      .account_write(move |db, now| {
+        let user = db::find_user(db, &username)?.ok_or(ErrorCode::NoSuchUser)?;
+        if unlink {
+          db::unlink_subject(db, user.id, None, now)?;
+        }
+        db::cloud_subject(db, user.id)
       })
       .await
   }

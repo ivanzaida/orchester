@@ -3,6 +3,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
+use orchester_api::certificate::CertificatePin;
 use serde::Deserialize;
 
 use crate::{addresses::TrustedProxy, error::ServerError};
@@ -39,6 +40,16 @@ impl std::str::FromStr for TlsMode {
   }
 }
 
+/// How the server knows the certificate the proxy in front presents, with `tls = "off"` (`proxy_certificate`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProxyCertificate {
+  /// `auto`: read at the server's own `address`, over TLS the operating system's trust store checks, and read again
+  /// as the proxy renews it.
+  Auto,
+  /// This SHA-256, as configured.
+  Fixed(CertificatePin),
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -58,6 +69,11 @@ pub struct Config {
   pub admin_url: String,
   /// The private plain-HTTP listener only the admin app's own server side calls the API on; `None` turns it off.
   pub admin_api_listen: Option<SocketAddr>,
+  /// With `tls = "off"`: the SHA-256 (64 hex characters) of the certificate the proxy in front presents, or `auto` to
+  /// read it at `address`, which the server signs into its key proofs so apps can enter codes
+  /// (`docs/server-hosting.md`, "The server admin"). Empty is the same as unset; read through
+  /// [`Config::proxy_certificate`].
+  pub proxy_certificate: Option<String>,
 }
 
 impl Default for Config {
@@ -74,6 +90,7 @@ impl Default for Config {
       trusted_proxies: Vec::new(),
       admin_url: "http://127.0.0.1:3100".into(),
       admin_api_listen: Some(SocketAddr::from(([127, 0, 0, 1], 8741))),
+      proxy_certificate: None,
     }
   }
 }
@@ -119,6 +136,10 @@ impl Config {
     if let Some(value) = environment("TLS_KEY")? {
       self.tls_key = Some(value.into());
     }
+    // Compose files pass the variable through even when the host left it empty: that is the same as unset.
+    if let Some(value) = environment("PROXY_CERTIFICATE")?.filter(|value| !value.trim().is_empty()) {
+      self.proxy_certificate = Some(value);
+    }
     if let Some(value) = environment("ADMIN_URL")? {
       self.admin_url = value;
     }
@@ -156,6 +177,7 @@ impl Config {
       }
       _ => {}
     }
+    self.validate_proxy_certificate()?;
     if self.name.trim().is_empty() || self.data_dir.as_os_str().is_empty() {
       return Err(ServerError::Configuration("NAME and DATA_DIR must not be empty"));
     }
@@ -171,6 +193,47 @@ impl Config {
     }
     if self.admin_api_listen.is_some_and(|admin| admin == self.listen) {
       return Err(ServerError::Configuration("ADMIN_API_LISTEN must differ from LISTEN"));
+    }
+    Ok(())
+  }
+
+  /// What `proxy_certificate` says; `None` when it is unset or empty.
+  pub fn proxy_certificate(&self) -> Result<Option<ProxyCertificate>, ServerError> {
+    let Some(value) = self
+      .proxy_certificate
+      .as_deref()
+      .map(str::trim)
+      .filter(|value| !value.is_empty())
+    else {
+      return Ok(None);
+    };
+    if value.eq_ignore_ascii_case("auto") {
+      return Ok(Some(ProxyCertificate::Auto));
+    }
+    CertificatePin::parse(&value.replace(':', ""))
+      .map(|pin| Some(ProxyCertificate::Fixed(pin)))
+      .ok_or(ServerError::Configuration(
+        "PROXY_CERTIFICATE must be auto or a SHA-256 fingerprint: 64 hex characters",
+      ))
+  }
+
+  fn validate_proxy_certificate(&self) -> Result<(), ServerError> {
+    let Some(proxy) = self.proxy_certificate()? else {
+      return Ok(());
+    };
+    if self.tls != TlsMode::Off {
+      return Err(ServerError::Configuration(
+        "PROXY_CERTIFICATE is used only with tls = \"off\"",
+      ));
+    }
+    let https = self
+      .address
+      .as_deref()
+      .is_some_and(|address| address.starts_with("https://"));
+    if proxy == ProxyCertificate::Auto && !https {
+      return Err(ServerError::Configuration(
+        "PROXY_CERTIFICATE = auto reads the certificate at ADDRESS, which must then be an https:// address",
+      ));
     }
     Ok(())
   }

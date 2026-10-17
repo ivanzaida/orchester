@@ -10,6 +10,7 @@ mod agents;
 mod all_projects;
 mod connections;
 mod files;
+pub(crate) mod gate;
 mod instructions;
 mod not_found;
 mod orchestrator;
@@ -111,6 +112,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewConnection(kind) => connections::new_connection(ctx, project, *kind),
     ProjectPage::EditConnection(id) => connections::edit_connection(ctx, project, *id),
     ProjectPage::Settings(tab) => project_settings::screen(ctx, project, *tab),
+    ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
   }
 }

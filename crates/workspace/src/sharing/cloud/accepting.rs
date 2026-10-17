@@ -4,7 +4,8 @@
 //! no check code to compare. The cloud lists an accepted invite no more but keeps issuing tokens for it to this
 //! account, so this computer keeps the invite until the join finished (N1 security review 1, M2): a join that failed is
 //! asked again, and one that waits for approval is asked again with that approval until it is approved or refused,
-//! as often as [`super::asking`] lets it.
+//! as often as [`super::asking`] lets it. Accepting needs two-factor authentication on the account and a sign-in with a
+//! code on this computer: a refusal for either leaves the invite open, at the cloud and here.
 
 use orchester_api::{
   ErrorCode,
@@ -83,6 +84,8 @@ impl Cloud {
     if !may_ask(&kept) {
       return Err(CloudError::TooManyAsks);
     }
+    // No earlier ask took a token for it, so the cloud has not marked it accepted and still lists it.
+    let first = kept.asks == 0;
     let kept = asking(kept, asker);
     self.keep_accepted(kept.clone()).await?;
     let outcome = self.ask(&kept, now).await;
@@ -99,6 +102,20 @@ impl Cloud {
         }
       },
       Err(CloudError::InviteEnded | CloudError::JoinRefused) => self.forget_accepted(kept.invite).await?,
+      // A first accept refused for want of a code leaves the invite open, listed by the cloud again. One an earlier
+      // ask took a token for is listed there no more: it stays here, not asked on its own, until a sign-in with a code.
+      Err(CloudError::TwoFactorOff | CloudError::TwoFactorSession) if first => {
+        self.forget_accepted(kept.invite).await?
+      }
+      Err(CloudError::TwoFactorOff | CloudError::TwoFactorSession) => {
+        self
+          .keep_accepted(AcceptedInvite {
+            next_check_at: None,
+            needs_code: true,
+            ..kept
+          })
+          .await?;
+      }
       // Kept: asked again on its own while its approval is open, and by the person.
       Err(_) => self.keep_accepted(scheduled(kept, now)).await?,
     }
@@ -114,10 +131,11 @@ impl Cloud {
       .with_token(|client, token| async move { ended(client.server(&token, audience).await) })
       .await?
       .server;
-    let (client, token) = self.signed_in().await?;
+    let (client, token, account) = self.signed_in().await?;
     let identity = CloudIdentity {
       cloud: &client,
       device: &token,
+      account,
       invite: Some(kept.invite),
     };
     let approval = kept.approval.filter(|_| approval_open(kept, now));
@@ -144,8 +162,9 @@ impl Cloud {
   }
 }
 
-/// How a failed join ends the invite for good, so it is not asked again: the cloud no longer issues tokens for it
-/// (declined elsewhere, revoked or expired), the server has no invite for it, or the server refused this computer.
+/// How a failed join ends this ask without asking again on its own: the cloud no longer issues tokens for the invite
+/// (declined elsewhere, revoked or expired), the server has no invite for it, or the server refused this computer; or
+/// the cloud refused a token without two-factor authentication.
 fn ending(error: &SharingError) -> Option<CloudError> {
   let SharingError::Client(error) = error else {
     return None;
@@ -155,6 +174,14 @@ fn ending(error: &SharingError) -> Option<CloudError> {
       code: CloudErrorCode::NotFound,
       ..
     } => Some(CloudError::InviteEnded),
+    ClientError::Cloud {
+      code: CloudErrorCode::MfaRequired,
+      ..
+    } => Some(CloudError::TwoFactorOff),
+    ClientError::Cloud {
+      code: CloudErrorCode::SessionWithoutMfa,
+      ..
+    } => Some(CloudError::TwoFactorSession),
     _ => match error.code()? {
       ErrorCode::NotInvited => Some(CloudError::InviteEnded),
       ErrorCode::ApprovalRefused | ErrorCode::Forbidden => Some(CloudError::JoinRefused),

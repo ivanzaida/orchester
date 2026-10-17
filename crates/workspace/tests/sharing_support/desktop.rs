@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use orchester_api::{Credential, client::ServerAddress};
-use orchester_core::secret::VaultKey;
+use orchester_core::{id::ServerId, secret::VaultKey};
 use orchester_store::AppDb;
 use orchester_workspace::{
   secrets::Vault,
@@ -66,6 +66,35 @@ impl Desktop {
 
   pub fn device_key(&self) -> VaultKey {
     VaultKey::cloud_device(self.workspace.installation_id().expect("installation"))
+  }
+
+  /// Records that this computer trusts `server` by `pin` from now on, as if the server made a new certificate.
+  pub fn pin_server(&self, server: ServerId, pin: &str) {
+    let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
+    db.set_server_trust(server, Some(pin), false).expect("pinned");
+  }
+
+  /// Makes the servers of the cloud account `account` nobody's, as servers known before they had owners are when no
+  /// account was signed in at the update.
+  pub fn disown_servers_of(&self, account: &str) {
+    rusqlite::Connection::open(self._data.path().join("orchester.db"))
+      .expect("database")
+      .execute("UPDATE servers SET owner = NULL WHERE owner = ?1", [account])
+      .expect("nobody's");
+  }
+
+  /// Keeps `invite` as accepted here, as an earlier ask of this computer left it.
+  pub fn keep_accepted(&self, invite: &orchester_store::AcceptedInvite) {
+    let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
+    db.keep_accepted_invite(invite).expect("kept");
+  }
+
+  /// Records the signed-in account as signed in at the cloud at `address`, as if the account's cloud moved there.
+  pub fn move_account_to(&self, address: &str) {
+    let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
+    let mut account = db.cloud_account().expect("account").expect("signed in");
+    account.cloud_address = address.to_owned();
+    db.set_cloud_account(Some(&account)).expect("moved");
   }
 }
 

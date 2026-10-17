@@ -12,13 +12,17 @@ pub(crate) fn spawn(cloud: Cloud) -> JoinHandle<()> {
       if let Err(error) = cloud.sweep().await {
         error.log();
       }
+      if let Err(error) = cloud.keep_keys().await {
+        error.log();
+      }
     }
   })
 }
 
 impl Cloud {
-  /// Deletes what the cloud no longer needs: expired links and invites, and accounts never confirmed whose links all
-  /// expired.
+  /// Deletes what the cloud no longer needs: expired links, invites and sign-in challenges, two-factor setups never
+  /// confirmed, accounts never confirmed whose links all expired, and the deleted accounts' tokens past the time they
+  /// would have ended unused.
   /// Runs every minute while the cloud serves.
   pub async fn sweep(&self) -> Result<(), CloudError> {
     let now = self.now();
@@ -42,6 +46,9 @@ impl Cloud {
     client
       .execute("DELETE FROM used_link_statements WHERE expires_at <= $1", &[&time(now)])
       .await?;
-    Ok(())
+    client
+      .execute("DELETE FROM ended_tokens WHERE until <= $1", &[&time(now)])
+      .await?;
+    crate::accounts::sweep_two_factor(&client, now).await
   }
 }

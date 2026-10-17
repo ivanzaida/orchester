@@ -11,7 +11,7 @@ use std::{
 };
 
 use orchester_api::Heartbeat;
-use orchester_core::id::{ServerId, TaskId};
+use orchester_core::id::{CloudAccountId, ServerId, TaskId};
 use orchester_store::ProjectDb;
 use tokio::{
   sync::watch,
@@ -159,25 +159,51 @@ impl Servers {
   }
 }
 
-/// The shared projects of the workspace whose folder can be read.
+/// The shared projects on this computer whose folder can be read, whichever account's: each keeps in step with its
+/// server while another account is signed in, through its own account's servers only, so a checkout another account
+/// linked and this one opened later reaches no server of that other account's.
 pub(super) fn shared_projects(servers: &Servers) -> Vec<ProjectServer> {
-  let projects = match servers.inner.workspace.projects() {
-    Ok(projects) => projects,
+  let owners = match servers.inner.workspace.server_owners() {
+    Ok(owners) => owners,
     Err(error) => {
-      tracing::error!(%error, "cannot read the projects of the workspace");
+      tracing::error!(%error, "cannot read whose the servers are");
+      return Vec::new();
+    }
+  };
+  owners
+    .iter()
+    .flat_map(|owner| shared_projects_of(servers, owner.as_ref()))
+    .collect()
+}
+
+/// [`shared_projects`] of `owner`.
+fn shared_projects_of(servers: &Servers, owner: Option<&CloudAccountId>) -> Vec<ProjectServer> {
+  let read = servers
+    .inner
+    .workspace
+    .projects_of(owner)
+    .map_err(SharingError::from)
+    .and_then(|projects| Ok((projects, servers.entries_of(owner)?)));
+  let (projects, entries) = match read {
+    Ok(read) => read,
+    Err(error) => {
+      tracing::error!(%error, "cannot read an account's projects and servers");
       return Vec::new();
     }
   };
   projects
     .into_iter()
     .filter(|project| project.repo_root.is_dir())
-    .filter_map(|project| match ProjectServer::open(servers, &project.repo_root) {
-      Ok(found) => found,
-      Err(error) => {
-        tracing::debug!(%error, root = %project.repo_root.display(), "a project's sharing cannot be read");
-        None
-      }
-    })
+    .filter_map(
+      |project| match ProjectServer::in_background(servers, &entries, &project.repo_root) {
+        Ok(found) => found,
+        Err(error) => {
+          // By id: the project may be another account's, whose folders the log does not name.
+          tracing::debug!(%error, project = %project.id, "a project's sharing cannot be read");
+          None
+        }
+      },
+    )
     .collect()
 }
 

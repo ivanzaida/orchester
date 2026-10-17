@@ -42,6 +42,7 @@ impl Clock for TestClock {
 pub mod admin_app;
 pub mod cloud;
 mod pinned;
+pub mod tls_proxy;
 
 pub struct TestServer {
   pub server: Server,
@@ -49,6 +50,9 @@ pub struct TestServer {
   pub clock: Arc<TestClock>,
   /// The first admin's device token, once `bootstrap` made them; `user` invites people with it.
   admin: Mutex<Option<String>>,
+  /// The cloud whose root the server pins once a code is entered in an app: every code but the setup code needs the
+  /// app's identity token with the two-factor claim, which this cloud signs.
+  cloud: cloud::TestCloud,
   address: SocketAddr,
   stop: Option<oneshot::Sender<()>>,
   task: Option<JoinHandle<Result<(), orchester_server::error::ServerError>>>,
@@ -86,6 +90,7 @@ impl TestServer {
       directory,
       clock,
       admin: Mutex::new(None),
+      cloud: cloud::TestCloud::generate(),
       address,
       stop: Some(stop),
       task: Some(task),
@@ -143,6 +148,11 @@ impl TestServer {
       std::future::pending(),
     ));
     address
+  }
+
+  /// Where the server's own (plain or TLS) listener is.
+  pub fn address(&self) -> SocketAddr {
+    self.address
   }
 
   pub async fn connect(&self) -> TcpStream {
@@ -220,7 +230,13 @@ impl TestServer {
       .expect("TLS handshake")
   }
 
-  /// The first admin, `alice`, from the setup code the server prints while it has no admin.
+  /// The cloud the server pins for two-factor identities; tests that link the server link it to this one.
+  pub fn cloud(&self) -> cloud::TestCloud {
+    self.cloud.clone()
+  }
+
+  /// The first admin, `alice`, from the setup code the server prints while it has no admin, on a computer marked as
+  /// signed in with two-factor authentication. The setup code needs no cloud identity.
   pub async fn bootstrap(&self) -> Joined {
     let code = self
       .server
@@ -228,20 +244,96 @@ impl TestServer {
       .await
       .expect("setup code")
       .expect("no admin yet");
-    let joined = self.join(&code, Some("alice"), "test computer").await;
+    let response = self.redeem_with(&code, Some("alice"), "test computer", None).await;
+    assert_eq!(response.status, 201);
+    let joined: Joined = response.json();
+    // Making invites needs a two-factor sign-in; the first admin's computer stands for one (`accounts/two_factor.rs`
+    // goes through the real ones).
+    self.two_factor(&joined.token);
     *self.admin.lock() = Some(joined.token.expose().to_owned());
     joined
   }
 
-  /// Joins with `code`; `username` (also the display name) when the code makes an account.
+  /// Joins with `code`, which makes the account `username` (also the display name), as that person.
   pub async fn join(&self, code: &Credential, username: Option<&str>, device: &str) -> Joined {
     let response = self.redeem(code, username, device).await;
     assert_eq!(response.status, 201);
     response.json()
   }
 
+  /// Joins with an account or pairing `code` of `person`'s account, with `person`'s cloud identity.
+  pub async fn join_as(&self, code: &Credential, person: &str, device: &str) -> Joined {
+    let response = self.redeem_as(code, person, device).await;
+    assert_eq!(response.status, 201);
+    response.json()
+  }
+
+  /// Redeems `code`, which makes the account `username`, as an app does: with that person's identity token, whose
+  /// device signed in with two-factor authentication. An account or pairing code names no username:
+  /// [`Self::redeem_as`].
   pub async fn redeem(&self, code: &Credential, username: Option<&str>, device: &str) -> Response {
+    let person = username.expect("a code that makes an account; redeem_as for an account or pairing code");
+    let proof = self.two_factor_proof(person).await;
+    self.redeem_with(code, username, device, Some(proof)).await
+  }
+
+  /// Redeems an account or pairing `code` with `person`'s identity token, as that person's app does.
+  pub async fn redeem_as(&self, code: &Credential, person: &str, device: &str) -> Response {
+    let proof = self.two_factor_proof(person).await;
+    self.redeem_with(code, None, device, Some(proof)).await
+  }
+
+  /// The audience of this server's identity tokens, pinning [`Self::cloud`]'s root first when nothing is pinned.
+  pub async fn audience(&self) -> String {
+    let pinned: Option<String> = self
+      .database()
+      .query_row("SELECT root_key FROM cloud_link WHERE id=1", [], |row| row.get(0))
+      .ok();
+    let link = match pinned {
+      Some(_) => self
+        .server
+        .host_cloud(orchester_server::host::CloudCommand::Show)
+        .await
+        .expect("the cloud link"),
+      None => self
+        .server
+        .host_cloud(orchester_server::host::CloudCommand::Pin(self.cloud.root.public()))
+        .await
+        .expect("pin the test cloud"),
+    };
+    link.server
+  }
+
+  /// `person`'s identity token for codes to this server, from a device that signed in with two-factor
+  /// authentication, and the key set that vouches for it, from [`Self::cloud`]: what that person's app sends with a
+  /// code. Every person has a cloud account of their own ([`cloud::person`]).
+  pub async fn two_factor_proof(&self, person: &str) -> (String, String) {
+    let audience = self.audience().await;
+    let subject = cloud::person(person);
+    let email = format!("{person}@example.com");
+    let identity = cloud::Identity {
+      audience: &audience,
+      subject: &subject,
+      email: &email,
+      name: person,
+      invite: None,
+    };
+    let now = self.seconds();
+    (self.cloud.code_token(&identity, true, now), self.cloud.key_set(now))
+  }
+
+  pub async fn redeem_with(
+    &self,
+    code: &Credential,
+    username: Option<&str>,
+    device: &str,
+    proof: Option<(String, String)>,
+  ) -> Response {
     let mut body = json!({"code": code.expose(), "device": device});
+    if let Some((token, key_set)) = proof {
+      body["identity_token"] = json!(token);
+      body["key_set"] = json!(key_set);
+    }
     if let Some(username) = username {
       body["username"] = json!(username);
       let mut display = username.to_owned();
@@ -276,12 +368,26 @@ impl TestServer {
     let response = self.request("POST", "/auth/pairings", Some(token), None).await;
     assert_eq!(response.status, 201);
     let pairing: PairingCode = response.json();
-    self.join(&pairing.code, None, "second computer").await
+    let me: orchester_api::UserResponse = self.request("GET", "/auth/me", Some(token), None).await.json();
+    self.join_as(&pairing.code, &me.user.username, "second computer").await
   }
 
   /// The server's time in seconds, as the cloud's tokens and key sets count it.
   pub fn seconds(&self) -> i64 {
     self.clock.now_ms() / 1000
+  }
+
+  /// Marks the device token `token` as issued for a cloud identity that signed in with two-factor authentication,
+  /// which the server admin needs to send invites by email. It stands in for the cloud sign-in that makes one, which
+  /// `accounts/two_factor.rs` goes through itself, in tests about something else.
+  pub fn two_factor(&self, token: &Credential) {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(token.expose().as_bytes()).to_vec();
+    let marked = self
+      .database()
+      .execute("UPDATE sessions SET mfa=1 WHERE token_hash=?1", [hash])
+      .expect("mark the session");
+    assert_eq!(marked, 1, "the token is a session of the server");
   }
 
   pub fn database(&self) -> rusqlite::Connection {

@@ -25,10 +25,13 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, inert, pressable},
+  pressable::{Focus, Press, inert, pressable},
   tooltip::Tooltip,
 };
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+};
 
 /// `Page tab/*` height.
 const TAB_HEIGHT: f32 = 34.0;
@@ -39,7 +42,9 @@ const ICON_SEGMENT_WIDTH: f32 = 28.0;
 
 #[derive(Clone)]
 enum TabState {
-  Open(Arc<dyn Fn() + Send + Sync>),
+  Open(Press),
+  /// The page shown, which a press does not open again: it keeps the panel it shows.
+  Here,
   /// Not built yet, for this reason.
   Unavailable(Arc<str>),
 }
@@ -65,7 +70,18 @@ impl PageTab {
       id: id.into(),
       label: label.into(),
       current,
-      state: TabState::Open(Arc::new(on_open)),
+      state: TabState::Open(Press::run(on_open)),
+      explanation: None,
+    }
+  }
+
+  /// A tab that is a place of its own: a press opens it with `open` by a browser's rules (`navigation::link`).
+  pub fn to(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, current: bool, open: Open) -> Self {
+    Self {
+      id: id.into(),
+      label: label.into(),
+      current,
+      state: TabState::Open(Press::Open(open)),
       explanation: None,
     }
   }
@@ -78,6 +94,18 @@ impl PageTab {
       label: label.into(),
       current: false,
       state: TabState::Unavailable(reason.into()),
+      explanation: None,
+    }
+  }
+
+  /// The current tab, which a press leaves as it is: no action, and no place to open again, e.g. a page that keeps
+  /// the panel it shows.
+  pub fn current(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+    Self {
+      id: id.into(),
+      label: label.into(),
+      current: true,
+      state: TabState::Here,
       explanation: None,
     }
   }
@@ -110,14 +138,16 @@ impl PageTab {
           .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", self.id)));
         return Tooltip::new(self.id, reason).wrap(ctx, tab);
       }
-      TabState::Open(open) => open,
+      TabState::Open(open) => Some(open),
+      TabState::Here => None,
     };
     let (typography, color) = if self.current {
       (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
     } else {
       (TypographyStyle::Body, PaletteColor::TextSecondary)
     };
-    let button = pressable(move || open())
+    let button = open
+      .map_or_else(|| Button::empty().focusable(false), Press::button)
       .id(self.id.clone())
       .height(Dimension::Px(TAB_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))

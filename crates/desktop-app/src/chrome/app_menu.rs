@@ -114,14 +114,15 @@ impl AppMenu {
         };
         let label = ctx.t(label_key);
         let (navigation, window) = (navigation.clone(), window.clone());
-        let item = MenuItem::new(id, label, move || match (command, &navigation) {
-          (Command::NewTab, Some(navigation)) => navigation.open_tab(),
-          (Command::AllProjects, Some(navigation)) => navigation.go(Route::AllProjects),
-          (Command::Settings, Some(navigation)) => navigation.go(Route::Settings),
-          (Command::Quit, _) => window.request_close(),
+        // All projects and Settings are places, opened by a browser's rules; New tab and Quit are actions.
+        let item = match (command, navigation) {
+          (Command::AllProjects, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::AllProjects)),
+          (Command::Settings, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::Settings)),
+          (Command::NewTab, Some(navigation)) => MenuItem::new(id, label, move || navigation.open_tab()),
+          (Command::Quit, _) => MenuItem::new(id, label, move || window.request_close()),
           // Only Quit is listed without tabs.
-          (Command::NewTab | Command::AllProjects | Command::Settings, None) => {}
-        });
+          (Command::NewTab | Command::AllProjects | Command::Settings, None) => return menu,
+        };
         menu.child(item.icon(glyph).render(ctx, &self.open))
       },
     )

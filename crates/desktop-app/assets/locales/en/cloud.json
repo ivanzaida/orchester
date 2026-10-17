@@ -69,10 +69,22 @@
       "signedInValue": "{{when}} on this computer",
       "address": "Cloud address",
       "signingOut": "Signing out",
-      "signingOutText": "Sign out ends this computer's session with Orchester Cloud: invites stop arriving here. Team servers you joined keep working, each with its own sign-in for this computer; sign out of each one on the left.",
+      "signingOutText": "Sign out ends this computer's session with Orchester Cloud and locks Orchester until you sign in again. Projects, tasks and runs on this computer are not touched, and team servers keep this computer's own sign-in.",
       "tokenNote": {
         "windows": "The cloud token for this computer is kept in Windows Credential Manager. Orchester never shows it.",
         "macos": "The cloud token for this computer is kept in your login Keychain. Orchester never shows it."
+      },
+      "signOutConfirm": {
+        "question": "Sign out of Orchester Cloud on this computer?",
+        "locks": "Orchester locks when you sign out: this window shows only the sign-in until you sign in again, and its MCP tools answer “sign in required”.",
+        "local": "Your projects and tasks stay on this computer, and runs that are going keep going. Team servers keep this computer's own sign-in, so nothing needs joining again.",
+        "confirm": "Sign out and lock",
+        "stay": "Stay signed in"
+      },
+      "twoFactor": {
+        "on": "Two-factor: on",
+        "off": "Two-factor: off",
+        "turnOn": "Turn on…"
       }
     },
     "invites": {
@@ -131,45 +143,26 @@
         "unanswered": "{{server}} hasn't approved this computer yet, and Orchester stopped asking on its own so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Try again once it's approved.",
         "tooMany": "Orchester asked {{server}} for this invite {{count}} times and stops here, so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Ask an admin of {{server}} for a new invite.",
         "tryAgain": "Try again",
-        "later": "Later"
+        "later": "Later",
+        "signedInWithCode": "You signed in with your code. Try again to finish joining {{server}}; nothing was uploaded."
       },
-      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected."
+      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected.",
+      "twoFactor": {
+        "off": "Accepting needs two-factor authentication on your account.",
+        "session": "Accepting needs a sign-in with your code. This computer signed in before you turned on two-factor.",
+        "turnOn": "Turn on two-factor authentication",
+        "turnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
+        "signInAgain": "Sign in again",
+        "notNow": "Not now",
+        "refusedTitle": "Sign in again to accept",
+        "refusedBody": "This computer signed in before you turned on two-factor. Accepting needs a sign-in with your code.",
+        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here.",
+        "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
+        "keptTurnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then try again."
+      }
     },
     "signIn": {
-      "title": "Sign in to Orchester Cloud",
-      "lead": "Your Orchester account brings invites to this computer and, on a new computer, finds the team servers you joined. Use the email and password of your account.",
-      "email": "Email",
-      "emailPlaceholder": "you@example.com",
-      "password": "Password",
-      "forgot": "Forgot password?",
-      "submit": "Sign in",
-      "newHere": "New to Orchester?",
-      "create": "Create an account",
-      "webHint": "Create an account and Forgot password open {{host}} in your browser. Confirm your email there, then sign in here.",
-      "wrong": "Wrong email or password.",
-      "unconfirmed": {
-        "title": "Confirm your email first",
-        "body": "Open the link Orchester Cloud sent to {{email}}, then sign in here. No email? Ask for a new one on the cloud's page.",
-        "open": "Open Orchester Cloud"
-      },
-      "paused": {
-        "title": "Too many attempts",
-        "body": "Sign-in for this email is paused. Try again in {{minutes}} min."
-      },
-      "unreachable": {
-        "title": "Orchester Cloud can't be reached",
-        "body": "Team servers you joined keep working without it. A server on a closed network takes an invite code."
-      },
-      "opened": {
-        "title": "Opened in your browser",
-        "body": "{{page}}. Confirm your email there, then sign in here."
-      },
-      "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
-      "offline": {
-        "title": "No internet where your server runs?",
-        "body": "A team server on a closed network takes its address and an 8-character invite code instead of an account. Ask whoever runs it for both.",
-        "connect": "Connect a server with a code"
-      }
+      "wrong": "Wrong email or password."
     },
     "advanced": {
       "title": "Advanced · cloud address",
@@ -182,7 +175,9 @@
       "testCloud": {
         "title": "Using a test cloud",
         "body": "Invites and servers from {{host}} don't show here while it's set."
-      }
+      },
+      "gateHint": "For a test or self-run cloud. Sign-in, Create an account and Forgot password? use this address instead of {{host}}.",
+      "testCloudState": "test cloud"
     },
     "server": {
       "runs": "Orchester server {{version}}, API {{api}}",
@@ -316,7 +311,19 @@
         "owner": "As an owner",
         "member": "As a member",
         "server": "To the server"
+      },
+      "twoFactor": {
+        "turnOnNote": "Turn on two-factor authentication opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
+        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here and in Settings › Orchester."
       }
+    },
+    "recovery": {
+      "left": {
+        "one": "1 recovery code left",
+        "other": "{{count}} recovery codes left"
+      },
+      "body": "You signed in with a recovery code. Make new ones on your account's security page before they run out: they're how you sign in if you lose your phone.",
+      "open": "Open security page"
     }
   }
 }

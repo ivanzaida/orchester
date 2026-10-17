@@ -10,7 +10,10 @@ use orchester_core::time::Timestamp;
 use orchester_store::ProjectDb;
 
 use super::{ProjectServer, organization::tag, store::RemoteTaskStore};
-use crate::{background, sharing::SharingError};
+use crate::{
+  background,
+  sharing::{ProjectAddress, SharingError},
+};
 
 impl ProjectServer {
   /// Reads the server project into the cache. A server that cannot be reached leaves the cache as
@@ -33,8 +36,15 @@ impl ProjectServer {
       .call(|client, token, project| async move { client.tasks(&token, project).await })
       .await?;
     let server = self.clone();
-    // A link made before API 3 learns the project's address, its identity since, from the server.
-    let address = self.link.address.is_none().then_some(project.address);
+    // A link made before API 3 learns the project's address, its identity since, from the server; one on another
+    // server is not kept, and the tasks are synced all the same. This repeats every minute, so it is not a warning.
+    let address = match self.link.address {
+      None => ProjectAddress::reported(&project.address, &self.entry.address)
+        .inspect_err(|error| tracing::debug!(%error, "the project's address was not recorded"))
+        .ok()
+        .map(|address| address.to_text()),
+      Some(_) => None,
+    };
     background::run(move || -> Result<(), SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
@@ -43,6 +53,8 @@ impl ProjectServer {
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;
+      let hint = project.remote_hint.as_ref().map(|hint| hint.as_str());
+      store.db.record_remote_hint(hint, Timestamp::now())?;
       if let Some(address) = address {
         store.db.record_project_address(&address)?;
       }

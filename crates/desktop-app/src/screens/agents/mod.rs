@@ -26,7 +26,7 @@ use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{agents::data::ProjectAgents, background, messages, tasks::outside::Outside};
 
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::{ShownProject, own::OwnChanges},
   routes::{AgentTab, ProjectPage, Route},
   ui::{
@@ -59,9 +59,9 @@ pub(super) struct AgentsNav {
   navigation: Navigation,
 }
 impl AgentsNav {
-  /// A place the person chose.
-  pub fn show(&self, shown: Shown) {
-    self.navigation.go(Route::Project(self.project, shown.page()));
+  /// What opens a place the person chose, by a browser's rules (`navigation::link`).
+  pub fn to(&self, shown: Shown) -> Open {
+    self.navigation.to(Route::Project(self.project, shown.page()))
   }
   /// The profile a save named, on the tab the editor shows now, in place of the editor it was saved from:
   /// a new profile gets its id.

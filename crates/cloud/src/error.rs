@@ -1,6 +1,6 @@
 use actix_web::{HttpResponse, ResponseError, http::StatusCode};
 use orchester_api::{
-  cloud::{CloudError as ApiError, CloudErrorCode},
+  cloud::{CloudError as ApiError, CloudErrorCode, SessionEnd},
   identity::IdentityError,
 };
 use thiserror::Error;
@@ -25,8 +25,12 @@ pub enum CloudError {
   Worker,
   #[error("invalid stored data")]
   StoredData,
-  #[error("cannot seal or open a signing key")]
+  #[error("cannot seal or open a root or signing key")]
   KeyEncryption,
+  #[error("the key-encryption key does not open the root key in the database")]
+  WrongKeyEncryptionKey,
+  #[error("the database holds signing keys or key sets but no root key")]
+  KeysWithoutRoot,
   #[error("identity token or key set refused: {0}")]
   Identity(#[from] IdentityError),
   #[error("cannot send email")]
@@ -35,6 +39,9 @@ pub enum CloudError {
   Api(CloudErrorCode),
   #[error("rate limited")]
   RateLimited(u64),
+  /// A device's token the cloud ended, `reason` and when (milliseconds): `401 unauthorized` with both.
+  #[error("the token ended: {reason:?}")]
+  Ended { reason: SessionEnd, at: i64 },
 }
 
 impl From<CloudErrorCode> for CloudError {
@@ -59,6 +66,16 @@ impl std::fmt::Debug for CloudError {
   }
 }
 
+/// What the log says when the key-encryption key does not open the stored root: the cloud never makes another root,
+/// so the operator restores the key this database started with (docs/cloud-hosting.md).
+const WRONG_KEY_ENCRYPTION_KEY: &str =
+  "ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY does not open the root key in the database; set the key it was made with";
+
+/// What the log says when the root row is gone but keys it vouched for are not: the cloud does not make a root
+/// beside them; emptying root_key, signing_keys and key_sets together starts over (docs/cloud-hosting.md).
+const KEYS_WITHOUT_ROOT: &str =
+  "the database holds signing keys or key sets but no root key: restore it, or empty signing_keys and key_sets too";
+
 impl CloudError {
   fn kind(&self) -> &'static str {
     match self {
@@ -72,10 +89,13 @@ impl CloudError {
       Self::Worker => "Worker",
       Self::StoredData => "StoredData",
       Self::KeyEncryption => "KeyEncryption",
+      Self::WrongKeyEncryptionKey => "WrongKeyEncryptionKey",
+      Self::KeysWithoutRoot => "KeysWithoutRoot",
       Self::Identity(_) => "Identity",
       Self::Mail => "Mail",
       Self::Api(_) => "Api",
       Self::RateLimited(_) => "RateLimited",
+      Self::Ended { .. } => "Ended",
     }
   }
 
@@ -85,6 +105,8 @@ impl CloudError {
       Self::Database(error) => error.code().map(|state| format!("sql_state={}", state.code())),
       Self::Io(error) => Some(format!("io_kind={:?}", error.kind())),
       Self::Configuration(reason) => Some((*reason).to_owned()),
+      Self::WrongKeyEncryptionKey => Some(WRONG_KEY_ENCRYPTION_KEY.to_owned()),
+      Self::KeysWithoutRoot => Some(KEYS_WITHOUT_ROOT.to_owned()),
       Self::SchemaTooNew(version) => Some(format!("schema_version={version}")),
       Self::Identity(error) => Some(error.to_string()),
       Self::Api(code) => Some(format!("code={code:?}")),
@@ -97,6 +119,7 @@ impl CloudError {
     match self {
       Self::Api(code) => *code,
       Self::RateLimited(_) => CloudErrorCode::RateLimited,
+      Self::Ended { .. } => CloudErrorCode::Unauthorized,
       _ => CloudErrorCode::Internal,
     }
   }
@@ -120,9 +143,15 @@ impl ResponseError for CloudError {
     if code == CloudErrorCode::Busy {
       response.insert_header(("Retry-After", "1"));
     }
+    let (reason, ended_at) = match self {
+      Self::Ended { reason, at } => (Some(*reason), Some(*at)),
+      _ => (None, None),
+    };
     response.json(ApiError {
       error: code,
       message: message.into(),
+      reason,
+      ended_at,
     })
   }
 }
@@ -148,6 +177,10 @@ fn status_message(code: CloudErrorCode) -> (StatusCode, &'static str) {
       "The server is linked by a newer statement, or this one was used",
     ),
     CloudErrorCode::TooManyServers => (StatusCode::CONFLICT, "The account owns as many servers as it may"),
+    CloudErrorCode::MfaRequired => (StatusCode::FORBIDDEN, "Two-factor authentication required"),
+    CloudErrorCode::SessionWithoutMfa => (StatusCode::FORBIDDEN, "This session signed in without two-factor"),
+    CloudErrorCode::InvalidCode => (StatusCode::UNAUTHORIZED, "Invalid code"),
+    CloudErrorCode::ChallengeExpired => (StatusCode::UNAUTHORIZED, "Sign in again"),
     CloudErrorCode::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "Cloud operation failed"),
   }
 }

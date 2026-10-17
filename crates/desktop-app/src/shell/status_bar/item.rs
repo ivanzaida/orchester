@@ -18,7 +18,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::Press,
     tooltip::Truncated,
   },
 };
@@ -64,9 +64,11 @@ pub fn frame(row: Row) -> Row {
     .align_items(Alignment::Center)
 }
 
-/// An item with the element id `id` that runs `press`: the pointer and the `hover` fill.
-pub fn pressed(id: &str, press: impl Fn() + Send + Sync + 'static) -> Button {
-  pressable(press)
+/// An item with the element id `id` pressed as `press` says, an action or a place it opens: the pointer and the
+/// `hover` fill.
+pub fn pressed(id: &str, press: Press) -> Button {
+  press
+    .button()
     .id(id.to_owned())
     .height(Dimension::Px(ITEM_HEIGHT))
     .padding(Padding::horizontal(SpacingSize::Sm))
@@ -115,7 +117,7 @@ pub fn time_part(id: &str, time: impl Into<Element>) -> Element {
 }
 
 /// An action beside an item, with the element id `id`.
-pub fn action(id: &str, text: &str, press: impl Fn() + Send + Sync + 'static) -> Element {
+pub fn action(id: &str, text: &str, press: Press) -> Element {
   pressed(id, press)
     .padding(Padding::horizontal(ExtraSpacing::Fine.role()))
     .describe("a11y_name", text.to_owned())

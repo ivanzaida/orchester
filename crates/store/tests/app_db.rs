@@ -10,8 +10,8 @@ use orchester_core::{
   usage::limits::WarningThreshold,
 };
 use orchester_store::{
-  AppDb, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredCloudAccount,
-  StoredServer,
+  AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd,
+  StoreError, StoredCloudAccount, StoredServer,
 };
 
 fn at(millis: i64) -> Timestamp {
@@ -51,14 +51,14 @@ fn projects_are_registered_once_and_listed_by_last_use() {
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
   let kontur = project("Kontur");
   let website = project("Personal website");
-  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(1))
+  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(1), None)
     .expect("register");
-  db.register_project(&website, Path::new("H:/projects/website"), at(2))
+  db.register_project(&website, Path::new("H:/projects/website"), at(2), None)
     .expect("register");
-  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(3))
+  db.register_project(&kontur, Path::new("H:/projects/kontur"), at(3), None)
     .expect("reopen");
 
-  let projects = db.projects().expect("list");
+  let projects = db.projects_of(None).expect("list");
   let names: Vec<&str> = projects.iter().map(|project| project.name.as_str()).collect();
   assert_eq!(names, ["Kontur", "Personal website"]);
   assert_eq!(projects[0].last_opened_at, at(3));
@@ -103,14 +103,19 @@ fn projects_forgotten_leave_their_folder_and_data_on_disk() {
   let kontur = project("Kontur");
   drop(ProjectDb::create(&repo, kontur.clone()).expect("create the project"));
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  db.register_project(&kontur, &repo, at(1)).expect("register");
-  db.register_project(&project("Personal website"), Path::new("H:/projects/website"), at(2))
-    .expect("register");
+  db.register_project(&kontur, &repo, at(1), None).expect("register");
+  db.register_project(
+    &project("Personal website"),
+    Path::new("H:/projects/website"),
+    at(2),
+    None,
+  )
+  .expect("register");
 
-  db.forget_project(kontur.id()).expect("forget");
+  db.forget_project(kontur.id(), None).expect("forget");
 
   let names: Vec<String> = db
-    .projects()
+    .projects_of(None)
     .expect("list")
     .iter()
     .map(|project| project.name.as_str().to_owned())
@@ -123,7 +128,7 @@ fn projects_forgotten_leave_their_folder_and_data_on_disk() {
   let reopened = ProjectDb::open(&repo).expect("the project opens again");
   assert_eq!(reopened.project().id(), kontur.id());
   // Forgetting it again changes nothing.
-  db.forget_project(kontur.id()).expect("forget again");
+  db.forget_project(kontur.id(), None).expect("forget again");
 }
 
 #[test]
@@ -132,11 +137,13 @@ fn projects_whose_folder_is_gone_are_listed_as_missing() {
   let (here, gone) = (dir.path().join("kontur"), dir.path().join("ledger"));
   fs::create_dir_all(&here).expect("create the folder");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  db.register_project(&project("Kontur"), &here, at(2)).expect("register");
-  db.register_project(&project("Ledger"), &gone, at(1)).expect("register");
+  db.register_project(&project("Kontur"), &here, at(2), None)
+    .expect("register");
+  db.register_project(&project("Ledger"), &gone, at(1), None)
+    .expect("register");
 
   let listed: Vec<(String, bool)> = db
-    .projects()
+    .projects_of(None)
     .expect("list")
     .iter()
     .map(|project| (project.name.as_str().to_owned(), project.folder_missing()))
@@ -248,9 +255,9 @@ fn ui_state_and_servers_are_added_to_a_database_of_schema_1() {
 
   let mut db = AppDb::open(&path).expect("migrate");
   db.set_ui_state("tabs", "saved").expect("store");
-  db.add_server(&server("https://orchester.kontur.lan", 2))
+  db.add_server(&server("https://orchester.kontur.lan", 2), None)
     .expect("add a server");
-  assert_eq!(db.projects().expect("list").len(), 1, "the projects are kept");
+  assert_eq!(db.projects_of(None).expect("list").len(), 1, "the projects are kept");
   drop(db);
   assert_eq!(schema_version(&path), current_schema_version());
 }
@@ -272,7 +279,7 @@ fn servers_are_added_to_a_database_of_schema_2_and_its_rows_are_kept() {
 
   let mut db = AppDb::open(&path).expect("migrate");
   let names: Vec<String> = db
-    .projects()
+    .projects_of(None)
     .expect("list")
     .iter()
     .map(|project| project.name.as_str().to_owned())
@@ -281,10 +288,10 @@ fn servers_are_added_to_a_database_of_schema_2_and_its_rows_are_kept() {
   assert_eq!(db.ui_state("tabs").expect("read").as_deref(), Some("kontur"));
   let (_, previous) = db.start_session(8, at(3)).expect("start");
   assert_eq!(previous, PreviousSession::Ended(SessionEnd::RunsPaused));
-  assert_eq!(db.servers().expect("list"), []);
+  assert_eq!(db.servers_of(None).expect("list"), []);
   let kontur = server("https://orchester.kontur.lan", 4);
-  db.add_server(&kontur).expect("add a server");
-  assert_eq!(db.servers().expect("list"), [kontur]);
+  db.add_server(&kontur, None).expect("add a server");
+  assert_eq!(db.servers_of(None).expect("list"), [kontur]);
   drop(db);
   assert_eq!(schema_version(&path), current_schema_version());
 }
@@ -315,8 +322,8 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
     plain_http_allowed: true,
     ..server("http://10.0.4.20:8740", 2)
   };
-  db.add_server(&kontur).expect("add Kontur team");
-  db.add_server(&lab).expect("add the lab");
+  db.add_server(&kontur, None).expect("add Kontur team");
+  db.add_server(&lab, None).expect("add the lab");
   let account = ServerAccount {
     user: UserId::generate(),
     username: "bohdan".to_owned(),
@@ -329,7 +336,7 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
   drop(db);
 
   let mut db = AppDb::open(&path).expect("reopen");
-  let servers = db.servers().expect("list");
+  let servers = db.servers_of(None).expect("list");
   assert_eq!(servers.len(), 2);
   assert_eq!(servers[0].url, "https://orchester.kontur.lan");
   assert_eq!(servers[0].name, "Kontur");
@@ -340,11 +347,11 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
   assert_eq!(servers[1].account, None);
 
   db.set_server_account(kontur.id, None).expect("sign out");
-  assert_eq!(db.servers().expect("list")[0].account, None);
+  assert_eq!(db.servers_of(None).expect("list")[0].account, None);
   // A server that presents a certificate the person confirmed again is trusted by its new pin.
   db.set_server_trust(lab.id, Some(&"c0".repeat(32)), false)
     .expect("pin the lab");
-  let lab = db.servers().expect("list").remove(1);
+  let lab = db.servers_of(None).expect("list").remove(1);
   assert_eq!(
     (lab.certificate_pin, lab.plain_http_allowed),
     (Some("c0".repeat(32)), false)
@@ -355,14 +362,15 @@ fn servers_keep_their_address_name_opt_in_pin_and_account() {
 fn servers_refuse_an_address_twice_and_an_unknown_server() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  db.add_server(&server("https://orchester.kontur.lan", 1)).expect("add");
-  assert!(db.add_server(&server("https://orchester.kontur.lan", 2)).is_err());
+  db.add_server(&server("https://orchester.kontur.lan", 1), None)
+    .expect("add");
+  assert!(db.add_server(&server("https://orchester.kontur.lan", 2), None).is_err());
   let unknown = ServerId::generate();
   assert!(matches!(
     db.set_server_name(unknown, "Lab"),
     Err(StoreError::ServerNotFound(id)) if id == unknown
   ));
-  assert_eq!(db.servers().expect("list").len(), 1);
+  assert_eq!(db.servers_of(None).expect("list").len(), 1);
 }
 
 #[test]
@@ -480,11 +488,11 @@ fn servers_keep_how_this_computer_joined_them() {
     ..server("https://orchester.kontur.lan", 1)
   };
   let lab = server("http://10.0.4.20:8740", 2);
-  db.add_server(&kontur).expect("add Kontur team");
-  db.add_server(&lab).expect("add the lab");
+  db.add_server(&kontur, None).expect("add Kontur team");
+  db.add_server(&lab, None).expect("add the lab");
   db.set_server_joined_with(lab.id, JoinedWith::Code)
     .expect("joined with a code");
-  let servers = db.servers().expect("servers");
+  let servers = db.servers_of(None).expect("servers");
   assert_eq!(servers[0].joined_with, Some(JoinedWith::Cloud(audience)));
   assert_eq!(servers[1].joined_with, Some(JoinedWith::Code));
 }
@@ -518,4 +526,70 @@ fn the_cloud_account_is_one_row_and_the_address_a_setting() {
     db.cloud_address().expect("address").as_deref(),
     Some("https://cloud.test.lurq.dev")
   );
+}
+
+#[test]
+fn why_the_last_cloud_sign_in_ended_is_one_row() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
+  let revoked = EndedCloudSignIn {
+    email: "ivan@example.com".into(),
+    reason: CloudSignInEnd::Revoked,
+    ended_at: at(7),
+    invite: None,
+  };
+  db.set_cloud_sign_in_ended(Some(&revoked)).expect("recorded");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(revoked.clone()));
+  let reset = EndedCloudSignIn {
+    reason: CloudSignInEnd::PasswordReset,
+    ..revoked.clone()
+  };
+  db.set_cloud_sign_in_ended(Some(&reset))
+    .expect("the newer one replaces it");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(reset));
+  let for_a_code = EndedCloudSignIn {
+    reason: CloudSignInEnd::TwoFactor,
+    invite: Some("Billing".into()),
+    ..revoked
+  };
+  db.set_cloud_sign_in_ended(Some(&for_a_code))
+    .expect("signed out to sign in with a code");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(for_a_code));
+  db.set_cloud_sign_in_ended(None).expect("signed in again");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
+}
+
+#[test]
+fn why_the_last_cloud_sign_in_ended_is_kept_through_the_two_factor_migration() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  // Before the two-factor migrations: the sign-in end, then the kept invites' refusal for want of a code.
+  let before = current_schema_version() - 2;
+  let raw = AppDb::create_at_version(&path, before).expect("the schema before two-factor authentication");
+  raw
+    .execute(
+      "INSERT INTO cloud_sign_in_ended (id, email, reason, ended_at) VALUES (1, 'ivan@example.com', 'revoked', 7)",
+      [],
+    )
+    .expect("a row of that schema");
+  drop(raw);
+  let mut db = AppDb::open(&path).expect("migrate");
+  assert_eq!(
+    db.cloud_sign_in_ended().expect("kept"),
+    Some(EndedCloudSignIn {
+      email: "ivan@example.com".into(),
+      reason: CloudSignInEnd::Revoked,
+      ended_at: at(7),
+      invite: None,
+    })
+  );
+  let for_a_code = EndedCloudSignIn {
+    email: "ivan@example.com".into(),
+    reason: CloudSignInEnd::TwoFactor,
+    ended_at: at(8),
+    invite: Some("Billing".into()),
+  };
+  db.set_cloud_sign_in_ended(Some(&for_a_code)).expect("the new reason");
+  assert_eq!(db.cloud_sign_in_ended().expect("read"), Some(for_a_code));
 }

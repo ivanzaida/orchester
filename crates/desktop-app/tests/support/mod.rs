@@ -1,7 +1,8 @@
 //! The app's window headless at the design's 1440 × 900, on a session of a data folder of its own: the
 //! real root with the theme and the bundled locales, the project Kontur (KON) registered in a temporary
 //! git repository, and runners whose program does not exist, so a project's runner fails to start
-//! (`MissingExecutable`) without starting anything.
+//! (`MissingExecutable`) without starting anything. The session is signed in to a stand-in Orchester Cloud with a
+//! keychain in memory ([`signed_in`]), past the sign-in gate; [`Data::launch_signed_out`] stops at the gate.
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
@@ -37,7 +38,9 @@ use orchester_workspace::{
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
+pub mod link_press;
 pub mod reads;
+pub mod signed_in;
 pub mod stand_ins;
 
 /// Kontur's id, as the routes of the tests name it.
@@ -47,13 +50,24 @@ pub fn project_id() -> ProjectId {
   PROJECT.parse().expect("a project id")
 }
 
-/// A data folder of its own, the runtime its sessions' services run on, and its repositories.
+/// A data folder of its own, the runtime its sessions' services run on, its repositories, and the stand-in cloud its
+/// sessions sign in to.
 pub struct Data {
   pub dir: TempDir,
   pub runtime: Runtime,
+  pub cloud: signed_in::account_cloud::AccountCloud,
 }
 
 impl Data {
+  /// A data folder in `dir`, its sessions' services on `runtime`.
+  pub fn at(dir: TempDir, runtime: Runtime) -> Self {
+    Self {
+      dir,
+      runtime,
+      cloud: signed_in::account_cloud::AccountCloud::start(),
+    }
+  }
+
   pub fn new() -> Self {
     // The workspace's folder named without `..`, as the seed and the app name the data folder.
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -65,6 +79,7 @@ impl Data {
     Self {
       dir: tempfile::tempdir_in(scratch).expect("private worktree directory"),
       runtime: Runtime::new().expect("tokio runtime"),
+      cloud: signed_in::account_cloud::AccountCloud::start(),
     }
   }
 
@@ -79,10 +94,24 @@ impl Data {
     repo
   }
 
-  /// Starts a session of the data folder. Its runner program does not exist.
+  /// Starts a session of the data folder, signed in to the stand-in cloud. Its runner program does not exist.
   pub fn launch(&self) -> Launch {
-    let runner = self.dir.path().join("no-runner").join("orchester-runner");
-    Launch::begin_at(&self.database(), runner, self.runtime.handle(), None)
+    self.launch_with(self.no_runner())
+  }
+
+  /// [`Self::launch`] with the runner program `runner`.
+  pub fn launch_with(&self, runner: PathBuf) -> Launch {
+    signed_in::launch(&self.database(), runner, self.runtime.handle(), &self.cloud)
+  }
+
+  /// A session of the data folder that is not signed in: the window shows the sign-in gate.
+  pub fn launch_signed_out(&self) -> Launch {
+    signed_in::launch_signed_out(&self.database(), self.no_runner(), self.runtime.handle())
+  }
+
+  /// A runner program that does not exist.
+  pub fn no_runner(&self) -> PathBuf {
+    self.dir.path().join("no-runner").join("orchester-runner")
   }
 
   /// Kontur (KON) with the id [`PROJECT`] in the repository `repo-kontur`, set up through `workspace`.

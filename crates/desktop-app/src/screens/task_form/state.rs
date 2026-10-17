@@ -113,6 +113,8 @@ pub struct View {
   pub changed: bool,
   /// The published pipelines; `None` while the project's tasks are read.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
+  /// A shared task's pipeline, by its slug, that this computer has no pipeline for: saving keeps it.
+  pub missing_pipeline: Option<Arc<str>>,
   /// The changes were kept on this computer from an earlier visit, at this time.
   pub kept_at: Option<Timestamp>,
   /// Why the last save, or the last Create & run before queuing, failed.

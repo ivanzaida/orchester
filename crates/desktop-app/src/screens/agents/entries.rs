@@ -21,7 +21,7 @@ use crate::{
   ui::{
     avatar::profile_avatar,
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::opening,
     table::{ColumnWidth, table_header},
     tooltip::Truncated,
   },
@@ -120,7 +120,7 @@ impl Component for AgentRow {
       .child(version_marker(ctx, entry))
       .child(words::note(&used).width(Dimension::Px(USED)))
       .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
-    pressable(move || nav.show(Shown::Edit(id, AgentTab::default())))
+    opening(nav.to(Shown::Edit(id, AgentTab::default())))
       .id(format!("agent-{id}"))
       .width(Dimension::Pct(100.0))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))

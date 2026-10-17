@@ -33,8 +33,13 @@ ALTER TABLE cloud_accepted_invites ADD COLUMN checks INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE cloud_accepted_invites ADD COLUMN next_check_at INTEGER;
 ";
 
+/// Whether the cloud refused the last ask for want of two-factor authentication (2026-10-17).
+pub(super) const NEEDS_CODE_MIGRATION: &str = r"
+ALTER TABLE cloud_accepted_invites ADD COLUMN needs_code INTEGER NOT NULL DEFAULT 0;
+";
+
 const COLUMNS: &str = "invite, team_server, server_name, project_name, expires_at, approval, accepted_at, \
-  approval_expires_at, asks, checks, next_check_at";
+  approval_expires_at, asks, checks, next_check_at, needs_code";
 
 /// An invite accepted here whose join has not finished.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,6 +63,8 @@ pub struct AcceptedInvite {
   pub checks: u32,
   /// When it is asked again on its own; `None`: only when the person asks.
   pub next_check_at: Option<Timestamp>,
+  /// The cloud refused the last ask for want of two-factor authentication: asked again after a sign-in with a code.
+  pub needs_code: bool,
 }
 
 impl AcceptedInvite {
@@ -80,6 +87,7 @@ impl AcceptedInvite {
       asks: 0,
       checks: 0,
       next_check_at: None,
+      needs_code: false,
     }
   }
 }
@@ -89,6 +97,7 @@ type Row = (
   (String, String, String, Option<String>),
   (i64, Option<String>, i64),
   (Option<i64>, u32, u32, Option<i64>),
+  bool,
 );
 
 impl AppDb {
@@ -106,6 +115,7 @@ impl AppDb {
         (row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?),
         (row.get(4)?, row.get(5)?, row.get(6)?),
         (row.get(7)?, row.get(8)?, row.get(9)?, row.get(10)?),
+        row.get(11)?,
       ))
     })?;
     rows.map(|row| accepted(row?)).collect()
@@ -116,10 +126,10 @@ impl AppDb {
     self.connection.execute(
       &format!(
         "INSERT INTO cloud_accepted_invites ({COLUMNS}) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) \
          ON CONFLICT (invite) DO UPDATE SET approval = excluded.approval, \
            approval_expires_at = excluded.approval_expires_at, asks = max(asks, excluded.asks), \
-           checks = excluded.checks, next_check_at = excluded.next_check_at"
+           checks = excluded.checks, next_check_at = excluded.next_check_at, needs_code = excluded.needs_code"
       ),
       params![
         invite.invite.to_string(),
@@ -133,6 +143,7 @@ impl AppDb {
         invite.asks,
         invite.checks,
         invite.next_check_at.map(Timestamp::unix_millis),
+        invite.needs_code,
       ],
     )?;
     Ok(())
@@ -159,6 +170,7 @@ fn accepted(
     (invite, server, server_name, project_name),
     (expires_at, approval, accepted_at),
     (approval_expires_at, asks, checks, next_check_at),
+    needs_code,
   ): Row,
 ) -> Result<AcceptedInvite, StoreError> {
   Ok(AcceptedInvite {
@@ -173,5 +185,6 @@ fn accepted(
     asks,
     checks,
     next_check_at: next_check_at.map(Timestamp::from_unix_millis),
+    needs_code,
   })
 }

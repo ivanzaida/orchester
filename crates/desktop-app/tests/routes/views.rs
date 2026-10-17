@@ -77,6 +77,7 @@ pub(super) fn view_routes() -> Vec<Route> {
     all.push(at(ProjectPage::Pipeline(id, panel)));
   }
   all.extend(ProjectSettingsTab::ALL.map(|tab| at(ProjectPage::Settings(tab))));
+  all.push(at(ProjectPage::MakeLocal));
   all
 }
 
@@ -149,12 +150,29 @@ fn views_have_their_documented_paths() {
       at(ProjectPage::Instructions(InstructionsView::Import)),
       format!("{root}/instructions?view=import"),
     ),
-    (
-      at(ProjectPage::Settings(ProjectSettingsTab::CodeIndex)),
-      format!("{root}/settings?tab=code_index"),
-    ),
   ];
   for (route, path) in paths {
+    assert_eq!(route.path(), path);
+  }
+}
+
+#[test]
+fn project_settings_tabs_have_their_documented_paths() {
+  let settings = format!("/project/{PROJECT}/settings");
+  for (route, path) in [
+    (
+      at(ProjectPage::Settings(ProjectSettingsTab::CodeIndex)),
+      format!("{settings}?tab=code_index"),
+    ),
+    (
+      at(ProjectPage::Settings(ProjectSettingsTab::Sharing)),
+      format!("{settings}?tab=sharing"),
+    ),
+    (
+      at(ProjectPage::MakeLocal),
+      format!("{settings}?tab=sharing&ask=make-local"),
+    ),
+  ] {
     assert_eq!(route.path(), path);
   }
 }
@@ -227,6 +245,9 @@ fn views_refuse_what_they_do_not_name() {
     format!("{root}/pipelines/{id}?version=latest"),
     format!("{root}/pipelines/{id}?version=1&panel=publish"),
     format!("{root}/settings?tab=memory"),
+    format!("{root}/settings?ask=make-local"),
+    format!("{root}/settings?tab=limits&ask=make-local"),
+    format!("{root}/settings?tab=sharing&ask=leave"),
   ] {
     assert!(Route::parse(&path).is_err(), "{path} names no view");
   }

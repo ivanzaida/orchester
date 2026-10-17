@@ -28,7 +28,7 @@ async fn s1a_backup_cli_reads_committed_data_while_an_immediate_writer_is_held()
   let version: i64 = snapshot
     .query_row("SELECT schema_version FROM meta", [], |row| row.get(0))
     .expect("committed schema");
-  assert_eq!(version, 4);
+  assert_eq!(version, 5);
   let integrity: String = snapshot
     .query_row("PRAGMA integrity_check", [], |row| row.get(0))
     .expect("snapshot integrity");

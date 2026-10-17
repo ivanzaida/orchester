@@ -13,7 +13,9 @@ mod history;
 mod links;
 mod proposal;
 mod queue;
+mod references;
 mod review;
+mod scroll;
 mod settings;
 mod start;
 #[path = "../support/mod.rs"]

@@ -9,10 +9,11 @@ use lurq::{
 };
 
 use crate::{
+  navigation::link::Open,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::opening,
   },
 };
 const FILES: f32 = 64.0;
@@ -51,7 +52,7 @@ pub struct SkillRow {
   values: [Arc<str>; 4],
   version: Icon,
   scope: Icon,
-  open: Arc<dyn Fn() + Send + Sync>,
+  open: Open,
 }
 impl SkillRow {
   pub fn new(
@@ -59,7 +60,7 @@ impl SkillRow {
     name: impl Into<Arc<str>>,
     description: impl Into<Arc<str>>,
     values: [Arc<str>; 4],
-    open: impl Fn() + Send + Sync + 'static,
+    open: Open,
   ) -> Self {
     Self {
       id: id.into(),
@@ -68,7 +69,7 @@ impl SkillRow {
       values,
       version: Icon::CircleDashed,
       scope: Icon::FolderGit2,
-      open: Arc::new(open),
+      open,
     }
   }
   pub fn marks(mut self, version: Icon, scope: Icon) -> Self {
@@ -112,6 +113,6 @@ impl From<SkillRow> for Element {
           .child(Text::new(&label).variant(TypographyStyle::Description))
       }))
       .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
-    pressable(move || (row.open)()).id(row.id).child(content).into()
+    opening(row.open).id(row.id).child(content).into()
   }
 }

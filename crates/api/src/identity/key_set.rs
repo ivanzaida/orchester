@@ -25,7 +25,7 @@ pub struct ListedKey {
   pub listed_until: i64,
 }
 
-/// What the root key signs. The cloud prepares it; the offline machine signs it unchanged.
+/// What the root key signs: the signing keys the cloud lists, and how long the set is valid.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct KeySetStatement {

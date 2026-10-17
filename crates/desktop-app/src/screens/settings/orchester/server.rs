@@ -182,7 +182,7 @@ impl Component for ServerPanel {
       ctx,
       "orchester-server-header",
       (Icon::Server, &entry.stored.name, &look),
-      &facts,
+      (Vec::new(), &facts),
     );
     if entry.in_use() {
       let confirming = self.confirming.clone();

@@ -17,7 +17,7 @@ use orchester_workspace::{
   tasks::{data::ProjectTasks, usage::ProjectUsage},
 };
 
-use crate::{mcp::McpStatus, routes::Route};
+use crate::{mcp::McpStatus, navigation::press::OpenIn, routes::Route, ui::pressable::Press};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BarFacts {
@@ -30,6 +30,8 @@ pub struct BarFacts {
   pub stopping: Stopping,
   /// The team server the item names: the project's, or those this computer is signed in to.
   pub servers: super::server::ServerFacts,
+  /// Orchester Cloud, while it cannot be reached.
+  pub cloud: super::cloud::CloudFacts,
 }
 
 /// How *Stop* of the runs that auto-approve goes.
@@ -132,8 +134,8 @@ pub enum BarAction {
   OpenRunnerLog,
   /// Start the active project's runner again.
   RestartRunner,
-  /// Go to `route` in the active tab.
-  Go(Route),
+  /// Open `route` where the press asks (`navigation::link`).
+  Go(Route, OpenIn),
   /// Stop auto-approving these runs of the active project.
   StopAutoApproving(Vec<RunId>),
   /// A failure or a decision in the activity slot was opened or dismissed: it leaves the slot.
@@ -146,3 +148,9 @@ pub enum BarAction {
 
 /// Where the bar's actions go.
 pub type Dispatch = Arc<dyn Fn(BarAction) + Send + Sync>;
+
+/// The press of an item that opens `route` through `dispatch`, where the press asks.
+pub fn go(dispatch: &Dispatch, route: Route) -> Press {
+  let dispatch = dispatch.clone();
+  Press::Open(Arc::new(move |at| dispatch(BarAction::Go(route.clone(), at))))
+}

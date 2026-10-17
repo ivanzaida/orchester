@@ -4,8 +4,9 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { FULL, resetAccounts, routeSignedIn, signInAccount, type Answer } from "./accounts.ts";
+import { FULL, resetAccounts, routeSignedIn, signInAccount, signInChecked, type Answer } from "./accounts.ts";
 import { routeRegistry } from "./registry.ts";
+import { finishSignIn, turnOnElsewhere } from "./two-factor.ts";
 
 import { RIGHT_PASSWORD } from "./accounts.ts";
 
@@ -118,6 +119,8 @@ function route(request: IncomingMessage, path: string, body: Record<string, unkn
       return confirm(body);
     case "POST /api/v1/auth/sessions":
       return signIn(body);
+    case "POST /api/v1/auth/sessions/two-factor":
+      return finishSignIn(body, signInChecked);
     case "POST /api/v1/auth/reset":
       return emailing(body.email);
     case "POST /api/v1/auth/reset/finish":
@@ -152,7 +155,7 @@ async function readBody(request: IncomingMessage): Promise<Record<string, unknow
 // Requests are listed for the tests; passwords stay out of the list.
 function redacted(body: Record<string, unknown>): Record<string, unknown> {
   const copy = { ...body };
-  for (const key of ["password", "new_password"]) {
+  for (const key of ["password", "new_password", "code", "challenge"]) {
     if (key in copy) {
       copy[key] = "<redacted>";
     }
@@ -169,6 +172,11 @@ export function startFakeApi(port: number) {
     }
     if (path === "/__fake/reset") {
       resetAccounts();
+      send(response, { status: 204 });
+      return;
+    }
+    if (path === "/__fake/two-factor-on") {
+      turnOnElsewhere(new URL(request.url ?? "/", "http://fake").searchParams.get("email") ?? "");
       send(response, { status: 204 });
       return;
     }

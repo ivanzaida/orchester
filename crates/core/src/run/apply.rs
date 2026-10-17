@@ -2,7 +2,7 @@
 //! [`Run::check`] and [`Run::apply`], so a replayed log reaches exactly the state the
 //! transitions produced.
 
-use std::{collections::BTreeSet, num::NonZeroU32};
+use std::{collections::BTreeSet, num::NonZeroU32, sync::Arc};
 
 use super::{
   attempt::{Attempt, Checkpoint, StepExecution},
@@ -10,7 +10,9 @@ use super::{
   event::{EventSequence, PlannedExecution, RunEvent, RunEventKind},
   plan::PlanDecision,
   state::Run,
-  status::{AttemptReason, AttemptStatus, ContinueTrigger, PauseReason, RunLimit, RunStatus, StepStatus, WaitReason},
+  status::{
+    AttemptReason, AttemptStatus, ContinueTrigger, PauseReason, RunFailure, RunLimit, RunStatus, StepStatus, WaitReason,
+  },
 };
 use crate::{
   id::{AttemptId, CheckpointId, StepExecutionId},
@@ -76,7 +78,9 @@ impl Run {
   fn check(&self, kind: &RunEventKind) -> Result<(), RunError> {
     match kind {
       RunEventKind::Created(_) => Err(RunError::Creation),
-      RunEventKind::Started => self.expect_status(kind, matches!(self.status, RunStatus::Pending)),
+      RunEventKind::BranchChosen { .. } | RunEventKind::Started => {
+        self.expect_status(kind, matches!(self.status, RunStatus::Pending))
+      }
       RunEventKind::PauseRequested => {
         self.expect_status(kind, self.status == RunStatus::Running && !self.pause_requested)
       }
@@ -112,7 +116,11 @@ impl Run {
         }
       }
       RunEventKind::Reopened => self.expect_status(kind, self.status == RunStatus::Succeeded),
-      RunEventKind::RecoveryRequested => self.expect_status(kind, matches!(self.status, RunStatus::Failed(_))),
+      // A run that never started has no worktree to resume in.
+      RunEventKind::RecoveryRequested => self.expect_status(
+        kind,
+        matches!(&self.status, RunStatus::Failed(failure) if !matches!(failure, RunFailure::WorktreeNotCreated(_))),
+      ),
       RunEventKind::FollowUpFailed => {
         if !self.in_follow_up() {
           return Err(RunError::NotFollowingUp);
@@ -347,6 +355,7 @@ impl Run {
   fn apply(&mut self, kind: &RunEventKind, at: Timestamp) {
     match kind {
       RunEventKind::Created(_) => unreachable!("Run::check rejects a second creation event"),
+      RunEventKind::BranchChosen { branch } => Arc::make_mut(&mut self.created).branch = branch.clone(),
       RunEventKind::Started
       | RunEventKind::Resumed
       | RunEventKind::Continued { .. }
@@ -410,13 +419,7 @@ impl Run {
       RunEventKind::StepWaiting { execution, reason } => self.set_step(*execution, StepStatus::Waiting(*reason)),
       RunEventKind::PlanDecided {
         execution, decision, ..
-      } => {
-        let status = match decision {
-          PlanDecision::Approved => StepStatus::Passed,
-          PlanDecision::ChangesRequested { .. } => StepStatus::Running,
-        };
-        self.set_step(*execution, status);
-      }
+      } => self.set_step(*execution, decided(decision)),
       RunEventKind::StepPassed { execution } => self.set_step(*execution, StepStatus::Passed),
       RunEventKind::StepFailed {
         execution,
@@ -476,6 +479,14 @@ impl Run {
     if let Some(current) = self.attempts.last_mut() {
       current.set_status(attempt);
     }
+  }
+}
+
+/// Where a decision on its plan leaves the gated step: passed once approved, at work again on requested changes.
+const fn decided(decision: &PlanDecision) -> StepStatus {
+  match decision {
+    PlanDecision::Approved => StepStatus::Passed,
+    PlanDecision::ChangesRequested { .. } => StepStatus::Running,
   }
 }
 

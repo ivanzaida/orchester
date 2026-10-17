@@ -63,8 +63,8 @@ impl Scheduler {
       if recorded.status() == &RunStatus::Pending {
         self.admit(&db)?;
       }
-      let prepared = super::prepare::resume_recorded(&mut db, root, task, recorded)?;
-      return self.begin(db, prepared);
+      let prepared = super::prepare::resume_recorded(&mut db, root, task, recorded);
+      return self.begin(db, task, prepared);
     }
     note_missing_worktrees(&mut db, root, task)?;
     let previous = check(&db, task, after)?;
@@ -77,8 +77,8 @@ impl Scheduler {
       self::remove_worktrees(&mut db, root, &previous, confirmed)?;
     }
     // Compared again where the run is recorded: an edit after the check above is refused there.
-    let prepared = super::prepare::record(&mut db, root, key, checked, revision)?;
-    self.begin(db, prepared)
+    let prepared = super::prepare::record(&mut db, root, key, checked, revision);
+    self.begin(db, task, prepared)
   }
 }
 

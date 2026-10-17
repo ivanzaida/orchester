@@ -1,0 +1,171 @@
+{
+  "version": "3",
+  "templates": [
+    {
+      "type": 3,
+      "platform": "linux",
+      "categories": [
+        "development"
+      ],
+      "administrator_only": false,
+      "id": 1,
+      "title": "Orchester team server",
+      "description": "The self-hosted Orchester team server and its admin, behind Caddy, for a public DNS name.",
+      "note": "From compose.yaml. Caddy publishes ports 80 and 443 and gets the certificate. After the deploy, the server's log shows the setup code; open https://&lt;DNS name&gt;/admin and enter it.",
+      "stackFile": "# An Orchester team server with its admin, behind Caddy, for a host with a public DNS name (deploy/server/README.md).\n# The images come from Docker Hub; no repository checkout is needed. Put the values into `.env` beside this file\n# (from `.env.example`), then:\n#   docker compose up -d\n#   docker compose logs server     # the setup code, then open https://<ORCHESTER_HOST>/admin\n# Caddy obtains and renews the public certificate (ports 80 and 443 must be reachable) and sends every request to the\n# server, which serves plain HTTP on the private network and forwards every path outside /api to the admin. Only Caddy\n# is published. No network or air gap: compose.private.yaml. A host that runs Traefik: compose.traefik.yaml.\n#\n# The private network has a fixed subnet so the server can trust Caddy's forwarded client address by its IP:\n# `.2` Caddy, `.3` the server, `.4` the admin. If another network on the host already uses 172.29.0.0/24, set\n# ORCHESTER_SUBNET_PREFIX.\nservices:\n  server:\n    image: ivanzaida/orchester-server:${ORCHESTER_VERSION:-latest}\n    restart: unless-stopped\n    environment:\n      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}\n      # Caddy holds the public certificate; the server speaks plain HTTP on this network only.\n      ORCHESTER_SERVER_TLS: \"off\"\n      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}\n      ORCHESTER_SERVER_TRUSTED_PROXIES: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.2\n      ORCHESTER_SERVER_ADMIN_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4:3100\n      # The admin calls the API on the server's own address on this network; the port is never published.\n      ORCHESTER_SERVER_ADMIN_API_LISTEN: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741\n      # Caddy's certificate, for the key proofs apps check before entering a code: `auto` reads it and its renewals at\n      # https://ORCHESTER_HOST; or set its SHA-256.\n      ORCHESTER_SERVER_PROXY_CERTIFICATE: ${ORCHESTER_SERVER_PROXY_CERTIFICATE:-auto}\n    # For `auto`: here ORCHESTER_HOST is Caddy, on this network.\n    extra_hosts:\n      - \"${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}:${ORCHESTER_SUBNET_PREFIX:-172.29.0}.2\"\n    volumes:\n      - server_data:/data\n    # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).\n    healthcheck:\n      test: [\"CMD\", \"bash\", \"-c\", \"exec 3<>/dev/tcp/${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3/8741 && printf 'GET /api/v1/server HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && read -r _ status _ <&3 && [ \\\"$$status\\\" = 200 ]\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    networks:\n      backend:\n        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3\n  admin:\n    image: ivanzaida/orchester-server-admin:${ORCHESTER_VERSION:-latest}\n    restart: unless-stopped\n    environment:\n      ORCHESTER_ADMIN_SERVER_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741\n      # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).\n      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}\n      # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.\n      # Set it empty to use codes only.\n      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}\n    healthcheck:\n      test: [\"CMD\", \"node\", \"-e\", \"fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    networks:\n      backend:\n        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4\n  caddy:\n    image: caddy:2\n    restart: unless-stopped\n    ports:\n      - \"80:80\"\n      - \"443:443\"\n      # HTTP/3, which Caddy advertises on 443.\n      - \"443:443/udp\"\n    configs:\n      - source: caddyfile\n        target: /etc/caddy/Caddyfile\n    volumes:\n      - caddy_data:/data\n      - caddy_config:/config\n    networks:\n      backend:\n        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.2\n    depends_on:\n      - server\nconfigs:\n  # Everything goes to the team server, which answers /api itself and forwards every other path to its admin. No\n  # access log is turned on.\n  caddyfile:\n    content: |\n      ${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name} {\n          reverse_proxy ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8080\n          header Strict-Transport-Security \"max-age=31536000\"\n      }\nnetworks:\n  backend:\n    ipam:\n      config:\n        - subnet: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.0/24\nvolumes:\n  server_data:\n  caddy_data:\n  caddy_config:\n",
+      "env": [
+        {
+          "name": "ORCHESTER_HOST",
+          "label": "DNS name",
+          "description": "Required. The server's public DNS name, without https://, pointing to this host."
+        },
+        {
+          "name": "ORCHESTER_ADMIN_SECRET",
+          "label": "Admin secret",
+          "description": "Required. 32 random bytes in base64: run `openssl rand -base64 32` and paste the result."
+        },
+        {
+          "name": "ORCHESTER_VERSION",
+          "label": "Version",
+          "description": "The image version: a release such as 0.1.0, or latest. Change it to upgrade.",
+          "default": "latest"
+        },
+        {
+          "name": "ORCHESTER_SERVER_NAME",
+          "label": "Server name",
+          "description": "The server's name until an admin renames it.",
+          "default": "Orchester"
+        },
+        {
+          "name": "ORCHESTER_ADMIN_CLOUD_URL",
+          "label": "Orchester Cloud address",
+          "description": "For signing in and linking through the browser and for invites by email.",
+          "default": "https://orchester-cloud.lurq.dev"
+        },
+        {
+          "name": "ORCHESTER_SUBNET_PREFIX",
+          "label": "Private subnet",
+          "description": "The first three numbers of the stack's private /24; change it only if 172.29.0.0/24 is taken.",
+          "default": "172.29.0"
+        }
+      ]
+    },
+    {
+      "type": 3,
+      "platform": "linux",
+      "categories": [
+        "development"
+      ],
+      "administrator_only": false,
+      "id": 2,
+      "title": "Orchester team server (private network)",
+      "description": "The Orchester team server and its admin with the server's own certificate on port 8740: no public DNS name, or air-gapped.",
+      "note": "From compose.private.yaml. Clear the Orchester Cloud address to use codes only. After the deploy, the server's log shows the setup code; open https://&lt;host&gt;:8740/admin and enter it.",
+      "stackFile": "# An Orchester team server with its admin, for a host with no public DNS name: a private network, or an air-gapped one\n# (deploy/server/README.md). The server presents its own certificate (tls = \"self_signed\") on port 8740 and forwards\n# every path outside /api to the admin on the private network. The images come from Docker Hub, or from `docker load`\n# without the internet. Put the values into `.env` beside this file (from `.env.example`), then:\n#   docker compose -f compose.private.yaml up -d\n#   docker compose -f compose.private.yaml logs server     # the setup code, then open https://<host>:8740/admin\nservices:\n  server:\n    image: ivanzaida/orchester-server:${ORCHESTER_VERSION:-latest}\n    restart: unless-stopped\n    environment:\n      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}\n      # Names and addresses people reach this host by, for the generated certificate (comma-separated). Read only\n      # when the certificate is generated, on the first start.\n      ORCHESTER_SERVER_TLS_NAMES: ${ORCHESTER_SERVER_TLS_NAMES:-}\n      ORCHESTER_SERVER_ADMIN_URL: http://admin:3100\n      # The admin calls the API here, on the private network only; this port is never published. The server warns at\n      # start that it listens on every interface of its container: that is this network, as long as 8741 stays\n      # unpublished.\n      ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741\n    ports:\n      - \"8740:8080\"\n    volumes:\n      - server_data:/data\n    # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).\n    healthcheck:\n      test: [\"CMD\", \"bash\", \"-c\", \"exec 3<>/dev/tcp/127.0.0.1/8741 && printf 'GET /api/v1/server HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && read -r _ status _ <&3 && [ \\\"$$status\\\" = 200 ]\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    networks:\n      - backend\n  admin:\n    image: ivanzaida/orchester-server-admin:${ORCHESTER_VERSION:-latest}\n    restart: unless-stopped\n    environment:\n      ORCHESTER_ADMIN_SERVER_URL: http://server:8741\n      # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).\n      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}\n      # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.\n      # Set it empty on an air-gapped network: the admin then offers codes only.\n      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}\n    healthcheck:\n      test: [\"CMD\", \"node\", \"-e\", \"fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    networks:\n      - backend\nnetworks:\n  backend:\nvolumes:\n  server_data:\n",
+      "env": [
+        {
+          "name": "ORCHESTER_ADMIN_SECRET",
+          "label": "Admin secret",
+          "description": "Required. 32 random bytes in base64: run `openssl rand -base64 32` and paste the result."
+        },
+        {
+          "name": "ORCHESTER_VERSION",
+          "label": "Version",
+          "description": "The image version: a release such as 0.1.0, or latest. Change it to upgrade.",
+          "default": "latest"
+        },
+        {
+          "name": "ORCHESTER_SERVER_NAME",
+          "label": "Server name",
+          "description": "The server's name until an admin renames it.",
+          "default": "Orchester"
+        },
+        {
+          "name": "ORCHESTER_ADMIN_CLOUD_URL",
+          "label": "Orchester Cloud address",
+          "description": "For signing in and linking through the browser and for invites by email.",
+          "default": "https://orchester-cloud.lurq.dev"
+        },
+        {
+          "name": "ORCHESTER_SERVER_TLS_NAMES",
+          "label": "Certificate names",
+          "description": "Names and addresses people reach this host by, comma-separated, for the server's own certificate."
+        }
+      ]
+    },
+    {
+      "type": 3,
+      "platform": "linux",
+      "categories": [
+        "development"
+      ],
+      "administrator_only": false,
+      "id": 3,
+      "title": "Orchester team server (Traefik)",
+      "description": "The Orchester team server and its admin behind the host's Traefik: no published ports.",
+      "note": "From compose.traefik.yaml. After the deploy, the server's log shows the setup code; open https://&lt;DNS name&gt;/admin and enter it.",
+      "stackFile": "# An Orchester team server with its admin on a host that already runs Traefik (deploy/server/README.md, \"Behind\n# Traefik\"). Nothing is published: Traefik holds the public certificate and reaches the server over its external\n# network; the server serves plain HTTP there and forwards every path outside /api to the admin. Put the values into\n# `.env` beside this file (from `.env.example`), then:\n#   docker compose -f compose.traefik.yaml up -d\n#   docker compose -f compose.traefik.yaml logs server     # the setup code, then open https://<ORCHESTER_HOST>/admin\n#\n# Only `server` joins Traefik's network. The admin and the server's private API listener stay on this stack's own\n# network `backend` (fixed subnet: `.3` the server, `.4` the admin), which is internal, so no other container on\n# Traefik's network reaches the listener that believes the admin's forwarded headers, even on a host that does not\n# isolate Docker's networks from each other. The admin has no route out: invites by email are carried to Orchester\n# Cloud by the inviter's browser instead of the admin's own server side. The server believes a forwarded client\n# address only from Traefik's own address, TRAEFIK_ADDRESS.\nservices:\n  server:\n    image: ivanzaida/orchester-server:${ORCHESTER_VERSION:-latest}\n    restart: unless-stopped\n    environment:\n      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}\n      # Traefik holds the public certificate; the server speaks plain HTTP to it.\n      ORCHESTER_SERVER_TLS: \"off\"\n      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}\n      ORCHESTER_SERVER_TRUSTED_PROXIES: ${TRAEFIK_ADDRESS:?Set TRAEFIK_ADDRESS to Traefik's address on the Traefik network}\n      ORCHESTER_SERVER_ADMIN_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4:3100\n      # The admin calls the API on the server's address on `backend` only; the port is never published.\n      ORCHESTER_SERVER_ADMIN_API_LISTEN: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741\n      # Traefik's certificate, for the key proofs apps check before entering a code: `auto` reads it and its renewals at\n      # https://ORCHESTER_HOST, out through Traefik's network (the host must reach its own name); or set its SHA-256.\n      ORCHESTER_SERVER_PROXY_CERTIFICATE: ${ORCHESTER_SERVER_PROXY_CERTIFICATE:-auto}\n    volumes:\n      - server_data:/data\n    # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).\n    healthcheck:\n      test: [\"CMD\", \"bash\", \"-c\", \"exec 3<>/dev/tcp/${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3/8741 && printf 'GET /api/v1/server HTTP/1.0\\\\r\\\\n\\\\r\\\\n' >&3 && read -r _ status _ <&3 && [ \\\"$$status\\\" = 200 ]\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    labels:\n      traefik.enable: 'true'\n      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}\n      # Every path on the host goes to the server, as with Caddy: it answers /api itself and forwards the rest.\n      traefik.http.routers.orchester-server.rule: Host(`${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}`)\n      traefik.http.routers.orchester-server.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}\n      traefik.http.routers.orchester-server.tls: 'true'\n      traefik.http.routers.orchester-server.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}\n      traefik.http.routers.orchester-server.middlewares: orchester-server-hsts\n      traefik.http.routers.orchester-server.service: orchester-server\n      traefik.http.middlewares.orchester-server-hsts.headers.stsSeconds: '31536000'\n      traefik.http.services.orchester-server.loadbalancer.server.port: '8080'\n      # Plain HTTP on the host goes to HTTPS, as Caddy does.\n      traefik.http.routers.orchester-server-http.rule: Host(`${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}`)\n      traefik.http.routers.orchester-server-http.entrypoints: ${TRAEFIK_HTTP_ENTRYPOINT:-web}\n      traefik.http.routers.orchester-server-http.middlewares: orchester-server-https\n      traefik.http.routers.orchester-server-http.service: orchester-server\n      traefik.http.middlewares.orchester-server-https.redirectscheme.scheme: https\n      traefik.http.middlewares.orchester-server-https.redirectscheme.permanent: 'true'\n    networks:\n      backend:\n        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3\n      traefik: {}\n  admin:\n    image: ivanzaida/orchester-server-admin:${ORCHESTER_VERSION:-latest}\n    restart: unless-stopped\n    environment:\n      ORCHESTER_ADMIN_SERVER_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741\n      # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).\n      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}\n      # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.\n      # Set it empty to use codes only.\n      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}\n    healthcheck:\n      test: [\"CMD\", \"node\", \"-e\", \"fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    labels:\n      traefik.enable: 'false'\n    networks:\n      backend:\n        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4\nnetworks:\n  backend:\n    internal: true\n    ipam:\n      config:\n        - subnet: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.0/24\n  traefik:\n    external: true\n    name: ${TRAEFIK_NETWORK:-traefik}\nvolumes:\n  server_data:\n",
+      "env": [
+        {
+          "name": "ORCHESTER_HOST",
+          "label": "DNS name",
+          "description": "Required. The server's public DNS name, without https://, pointing to this host."
+        },
+        {
+          "name": "ORCHESTER_ADMIN_SECRET",
+          "label": "Admin secret",
+          "description": "Required. 32 random bytes in base64: run `openssl rand -base64 32` and paste the result."
+        },
+        {
+          "name": "TRAEFIK_ADDRESS",
+          "label": "Traefik's address",
+          "description": "Required. Traefik's IPv4 address on its network, without /16 (Networks → traefik)."
+        },
+        {
+          "name": "ORCHESTER_VERSION",
+          "label": "Version",
+          "description": "The image version: a release such as 0.1.0, or latest. Change it to upgrade.",
+          "default": "latest"
+        },
+        {
+          "name": "ORCHESTER_SERVER_NAME",
+          "label": "Server name",
+          "description": "The server's name until an admin renames it.",
+          "default": "Orchester"
+        },
+        {
+          "name": "ORCHESTER_ADMIN_CLOUD_URL",
+          "label": "Orchester Cloud address",
+          "description": "For signing in and linking through the browser and for invites by email.",
+          "default": "https://orchester-cloud.lurq.dev"
+        },
+        {
+          "name": "ORCHESTER_SUBNET_PREFIX",
+          "label": "Private subnet",
+          "description": "The first three numbers of the stack's private /24; change it only if 172.29.0.0/24 is taken.",
+          "default": "172.29.0"
+        },
+        {
+          "name": "TRAEFIK_NETWORK",
+          "label": "Traefik network",
+          "default": "traefik"
+        },
+        {
+          "name": "TRAEFIK_ENTRYPOINT",
+          "label": "HTTPS entry point",
+          "default": "websecure"
+        },
+        {
+          "name": "TRAEFIK_HTTP_ENTRYPOINT",
+          "label": "HTTP entry point",
+          "default": "web"
+        },
+        {
+          "name": "TRAEFIK_CERT_RESOLVER",
+          "label": "Certificate resolver",
+          "default": "letsencrypt"
+        }
+      ]
+    }
+  ]
+}

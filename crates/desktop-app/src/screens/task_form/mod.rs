@@ -39,12 +39,13 @@ use orchester_core::{
 use orchester_workspace::tasks::data::ProjectTasks;
 
 use self::{
+  actions::RunBegan,
   form::{FormProps, TaskForm},
   state::Subject,
 };
 use super::placeholder::centered;
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::{ShownProject, TasksState},
   routes::{ProjectPage, Route, Screen, TaskList, TaskView},
   ui::{
@@ -69,6 +70,7 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
     updated_at: None,
     separator: ctx.t("task_form.number.groupSeparator"),
     pipelines: Some(tasks.pipelines),
+    missing_pipeline: None,
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
 }
@@ -97,6 +99,10 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
     subject,
     tasks: task_ids(&tasks),
     pipelines: Some(tasks.pipelines.clone()),
+    missing_pipeline: tasks
+      .missing_pipelines
+      .get(&task_id)
+      .map(|slug| Arc::from(slug.as_str())),
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
 }
@@ -153,31 +159,40 @@ impl Nav {
     Route::Project(self.project, page)
   }
 
-  /// The Tasks list; with `highlight`, the task Create just added, in the form's place so Back does not
-  /// return to a form that was used.
-  pub fn tasks(&self, highlight: Option<TaskKey>) {
-    match highlight {
-      Some(key) => self
-        .navigation
-        .replace(self.route(ProjectPage::Tasks(TaskList::default().with_highlight(key)))),
-      None => self.navigation.go(self.route(ProjectPage::Tasks(TaskList::default()))),
-    }
-  }
-
-  pub fn task(&self, key: &TaskKey) {
+  /// The Tasks list with `highlight`, the task Create just added, in the form's place so Back does not return to a
+  /// form that was used.
+  pub fn tasks(&self, highlight: TaskKey) {
     self
       .navigation
-      .go(self.route(ProjectPage::Task(key.clone(), TaskView::Summary)));
+      .replace(self.route(ProjectPage::Tasks(TaskList::default().with_highlight(highlight))));
   }
 
-  /// The Conversation of the task whose run started, in the form's place.
-  pub fn started(&self, key: &TaskKey) {
+  /// What opens the Tasks list where a press asks (`navigation::link`).
+  pub fn to_tasks(&self) -> Open {
+    self.navigation.to(self.route(ProjectPage::Tasks(TaskList::default())))
+  }
+
+  /// What opens the Summary of the task `key` where a press asks.
+  pub fn to_task(&self, key: &TaskKey) -> Open {
     self
       .navigation
-      .replace(self.route(ProjectPage::Task(key.clone(), TaskView::Conversation)));
+      .to(self.route(ProjectPage::Task(key.clone(), TaskView::Summary)))
   }
 
-  pub fn pipelines(&self) {
-    self.navigation.go(self.route(ProjectPage::Pipelines));
+  /// The task whose run was asked to start, in the form's place: its Conversation, or its Summary, which says why,
+  /// when the run failed before it started.
+  pub fn started(&self, key: &TaskKey, began: RunBegan) {
+    let view = match began {
+      RunBegan::Yes => TaskView::Conversation,
+      RunBegan::FailedBeforeStart => TaskView::Summary,
+    };
+    self
+      .navigation
+      .replace(self.route(ProjectPage::Task(key.clone(), view)));
+  }
+
+  /// What opens the Pipelines library where a press asks.
+  pub fn to_pipelines(&self) -> Open {
+    self.navigation.to(self.route(ProjectPage::Pipelines))
   }
 }

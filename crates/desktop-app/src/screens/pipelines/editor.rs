@@ -314,7 +314,7 @@ impl Editor {
     let nav = Navigation::of(ctx);
     let id = props.project.open.project.id();
     let back = ActionButton::new("pipeline-parent", ButtonKind::Ghost, ctx.t("pipelines.title"))
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipelines)));
+      .opens(nav.to(Route::Project(id, ProjectPage::Pipelines)));
     let status = save_status(ctx, &editing, busy);
     let publish = self.publish_button(ctx, &editing, busy);
     let mut head = parts::header()

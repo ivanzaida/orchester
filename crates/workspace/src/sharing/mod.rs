@@ -6,7 +6,8 @@
 //! A server is *in use* while an account is signed in to it from this computer, also after the
 //! server stopped accepting the token (signed out). Every request reports how the server answered, so
 //! a refused token shows as signed out at once and a server that stopped answering is retried with
-//! the backoff. Shared projects (S2b) are in [`project`].
+//! the backoff. Shared projects (S2b) are in [`project`]. Each server is the Orchester Cloud account's that joined it
+//! ([`owners`]).
 
 mod account;
 pub mod address;
@@ -18,8 +19,10 @@ mod error;
 mod joining;
 mod linked;
 mod monitor;
+mod owners;
 mod password;
 pub mod project;
+mod server_key;
 pub mod trust;
 
 use std::{
@@ -39,13 +42,14 @@ use orchester_store::{StoreError, StoredServer};
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
+use self::owners::Behalf;
 pub use self::{
   account::{PendingPasswordChange, SignedIn},
   address::{ProjectAddress, ProjectAddressError, RemoteMatch, remote_match},
   connect::{Reached, Reaching},
   connection::{Connection, Schedule},
   error::{SharingError, client_message},
-  joining::{CloudIdentity, CloudJoined, CodeRequest},
+  joining::{CloudIdentity, CloudJoined, CodeProof, CodeRequest},
   linked::{LinkedProject, ServerProject},
   monitor::run as monitor,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
@@ -163,6 +167,13 @@ impl Servers {
     self.inner.sharing_now.lock().contains(root)
   }
 
+  /// Runs `change` unless the project at `root` is being shared now (`None` then). No share starts while it runs, so a
+  /// share that starts later reads what it changed.
+  pub(crate) fn outside_share<T>(&self, root: &Path, change: impl FnOnce() -> T) -> Option<T> {
+    let sharing = self.inner.sharing_now.lock();
+    (!sharing.contains(root)).then(change)
+  }
+
   /// Reads the shared projects' caches again now (opening a project, *Try now*, *Check again*).
   pub fn sync_now(&self) {
     self.inner.sync.send_modify(|count| *count += 1);
@@ -190,9 +201,13 @@ impl Servers {
       .map_or(Connection::Checking, |watched| watched.connection)
   }
 
-  /// The servers with their connections, in the order they were added. Blocking.
+  /// The signed-in account's servers with their connections, in the order they were added ([`owners`]). Blocking.
   pub fn entries(&self) -> Result<Vec<ServerEntry>, SharingError> {
-    let stored = self.inner.workspace.servers()?;
+    self.listed(self.inner.workspace.servers()?)
+  }
+
+  /// `stored` with their connections.
+  fn listed(&self, stored: Vec<StoredServer>) -> Result<Vec<ServerEntry>, SharingError> {
     let watched = self.inner.watched.lock();
     stored
       .into_iter()
@@ -225,7 +240,7 @@ impl Servers {
     Client::new(address, plain_http)?.server_info().await
   }
 
-  /// Adds the checked server to the list; returns its id.
+  /// Adds the checked server to the signed-in account's list; returns its id.
   pub async fn add(
     &self,
     address: &ServerAddress,
@@ -244,7 +259,11 @@ impl Servers {
     };
     let workspace = self.inner.workspace.clone();
     let id = stored.id;
-    background::run(move || workspace.add_server(&stored)).await??;
+    background::run(move || -> Result<(), StoreError> {
+      let owner = workspace.signed_in_account()?;
+      workspace.add_server(&stored, owner.as_ref())
+    })
+    .await??;
     self.changed();
     Ok(id)
   }
@@ -278,13 +297,27 @@ impl Servers {
     Ok(())
   }
 
-  /// Runs `call` with `server`'s client and token and records how the server answered: a refused
-  /// token signs this computer out of it, a server that cannot be reached is retried.
+  /// Runs `call` with `server`'s client and token for the signed-in account, which `server` must be one of
+  /// ([`SharingError::ServerMissing`] otherwise), and records how the server answered: a refused token signs this
+  /// computer out of it, a server that cannot be reached is retried.
   async fn with_token<T, F, Fut>(&self, server: &ServerEntry, call: F) -> Result<T, SharingError>
   where
     F: FnOnce(Client, SecretValue) -> Fut,
     Fut: Future<Output = Result<T, ClientError>>,
   {
+    self.with_token_for(Behalf::Account, server, call).await
+  }
+
+  /// [`Self::with_token`] on `behalf` of the signed-in account, or of the background work, which may use any account's
+  /// server.
+  async fn with_token_for<T, F, Fut>(&self, behalf: Behalf, server: &ServerEntry, call: F) -> Result<T, SharingError>
+  where
+    F: FnOnce(Client, SecretValue) -> Fut,
+    Fut: Future<Output = Result<T, ClientError>>,
+  {
+    if behalf == Behalf::Account {
+      self.own(server.stored.id).await?;
+    }
     let (client, trust) = Self::client(server)?;
     let token = match self.token(server.stored.id).await {
       Ok(token) => token,

@@ -142,7 +142,7 @@ pub(super) fn footer(
       ctx.t_args(key, [("project", waiting.name.as_str())]),
     )
     .icon(Icon::LayoutDashboard)
-    .on_click(move || press())
+    .opens(press)
   });
   Row::new()
     .id("needs-you-footer")

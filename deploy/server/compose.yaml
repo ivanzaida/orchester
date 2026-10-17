@@ -1,44 +1,99 @@
-# The team server and its admin, on a host with no public domain: the server presents its own certificate
-# (tls = "self_signed") on port 8740, and forwards every path outside /api to the admin on the private network.
-# For a public domain with Caddy in front, use compose.caddy.yaml instead (docs/server-hosting.md, "Docker").
-#   ORCHESTER_ADMIN_SECRET=$(openssl rand -base64 32) docker compose up -d --build
-# The setup code is in the server's console output: docker compose logs server.
+# An Orchester team server with its admin, behind Caddy, for a host with a public DNS name (deploy/server/README.md).
+# The images come from Docker Hub; no repository checkout is needed. Put the values into `.env` beside this file
+# (from `.env.example`), then:
+#   docker compose up -d
+#   docker compose logs server     # the setup code, then open https://<ORCHESTER_HOST>/admin
+# Caddy obtains and renews the public certificate (ports 80 and 443 must be reachable) and sends every request to the
+# server, which serves plain HTTP on the private network and forwards every path outside /api to the admin. Only Caddy
+# is published. No network or air gap: compose.private.yaml. A host that runs Traefik: compose.traefik.yaml.
+#
+# The private network has a fixed subnet so the server can trust Caddy's forwarded client address by its IP:
+# `.2` Caddy, `.3` the server, `.4` the admin. If another network on the host already uses 172.29.0.0/24, set
+# ORCHESTER_SUBNET_PREFIX.
 services:
   server:
-    build:
-      context: ../..
-      dockerfile: deploy/server/Dockerfile
+    image: ivanzaida/orchester-server:${ORCHESTER_VERSION:-latest}
     restart: unless-stopped
     environment:
       ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
-      # Names and addresses people reach this host by, for the generated certificate (comma-separated).
-      ORCHESTER_SERVER_TLS_NAMES: ${ORCHESTER_SERVER_TLS_NAMES:-}
-      ORCHESTER_SERVER_ADMIN_URL: http://admin:3100
-      # The admin calls the API here, on the private network only; this port is never published. The server warns at
-      # start that it listens on every interface of its container: that is this network, as long as 8741 stays
-      # unpublished.
-      ORCHESTER_SERVER_ADMIN_API_LISTEN: 0.0.0.0:8741
-    ports:
-      - "8740:8080"
+      # Caddy holds the public certificate; the server speaks plain HTTP on this network only.
+      ORCHESTER_SERVER_TLS: "off"
+      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}
+      ORCHESTER_SERVER_TRUSTED_PROXIES: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.2
+      ORCHESTER_SERVER_ADMIN_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4:3100
+      # The admin calls the API on the server's own address on this network; the port is never published.
+      ORCHESTER_SERVER_ADMIN_API_LISTEN: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741
+      # Caddy's certificate, for the key proofs apps check before entering a code: `auto` reads it and its renewals at
+      # https://ORCHESTER_HOST; or set its SHA-256.
+      ORCHESTER_SERVER_PROXY_CERTIFICATE: ${ORCHESTER_SERVER_PROXY_CERTIFICATE:-auto}
+    # For `auto`: here ORCHESTER_HOST is Caddy, on this network.
+    extra_hosts:
+      - "${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}:${ORCHESTER_SUBNET_PREFIX:-172.29.0}.2"
     volumes:
       - server_data:/data
+    # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3/8741 && printf 'GET /api/v1/server HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ status _ <&3 && [ \"$$status\" = 200 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
-      - backend
+      backend:
+        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3
   admin:
-    build:
-      context: ../../web
-      dockerfile: Dockerfile.server
+    image: ivanzaida/orchester-server-admin:${ORCHESTER_VERSION:-latest}
     restart: unless-stopped
     environment:
-      ORCHESTER_ADMIN_SERVER_URL: http://server:8741
+      ORCHESTER_ADMIN_SERVER_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741
       # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).
       ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}
       # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.
-      # Empty on an air-gapped network: the admin then offers codes only.
+      # Set it empty to use codes only.
       ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
-      - backend
+      backend:
+        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # HTTP/3, which Caddy advertises on 443.
+      - "443:443/udp"
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      backend:
+        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.2
+    depends_on:
+      - server
+configs:
+  # Everything goes to the team server, which answers /api itself and forwards every other path to its admin. No
+  # access log is turned on.
+  caddyfile:
+    content: |
+      ${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name} {
+          reverse_proxy ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8080
+          header Strict-Transport-Security "max-age=31536000"
+      }
 networks:
   backend:
+    ipam:
+      config:
+        - subnet: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.0/24
 volumes:
   server_data:
+  caddy_data:
+  caddy_config:

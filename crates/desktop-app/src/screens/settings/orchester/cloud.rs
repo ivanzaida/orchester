@@ -1,33 +1,42 @@
 //! The Orchester Cloud account (`Account details` `S9wde` in `Cu20b`): the header with *Sign out*; the tabs *Account*,
 //! *Invites* and *Devices* (not built in this app yet, and says so); the account's facts, the waiting invites, what
-//! signing out does and the advanced cloud address. Signed out, the panel is the sign-in form ([`super::sign_in`]).
+//! signing out does and the advanced cloud address. The header says whether two-factor authentication is on
+//! ([`super::two_factor`]), and the body starts with few recovery codes left, after a sign-in with one. *Sign out* asks
+//! in place under *Signing out* (`In-place confirmation` `FeM5F` in `p2VeL`); *Sign out and lock* is a person's, and
+//! the sign-in gate takes the window after it. Signed out, the app shows only the gate (`crate::screens::gate`), so
+//! this panel always has an account.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, Interval},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::Column,
+  components::{Column, Row, Text},
   core::Signal,
-  node::{Element, dimension::Dimension},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_api::cloud::TwoFactorStatus;
 use orchester_store::StoredCloudAccount;
 use orchester_workspace::sharing::cloud::CloudAddress;
 
 use super::{
-  Invites, Said, advanced, invites,
+  Invites, Said,
+  advanced::{self, Place},
+  invites,
   parts::{Fact, body, frame, header, paragraph, section, section_title, tabs},
-  sign_in,
   words::{Look, cloud_error, counted, day_and_time},
 };
 use crate::{
   navigation::Navigation,
   routes::{OrchesterPanel, OrchesterView, Route},
   services::Services,
+  theme::{ExtraRadius, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
     inspector::{self, PropertyValue},
+    state::loading,
     tabs::PageTab,
   },
 };
@@ -39,16 +48,19 @@ pub(super) struct Props {
   pub invites: Invites,
   /// The invites accepted here whose join did not finish.
   pub accepted: super::Kept,
+  /// The account's two-factor authentication, once the cloud said.
+  pub two_factor: Option<TwoFactorStatus>,
   pub panel: OrchesterPanel,
 }
 
 impl DevtoolsInspectable for Props {}
 
 pub(super) struct CloudPanel {
-  form: sign_in::Form,
   advanced: advanced::Advanced,
   invites: invites::Answers,
   sign_out: FutureAction<(), (), Said>,
+  /// *Sign out* asks before it signs out and locks.
+  asking: Signal<bool>,
   /// Signing this computer out of the cloud is a person's (review 1, M1).
   person: super::PersonOnly,
   /// Counts the checks of joins that wait for approval ([`super::accepted::check`]).
@@ -57,6 +69,7 @@ pub(super) struct CloudPanel {
 }
 
 const SIGN_OUT: &str = "orchester-cloud-sign-out";
+const SIGN_OUT_CONFIRM: &str = "orchester-cloud-sign-out-confirm";
 
 impl Component for CloudPanel {
   type Props = Props;
@@ -67,13 +80,13 @@ impl Component for CloudPanel {
     let next = tick.clone();
     let checks = ctx.create_interval(super::accepted::CHECK_EVERY, move || next.update(|tick| *tick += 1));
     Self {
-      form: sign_in::Form::new(ctx),
       advanced: advanced::Advanced::new(ctx),
       invites: invites::Answers::new(ctx),
       sign_out: ctx.future_action(move |(): ()| {
         let cloud = cloud.clone();
         async move { cloud.sign_out().await.map_err(|error| cloud_error(&error)) }
       }),
+      asking: ctx.signal(false),
       person: super::PersonOnly::new(ctx),
       tick,
       checks,
@@ -87,8 +100,9 @@ impl Component for CloudPanel {
       let cloud = Services::of(ctx).cloud;
       super::accepted::check(ctx, self.tick.get(), (&cloud, &self.invites));
     }
+    // Only while the window turns to the sign-in gate after a sign-out.
     let Some(account) = &props.account else {
-      return sign_in::panel(ctx, &props.address, &self.form, &self.advanced);
+      return Element::from(loading("orchester-cloud-reading", &ctx.t("cloud.reading")));
     };
     let look = Look {
       icon: Icon::CircleCheck,
@@ -102,29 +116,27 @@ impl Component for CloudPanel {
       Fact::Mono(account.email.clone()),
     ];
     let sign_out = {
-      let (action, person) = (self.sign_out.clone(), self.person.clone());
-      let button =
-        ActionButton::new(SIGN_OUT, ButtonKind::Secondary, ctx.t("cloud.account.signOut")).icon(Icon::LogOut);
-      if self.sign_out.state().get().is_pending() {
-        button.loading()
-      } else {
-        button.on_click(move || {
-          if person.allows(SIGN_OUT) {
-            action.run(());
-          }
-        })
-      }
+      let asking = self.asking.clone();
+      ActionButton::new(SIGN_OUT, ButtonKind::Secondary, ctx.t("cloud.account.signOut"))
+        .icon(Icon::LogOut)
+        .held(self.asking.get())
+        .on_click(move || asking.set(true))
     };
+    let after = super::two_factor::header(ctx, props.two_factor.as_ref(), &self.invites);
     let head = header(
       ctx,
       "orchester-cloud-header",
       (Icon::User, &account.display_name, &look),
-      &facts,
+      (after, &facts),
     )
     .child(sign_out);
-    let mut parts: Vec<Element> = self.person.reason(ctx, SIGN_OUT).into_iter().collect();
+    let mut parts: Vec<Element> = Vec::new();
     parts.extend(match props.panel {
-      OrchesterPanel::Invites => vec![invites::waiting(ctx, (&props.invites, &props.accepted), &self.invites)],
+      OrchesterPanel::Invites => vec![invites::waiting(
+        ctx,
+        (&props.invites, &props.accepted, props.two_factor.as_ref()),
+        &self.invites,
+      )],
       _ => self.account_parts(ctx, account, &props),
     });
     frame("orchester-cloud-details")
@@ -143,47 +155,7 @@ impl CloudPanel {
       .get()
       .error
       .map(|reason| crate::ui::field::field_error("orchester-cloud-sign-out-error", &reason.text(ctx)).into());
-    let this_device = ctx.t_args(
-      "cloud.account.deviceValue",
-      [("device", orchester_workspace::sharing::device::this_computer())],
-    );
-    let display_name = ctx.t_args("cloud.account.nameValue", [("name", account.display_name.as_str())]);
-    let facts = Column::new()
-      .id("orchester-cloud-facts")
-      .width(Dimension::Pct(100.0))
-      .child(inspector::property(
-        "orchester-cloud-email",
-        &ctx.t("cloud.account.signedInAs"),
-        &account.email,
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-name",
-        &ctx.t("cloud.account.displayName"),
-        &display_name,
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-device",
-        &ctx.t("cloud.account.thisDevice"),
-        &this_device,
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-signed-in",
-        &ctx.t("cloud.account.signedInAt"),
-        &ctx.t_args(
-          "cloud.account.signedInValue",
-          [("when", day_and_time(ctx, account.signed_in_at))],
-        ),
-        PropertyValue::Plain,
-      ))
-      .child(inspector::property(
-        "orchester-cloud-address",
-        &ctx.t("cloud.account.address"),
-        &account.cloud_address,
-        PropertyValue::Mono,
-      ));
+    let facts = facts(ctx, account);
     let signing_out = section(
       "orchester-cloud-signing-out",
       section_title(
@@ -191,22 +163,143 @@ impl CloudPanel {
         &ctx.t("cloud.account.signingOut"),
         None,
       ),
-      vec![
+      vec![if self.asking.get() {
+        self.sign_out_question(ctx)
+      } else {
         paragraph(
           "orchester-cloud-signing-out-text",
           &ctx.t("cloud.account.signingOutText"),
         )
-        .into(),
-      ],
+        .into()
+      }],
     );
     let mut parts: Vec<Element> = failed.into_iter().collect();
+    parts.extend(super::two_factor::recovery_warning(
+      ctx,
+      "orchester-cloud-recovery",
+      (props.two_factor.as_ref(), &self.invites),
+    ));
+    parts.extend(self.invites.person.reason(ctx, super::two_factor::TURN_ON_HEADER));
     parts.push(facts.into());
-    parts.push(invites::waiting(ctx, (&props.invites, &props.accepted), &self.invites));
+    parts.push(invites::waiting(
+      ctx,
+      (&props.invites, &props.accepted, props.two_factor.as_ref()),
+      &self.invites,
+    ));
     parts.push(signing_out.into());
-    parts.push(advanced::section(ctx, &props.address, &self.advanced));
+    parts.push(advanced::section(ctx, &props.address, &self.advanced, Place::Settings));
     parts.push(inspector::note("orchester-cloud-token-note", Icon::KeyRound, &ctx.t(token_note())).into());
     parts
   }
+
+  /// *Sign out of Orchester Cloud on this computer?* in place, with what locking means for the window, its MCP tools
+  /// and the work here.
+  fn sign_out_question(&self, ctx: &mut Ctx) -> Element {
+    let (action, person) = (self.sign_out.clone(), self.person.clone());
+    let confirm = ActionButton::new(
+      SIGN_OUT_CONFIRM,
+      ButtonKind::Danger,
+      ctx.t("cloud.account.signOutConfirm.confirm"),
+    )
+    .icon(Icon::LogOut);
+    let confirm = if self.sign_out.state().get().is_pending() {
+      confirm.loading()
+    } else {
+      confirm.on_click(move || {
+        if person.allows(SIGN_OUT_CONFIRM) {
+          action.run(());
+        }
+      })
+    };
+    let stay = {
+      let asking = self.asking.clone();
+      ActionButton::new(
+        "orchester-cloud-sign-out-stay",
+        ButtonKind::Secondary,
+        ctx.t("cloud.account.signOutConfirm.stay"),
+      )
+      .on_click(move || asking.set(false))
+    };
+    Column::new()
+      .id("orchester-cloud-sign-out-question")
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(
+        crate::theme::ExtraSpacing::Inset.role(),
+        SpacingSize::Md,
+      ))
+      .spacing(SpacingSize::Sm)
+      .background(PaletteColor::SurfaceRaised)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .rounded(ExtraRadius::Tile.role())
+      .child(
+        Text::new(&ctx.t("cloud.account.signOutConfirm.question"))
+          .variant(ExtraTypography::FormSection.role())
+          .width(Dimension::Pct(100.0)),
+      )
+      .child(paragraph(
+        "orchester-cloud-sign-out-locks",
+        &ctx.t("cloud.account.signOutConfirm.locks"),
+      ))
+      .child(paragraph(
+        "orchester-cloud-sign-out-local",
+        &ctx.t("cloud.account.signOutConfirm.local"),
+      ))
+      .child(
+        Row::new()
+          .padding(Padding::new().top(SpacingSize::Xs))
+          .spacing(SpacingSize::Sm)
+          .child(confirm)
+          .child(stay),
+      )
+      .with_children(self.person.reason(ctx, SIGN_OUT_CONFIRM))
+      .into()
+  }
+}
+
+/// The account's facts (`Account details` `S9wde`): who is signed in, as what name, from which device, since when and
+/// at which cloud.
+fn facts(ctx: &Ctx, account: &StoredCloudAccount) -> Column {
+  let this_device = ctx.t_args(
+    "cloud.account.deviceValue",
+    [("device", orchester_workspace::sharing::device::this_computer())],
+  );
+  let display_name = ctx.t_args("cloud.account.nameValue", [("name", account.display_name.as_str())]);
+  Column::new()
+    .id("orchester-cloud-facts")
+    .width(Dimension::Pct(100.0))
+    .child(inspector::property(
+      "orchester-cloud-email",
+      &ctx.t("cloud.account.signedInAs"),
+      &account.email,
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-name",
+      &ctx.t("cloud.account.displayName"),
+      &display_name,
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-device",
+      &ctx.t("cloud.account.thisDevice"),
+      &this_device,
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-signed-in",
+      &ctx.t("cloud.account.signedInAt"),
+      &ctx.t_args(
+        "cloud.account.signedInValue",
+        [("when", day_and_time(ctx, account.signed_in_at))],
+      ),
+      PropertyValue::Plain,
+    ))
+    .child(inspector::property(
+      "orchester-cloud-address",
+      &ctx.t("cloud.account.address"),
+      &account.cloud_address,
+      PropertyValue::Mono,
+    ))
 }
 
 fn detail_tabs(ctx: &mut Ctx, props: &Props) -> Element {

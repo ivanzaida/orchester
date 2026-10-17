@@ -245,14 +245,13 @@ fn footer(
   };
   let answers: Vec<Element> = match &place.conversation {
     Some(conversation) if place.in_panel => {
-      let conversation = conversation.clone();
       let open = ActionButton::new(
         format!("{id}-conversation"),
         ButtonKind::Ghost,
         ctx.t("cards.choice.openConversation"),
       )
       .icon(Icon::ArrowUpRight)
-      .on_click(move || conversation());
+      .opens(conversation.clone());
       vec![
         Row::new()
           .id(format!("{id}-answers"))

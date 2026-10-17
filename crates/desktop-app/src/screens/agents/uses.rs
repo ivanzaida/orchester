@@ -170,7 +170,7 @@ fn open_pipeline(ctx: &mut Ctx, props: &Props, index: usize, step: &PipelineUse,
       props.project.open.project.id(),
       ProjectPage::Pipeline(step.pipeline, PipelinePanel::default()),
     );
-    button.on_click(move || navigation.go(route.clone()))
+    button.opens(navigation.to(route))
   };
   button.render(ctx)
 }

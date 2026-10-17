@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::{
   Cloud,
-  accounts::Authenticated,
+  accounts::{Authenticated, two_factor_session},
   clock::DAY_MS,
   db::{audit, millis, time},
   error::CloudError,
@@ -156,11 +156,11 @@ impl Cloud {
   }
 
   /// `GET /invites`: the open invites to the account's email from linked servers, soonest to expire first; answered
-  /// ones are not listed.
+  /// ones are not listed. Each says whether the asking device needs two-factor authentication to accept it.
   pub(crate) async fn invites(&self, auth: Authenticated) -> Result<Vec<CloudInvite>, CloudError> {
-    let rows = self
-      .client()
-      .await?
+    let client = self.client().await?;
+    let needs_two_factor = !two_factor_session(&client, auth.device).await?;
+    let rows = client
       .query(
         "SELECT i.id, i.kind, i.role, s.id, s.name, s.address, i.project_address, i.project_name,
            i.inviter_display_name, i.expires_at
@@ -170,7 +170,7 @@ impl Cloud {
         &[&auth.account.as_uuid(), &time(self.now())],
       )
       .await?;
-    rows.iter().map(invite_row).collect()
+    rows.iter().map(|row| invite_row(row, needs_two_factor)).collect()
   }
 }
 
@@ -253,7 +253,7 @@ async fn store(client: &impl GenericClient, invite: &SignedInvite, email: &str, 
   Ok(stored == 1)
 }
 
-fn invite_row(row: &Row) -> Result<CloudInvite, CloudError> {
+fn invite_row(row: &Row, needs_two_factor: bool) -> Result<CloudInvite, CloudError> {
   let project = match (
     row.try_get::<_, Option<String>>(6)?,
     row.try_get::<_, Option<String>>(7)?,
@@ -273,6 +273,7 @@ fn invite_row(row: &Row) -> Result<CloudInvite, CloudError> {
     project,
     inviter_display_name: row.try_get(8)?,
     expires_at: millis(row.try_get(9)?)?,
+    needs_two_factor,
   })
 }
 

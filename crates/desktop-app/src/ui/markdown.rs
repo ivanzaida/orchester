@@ -14,6 +14,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::MouseEvent,
     theme::{FormTextRole, PaletteColor, TypographyStyle},
   },
   components::{Markdown, MarkdownLink, MarkdownProps},
@@ -25,8 +26,9 @@ use crate::{
   ui::chat::presentation::{LinkWords, presentation},
 };
 
-/// What a press on a link does with its destination.
-pub type LinkHandler = Arc<dyn Fn(&str) + Send + Sync>;
+/// What a press on a link does with its destination: the event that activated it, a left or middle click or Enter
+/// on the focused link (`MarkdownProps::on_link_activate`), says with which button and keys.
+pub type LinkHandler = Arc<dyn Fn(&str, &MouseEvent) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct MarkdownView {
@@ -99,7 +101,7 @@ impl Component for MarkdownHost {
     let props = MarkdownProps::styled(view.text, style)
       .width(Dimension::Pct(100.0))
       .selectable(true)
-      .on_link_click(move |link: &MarkdownLink| on_link(link.destination()))
+      .on_link_activate(move |link: &MarkdownLink, event: &MouseEvent| on_link(link.destination(), event))
       .link_presentation(move |link: &MarkdownLink| {
         let words = LinkWords {
           i18n: &i18n,

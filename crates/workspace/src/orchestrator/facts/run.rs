@@ -50,7 +50,7 @@ pub(super) fn read(
     pipeline,
     task,
     stands,
-    branch: run.branch().as_str().to_owned(),
+    branch: run.own_branch().map(|branch| branch.as_str().to_owned()),
     into: run.base_branch().map(|branch| branch.as_str().to_owned()),
     changes,
   }))

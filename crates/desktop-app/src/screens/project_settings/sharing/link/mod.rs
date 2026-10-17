@@ -1,11 +1,13 @@
 //! A local project's Sharing (`bWD9q`, the linking states of `N9NFio`): *Task list · Local only*; *Link to a server
 //! project* with the connected server, the person's projects there or a project address (prefilled from
 //! `orchester.toml` only when the person takes it), the repository compared with the project's hint ([`rows`]), and
-//! *Link to Kontur…*, which asks in place: first about a mismatch (*Choose another project* or *Link anyway…*), then
-//! what goes up ([`confirm`]). A project with tasks of its own is joined through its review, which this version does
-//! not have yet, and says so. What linking sends closes the page ([`parts`]).
+//! *Link to Kontur…*, which asks in place about a mismatch (*Choose another project* or *Link anyway…*) and then
+//! opens what goes up on a page of its own (`KSnOW`, `super::upload`) ([`confirm`]). A checkout with tasks linked to a
+//! project with tasks is joined through its review, which this version does not have yet, and says so. What linking
+//! sends closes the page ([`parts`]). After *Make local* the page says what it did until the person dismisses it.
 
 mod confirm;
+mod discovery;
 mod parts;
 mod rows;
 
@@ -26,12 +28,17 @@ use orchester_core::{
 use orchester_workspace::sharing::{
   ProjectAddress, RemoteMatch, ServerEntry, ServerProject, Servers, SharingError,
   project::{
-    LinkFirst, ShareError,
+    first_link::{LinkKind, LinkPlan},
     link::{LinkProblem, LinkTarget},
   },
 };
 
-use super::Facts;
+pub(super) use self::parts::sends;
+use super::{
+  Facts,
+  make_local::Made,
+  upload::{LinkPage, Upload},
+};
 use crate::{
   project::ShownProject,
   screens::settings::orchester::{PersonOnly, Said, sharing_said},
@@ -43,7 +50,9 @@ use crate::{
 pub(super) struct Props {
   pub project: ShownProject,
   pub facts: Facts,
-  pub revision: Signal<u64>,
+  /// The first link's page, opened once the project is resolved.
+  pub page: Signal<LinkPage>,
+  pub made_local: Signal<Made>,
 }
 
 impl PartialEq for Props {
@@ -73,7 +82,7 @@ enum Problem {
   NotConnected(String),
   /// No project there the person is a member of; the server answers both alike.
   NoProject(String),
-  /// The project has tasks already: joining it is its review, not built in this version.
+  /// The checkout and the project both have tasks: joining it is its review, not built in this version.
   Taken(String),
   Other(Said),
 }
@@ -86,19 +95,38 @@ enum Asking {
   Nothing,
   /// The checkout's `origin` is not the project's hint: *Choose another project* or *Link anyway…*.
   Mismatch,
-  /// What goes up, with *Link and upload*.
-  Upload,
 }
 
 impl DevtoolsInspectable for Asking {}
 
-/// A target the page resolved, ready to link.
+/// A target the page resolved, with what linking it would do.
 #[derive(Clone, Debug)]
-struct Target(LinkTarget);
+struct Target(LinkTarget, LinkPlan);
 
 impl PartialEq for Target {
   fn eq(&self, other: &Self) -> bool {
-    self.0.entry == other.0.entry && self.0.project.id == other.0.project.id && self.0.remote == other.0.remote
+    self.0.entry == other.0.entry
+      && self.0.project.id == other.0.project.id
+      && self.0.remote == other.0.remote
+      && self.1.kind == other.1.kind
+      && self.1.discovery == other.1.discovery
+  }
+}
+
+impl Target {
+  /// The first link's page for this target, with a new upload key.
+  fn upload(&self) -> LinkPage {
+    let remote = match &self.0.remote {
+      RemoteMatch::Same => self.0.project.remote_hint.clone(),
+      RemoteMatch::Different { checkout, .. } => Some(checkout.clone()),
+      RemoteMatch::NoHint | RemoteMatch::NoOrigin => None,
+    };
+    LinkPage(Some(std::sync::Arc::new(Upload {
+      entry: self.0.entry.clone(),
+      plan: self.1.clone(),
+      remote,
+      key: IdempotencyKey::generate(),
+    })))
   }
 }
 
@@ -121,12 +149,6 @@ impl PartialEq for Listed {
 
 impl DevtoolsInspectable for Listed {}
 
-/// The upload's idempotency key, made when the confirmation opens: a retried link links once.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct UploadKey(IdempotencyKey);
-
-impl DevtoolsInspectable for UploadKey {}
-
 /// What the page sends to resolve a target: a project of the list, or an address.
 #[derive(Clone)]
 enum Choice {
@@ -141,10 +163,8 @@ pub(super) struct Link {
   /// The person took the address `orchester.toml` names, or set it aside (*Not now*).
   discovery_answered: Signal<bool>,
   asking: Signal<Asking>,
-  key: Signal<UploadKey>,
   resolve: FutureAction<Choice, Target, Problem>,
-  link: FutureAction<(Target, UploadKey), (), Problem>,
-  /// Linking (which contacts the server) and the upload are a person's (review 1, M1).
+  /// Linking contacts the server: it is a person's (review 1, M1).
   person: PersonOnly,
 }
 
@@ -154,30 +174,25 @@ impl Component for Link {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let services = Services::of(ctx);
-    let (servers, origin) = (services.servers.clone(), props.facts.origin.clone());
+    let (servers, origin, root) = (
+      services.servers,
+      props.facts.origin.clone(),
+      props.project.open.repo_root.clone(),
+    );
     let resolve = ctx.future_action(move |choice: Choice| {
-      let (servers, origin) = (servers.clone(), origin.clone());
-      async move { resolve(&servers, choice, origin.as_ref()).await }
-    });
-    let (servers, root) = (services.servers, props.project.open.repo_root.clone());
-    let link = ctx.future_action(move |(target, key): (Target, UploadKey)| {
-      let (servers, root) = (servers.clone(), root.clone());
-      async move { link(&servers, &root, target, key).await }
+      let (servers, origin, root) = (servers.clone(), origin.clone(), root.clone());
+      async move { resolve(&servers, &root, choice, origin.as_ref()).await }
     });
     let first = props.facts.servers.first().map(|entry| entry.stored.id);
-    let (asking, key) = (
-      ctx.signal(Asking::Nothing),
-      ctx.signal(UploadKey(IdempotencyKey::generate())),
-    );
-    let (next, fresh) = (asking.clone(), key.clone());
+    let asking = ctx.signal(Asking::Nothing);
+    let (next, page) = (asking.clone(), props.page);
     ctx.watch(&resolve.state(), move |state| {
       if let Some(target) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-        fresh.set(UploadKey(IdempotencyKey::generate()));
-        next.set(if target.0.remote.warns() {
-          Asking::Mismatch
+        if target.0.remote.warns() {
+          next.set(Asking::Mismatch);
         } else {
-          Asking::Upload
-        });
+          page.set(target.upload());
+        }
       }
     });
     Self {
@@ -186,21 +201,23 @@ impl Component for Link {
       address: ctx.signal(String::new()),
       discovery_answered: ctx.signal(false),
       asking,
-      key,
       resolve,
-      link,
       person: PersonOnly::new(ctx),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    self.follow_link(&props);
     let listed = self.listed(ctx, &props);
     Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Roomy.role())
+      .with_children(super::make_local::made(
+        ctx,
+        &props.made_local,
+        props.project.open.project.name().as_str(),
+      ))
       .child(parts::task_list(ctx, &props))
       .child(self.link_section(ctx, &props, listed.as_ref()))
       .child(parts::admin_note(ctx, self.chosen_entry(&props)))
@@ -209,15 +226,6 @@ impl Component for Link {
 }
 
 impl Link {
-  /// Once the link went through, the tab reads the project again and shows it linked.
-  fn follow_link(&self, props: &Props) {
-    let state = self.link.state().get();
-    if state.is_fulfilled() && self.asking.get() != Asking::Nothing {
-      self.asking.set(Asking::Nothing);
-      props.revision.update(|count| *count += 1);
-    }
-  }
-
   fn chosen_entry<'a>(&self, props: &'a Props) -> Option<&'a ServerEntry> {
     let chosen = self.server.get().0?;
     props.facts.servers.iter().find(|entry| entry.stored.id == chosen)
@@ -248,43 +256,37 @@ impl Link {
   }
 }
 
-/// The target `choice` names, with the checkout's `origin` compared.
-async fn resolve(servers: &Servers, choice: Choice, origin: Option<&RepositoryIdentity>) -> Result<Target, Problem> {
-  match choice {
+/// The target `choice` names, with the checkout's `origin` compared and what linking it would do. A checkout with
+/// tasks of its own linked to a project with tasks is a join, reviewed first: not in this version.
+async fn resolve(
+  servers: &Servers,
+  root: &std::path::Path,
+  choice: Choice,
+  origin: Option<&RepositoryIdentity>,
+) -> Result<Target, Problem> {
+  let target = match choice {
     Choice::Listed(listed) => {
       let (entry, project) = *listed;
-      Ok(Target(Servers::target(entry, project, origin)))
+      Servers::target(entry, project, origin)
     }
     Choice::Address(text) => {
       let address =
         ProjectAddress::parse(&text).map_err(|_| Problem::Other(Said::new("sharing.link.addressInvalid")))?;
       match servers.link_target(&address, origin).await {
-        Ok(target) => Ok(Target(target)),
-        Err(LinkProblem::NotConnected(server)) => Err(Problem::NotConnected(server.authority())),
-        Err(LinkProblem::Sharing(error)) => Err(sharing_problem(&error, &address.to_text())),
+        Ok(target) => target,
+        Err(LinkProblem::NotConnected(server)) => return Err(Problem::NotConnected(server.authority())),
+        Err(LinkProblem::Sharing(error)) => return Err(sharing_problem(&error, &address.to_text())),
       }
     }
-  }
-}
-
-/// Links the project at `root` to `target` as its first checkout: every task goes up with its number.
-async fn link(servers: &Servers, root: &std::path::Path, target: Target, key: UploadKey) -> Result<(), Problem> {
-  let request = LinkFirst {
-    slug: target.0.project.slug.clone(),
-    remote: match &target.0.remote {
-      RemoteMatch::Same => target.0.project.remote_hint.clone(),
-      RemoteMatch::Different { checkout, .. } => Some(checkout.clone()),
-      RemoteMatch::NoHint | RemoteMatch::NoOrigin => None,
-    },
-    key: key.0,
-    // The discovery file is N2's: linking writes nothing into the checkout.
-    write_discovery: false,
   };
-  match servers.link_first(&target.0.entry, root, request).await {
-    Ok(_) => Ok(()),
-    Err(ShareError::Taken { .. }) => Err(Problem::Taken(target.0.project.name.clone())),
-    Err(ShareError::Sharing(error)) => Err(sharing_problem(&error, &target.0.project.address)),
+  let plan = servers
+    .link_plan(&target.entry, root, target.project.clone())
+    .await
+    .map_err(|error| sharing_problem(&error, &target.project.address))?;
+  if let LinkKind::Review { .. } = plan.kind {
+    return Err(Problem::Taken(target.project.name.clone()));
   }
+  Ok(Target(target, plan))
 }
 
 fn sharing_problem(error: &SharingError, address: &str) -> Problem {

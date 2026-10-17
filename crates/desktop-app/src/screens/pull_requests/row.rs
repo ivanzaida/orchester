@@ -30,7 +30,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
-    pressable::pressable,
+    pressable::opening,
     table::{ColumnWidth, TableRow},
     tooltip::Truncated,
   },
@@ -93,7 +93,7 @@ impl Component for PullRequestRow {
       .cell(STATE, state_cell(ctx, pull_request))
       .cell(CHECKS, checks_cell(ctx, pull_request))
       .cell(OPEN, github)
-      .on_open(move || navigation.go(opened.clone()))
+      .opens(navigation.to(opened))
   }
 }
 
@@ -154,7 +154,7 @@ fn meta(ctx: &mut Ctx, props: &RowProps) -> Row {
         props.project,
         ProjectPage::Task(task.key.clone(), TaskView::of(TaskTab::Summary)),
       );
-      pressable(move || navigation.go(to.clone()))
+      opening(navigation.to(to))
         .id(format!("pull-request-task-{number}"))
         .spacing(SpacingSize::Xs)
         .describe("a11y_name", task.key.to_string())

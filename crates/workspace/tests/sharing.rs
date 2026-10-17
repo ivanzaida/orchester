@@ -125,6 +125,20 @@ impl Desktop {
     }
   }
 
+  /// Records `account` as this computer's Orchester Cloud account, as signing in does.
+  fn sign_in_as(&self, account: &str) {
+    let mut db = AppDb::open(&self._dir.path().join("orchester.db")).expect("database");
+    db.set_cloud_account(Some(&orchester_store::StoredCloudAccount {
+      account: account.parse().expect("an account id"),
+      email: "bohdan@example.com".into(),
+      display_name: "Bohdan Koval".into(),
+      device_name: "Laptop".into(),
+      signed_in_at: orchester_core::time::Timestamp::from_unix_millis(1),
+      cloud_address: "https://cloud.test".into(),
+    }))
+    .expect("signed in");
+  }
+
   /// The same database and keychain after the application started again.
   fn restarted(&self) -> Servers {
     let workspace = Workspace::new(AppDb::open(&self._dir.path().join("orchester.db")).expect("database"));
@@ -150,19 +164,29 @@ fn joined(desktop: &Desktop, server: &TestServer, (username, code): (&str, &Cred
 fn joined_at(desktop: &Desktop, server: &TestServer, url: &str, (username, code): (&str, &Credential)) {
   let address = ServerAddress::parse(url).expect("address");
   server
-    .block_on(
-      desktop
-        .servers
-        .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request(username, code)),
-    )
+    .block_on(desktop.servers.join_with_code(
+      &address,
+      Trust::System(PlainHttp::NotAllowed),
+      proved(server, username, code),
+    ))
     .expect("join with a code");
 }
 
+/// A code as typed, with no cloud identity: a setup code needs none.
 fn request(username: &str, code: &Credential) -> CodeRequest {
   CodeRequest {
     code: Credential::new(code.expose().into()),
     username: Some(username.into()),
     display_name: Some(username.into()),
+    proof: None,
+  }
+}
+
+/// A code with this computer's two-factor cloud identity for `server`, which every code but the setup code needs.
+fn proved(server: &TestServer, username: &str, code: &Credential) -> CodeRequest {
+  CodeRequest {
+    proof: Some(server.code_proof(username)),
+    ..request(username, code)
   }
 }
 
@@ -273,6 +297,7 @@ fn sharing_a_pairing_code_joins_the_same_person_on_another_computer() {
     code: pairing.code,
     username: None,
     display_name: None,
+    proof: Some(server.code_proof("alice")),
   };
   server
     .block_on(
@@ -345,11 +370,14 @@ fn sharing_a_cloud_identity_joins_through_an_email_invite_with_the_key_set_the_a
   let audience = server.link_cloud(&fake.root_key, &fake.key_set);
   fake.serve_for(audience.clone());
   let desktop = Desktop::new();
+  let bohdan = bohdan_identity(String::new()).account;
+  desktop.sign_in_as(&bohdan);
   let client = CloudClient::new(ServerAddress::parse(&fake.url()).expect("cloud")).expect("cloud client");
   let device = SecretValue::new("cloud device token".into()).expect("token");
   let identity = CloudIdentity {
     cloud: &client,
     device: &device,
+    account: bohdan.parse().expect("an account id"),
     invite: None,
   };
   // The cloud's record of a server with a CA's certificate, or here plain HTTP on loopback: no fingerprint.

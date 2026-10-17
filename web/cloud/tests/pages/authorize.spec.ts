@@ -61,6 +61,20 @@ test("a sign-in to a server's admin goes through sign-in, then posts the token t
   expect(posted[0]?.body).toEqual({ state: STATE, identity_token: "fake-admin-token", key_set: "fake-key-set" });
 });
 
+test("an account with two-factor authentication gives its code, then confirms the admin sign-in", async ({ page }) => {
+  await start(page, { purpose: "admin", server: SERVER_ID, state: STATE, return: CALLBACK });
+  await expect(page).toHaveURL(/\/signin\?next=/);
+  await page.getByLabel("Email").fill("two.factor@example.com");
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/signin\/code$/);
+  await page.getByLabel("Code").fill("123456");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to Kontur team's admin as two.factor@example.com?" })).toBeVisible();
+  const csp = (await page.request.get(page.url())).headers()["content-security-policy"];
+  expect(csp).toContain(`form-action 'self' ${API}`);
+});
+
 test("linking shows the check code, posts the keys back, and the statement is in no address", async ({ page }) => {
   const addresses: string[] = [];
   page.on("request", (request) => addresses.push(request.url()));

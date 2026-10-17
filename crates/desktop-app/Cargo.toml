@@ -69,6 +69,9 @@ lurq = { workspace = true, features = [
   "canvas",
 ] }
 parking_lot.workspace = true
+# Where an agent's chat message has text outside code and links, by offset, for the places it names
+# (`ui::chat::references`); already built through lurq's `markdown`.
+pulldown-cmark.workspace = true
 # The system's folder picker for the project switcher's Open folder…; lurq already builds it for DevTools.
 rfd.workspace = true
 # Arguments and results of the app's MCP tools.
@@ -120,6 +123,9 @@ rmcp = { workspace = true, features = ["client"] }
 # The QA seed (`examples/seed`) damages a run's record and sets a project database's schema version the way an
 # edit outside Orchester or a newer build would; the store has no API for either.
 rusqlite.workspace = true
+# The shared test server marks its first admin's device as a two-factor sign-in by its token's SHA-256, as the server
+# keeps it (`workspace/tests/server_support/joins.rs`).
+sha2.workspace = true
 # Tries to share the MCP server's port the way another program would (`tests/mcp_stable`).
 socket2.workspace = true
 tempfile.workspace = true

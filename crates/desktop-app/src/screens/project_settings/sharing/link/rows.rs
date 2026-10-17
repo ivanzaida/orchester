@@ -11,7 +11,9 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::SharedProject;
-use orchester_workspace::sharing::{RemoteMatch, ServerProject, project::discovery::ProjectDiscovery, remote_match};
+use orchester_workspace::sharing::{
+  Connection, RemoteMatch, ServerEntry, ServerProject, project::discovery::ProjectDiscovery, remote_match,
+};
 
 use super::{Chosen, Link, Listed, Picked, Props};
 use crate::{
@@ -19,7 +21,7 @@ use crate::{
   routes::{OrchesterView, Route},
   screens::{
     project_settings::page::{self, CONTROL_WIDTH},
-    settings::orchester::{Said, shown_address},
+    settings::orchester::{Said, moment, shown_address},
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
@@ -50,11 +52,23 @@ impl Link {
     .into()
   }
 
-  /// *orchester.toml names a project* with *Use this address* and *Not now*; nothing is contacted before.
-  fn discovery_offer(&self, ctx: &Ctx, props: &Props) -> Option<Element> {
+  /// *orchester.toml names a project* on a connected server, with *Use this address* and *Not now*; nothing is
+  /// contacted before. A file that names a server this computer isn't connected to asks step by step instead.
+  fn discovery_offer(&self, ctx: &mut Ctx, props: &Props) -> Option<Element> {
+    if let Some(offer) = self.unconnected_offer(ctx, props) {
+      return Some(offer);
+    }
     let ProjectDiscovery::Project(address) = &props.facts.discovery else {
       return None;
     };
+    if !props
+      .facts
+      .servers
+      .iter()
+      .any(|entry| entry.address == *address.server())
+    {
+      return None;
+    }
     if self.discovery_answered.get() {
       return None;
     }
@@ -62,7 +76,7 @@ impl Link {
     let (field_value, answered) = (self.address.clone(), self.discovery_answered.clone());
     let use_it = ActionButton::new(
       "sharing-discovery-use",
-      ButtonKind::Secondary,
+      ButtonKind::Primary,
       ctx.t("sharing.link.discovery.use"),
     )
     .on_click(move || {
@@ -76,17 +90,28 @@ impl Link {
       ctx.t("sharing.link.discovery.notNow"),
     )
     .on_click(move || answered.set(true));
+    // The answers stand under the notice, *Use this address* first (`Discovery file · offered` in `N9NFio`).
     Some(
-      Callout::new(
-        "sharing-discovery",
-        CalloutTone::Info,
-        ctx.t("sharing.link.discovery.title"),
-      )
-      .icon(Icon::FileText)
-      .body(ctx.t_args("sharing.link.discovery.body", [("address", address.to_text())]))
-      .action(use_it)
-      .action(not_now)
-      .into(),
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Md)
+        .child(
+          Callout::new(
+            "sharing-discovery",
+            CalloutTone::Info,
+            ctx.t("sharing.link.discovery.title"),
+          )
+          .icon(Icon::FileText)
+          .body(ctx.t_args("sharing.link.discovery.body", [("address", address.to_text())])),
+        )
+        .child(
+          Row::new()
+            .id("sharing-discovery-answers")
+            .spacing(SpacingSize::Sm)
+            .child(use_it)
+            .child(not_now),
+        )
+        .into(),
     )
   }
 
@@ -100,7 +125,7 @@ impl Link {
         ctx.t("settings.connectServer"),
       )
       .icon(Icon::Plus)
-      .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect())));
+      .opens(navigation.to(Route::Orchester(OrchesterView::connect())));
       let control = Column::new()
         .width(Dimension::Px(CONTROL_WIDTH))
         .spacing(SpacingSize::Sm)
@@ -134,12 +159,14 @@ impl Link {
     let control = Column::new()
       .width(Dimension::Px(CONTROL_WIDTH))
       .spacing(SpacingSize::Sm)
-      .child(select)
-      .child(page::icon_note(
-        "sharing-server-state",
-        Icon::CircleCheck,
-        &ctx.t("sharing.link.serverHint"),
-      ));
+      .child(select);
+    let control = match self.chosen_entry(props) {
+      Some(entry) => {
+        let (glyph, words) = server_hint(ctx, entry);
+        control.child(page::icon_note("sharing-server-state", glyph, &words))
+      }
+      None => control,
+    };
     page::row(ctx, "sharing-server", keys, control.into(), Place::Within)
   }
 
@@ -378,4 +405,35 @@ fn remote_words(ctx: &Ctx, props: &Props, picked: Option<&SharedProject>) -> (Ic
       ctx.t("sharing.link.remote.noHint").to_string(),
     ),
   }
+}
+
+/// The chosen server's state as the status bar says it (*Offline since 14:31* in `aocsw`), and where another server is
+/// added.
+fn server_hint(ctx: &Ctx, entry: &ServerEntry) -> (Icon, String) {
+  let (glyph, state) = if entry.certificate_changed {
+    (Icon::ShieldAlert, ctx.t("sharing.link.serverState.certificateChanged"))
+  } else {
+    match entry.connection {
+      Some(Connection::Connected) => (Icon::CircleCheck, ctx.t("sharing.link.serverState.connected")),
+      Some(Connection::Checking) | None => (Icon::RefreshCw, ctx.t("sharing.link.serverState.checking")),
+      Some(Connection::Reconnecting { attempt, .. }) => (
+        Icon::RefreshCw,
+        ctx.t_args(
+          "sharing.link.serverState.reconnecting",
+          [("attempt", attempt.to_string())],
+        ),
+      ),
+      Some(Connection::Offline { since, .. }) => (
+        Icon::CloudOff,
+        ctx.t_args("sharing.link.serverState.offline", [("time", moment(ctx, since))]),
+      ),
+      Some(Connection::SignedOut) => (Icon::CloudOff, ctx.t("sharing.link.serverState.signedOut")),
+    }
+  };
+  (
+    glyph,
+    ctx
+      .t_args("sharing.link.serverHint", [("state", state.to_string())])
+      .to_string(),
+  )
 }

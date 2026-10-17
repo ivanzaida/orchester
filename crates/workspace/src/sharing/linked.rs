@@ -81,11 +81,12 @@ impl Servers {
     )
   }
 
-  /// Trusts the certificate the person confirmed for `entry` after it presented another one (*It matches · trust
-  /// it*), and asks the server again now.
+  /// Trusts the certificate the person confirmed for `entry`, one of the signed-in account's servers, after it
+  /// presented another one (*It matches · trust it*), and asks the server again now.
   pub async fn trust_again(&self, entry: &ServerEntry, trust: Trust) -> Result<(), SharingError> {
     let (pin, plain_http) = trust.columns();
     let (workspace, server) = (self.inner.workspace.clone(), entry.stored.id);
+    self.own(server).await?;
     background::run(move || workspace.set_server_trust(server, pin.as_deref(), plain_http)).await??;
     self.forget(server);
     self.retry_now(server);

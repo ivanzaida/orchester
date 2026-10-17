@@ -39,9 +39,7 @@ pub(super) fn head(ctx: &mut Ctx, form: &Form) -> Column {
     None => ctx.t("setup.crumbs.newProject"),
   };
   let crumbs = vec![
-    Crumb::link(ctx.t("setup.crumbs.allProjects"), move || {
-      navigation.go(Route::AllProjects)
-    }),
+    Crumb::to(ctx.t("setup.crumbs.allProjects"), navigation.to(Route::AllProjects)),
     Crumb::here(here),
   ];
   Column::new()

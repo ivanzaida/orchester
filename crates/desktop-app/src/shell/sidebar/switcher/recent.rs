@@ -1,7 +1,9 @@
 //! *RECENT* in the project switcher's menu: the five projects used last, most recent first, read from
 //! the workspace each time the menu opens, the shown one checked (`Switcher project row` `NUMiQ`). A row
-//! opens its project's Overview in the active tab; under the pointer it offers *Open in new tab*
-//! (`Open in new tab` `o4Lzf`).
+//! opens its project's Overview by a browser's rules (`navigation::link`); under the pointer it offers *Open in new
+//! tab* (`Open in new tab` `o4Lzf`).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -20,13 +22,13 @@ use orchester_workspace::{background, messages};
 
 use super::{glyph_tile, initial};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   routes::{OverviewTab, ProjectPage, Route},
   services::Services,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{opening, pressable},
     tooltip::Tooltip,
   },
 };
@@ -150,10 +152,11 @@ impl Component for RecentRow {
       })
     };
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
-    pressable(move || {
+    let to = navigation.to(route);
+    opening(Arc::new(move |at| {
       open.set(false);
-      navigation.go(route.clone());
-    })
+      to(at);
+    }))
     .id(id)
     .describe("current", if current { "true" } else { "false" })
     .describe("a11y_name", name)
@@ -178,8 +181,7 @@ fn new_tab(ctx: &mut Ctx, row: &str, (navigation, route): (Navigation, Route), o
   let label = ctx.t("shell.switcher.openInNewTab");
   let button = pressable(move || {
     open.set(false);
-    navigation.open_tab();
-    navigation.replace(route.clone());
+    navigation.open(route.clone(), OpenIn::NewTab);
   })
   .id(id.clone())
   .describe("a11y_name", label.clone())

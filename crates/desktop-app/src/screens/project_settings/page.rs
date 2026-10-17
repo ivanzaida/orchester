@@ -6,7 +6,7 @@ use lurq::{
   },
   components::{Column, Row, ScrollVertical, Spacer, Text},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, layout_kind::ScrollState},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
@@ -45,12 +45,15 @@ pub fn header(ctx: &mut Ctx, (project, tab): (&ShownProject, Tab), status: &Sign
         ctx.t("project_settings.finishEditing"),
       );
     }
-    let navigation = navigation.clone();
-    PageTab::new(
-      format!("settings-tab-{}", choice.element()),
-      ctx.t(choice.key()),
-      tab == choice,
-      move || navigation.go(Route::Project(id, ProjectPage::Settings(choice))),
+    let (element, label) = (format!("settings-tab-{}", choice.element()), ctx.t(choice.key()));
+    if tab == choice {
+      return PageTab::current(element, label);
+    }
+    PageTab::to(
+      element,
+      label,
+      false,
+      navigation.to(Route::Project(id, ProjectPage::Settings(choice))),
     )
   };
   let tabs = Tab::BEFORE_MEMORY
@@ -98,6 +101,13 @@ pub fn screen(header: Element, content: Element) -> Element {
     .into()
 }
 pub fn scroll(content: impl Into<Element>) -> Element {
+  scroller(content).into()
+}
+/// [`scroll`] kept by `state`, which the page moves.
+pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element {
+  scroller(content).with_scroll_state(state.clone()).into()
+}
+fn scroller(content: impl Into<Element>) -> ScrollVertical {
   ScrollVertical::new(
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -118,7 +128,6 @@ pub fn scroll(content: impl Into<Element>) -> Element {
   )
   .id("project-settings-scroll")
   .flex(1.0)
-  .into()
 }
 pub fn row(ctx: &Ctx, id: &str, keys: (&str, &str), control: Element, place: Place) -> Element {
   side_row(
@@ -131,6 +140,17 @@ pub fn row(ctx: &Ctx, id: &str, keys: (&str, &str), control: Element, place: Pla
 pub fn icon_note(id: &str, glyph: Icon, words: &str) -> Element {
   Row::new()
     .id(id.to_owned())
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Start)
+    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::TextMuted))
+    .child(Text::new(words).variant(ExtraTypography::Note.role()).flex(1.0))
+    .into()
+}
+/// [`icon_note`] that takes its parent's width, so its words wrap there.
+pub fn wide_note(id: &str, glyph: Icon, words: &str) -> Element {
+  Row::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Start)
     .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::TextMuted))

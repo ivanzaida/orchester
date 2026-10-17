@@ -15,6 +15,8 @@ pub struct Projects {
   states: Signal<KnownStates>,
   /// How often opening each project was asked for again ([`Projects::retry`]).
   attempts: Signal<Attempts>,
+  /// How often every project was to be opened again ([`Projects::forget_all`]).
+  rounds: Signal<u32>,
   feeds: Arc<Mutex<HashMap<ProjectId, ProjectFeed>>>,
   /// The session's merge and removal operations, which each project's feed follows.
   jobs: ProjectJobs,
@@ -47,6 +49,7 @@ impl Projects {
     Self {
       states: Signal::new(KnownStates(Arc::new(landed.into_iter().collect()))),
       attempts: Signal::new(Attempts::default()),
+      rounds: Signal::new(0),
       feeds: Arc::default(),
       jobs,
     }
@@ -91,11 +94,13 @@ impl Projects {
     self.feeds.lock().get(&project).cloned()
   }
 
-  /// How often opening `project` was asked for again; reading it in a render re-renders it then.
+  /// How often opening `project` was asked for again, alone or with every project; reading it in a render
+  /// re-renders it then.
   pub fn attempt(&self, project: ProjectId) -> u32 {
-    self
+    let alone = self
       .attempts
-      .with(|attempts| attempts.0.get(&project).copied().unwrap_or(0))
+      .with(|attempts| attempts.0.get(&project).copied().unwrap_or(0));
+    alone.wrapping_add(self.rounds.get())
   }
 
   /// Opens `project` again, e.g. once its folder is back: what it stood for is forgotten, so its
@@ -117,6 +122,14 @@ impl Projects {
     self.states.update(|known| {
       Arc::make_mut(&mut known.0).insert(project, state);
     });
+  }
+
+  /// Forgets every project's state and feed: another account signed in, and its tabs open each of its projects
+  /// again, as its own list says (`root`).
+  pub fn forget_all(&self) {
+    self.feeds.lock().clear();
+    self.states.update(|known| Arc::make_mut(&mut known.0).clear());
+    self.rounds.update(|rounds| *rounds = rounds.wrapping_add(1));
   }
 
   /// Forgets what projects no tab shows any more (not among `shown`) could not be opened as, so a tab

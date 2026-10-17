@@ -1,5 +1,6 @@
 //! The app's own MCP tools, served beside lurq's `lurq_*`: `app_state` reads where the window is,
-//! `navigate` takes the active tab somewhere, `set_theme` switches the colors, and in debug builds
+//! `navigate` takes the active tab somewhere, `set_theme` switches the colors, `sign_in_state` says whether the
+//! app is signed in to Orchester Cloud (the one tool that answers while it is not), and in debug builds
 //! `hold_reads` holds the project feeds' reads for QA. They run on the event-loop thread, with the tree
 //! and the app, like every other change to the window.
 
@@ -8,13 +9,19 @@ mod error;
 mod hold_reads;
 mod navigate;
 mod set_theme;
+mod sign_in_state;
 
 use lurq::mcp::McpTool;
-use orchester_workspace::links::with_usage_query;
+use orchester_workspace::{links::with_usage_query, sharing::cloud::Cloud};
 use serde_json::{Map, Value, json};
 
 pub use self::{
-  app_state::app_state, error::ToolError, hold_reads::hold_reads, navigate::navigate, set_theme::set_theme,
+  app_state::app_state,
+  error::ToolError,
+  hold_reads::hold_reads,
+  navigate::navigate,
+  set_theme::set_theme,
+  sign_in_state::{SIGN_IN_STATE, sign_in_state},
 };
 use super::{McpSettings, WindowLink};
 use crate::{
@@ -23,14 +30,20 @@ use crate::{
   routes::{OrchestratorChat, ProjectPage, Route, Screen},
 };
 
-/// Every app tool, for lurq's MCP configuration; `hold_reads` only in debug builds of a started session,
-/// whose reads `hold` holds.
-pub fn all(link: &WindowLink, appearance: &Appearance, settings: McpSettings, hold: Option<ReadHold>) -> Vec<McpTool> {
+/// Every app tool, for lurq's MCP configuration; for a started session `sign_in_state` on its `cloud`, and in debug
+/// builds `hold_reads`, whose reads `hold` holds.
+pub fn all(
+  link: &WindowLink,
+  appearance: &Appearance,
+  settings: McpSettings,
+  (hold, cloud): (Option<ReadHold>, Option<Cloud>),
+) -> Vec<McpTool> {
   let mut tools = vec![
     app_state::tool(link.clone(), appearance.clone(), settings),
     navigate::tool(link.clone()),
     set_theme::tool(appearance.clone()),
   ];
+  tools.extend(cloud.map(sign_in_state::tool));
   if cfg!(debug_assertions)
     && let Some(hold) = hold
   {

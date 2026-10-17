@@ -137,10 +137,12 @@ pub enum ExtraRadius {
   Meter,
   /// 2: a color swatch in a legend or a filter's option (`Swatch` `p4TazJ`, `u1ZxRL`).
   Swatch,
+  /// 3: a link's corners and its focus ring's (`Mjhop`), as the Markdown links'.
+  Link,
 }
 
 impl ExtraRadius {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::Tile,
     Self::Window,
     Self::Full,
@@ -148,6 +150,7 @@ impl ExtraRadius {
     Self::BrandBar,
     Self::Meter,
     Self::Swatch,
+    Self::Link,
   ];
 
   pub fn role(self) -> RadiusSize {
@@ -163,6 +166,7 @@ impl ExtraRadius {
       Self::BrandBar => "brand_bar",
       Self::Meter => "meter",
       Self::Swatch => "swatch",
+      Self::Link => "link",
     }
   }
 
@@ -174,6 +178,7 @@ impl ExtraRadius {
       Self::BrandTile => 5.4,
       Self::BrandBar => 1.75,
       Self::Meter | Self::Swatch => 2.0,
+      Self::Link => super::markdown::LINK_RADIUS,
     }
   }
 }

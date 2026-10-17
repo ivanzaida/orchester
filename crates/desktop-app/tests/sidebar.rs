@@ -227,9 +227,18 @@ fn sidebar_open_folder_opens_a_project_folder_and_refuses_others() {
   let kontur = data.add_kontur(workspace);
   let opened = open_folder(workspace, &kontur.repo_root).expect("a project folder opens");
   assert_eq!(opened.project.id(), project_id());
-  let plain = data.dir.path().join("plain");
+  // The data folder lies in the checkout's `.tmp`, inside its git repository, where every folder is in a
+  // repository: a folder in no repository has to be outside the checkout, in the system's temporary folder.
+  let outside = tempfile::tempdir().expect("a folder in the system's temporary folder");
+  let plain = outside.path().join("plain");
   fs::create_dir_all(&plain).expect("a folder");
+  assert!(
+    plain.ancestors().all(|folder| !folder.join(".git").exists()),
+    "{} lies in no git repository",
+    plain.display()
+  );
   assert_eq!(open_folder(workspace, &plain), Err(FolderRefusal::NotRepository));
+
   let inside = kontur.repo_root.join("src");
   fs::create_dir_all(&inside).expect("a folder in the repository");
   assert_eq!(

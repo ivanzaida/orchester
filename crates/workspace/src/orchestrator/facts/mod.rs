@@ -96,8 +96,8 @@ pub struct RunFacts {
   /// Its task's key and title.
   pub task: Option<(String, String)>,
   pub stands: Stands,
-  /// Its branch, and the branch it merges into.
-  pub branch: String,
+  /// Its branch (`None` for a run that never started, which made none), and the branch it merges into.
+  pub branch: Option<String>,
   pub into: Option<String>,
   /// What its last checkpoint changed over its base: files, lines added and removed.
   pub changes: Option<(usize, u64, u64)>,

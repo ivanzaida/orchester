@@ -1,4 +1,4 @@
-//! Settings › Orchester (`Cu20b` signed in, `DUWM5` signed out, `SFaAp` a team server's entry, `Aowlk` their states;
+//! Settings › Orchester (`Cu20b` signed in, `SFaAp` a team server's entry, `Aowlk` their states;
 //! layer `uyO5v`): the list of the Orchester Cloud account and the team servers on the left, and the shown one's
 //! details on the right; *Connect a server* (`zxe2P`, `bIwte`) is a page of its own ([`connect`]). Member actions only:
 //! everything administrative is in a server's admin in the browser, which the entry links to.
@@ -21,7 +21,7 @@ mod person;
 mod server;
 mod server_parts;
 mod server_projects;
-mod sign_in;
+mod two_factor;
 mod words;
 
 use std::sync::Arc;
@@ -47,10 +47,11 @@ use orchester_workspace::{
   },
 };
 
+pub(crate) use self::advanced::{Advanced, Place, section as advanced_section};
 pub use self::{
   notice::InvitesNotice,
   person::PersonOnly,
-  words::{Said, day as day_of, moment, runs, sharing_error as sharing_said, shown_address},
+  words::{Said, cloud_error as cloud_said, day as day_of, moment, runs, sharing_error as sharing_said, shown_address},
 };
 
 /// The cloud account as read, for a future's answer.
@@ -84,6 +85,14 @@ impl Snapshot {
   }
 }
 
+/// The invites waiting and the account's two-factor authentication, as the cloud answered: what the All projects notice
+/// shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Waiting {
+  pub invites: Invites,
+  pub two_factor: Option<orchester_api::cloud::TwoFactorStatus>,
+}
+
 /// The invites waiting for the account, as the cloud answered.
 #[derive(Clone, Debug)]
 pub enum Invites {
@@ -99,7 +108,11 @@ impl PartialEq for Invites {
     match (self, other) {
       (Self::SignedOut, Self::SignedOut) => true,
       (Self::Listed(one), Self::Listed(two)) => {
-        one.len() == two.len() && one.iter().zip(two.iter()).all(|(one, two)| one.id == two.id)
+        one.len() == two.len()
+          && one
+            .iter()
+            .zip(two.iter())
+            .all(|(one, two)| one.id == two.id && one.needs_two_factor == two.needs_two_factor)
       }
       (Self::Failed(one), Self::Failed(two)) => one == two,
       _ => false,
@@ -153,6 +166,7 @@ impl Component for OrchesterTab {
       }
     };
     let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let two_factor = two_factor::read(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let details = match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => ctx.mount_keyed::<server::ServerPanel>(
@@ -170,6 +184,7 @@ impl Component for OrchesterTab {
           address: snapshot.address.clone(),
           invites: invites.clone(),
           accepted,
+          two_factor,
           panel: view.panel,
         },
       ),
@@ -206,6 +221,22 @@ pub fn follow(ctx: &mut Ctx, (servers, cloud): (&Servers, &Cloud)) -> u64 {
       }
     },
   );
+  stream.state().get().data.unwrap_or_default()
+}
+
+/// Counts changes of the shared projects' caches (a role, a removal, a sync), for a screen that shows how a project
+/// stands with its server.
+pub fn follow_shared(ctx: &mut Ctx, servers: &Servers) -> u64 {
+  let stream = ctx.stream(servers.clone(), |servers, emitter: StreamEmitter<u64, ()>| async move {
+    let mut shared = servers.subscribe_shared();
+    let mut count = 0_u64;
+    loop {
+      if !emitter.emit(count) || shared.changed().await.is_err() {
+        return;
+      }
+      count += 1;
+    }
+  });
   stream.state().get().data.unwrap_or_default()
 }
 

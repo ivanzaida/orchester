@@ -64,13 +64,8 @@ async function postgres(directory: string): Promise<{ url: string; container: st
   return { url: `postgres://postgres:${password}@${port}/postgres?sslmode=disable`, container: name };
 }
 
-async function cloud(directory: string, database: string, smtp: number): Promise<Started> {
-  const rootKey = join(directory, "root.key");
-  const generated = await run(binary("orchester-cloud"), ["root", "generate", rootKey]);
-  const root = /ORCHESTER_CLOUD_ROOT_PUBLIC_KEY=(\S+)/.exec(generated)?.[1];
-  if (root === undefined) {
-    throw new Error("orchester-cloud root generate printed no public key");
-  }
+/** The cloud makes its root key and publishes its first key set before it listens. */
+async function cloud(database: string, smtp: number): Promise<Started> {
   const env = {
     ORCHESTER_CLOUD_LISTEN: `127.0.0.1:${PORTS.cloud}`,
     ORCHESTER_CLOUD_PUBLIC_URL: CLOUD_WEB,
@@ -78,18 +73,11 @@ async function cloud(directory: string, database: string, smtp: number): Promise
     ORCHESTER_CLOUD_SMTP_URL: `smtp://127.0.0.1:${smtp}`,
     ORCHESTER_CLOUD_SMTP_FROM: "Orchester <no-reply@cloud.test>",
     ORCHESTER_CLOUD_KEY_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
-    ORCHESTER_CLOUD_ROOT_PUBLIC_KEY: root,
     // The web front forwards the browser's address.
     ORCHESTER_CLOUD_TRUSTED_PROXIES: "127.0.0.1",
   };
   const started = start("orchester-cloud", binary("orchester-cloud"), ["serve"], env);
   await waitForUrl(`${CLOUD_API}/keys`);
-  const statement = join(directory, "key-set-statement.json");
-  const signed = join(directory, "key-set.jws");
-  await run(binary("orchester-cloud"), ["keys", "rotate"], env);
-  await run(binary("orchester-cloud"), ["keys", "prepare", statement], env);
-  await run(binary("orchester-cloud"), ["keys", "sign", statement, rootKey, signed]);
-  await run(binary("orchester-cloud"), ["keys", "publish", signed], env);
   return started;
 }
 
@@ -123,7 +111,7 @@ export async function startStack(options: { cloud: boolean }): Promise<Stack> {
     await smtp.listen(PORTS.smtp);
     const database = await postgres(directory);
     container = database.container;
-    processes.push(await cloud(directory, database.url, PORTS.smtp));
+    processes.push(await cloud(database.url, PORTS.smtp));
     fronts.push(await startFront(PORTS.cloudWeb, PORTS.cloud, PORTS.cloudWebApp));
     processes.push(next("cloud", PORTS.cloudWebApp, "127.0.0.1", {
       ORCHESTER_CLOUD_PUBLIC_URL: CLOUD_WEB,

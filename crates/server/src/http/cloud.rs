@@ -1,8 +1,12 @@
 //! The server's link to Orchester Cloud for its admins (`/server/cloud`).
 
-use axum::{Json, extract::State};
+use axum::{Json, extract::State, http::HeaderMap};
 use orchester_api::{
-  CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, cloud::TokenPurpose,
+  CloudLinkChanges, CloudLinkFinish, CloudLinkResponse, CloudLinkStep, ErrorCode, KeyProofRequest, KeyProofResponse,
+  PRESENTED_CERTIFICATE,
+  certificate::CertificatePin,
+  cloud::TokenPurpose,
+  statements::{KEY_PROOF_TYPE, KeyProof},
 };
 use rusqlite::Connection;
 
@@ -15,6 +19,49 @@ use crate::{
   server_keys::ServerKeys,
   settings,
 };
+
+/// `POST /server/key-proof`: the server's public key and its signature of the app's nonce and of the certificate its
+/// connections present, with the id of that key, which is the server's: what an app checks before it asks Orchester
+/// Cloud for a code's token for this id (`docs/architecture/server.md`, "Codes"). Nothing is stored. An app that names
+/// the certificate its connections presented ([`PRESENTED_CERTIFICATE`]) also gets the proxy's one before a renewal.
+pub(super) async fn key_proof(
+  State(server): State<Server>,
+  headers: HeaderMap,
+  SafeJson(input): SafeJson<KeyProofRequest>,
+) -> Result<Json<KeyProofResponse>, ServerError> {
+  let nonce = input.nonce;
+  let shaped = (16..=64).contains(&nonce.len())
+    && nonce
+      .bytes()
+      .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
+  if !shaped {
+    return Err(ErrorCode::Invalid.into());
+  }
+  let seen = match headers.get(PRESENTED_CERTIFICATE) {
+    None => None,
+    Some(value) => Some(
+      value
+        .to_str()
+        .ok()
+        .and_then(CertificatePin::parse)
+        .ok_or(ErrorCode::Invalid)?,
+    ),
+  };
+  let named = server.inner.presented.for_proof(seen).await;
+  let keys = &server.inner.keys;
+  let proof = KeyProof {
+    server: keys.id,
+    nonce,
+    certificate: named.current.map(|pin| pin.to_hex()),
+    // Only an app that named its certificate reads this field; others refuse a statement with a field they lack.
+    previous_certificate: seen.and(named.previous).map(|pin| pin.to_hex()),
+    issued_at: server.now().div_euclid(1000),
+  };
+  Ok(Json(KeyProofResponse {
+    public_key: keys.public_key(),
+    proof: keys.sign(KEY_PROOF_TYPE, &proof)?,
+  }))
+}
 
 pub(super) async fn show_cloud(
   State(server): State<Server>,

@@ -27,6 +27,7 @@ use orchester_workspace::{
 };
 
 use crate::{
+  navigation::link::Open,
   theme::{ExtraRadius, ExtraSpacing, IconSize, NeedsYouText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -34,16 +35,14 @@ use crate::{
   },
 };
 
-type Press = Arc<dyn Fn() + Send + Sync>;
-
-/// The note of `item`, element id `id`, which went as `settled`; *Open* does `open`.
-pub(super) fn note(ctx: &Ctx, id: &str, (item, settled): (&NeedItem, &Settled), open: Press) -> Element {
+/// The note of `item`, element id `id`, which went as `settled`; *Open* opens where `open` takes it.
+pub(super) fn note(ctx: &Ctx, id: &str, (item, settled): (&NeedItem, &Settled), open: Open) -> Element {
   let about = About::of(ctx, item);
   let (glyph, color) = glyph(settled);
   let link = ActionButton::new(format!("{id}-open"), ButtonKind::Ghost, ctx.t("needs_you.note.open"))
     .icon(Icon::ArrowUpRight)
     .small()
-    .on_click(move || open());
+    .opens(open);
   Row::new()
     .id(id.to_owned())
     .describe("state", "settled")

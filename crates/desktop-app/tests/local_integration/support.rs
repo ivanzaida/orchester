@@ -48,10 +48,10 @@ impl Page {
   pub fn new(fixture: Fixture) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     fs::create_dir_all(&scratch).expect("scratch");
-    let data = Data {
-      dir: tempfile::tempdir_in(scratch).expect("private app data"),
-      runtime: Runtime::new().expect("runtime"),
-    };
+    let data = Data::at(
+      tempfile::tempdir_in(scratch).expect("private app data"),
+      Runtime::new().expect("runtime"),
+    );
     let launch = data.launch();
     let project = launch
       .workspace()

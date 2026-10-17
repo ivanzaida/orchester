@@ -105,8 +105,7 @@ fn new_button(ctx: &Ctx, id: &str, listed: &ProjectAgents, nav: &AgentsNav) -> A
   if listed.connections.is_empty() {
     button.unavailable(ctx.t("agents.needsConnection"))
   } else {
-    let nav = nav.clone();
-    button.on_click(move || nav.show(Shown::New(AgentTab::default())))
+    button.opens(nav.to(Shown::New(AgentTab::default())))
   }
 }
 fn import(ctx: &Ctx, id: &str) -> ActionButton {
@@ -163,7 +162,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &Ag
         ctx.t("agents.openConnections"),
       )
       .icon(Icon::Plug)
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
+      .opens(nav.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
     );
   }
   empty.child(empty_connections(ctx, project, listed)).into()

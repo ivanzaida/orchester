@@ -6,12 +6,18 @@
 
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
+mod joins;
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the tests' one cloud key, loaded by every support module that signs for it, whichever of them a test binary includes"
+)]
+pub mod test_cloud;
 mod tls;
 
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use orchester_api::{
-  CodeJoin, Credential, SharedProject, UserChanges,
+  Credential, SharedProject, UserChanges,
   certificate::CertificatePin,
   client::{Client, PlainHttp, ServerAddress},
 };
@@ -76,6 +82,17 @@ impl TestServer {
     server
   }
 
+  /// A server on plain HTTP that names `https://localhost:<its port>` as its address, as one behind a proxy that
+  /// announces another address than the one a computer reaches it by: the project addresses it reports are on another
+  /// server than the one that computer connected to.
+  pub fn start_announcing_another_address() -> Self {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+      .and_then(|listener| listener.local_addr())
+      .expect("a free port")
+      .port();
+    Self::open(TlsMode::Off, Some(port))
+  }
+
   fn with(tls: TlsMode) -> Self {
     Self::open(tls, None)
   }
@@ -120,6 +137,11 @@ impl TestServer {
     );
   }
 
+  /// The server's data directory.
+  fn data_dir(&self) -> &std::path::Path {
+    self._directory.path()
+  }
+
   /// The address as a person types it.
   pub fn url(&self) -> String {
     let scheme = if self.tls { "https" } else { "http" };
@@ -148,41 +170,6 @@ impl TestServer {
       &json!({"kind":"server","delivery":"code","admin":admin}),
     );
     Credential::new(invite["code"].as_str().expect("invite code").into())
-  }
-
-  /// The account `username` joined on a test computer; returns that device's token. API 3 has no passwords: the
-  /// frozen `crates/desktop`'s tests use this name for what a first password was.
-  pub fn create_user(&self, username: &str, display_name: &str, admin: bool) -> Credential {
-    let code = self.code_for(username, admin);
-    let client = self.client();
-    let joined = self
-      .block_on(client.join_with_code(&CodeJoin {
-        code,
-        device: "test computer".into(),
-        username: Some(username.into()),
-        display_name: Some(display_name.into()),
-        kind: orchester_api::DeviceKind::App,
-      }))
-      .expect("join with a code");
-    joined.token
-  }
-
-  /// Another device of `username`, joined with an account code from the host: that device's token.
-  pub fn device_of(&self, username: &str) -> SecretValue {
-    let code = self
-      .block_on(self.server.host_account_code(username.into()))
-      .expect("account code");
-    let client = self.client();
-    let joined = self
-      .block_on(client.join_with_code(&CodeJoin {
-        code,
-        device: "BUILD-02 · Windows".into(),
-        username: None,
-        display_name: None,
-        kind: orchester_api::DeviceKind::App,
-      }))
-      .expect("join with an account code");
-    SecretValue::new(joined.token.expose().to_owned()).expect("a token")
   }
 
   /// Another computer of `username` (the passwords stand for nothing since API 3); returns its device token.
@@ -231,6 +218,85 @@ impl TestServer {
   pub fn add_member(&self, project: &SharedProject, username: &str) {
     let path = format!("/projects/{}/members", project.id);
     self.admin_request("POST", &path, &json!({"username": username, "role": "member"}));
+  }
+
+  /// Gives `username` the `role` (`owner` or `member`) in `project`, as an owner does in the server admin.
+  pub fn set_role(&self, project: &SharedProject, username: &str, role: &str) {
+    let path = format!("/projects/{}/members", project.id);
+    let members = self.admin_request("GET", &path, &Value::Null);
+    let user = members["members"]
+      .as_array()
+      .expect("members")
+      .iter()
+      .find(|member| member["username"] == username)
+      .expect("a member")["user"]["id"]
+      .as_str()
+      .expect("member id")
+      .to_owned();
+    self.admin_request("PATCH", &format!("{path}/{user}"), &json!({ "role": role }));
+  }
+
+  /// Removes `username` from `project`, as an owner does in the server admin.
+  pub fn remove_member(&self, project: &SharedProject, username: &str) {
+    let path = format!("/projects/{}/members", project.id);
+    let members = self.admin_request("GET", &path, &Value::Null);
+    let user = members["members"]
+      .as_array()
+      .expect("members")
+      .iter()
+      .find(|member| member["username"] == username)
+      .expect("a member")["user"]["id"]
+      .as_str()
+      .expect("member id")
+      .to_owned();
+    self.admin_request("DELETE", &format!("{path}/{user}"), &Value::Null);
+  }
+
+  /// The keys of `project`'s tasks on the server, by number, as the first admin reads them.
+  pub fn task_keys(&self, project: &SharedProject) -> Vec<String> {
+    let tasks = self.admin_request("GET", &format!("/projects/{}/tasks", project.id), &Value::Null);
+    let mut keys: Vec<(u64, String)> = tasks["tasks"]
+      .as_array()
+      .expect("tasks")
+      .iter()
+      .map(|task| {
+        (
+          task["number"].as_u64().expect("number"),
+          task["key"].as_str().expect("key").to_owned(),
+        )
+      })
+      .collect();
+    keys.sort();
+    keys.into_iter().map(|(_, key)| key).collect()
+  }
+
+  /// Adds tasks of `contents` (the API's `TaskContent`) to `project`, as the first admin creates them from their
+  /// computer.
+  pub fn add_tasks(&self, project: &SharedProject, contents: &[Value]) {
+    let body = json!({ "idempotency_key": orchester_core::id::IdempotencyKey::generate(), "tasks": contents });
+    self.admin_request("POST", &format!("/projects/{}/tasks", project.id), &body);
+  }
+
+  /// Gives the task `key` of `project` the title `title`, as the first admin saves it from their computer.
+  pub fn retitle(&self, project: &SharedProject, key: &str, title: &str) {
+    self.change_task(project, key, &json!({ "title": title }));
+  }
+
+  /// Changes the task `key` of `project` by `changes` (the API's `Changes`), as the first admin saves it from their
+  /// computer.
+  pub fn change_task(&self, project: &SharedProject, key: &str, changes: &Value) {
+    let path = format!("/projects/{}/tasks", project.id);
+    let tasks = self.admin_request("GET", &path, &Value::Null);
+    let task = tasks["tasks"]
+      .as_array()
+      .expect("tasks")
+      .iter()
+      .find(|task| task["key"] == key)
+      .expect("the task")
+      .clone();
+    let body = json!({ "revision": task["revision"], "changes": changes });
+    let id = task["id"].as_str().expect("task id");
+    self.admin_request("PATCH", &format!("{path}/{id}"), &body);
   }
 
   /// An invite to `project` as a member by email, which the cloud routes; returns its id.
@@ -323,7 +389,7 @@ impl TestServer {
     invite["invite"]["id"].as_str().expect("invite id").to_owned()
   }
 
-  fn client(&self) -> Client {
+  pub fn client(&self) -> Client {
     if let Some(pin) = self.pin {
       return Client::pinned(ServerAddress::parse(&self.url()).expect("address"), pin).expect("client");
     }
@@ -377,6 +443,8 @@ impl TestServer {
       match token {
         Some(token) => token,
         None => {
+          // A first admin who joined elsewhere than `create_user`: another device of theirs, joined with an account
+          // code and a two-factor identity ([`Self::code_proof`]), as inviting needs.
           let token = self.device_of(&username.expect("the first admin joined"));
           self.admin.lock().1 = Some(token.expose().to_owned());
           token.expose().to_owned()

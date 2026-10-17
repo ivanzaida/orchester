@@ -8,11 +8,7 @@ use parking_lot::Mutex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::support::{
-  TestServer,
-  cloud::{Identity, TestCloud},
-  credential,
-};
+use crate::support::{TestServer, cloud::Identity, credential};
 
 #[tokio::test]
 async fn s1c_device_tokens_are_stored_as_hashes_and_no_password_remains() {
@@ -65,6 +61,8 @@ impl Write for Capture {
 async fn joins(server: &TestServer) -> Vec<String> {
   let setup = server.server.host_setup_code().await.expect("setup").expect("no admin");
   let admin = server.join(&setup, Some("alice"), "laptop").await;
+  // The admin sends invites by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&admin.token);
   let invite: InviteCreated = server
     .request(
       "POST",
@@ -80,8 +78,8 @@ async fn joins(server: &TestServer) -> Vec<String> {
     .request("POST", "/auth/pairings", Some(&bob.token), None)
     .await
     .json();
-  let paired = server.join(&pairing.code, None, "phone").await;
-  let cloud = TestCloud::generate();
+  let paired = server.join_as(&pairing.code, "bob", "phone").await;
+  let cloud = server.cloud();
   let now = server.seconds();
   let key_set = cloud.key_set(now);
   let linked = server
@@ -120,7 +118,7 @@ async fn joins(server: &TestServer) -> Vec<String> {
     )
     .await
     .json();
-  let wrong = server.redeem(&credential("ZZZZ-ZZZZ"), None, "laptop").await;
+  let wrong = server.redeem_with(&credential("ZZZZ-ZZZZ"), None, "laptop", None).await;
   assert_eq!(wrong.status, 401);
   vec![
     setup.expose().into(),

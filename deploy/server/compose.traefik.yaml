@@ -1,0 +1,93 @@
+# An Orchester team server with its admin on a host that already runs Traefik (deploy/server/README.md, "Behind
+# Traefik"). Nothing is published: Traefik holds the public certificate and reaches the server over its external
+# network; the server serves plain HTTP there and forwards every path outside /api to the admin. Put the values into
+# `.env` beside this file (from `.env.example`), then:
+#   docker compose -f compose.traefik.yaml up -d
+#   docker compose -f compose.traefik.yaml logs server     # the setup code, then open https://<ORCHESTER_HOST>/admin
+#
+# Only `server` joins Traefik's network. The admin and the server's private API listener stay on this stack's own
+# network `backend` (fixed subnet: `.3` the server, `.4` the admin), which is internal, so no other container on
+# Traefik's network reaches the listener that believes the admin's forwarded headers, even on a host that does not
+# isolate Docker's networks from each other. The admin has no route out: invites by email are carried to Orchester
+# Cloud by the inviter's browser instead of the admin's own server side. The server believes a forwarded client
+# address only from Traefik's own address, TRAEFIK_ADDRESS.
+services:
+  server:
+    image: ivanzaida/orchester-server:${ORCHESTER_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ORCHESTER_SERVER_NAME: ${ORCHESTER_SERVER_NAME:-Orchester}
+      # Traefik holds the public certificate; the server speaks plain HTTP to it.
+      ORCHESTER_SERVER_TLS: "off"
+      ORCHESTER_SERVER_ADDRESS: https://${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}
+      ORCHESTER_SERVER_TRUSTED_PROXIES: ${TRAEFIK_ADDRESS:?Set TRAEFIK_ADDRESS to Traefik's address on the Traefik network}
+      ORCHESTER_SERVER_ADMIN_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4:3100
+      # The admin calls the API on the server's address on `backend` only; the port is never published.
+      ORCHESTER_SERVER_ADMIN_API_LISTEN: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741
+      # Traefik's certificate, for the key proofs apps check before entering a code: `auto` reads it and its renewals at
+      # https://ORCHESTER_HOST, out through Traefik's network (the host must reach its own name); or set its SHA-256.
+      ORCHESTER_SERVER_PROXY_CERTIFICATE: ${ORCHESTER_SERVER_PROXY_CERTIFICATE:-auto}
+    volumes:
+      - server_data:/data
+    # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3/8741 && printf 'GET /api/v1/server HTTP/1.0\\r\\n\\r\\n' >&3 && read -r _ status _ <&3 && [ \"$$status\" = 200 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
+      # Every path on the host goes to the server, as with Caddy: it answers /api itself and forwards the rest.
+      traefik.http.routers.orchester-server.rule: Host(`${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}`)
+      traefik.http.routers.orchester-server.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.orchester-server.tls: 'true'
+      traefik.http.routers.orchester-server.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.orchester-server.middlewares: orchester-server-hsts
+      traefik.http.routers.orchester-server.service: orchester-server
+      traefik.http.middlewares.orchester-server-hsts.headers.stsSeconds: '31536000'
+      traefik.http.services.orchester-server.loadbalancer.server.port: '8080'
+      # Plain HTTP on the host goes to HTTPS, as Caddy does.
+      traefik.http.routers.orchester-server-http.rule: Host(`${ORCHESTER_HOST:?Set ORCHESTER_HOST to the server's DNS name}`)
+      traefik.http.routers.orchester-server-http.entrypoints: ${TRAEFIK_HTTP_ENTRYPOINT:-web}
+      traefik.http.routers.orchester-server-http.middlewares: orchester-server-https
+      traefik.http.routers.orchester-server-http.service: orchester-server
+      traefik.http.middlewares.orchester-server-https.redirectscheme.scheme: https
+      traefik.http.middlewares.orchester-server-https.redirectscheme.permanent: 'true'
+    networks:
+      backend:
+        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3
+      traefik: {}
+  admin:
+    image: ivanzaida/orchester-server-admin:${ORCHESTER_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ORCHESTER_ADMIN_SERVER_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741
+      # Signs the CSRF tokens and seals the admin's cookies: 32 random bytes in base64 (`openssl rand -base64 32`).
+      ORCHESTER_ADMIN_SECRET: ${ORCHESTER_ADMIN_SECRET:?Set ORCHESTER_ADMIN_SECRET}
+      # Orchester Cloud's public address, for signing in and linking through the browser and for invites by email.
+      # Set it empty to use codes only.
+      ORCHESTER_ADMIN_CLOUD_URL: ${ORCHESTER_ADMIN_CLOUD_URL-https://orchester-cloud.lurq.dev}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/admin/https').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      traefik.enable: 'false'
+    networks:
+      backend:
+        ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4
+networks:
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.0/24
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
+volumes:
+  server_data:

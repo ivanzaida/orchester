@@ -300,10 +300,12 @@ impl Run {
   /// A run fails from work (its last step failed) or when a person stops it while it waits for them,
   /// for the reason it waits.
   pub(super) fn check_failed(&self, kind: &RunEventKind, reason: &RunFailure) -> Result<(), RunError> {
+    let not_started = matches!(reason, RunFailure::WorktreeNotCreated(_));
     match self.status() {
+      RunStatus::Pending => self.expect_status(kind, not_started),
       RunStatus::WaitingForPerson(stuck) => self.expect_status(kind, stuck.failure() == *reason),
       status => {
-        self.expect_status(kind, *status == RunStatus::Running)?;
+        self.expect_status(kind, *status == RunStatus::Running && !not_started)?;
         self.expect_settled()
       }
     }

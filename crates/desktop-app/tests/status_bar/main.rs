@@ -17,9 +17,11 @@ use lurq::{
 use orchester_app::{
   i18n,
   mcp::{McpKind, McpSettings, McpStatus, ServerState},
+  navigation::press::OpenIn,
   routes::{OverviewTab, ProjectPage, Route, TaskView},
   shell::status_bar::{
-    BarAction, BarFacts, BarProps, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView, Stopping,
+    BarAction, BarFacts, BarProps, CloudFacts, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView,
+    Stopping,
   },
   theme::{self, Mode},
   ui::tooltip::TOOLTIP_DELAY,
@@ -195,6 +197,7 @@ fn facts(project: Option<ProjectFacts>) -> BarFacts {
     mcp: listening(),
     stopping: Stopping::Idle,
     servers: ServerFacts::None,
+    cloud: CloudFacts::Quiet,
   }
 }
 

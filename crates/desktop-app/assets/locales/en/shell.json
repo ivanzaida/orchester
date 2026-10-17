@@ -204,7 +204,12 @@
           "signedOut": "{{count}} servers · one signed out",
           "certificateChanged": "{{count}} servers · a certificate changed"
         }
-      }
+      },
+      "mcpLocked": "MCP {{address}} · sign-in required",
+      "mcpLockedQa": "MCP :{{port}} · QA · sign-in required",
+      "mcpLockedDevelopment": "MCP :{{port}} · sign-in required",
+      "mcpLockedShort": "MCP · sign-in required",
+      "cloudOffline": "Orchester Cloud · offline"
     },
     "needsYou": {
       "one": "{{count}} needs you",
@@ -292,7 +297,19 @@
         "environment": "For this run: ORCHESTER_APP_MCP_WINDOW_CONTROL is set."
       },
       "openSettings": "Open Automation settings",
-      "portRefused": "Port {{port}} refused"
+      "portRefused": "Port {{port}} refused",
+      "locked": {
+        "title": "Orchester's MCP server",
+        "since": "Refusing every tool · since {{time}}",
+        "body": "Agents and other MCP clients still connect to {{address}}, but every tool answers “sign in required” until you sign in to Orchester Cloud in this window.",
+        "hint": "Signing in can't be done over MCP: only a person, in the window."
+      }
+    },
+    "cloud": {
+      "title": "Orchester Cloud",
+      "offlineSince": "Offline since {{time}} · signed in as {{email}}",
+      "body": "You keep working: projects, tasks and runs on this computer don't need the cloud. Orchester checks your sign-in again when it can reach Orchester Cloud, and invites arrive then.",
+      "hint": "Click for Settings › Orchester."
     }
   }
 }

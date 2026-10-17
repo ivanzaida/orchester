@@ -38,7 +38,7 @@ use crate::{
   theme::{ComposerRadius, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{opening, pressable},
     tooltip::Tooltip,
   },
 };
@@ -177,7 +177,7 @@ fn limit_words(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
 /// *Open the decision →*: the task's Summary, where the run's decision waits.
 fn decision_link(ctx: &mut Ctx, composing: &Composing) -> Element {
   let words = ctx.t("composer.context.openDecision");
-  pressable(composing.open(ctx, TaskView::Summary))
+  opening(composing.open(ctx, TaskView::Summary))
     .id("composer-open-decision")
     .child(
       Text::new(&words)

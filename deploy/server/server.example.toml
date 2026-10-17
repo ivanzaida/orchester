@@ -11,6 +11,10 @@ tls = "self_signed"
 # With tls = "pem", both PEM paths:
 # tls_cert = "certificate.pem"
 # tls_key = "private-key.pem"
+# With tls = "off": the certificate the proxy presents, which apps check before entering a code. "auto" reads it at
+# `address` (https://, checked by the system's trust store) and follows the proxy's renewals; or its SHA-256
+# fingerprint ("3F:7A:...:C1"), to set again when that certificate changes.
+# proxy_certificate = "auto"
 trusted_proxies = []
 # The server admin app on a private address: every path outside /api is forwarded to it.
 admin_url = "http://127.0.0.1:3100"

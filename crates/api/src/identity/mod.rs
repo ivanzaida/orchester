@@ -1,5 +1,5 @@
 //! Orchester Cloud's identity tokens and signed key sets (`docs/architecture/server.md`, "Identity tokens and keys"):
-//! the cloud signs, team servers verify locally with the key set its offline root key signed.
+//! the cloud signs, team servers verify locally with the key set its root key signed.
 //!
 //! Both are compact JWS (`EdDSA`, Ed25519). A team server keeps the newest key set that verifies with the root it
 //! pinned, and accepts a token whose key that set lists. Remembering each token's `jti` until its expiry, so a token
@@ -7,12 +7,14 @@
 
 mod error;
 mod jws;
+mod key_proof;
 mod key_set;
 mod keys;
 mod statement;
 mod token;
 
 pub use error::IdentityError;
+pub use key_proof::{key_proof_nonce, verify_key_proof};
 pub use key_set::{
   KEY_LISTED_AFTER_SECS, KEY_SET_LIFETIME_SECS, KEY_SIGNS_SECS, KeySetStatement, ListedKey, STATEMENT_FRESH_SECS,
   VerifiedKeySet, VerifiedToken,

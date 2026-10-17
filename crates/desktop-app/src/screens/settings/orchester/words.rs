@@ -116,6 +116,8 @@ pub fn cloud_error(error: &CloudError) -> Said {
     CloudError::TooManyAsks => Said::new("cloud.errors.tooManyAsks"),
     CloudError::InviteEnded => Said::new("cloud.invites.ended"),
     CloudError::NoServer => Said::new("cloud.errors.noServer"),
+    CloudError::TwoFactorOff => Said::new("cloud.invites.twoFactor.off"),
+    CloudError::TwoFactorSession => Said::new("cloud.invites.twoFactor.session"),
     CloudError::Join(error) => sharing_error(error),
   }
 }
@@ -142,6 +144,12 @@ pub fn sharing_error(error: &SharingError) -> Said {
     SharingError::SignedOut => Said::new("cloud.errors.serverSignedOut"),
     SharingError::CertificateChanged => Said::new("cloud.errors.certificateChanged"),
     SharingError::Offline => Said::new("cloud.errors.serverUnreachable"),
+    SharingError::ForeignAddress { own } => {
+      Said::new("sharing.upload.foreignAddress").with("own", shown_address(own.as_str()))
+    }
+    SharingError::TwoFactorOff => Said::new("sharing.connect.twoFactorOff"),
+    SharingError::TwoFactorSession => Said::new("sharing.connect.twoFactorSession"),
+    SharingError::UnprovenServer => Said::new("sharing.connect.unprovenServer"),
     _ => Said::new("cloud.errors.local"),
   }
 }
@@ -160,6 +168,9 @@ pub fn server_client(error: &ClientError) -> Said {
       ErrorCode::KeySetStale => Said::new("sharing.connect.keySetStale"),
       ErrorCode::ApprovalRefused => Said::new("sharing.connect.approvalRefused"),
       ErrorCode::InvalidIdentity => Said::new("sharing.connect.invalidIdentity"),
+      ErrorCode::MfaRequired => Said::new("sharing.connect.twoFactorSession"),
+      ErrorCode::MfaUnverifiable => Said::new("sharing.connect.twoFactorUnverifiable"),
+      ErrorCode::AccountExists => Said::new("sharing.connect.accountExists"),
       _ => Said::new("cloud.errors.serverRefused"),
     },
     ClientError::Cloud { .. } => cloud_client(error),

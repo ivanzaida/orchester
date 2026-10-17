@@ -3,7 +3,7 @@ use lurq::core::Signal;
 use orchester_core::id::{ProjectId, ResourceId};
 
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::own::OwnChanges,
   routes::{ProjectPage, Route, SkillsFilter},
 };
@@ -42,9 +42,6 @@ pub struct PanelNav {
   pub navigation: Navigation,
 }
 impl PanelNav {
-  pub fn set(&self, panel: Panel) {
-    self.navigation.go(Route::Project(self.project, panel.page()));
-  }
   /// *Cancel*: shows `panel`, leaving no entry for the page it closes.
   pub fn close(&self, panel: Panel) {
     self.navigation.close_panel(Route::Project(self.project, panel.page()));
@@ -55,6 +52,10 @@ impl PanelNav {
       Some(Route::Project(project, ProjectPage::Skills(filter))) if *project == self.project => Panel::Library(*filter),
       _ => Panel::LIBRARY,
     }
+  }
+  /// What opens `panel`, a place of its own, where a press asks (`navigation::link`).
+  pub fn to(&self, panel: Panel) -> Open {
+    self.navigation.to(Route::Project(self.project, panel.page()))
   }
 }
 #[derive(Clone)]

@@ -41,7 +41,7 @@ pub(super) fn found(ctx: &mut Ctx, answers: &Answers) -> Vec<Element> {
           project,
         } => Some(approved(ctx, &id, (*joined, server, project.as_deref()), done)),
         Outcome::Refused { server } => Some(refused(ctx, &id, server, done)),
-        Outcome::Waiting { .. } => None,
+        Outcome::Waiting { .. } | Outcome::TwoFactorOff { .. } | Outcome::NeedsCode { .. } => None,
       }
     })
     .collect()

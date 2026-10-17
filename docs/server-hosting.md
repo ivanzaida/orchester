@@ -63,6 +63,15 @@ their own. Redemptions from the host itself (loopback) are exempt from the serve
 redeem the setup code there. A server holds at most 50 open codes (`409 too_many_codes`, also for a pairing code).
 Failed joins are counted per address and hour in `failed_joins`, kept 90 days.
 
+**Two-factor authentication** (2026-10-16). Every invite, by email or with a code, is made only for a device token that
+came with a cloud identity's two-factor claim (`mfa`, kept as `sessions.mfa`, schema 5): a sign-in to the admin through
+Orchester Cloud with two-factor authentication, an app that joined with it, or a browser signed in with a pairing code
+such an app made. Any other gets `403 mfa_required`. Every code but the setup code, entered in an app, needs the app's
+identity token for this server with the claim (`identity_token` and `key_set` beside the code), verified against the
+pinned root: `403 mfa_required` without it, `403 mfa_unverifiable` while no root is pinned. A join token that accepts an
+invite by email needs the claim as well. Invites made before are still delivered as they were (only new ones are held
+to it), and accepting any of them needs it.
+
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
 the server admin to carry to Orchester Cloud. One person sends at most 30 invites by email in 24 hours (`429` with
 `Retry-After`). Orchester Cloud adds its own limits: 100 new invites a day for all the servers one account owns, and
@@ -111,7 +120,8 @@ While join approval is on, a sign-in to the server admin through Orchester Cloud
 from the host, signs the browser in instead. A browser signed in to the admin never lists or answers its own
 account's approvals; one of the account's own computers, or another admin, does (security review 1, B2).
 
-The server itself never reaches the cloud: it neither fetches key sets nor sends or revokes invites. The server
+The server itself never reaches the cloud: it neither fetches key sets nor sends or revokes invites (its only
+connection out is to its own public address, with `proxy_certificate = "auto"`). The server
 admin's own server side delivers invites and revocations to the cloud when the host has the internet, or the
 inviter's browser does; apps and cloud sign-ins to the admin carry newer key sets.
 
@@ -135,14 +145,35 @@ at `https://<server>/admin`: first setup, projects, members and roles, invites, 
 server stays the front door: it answers `/api/*` itself, sends `/` to `/admin`, and forwards every other path to the
 admin app at `admin_url` (default `http://127.0.0.1:3100`), setting `X-Forwarded-For`, `-Proto` and `-Host` itself.
 Behind a proxy that holds the certificate (`tls = "off"`), the scheme is the one a proxy in `trusted_proxies` says in
-`X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `compose.caddy.yaml` does, or the admin
+`X-Forwarded-Proto` (`http` or `https`), else that of `address`: set both, as `deploy/server/compose.yaml` does, or the admin
 answers every page with *This page needs HTTPS*. Without `address`, project addresses take that same scheme and the
-host the request named.
+host the request named. Set `proxy_certificate` (`ORCHESTER_SERVER_PROXY_CERTIFICATE`) too: the server signs the
+certificate the proxy presents into the key proof an app checks before it enters a code there
+([architecture/server.md](architecture/server.md), "Codes"); without it no app enters a code but the setup code. Give
+each server a certificate of its own: servers that share one cannot be told apart by it. Two ways:
+
+- **`auto`** (the compose files' default): the server reads the certificate itself, by connecting to its own `address`
+  (which must then be `https://`) over TLS that the operating system's trust store checks, chain and name, as an app
+  does. It reads it at start, every hour (30 seconds after a read that failed), before a proof when the last read is older than ten minutes, and when an app
+  says its connection presented one the server has not seen yet; for an hour after a renewal it still accepts the one
+  before. So a proxy that renews its certificate (Caddy, Traefik with Let's Encrypt) needs nothing here. If a read
+  fails, proofs name no certificate and apps enter no codes until a read succeeds; the server's log says why, at most
+  every ten minutes. The server needs a route to its own public name: through the proxy's address for that name (the
+  Caddy compose file maps it to Caddy on the stack's network), or out and back in, which on some hosts needs hairpin
+  NAT. The server's image carries the system's certificate authorities for this. A server that passes apps' proofs on
+  from another cannot make this one read its certificate: the server connects only to its own configured address.
+  Someone who takes over this server's own name with a certificate the trust store accepts for it could, as they could
+  fool every app.
+- **A fingerprint:** the SHA-256 of the certificate the proxy presents, 64 hex characters, colons allowed (`openssl
+  x509 -in cert.pem -noout -fingerprint -sha256`). After the proxy's certificate changes (a renewal) it must be set to
+  the new one.
+
+An empty value is the same as none.
 The admin app's server side calls the API on a second, private listener, `admin_api_listen` (default
 `127.0.0.1:8741`, plain HTTP, `off` to turn it off), which takes the browser's address and host from the headers the
 admin forwards. **Never publish that port**: it trusts its callers' forwarded headers. The server warns at start when
 `admin_api_listen` is not a loopback or private address (every interface, `0.0.0.0`, included: inside the Docker
-network of `compose.yaml` that is expected, as long as the port stays unpublished). Projects whose slug is `admin`,
+network of `compose.private.yaml` that is expected, as long as the port stays unpublished). Projects whose slug is `admin`,
 `api` or `auth` (an older server allowed them) get the next free slug when the server opens (`admin` → `admin-2`),
 and the server's log names each. Without the admin app, admin
 paths answer *The admin app is not running* and the host commands remain for recovery.
@@ -163,23 +194,35 @@ certificate with `orchester-server tls show` before trusting it (the sign-in and
 **Air-gapped.** Build the images (or the binary and the admin's standalone folder) elsewhere and copy them in; nothing
 is fetched at run time (the admin bundles its fonts and loads nothing from the internet). Leave
 `ORCHESTER_ADMIN_CLOUD_URL` out: setup stops after the first admin, people join with codes and admins sign in with a
-pairing code from their Orchester or an account code from the host (`orchester-server account-code <username>`).
+pairing code from their Orchester or an account code from the host (`orchester-server account-code <username>`). Codes
+need two-factor authentication the server can check: pin Orchester Cloud's root on the host without linking
+(`orchester-server cloud pin <root public key>`, the public key the cloud names in its log and in `docs/cloud-hosting.md`,
+"Keys"). Pinning also lets people join with their cloud identity; `orchester-server cloud off` stops that and still
+checks the tokens codes carry. Each person's Orchester then reaches the cloud once per code, signed in with two-factor
+authentication, and carries its token and key set to the server. An admin makes invites from a browser signed in with a pairing code their
+Orchester made after it joined that way. Without a pinned root the server makes no invites and takes no code but the
+setup code (`403 mfa_unverifiable`); a team with no internet anywhere cannot add people.
 
 ## Docker
 
-`deploy/server` has two complete examples, each with the `server` (Rust) and the `admin` (the Next.js standalone build
-on Node 24, `web/Dockerfile.server`) on a private network; only the front door is published. Both need
-`ORCHESTER_ADMIN_SECRET` (32 random bytes in base64).
+[deploy/server/README.md](../deploy/server/README.md) is the self-hoster's quick start. The images are published on
+Docker Hub for linux/amd64 and linux/arm64 (`ivanzaida/orchester-server` and `ivanzaida/orchester-server-admin`, the
+Next.js standalone build on Node 24 from `web/Dockerfile.server`) by `.github/workflows/server-release.yml`. Each
+compose file in `deploy/server` runs the `server` and the `admin` on a private network, takes every value from `.env`
+(`.env.example` lists them) and needs `ORCHESTER_ADMIN_SECRET` (32 random bytes in base64); only the front door is
+published.
 
-- **`compose.yaml`, no public domain**: the server presents its own certificate on port 8740. Run
-  `docker compose up -d --build` with `ORCHESTER_ADMIN_SECRET` set, then open `https://<host>:8740/admin`. Set
-  `ORCHESTER_SERVER_TLS_NAMES` to the names and addresses people use for this host before the first start (they are
-  read only when the certificate is generated).
-- **`compose.caddy.yaml`, a public DNS name**: set `ORCHESTER_HOST` to a DNS name pointing to this host and run
-  `docker compose -f compose.caddy.yaml up -d --build`. Caddy obtains and renews HTTPS certificates; ports 80 and 443
-  must be reachable. The server serves plain HTTP on the compose network only (`ORCHESTER_SERVER_TLS=off`) and knows
-  its public address from `ORCHESTER_SERVER_ADDRESS`. The example reserves subnet `172.29.0.0/24`; if it overlaps your
-  network, change the subnet, the service addresses and `ORCHESTER_SERVER_TRUSTED_PROXIES` together.
+- **`compose.yaml`, a public DNS name**: set `ORCHESTER_HOST` to a DNS name pointing to this host. Caddy obtains and
+  renews HTTPS certificates; ports 80 and 443 must be reachable. The server serves plain HTTP on the compose network
+  only (`ORCHESTER_SERVER_TLS=off`) and knows its public address from `ORCHESTER_SERVER_ADDRESS`. The network has the
+  subnet `172.29.0.0/24` (Caddy `.2`, the server `.3`, the admin `.4`); if it overlaps your network, set
+  `ORCHESTER_SUBNET_PREFIX`.
+- **`compose.private.yaml`, no public domain or air-gapped**: the server presents its own certificate on port 8740.
+  Open `https://<host>:8740/admin`. Set `ORCHESTER_SERVER_TLS_NAMES` to the names and addresses people use for this
+  host before the first start (they are read only when the certificate is generated).
+- **`compose.traefik.yaml`, behind the host's Traefik**: labels instead of published ports; the server believes
+  forwarded addresses only from `TRAEFIK_ADDRESS`, and its own network is internal.
+- **`compose.build.yaml`** builds both images from this repository instead of pulling them, added to any of the above.
 
 The setup code is in the server's console output: `docker compose logs server` shows it (it is the container's
 stdout, not a log record), or run `docker compose exec server orchester-server setup-code`.
@@ -233,7 +276,11 @@ private admin API listener on `127.0.0.1:8741`. An admin may rename the server i
 `server.toml` is then only the default. Host commands accept the same `--config` and
 environment settings and can run while the server is running, against the same data directory:
 `serve`, `backup <path>`, `tls show`, `tls regenerate`, `setup-code`, `account-code <username>`,
-`cloud show|on|off|unlink`, `cloud pin <root public key>`. Codes are printed only to the command's own output.
+`account-cloud <username>`, `account-unlink <username>`, `cloud show|on|off|unlink`, `cloud pin <root public key>`.
+Codes are printed only to the command's own output. `account-cloud` prints the Orchester Cloud account an account is
+linked to; `account-unlink` ends that link (the account's computers stay joined), as *Unlink Orchester Cloud* on the
+admin's People page does. An account code links the account to the cloud account it is entered with, in place of the
+one before: the way back for someone whose cloud account was deleted and made again.
 Commands that write need the database's write lock, including during the schema check. If another writer holds it for
 the five-second busy timeout, the command exits unsuccessfully, prints no code, and reports
 `server database is busy or locked; retry after the writer releases the lock`.
@@ -242,6 +289,7 @@ Environment overrides TOML: `ORCHESTER_SERVER_LISTEN`, `ORCHESTER_SERVER_DATA_DI
 `ORCHESTER_SERVER_ADMIN_URL`, `ORCHESTER_SERVER_ADMIN_API_LISTEN` (an address, or `off`),
 `ORCHESTER_SERVER_ADDRESS`, `ORCHESTER_SERVER_TLS` (`self_signed`, `pem`, `off`), `ORCHESTER_SERVER_TLS_NAMES`
 (comma-separated), `ORCHESTER_SERVER_TLS_CERT`, `ORCHESTER_SERVER_TLS_KEY` (both, and only, with `tls = "pem"`),
+`ORCHESTER_SERVER_PROXY_CERTIFICATE` (`auto` or a fingerprint, only with `tls = "off"`; empty is unset),
 `ORCHESTER_SERVER_TRUSTED_PROXIES` (comma-separated exact IPs or CIDR ranges, for example `172.29.0.2,10.20.0.0/16`).
 Only list proxy connection addresses or networks you control: forwarded addresses are ignored from other peers. The
 server combines all forwarding-header lines and walks the chain from the connection backwards; malformed lists use the

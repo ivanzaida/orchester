@@ -30,7 +30,7 @@ use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, OrchestratorSpacing, OrchestratorText},
-  ui::{field::FieldInput, icon::Icon, icon_button::IconButton, kbd::key_cap, pressable::pressable},
+  ui::{field::FieldInput, icon::Icon, icon_button::IconButton, kbd::key_cap, pressable::opening},
 };
 
 /// The panel's width (`pHsY5`).
@@ -288,7 +288,7 @@ fn chat_row(ctx: &mut Ctx, listing: &ChatListing, (current, today): (bool, bool)
   };
   let navigation = Navigation::of(ctx);
   let route = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::Chat(id)));
-  let row = pressable(move || navigation.go(route.clone()))
+  let row = opening(navigation.to(route))
     .id(format!("orchestrator-history-{id}"))
     .describe("current", current.to_string())
     .width(Dimension::Pct(100.0))

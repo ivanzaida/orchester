@@ -20,7 +20,7 @@ pub(super) async fn create(
   let created = server
     .account_write(move |db, now| {
       let current = db::checked(db, &auth, now, false)?;
-      invites::create(db, &state.keys, &current.user, &input, &base, now)
+      invites::create(db, &state.keys, &current, &input, &base, now)
     })
     .await?;
   Ok((StatusCode::CREATED, Json(created)))

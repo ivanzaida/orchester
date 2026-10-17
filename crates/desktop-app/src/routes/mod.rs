@@ -17,8 +17,9 @@
 //! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Secrets, the Skills
 //! library, an agent profile, Instructions, a pipeline's editor and Project settings keep their tab, filter,
 //! item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`], [`InstructionsView`],
-//! [`PipelinePanel`], [`ProjectSettingsTab`]). A tab, source or kind left out of the query is the one the
-//! screen opens on.
+//! [`PipelinePanel`], [`ProjectSettingsTab`]); `/project/<id>/settings?tab=sharing&ask=make-local` opens
+//! Sharing with *Make local*'s question. A tab, source or kind left out of the query is the one the screen
+//! opens on.
 //!
 //! Every place a person chooses — another screen, tab, filter, item or panel — is a new entry of the tab's
 //! history (`Navigation::go`), so Back returns to it as in a browser. Only what chooses no place takes the
