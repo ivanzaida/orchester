@@ -17,6 +17,7 @@ use orchester_workspace::{
     proposal::{self, Decision},
     tools::ChatScope,
   },
+  workspace::OrchestratorConsent,
 };
 
 use super::{
@@ -179,7 +180,7 @@ fn orchestrator_publishes_directly_the_draft_it_checked_by_its_id() {
   let impostor = screen.pipeline(builder, ("aa-impostor", &delivery.to_string()));
   screen.pipeline_draft((delivery, builder), "Read README.md twice.");
   screen.pipeline_draft((impostor, builder), "Read README.md three times.");
-  screen.let_orchestrator_publish(true);
+  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
   screen.let_automation_widen(true);
   screen.go(OrchestratorChat::New);
   call(
@@ -244,7 +245,7 @@ fn orchestrator_card_head_is_one_line_at_a_fractional_scale() {
   let builder = screen.builder();
   let delivery = screen.pipeline(builder, ("feature-delivery", "Feature delivery"));
   screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  screen.let_orchestrator_publish(true);
+  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
   screen.let_automation_widen(true);
   screen.go(OrchestratorChat::New);
   call(

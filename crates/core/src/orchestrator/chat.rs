@@ -1,9 +1,10 @@
 //! A conversation of the Orchestrator chat and what it holds: the person's messages, each with the state of the turn
-//! it started, the agent's replies, and the actions the agent took through Orchester's tools.
+//! it started, the agent's replies, the actions the agent took through Orchester's tools, and the waits of the
+//! project's agents, each with the turn it started by itself, if any.
 
 use serde::{Deserialize, Serialize};
 
-use super::{change::ProposedChange, proposal::ProposedStart};
+use super::{change::ProposedChange, proposal::ProposedStart, wait::AgentWait};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
@@ -55,9 +56,15 @@ pub struct Chat {
 impl Chat {
   /// A new conversation, named after its first message `first`, sent at `at`.
   pub fn start(id: ChatId, first: &MessageBody, at: Timestamp) -> Self {
+    Self::named(id, first.as_str(), at)
+  }
+
+  /// A new conversation named after `title`, started at `at`: the one a wait of an agent opens in a project that has
+  /// none yet.
+  pub fn named(id: ChatId, title: &str, at: Timestamp) -> Self {
     Self {
       id,
-      title: title_of(first.as_str()),
+      title: title_of(title),
       started: at,
       session: None,
     }
@@ -264,6 +271,11 @@ impl ActionOutcome {
   pub const fn is_proposed(&self) -> bool {
     matches!(self, Self::Proposed(_) | Self::Waits)
   }
+
+  /// Whether what it names was carried out: by the chat itself, or applied by a person.
+  pub const fn answered(&self) -> bool {
+    matches!(self, Self::Done | Self::Applied)
+  }
 }
 
 /// What one entry of a conversation is.
@@ -282,6 +294,33 @@ pub enum EntryKind {
   },
   Action(ChatAction),
   Event(ChatEvent),
+  /// An agent of the project waits ([`AgentWait`]), and the turn it started by itself, once it started one.
+  Wait {
+    wait: AgentWait,
+    turn: Option<WaitTurn>,
+  },
+}
+
+/// The Orchestrator turn a wait started by itself: under the id its prompt was kept by, where it stands and when it
+/// ended, as a person's message's turn.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WaitTurn {
+  pub message: ChatMessageId,
+  pub state: TurnState,
+  pub ended: Option<Timestamp>,
+}
+
+impl EntryKind {
+  /// The turn this entry started, and where it stands: a person's message's, or a wait's that started one.
+  pub fn turn(&self) -> Option<(ChatMessageId, &TurnState)> {
+    match self {
+      Self::Person { message, turn, .. } => Some((*message, turn)),
+      Self::Wait {
+        turn: Some(started), ..
+      } => Some((started.message, &started.state)),
+      _ => None,
+    }
+  }
 }
 
 /// One entry of a conversation, in the order it was kept (`seq`).

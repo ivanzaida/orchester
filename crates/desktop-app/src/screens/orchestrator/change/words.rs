@@ -83,11 +83,11 @@ impl View<'_> {
   }
 
   /// When the action stood as it stands: when a person settled it, else when it was taken.
-  fn time(&self) -> String {
+  pub(super) fn time(&self) -> String {
     display::clock(self.action.settled.unwrap_or(self.at))
   }
 
-  fn task(&self) -> &str {
+  pub(super) fn task(&self) -> &str {
     self.action.task.as_deref().unwrap_or_default()
   }
 
@@ -137,6 +137,18 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
     }
     Some(Change::Cancel { number, .. }) => cancel(ctx, view, *number),
     Some(Change::Merge { number, into, .. }) => merge(ctx, view, (*number, into.as_deref())),
+    Some(Change::Answer {
+      number, choices, text, ..
+    }) => {
+      let separator = ctx.t("orchestrator.change.facts.separator");
+      let answer = choices
+        .iter()
+        .map(String::as_str)
+        .chain(text.as_deref())
+        .collect::<Vec<_>>();
+      super::answer::answer(ctx, view, (*number, &answer.join(&separator)))
+    }
+    Some(Change::Message { number, text, .. }) => super::answer::message(ctx, view, (*number, text)),
     None => start(ctx, view),
   }
 }
@@ -151,7 +163,7 @@ fn subject(view: &View) -> String {
 }
 
 /// The state at the end of the head, the person's apply worded by `by_you`.
-fn state(ctx: &Ctx, view: &View, by_you: &str) -> State {
+pub(super) fn state(ctx: &Ctx, view: &View, by_you: &str) -> State {
   let time = view.time();
   let (glyph, color, key) = match view.phase() {
     Phase::Waits => return waits(ctx, view.at),

@@ -6,7 +6,9 @@ mod across;
 mod approvals;
 mod auto_mode;
 mod continue_run;
+mod conversation;
 mod limits;
+mod message_waits;
 mod messages;
 mod pipeline_copy;
 mod plan_read;
@@ -37,9 +39,13 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-pub(crate) use self::pipeline_copy::duplicate_pipeline_draft;
 pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
+pub(crate) use self::{
+  messages::{plan_person_only, refusal as outgoing_refusal},
+  pipeline_copy::duplicate_pipeline_draft,
+  questions::{check_answer, waiting_request},
+};
 pub use self::{
   run_task::{Proposal, propose_run, run_proposed},
   runs::find_run,
@@ -59,6 +65,14 @@ impl Translate {
   pub fn text(&self, message: &Message) -> String {
     (self.0)(message)
   }
+}
+
+/// Who sends an answer or a message to a run's agents: a client of the app's MCP server, or the project's
+/// Orchestrator chat, whose answers the task's conversation names as the chat's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SentBy {
+  Client,
+  Orchestrator,
 }
 
 /// One tool as clients list it.
@@ -110,10 +124,12 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "get_run",
     description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
-                  what it waits for, its agents' waiting questions with their options and the plan waiting for a decision \
-                  (version, step, its whole text and an excerpt) among it; and its decided plans, each with its decision, \
-                  note, when and decided_by (person, or automation through this server). The run's link is its task's \
-                  page; the waiting approvals, questions and plans link to their cards on the task's Conversation.",
+                  what it waits for, its agents' waiting questions with their options, the steps that wait for a \
+                  message with what each one's agent wrote last (awaiting.messages: the question it ended its step with, \
+                  or its newest message), and the plan waiting for a decision (version, step, its whole text and an \
+                  excerpt) among it; and its decided plans, each with its decision, note, when and decided_by (person, \
+                  or automation through this server). The run's link is its task's page; the waiting approvals, \
+                  questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -125,8 +141,14 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_questions",
-    description: "Agents' questions waiting for an answer, oldest first: id, agent, when it was asked, whether the agent waits in its turn, the questions with their suggested answers, the run (id and number), the task, and the link to its card on the task's Conversation in the app. With `run`, that run's (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. Reading only: answering is a person's, or answer_question's.",
+    description: "Agents' questions waiting for an answer, oldest first: id, agent, when it was asked, whether the agent waits in its turn, the questions with their suggested answers, the run (id and number), the task, and the link to its card on the task's Conversation in the app; and, under waiting_for_message, the steps of tasks' latest runs that wait for a message, each with what its agent wrote last (the question it ended its step with, or its newest message), its run, task and link (send_message answers them). With `run`, that run's (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. Reading only: answering is a person's, or answer_question's and send_message's.",
     schema: schema_for_type::<questions::ListQuestions>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_conversation",
+    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
+    schema: schema_for_type::<conversation::GetConversation>,
     read_only: true,
   },
   Spec {
@@ -319,7 +341,7 @@ async fn dispatch(
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "return_to_draft" => return_to_draft::return_to_draft(services, parse(arguments)?).await,
     "continue_run" => continue_run::continue_run(services, parse(arguments)?).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, translate).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Client)).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "get_usage" => usage::get_usage(services, parse(arguments)?).await,
@@ -342,9 +364,10 @@ async fn dispatch_answers(
   match name {
     "list_approvals" => approvals::list_approvals(services, parse(arguments)?, translate).await,
     "list_questions" => questions::list_questions(services, parse(arguments)?, translate).await,
+    "get_conversation" => conversation::get_conversation(services, parse(arguments)?).await,
     "get_plan" => plan_read::get_plan(services, parse(arguments)?).await,
     "decide_approval" => approvals::decide_approval(services, parse(arguments)?).await,
-    "answer_question" => questions::answer_question(services, parse(arguments)?).await,
+    "answer_question" => questions::answer_question(services, parse(arguments)?, SentBy::Client).await,
     "decide_plan" => plans::decide_plan(services, parse(arguments)?).await,
     "set_run_auto_mode" => auto_mode::set_run_auto_mode(services, parse(arguments)?).await,
     "get_auto_mode" => auto_mode::get_auto_mode(services, parse(arguments)?).await,
@@ -352,6 +375,22 @@ async fn dispatch_answers(
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
+  }
+}
+
+/// Calls `answer_question` or `send_message` (`name`) with `arguments` for the project's Orchestrator chat: as
+/// automation, named the chat's in the task's conversation, and refused where it would decide a waiting plan.
+pub async fn answer_for_orchestrator(
+  services: &Services,
+  translate: &Translate,
+  name: &str,
+  arguments: JsonObject,
+) -> Result<Value, ToolError> {
+  let arguments = Value::Object(arguments);
+  match name {
+    "answer_question" => questions::answer_question(services, parse(arguments)?, SentBy::Orchestrator).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Orchestrator)).await,
+    other => Err(ToolError::InvalidArguments(format!("{other} answers no agent"))),
   }
 }
 

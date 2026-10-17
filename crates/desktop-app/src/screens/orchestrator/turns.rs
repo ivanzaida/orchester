@@ -1,11 +1,13 @@
 //! A conversation as turns: each message a person sent, what the Orchestrator answered it with (its replies and
-//! the actions it took, in the order they were kept) and how the turn ended.
+//! the actions it took, in the order they were kept) and how the turn ended; and each wait of an agent of the
+//! project, with the turn it started by itself, if it started one. What is kept while a turn runs belongs to that
+//! turn, even when a wait kept meanwhile shows under it.
 
 use std::sync::Arc;
 
 use orchester_core::{
   id::ChatMessageId,
-  orchestrator::{ChatAction, ChatEntry, ChatEvent, EntryKind, TurnState},
+  orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, EntryKind, TurnState},
   resource::ModelId,
   time::Timestamp,
 };
@@ -38,17 +40,23 @@ impl Part {
   }
 }
 
-/// One message and its answer.
+/// One message and its answer, or one wait of an agent and the answer of the turn it started, if any.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Turn {
-  /// `None` while it is being sent and not kept yet.
+  /// `None` while it is being sent and not kept yet, and for a wait that started no turn.
   pub(super) message: Option<ChatMessageId>,
+  /// The person's words; empty for a wait.
   pub(super) text: Arc<str>,
+  /// The wait that opens the row instead of a person's message.
+  pub(super) wait: Option<Box<AgentWait>>,
+  /// Its entry in the conversation; `None` while it is being sent.
+  seq: Option<i64>,
   /// When it was kept; `None` while it is being sent.
   pub(super) at: Option<Timestamp>,
   /// When its turn ended, when the runner said.
   pub(super) ended: Option<Timestamp>,
-  pub(super) state: TurnState,
+  /// Where its turn stands; `None` for a wait that started no turn.
+  pub(super) state: Option<TurnState>,
   pub(super) answer: Vec<Part>,
 }
 
@@ -58,9 +66,11 @@ impl Turn {
     Self {
       message: None,
       text: Arc::from(text),
+      wait: None,
+      seq: None,
       at: None,
       ended: None,
-      state: TurnState::Thinking,
+      state: Some(TurnState::Thinking),
       answer: Vec::new(),
     }
   }
@@ -84,58 +94,70 @@ impl Turn {
     })
   }
 
-  /// The row's key: its message, or *sending* until it is kept.
+  /// The row's key: its message, its wait's entry, or *sending* until it is kept.
   pub(super) fn key(&self) -> String {
-    self
-      .message
-      .map_or_else(|| "sending".to_owned(), |message| message.to_string())
+    match (self.message, self.seq) {
+      (Some(message), _) => message.to_string(),
+      (None, Some(seq)) => format!("wait-{seq}"),
+      (None, None) => "sending".to_owned(),
+    }
   }
 }
 
-/// The turns of `entries`, oldest first. What comes before the first message belongs to no turn and is left out.
+/// The turns of `entries`, oldest first. What comes before the first message or wait belongs to no turn and is left
+/// out; a reply, action or event belongs to the newest row with a turn.
 pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
   for entry in entries {
-    match &entry.kind {
+    let part = match &entry.kind {
       EntryKind::Person {
         message,
         text,
         turn,
         ended,
-      } => turns.push(Turn {
-        message: Some(*message),
+      } => {
+        turns.push(Turn {
+          message: Some(*message),
+          text: Arc::from(text.as_str()),
+          wait: None,
+          seq: Some(entry.seq),
+          at: Some(entry.at),
+          ended: *ended,
+          state: Some(turn.clone()),
+          answer: Vec::new(),
+        });
+        continue;
+      }
+      EntryKind::Wait { wait, turn } => {
+        turns.push(Turn {
+          message: turn.as_ref().map(|turn| turn.message),
+          text: Arc::from(""),
+          wait: Some(Box::new(wait.clone())),
+          seq: Some(entry.seq),
+          at: Some(entry.at),
+          ended: turn.as_ref().and_then(|turn| turn.ended),
+          state: turn.as_ref().map(|turn| turn.state.clone()),
+          answer: Vec::new(),
+        });
+        continue;
+      }
+      EntryKind::Reply { text, model } => Part::Reply {
         text: Arc::from(text.as_str()),
-        at: Some(entry.at),
-        ended: *ended,
-        state: turn.clone(),
-        answer: Vec::new(),
-      }),
-      EntryKind::Reply { text, model } => {
-        if let Some(turn) = turns.last_mut() {
-          turn.answer.push(Part::Reply {
-            text: Arc::from(text.as_str()),
-            model: model.clone(),
-            at: entry.at,
-          });
-        }
-      }
-      EntryKind::Action(action) => {
-        if let Some(turn) = turns.last_mut() {
-          turn.answer.push(Part::Action {
-            action: Box::new(action.clone()),
-            at: entry.at,
-            seq: entry.seq,
-          });
-        }
-      }
-      EntryKind::Event(event) => {
-        if let Some(turn) = turns.last_mut() {
-          turn.answer.push(Part::Event {
-            event: event.clone(),
-            at: entry.at,
-          });
-        }
-      }
+        model: model.clone(),
+        at: entry.at,
+      },
+      EntryKind::Action(action) => Part::Action {
+        action: Box::new(action.clone()),
+        at: entry.at,
+        seq: entry.seq,
+      },
+      EntryKind::Event(event) => Part::Event {
+        event: event.clone(),
+        at: entry.at,
+      },
+    };
+    if let Some(turn) = turns.iter_mut().rev().find(|turn| turn.state.is_some()) {
+      turn.answer.push(part);
     }
   }
   turns

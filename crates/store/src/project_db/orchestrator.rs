@@ -1,13 +1,15 @@
 //! The project's Orchestrator chat (`orchester_core::orchestrator`): what it runs on, its conversations and their
 //! entries. The app keeps a person's message before it asks the runner for the turn, and forgets it again when the
 //! runner never took it; the runner keeps the replies, the session and how the turn ended; the app keeps the
-//! actions the agent took through its tools.
+//! actions the agent took through its tools, and the waits of the project's agents with the turns they started
+//! ([`super::orchestrator_waits`]).
 
 use orchester_core::{
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
-    Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure, TurnState,
+    AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure,
+    TurnState, WaitTurn, instructions::wait_prompt,
   },
   resource::ModelId,
   time::Timestamp,
@@ -30,7 +32,8 @@ pub struct ChatListing {
   pub messages: u32,
 }
 
-/// A person's message, as the runner reads it to start its turn.
+/// A turn's prompt, as the runner reads it to start the turn: a person's message, or what a wait of an agent that
+/// started the turn by itself tells the Orchestrator ([`wait_prompt`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChatTurn {
   pub chat: Chat,
@@ -145,8 +148,8 @@ impl ProjectDb {
     Ok(kept == 1)
   }
 
-  /// Forgets `message`, which the runner never took: its draft is kept by the app, and a conversation it alone
-  /// started goes with it.
+  /// Forgets the person's message `message`, which the runner never took: its draft is kept by the app, and a
+  /// conversation it alone started goes with it.
   pub fn forget_chat_message(&mut self, message: ChatMessageId) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     let chat: Option<String> = transaction
@@ -171,32 +174,37 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// The person's message `message`, its conversation and its turn; `None` when it is not kept.
+  /// The turn of `message`: its prompt, its conversation and where it stands; `None` when it is not kept.
   pub fn chat_turn(&self, message: ChatMessageId) -> Result<Option<ChatTurn>, StoreError> {
     let row = self
       .connection
       .query_row(
-        "SELECT chat_id, body, turn, failure FROM orchestrator_entries WHERE message_id = ?1",
+        "SELECT chat_id, kind, body, turn, failure FROM orchestrator_entries WHERE message_id = ?1",
         [message.to_string()],
         |row| {
           Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
-            row.get::<_, Option<String>>(3)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, Option<String>>(4)?,
           ))
         },
       )
       .optional()?;
-    let Some((chat, body, turn, failure)) = row else {
+    let Some((chat, kind, body, turn, failure)) = row else {
       return Ok(None);
     };
     let chat = self
       .chat(parse("chat id", &chat)?)?
       .ok_or_else(|| corrupt("chat message", "its conversation is gone"))?;
+    let prompt = match kind.as_str() {
+      "wait" => wait_prompt(&wait_of(&body)?),
+      _ => body,
+    };
     Ok(Some(ChatTurn {
       chat,
-      text: MessageBody::new(&body).map_err(|error| corrupt("chat message", error))?,
+      text: MessageBody::new(&prompt).map_err(|error| corrupt("chat message", error))?,
       turn: turn_state(&turn, failure.as_deref())?,
     }))
   }
@@ -457,6 +465,20 @@ impl RawEntry {
       ("event", ..) => {
         EntryKind::Event(serde_json::from_str(&self.body).map_err(|error| corrupt("chat event", error))?)
       }
+      ("wait", message, turn, _) => {
+        let turn = match (message, turn) {
+          (Some(message), Some(turn)) => Some(WaitTurn {
+            message: parse("chat message id", &message)?,
+            state: turn_state(&turn, self.failure.as_deref())?,
+            ended: self.ended.map(Timestamp::from_unix_millis),
+          }),
+          _ => None,
+        };
+        EntryKind::Wait {
+          wait: wait_of(&self.body)?,
+          turn,
+        }
+      }
       (kind, ..) => return Err(corrupt("chat entry kind", kind)),
     };
     Ok(ChatEntry {
@@ -465,6 +487,11 @@ impl RawEntry {
       kind,
     })
   }
+}
+
+/// The wait a `wait` entry's body holds.
+pub(super) fn wait_of(body: &str) -> Result<AgentWait, StoreError> {
+  serde_json::from_str(body).map_err(|error| corrupt("chat wait", error))
 }
 
 fn turn_state(word: &str, failure: Option<&str>) -> Result<TurnState, StoreError> {

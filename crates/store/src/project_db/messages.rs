@@ -24,7 +24,7 @@ const PERSON: &str = "person";
 const AGENT: &str = "agent";
 const COLUMNS: &str = "id, task_id, run_id, author, kind, recipient_profile, step_execution_id, invocation_id, body, \
                        created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-                       undelivered_execution, undelivered_at, undelivered_reason";
+                       undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator";
 
 impl ConversationStore for ProjectDb {
   type Error = StoreError;
@@ -171,8 +171,8 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
   connection.execute(
     "INSERT INTO messages (id, task_id, run_id, idempotency_key, author, kind, recipient_profile, step_execution_id, \
      invocation_id, body, created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-     undelivered_execution, undelivered_at, undelivered_reason) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+     undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
     params![
       message.id().to_string(),
       message.task().to_string(),
@@ -197,6 +197,7 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
       columns.undelivered_execution,
       columns.undelivered_at,
       columns.undelivered_reason,
+      message.by_orchestrator(),
     ],
   )?;
   Ok(())
@@ -300,6 +301,7 @@ struct StoredRow {
   undelivered_execution: Option<String>,
   undelivered_at: Option<i64>,
   undelivered_reason: Option<String>,
+  by_orchestrator: bool,
 }
 
 impl StoredRow {
@@ -323,6 +325,7 @@ impl StoredRow {
       undelivered_execution: row.get(15)?,
       undelivered_at: row.get(16)?,
       undelivered_reason: row.get(17)?,
+      by_orchestrator: row.get(18)?,
     })
   }
 
@@ -346,6 +349,13 @@ impl StoredRow {
       message
     } else {
       message.sent(timing).map_err(|error| corrupt("message", error))?
+    };
+    let message = if self.by_orchestrator {
+      message
+        .sent_by_orchestrator()
+        .map_err(|error| corrupt("message", error))?
+    } else {
+      message
     };
     match self.recovery_sequence {
       None => Ok(message),

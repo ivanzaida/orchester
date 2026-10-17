@@ -121,11 +121,23 @@ pub fn person_message(
   (body, at): (&Arc<str>, Option<Timestamp>),
   delivery: Option<Element>,
 ) -> Column {
+  let you = ctx.t("conversation.you");
+  person_side_message(id, (&you, body, at), delivery)
+}
+
+/// A message on the person's side as [`person_message`] shows it, written by `author` (the project's Orchestrator
+/// for one it sent the agents of a task) instead of *You*.
+pub fn person_side_message(
+  id: &str,
+  (author, body, at): (&str, &Arc<str>, Option<Timestamp>),
+  delivery: Option<Element>,
+) -> Column {
   let head = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(
-      Text::new(&ctx.t("conversation.you"))
+      Text::new(author)
+        .id(format!("{id}-author"))
         .variant(TypographyStyle::FieldLabel)
         .nowrap(),
     )

@@ -15,7 +15,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  Translate,
+  SentBy, Translate,
   runs::{find_run, status_now},
 };
 use crate::{
@@ -29,13 +29,21 @@ use crate::{
       SendError,
       composer::ComposerMode,
       follow::{RunnerOf, Sent, Stored, follow},
-      outgoing::{OutgoingError, Way, plan_changes, prepare_in, store_in},
+      outgoing::{OutgoingError, Way, plan_changes, prepare_in, store_by_orchestrator_in, store_in},
     },
     outside::Outside,
     run::control_message,
   },
   workspace::OpenProject,
 };
+
+/// A message of the Orchestrator chat that would decide the plan a run waits on: refused, a person decides it.
+pub fn plan_person_only() -> ToolError {
+  ToolError::refused(
+    "plan_decision_person_only",
+    vec![Message::new("orchestrator.tools.planPersonOnly")],
+  )
+}
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -62,7 +70,13 @@ pub enum SendTiming {
   AfterTurn,
 }
 
-pub async fn send_message(services: &Services, args: SendMessage, translate: &Translate) -> Result<Value, ToolError> {
+/// `send_message`; `by` the Orchestrator chat, the message is named the chat's in the task's conversation, and a
+/// message that would decide a waiting plan is refused: plan decisions stay the person's.
+pub async fn send_message(
+  services: &Services,
+  args: SendMessage,
+  (translate, by): (&Translate, SentBy),
+) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
   let (project, prepared) = blocking(move || {
@@ -75,6 +89,9 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
+    if by == SentBy::Orchestrator {
+      return Err(plan_person_only());
+    }
     let command = plan_changes(&prepared, &args.text, (Answerer::Automation, None)).map_err(refusal)?;
     services
       .runners
@@ -91,7 +108,11 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
   };
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then) = blocking(move || {
-    let (then, _) = store_in(&root, &prepared, (key, way), &text).map_err(refusal)?;
+    let store = match by {
+      SentBy::Client => store_in,
+      SentBy::Orchestrator => store_by_orchestrator_in,
+    };
+    let (then, _) = store(&root, &prepared, (key, way), &text).map_err(refusal)?;
     Ok((prepared, then))
   })
   .await?;
@@ -116,7 +137,7 @@ pub async fn send_message(services: &Services, args: SendMessage, translate: &Tr
 }
 
 /// Why the message was refused, as the tool says it.
-fn refusal(error: OutgoingError) -> ToolError {
+pub fn refusal(error: OutgoingError) -> ToolError {
   let reason = error.message();
   match error {
     OutgoingError::Store(error) | OutgoingError::Send(SendError::Store(error)) => error.into(),

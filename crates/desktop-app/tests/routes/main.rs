@@ -8,6 +8,7 @@ mod views;
 
 use std::num::NonZeroU64;
 
+use lurq::router::RouteMatch;
 use orchester_app::routes::{
   ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage,
   Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
@@ -24,6 +25,11 @@ const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 /// A search and a file path with every character a query must escape, and some it need not.
 const AWKWARD: &str = "retry & jitter #2 ? 100% = ü/слово+";
+
+/// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
+fn matched(chain: &[RouteMatch]) -> String {
+  chain.iter().skip(1).map(RouteMatch::pattern_raw).collect()
+}
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
@@ -247,8 +253,8 @@ fn the_router_table_resolves_every_route_to_its_screen() {
   for route in every_route() {
     let path = route.path();
     let chain = table.resolve(&path);
-    let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
-    assert_eq!(leaf.pattern_raw(), route.pattern(), "{path}");
+    assert!(!chain.is_empty(), "{path} resolves");
+    assert_eq!(matched(&chain), route.pattern(), "{path}");
   }
 }
 
