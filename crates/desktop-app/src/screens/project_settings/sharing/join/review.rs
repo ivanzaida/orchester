@@ -40,6 +40,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
     icon::Icon,
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -109,7 +110,14 @@ impl Component for Review {
         let request = (ticked, IdempotencyKey::generate());
         match servers.join(&reviewed.entry, &root, &reviewed.review, request).await {
           Ok(done) => {
-            joined::keep(&workspace, project, &done.dropped);
+            let dropped = done.dropped;
+            // Joined either way: a note that wasn't kept only leaves Sharing without it, and `keep` logs why.
+            if orchester_workspace::background::run(move || joined::keep(&workspace, project, &dropped))
+              .await
+              .is_err()
+            {
+              tracing::warn!("what the join did was not kept for Sharing: the work was interrupted");
+            }
             Ok(())
           }
           Err(failed) => Err(Failure {
@@ -158,7 +166,7 @@ impl Component for Review {
           .map(|failure| failed(ctx, &props, &failure)),
       )
       .child(summary(ctx, &plan, &key))
-      .child(rows::table(ctx, &plan.rows, (&key, &self.unticked)))
+      .child(rows::table(ctx, &plan.rows, (&key, &self.unticked, &self.person)))
       .child(page::wide_note(
         "sharing-join-note",
         Icon::Info,
@@ -400,13 +408,17 @@ fn failed(ctx: &Ctx, props: &Props, failure: &Failure) -> Element {
     Some(true) => "sharing.join.failedUploaded",
     None => "sharing.join.failedUnknown",
   };
-  Callout::new(
+  Notice::new(
     "sharing-join-failed",
-    CalloutTone::Danger,
+    NoticeTone::Danger,
     ctx.t_args("sharing.join.failed", names.clone()),
   )
   .icon(Icon::CircleAlert)
   .body(ctx.t_args(body, names))
-  .note(failure.reason.text(ctx))
+  .part(
+    Text::new(&failure.reason.text(ctx))
+      .id("sharing-join-failed-reason")
+      .variant(ExtraTypography::Note.role()),
+  )
   .into()
 }

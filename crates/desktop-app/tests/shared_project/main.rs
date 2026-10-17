@@ -20,6 +20,7 @@ mod linking;
 mod make_local;
 mod members;
 mod no_server;
+mod rejoin;
 #[path = "../project_settings/run_fixture.rs"]
 mod run_fixture;
 #[path = "../../../workspace/tests/server_support/mod.rs"]

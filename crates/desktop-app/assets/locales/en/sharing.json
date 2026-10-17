@@ -188,9 +188,14 @@
         "connect": "Connect to {{host}}…"
       },
       "notMember": {
-        "title": "No project you're a member of here",
-        "body": "{{address}} answered as if it had no project: either there is none, or you aren't a member of it, and a server doesn't tell the two apart. Nothing was sent or uploaded.",
-        "ask": "Ask for an invite from whoever shared the address with you. It reaches you in Settings › Orchester, and accepting it opens the join review."
+        "title": "{{server}} has no project you're a member of at this address",
+        "body": "Either there's no project at {{address}}, or you aren't a member of it: the server answers both alike. Ask whoever shared the address for an invite, or an owner to add your username, then check again. Nothing was uploaded.",
+        "owners": "Owners",
+        "ownersUnknown": "Not known: a server names a project's owners only to its members",
+        "username": "Your username",
+        "checkAgain": "Check again",
+        "checked": "Checked {{time}} · still not a member",
+        "note": "Orchester only asked {{server}} for the project at this address; it sent nothing else."
       }
     },
     "linked": {
@@ -445,7 +450,8 @@
       "failed": "Couldn't join {{key}}",
       "failedNothing": "Nothing was uploaded and {{project}} is still local. Your ticks are kept; try again when {{server}} can be reached.",
       "failedUploaded": "Your tasks reached {{server}}, but this computer couldn't finish joining. Your ticks are kept; trying again links them without uploading them twice.",
-      "failedUnknown": "{{project}} is still local. The connection was lost while your tasks were sent, so some may have reached {{server}}; trying again doesn't upload them twice."
+      "failedUnknown": "{{project}} is still local. The connection was lost while your tasks were sent, so some may have reached {{server}}; trying again doesn't upload them twice.",
+      "linkedElsewhere": "This checkout is linked to another project already, so nothing was read or sent. A checkout links to one project: make it local first in its Sharing to join this one."
     },
     "joined": {
       "heading": "You joined {{key}} on {{server}}",
@@ -509,7 +515,18 @@
       "addTitle": "Choose the checkout folder",
       "addHint": "For a folder Orchester doesn't know yet. Not cloned? Clone {{hint}} yourself first: the server never holds code.",
       "notGit": "{{path}} can't be linked: Orchester needs a git checkout of {{hint}}, and there's no .git folder there. Pick the folder you cloned.",
-      "notAdded": "{{path}} couldn't be added. The reason is in Orchester's log; pick another folder."
+      "notAdded": "{{path}} couldn't be added. The reason is in Orchester's log; pick another folder.",
+      "notGitLine": "Not a git checkout: there's no .git folder here",
+      "notGitNote": "A downloaded archive can't run agents' branches and worktrees. Pick the folder you cloned.",
+      "addAnother": "Pick another folder.",
+      "addedNote": "Adds it to All projects as it is; Orchester keeps its own data there and changes nothing else in the folder.",
+      "addFirst": "Continue to the join review stays unavailable until a checkout is picked.",
+      "waits": {
+        "title": "{{project}} waits in Settings › Orchester",
+        "body": "You're a member of {{project}} on {{server}}; nothing is linked or uploaded yet. {{server}} in Settings › Orchester lists {{project}} with Link a checkout…, which brings you back here.",
+        "link": "Link a checkout…",
+        "open": "Open Settings › Orchester"
+      }
     }
   }
 }

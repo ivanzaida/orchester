@@ -9,6 +9,7 @@
 
 mod confirm;
 mod discovery;
+mod not_member;
 mod parts;
 mod rows;
 
@@ -83,8 +84,8 @@ impl DevtoolsInspectable for Picked {}
 enum Problem {
   /// The address is on a server this computer is not connected to; nothing was sent there.
   NotConnected(String),
-  /// No project there the person is a member of; the server answers both alike.
-  NoProject(String),
+  /// No project there the person is a member of; the server answers both alike. The address, and when it answered.
+  NoProject(String, orchester_core::time::Timestamp),
   Other(Said),
 }
 
@@ -302,7 +303,7 @@ async fn resolve(
 
 fn sharing_problem(error: &SharingError, address: &str) -> Problem {
   match error {
-    SharingError::NoProject => Problem::NoProject(address.to_owned()),
+    SharingError::NoProject => Problem::NoProject(address.to_owned(), orchester_core::time::Timestamp::now()),
     error => Problem::Other(sharing_said(error)),
   }
 }

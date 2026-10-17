@@ -74,6 +74,8 @@ fn every_route() -> Vec<Route> {
     )),
     at(ProjectPage::Join(join_target())),
     Route::Invite(join_target()),
+    at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
+    at(ProjectPage::KeptTask(key("KON-12"), TaskView::Conversation)),
     at(ProjectPage::Tasks(
       TaskList::new(TaskListTab::InReview)
         .with_search("  spaced  ")
@@ -228,6 +230,10 @@ fn joining_paths_are_the_documented_ones() {
     (
       at(ProjectPage::Tasks(TaskList::default().with_not_shared(true))),
       format!("{root}/tasks?show=not-shared"),
+    ),
+    (
+      at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
+      format!("{root}/tasks/kept/KON-12/summary"),
     ),
   ];
   for (route, path) in paths {

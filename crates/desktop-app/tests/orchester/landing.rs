@@ -100,3 +100,28 @@ fn orchester_the_invite_landing_lists_the_checkouts_to_pick() {
   );
   assert_eq!(server.task_keys(&kontur), ["KTR-1"], "nothing was uploaded");
 }
+
+#[test]
+fn orchester_an_invite_to_a_project_linked_here_opens_its_sharing() {
+  let cloud = AccountCloud::start();
+  let (server, kontur, invite) = invited(&cloud);
+  let mut window = signed_in_with(&cloud, Some(KONTUR_REMOTE));
+  local_task(&window, "Export invoices as PDF");
+  press(&mut window, &format!("orchester-invite-{invite}-accept"));
+  press(&mut window, "sharing-join-confirm");
+  shows(&mut window, "sharing-joined");
+  let keys = server.task_keys(&kontur);
+
+  // Invited again, to the project this checkout is linked to: accepting it shows the project's Sharing.
+  let again = server.project_email_invite(EMAIL, &kontur);
+  cloud.invite(&again, Some(("Kontur", &format!("{}/kontur", server.url()))));
+  super::harness::go(
+    &mut window,
+    Route::Orchester(orchester_app::routes::OrchesterView::default()),
+    &format!("orchester-invite-{again}-accept"),
+  );
+  press(&mut window, &format!("orchester-invite-{again}-accept"));
+  shows(&mut window, "sharing-keys");
+  assert!(window.tree.get_element_by_id("sharing-join").is_none(), "no review");
+  assert_eq!(server.task_keys(&kontur), keys, "nothing went up again");
+}

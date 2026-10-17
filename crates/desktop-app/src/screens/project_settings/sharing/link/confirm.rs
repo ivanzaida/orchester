@@ -47,7 +47,7 @@ impl Link {
     control = control.with_children(self.person.reason(ctx, LINK));
     let problem = resolving.error.clone().filter(|_| !resolving.is_pending());
     if let Some(problem) = problem {
-      control = control.child(problem_part(ctx, &problem));
+      control = control.with_children(problem_part(ctx, &problem));
     }
     control = control.child(page::icon_note(
       "sharing-link-hint",
@@ -63,7 +63,7 @@ impl Link {
   }
 
   /// What the person chose: an address typed or taken, else the project picked in the list.
-  fn choice(&self, props: &Props, listed: Option<&Result<Listed, Said>>) -> Option<Choice> {
+  pub(super) fn choice(&self, props: &Props, listed: Option<&Result<Listed, Said>>) -> Option<Choice> {
     let typed = self.address.get();
     if !typed.trim().is_empty() {
       return Some(Choice::Address(typed));
@@ -140,8 +140,8 @@ impl Link {
   }
 }
 
-fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
-  match problem {
+fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Option<Element> {
+  Some(match problem {
     Problem::NotConnected(host) => {
       let navigation = Navigation::of(ctx);
       Callout::new(
@@ -162,16 +162,8 @@ fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
       )
       .into()
     }
-    // The server answers a non-member as if there were no project: nobody can be named, and nothing more is sent.
-    Problem::NoProject(address) => Callout::new(
-      "sharing-no-project",
-      CalloutTone::Warning,
-      ctx.t("sharing.link.notMember.title"),
-    )
-    .icon(Icon::UserX)
-    .body(ctx.t_args("sharing.link.notMember.body", [("address", address.as_str())]))
-    .note(ctx.t("sharing.link.notMember.ask"))
-    .into(),
+    // Said at the section's width, under it ([`Link::not_member`]).
+    Problem::NoProject(..) => return None,
     Problem::Other(said) => field_error("sharing-link-error", &said.text(ctx)).into(),
-  }
+  })
 }

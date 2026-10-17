@@ -54,6 +54,11 @@ pub fn before_showing(app: &mut App, tree: &mut Tree, (state, seeded): (State, &
       press(app, tree, "orchester-landing-add")?;
       until(app, tree, "orchester-landing-refused")
     }
+    State::Later => {
+      until(app, tree, "orchester-landing-later")?;
+      press(app, tree, "orchester-landing-later")?;
+      until(app, tree, "orchester-landing-waits")
+    }
     _ => Ok(()),
   }
 }

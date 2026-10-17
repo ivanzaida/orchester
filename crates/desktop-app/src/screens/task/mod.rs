@@ -53,20 +53,24 @@ use crate::{
   },
 };
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, view: &TaskView) -> Element {
+/// The page of the task `key`; `kept`: the task kept *Not shared* with that key, which a shared task may have too.
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, (key, kept): (&TaskKey, bool), view: &TaskView) -> Element {
   let props = PageProps {
     project: project.clone(),
     key: key.clone(),
+    kept,
     tab: view.tab(),
   };
   // Keyed by the task, not the tab: the frame stays as the tabs switch.
-  ctx.mount_keyed::<TaskPage>(&format!("task-page-{key}"), props)
+  let place = if kept { "kept-" } else { "" };
+  ctx.mount_keyed::<TaskPage>(&format!("task-page-{place}{key}"), props)
 }
 
 #[derive(Clone, PartialEq)]
 struct PageProps {
   project: ShownProject,
   key: TaskKey,
+  kept: bool,
   tab: TaskTab,
 }
 
@@ -87,13 +91,17 @@ impl Component for TaskPage {
     let found = match props.project.feed.tasks.get() {
       TasksState::Loading => return page(loading("task-loading", &ctx.t("task.page.loading"))),
       TasksState::Failed(reason) => return page(read_failed(ctx, &reason, None)),
-      // A task kept Not shared keeps its key from before the join; its page is read-only.
-      TasksState::Ready(tasks) => tasks
-        .tasks
-        .iter()
-        .chain(tasks.not_shared.iter())
-        .find(|task| *task.key() == props.key)
-        .map(|task| task.id()),
+      // A task kept Not shared keeps its key from before the join, which a shared task may have too: its own
+      // address names it. A link to a key no shared task has still finds it.
+      TasksState::Ready(tasks) => {
+        let find =
+          |list: &[orchester_core::task::Task]| list.iter().find(|task| *task.key() == props.key).map(|task| task.id());
+        if props.kept {
+          find(&tasks.not_shared)
+        } else {
+          find(&tasks.tasks).or_else(|| find(&tasks.not_shared))
+        }
+      }
     };
     let Some(task) = found else {
       return page(not_found(ctx, &props));

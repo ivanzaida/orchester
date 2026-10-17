@@ -94,7 +94,8 @@ pub fn seed(
     | State::LandingNotGit
     | State::LandingLinked
     | State::LandingDirect
-    | State::Later => landing(state, (&checkouts, &target), (&services.servers, runtime))?,
+    | State::Later
+    | State::LaterEntry => landing(state, (&checkouts, &target), (&services.servers, runtime))?,
     _ => (
       kontur_route(state, (&checkouts, &target), (services, runtime))?,
       folder.to_owned(),
@@ -141,7 +142,7 @@ fn kontur_route(
     State::TasksFormerKey => tasks(TaskList::default().with_search("KON-3")),
     State::TasksOnlyNotShared => tasks(TaskList::default().with_search("KON-5")),
     State::TasksNotSharedSearch => tasks(TaskList::default().with_search("invoices").with_not_shared(true)),
-    State::TaskNotShared | State::TaskShare => at(ProjectPage::Task("KON-1".parse()?, Default::default())),
+    State::TaskNotShared | State::TaskShare => at(ProjectPage::KeptTask("KON-1".parse()?, Default::default())),
     State::TaskJoined => at(ProjectPage::Task(was(&repo, "KON-3")?, Default::default())),
     _ => tasks(TaskList::default()),
   })
@@ -177,9 +178,9 @@ fn landing(
       checkouts.kontur(true)?;
       (invite, folder.to_owned())
     }
-    State::LandingNone | State::Later => {
+    State::LandingNone | State::Later | State::LaterEntry => {
       checkouts.billing(servers, runtime)?;
-      let route = if state == State::Later {
+      let route = if state == State::LaterEntry {
         Route::Orchester(OrchesterView::server(target.server))
       } else {
         invite

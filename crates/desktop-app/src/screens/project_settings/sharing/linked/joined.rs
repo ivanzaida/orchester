@@ -23,9 +23,9 @@ use crate::{
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
-    callout::{Callout, CalloutTone},
     form_section::section,
     icon::Icon,
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -63,7 +63,14 @@ pub fn read(workspace: &Workspace, project: ProjectId) -> Option<Note> {
       return None;
     }
   };
-  let value: serde_json::Value = serde_json::from_str(&text).ok()?;
+  let value: serde_json::Value = match serde_json::from_str(&text) {
+    Ok(value) => value,
+    // Only this app writes it; a note that can't be read is left out of Sharing rather than shown wrong.
+    Err(error) => {
+      tracing::warn!(%error, "what the join did can't be read: its note is corrupt");
+      return None;
+    }
+  };
   let dropped = value
     .get("dropped")?
     .as_array()?
@@ -121,9 +128,10 @@ pub(in crate::screens::project_settings::sharing) fn callout(
     body = format!("{body} {}", ctx.t_args("sharing.joined.dropped", [("links", links)]));
   }
   let navigation = Navigation::of(ctx);
-  Callout::new(
+  // The neutral notice, its actions at the end (`YdKuq`), as Make local's outcome.
+  Notice::new(
     "sharing-joined",
-    CalloutTone::Success,
+    NoticeTone::Info,
     ctx.t_args("sharing.joined.heading", [("key", key), ("server", server)]),
   )
   .icon(Icon::CircleCheck)
@@ -139,7 +147,7 @@ pub(in crate::screens::project_settings::sharing) fn callout(
   .action(
     ActionButton::new(
       "sharing-joined-open",
-      ButtonKind::Secondary,
+      ButtonKind::Primary,
       ctx.t("sharing.joined.openTasks"),
     )
     .icon(Icon::ListChecks)

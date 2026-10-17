@@ -21,10 +21,11 @@ use lurq::{
 };
 use orchester_core::id::IdempotencyKey;
 use orchester_exec::programs::Programs;
+use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
   sharing::{
-    RemoteMatch, ServerEntry, Servers, SharingError,
+    ProjectAddress, RemoteMatch, ServerEntry, Servers, SharingError,
     project::{JoinReview, first_link::LinkKind, link::checkout_origin},
   },
 };
@@ -57,6 +58,8 @@ enum Resolved {
   Review(Arc<Reviewed>),
   /// One of them has none: the first link's page.
   Link(Arc<Upload>),
+  /// The checkout is linked to this project already: its Sharing shows it.
+  Here,
 }
 
 impl PartialEq for Resolved {
@@ -64,6 +67,7 @@ impl PartialEq for Resolved {
     match (self, other) {
       (Self::Review(one), Self::Review(two)) => Arc::ptr_eq(one, two),
       (Self::Link(one), Self::Link(two)) => Arc::ptr_eq(one, two),
+      (Self::Here, Self::Here) => true,
       _ => false,
     }
   }
@@ -145,6 +149,7 @@ impl Component for JoinPage {
     match (state.data, state.error) {
       (Some(Resolved::Review(reviewed)), _) => review::page(ctx, &props.project, reviewed),
       (Some(Resolved::Link(upload)), _) => self.link(ctx, &props.project, upload),
+      (Some(Resolved::Here), _) => self.here(ctx, &props.project),
       (None, Some(reason)) => self.failed(ctx, &reason),
       (None, None) => page::screen(
         loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
@@ -155,6 +160,22 @@ impl Component for JoinPage {
 }
 
 impl JoinPage {
+  /// Sharing of the checkout linked to this project already, in place of the join, once.
+  fn here(&self, ctx: &mut Ctx, project: &ShownProject) -> Element {
+    let mut opened = self.opened.lock();
+    if !*opened {
+      *opened = true;
+      Navigation::of(ctx).replace(Route::Project(
+        project.open.project.id(),
+        ProjectPage::Settings(ProjectSettingsTab::Sharing),
+      ));
+    }
+    page::screen(
+      loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
+      page::scroll(lurq::components::Column::new()),
+    )
+  }
+
   /// The first link's page for `upload`, opened once.
   fn link(&self, ctx: &mut Ctx, project: &ShownProject, upload: Arc<Upload>) -> Element {
     let mut opened = self.opened.lock();
@@ -179,7 +200,7 @@ impl JoinPage {
     page::screen(
       load_error(
         ctx,
-        "sharing-join-failed",
+        "sharing-join-unavailable",
         (&ctx.t("sharing.join.loadFailed"), &text),
         move || retries.update(|count| *count += 1),
       ),
@@ -190,6 +211,23 @@ impl JoinPage {
 
 /// What joining `target` would do for the checkout at `root`.
 async fn resolve(servers: &Servers, programs: &Programs, root: PathBuf, target: &JoinTarget) -> Result<Resolved, Said> {
+  // A checkout links to one project: linked to this one, it is shown; linked to another, nothing is read or sent.
+  let local = root.clone();
+  let link = background::run(move || ProjectDb::open(&local).and_then(|db| db.sharing()))
+    .await
+    .map_err(|_| Said::new("cloud.errors.local"))?
+    .map_err(|_| Said::new("cloud.errors.local"))?;
+  if let Some(link) = link {
+    let slug = link
+      .address
+      .as_deref()
+      .and_then(|address| ProjectAddress::parse(address).ok())
+      .map(|address| address.slug().to_owned());
+    if link.server == target.server && slug.as_deref() == Some(target.slug()) {
+      return Ok(Resolved::Here);
+    }
+    return Err(Said::new("sharing.join.linkedElsewhere"));
+  }
   let all = servers.clone();
   let entry = background::run(move || all.entries())
     .await

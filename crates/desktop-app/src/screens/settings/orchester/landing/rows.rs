@@ -14,7 +14,7 @@ use lurq::{
   components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_api::MemberRole;
 use orchester_workspace::{
@@ -25,12 +25,11 @@ use orchester_workspace::{
   },
 };
 
-use super::{Added, Picked, Said};
+use super::{Added, Picked, Said, adding};
 use crate::{
   screens::settings::orchester::shown_address,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
-    button::{ActionButton, ButtonKind},
     chip::{BadgeTone, badge},
     code_box::CodeBox,
     detail_row::{DetailValue, detail_row},
@@ -77,7 +76,8 @@ pub(super) fn body(
     .id("orchester-landing-checkouts")
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm);
-  if !shown.iter().any(|checkout| checkout.choosable()) {
+  let shown_choosable = shown.iter().any(|checkout| checkout.choosable());
+  if !shown_choosable {
     list = list.child(no_checkout(ctx, landing));
   }
   for checkout in shown {
@@ -86,13 +86,14 @@ pub(super) fn body(
       ctx,
       landing,
       checkout,
-      (chosen == Some(checkout.id), added),
+      (chosen == Some(checkout.id) && checkout.choosable(), added),
       picked,
     ));
   }
+  let none = !shown_choosable;
   list = list
-    .with_children(refused(ctx, landing, add))
-    .child(add_row(ctx, landing, add));
+    .with_children(adding::refused(ctx, landing, add))
+    .child(adding::add_row(ctx, landing, (add, none)));
   Column::new()
     .id("orchester-landing")
     .width(Dimension::Pct(100.0))
@@ -375,61 +376,5 @@ fn no_checkout(ctx: &mut Ctx, landing: &Landing) -> Element {
         ),
     )
     .with_children(command)
-    .into()
-}
-
-/// A folder that couldn't be added: not a git checkout, or not read.
-fn refused(ctx: &Ctx, landing: &Landing, add: &FutureAction<Arc<str>, Added, Said>) -> Option<Element> {
-  let state = add.state().get();
-  if state.is_pending() {
-    return None;
-  }
-  let hint = landing
-    .project
-    .remote_hint
-    .as_ref()
-    .map_or_else(|| landing.project.name.clone(), |hint| hint.as_str().to_owned());
-  let text = match state.data? {
-    Added::NotGit(folder) => ctx.t_args(
-      "sharing.landing.notGit",
-      [("path", folder.display().to_string()), ("hint", hint)],
-    ),
-    Added::Failed(folder) => ctx.t_args("sharing.landing.notAdded", [("path", folder.display().to_string())]),
-    Added::Closed | Added::Project(_) => return None,
-  };
-  Some(crate::ui::field::field_error("orchester-landing-refused", &text).into())
-}
-
-/// *Add a checkout folder…* with what it is for.
-fn add_row(ctx: &Ctx, landing: &Landing, add: &FutureAction<Arc<str>, Added, Said>) -> Element {
-  let button = ActionButton::new(
-    "orchester-landing-add",
-    ButtonKind::Secondary,
-    ctx.t("sharing.landing.add"),
-  )
-  .icon(Icon::FolderPlus);
-  let button = if add.state().get().is_pending() {
-    button.loading()
-  } else {
-    let (add, title) = (add.clone(), ctx.t("sharing.landing.addTitle"));
-    button.on_click(move || add.run(title.clone()))
-  };
-  let hint = landing
-    .project
-    .remote_hint
-    .as_ref()
-    .map_or_else(|| landing.project.name.clone(), |hint| hint.as_str().to_owned());
-  Row::new()
-    .id("orchester-landing-add-row")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::new().top(SpacingSize::Xs))
-    .spacing(SpacingSize::Md)
-    .align_items(Alignment::Center)
-    .child(button)
-    .child(
-      Text::new(&ctx.t_args("sharing.landing.addHint", [("hint", hint)]))
-        .variant(ExtraTypography::Note.role())
-        .flex(1.0),
-    )
     .into()
 }

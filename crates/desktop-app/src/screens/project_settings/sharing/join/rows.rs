@@ -17,6 +17,7 @@ use orchester_workspace::sharing::project::ReviewTask;
 
 use super::plan::{Planned, Unticked};
 use crate::{
+  screens::settings::orchester::PersonOnly,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -26,16 +27,20 @@ use crate::{
   },
 };
 
-/// The columns (`izogn`): the box 26, the local key 72, the task the room left, workflow and run 200, what it becomes
-/// 106.
-const TICK: ColumnWidth = ColumnWidth::Fixed(26.0);
+/// The columns (`izogn`): the box 16, the local key 72, the task the room left, workflow and run 200, what it becomes
+/// 120.
+const TICK: ColumnWidth = ColumnWidth::Fixed(16.0);
 const KEY: ColumnWidth = ColumnWidth::Fixed(72.0);
 const TASK: ColumnWidth = ColumnWidth::Fill;
 const WORKFLOW: ColumnWidth = ColumnWidth::Fixed(200.0);
-const BECOMES: ColumnWidth = ColumnWidth::Fixed(106.0);
+const BECOMES: ColumnWidth = ColumnWidth::Fixed(120.0);
 
 /// The table of `rows`; a press on a box that can be unticked changes `unticked`.
-pub(super) fn table(ctx: &mut Ctx, rows: &[Planned<'_>], (key, unticked): (&str, &Signal<Unticked>)) -> Element {
+pub(super) fn table(
+  ctx: &mut Ctx,
+  rows: &[Planned<'_>],
+  (key, unticked, person): (&str, &Signal<Unticked>, &PersonOnly),
+) -> Element {
   let headings = [
     (TICK, None),
     (KEY, Some(ctx.t("sharing.join.columns.key"))),
@@ -56,25 +61,43 @@ pub(super) fn table(ctx: &mut Ctx, rows: &[Planned<'_>], (key, unticked): (&str,
     .clip()
     .child(table_header("sharing-join-table-header", &columns, false));
   for row in rows {
-    table = table.child(line(ctx, row, (key, unticked)));
+    table = table.child(line(ctx, row, (key, unticked, person)));
   }
-  table.into()
+  // What goes up is a person's choice, as the join is: an MCP client's tick changes nothing and says why.
+  let refused = rows
+    .iter()
+    .filter_map(|row| person.reason(ctx, &tick_id(row.task)))
+    .collect::<Vec<_>>();
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(table)
+    .with_children(refused)
+    .into()
 }
 
-fn line(ctx: &mut Ctx, planned: &Planned<'_>, (key, unticked): (&str, &Signal<Unticked>)) -> Row {
+/// The id of `task`'s box.
+fn tick_id(task: &ReviewTask) -> String {
+  format!("sharing-join-row-{}-tick", task.task.key())
+}
+
+fn line(ctx: &mut Ctx, planned: &Planned<'_>, (key, unticked, person): (&str, &Signal<Unticked>, &PersonOnly)) -> Row {
   let task = planned.task;
   let local = task.task.key().to_string();
   let id = format!("sharing-join-row-{local}");
   let mut tick = Toggle::new(
-    format!("{id}-tick"),
+    tick_id(task),
     ToggleKind::Checkbox,
     planned.ticked,
     ctx.t_args("sharing.join.tick", [("task", local.as_str())]),
   )
   .hide_label();
   if !task.locked() {
-    let (unticked, task) = (unticked.clone(), task.task.id());
+    let (unticked, person, button, task) = (unticked.clone(), person.clone(), tick_id(task), task.task.id());
     tick = tick.on_change(move |on| {
+      if !person.allows(&button) {
+        return;
+      }
       let mut set = unticked.get_untracked();
       if on {
         set.0.remove(&task);
@@ -106,6 +129,7 @@ fn line(ctx: &mut Ctx, planned: &Planned<'_>, (key, unticked): (&str, &Signal<Un
       KEY,
       Text::new(&local)
         .variant(ExtraTypography::MonoKey.role())
+        .color(PaletteColor::TextSecondary)
         .nowrap()
         .into(),
     ))

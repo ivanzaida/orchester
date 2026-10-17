@@ -147,7 +147,8 @@ fn share_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
     return None;
   }
   let share = PageState::of(ctx).share;
-  let button = ActionButton::new("task-share", ButtonKind::Primary, ctx.t("task.notShared.share")).icon(Icon::Upload);
+  let button =
+    ActionButton::new("task-share", ButtonKind::Primary, ctx.t("task.notShared.share")).icon(Icon::CloudUpload);
   if share.get() {
     return Some(button.disabled());
   }

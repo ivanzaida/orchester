@@ -96,12 +96,14 @@ pub enum State {
   LandingLinked,
   /// The invite landing with the one checkout that matches: it opens the join review at once (`d8oDsO`).
   LandingDirect,
-  /// *Later*: the server's entry in Settings › Orchester, KTR with *Link a checkout…* (`d8oDsO`).
+  /// *Later* on the landing: *Kontur waits in Settings › Orchester* (`d8oDsO`).
   Later,
+  /// The server's entry in Settings › Orchester, Kontur with *Link a checkout…*, which *Later*'s notice opens.
+  LaterEntry,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 22] = [
+  const ALL: [(&'static str, Self); 23] = [
     ("join-review", Self::JoinReview),
     ("join-unticked", Self::JoinUnticked),
     ("join-failed", Self::JoinFailed),
@@ -124,6 +126,7 @@ impl State {
     ("landing-linked", Self::LandingLinked),
     ("landing-direct", Self::LandingDirect),
     ("later", Self::Later),
+    ("later-entry", Self::LaterEntry),
   ];
 
   fn named(name: &str) -> Option<Self> {

@@ -62,7 +62,14 @@ impl Component for TaskListRow {
     let key = row.key.clone();
     let navigation = Navigation::of(ctx);
     let task: TaskKey = key.parse().expect("a task's key reads back as a task key");
-    let open = Route::Project(props.project, ProjectPage::Task(task, TaskView::of(TaskTab::Summary)));
+    // A task kept Not shared has an address of its own: a shared task may have its key (`R4elt`).
+    let view = TaskView::of(TaskTab::Summary);
+    let page = if row.not_shared {
+      ProjectPage::KeptTask(task, view)
+    } else {
+      ProjectPage::Task(task, view)
+    };
+    let open = Route::Project(props.project, page);
     let pipeline = pipeline_label(ctx, &row.pipeline);
     let line = TableRow::new(format!("task-row-{key}"))
       .cell(

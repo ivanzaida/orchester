@@ -6,6 +6,7 @@
 //! chosen project; nothing is sent until the review is confirmed. *Later* leaves the invite accepted: the server's
 //! entry in Settings › Orchester lists the project with *Link a checkout…*.
 
+mod adding;
 mod rows;
 
 use std::{path::PathBuf, sync::Arc};
@@ -26,7 +27,7 @@ use orchester_workspace::{
   background,
   sharing::{
     Servers,
-    project::landing::{CheckoutRefusal, Landing},
+    project::landing::{CheckoutRefusal, Landing, Linked},
   },
 };
 use parking_lot::Mutex;
@@ -34,7 +35,7 @@ use parking_lot::Mutex;
 use super::{Said, sharing_said};
 use crate::{
   navigation::Navigation,
-  routes::{JoinTarget, OrchesterView, ProjectPage, Route, Screen},
+  routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route, Screen},
   services::{
     Services,
     path_picker::{PathKind, PathPicker},
@@ -44,6 +45,7 @@ use crate::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     icon::Icon,
+    notice::{Notice, NoticeTone},
     state::{load_error, loading},
   },
 };
@@ -105,6 +107,8 @@ struct LandingPage {
   revision: Signal<u64>,
   /// The landing opened the review at once; it does so once.
   skipped: Mutex<bool>,
+  /// *Later* was pressed: the page says where the invite waits.
+  later: Signal<bool>,
 }
 
 impl Component for LandingPage {
@@ -142,6 +146,7 @@ impl Component for LandingPage {
       add,
       revision,
       skipped: Mutex::new(false),
+      later: ctx.signal(false),
     }
   }
 
@@ -167,7 +172,12 @@ impl Component for LandingPage {
           loading("orchester-landing-opening", &ctx.t("sharing.landing.opening")).into()
         } else {
           let header = self.header(ctx, Some(&landing), &target);
-          return page(header, rows::body(ctx, &landing, (&self.picked, &self.add)));
+          let body = if self.later.get() {
+            self.waits(ctx, &landing)
+          } else {
+            rows::body(ctx, &landing, (&self.picked, &self.add))
+          };
+          return page(header, body);
         }
       }
       (None, Some(reason)) => {
@@ -187,7 +197,8 @@ impl Component for LandingPage {
 }
 
 impl LandingPage {
-  /// Opens the review in the checkout `landing` names as the one, once: the page itself is skipped.
+  /// Opens the review in the checkout `landing` names as the one, or the Sharing of the one linked to the project
+  /// already, once: the page itself is skipped.
   fn open_at_once(&self, ctx: &mut Ctx, landing: &Landing, target: &JoinTarget) -> bool {
     let Some(checkout) = landing.direct() else {
       return false;
@@ -195,7 +206,13 @@ impl LandingPage {
     let mut skipped = self.skipped.lock();
     if !*skipped {
       *skipped = true;
-      Navigation::of(ctx).replace(Route::Project(checkout.id, ProjectPage::Join(target.clone())));
+      // A checkout linked to the project already shows its Sharing; nothing is joined again.
+      let page = if checkout.linked == Some(Linked::This) {
+        ProjectPage::Settings(ProjectSettingsTab::Sharing)
+      } else {
+        ProjectPage::Join(target.clone())
+      };
+      Navigation::of(ctx).replace(Route::Project(checkout.id, page));
     }
     true
   }
@@ -212,7 +229,7 @@ impl LandingPage {
       CrumbSeparator::Chevron,
       vec![
         Crumb::to(ctx.t(Screen::Settings.title_key()), navigation.to(Route::Settings)),
-        Crumb::to(ctx.t("settings.tabs.orchester"), navigation.to(to_orchester.clone())),
+        Crumb::to(ctx.t("settings.tabs.orchester"), navigation.to(to_orchester)),
         Crumb::here(ctx.t_args("sharing.landing.crumb", [("project", project.as_str())])),
       ],
     );
@@ -222,7 +239,10 @@ impl LandingPage {
       ButtonKind::Ghost,
       ctx.t("sharing.landing.later"),
     )
-    .opens(navigation.to(to_orchester));
+    .on_click({
+      let later = self.later.clone();
+      move || later.set(true)
+    });
     let go_on = self.continue_button(ctx, landing, target);
     let column = Column::new()
       .width(Dimension::Px(HEAD_WIDTH))
@@ -232,7 +252,8 @@ impl LandingPage {
         Row::new()
           .width(Dimension::Pct(100.0))
           .spacing(SpacingSize::Md)
-          .align_items(Alignment::Center)
+          // The actions stand level with the description, under the title (`xeFRB`).
+          .align_items(Alignment::End)
           .child(text)
           .child(Spacer::new().width(Dimension::Px(0.0)))
           .child(later)
@@ -252,6 +273,46 @@ impl LandingPage {
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(column)
       .into()
+  }
+
+  /// *Kontur waits in Settings › Orchester* (`Later` in `d8oDsO`): the invite stays accepted and nothing is linked;
+  /// *Link a checkout…* comes back to the list, *Open Settings › Orchester* opens the server's entry, which lists the
+  /// project with *Link a checkout…*.
+  fn waits(&self, ctx: &mut Ctx, landing: &Landing) -> Element {
+    let names = [
+      ("project", landing.project.name.as_str()),
+      ("server", landing.entry.stored.name.as_str()),
+    ];
+    let back = self.later.clone();
+    let navigation = Navigation::of(ctx);
+    let entry = Route::Orchester(OrchesterView::server(landing.entry.stored.id));
+    Notice::new(
+      "orchester-landing-waits",
+      NoticeTone::Info,
+      ctx.t_args("sharing.landing.waits.title", names),
+    )
+    .icon(Icon::CircleHelp)
+    .body(ctx.t_args("sharing.landing.waits.body", names))
+    .stacked()
+    .action(
+      ActionButton::new(
+        "orchester-landing-waits-link",
+        ButtonKind::Primary,
+        ctx.t("sharing.landing.waits.link"),
+      )
+      .icon(Icon::Link)
+      .on_click(move || back.set(false)),
+    )
+    .action(
+      ActionButton::new(
+        "orchester-landing-waits-open",
+        ButtonKind::Secondary,
+        ctx.t("sharing.landing.waits.open"),
+      )
+      .icon(Icon::ArrowUpRight)
+      .opens(navigation.to(entry)),
+    )
+    .into()
   }
 
   /// *Continue to the join review*, once a checkout that can be linked is picked; it sends nothing.

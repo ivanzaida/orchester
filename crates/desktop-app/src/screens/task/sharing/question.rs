@@ -128,7 +128,7 @@ impl Component for ShareQuestion {
       .id("task-share-question")
       .width(Dimension::Pct(100.0))
       .padding(ExtraSpacing::Inset.role())
-      .spacing(SpacingSize::Sm)
+      .spacing(ExtraSpacing::Loose.role())
       .background(PaletteColor::SurfaceRaised)
       .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
       .rounded(ExtraRadius::Tile.role())
@@ -154,7 +154,7 @@ impl ShareQuestion {
       Some(next) => ctx.t_args("task.share.confirm", [("key", next)]),
       None => ctx.t("task.share.confirmNext"),
     };
-    let share = ActionButton::new(SHARE, ButtonKind::Primary, label).icon(Icon::Upload);
+    let share = ActionButton::new(SHARE, ButtonKind::Primary, label).icon(Icon::CloudUpload);
     let share = if pending {
       share.loading()
     } else {
@@ -198,7 +198,11 @@ fn lines(
       [("project", project), ("server", server), ("key", key)],
     ),
   };
-  let mut lines = vec![line("task-share-goes", Icon::Upload, &goes)];
+  let mut lines = vec![line(
+    "task-share-goes",
+    (Icon::CloudUpload, PaletteColor::TextSecondary),
+    &goes,
+  )];
   if let Some(similar) = props
     .linked
     .as_ref()
@@ -214,25 +218,29 @@ fn lines(
         ("task", local),
       ],
     );
-    lines.push(line("task-share-similar", Icon::Copy, &words));
+    lines.push(line("task-share-similar", (Icon::Copy, PaletteColor::Warning), &words));
   }
   lines.push(line(
     "task-share-tags",
-    Icon::Tag,
+    (Icon::Tag, PaletteColor::TextSecondary),
     &ctx.t_args("task.share.tags", [("project", key)]),
   ));
-  lines.push(line("task-share-stays", Icon::Archive, &ctx.t("task.share.stays")));
+  lines.push(line(
+    "task-share-stays",
+    (Icon::Archive, PaletteColor::TextSecondary),
+    &ctx.t("task.share.stays"),
+  ));
   lines
 }
 
 /// One thing the share does, after its icon.
-fn line(id: &str, glyph: Icon, words: &str) -> Element {
+fn line(id: &str, (glyph, color): (Icon, PaletteColor), words: &str) -> Element {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Sm, color))
     .child(Text::new(words).variant(ExtraTypography::Prose.role()).flex(1.0))
     .into()
 }

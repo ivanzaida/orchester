@@ -21,6 +21,8 @@ const FILE: &str = "file";
 /// What Project settings' Sharing tab asks once open.
 const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
+/// A task kept Not shared, by its kept key (`/tasks/kept/KON-2/summary`).
+const KEPT: &str = "kept";
 /// What Project settings' Sharing tab shows in place of itself: the join review.
 const VIEW: &str = "view";
 const JOIN: &str = "join";
@@ -34,6 +36,8 @@ pub enum ProjectPage {
   Tasks(TaskList),
   NewTask,
   EditTask(TaskKey),
+  /// A task kept *Not shared* when the project joined, by its kept key, which a shared task may have too (`R4elt`).
+  KeptTask(TaskKey, TaskView),
   Task(TaskKey, TaskView),
   MergeQueue,
   /// The Pull requests page on its tab.
@@ -123,7 +127,7 @@ impl ProjectPage {
       Self::Tasks(_) => Screen::Tasks,
       Self::NewTask => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
-      Self::Task(..) => Screen::Task,
+      Self::Task(..) | Self::KeptTask(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
       Self::Usage(_) => Screen::Usage,
@@ -159,6 +163,7 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::KeptTask(key, view) => view.path(&format!("{tasks}/{KEPT}/{key}")),
       Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
@@ -218,6 +223,10 @@ impl ProjectPage {
       [ORCHESTRATOR, SETTINGS] => Ok(Self::OrchestratorSettings),
       [TASKS] => TaskList::take(params).map(Self::Tasks),
       [TASKS, NEW] => Ok(Self::NewTask),
+      [TASKS, KEPT, key, rest @ ..] => {
+        let key = task_key(key)?;
+        TaskView::parse(rest, params).map(|view| Self::KeptTask(key, view))
+      }
       [TASKS, key, rest @ ..] => {
         let key = task_key(key)?;
         match rest {

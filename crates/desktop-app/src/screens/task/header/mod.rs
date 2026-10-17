@@ -235,6 +235,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     props.task.project.open.project.id(),
     props.task.detail.task.key().clone(),
   );
+  let kept = props.task.detail.not_shared();
   // Changes opens on the file it showed last.
   let open = |tab: TaskTab| -> Open {
     let (navigation, changes_reads, key) = (navigation.clone(), changes_reads.clone(), key.clone());
@@ -243,7 +244,12 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
         TaskTab::Summary | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
       };
-      navigation.open(Route::Project(project, ProjectPage::Task(key.clone(), view)), at);
+      let page = if kept {
+        ProjectPage::KeptTask(key.clone(), view)
+      } else {
+        ProjectPage::Task(key.clone(), view)
+      };
+      navigation.open(Route::Project(project, page), at);
     })
   };
   let tab =

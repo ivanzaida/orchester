@@ -89,6 +89,7 @@ icons! {
   Cloud => '\u{e088}',
   CloudCheck => '\u{e66e}',
   CloudOff => '\u{e08d}',
+  CloudUpload => '\u{e091}',
   CodeXml => '\u{e206}',
   Coins => '\u{e097}',
   Compass => '\u{e09b}',
