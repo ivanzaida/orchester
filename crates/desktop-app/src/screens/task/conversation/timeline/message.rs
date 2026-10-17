@@ -46,7 +46,11 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
   };
   let avatar = if row.tool_step { Avatar::Tool } else { Avatar::Agent };
   let message = row.text.as_ref().map(|said| {
-    let body = vec![text(ctx, &format!("conversation-text-{}", row.key), said)];
+    let body = vec![text(
+      ctx,
+      &format!("conversation-text-{}", row.key),
+      (said, timeline.project),
+    )];
     chat_row(
       format!("conversation-agent-{}", row.key),
       avatar,

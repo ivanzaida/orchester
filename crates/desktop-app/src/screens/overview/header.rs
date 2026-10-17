@@ -142,7 +142,7 @@ fn actions(ctx: &mut Ctx, project: ProjectId, id: &str, heading: bool) -> Column
   .unavailable(reason.clone());
   let new_task = ActionButton::new(format!("{id}-new-task"), ButtonKind::Primary, ctx.t("overview.newTask"))
     .icon(Icon::Plus)
-    .on_click(move || navigation.go(Route::Project(project, ProjectPage::NewTask)));
+    .opens(navigation.to(Route::Project(project, ProjectPage::NewTask)));
   let row = Row::new().spacing(SpacingSize::Sm).align_items(Alignment::Center);
   let row = if heading {
     row.child(import).child(new_task)

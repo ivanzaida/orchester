@@ -34,10 +34,12 @@ pub struct Props {
   pub project: ShownProject,
   pub selection: Selection,
   pub all_empty: bool,
+  /// The scope tab shown.
+  pub tab: Tab,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.all_empty == other.all_empty
+    self.project == other.project && self.all_empty == other.all_empty && self.tab == other.tab
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -69,10 +71,7 @@ impl Component for Empty {
       .state()
       .get();
     let (new, import) = (props.selection.clone(), props.selection.clone());
-    let tab = match props.selection.view.get() {
-      View::Rule(tab, _) | View::New(tab) => tab,
-      View::Import => Tab::Project,
-    };
+    let tab = props.tab;
     let title = if props.all_empty {
       ctx.t_args(
         "instructions.emptyTitle",
@@ -103,7 +102,7 @@ impl Component for Empty {
         ctx.t("instructions.import"),
       )
       .icon(Icon::FolderOpen)
-      .on_click(move || import.open(View::Import)),
+      .opens(import.to(View::Import)),
     )
     .action(
       ActionButton::new(
@@ -112,7 +111,7 @@ impl Component for Empty {
         ctx.t("instructions.new"),
       )
       .icon(Icon::Plus)
-      .on_click(move || new.open(View::New(tab))),
+      .opens(new.to(View::new_rule(tab))),
     );
     if let Some(scan) = read.data.as_ref().filter(|scan| !scan.items.is_empty()) {
       empty = empty.child(findings(ctx, scan, &props.project.open.repo_root.to_string_lossy()));

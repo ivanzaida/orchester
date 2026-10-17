@@ -229,3 +229,34 @@ fn gate_enter_in_advanced_uses_the_address() {
       .is_some_and(|texts| texts.join("").ends_with("· test cloud"))
   });
 }
+
+#[test]
+fn gate_two_factor_tab_and_enter_go_through_the_code_step() {
+  let mut window = signed_out();
+  use_stand_in(&mut window);
+  window.data.cloud.require_codes();
+  focus_on(&mut window, "gate-email");
+  window.set("gate-email", EMAIL);
+  window.set("gate-password", PASSWORD);
+  enter(&mut window);
+  shows(&mut window, "gate-code-card");
+  focus_on(&mut window, "gate-code");
+  assert_eq!(
+    walk(&mut window, false, 4),
+    ["gate-code-back", "gate-verify", "gate-code-switch", "gate-code"],
+    "the field, Back, Verify and the link, and around"
+  );
+
+  window.set("gate-code", "000000");
+  enter(&mut window);
+  shows(&mut window, "gate-code-note");
+  let code = window.data.cloud.next_code();
+  window.set("gate-code", &code);
+  with_synthetic_input(|| enter(&mut window));
+  shows(&mut window, "gate-verify-person-only");
+  assert!(!has(&mut window, "gate-code-checking"));
+  enter(&mut window);
+  shows(&mut window, "content");
+  let services = window.launch.services().expect("services").clone();
+  assert!(services.cloud.is_signed_in());
+}

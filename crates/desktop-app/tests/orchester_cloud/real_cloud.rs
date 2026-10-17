@@ -14,8 +14,9 @@ use std::{
 
 use orchester_api::{
   Credential,
-  client::{CloudClient, ServerAddress},
+  client::{CloudClient, ServerAddress, SignInAnswer},
   cloud::{CloudPlatform, CloudSignIn, DeviceInfo, ServerLinked},
+  totp,
 };
 use orchester_core::id::IdempotencyKey;
 use parking_lot::Mutex;
@@ -111,11 +112,34 @@ impl RealCloud {
         platform: CloudPlatform::Windows,
       },
     };
-    self
-      .runtime
-      .block_on(client.sign_in(&request))
-      .expect("signed in")
-      .token
+    match self.runtime.block_on(client.sign_in(&request)).expect("signed in") {
+      SignInAnswer::SignedIn(signed_in) => signed_in.token,
+      SignInAnswer::Challenged(_) => panic!("a test device signs in before two-factor authentication is on"),
+    }
+  }
+
+  /// Turns two-factor authentication on for the account of `email`, which accepting an invite needs, through the API
+  /// from a device of the test's own, with the code an authenticator app would show; the app's secret, from which the
+  /// app's sign-in takes its code at the gate.
+  pub fn turn_on_two_factor(&self, email: &str, password: &str) -> Vec<u8> {
+    let device = self.device(email, password);
+    let start = json!({"password": password});
+    let (status, setup) = self.request("POST", "/me/two-factor", Some(device.expose()), &start);
+    assert_eq!(status, 201, "{setup}");
+    let secret = totp::decode_secret(setup["secret"].as_str().expect("secret")).expect("a base32 secret");
+    let now = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .expect("after 1970")
+      .as_secs();
+    let code = totp::code(&secret, totp::step(i64::try_from(now).expect("seconds fit")));
+    let (status, answer) = self.request(
+      "POST",
+      "/me/two-factor/confirm",
+      Some(device.expose()),
+      &json!({"code": code}),
+    );
+    assert_eq!(status, 200, "{answer}");
+    secret
   }
 
   /// Registers the team server that signed `statement`, for the account of `device`: what the server pins.

@@ -522,7 +522,7 @@ impl Fix {
     Some(
       ActionButton::new(id, ButtonKind::Primary, ctx.t(key))
         .icon(Icon::ArrowUpRight)
-        .on_click(move || navigation.go(route.clone())),
+        .opens(navigation.to(route)),
     )
   }
 }

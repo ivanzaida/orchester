@@ -16,7 +16,7 @@ use orchester_api::{
   client::{PlainHttp, ServerAddress},
 };
 use orchester_app::{
-  routes::{ProjectPage, Route, TaskList},
+  routes::{ProjectPage, ProjectSettingsTab, Route, TaskList},
   services::Services,
 };
 use orchester_core::{
@@ -120,7 +120,7 @@ pub fn seed(
   let elsewhere = (state == State::DiscoveryUnconnected).then(TestServer::start);
   let address = format!("{}/kontur", port.url());
   let seeded = Seeded {
-    route: Route::Project(project.id(), ProjectPage::Sharing { make_local: false }),
+    route: Route::Project(project.id(), ProjectPage::Settings(ProjectSettingsTab::Sharing)),
     project: project.id(),
     address,
     repo: repo.clone(),
@@ -199,7 +199,7 @@ fn linked(
       seeded.port.down();
       offline_route(state, project, &tasks)
     }
-    State::MakeLocal => Route::Project(project, ProjectPage::Sharing { make_local: true }),
+    State::MakeLocal => Route::Project(project, ProjectPage::MakeLocal),
     State::Removed | State::TasksRemoved => {
       server.remove_member(kontur, "ivan");
       runtime.block_on(open.sync())?;
@@ -230,8 +230,8 @@ fn changed_after(
   (services, runtime): (&Services, &Runtime),
   open: &ProjectServer,
 ) -> Result<Option<Route>, Box<dyn Error>> {
-  let sharing = Route::Project(seeded.project, ProjectPage::Sharing { make_local: false });
-  let make_local = Route::Project(seeded.project, ProjectPage::Sharing { make_local: true });
+  let sharing = Route::Project(seeded.project, ProjectPage::Settings(ProjectSettingsTab::Sharing));
+  let make_local = Route::Project(seeded.project, ProjectPage::MakeLocal);
   let sign_out = || -> Result<(), Box<dyn Error>> {
     let entry = services.servers.entries()?.remove(0);
     runtime.block_on(services.servers.sign_out(&entry))?;
@@ -283,9 +283,9 @@ fn linked_elsewhere(
 
 fn offline_route(state: State, project: ProjectId, tasks: &Route) -> Route {
   match state {
-    State::MakeLocalOffline => Route::Project(project, ProjectPage::Sharing { make_local: true }),
+    State::MakeLocalOffline => Route::Project(project, ProjectPage::MakeLocal),
     State::TasksOffline => tasks.clone(),
-    _ => Route::Project(project, ProjectPage::Sharing { make_local: false }),
+    _ => Route::Project(project, ProjectPage::Settings(ProjectSettingsTab::Sharing)),
   }
 }
 
@@ -300,6 +300,7 @@ fn join(
     code: server.project_code(kontur),
     username: Some("ivan".into()),
     display_name: Some("Ivan Zaida".into()),
+    proof: Some(server.code_proof("ivan")),
   };
   let address = ServerAddress::parse(&port.url())?;
   runtime.block_on(servers.join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request))?;

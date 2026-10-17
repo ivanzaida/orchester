@@ -5,7 +5,10 @@
 
 use std::sync::Arc;
 
-use lurq::{app::events::keyboard_event::KeyboardEvent, core::Signal};
+use lurq::{
+  app::events::keyboard_event::KeyboardEvent,
+  core::{ElementRef, Signal},
+};
 use orchester_core::{
   conversation::Recipient,
   id::{RunId, TaskId},
@@ -86,10 +89,12 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
 }
 
 /// What the field's keys do: Enter sends the state's way, Ctrl/Cmd+Enter the second where there is one,
-/// Shift+Enter adds a line; Esc closes the send menu, then leaves the mode's context.
+/// Shift+Enter adds a line; Esc closes the send menu, then leaves the mode's context. lurq hands a key to every
+/// node that takes keys, so Enter is the field's only while `input`, the field, has the focus: elsewhere it is, say,
+/// a focused link's in the chat.
 pub(super) fn keys(
   presses: &Sending,
-  leave: Option<Press>,
+  (leave, input): (Option<Press>, ElementRef),
   menu: Signal<bool>,
 ) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let (primary, second) = match presses {
@@ -107,7 +112,7 @@ pub(super) fn keys(
       }
       return;
     }
-    if event.key != "Enter" || event.shift {
+    if event.key != "Enter" || event.shift || !input.focused() {
       return;
     }
     // Enter sends; it never also adds a line, even with nothing to send.

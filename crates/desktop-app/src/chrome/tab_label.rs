@@ -101,7 +101,7 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
     Route::Project(_, ProjectPage::NewPipeline) => ctx.t("pipelines.new").to_string(),
-    Route::Project(project, ProjectPage::Pipeline(id)) => projects
+    Route::Project(project, ProjectPage::Pipeline(id, _) | ProjectPage::PipelineVersion(id, ..)) => projects
       .feed(*project)
       .pipeline_names
       .get()
@@ -116,7 +116,7 @@ pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
       || ctx.t(route.screen().title_key()).to_string(),
       |file| file.rsplit('/').next().unwrap_or(file).to_owned(),
     ),
-    Route::Project(_, ProjectPage::PullRequest(number)) => ctx
+    Route::Project(_, ProjectPage::PullRequest(number, _)) => ctx
       .t_args("shell.screens.pullRequestOf", [("number", number.to_string())])
       .to_string(),
     route => ctx.t(route.screen().title_key()).to_string(),

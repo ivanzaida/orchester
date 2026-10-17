@@ -98,14 +98,11 @@ fn tabs(ctx: &mut Ctx, project: ProjectId, current: OverviewTab, tasks: Option<&
         Some(tasks) => counted(ctx, &word, board_tab(tab).count(tasks)),
         None => ctx.t_args("ui.tabCount", [("label", word), ("count", unknown.clone())]),
       };
-      let navigation = navigation.clone();
-      PageTab::new(
+      PageTab::to(
         format!("overview-tab-{}", tab.name()),
         label,
         tab == current,
-        move || {
-          navigation.go(Route::Project(project, ProjectPage::Overview(tab)));
-        },
+        navigation.to(Route::Project(project, ProjectPage::Overview(tab))),
       )
     })
     .collect();
@@ -142,12 +139,10 @@ fn footer_row(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> Row {
   let navigation = Navigation::of(ctx);
   let all = ActionButton::new("overview-view-all", ButtonKind::Ghost, ctx.t("overview.tasks.viewAll"))
     .icon(Icon::ArrowRight)
-    .on_click(move || {
-      navigation.go(Route::Project(
-        project,
-        ProjectPage::Tasks(TaskList::new(TaskListTab::All)),
-      ));
-    });
+    .opens(navigation.to(Route::Project(
+      project,
+      ProjectPage::Tasks(TaskList::new(TaskListTab::All)),
+    )));
   Row::new()
     .id("overview-footer")
     .width(Dimension::Pct(100.0))

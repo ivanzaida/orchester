@@ -9,9 +9,12 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::pressable,
+  pressable::opening,
 };
-use crate::theme::{ExtraColor, ExtraSpacing, IconSize, instructions};
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraColor, ExtraSpacing, IconSize, instructions},
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RuleState {
@@ -26,7 +29,7 @@ pub struct RuleItem {
   meta: Arc<str>,
   selected: bool,
   state: RuleState,
-  open: Arc<dyn Fn() + Send + Sync>,
+  open: Open,
 }
 impl RuleItem {
   pub fn new(
@@ -35,7 +38,7 @@ impl RuleItem {
     version: impl Into<Arc<str>>,
     meta: impl Into<Arc<str>>,
     selected: bool,
-    open: impl Fn() + Send + Sync + 'static,
+    open: Open,
   ) -> Self {
     Self {
       id: id.into(),
@@ -44,7 +47,7 @@ impl RuleItem {
       meta: meta.into(),
       selected,
       state: RuleState::Draft,
-      open: Arc::new(open),
+      open,
     }
   }
   /// A published version has the green check of zmP3o; drafts use the editing glyph.
@@ -94,7 +97,7 @@ impl From<RuleItem> for Element {
         .rounded(RadiusSize::Md)
         .into();
     }
-    pressable(move || (item.open)())
+    opening(item.open)
       .id(item.id)
       .width(Dimension::Pct(100.0))
       .rounded(RadiusSize::Md)

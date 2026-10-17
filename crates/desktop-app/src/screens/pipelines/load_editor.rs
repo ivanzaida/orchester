@@ -7,12 +7,13 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::id::ResourceId;
+use orchester_core::{id::ResourceId, resource::VersionNumber};
 use orchester_workspace::{background, pipelines::data::OpenedPipeline};
 
 use super::{
   editor::{Editor, EditorProps},
   parts,
+  state::Panel,
 };
 use crate::{
   project::ShownProject,
@@ -26,6 +27,10 @@ use crate::{
 pub struct LoadProps {
   pub project: ShownProject,
   pub id: ResourceId,
+  /// The panel the route shows.
+  pub panel: Panel,
+  /// The published version the route views; `None` for the draft.
+  pub version: Option<VersionNumber>,
 }
 impl DevtoolsInspectable for LoadProps {}
 pub struct LoadEditor {
@@ -66,6 +71,8 @@ impl Component for LoadEditor {
         EditorProps {
           project: props.project,
           opened,
+          panel: props.panel,
+          version: props.version,
           reload: self.retry.clone(),
           loading: loaded.is_pending(),
         },

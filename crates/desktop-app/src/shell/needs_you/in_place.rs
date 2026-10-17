@@ -30,9 +30,10 @@ use parking_lot::Mutex;
 
 use super::{item::open_conversation, note::note};
 use crate::{
+  navigation::link::Open,
   project::Projects,
   screens::task::{
-    cards::{self, Decisions, Place, Press},
+    cards::{self, Decisions, Place},
     links, step_label,
   },
   services::Services,
@@ -55,7 +56,7 @@ pub(super) struct InPlaceProps {
   /// The item, once it no longer waits: its note takes the card's place.
   pub(super) gone: Option<NeedItem>,
   /// Opens the card in its task's conversation.
-  pub(super) conversation: Press,
+  pub(super) conversation: Open,
 }
 
 /// What opens the conversation is the same for one item, so it does not count.

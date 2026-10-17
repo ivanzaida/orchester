@@ -14,10 +14,14 @@ use orchester_server::{
   clock::SystemClock,
   config::{Config, TlsMode},
   error::ServerError,
+  host::CloudCommand,
 };
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle};
+
+#[path = "../../../workspace/tests/server_support/test_cloud.rs"]
+mod test_cloud;
 
 pub struct TestServer {
   pub server: Server,
@@ -76,8 +80,27 @@ impl TestServer {
     .expect("client")
   }
 
-  /// Joins with `code` from this computer; `username` when the code makes an account.
-  pub async fn join(&self, code: &Credential, username: Option<&str>) -> Joined {
+  /// Joins with `code`, which makes the account `username`, from this computer, with that person's identity token for
+  /// codes, which every code but the setup code needs ([`Self::code_proof`]).
+  pub async fn join(&self, code: &Credential, username: &str) -> Joined {
+    let (identity_token, key_set) = self.code_proof(username).await;
+    self
+      .join_with(code, Some(username), (Some(identity_token), Some(key_set)))
+      .await
+  }
+
+  /// Joins with an account or pairing `code` of `person`'s account, with `person`'s identity token for codes.
+  pub async fn join_as(&self, code: &Credential, person: &str) -> Joined {
+    let (identity_token, key_set) = self.code_proof(person).await;
+    self.join_with(code, None, (Some(identity_token), Some(key_set))).await
+  }
+
+  async fn join_with(
+    &self,
+    code: &Credential,
+    username: Option<&str>,
+    (identity_token, key_set): (Option<Credential>, Option<String>),
+  ) -> Joined {
     self
       .client()
       .join_with_code(&CodeJoin {
@@ -86,12 +109,36 @@ impl TestServer {
         username: username.map(Into::into),
         display_name: username.map(Into::into),
         kind: DeviceKind::App,
+        identity_token,
+        key_set,
       })
       .await
       .expect("join with a code")
   }
 
-  /// The first admin, `alice`, from the setup code; returns the device token.
+  /// What the app of `person`, signed in to Orchester Cloud with two-factor authentication, sends with a code: that
+  /// person's identity token for codes to this server from the tests' cloud, and its key set. The server pins that
+  /// cloud's root first, as its admin does on the host.
+  pub async fn code_proof(&self, person: &str) -> (Credential, String) {
+    let shown = self
+      .server
+      .host_cloud(CloudCommand::Show)
+      .await
+      .expect("the cloud link");
+    let link = match shown.root_fingerprint {
+      Some(_) => shown,
+      None => self
+        .server
+        .host_cloud(CloudCommand::Pin(test_cloud::root_key()))
+        .await
+        .expect("pin the tests' cloud"),
+    };
+    let token = test_cloud::code_token(&link.server, person);
+    (Credential::new(token), test_cloud::key_set(test_cloud::now()))
+  }
+
+  /// The first admin, `alice`, from the setup code, on a second computer joined with an account code and a two-factor
+  /// identity, as making invites needs; returns that device token.
   pub async fn admin(&self) -> SecretValue {
     let code = self
       .server
@@ -99,7 +146,13 @@ impl TestServer {
       .await
       .expect("setup code")
       .expect("no admin yet");
-    token(&self.join(&code, Some("alice")).await.token)
+    self.join_with(&code, Some("alice"), (None, None)).await;
+    let account = self
+      .server
+      .host_account_code("alice".into())
+      .await
+      .expect("account code");
+    token(&self.join_as(&account, "alice").await.token)
   }
 
   /// `username`, invited to the server by `admin` with a code and joined: their id and token.
@@ -108,7 +161,7 @@ impl TestServer {
       .post(admin, "/invites", json!({"kind":"server","delivery":"code"}))
       .await;
     let code = Credential::new(invite["code"].as_str().expect("invite code").into());
-    let joined = self.join(&code, Some(username)).await;
+    let joined = self.join(&code, username).await;
     (joined.user.id, token(&joined.token))
   }
 

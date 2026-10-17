@@ -131,11 +131,12 @@ impl Join {
                 code: Credential::new(request.code.trim().to_owned()),
                 username: filled(&request.username),
                 display_name: filled(&request.name),
+                proof: None,
               };
-              let server = servers
+              let server = cloud
                 .join_with_code(&request.address, request.trust, code)
                 .await
-                .map_err(|error| sharing_error(&error))?;
+                .map_err(|error| cloud_error(&error))?;
               joined(&servers, server).await
             }
           }

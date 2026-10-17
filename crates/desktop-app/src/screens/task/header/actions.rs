@@ -98,7 +98,7 @@ fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   Some(
     ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
       .icon(Icon::Pencil)
-      .on_click(move || navigation.go(route.clone())),
+      .opens(navigation.to(route)),
   )
 }
 

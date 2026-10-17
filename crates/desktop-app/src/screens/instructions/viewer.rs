@@ -15,8 +15,10 @@ use orchester_workspace::instructions::{
 };
 
 use super::{
-  panels::{Panel, Panels, Props},
-  preview, sources, words,
+  panels::{Panels, Props},
+  preview, sources,
+  state::Panel,
+  words,
 };
 use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, instructions},
@@ -72,7 +74,7 @@ pub fn full(ctx: &mut Ctx, state: &Panels, props: &Props, catalog: &PreviewCatal
       let panel = props.panel.clone();
       move |event: lurq::app::events::KeyboardEvent| {
         if event.key == "Escape" {
-          panel.set(Panel::Preview);
+          panel.close(Panel::Preview);
           event.prevent_default();
         }
       }
@@ -100,7 +102,7 @@ fn header(ctx: &mut Ctx, state: &Panels, props: &Props, composition: &Compositio
   let back = props.panel.clone();
   let arrow = IconButton::new("instruction-viewer-return", Icon::ArrowLeft, ctx.t("instructions.back"))
     .small()
-    .on_click(move || back.set(Panel::Preview))
+    .on_click(move || back.close(Panel::Preview))
     .render(ctx);
   let panel = props.panel.clone();
   let rule = props.panel.clone();
@@ -113,8 +115,8 @@ fn header(ctx: &mut Ctx, state: &Panels, props: &Props, composition: &Compositio
     "instruction-viewer-crumbs",
     CrumbSeparator::Chevron,
     vec![
-      Crumb::link(ctx.t("instructions.title"), move || panel.set(Panel::Preview)),
-      Crumb::link(name, move || rule.set(Panel::Preview)),
+      Crumb::link(ctx.t("instructions.title"), move || panel.close(Panel::Preview)),
+      Crumb::link(name, move || rule.close(Panel::Preview)),
       Crumb::here(ctx.t("instructions.effective")).title(),
     ],
   );
@@ -298,7 +300,7 @@ fn footer(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>, composition: &Compo
         crate::ui::button::ButtonKind::Ghost,
         ctx.t("instructions.back"),
       )
-      .on_click(move || back.set(Panel::Preview)),
+      .on_click(move || back.close(Panel::Preview)),
     )
     .into()
 }
@@ -369,7 +371,7 @@ fn unavailable(ctx: &Ctx, state: &Panels, props: &Props, catalog: &PreviewCatalo
         ctx.t("instructions.back"),
       )
       .icon(Icon::ArrowLeft)
-      .on_click(move || back.set(Panel::Preview)),
+      .on_click(move || back.close(Panel::Preview)),
     )
     .child(preview::panel(ctx, state, props, catalog))
     .into()

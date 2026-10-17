@@ -27,6 +27,14 @@ pub enum EmailPurpose {
   Reset,
   /// An invite to a team server or one of its projects.
   Invite,
+  /// Two-factor authentication was turned on for the account.
+  TwoFactorOn,
+  /// Two-factor authentication was turned off for the account.
+  TwoFactorOff,
+  /// A recovery code of the account was used to sign in.
+  RecoveryCodeUsed,
+  /// Many wrong two-factor codes were entered for the account within a day.
+  TwoFactorFailures,
 }
 
 impl EmailPurpose {
@@ -36,6 +44,10 @@ impl EmailPurpose {
       Self::AlreadyRegistered => "already_registered",
       Self::Reset => "reset",
       Self::Invite => "invite",
+      Self::TwoFactorOn => "two_factor_on",
+      Self::TwoFactorOff => "two_factor_off",
+      Self::RecoveryCodeUsed => "recovery_code_used",
+      Self::TwoFactorFailures => "two_factor_failures",
     }
   }
 }

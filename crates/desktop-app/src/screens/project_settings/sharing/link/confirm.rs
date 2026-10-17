@@ -156,7 +156,7 @@ fn problem_part(ctx: &mut Ctx, problem: &Problem) -> Element {
           ctx.t("settings.connectServer"),
         )
         .icon(Icon::Plus)
-        .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect()))),
+        .opens(navigation.to(Route::Orchester(OrchesterView::connect()))),
       )
       .into()
     }

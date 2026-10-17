@@ -14,6 +14,13 @@ export const FORGOT_FLOW_COOKIE = "__Host-orchester_forgot";
  * URL, and is used once (security review 1, B1).
  */
 export const AUTHORIZE_COOKIE = "__Host-orchester_authorize";
+/**
+ * The second step of a sign-in with two-factor authentication: the cloud's challenge, the email and where to go after,
+ * sealed. The browser never reads the challenge, as it never reads the session token.
+ */
+export const CHALLENGE_COOKIE = "__Host-orchester_challenge";
+/** As long as the cloud's challenge works. */
+export const CHALLENGE_SECONDS = 5 * 60;
 /** How an invite carried by the inviter's browser went, and the server's own admin to go back to (signed). */
 export const DELIVERED_COOKIE = "__Host-orchester_delivered";
 export const DELIVERED_SECONDS = 10 * 60;

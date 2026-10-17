@@ -168,7 +168,7 @@ fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {
     ctx.t("summary.openConversation"),
   )
   .icon(Icon::MessageSquare)
-  .on_click(move || navigation.go(route.clone()))
+  .opens(navigation.to(route))
 }
 
 /// A section's title with its count (`Head · Steps` `P4Q0cn`).

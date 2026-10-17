@@ -19,7 +19,7 @@ fn orchester_design_link_takes_the_server_projects_key() {
   let (_server, _recorder) = joined_through_recorder(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");

@@ -127,6 +127,88 @@ pub struct CloudSignedIn {
   pub account: CloudAccount,
 }
 
+/// `202` of `POST /auth/sessions` for an account with two-factor authentication on: the password was right, and the
+/// sign-in finishes with a code at `POST /auth/sessions/two-factor` before `expires_at` (milliseconds). The challenge
+/// works once.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CloudSignInChallenge {
+  pub challenge: Credential,
+  pub expires_at: i64,
+}
+
+/// `POST /auth/sessions/two-factor`: the challenge of the password step and a code from the authenticator app, or one
+/// of the account's recovery codes.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TwoFactorSignIn {
+  pub challenge: Credential,
+  pub code: Credential,
+}
+
+/// `POST /me/two-factor`: starts turning two-factor authentication on, with the account's password.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TwoFactorStart {
+  pub password: Credential,
+}
+
+/// `201` of `POST /me/two-factor`: the new secret in base32 and the `otpauth://` link an authenticator app reads from a
+/// QR code. Shown while the setup is open; never again once it is confirmed.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TwoFactorSetup {
+  pub secret: Credential,
+  pub uri: Credential,
+}
+
+/// A code from the authenticator app (confirming the setup), or either kind of code (new recovery codes).
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TwoFactorCode {
+  pub code: Credential,
+}
+
+/// The account's ten recovery codes, shown once: each works once in place of a code from the app.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RecoveryCodes {
+  pub recovery_codes: Vec<Credential>,
+}
+
+/// `DELETE /me/two-factor`: the password and a code from the app or a recovery code.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TwoFactorOff {
+  pub password: Credential,
+  pub code: Credential,
+}
+
+/// The account's two-factor authentication as `GET /me` reports it to the asking device.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TwoFactorStatus {
+  pub enabled: bool,
+  /// Milliseconds since the Unix epoch.
+  pub enabled_at: Option<i64>,
+  /// Unused recovery codes; 0 while it is off.
+  pub recovery_codes_left: u32,
+  /// Whether the asking device signed in with a code, stepped up with one, or turned two-factor authentication on
+  /// itself: only such a session accepts invites.
+  pub this_session: bool,
+}
+
+/// `201` of `POST /auth/sessions/two-factor`: the signed-in device, as a password-only sign-in answers, and the
+/// recovery codes left, so a client can warn when few remain.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TwoFactorSignedIn {
+  #[serde(flatten)]
+  pub signed_in: CloudSignedIn,
+  pub recovery_codes_left: u32,
+}
+
+/// `200` of `POST /auth/sessions/current/two-factor`: the asking device is a two-factor session now.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SteppedUp {
+  pub recovery_codes_left: u32,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResetRequest {
@@ -143,6 +225,8 @@ pub struct ResetFinish {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountResponse {
   pub account: CloudAccount,
+  #[serde(default)]
+  pub two_factor: TwoFactorStatus,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -161,7 +245,8 @@ pub struct DevicesResponse {
 #[serde(deny_unknown_fields)]
 pub struct IdentityTokenRequest {
   pub audience: String,
-  /// `admin` for a sign-in to that server's admin, which must be linked to the cloud; `None` to join with a device.
+  /// `admin` for a sign-in to that server's admin, which must be linked to the cloud; `code` to show with a code
+  /// entered in the app; `None` to join with a device.
   #[serde(default)]
   pub purpose: Option<TokenPurpose>,
   /// An open invite to the account's email from that server, which the token accepts: the token names it, and the
@@ -179,6 +264,9 @@ pub enum TokenPurpose {
   Admin,
   /// Linking the team server to the cloud account of the admin who set it up.
   Link,
+  /// Showing, with a code entered in the app, that the person signed in with two-factor authentication. The server
+  /// takes it only with a code (`POST /auth/code`), never to join or sign in with the identity itself.
+  Code,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -285,6 +373,10 @@ pub struct CloudInvite {
   pub project: Option<InvitedProject>,
   pub inviter_display_name: String,
   pub expires_at: i64,
+  /// The asking device cannot accept it yet: accepting needs two-factor authentication on the account
+  /// (`403 mfa_required`) and a device that signed in or stepped up with it (`403 session_without_mfa`).
+  #[serde(default)]
+  pub needs_two_factor: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -323,6 +415,15 @@ pub enum CloudErrorCode {
   TooManyServers,
   /// The cloud is at a capacity limit (its limiters' memory, its password hashing); try again shortly.
   Busy,
+  /// Accepting an invite needs two-factor authentication on the account, which is off.
+  MfaRequired,
+  /// The account has two-factor authentication, but the asking device signed in without it: step up with a code, or
+  /// sign in again.
+  SessionWithoutMfa,
+  /// A two-factor code or recovery code that is wrong or was used.
+  InvalidCode,
+  /// A sign-in's two-factor challenge that is unknown, used, expired or out of tries: sign in again.
+  ChallengeExpired,
   Internal,
 }
 

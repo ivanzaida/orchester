@@ -164,19 +164,29 @@ fn joined(desktop: &Desktop, server: &TestServer, (username, code): (&str, &Cred
 fn joined_at(desktop: &Desktop, server: &TestServer, url: &str, (username, code): (&str, &Credential)) {
   let address = ServerAddress::parse(url).expect("address");
   server
-    .block_on(
-      desktop
-        .servers
-        .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), request(username, code)),
-    )
+    .block_on(desktop.servers.join_with_code(
+      &address,
+      Trust::System(PlainHttp::NotAllowed),
+      proved(server, username, code),
+    ))
     .expect("join with a code");
 }
 
+/// A code as typed, with no cloud identity: a setup code needs none.
 fn request(username: &str, code: &Credential) -> CodeRequest {
   CodeRequest {
     code: Credential::new(code.expose().into()),
     username: Some(username.into()),
     display_name: Some(username.into()),
+    proof: None,
+  }
+}
+
+/// A code with this computer's two-factor cloud identity for `server`, which every code but the setup code needs.
+fn proved(server: &TestServer, username: &str, code: &Credential) -> CodeRequest {
+  CodeRequest {
+    proof: Some(server.code_proof(username)),
+    ..request(username, code)
   }
 }
 
@@ -287,6 +297,7 @@ fn sharing_a_pairing_code_joins_the_same_person_on_another_computer() {
     code: pairing.code,
     username: None,
     display_name: None,
+    proof: Some(server.code_proof("alice")),
   };
   server
     .block_on(

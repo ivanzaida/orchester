@@ -36,7 +36,10 @@ async function recorded(): Promise<{ path: string; forwardedFor: string | null; 
 describe("api client", () => {
   it("reads a sign-in and sends the visitor's address", async () => {
     const result = await signIn({ email: ACCOUNT.email, password: RIGHT_PASSWORD, device }, { client: "203.0.113.7" });
-    expect(result.ok && result.value.account).toEqual({ email: ACCOUNT.email, displayName: ACCOUNT.display_name });
+    expect(result.ok && result.value.kind === "signedIn" && result.value.account).toEqual({
+      email: ACCOUNT.email,
+      displayName: ACCOUNT.display_name,
+    });
     const last = (await recorded()).at(-1);
     expect(last?.path).toBe("/api/v1/auth/sessions");
     expect(last?.forwardedFor).toBe("203.0.113.7");
@@ -44,7 +47,7 @@ describe("api client", () => {
 
   it("sends the session token as a bearer token", async () => {
     const signedIn = await signIn({ email: ACCOUNT.email, password: RIGHT_PASSWORD, device }, {});
-    if (!signedIn.ok) {
+    if (!signedIn.ok || signedIn.value.kind !== "signedIn") {
       throw new Error("sign-in failed");
     }
     const account = await me({ token: signedIn.value.token });
@@ -78,7 +81,7 @@ describe("api client", () => {
 describe("account api", () => {
   async function token(email: string): Promise<string> {
     const result = await signIn({ email, password: RIGHT_PASSWORD, device }, {});
-    if (!result.ok) {
+    if (!result.ok || result.value.kind !== "signedIn") {
       throw new Error("sign-in failed");
     }
     return result.value.token;

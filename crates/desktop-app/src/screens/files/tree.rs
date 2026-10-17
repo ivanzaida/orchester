@@ -23,14 +23,14 @@ use parking_lot::Mutex;
 
 use super::{OpenFolders, Page, reads::Shown};
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   routes::{FilesView, ProjectPage, Route},
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, file_icon, icon},
     icon_button::IconButton,
     message::message_text,
-    pressable::pressable,
+    pressable::{opening, pressable},
     state::loading,
   },
 };
@@ -125,18 +125,18 @@ pub fn panel(ctx: &mut Ctx, page: &Page<'_>, list: &Shown<FileList>) -> Element 
     .into()
 }
 
-type Choose = Arc<dyn Fn(&TreeRow) + Send + Sync>;
+type Choose = Arc<dyn Fn(&TreeRow, OpenIn) + Send + Sync>;
 
-/// A folder opens or closes, a file opens at the version shown.
+/// A folder opens or closes, a file opens at the version shown where a press asks (`navigation::link`).
 fn chooser(ctx: &mut Ctx, page: &Page<'_>) -> Choose {
   let open = page.view.open.clone();
   let navigation = Navigation::of(ctx);
   let (project, at) = (page.project.open.project.id(), page.at().clone());
-  Arc::new(move |row: &TreeRow| match row.kind {
+  Arc::new(move |row: &TreeRow, place: OpenIn| match row.kind {
     EntryKind::Folder { .. } => open.set(open.get_untracked().toggled(&row.path)),
     EntryKind::File => {
       let view = FilesView::new(Some(&row.path), at.clone());
-      navigation.go(Route::Project(project, ProjectPage::Files(view)));
+      navigation.open(Route::Project(project, ProjectPage::Files(view)), place);
     }
   })
 }
@@ -298,7 +298,12 @@ impl Component for RowView {
       EntryKind::File => "file",
     };
     let target = row.clone();
-    let line = pressable(move || choose(&target))
+    // A file is a place of its own; a folder opens or closes in the tree.
+    let line = match row.kind {
+      EntryKind::File => opening(Arc::new(move |place| choose(&target, place))),
+      EntryKind::Folder { .. } => pressable(move || choose(&target, OpenIn::ActiveTab)),
+    };
+    let line = line
       .id(format!("files-tree:{}", row.path))
       .describe("path", row.path.to_string())
       .describe("kind", kind)

@@ -15,8 +15,9 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OrchesterView,
-    OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView,
+    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, InstructionsView,
+    NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route, Screen,
+    SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
@@ -137,15 +138,15 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     },
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
-    Screen::Instructions => ProjectPage::Instructions,
+    Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
     Screen::Memory => ProjectPage::Memory,
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
-    Screen::Secrets => ProjectPage::Secrets,
+    Screen::Secrets => ProjectPage::Secrets(SecretsView::default()),
     Screen::Connections => ProjectPage::Connections(connections_view(args)?),
     Screen::NewConnection => ProjectPage::NewConnection(new_connection(args)?),
     Screen::EditConnection => ProjectPage::EditConnection(connection(args, "connection")?),
-    Screen::ProjectSettings => ProjectPage::Settings,
+    Screen::ProjectSettings => ProjectPage::Settings(ProjectSettingsTab::default()),
     Screen::Files => ProjectPage::Files(files_view(args)?),
   };
   Ok(Route::Project(project(args)?, page))
@@ -323,7 +324,7 @@ fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolErro
   number
     .trim_start_matches('#')
     .parse::<NonZeroU64>()
-    .map(ProjectPage::PullRequest)
+    .map(|number| ProjectPage::PullRequest(number, None))
     .map_err(|_| ToolError::InvalidParam {
       param: "number",
       reason: format!("`{number}` is not a pull request number"),
@@ -420,7 +421,7 @@ fn orchestrator_chat(args: &Map<String, Value>) -> Result<OrchestratorChat, Tool
 
 fn skills_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   match string(args, "skill")? {
-    None => Ok(ProjectPage::Skills),
+    None => Ok(ProjectPage::Skills(SkillsFilter::default())),
     Some("new") => Ok(ProjectPage::NewSkill),
     Some("import") => Ok(ProjectPage::ImportSkills),
     Some(id) => id

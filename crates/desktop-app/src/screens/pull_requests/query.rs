@@ -49,12 +49,11 @@ pub(super) fn tabs(ctx: &mut Ctx, project: ProjectId, tab: PullRequestTab, list:
         Some(list) => counted(ctx, &word, list.count(shown)),
         None => ctx.t_args("ui.tabCount", [("label", word), ("count", unknown.clone())]),
       };
-      let navigation = navigation.clone();
-      PageTab::new(
+      PageTab::to(
         format!("pull-requests-tab-{}", shown.name()),
         label,
         shown == tab,
-        move || navigation.go(Route::Project(project, ProjectPage::PullRequests(shown))),
+        navigation.to(Route::Project(project, ProjectPage::PullRequests(shown))),
       )
     })
     .collect();

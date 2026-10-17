@@ -285,7 +285,7 @@ fn instructions_failed_load_is_visible_and_can_retry() {
     .expect("valid instruction fixture");
   screen.window.navigation().go(orchester_app::routes::Route::Project(
     super::support::project_id(),
-    orchester_app::routes::ProjectPage::Instructions,
+    orchester_app::routes::ProjectPage::Instructions(Default::default()),
   ));
   screen.window.pass();
   assert!(screen.exists("instructions-loading"));

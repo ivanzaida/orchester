@@ -29,7 +29,8 @@
     "unavailable": "Orchester Cloud is not answering right now. Try again in a minute.",
     "formExpired": "This form has expired. Reload the page and try again.",
     "tooManyEmails": "Too many emails were sent. Try again in {{minutes}} min, at {{time}}.",
-    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}."
+    "tooManyTries": "Too many tries from your network. Try again in {{minutes}} min, at {{time}}.",
+    "sessionWithoutMfa": "Your account uses two-factor authentication, and this browser signed in without it. Sign out, then sign in again with a code from your authenticator app."
   },
   "signup": {
     "pageTitle": "Create an account",
@@ -94,7 +95,23 @@
     "tooMany": "Too many sign-in attempts. Try again in {{minutes}} min, at {{time}}.",
     "unavailableUntil": "Sign in unavailable until {{time}}.",
     "question": "New to Orchester?",
-    "link": "Create an account"
+    "link": "Create an account",
+    "code": {
+      "pageTitle": "Two-factor code",
+      "title": "Enter your code",
+      "description": "Two-factor authentication is on for {{email}}. Enter the 6-digit code your authenticator app shows now.",
+      "label": "Code",
+      "hint": "Lost your phone? Enter one of your recovery codes instead.",
+      "submit": "Sign in",
+      "submitting": "Signing in…",
+      "wrong": "This code is not right, or it was used already. Enter the next code the app shows, or a recovery code.",
+      "tooMany": "Too many wrong codes. Try again in {{minutes}} min, at {{time}}.",
+      "expiredTitle": "Sign in again",
+      "expiredDescription": "A sign-in waits 5 minutes for its code, and takes 5 tries. This one ended; sign in again with your password.",
+      "signInAgain": "Sign in again",
+      "question": "Not your account?",
+      "link": "Sign in with another"
+    }
   },
   "forgot": {
     "pageTitle": "Reset your password",
@@ -148,7 +165,8 @@
       "invitesCount": "Invites · {{count}}",
       "servers": "Your servers",
       "devices": "Devices",
-      "account": "Account"
+      "account": "Account",
+      "security": "Security"
     },
     "getStarted": {
       "title": "Get started",
@@ -184,7 +202,8 @@
       "roles": {
         "owner": "Owner",
         "member": "Member"
-      }
+      },
+      "needsTwoFactor": "Accepting an invite needs two-factor authentication. Turn it on under Security, then sign in to Orchester with a code."
     },
     "servers": {
       "title": "Your servers",
@@ -259,7 +278,62 @@
       "deleteServersUnknown": "Team servers you linked stay registered with no owner, with their members and invites, until an admin of that server links it again.",
       "deleteServersHash": "A keyed hash of your email stays with the team servers you linked, for abuse limits, until they are linked again."
     },
-    "today": "Today, {{time}}"
+    "today": "Today, {{time}}",
+    "security": {
+      "title": "Security",
+      "description": "Two-factor authentication asks for a code from an authenticator app when you sign in. Invites to team servers are sent and accepted only with it.",
+      "twoFactor": "Two-factor authentication",
+      "on": "On",
+      "off": "Off",
+      "onSince": "On since {{date}}. Signing in asks for a code from your authenticator app.",
+      "offHint": "Signing in asks only for your password, and you cannot accept invites to team servers.",
+      "turnOn": "Turn on",
+      "passwordLabel": "Password",
+      "passwordHint": "Enter your password to set up an authenticator app.",
+      "passwordEmpty": "Enter your password.",
+      "passwordWrong": "The password is not right.",
+      "continue": "Continue",
+      "continuing": "Checking…",
+      "cancel": "Cancel",
+      "scanTitle": "Scan this QR code with your authenticator app",
+      "scanText": "Any app that makes 6-digit codes works, such as 1Password, Google Authenticator or Microsoft Authenticator. If you cannot scan it, enter this key in the app:",
+      "qrLabel": "QR code for your authenticator app",
+      "copyKey": "Copy key",
+      "copiedKey": "Key copied",
+      "codeLabel": "Code from the app",
+      "codeEmpty": "Enter the code from the app.",
+      "codeWrong": "This code is not right. Enter the code the app shows now.",
+      "setupEnded": "This setup ended after 15 minutes. Start again.",
+      "confirm": "Turn on",
+      "confirming": "Turning on…",
+      "codesTitle": "Your recovery codes",
+      "codesBadge": "Shown once",
+      "codesText": "Each code signs you in once if you lose your phone. Keep them somewhere safe, apart from your phone: they are not shown again.",
+      "copyCodes": "Copy codes",
+      "copiedCodes": "Codes copied",
+      "download": "Download",
+      "downloadName": "orchester-recovery-codes.txt",
+      "done": "Done",
+      "recoveryCodes": "Recovery codes",
+      "recoveryLeft": "{{count}} of 10 left. Each signs you in once without your phone.",
+      "recoveryFew": "Only {{count}} of 10 left. Make new ones before you run out.",
+      "newCodes": "Make new codes",
+      "makingCodes": "Making codes…",
+      "newCodesHint": "Enter a code from the app, or a recovery code. Every earlier recovery code stops working.",
+      "anyCodeLabel": "Code from the app or a recovery code",
+      "anyCodeEmpty": "Enter a code.",
+      "anyCodeWrong": "This code is not right, or it was used already.",
+      "turnOff": "Turn off",
+      "turningOff": "Turning off…",
+      "offTitle": "Turn off two-factor authentication?",
+      "offText": "Signing in will ask only for your password, and you will not be able to accept invites to team servers. Your recovery codes stop working.",
+      "keep": "Keep it on",
+      "lostPhone": "Lost your phone and your recovery codes? Two-factor authentication is not reset by email: the people who run this Orchester Cloud can turn it off for your account.",
+      "thisBrowser": "This browser",
+      "thisBrowserText": "This browser signed in without a code. Enter one to accept invites from here.",
+      "verify": "Verify",
+      "verifying": "Verifying…"
+    }
   },
   "device": {
     "webName": "{{browser}} on {{system}}",

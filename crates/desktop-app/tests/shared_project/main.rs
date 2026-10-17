@@ -65,6 +65,7 @@ fn join(window: &Window, server: &TestServer, kontur: &SharedProject, (username,
     code,
     username: Some(username.into()),
     display_name: Some(name.into()),
+    proof: Some(server.code_proof(username)),
   };
   block_on(
     window,
@@ -134,7 +135,7 @@ fn link_kontur(window: &Window) {
 fn open_sharing(window: &mut Window, id: &str) {
   harness::go(
     window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(window, "settings-tab-sharing");

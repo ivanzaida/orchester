@@ -1,5 +1,5 @@
 //! What the bar's items do in the window: open the shown project's runner log or start its runner again
-//! (the runners show the active tab's project), go somewhere in the active tab, leave a failure in the
+//! (the runners show the active tab's project), open a place where a press asks, leave a failure in the
 //! activity's history, and stop runs auto-approving, written off the UI thread, after which every tab of
 //! the project reads its tasks again.
 
@@ -110,7 +110,7 @@ pub fn dispatch(
       }
     }
     BarAction::RestartRunner => services.runners.restart(),
-    BarAction::Go(route) => navigation.go(route),
+    BarAction::Go(route, at) => navigation.open(route, at),
     BarAction::Resolve(id) => services.activity.resolve(id),
     BarAction::ReviewInterrupted(project) => services.recovery.review(project, true),
     BarAction::ReadAgain => {

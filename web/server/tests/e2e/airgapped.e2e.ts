@@ -1,13 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { joinWithCode } from "./accounts";
-import { adminConnections, PORTS, SERVER, startStack, type Stack } from "./stack";
-import { createProject, expectNoSecretIn, inviteWithCode, logs, setUp } from "./steps";
+import { adminConnections, PORTS, SERVER, SERVER_API, startStack, type Stack } from "./stack";
+import { accountCode, createProject, expectNoSecretIn, logs, setUp } from "./steps";
 
 /**
- * An air-gapped team server: no Orchester Cloud at all, none named to the admin. Setup stops after the first admin,
- * people join with codes, and nothing reaches outside: the browser asks only the team server, and the admin's own
- * server side connects only to the server's private API listener.
+ * An air-gapped team server: no Orchester Cloud at all, none named to the admin. Setup stops after the first admin, and
+ * nothing reaches outside: the browser asks only the team server, and the admin's own server side connects only to the
+ * server's private API listener. With no cloud root pinned the server cannot check two-factor authentication, which
+ * making an invite and entering a code need: it refuses both and says so (`docs/architecture/server.md`, "Codes").
  */
 
 test.describe.configure({ mode: "serial" });
@@ -36,11 +36,19 @@ test("setup without the internet stops after the first admin", async () => {
   await expect(page.getByText("Not linked to Orchester Cloud")).toBeVisible();
 });
 
-test("a project, and a member joining with a code", async () => {
+test("a project; invites and codes wait for two-factor authentication the server can check", async () => {
   await createProject(page);
-  const code = await inviteWithCode(page);
-  const token = await joinWithCode(code, "oleh", "oleh-pc");
-  expect(token).toMatch(/^orc_/);
+  await page.goto(`${SERVER}/admin/projects/kontur/invites`);
+  await page.getByRole("button", { name: "Make a code" }).click();
+  await expect(page.getByText("Making invites, codes too, needs two-factor authentication", { exact: false })).toBeVisible();
+  const code = await accountCode(stack, "ivan");
+  const refused = await fetch(`${SERVER_API}/auth/code`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code, device: "ivan-pc" }),
+  });
+  expect(refused.status).toBe(403);
+  expect(((await refused.json()) as { error?: unknown }).error).toBe("mfa_unverifiable");
   expectNoSecretIn(logs(stack), [stack.setupCode, code]);
 });
 

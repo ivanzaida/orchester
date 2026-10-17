@@ -47,8 +47,14 @@ async fn client_never_shows_a_token_or_code_in_debug_output_or_logs() {
 
   let server = TestServer::start(|_| {}).await;
   let setup = server.server.host_setup_code().await.expect("setup").expect("no admin");
-  let joined = server.join(&setup, Some("alice")).await;
-  let admin = token(&joined.token);
+  let joined = server.join(&setup, "alice").await;
+  // Making an invite needs a device that showed a two-factor identity, which the setup code's does not.
+  let account = server
+    .server
+    .host_account_code("alice".into())
+    .await
+    .expect("account code");
+  let admin = token(&server.join_as(&account, "alice").await.token);
   let invite = server
     .post(
       &admin,
@@ -58,12 +64,15 @@ async fn client_never_shows_a_token_or_code_in_debug_output_or_logs() {
     .await;
   let code = invite["code"].as_str().expect("invite code").to_owned();
   let client = server.client();
+  let (identity_token, key_set) = server.code_proof("bohdan").await;
   let request = CodeJoin {
     code: Credential::new(code.clone()),
     device: "Bohdan's laptop".into(),
     username: Some("bohdan".into()),
     display_name: Some("Bohdan Koval".into()),
     kind: DeviceKind::App,
+    identity_token: Some(identity_token),
+    key_set: Some(key_set),
   };
   let request_debug = format!("{request:?}");
   let signed = client.join_with_code(&request).await.expect("join");

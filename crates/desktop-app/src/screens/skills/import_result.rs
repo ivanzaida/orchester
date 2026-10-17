@@ -101,7 +101,7 @@ fn created_row(ctx: &Ctx, p: &PageProps, draft: &CreatedDraft, i: usize) -> Elem
   )
   .icon(Icon::ArrowUpRight);
   let open = if skill {
-    open.on_click(move || panel.set(Panel::Edit(id)))
+    open.opens(panel.to(Panel::Edit(id)))
   } else {
     open.unavailable(ctx.t("skills.instructionEditorUnavailable"))
   };
@@ -157,7 +157,7 @@ fn header(ctx: &mut Ctx, p: &PageProps, count: usize) -> Column {
     "skill-result-crumb",
     CrumbSeparator::Chevron,
     vec![
-      Crumb::link(ctx.t("skills.title"), move || back.set(Panel::Library)),
+      Crumb::to(ctx.t("skills.title"), back.to(back.library())),
       Crumb::here(ctx.t("skills.import")),
     ],
   );
@@ -256,7 +256,7 @@ fn footer(ctx: &Ctx, p: &PageProps, totals: &str, (imported, total): (usize, usi
     )
     .child(
       ActionButton::new("skills-back", ButtonKind::Primary, ctx.t("skills.reviewSkills"))
-        .on_click(move || panel.set(Panel::Library)),
+        .opens(panel.to(Panel::LIBRARY)),
     )
 }
 fn draft_label(ctx: &Ctx, draft: &CreatedDraft) -> std::sync::Arc<str> {

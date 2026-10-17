@@ -87,7 +87,7 @@ fn introduction(ctx: &mut Ctx, open: &OpenAction) -> Column {
   )
   .icon(Icon::Plus)
   .large()
-  .on_click(move || navigation.go(Route::AddProject(None)));
+  .opens(navigation.to(Route::AddProject(None)));
   let actions = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)

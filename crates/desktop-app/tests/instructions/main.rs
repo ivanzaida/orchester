@@ -6,6 +6,7 @@ mod events;
 mod harness;
 mod insertion;
 mod library;
+mod panel_history;
 mod preview;
 mod publication_layout;
 mod reads;

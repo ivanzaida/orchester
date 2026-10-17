@@ -31,7 +31,7 @@ use super::{
   words,
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskTab, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -106,14 +106,13 @@ struct Opener {
 }
 
 impl Opener {
-  /// What opens the task `key` of `project`; `None` for a key that names no task.
-  fn open(&self, project: ProjectId, key: &str) -> Option<impl Fn() + Send + Sync + 'static> {
+  /// What opens the task `key` of `project` where a press asks; `None` for a key that names no task.
+  fn open(&self, project: ProjectId, key: &str) -> Option<Open> {
     let key: TaskKey = key.parse().ok()?;
-    let (navigation, route) = (
-      self.navigation.clone(),
-      Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary))),
-    );
-    Some(move || navigation.go(route.clone()))
+    Some(self.navigation.to(Route::Project(
+      project,
+      ProjectPage::Task(key, TaskView::of(TaskTab::Summary)),
+    )))
   }
 }
 

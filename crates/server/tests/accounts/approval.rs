@@ -9,7 +9,7 @@ use crate::support::{
 async fn linked_with_bob() -> (TestServer, Joined, Joined, TestCloud, String) {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
-  let cloud = TestCloud::generate();
+  let cloud = server.cloud();
   let now = server.seconds();
   let linked = server
     .request(

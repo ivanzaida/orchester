@@ -41,6 +41,11 @@ export function InviteDates({ expiresAt, now }: { expiresAt: number; now: number
   return <>{t("account.invites.when", { sent, expires: when.date(expiresAt) })}</>;
 }
 
+/** When two-factor authentication was turned on, in the reader's time zone. */
+export function OnSince({ at }: { at: number }) {
+  return <>{t("account.security.onSince", { date: useWhen().date(at) })}</>;
+}
+
 export function Since({ at, owner }: { at: number; owner: boolean }) {
   const date = useWhen().date(at);
   return <>{owner ? t("account.servers.connected", { date }) : t("account.servers.joined", { date })}</>;

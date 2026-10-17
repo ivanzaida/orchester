@@ -223,9 +223,7 @@ fn actions(ctx: &mut Ctx, refusal: Option<(&PathBuf, &FolderRefusal)>, picks: &P
       .icon(Icon::Plus)
       .in_form();
       buttons.push(match refusal.and_then(|(folder, _)| RouteFolder::new(folder)) {
-        Some(folder) => set_up
-          .on_click(move || navigation.go(Route::AddProject(Some(folder.clone()))))
-          .into(),
+        Some(folder) => set_up.opens(navigation.to(Route::AddProject(Some(folder)))).into(),
         None => {
           let reason = ctx.t("shell.switcher.folder.setUpUnavailable");
           with_reason(

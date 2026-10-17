@@ -47,6 +47,7 @@ fn gate_roles_follow_the_design() {
     (GateText::Title, 26.0, FontWeight::SemiBold, "Geist", -0.5),
     (GateText::Lead, 13.5, FontWeight::Normal, "Geist", 0.0),
     (GateText::Note, 11.5, FontWeight::Normal, "Geist", 0.0),
+    (GateText::Code, 13.0, FontWeight::Normal, "Geist Mono", 2.0),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

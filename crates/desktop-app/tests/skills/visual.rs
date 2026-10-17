@@ -4,7 +4,7 @@ use super::*;
 #[test]
 fn skills_visual_empty_variants_and_populated_repository_setting_are_truthful() {
   let mut s = Skills::new();
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   assert!(!s.text("skills-empty").contains("Found in this repository"));
   assert!(s.text("skills-empty").contains("Write the first one for Kontur"));
   assert!(
@@ -22,7 +22,7 @@ fn skills_visual_empty_variants_and_populated_repository_setting_are_truthful() 
   assert!(ownership.y >= guide.y + guide.height && ownership.x >= guide.x);
   let mut s = Skills::new();
   s.seed("checks", false);
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   s.window.until("populated library", |w| {
     w.tree.get_element_by_id("skills-list").is_some()
   });
@@ -34,7 +34,7 @@ fn skills_visual_empty_variants_and_populated_repository_setting_are_truthful() 
 fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap() {
   let mut s = Skills::new();
   let reference = prepare_import(&s);
-  s.go(ProjectPage::Skills);
+  s.go(ProjectPage::Skills(Default::default()));
   assert!(s.text("skills-found").contains("3 items"));
   s.click("skills-import-open");
   assert!(s.text("skills-import-review").contains("1 instruction, 2 skills"));

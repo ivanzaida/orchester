@@ -29,7 +29,7 @@ use crate::{
     icon::{Icon, icon},
     icon_button::IconButton,
     message::message_text,
-    pressable::pressable,
+    pressable::opening,
   },
 };
 
@@ -92,7 +92,7 @@ pub(super) fn row(ctx: &mut Ctx, listed: &ListedProject, ask: &Ask, last: bool) 
     .child(actions(ctx, listed, ask, asking));
   let cells: Element = if listed.opens() && !asking {
     let navigation = Navigation::of(ctx);
-    pressable(move || navigation.go(Route::Project(id, ProjectPage::Overview(OverviewTab::default()))))
+    opening(navigation.to(Route::Project(id, ProjectPage::Overview(OverviewTab::default()))))
       .width(Dimension::Pct(100.0))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .child(cells)

@@ -54,7 +54,7 @@ async fn s1c_codes_are_one_time_case_and_hyphen_blind_and_expire_by_kind() {
     .await
     .expect("account code");
   server.clock.advance(24 * HOUR - 1);
-  let again = server.join(&account, None, "new laptop").await;
+  let again = server.join_as(&account, "bob", "new laptop").await;
   assert_eq!(again.user.id, bob.user.id);
   let account = server
     .server
@@ -62,7 +62,7 @@ async fn s1c_codes_are_one_time_case_and_hyphen_blind_and_expire_by_kind() {
     .await
     .expect("account code");
   server.clock.advance(24 * HOUR);
-  assert_invalid_code(&server.redeem(&account, None, "new laptop").await);
+  assert_invalid_code(&server.redeem_as(&account, "bob", "new laptop").await);
   assert!(server.server.host_account_code("nobody".into()).await.is_err());
   server.finish().await;
 }
@@ -129,19 +129,29 @@ async fn s1c_failed_redemptions_block_an_address_after_ten() {
   // A valid code from the blocked address waits too; another address is not affected.
   let invite = invite_code(&server, &admin.token, json!({"kind":"server","delivery":"code"})).await;
   let headers = [("X-Forwarded-For", "198.51.100.1")];
-  let body =
-    json!({"code": invite.code.as_ref().expect("code").expose(), "device":"x", "username":"bob", "display_name":"Bob"});
+  let body = |(identity_token, key_set): (String, String)| {
+    json!({"code": invite.code.as_ref().expect("code").expose(), "device":"x", "username":"bob",
+      "display_name":"Bob", "identity_token": identity_token, "key_set": key_set})
+  };
   assert_eq!(
     server
-      .request_headers("POST", "/auth/code", None, Some(body.clone()), &headers)
+      .request_headers(
+        "POST",
+        "/auth/code",
+        None,
+        Some(body(server.two_factor_proof("bob").await)),
+        &headers
+      )
       .await
       .status,
     429
   );
   server.clock.advance(15 * 60 * 1000);
+  // A fresh identity token: the one before is past its five minutes.
+  let fresh = body(server.two_factor_proof("bob").await);
   assert_eq!(
     server
-      .request_headers("POST", "/auth/code", None, Some(body), &headers)
+      .request_headers("POST", "/auth/code", None, Some(fresh), &headers)
       .await
       .status,
     201

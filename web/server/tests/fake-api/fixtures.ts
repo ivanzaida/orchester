@@ -99,6 +99,8 @@ export interface FakeState {
   devices: FakeDevice[];
   browsers: FakeBrowser[];
   approvals: FakeApproval[];
+  /** The browser signed in without two-factor authentication: every new invite is `403 mfa_required`. */
+  no_mfa?: boolean;
 }
 
 export const id = (n: number) => `0199f0a0-0000-7000-8000-${String(n).padStart(12, "0")}`;
@@ -239,6 +241,8 @@ export function scenario(name: string, now: number): FakeState {
       return { ...state, join_approval: false, approvals: [] };
     case "plain":
       return { ...state, certificate: null };
+    case "no-mfa":
+      return { ...state, no_mfa: true };
     default:
       return state;
   }

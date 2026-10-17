@@ -57,7 +57,7 @@ pub(super) fn notice(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
         ButtonKind::Secondary,
         ctx.t("local_integration.title"),
       )
-      .on_click(move || navigation.go(route.clone())),
+      .opens(navigation.to(route)),
     )
     .into(),
   )

@@ -284,7 +284,7 @@ pub(super) fn inspector_rows(
     AccountsView::of(account.id(), crate::routes::AccountsPanel::Account)
   });
   // The words wrap within the row; the arrow stays at their end.
-  let link = crate::ui::pressable::pressable(move || navigation.go(Route::Accounts(view)))
+  let link = crate::ui::pressable::opening(navigation.to(Route::Accounts(view)))
     .id("connection-account-link")
     .flex(1.0)
     .min_width(lurq::node::dimension::Dimension::Px(0.0))

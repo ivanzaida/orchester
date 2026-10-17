@@ -19,8 +19,8 @@ use orchester_core::usage::AccountSeries;
 
 use super::series::series_swatch;
 use crate::{
+  navigation::link::Open,
   theme::{ExtraColor, ExtraSpacing, UsageText},
-  ui::pressable::pressable,
 };
 
 const HEADER_HEIGHT: f32 = 28.0;
@@ -199,9 +199,10 @@ fn bare_row(id: &str, columns: &[TableColumn], density: Density, cells: Vec<Cell
     }))
 }
 
-/// `row` pressed to run `open`, with the `hover` fill under the pointer.
-pub fn opening(row: Row, open: impl Fn() + Send + Sync + 'static) -> Element {
-  pressable(open)
+/// `row` opening its place with `open` by a browser's rules (`navigation::link`), with the `hover` fill under the
+/// pointer.
+pub fn opening(row: Row, open: Open) -> Element {
+  crate::ui::pressable::opening(open)
     .width(Dimension::Pct(100.0))
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(row)

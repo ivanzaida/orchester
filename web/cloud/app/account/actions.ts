@@ -5,33 +5,15 @@ import { redirect } from "next/navigation";
 
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
-import type { CallOptions } from "@/lib/server/api";
 import { changePassword, declineInvite, deleteAccount, rename, revokeDevice } from "@/lib/server/account";
 import { signOut } from "@/lib/server/cloud";
 import { failureMessage } from "@/lib/server/failures";
-import { endSession, formIsGenuine, leaveIfEnded, sessionEnded, signedIn } from "@/lib/server/visitor";
+import { formSession, isMessage } from "@/lib/server/form-session";
+import { endSession, leaveIfEnded, sessionEnded } from "@/lib/server/visitor";
 import { collect, displayNameError, newPasswordErrors, type FieldErrors } from "@/lib/validation";
 
 export interface FormState {
   readonly error?: Message;
-}
-
-/** The checks every form of the page makes first: a genuine form from a visitor who is still signed in. */
-async function session(form: FormData): Promise<CallOptions | Message> {
-  if (!(await formIsGenuine(form))) {
-    return message("error.formExpired");
-  }
-  const options = await signedIn();
-  if (options === null) {
-    // A cookie past its own 12 hours, or one this site cannot open: nothing to keep.
-    await endSession();
-    redirect("/signin");
-  }
-  return options;
-}
-
-function isMessage(value: CallOptions | Message): value is Message {
-  return "key" in value;
 }
 
 /**
@@ -39,7 +21,7 @@ function isMessage(value: CallOptions | Message): value is Message {
  * and the visitor reads why: a cookie dropped here while its token still works at the cloud would only look signed out.
  */
 export async function signOutAction(_: FormState, form: FormData): Promise<FormState> {
-  const options = await session(form);
+  const options = await formSession(form);
   if (isMessage(options)) {
     return { error: options };
   }
@@ -53,7 +35,7 @@ export async function signOutAction(_: FormState, form: FormData): Promise<FormS
 }
 
 export async function renameAction(_: FormState, form: FormData): Promise<FormState> {
-  const options = await session(form);
+  const options = await formSession(form);
   if (isMessage(options)) {
     return { error: options };
   }
@@ -89,7 +71,7 @@ function passwordErrors(form: FormData): FieldErrors<"current" | "password" | "r
 
 export async function passwordAction(previous: PasswordState, form: FormData): Promise<PasswordState> {
   const answer = previous.view === "open" ? previous.answer + 1 : 1;
-  const options = await session(form);
+  const options = await formSession(form);
   if (isMessage(options)) {
     return { view: "open", answer, errors: {}, error: options };
   }
@@ -121,7 +103,7 @@ export type DeleteState =
  * browser's session, as every other device's, and leaves for sign-in.
  */
 export async function deleteAccountAction(_: DeleteState, form: FormData): Promise<DeleteState> {
-  const options = await session(form);
+  const options = await formSession(form);
   if (isMessage(options)) {
     return { view: "open", errors: {}, error: options };
   }
@@ -148,7 +130,7 @@ export interface DeviceState {
 
 /** Signs another device out at once, without a question first (the designer's notes); this one signs out as a whole. */
 export async function signOutDeviceAction(_: DeviceState, form: FormData): Promise<DeviceState> {
-  const options = await session(form);
+  const options = await formSession(form);
   if (isMessage(options)) {
     return { error: options };
   }
@@ -163,7 +145,7 @@ export async function signOutDeviceAction(_: DeviceState, form: FormData): Promi
 }
 
 export async function declineAction(_: FormState, form: FormData): Promise<FormState> {
-  const options = await session(form);
+  const options = await formSession(form);
   if (isMessage(options)) {
     return { error: options };
   }

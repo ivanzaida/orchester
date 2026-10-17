@@ -5,21 +5,20 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, VirtualizedList},
-  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::agents::data::ProjectAgents;
 
 use super::{
-  View,
+  AgentsNav, Shown,
   entries::{AgentRow, RowProps},
   words,
 };
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ConnectionsView, ProjectPage, Route},
+  routes::{AgentTab, ConnectionsView, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize, agents::page_spacing},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -28,17 +27,18 @@ use crate::{
   },
 };
 
-pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Signal<View>) -> Element {
+pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
   let page = Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .padding(Padding::symmetric(page_spacing(), SpacingSize::Section))
     .spacing(ExtraSpacing::Tabs.role())
-    .child(header(ctx, listed, view.clone()));
+    .child(header(ctx, listed, nav));
   if listed.profiles.is_empty() {
-    return page.child(empty(ctx, project, listed, view)).into();
+    return page.child(empty(ctx, project, listed, nav)).into();
   }
   let data = listed.clone();
+  let nav = nav.clone();
   let rows = VirtualizedList::new_shared(ctx, listed.profiles.clone())
     .list_key("agents-list")
     .width(Dimension::Pct(100.0))
@@ -49,7 +49,7 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents
       move |entry| RowProps {
         entry: entry.clone(),
         listed: data.clone(),
-        view: view.clone(),
+        nav: nav.clone(),
       },
     );
   let published = listed
@@ -100,12 +100,12 @@ pub(super) fn list(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents
     .into()
 }
 
-fn new_button(ctx: &Ctx, id: &str, listed: &ProjectAgents, view: Signal<View>) -> ActionButton {
+fn new_button(ctx: &Ctx, id: &str, listed: &ProjectAgents, nav: &AgentsNav) -> ActionButton {
   let button = ActionButton::new(id, ButtonKind::Primary, ctx.t("agents.new")).icon(Icon::Plus);
   if listed.connections.is_empty() {
     button.unavailable(ctx.t("agents.needsConnection"))
   } else {
-    button.on_click(move || view.set(View::New))
+    button.opens(nav.to(Shown::New(AgentTab::default())))
   }
 }
 fn import(ctx: &Ctx, id: &str) -> ActionButton {
@@ -113,7 +113,7 @@ fn import(ctx: &Ctx, id: &str) -> ActionButton {
     .icon(Icon::Download)
     .unavailable(ctx.t("agents.importUnavailable"))
 }
-fn header(ctx: &Ctx, listed: &ProjectAgents, view: Signal<View>) -> Row {
+fn header(ctx: &Ctx, listed: &ProjectAgents, nav: &AgentsNav) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Lg)
@@ -133,10 +133,10 @@ fn header(ctx: &Ctx, listed: &ProjectAgents, view: Signal<View>) -> Row {
       Row::new()
         .spacing(SpacingSize::Sm)
         .child(import(ctx, "agents-import"))
-        .child(new_button(ctx, "agents-new", listed, view)),
+        .child(new_button(ctx, "agents-new", listed, nav)),
     )
 }
-fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Signal<View>) -> Element {
+fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, nav: &AgentsNav) -> Element {
   let has_connection = !listed.connections.is_empty();
   let mut empty = EmptyState::new(
     "agents-empty",
@@ -150,7 +150,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Si
   );
   if has_connection {
     empty = empty
-      .action(new_button(ctx, "agents-empty-new", listed, view))
+      .action(new_button(ctx, "agents-empty-new", listed, nav))
       .action(import(ctx, "agents-empty-import"));
   } else {
     let nav = Navigation::of(ctx);
@@ -162,7 +162,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectAgents, view: Si
         ctx.t("agents.openConnections"),
       )
       .icon(Icon::Plug)
-      .on_click(move || nav.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
+      .opens(nav.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())))),
     );
   }
   empty.child(empty_connections(ctx, project, listed)).into()

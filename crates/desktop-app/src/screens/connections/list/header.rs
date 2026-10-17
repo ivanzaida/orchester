@@ -15,7 +15,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{ConnectionsTab, ConnectionsView, NewConnection, ProjectPage, Route},
   screens::connections::data::count,
   theme::{ConnectionsText, ExtraSpacing, ExtraTypography},
@@ -61,10 +61,7 @@ pub(super) fn header(ctx: &mut Ctx, project: ProjectId, tab: ConnectionsTab, men
 /// What adds a connection on `tab`.
 fn add_action(ctx: &mut Ctx, project: ProjectId, tab: ConnectionsTab, menu: &AddMenu) -> Element {
   let navigation = Navigation::of(ctx);
-  let add = move |kind: NewConnection| {
-    let navigation = navigation.clone();
-    move || navigation.go(Route::Project(project, ProjectPage::NewConnection(kind)))
-  };
+  let add = move |kind: NewConnection| navigation.to(Route::Project(project, ProjectPage::NewConnection(kind)));
   match tab {
     ConnectionsTab::All => {
       let button = MenuButton::new(
@@ -96,20 +93,16 @@ fn add_action(ctx: &mut Ctx, project: ProjectId, tab: ConnectionsTab, menu: &Add
   }
 }
 
-fn primary(ctx: &Ctx, key: &str, add: impl Fn() + Send + Sync + 'static) -> Element {
+fn primary(ctx: &Ctx, key: &str, add: Open) -> Element {
   ActionButton::new("connections-add", ButtonKind::Primary, ctx.t(key))
     .icon(Icon::Plus)
-    .on_click(add)
+    .opens(add)
     .into()
 }
 
 /// The kinds Add connection adds, each with what it is.
-fn add_menu<F, G>(ctx: &mut Ctx, menu: &AddMenu, add: &F) -> Column
-where
-  F: Fn(NewConnection) -> G,
-  G: Fn() + Send + Sync + 'static,
-{
-  let agent = MenuItem::new(
+fn add_menu(ctx: &mut Ctx, menu: &AddMenu, add: &impl Fn(NewConnection) -> Open) -> Column {
+  let agent = MenuItem::opens(
     "connections-add-agent",
     ctx.t("connections.menu.agent"),
     add(NewConnection::AgentProvider),
@@ -122,7 +115,7 @@ where
     ctx.t("connections.github.addUnavailable"),
   )
   .icon(Icon::GitPullRequest);
-  let mcp = MenuItem::new(
+  let mcp = MenuItem::opens(
     "connections-add-mcp",
     ctx.t("connections.menu.mcp"),
     add(NewConnection::McpServer),
@@ -148,17 +141,14 @@ pub(super) fn tabs(ctx: &mut Ctx, project: ProjectId, tab: ConnectionsTab, count
         Some(counts) => counted(ctx, &word, count(counts, shown)),
         None => ctx.t_args("ui.tabCount", [("label", word), ("count", unknown.clone())]),
       };
-      let navigation = navigation.clone();
-      PageTab::new(
+      PageTab::to(
         format!("connections-tab-{}", shown.name()),
         label,
         shown == tab,
-        move || {
-          navigation.go(Route::Project(
-            project,
-            ProjectPage::Connections(ConnectionsView::new(shown)),
-          ));
-        },
+        navigation.to(Route::Project(
+          project,
+          ProjectPage::Connections(ConnectionsView::new(shown)),
+        )),
       )
     })
     .collect();

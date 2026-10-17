@@ -16,9 +16,12 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::pressable,
+  pressable::Press,
 };
-use crate::theme::{ExtraColor, ExtraTypography, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ExtraColor, ExtraTypography, IconSize},
+};
 
 /// `Task list header` and `Task list row` heights, for a screen that sizes a table by its rows.
 pub const HEADER_HEIGHT: f32 = 32.0;
@@ -73,7 +76,7 @@ pub fn table_header(id: &str, columns: &[(ColumnWidth, Option<&str>)], openable:
 pub struct TableRow {
   id: Arc<str>,
   cells: Vec<(ColumnWidth, Element)>,
-  open: Option<Arc<dyn Fn() + Send + Sync>>,
+  open: Option<Press>,
   /// The chevron's column stays, empty, in a table whose other rows open.
   open_column: bool,
   highlighted: bool,
@@ -129,7 +132,15 @@ impl TableRow {
 
   /// A press on the row runs `open`; the row ends in the chevron.
   pub fn on_open(mut self, open: impl Fn() + Send + Sync + 'static) -> Self {
-    self.open = Some(Arc::new(open));
+    self.open = Some(Press::run(open));
+    self.open_column = true;
+    self
+  }
+
+  /// The row opens a page: a press opens it with `open` by a browser's rules (`navigation::link`); the row ends
+  /// in the chevron.
+  pub fn opens(mut self, open: Open) -> Self {
+    self.open = Some(Press::Open(open));
     self.open_column = true;
     self
   }
@@ -191,7 +202,8 @@ impl From<TableRow> for Element {
         }))
         .into();
     };
-    pressable(move || open())
+    open
+      .button()
       .id(row.id)
       .width(Dimension::Pct(100.0))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))

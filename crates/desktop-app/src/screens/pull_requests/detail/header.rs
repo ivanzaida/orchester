@@ -26,7 +26,7 @@ use super::super::{
   status::{Shown, parts, status_line},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{OverviewTab, ProjectPage, Route, TaskTab, TaskView},
   theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing, PullRequestsText},
@@ -34,7 +34,7 @@ use crate::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::opening,
     tabs::{PageTab, counted, page_tabs},
     tooltip::Truncated,
     unavailable::reason_line,
@@ -115,18 +115,19 @@ fn frame() -> Column {
 fn crumbs(ctx: &mut Ctx, project: &ShownProject, number: u64) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let (overview, list) = (navigation.clone(), navigation);
   breadcrumb(
     ctx,
     "pull-request-crumbs",
     CrumbSeparator::Slash,
     vec![
-      Crumb::link(project.open.project.name().as_str().to_owned(), move || {
-        overview.go(Route::Project(id, ProjectPage::Overview(OverviewTab::default())));
-      }),
-      Crumb::link(ctx.t("pull_requests.title"), move || {
-        list.go(Route::Project(id, ProjectPage::PullRequests(PullRequestTab::default())));
-      }),
+      Crumb::to(
+        project.open.project.name().as_str().to_owned(),
+        navigation.to(Route::Project(id, ProjectPage::Overview(OverviewTab::default()))),
+      ),
+      Crumb::to(
+        ctx.t("pull_requests.title"),
+        navigation.to(Route::Project(id, ProjectPage::PullRequests(PullRequestTab::default()))),
+      ),
       Crumb::here(ctx.t_args("pull_requests.row.number", [("number", number.to_string())])).mono(),
     ],
   )
@@ -216,7 +217,7 @@ fn organization(
       project.open.project.id(),
       ProjectPage::Task(task.key.clone(), TaskView::of(TaskTab::Summary)),
     );
-    linked_task(ctx, &task.key.to_string(), move || navigation.go(to.clone()))
+    linked_task(ctx, &task.key.to_string(), navigation.to(to))
   });
   let mut row = Row::new()
     .id("pull-request-organization")
@@ -247,8 +248,8 @@ fn branch(name: &str) -> Text {
 }
 
 /// *Task* and the task's key in its link (`Linked task link` `EVzFC`), which opens the task.
-fn linked_task(ctx: &Ctx, key: &str, open: impl Fn() + Send + Sync + 'static) -> Row {
-  let link = pressable(open)
+fn linked_task(ctx: &Ctx, key: &str, open: Open) -> Row {
+  let link = opening(open)
     .id("pull-request-task")
     .height(Dimension::Px(ControlHeight::Sm.value()))
     .padding(Padding::horizontal(SpacingSize::Sm))

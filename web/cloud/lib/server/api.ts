@@ -24,6 +24,10 @@ export type CloudErrorCode =
   | "keys_unavailable"
   | "busy"
   | "conflict"
+  | "invalid_code"
+  | "challenge_expired"
+  | "mfa_required"
+  | "session_without_mfa"
   | "internal";
 
 export type ApiFailure =
@@ -47,7 +51,8 @@ const TIMEOUT_MS = 10_000;
 const CODES = new Set<string>([
   "bad_request", "payload_too_large", "method_not_allowed", "request_timeout", "unsupported_media_type", "not_found",
   "unauthorized", "invalid_credentials", "confirm_failed", "email_unconfirmed", "invalid_link", "invalid", "rate_limited",
-  "keys_unavailable", "busy", "conflict", "internal",
+  "keys_unavailable", "busy", "conflict", "invalid_code", "challenge_expired", "mfa_required", "session_without_mfa",
+  "internal",
 ]);
 
 function headers(options: CallOptions, body: boolean): Headers {
@@ -102,26 +107,28 @@ async function send(method: string, path: string, body: unknown, options: CallOp
 }
 
 /**
- * One API call. `expected` is the success status; `read` turns its JSON body into the value, or `null` when the body
- * does not have the contract's shape.
+ * One API call. `expected` is the success status, or the success statuses when the answer can be more than one kind
+ * (a sign-in: `201` signed in, `202` a two-factor challenge); `read` turns its JSON body, with its status, into the
+ * value, or `null` when the body does not have the contract's shape.
  */
 export async function call<T>(
   method: string,
   path: string,
-  request: { body?: unknown; expected: number; read: (json: unknown) => T | null },
+  request: { body?: unknown; expected: number | readonly number[]; read: (json: unknown, status: number) => T | null },
   options: CallOptions = {},
 ): Promise<ApiResult<T>> {
   const response = await send(method, path, request.body, options);
   if (response === null) {
     return { ok: false, error: { kind: "unreachable" } };
   }
-  if (response.status !== request.expected) {
+  const expected: readonly number[] = typeof request.expected === "number" ? [request.expected] : request.expected;
+  if (!expected.includes(response.status)) {
     return { ok: false, error: await failure(response) };
   }
   // A body that is not JSON reads as `null`, which `read` refuses and which makes the answer `unexpected`.
   // A `202` may come with a body (`POST /invites` names the server) or without one (sign-up).
   const json: unknown = response.status === 204 ? null : await response.json().catch(() => null);
-  const value = request.read(json);
+  const value = request.read(json, response.status);
   return value === null ? { ok: false, error: { kind: "unexpected", status: response.status } } : { ok: true, value };
 }
 

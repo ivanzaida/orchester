@@ -78,10 +78,24 @@ pub enum State {
   Offline,
   /// The same, its card on hover.
   OfflineCard,
+  /// The code step after the password of an account with two-factor authentication (`Tmwkg`, `Dix2w`).
+  Code,
+  /// The code step with a recovery code (`hJ2yS`, `AZVn7`).
+  Recovery,
+  /// Verifying a code (`iflk6`, `MHk6K`).
+  Verifying,
+  /// A wrong code (`DtxLq`, `d0gfiq`).
+  WrongCode,
+  /// Too many codes: paused (`qZyaZ`, `LfTnj`).
+  TooManyCodes,
+  /// The challenge ended: back to the password (`R2wOmb`, `Z0ceYP`).
+  TimedOut,
+  /// Signed out to sign in again with a code, which accepting an invite to Billing needs (`Nq3Mf`, `y4WjRA`).
+  SignInForCode,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 16] = [
+  const ALL: [(&'static str, Self); 23] = [
     ("first-run", Self::FirstRun),
     ("mcp-card", Self::McpCard),
     ("advanced", Self::Advanced),
@@ -98,6 +112,13 @@ impl State {
     ("sign-out", Self::SignOut),
     ("offline", Self::Offline),
     ("offline-card", Self::OfflineCard),
+    ("code", Self::Code),
+    ("recovery", Self::Recovery),
+    ("verifying", Self::Verifying),
+    ("wrong-code", Self::WrongCode),
+    ("too-many-codes", Self::TooManyCodes),
+    ("timed-out", Self::TimedOut),
+    ("sign-in-for-code", Self::SignInForCode),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -116,6 +137,14 @@ impl State {
       Self::Other => Some(None),
       _ => None,
     }
+  }
+
+  /// Whether the state is past the password of an account with two-factor authentication.
+  const fn code_step(self) -> bool {
+    matches!(
+      self,
+      Self::Code | Self::Recovery | Self::Verifying | Self::WrongCode | Self::TooManyCodes | Self::TimedOut
+    )
   }
 }
 
@@ -156,7 +185,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     data.path().display(),
     if narrow { 960 } else { 1440 }
   );
-  window(&runtime, &launch, (state, narrow, position), tabs)?;
+  window(&runtime, &launch, (state, narrow, position), (tabs, &cloud))?;
   launch.end();
   Ok(())
 }
@@ -190,6 +219,7 @@ fn seed(
       | State::SignOut
       | State::Offline
       | State::OfflineCard
+      | State::SignInForCode
   );
   // On a build whose own cloud the stand-in is, nothing is set in Advanced: the frames draw the default.
   if signed_in && own {
@@ -204,8 +234,12 @@ fn seed(
       return Err("the cloud still accepted the sign-in".into());
     }
   }
+  if state.code_step() {
+    cloud.require_codes();
+  }
   match state {
     State::SignedOut => runtime.block_on(services.cloud.sign_out())?,
+    State::SignInForCode => runtime.block_on(services.cloud.sign_out_for_code(Some("Billing".into())))?,
     State::Offline | State::OfflineCard => {
       cloud.set_down(true);
       if runtime.block_on(services.cloud.check_sign_in()).is_ok() {
@@ -228,7 +262,7 @@ fn window(
   runtime: &Runtime,
   launch: &Launch,
   (state, narrow, position): (State, bool, Option<WindowPosition>),
-  tabs: usize,
+  (tabs, cloud): (usize, &AccountCloud),
 ) -> Result<(), Box<dyn Error>> {
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
@@ -257,7 +291,7 @@ fn window(
   );
   let width = if narrow { 960 } else { 1440 };
   tree.resize(width, 900);
-  drive::to(&mut app, &mut tree, (state, &link), tabs)?;
+  drive::to(&mut app, &mut tree, (state, &link, cloud), tabs)?;
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   let window = WinitWindow::new(app, tree)
     .with_title("Orchester sign-in gate QA")

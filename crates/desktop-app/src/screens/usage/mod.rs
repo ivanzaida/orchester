@@ -6,7 +6,7 @@
 //! tokens go*, *Most expensive* and *Efficiency*, which scroll. Every chart reads as a table too.
 //!
 //! The period, grouping and filters are the route's query (`orchester_workspace::usage::UsageQuery`), so a
-//! link opens the page as it was asked for, and a change of them takes the tab's current entry's place.
+//! link opens the page as it was asked for, and a change of them is a new entry of the tab's history.
 //! What counts, which state the page is in and what a filter chooses is `orchester_workspace::usage`; the
 //! usage is read off the UI thread, again whenever the project's runs change, and the dashboard is built
 //! off it too, again whenever the query or the usage read changes.

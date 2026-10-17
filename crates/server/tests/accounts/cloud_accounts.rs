@@ -48,15 +48,15 @@ async fn s1c_an_account_invite_refuses_the_identity_of_another_account_and_stays
     403,
     ErrorCode::NotInvited,
   );
-  let (accepted, carol_linked): (Option<i64>, bool) = server
+  let (accepted, carol_linked): (Option<i64>, Option<String>) = server
     .database()
     .query_row(
-      "SELECT (SELECT accepted_at FROM invites WHERE id=?1), (SELECT cloud_subject IS NOT NULL FROM users WHERE id=?2)",
+      "SELECT (SELECT accepted_at FROM invites WHERE id=?1), (SELECT cloud_subject FROM users WHERE id=?2)",
       [invite_id, carol.user.id.to_string()],
       |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .expect("invite and account");
-  assert_eq!((accepted, carol_linked), (None, false));
+  assert_eq!((accepted, carol_linked), (None, None));
   let me: UserResponse = server.request("GET", "/auth/me", Some(&known.token), None).await.json();
   assert_eq!(me.user.id, known.user.id);
   server.finish().await;
@@ -128,6 +128,8 @@ async fn s1c_an_admin_invite_by_an_inviter_who_lost_admin_gives_nothing() {
   let (server, admin, cloud, audience) = linked().await;
   let known = bob_joined(&server, &admin, &cloud, &audience).await;
   let olena = server.invited("olena", true).await;
+  // Olena sends an invite by email, which needs a two-factor sign-in (accounts/two_factor.rs).
+  server.two_factor(&olena.token);
   let body = json!({"kind":"server","delivery":"cloud","email":"bob@example.com","admin":true});
   let invite = email_invite(&server, &olena.token, body).await;
   let invite_id = invite.invite.id.to_string();

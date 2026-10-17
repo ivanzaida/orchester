@@ -559,16 +559,62 @@ fn why_the_last_cloud_sign_in_ended_is_one_row() {
     email: "ivan@example.com".into(),
     reason: CloudSignInEnd::Revoked,
     ended_at: at(7),
+    invite: None,
   };
   db.set_cloud_sign_in_ended(Some(&revoked)).expect("recorded");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(revoked.clone()));
   let reset = EndedCloudSignIn {
     reason: CloudSignInEnd::PasswordReset,
-    ..revoked
+    ..revoked.clone()
   };
   db.set_cloud_sign_in_ended(Some(&reset))
     .expect("the newer one replaces it");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(reset));
+  let for_a_code = EndedCloudSignIn {
+    reason: CloudSignInEnd::TwoFactor,
+    invite: Some("Billing".into()),
+    ..revoked
+  };
+  db.set_cloud_sign_in_ended(Some(&for_a_code))
+    .expect("signed out to sign in with a code");
+  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(for_a_code));
   db.set_cloud_sign_in_ended(None).expect("signed in again");
   assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
+}
+
+/// The schema before the two-factor migrations (18: the sign-in end, 19: the kept invites' refusal for want of a code).
+const BEFORE_TWO_FACTOR: u32 = 17;
+
+#[test]
+fn why_the_last_cloud_sign_in_ended_is_kept_through_the_two_factor_migration() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  // Before the two-factor migrations: the sign-in end, then the kept invites' refusal for want of a code.
+  let before = BEFORE_TWO_FACTOR;
+  let raw = AppDb::create_at_version(&path, before).expect("the schema before two-factor authentication");
+  raw
+    .execute(
+      "INSERT INTO cloud_sign_in_ended (id, email, reason, ended_at) VALUES (1, 'ivan@example.com', 'revoked', 7)",
+      [],
+    )
+    .expect("a row of that schema");
+  drop(raw);
+  let mut db = AppDb::open(&path).expect("migrate");
+  assert_eq!(
+    db.cloud_sign_in_ended().expect("kept"),
+    Some(EndedCloudSignIn {
+      email: "ivan@example.com".into(),
+      reason: CloudSignInEnd::Revoked,
+      ended_at: at(7),
+      invite: None,
+    })
+  );
+  let for_a_code = EndedCloudSignIn {
+    email: "ivan@example.com".into(),
+    reason: CloudSignInEnd::TwoFactor,
+    ended_at: at(8),
+    invite: Some("Billing".into()),
+  };
+  db.set_cloud_sign_in_ended(Some(&for_a_code)).expect("the new reason");
+  assert_eq!(db.cloud_sign_in_ended().expect("read"), Some(for_a_code));
 }

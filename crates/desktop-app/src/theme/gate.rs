@@ -21,10 +21,12 @@ pub enum GateText {
   Lead,
   /// 11.5 `text_muted`, 1.45: what the two pages in the browser are for, at the card's foot (`Browser note` `hiNvS`).
   Note,
+  /// Geist Mono 13 `text_primary`, tracking 2: a two-factor code in its field (`JQkW2` in `F5Mc9`, `Tmwkg`).
+  Code,
 }
 
 impl GateText {
-  pub const ALL: [Self; 4] = [Self::Eyebrow, Self::Title, Self::Lead, Self::Note];
+  pub const ALL: [Self; 5] = [Self::Eyebrow, Self::Title, Self::Lead, Self::Note, Self::Code];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -36,6 +38,7 @@ impl GateText {
       Self::Title => "gate_title",
       Self::Lead => "gate_lead",
       Self::Note => "gate_note",
+      Self::Code => "gate_code",
     }
   }
 
@@ -45,6 +48,7 @@ impl GateText {
       Self::Title => style(26.0, FontWeight::SemiBold, 1.3, -0.5, palette.text_primary),
       Self::Lead => style(13.5, FontWeight::Normal, 1.55, 0.0, palette.text_secondary),
       Self::Note => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::Code => mono(style(13.0, FontWeight::Normal, 1.3, 2.0, palette.text_primary)),
     }
   }
 }

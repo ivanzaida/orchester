@@ -1,7 +1,7 @@
 //! Cross-feature navigation uses the real row action and independent fixture databases.
 use std::collections::BTreeSet;
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{AgentTab, ProjectPage, Route};
 use orchester_core::{
   id::ResourceId,
   name::Name,
@@ -13,6 +13,11 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 
 use super::{harness::Agents, support::project_id};
+
+/// The profile's *Used by* tab, where a held link leaves the editor.
+fn used_by(profile: ResourceId) -> Route {
+  Route::Project(project_id(), ProjectPage::Agent(profile, AgentTab::UsedBy))
+}
 
 fn used_profile() -> (Agents, ResourceId, ResourceId) {
   let screen = Agents::new(true);
@@ -59,7 +64,7 @@ fn used_profile() -> (Agents, ResourceId, ResourceId) {
 fn current_pipeline(screen: &mut Agents, pipeline: ResourceId) {
   assert_eq!(
     screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Pipeline(pipeline))
+    Route::Project(project_id(), ProjectPage::Pipeline(pipeline, Default::default()))
   );
   screen.until("actual current pipeline editor", |s| s.exists("pipeline-canvas"));
   assert!(screen.text("screen-pipelines").contains("Linked delivery"));
@@ -109,10 +114,7 @@ fn agents_used_link_preserves_unsaved_fields_until_actual_save_completes() {
   screen.set("agent-responsibility", "Keep my unsaved change");
   screen.click("agent-tab-used");
   screen.click("agent-use-open-0");
-  assert_eq!(
-    screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Agents)
-  );
+  assert_eq!(screen.window.navigation().route_now(), used_by(profile));
   assert!(screen.text("agent-editor").contains("Save this profile’s changes"));
   assert_eq!(
     screen
@@ -137,12 +139,10 @@ fn agents_used_link_preserves_unsaved_fields_until_actual_save_completes() {
   screen.click("agent-tab-used");
   assert!(screen.exists("agent-saving"));
   assert!(!screen.exists("agent-use-open-0"));
-  assert_eq!(
-    screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Agents)
-  );
+  assert_eq!(screen.window.navigation().route_now(), used_by(profile));
+  // The saved profile opens on the tab the route names.
   screen.until("actual saved profile", |s| {
-    !s.exists("agent-saving") && s.exists("agent-role") && !s.exists("agent-save")
+    !s.exists("agent-saving") && s.exists("agent-use-open-1") && !s.exists("agent-save")
   });
   assert_eq!(
     screen
@@ -173,10 +173,7 @@ fn agents_used_link_keeps_pending_person_question_and_storage_unchanged() {
   screen.until("person question", |s| s.exists("agent-confirm-confirm"));
   screen.click("agent-tab-used");
   screen.click("agent-use-open-0");
-  assert_eq!(
-    screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Agents)
-  );
+  assert_eq!(screen.window.navigation().route_now(), used_by(profile));
   assert!(screen.exists("agent-confirm-confirm"));
   assert!(screen.window.link.input_gate().protecting());
   assert!(
@@ -216,10 +213,7 @@ fn agents_used_link_keeps_clean_stale_publish_question_without_answering_it() {
   screen.until("stale question", |s| s.exists("agent-confirm-confirm"));
   screen.click("agent-tab-used");
   screen.click("agent-use-open-1");
-  assert_eq!(
-    screen.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Agents)
-  );
+  assert_eq!(screen.window.navigation().route_now(), used_by(profile));
   assert!(screen.exists("agent-confirm-confirm"));
   assert!(screen.window.link.input_gate().protecting());
   assert!(

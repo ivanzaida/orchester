@@ -28,6 +28,7 @@ use super::{
   work::Work,
 };
 use crate::{
+  navigation::link::Open,
   theme::{ConnectionsText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -75,9 +76,10 @@ pub(super) struct Inspecting<'a> {
 pub(super) struct Actions {
   pub start: Arc<dyn Fn(ConnectionId, Work) + Send + Sync>,
   pub confirm: Arc<dyn Fn(Option<Confirm>) + Send + Sync>,
-  pub edit: Arc<dyn Fn(ConnectionId) + Send + Sync>,
+  /// What opens the page that edits a connection.
+  pub edit: Arc<dyn Fn(ConnectionId) -> Open + Send + Sync>,
   /// Opens the Agents screen, where a profile chooses its connection and servers.
-  pub agents: Arc<dyn Fn() + Send + Sync>,
+  pub agents: Open,
 }
 
 /// The inspector of `inspecting.entry`.

@@ -278,10 +278,9 @@ impl ChangeCard {
         .into_iter()
         .enumerate()
         .map(|(index, (glyph, label, route))| {
-          let navigation = navigation.clone();
           ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
             .icon(glyph)
-            .on_click(move || navigation.go(route.clone()))
+            .opens(navigation.to(route))
         }),
     )
   }

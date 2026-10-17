@@ -17,6 +17,7 @@ use lurq::{
 use orchester_app::{
   i18n,
   mcp::{McpKind, McpSettings, McpStatus, ServerState},
+  navigation::press::OpenIn,
   routes::{OverviewTab, ProjectPage, Route, TaskView},
   shell::status_bar::{
     BarAction, BarFacts, BarProps, CloudFacts, ProjectFacts, ReadFailure, RunnerFacts, ServerFacts, StatusBarView,

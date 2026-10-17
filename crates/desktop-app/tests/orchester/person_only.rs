@@ -209,7 +209,7 @@ fn orchester_person_only_linking_and_uploading() {
   let (_server, recorder) = joined_through_recorder(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
@@ -235,7 +235,7 @@ fn orchester_person_only_leaving_and_signing_out_of_a_server() {
   let entry = link_kontur(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
@@ -273,7 +273,7 @@ fn orchester_person_only_joining_again() {
     &window,
     services
       .servers
-      .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), as_ivan(code)),
+      .join_with_code(&address, Trust::System(PlainHttp::NotAllowed), as_ivan(&server, code)),
   )
   .expect("joined");
   let entry = services.servers.entries().expect("entries").remove(0);
@@ -286,12 +286,13 @@ fn orchester_person_only_joining_again() {
   refused(&mut window, "orchester-server-join-again");
 }
 
-/// A code request for `ivan` with `code`.
-fn as_ivan(code: orchester_api::Credential) -> CodeRequest {
+/// A code request for `ivan` with `code`, from a computer signed in to the cloud with two-factor authentication.
+fn as_ivan(server: &TestServer, code: orchester_api::Credential) -> CodeRequest {
   CodeRequest {
     code,
     username: Some("ivan".into()),
     display_name: Some("Ivan Zaida".into()),
+    proof: Some(server.code_proof("ivan")),
   }
 }
 
@@ -334,7 +335,7 @@ fn orchester_person_only_check_code_of_a_changed_certificate() {
     &window,
     services
       .servers
-      .join_with_code(&address, presented.confirm(), as_ivan(code)),
+      .join_with_code(&address, presented.confirm(), as_ivan(&server, code)),
   )
   .expect("joined");
   // This computer now trusts another server's certificate, so this one's looks changed.

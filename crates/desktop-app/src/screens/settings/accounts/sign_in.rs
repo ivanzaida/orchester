@@ -304,7 +304,7 @@ fn same_person(ctx: &mut Ctx, account: &AgentAccount, other: &AgentAccount, emai
           t(ctx, "accounts.signIn.keepBoth"),
         )
         .icon(Icon::Check)
-        .on_click(move || to.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
+        .on_click(move || to.close_panel(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
       )
       .child(
         ActionButton::new(
@@ -313,7 +313,7 @@ fn same_person(ctx: &mut Ctx, account: &AgentAccount, other: &AgentAccount, emai
           ta(ctx, "accounts.signIn.removeIt", [("account", shown)]),
         )
         .icon(Icon::Trash2)
-        .on_click(move || remove.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Remove)))),
+        .on_click(move || remove.go(Route::Accounts(AccountsView::of(id, AccountsPanel::Remove)))),
       ),
   )
   .into()
@@ -369,7 +369,7 @@ fn signed_in(ctx: &mut Ctx, parts: &Parts, account: &AgentAccount) -> Element {
           t(ctx, "accounts.signIn.done"),
         )
         .icon(Icon::ArrowRight)
-        .on_click(move || navigation.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
+        .on_click(move || navigation.close_panel(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)))),
       )
       .with_children(copy),
   )
@@ -437,7 +437,7 @@ fn footer(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount, sho
     ButtonKind::Secondary,
     t(ctx, "accounts.signIn.finishLater"),
   )
-  .on_click(move || navigation.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account))));
+  .on_click(move || navigation.close_panel(Route::Accounts(AccountsView::of(id, AccountsPanel::Account))));
   let again = if parts.signing_in == Some(id) {
     open_button(ctx, work, id, true).loading()
   } else {

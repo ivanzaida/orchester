@@ -116,13 +116,12 @@ fn instructions_missing_run_variable_is_flagged_and_copy_is_disabled() {
   screen.click("instruction-variable-run.revision");
   assert!(screen.text("instruction-variable-detail").contains("Unavailable"));
   screen.click("instruction-variable-resume");
-  screen.pump();
-  assert!(
-    screen.listed().entries[0]
+  screen.until("resume event saved", |s| {
+    s.listed().entries[0]
       .body
       .events()
       .contains(&orchester_core::resource::InjectionEvent::Resume)
-  );
+  });
 }
 
 fn seed_unavailable_tasks(screen: &Instructions) {

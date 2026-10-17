@@ -3,13 +3,14 @@ use std::{net::IpAddr, time::SystemTime};
 use deadpool_postgres::GenericClient;
 use orchester_api::{
   Credential,
-  cloud::{CloudDevice, CloudErrorCode, CloudSignIn, CloudSignedIn, DeviceInfo, SessionEnd},
+  cloud::{CloudDevice, CloudErrorCode, CloudSignIn, CloudSignInChallenge, CloudSignedIn, DeviceInfo, SessionEnd},
 };
 use orchester_core::id::{CloudAccountId, CloudDeviceId};
 
 use super::{
   Cloud, input,
   rows::{ACTIVE, AccountRow, Authenticated, account_by_email, active_since},
+  two_factor,
 };
 use crate::{
   clock::MINUTE_MS,
@@ -19,10 +20,22 @@ use crate::{
   tokens::{DEVICE_PREFIX, random_token, token_hash, well_formed},
 };
 
+/// What the password step of a sign-in comes to.
+pub(crate) enum SignInAnswer {
+  SignedIn(Box<CloudSignedIn>),
+  /// Two-factor authentication is on: a code finishes the sign-in (`POST /auth/sessions/two-factor`).
+  Challenged(CloudSignInChallenge),
+}
+
 impl Cloud {
   /// A wrong password and an unknown email answer alike: the unknown one is verified against a dummy hash and counts
-  /// against the same limits. `email_unconfirmed` comes only after the right password.
-  pub(crate) async fn sign_in(&self, input: CloudSignIn, address: IpAddr) -> Result<CloudSignedIn, CloudError> {
+  /// against the same limits. `email_unconfirmed` comes only after the right password, and so does a challenge for an
+  /// account with two-factor authentication. Answers the account it is for, for the request log.
+  pub(crate) async fn sign_in(
+    &self,
+    input: CloudSignIn,
+    address: IpAddr,
+  ) -> Result<(CloudAccountId, SignInAnswer), CloudError> {
     let device = input::device(&input.device)?;
     let Ok(email) = input::email(&input.email) else {
       return Err(CloudErrorCode::InvalidCredentials.into());
@@ -50,17 +63,48 @@ impl Cloud {
       attempt.succeeded();
       return Err(CloudErrorCode::EmailUnconfirmed.into());
     }
+    let id = account.account.id;
+    let answer = match two_factor::confirmed_id(&self.client().await?, id).await? {
+      Some(two_factor) => self
+        .challenge(&account, (two_factor, &hash), &device, address)
+        .await?
+        .map(SignInAnswer::Challenged),
+      None => self
+        .add_device(account, &hash, device, address)
+        .await?
+        .map(|signed_in| SignInAnswer::SignedIn(Box::new(signed_in))),
+    };
+    let Some(answer) = answer else {
+      attempt.failed(now);
+      self.record_failure(Some(id), address, now).await?;
+      return Err(CloudErrorCode::InvalidCredentials.into());
+    };
+    attempt.succeeded();
+    Ok((id, answer))
+  }
+
+  /// Adds the device, signed in without a second factor, only while the password is still the one just verified and
+  /// two-factor authentication is still off; `None` otherwise. `FOR SHARE` waits for a reset or change that holds the
+  /// account row and then checks its new hash, so a device can never be added after a reset signed every device out
+  /// (review 1, M1).
+  async fn add_device(
+    &self,
+    account: AccountRow,
+    hash: &PasswordHash,
+    device: DeviceInfo,
+    address: IpAddr,
+  ) -> Result<Option<CloudSignedIn>, CloudError> {
     let token = random_token(DEVICE_PREFIX)?;
     let id = CloudDeviceId::generate();
+    let now = self.now();
     let client = self.inner.db.client().await?;
-    // Only while the password is still the one just verified: a change or reset meanwhile wins. `FOR SHARE` waits
-    // for a reset or change that holds the account row and then checks its new hash, so a device can never be added
-    // after a reset signed every device out (review 1, M1).
     let added = client
       .execute(
         "INSERT INTO devices (id, account, name, platform, token_hash, created_at, last_used_at)
          SELECT $1, id, $2, $3, $4, $5, $5 FROM accounts
-         WHERE id = $6 AND password_hash = $7 AND confirmed_at IS NOT NULL FOR SHARE",
+         WHERE id = $6 AND password_hash = $7 AND confirmed_at IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM two_factor t WHERE t.account = accounts.id AND t.confirmed_at IS NOT NULL)
+         FOR SHARE",
         &[
           &id.as_uuid(),
           &device.name,
@@ -73,11 +117,8 @@ impl Cloud {
       )
       .await?;
     if added == 0 {
-      attempt.failed(now);
-      self.record_failure(Some(account.account.id), address, now).await?;
-      return Err(CloudErrorCode::InvalidCredentials.into());
+      return Ok(None);
     }
-    attempt.succeeded();
     audit(
       &client,
       Some(account.account.id),
@@ -87,7 +128,7 @@ impl Cloud {
       now,
     )
     .await?;
-    Ok(signed_in(token, account, id, device, now))
+    Ok(Some(signed_in(token, account, id, device, now)))
   }
 
   async fn record_failure(&self, account: Option<CloudAccountId>, address: IpAddr, now: i64) -> Result<(), CloudError> {
@@ -154,7 +195,13 @@ async fn ended(client: &impl GenericClient, hash: &[u8]) -> Result<CloudError, C
   Ok(CloudError::Ended { reason, at })
 }
 
-fn signed_in(token: Credential, account: AccountRow, id: CloudDeviceId, device: DeviceInfo, now: i64) -> CloudSignedIn {
+pub(super) fn signed_in(
+  token: Credential,
+  account: AccountRow,
+  id: CloudDeviceId,
+  device: DeviceInfo,
+  now: i64,
+) -> CloudSignedIn {
   CloudSignedIn {
     token,
     device: CloudDevice {

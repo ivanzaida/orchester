@@ -25,9 +25,10 @@ use orchester_core::{
 
 use super::{listed::Listed, load::LastRead};
 use crate::{
+  navigation::press::OpenIn,
   routes::ChangeSource,
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
-  ui::{pressable::pressable, tooltip::Tooltip},
+  ui::{pressable::opening, tooltip::Tooltip},
 };
 
 /// Width of the file list (`qT0kd`), height of a file row (`dAwTi`) and width of its change's letter
@@ -146,8 +147,8 @@ impl FileItem {
   }
 }
 
-/// Called with the file a person chose.
-pub type SelectFile = Arc<dyn Fn(&Listed) + Send + Sync>;
+/// Opens the file a person chose, where the press asks: each file is a place of its own (`navigation::link`).
+pub type SelectFile = Arc<dyn Fn(&Listed, OpenIn) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FileListProps {
@@ -301,7 +302,7 @@ fn file_row(ctx: &mut Ctx, listed: &Listed, summary: &FileSummary, selected: boo
     .with_children(summary.counts(ctx, ExtraTypography::MonoNote.role()));
   let path = listed.path.to_string();
   let listed = listed.clone();
-  let row = pressable(move || select(&listed))
+  let row = opening(Arc::new(move |at| select(&listed, at)))
     .id(id)
     .describe("path", path)
     .describe("state", if selected { "selected" } else { "enabled" })

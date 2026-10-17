@@ -45,7 +45,7 @@ use self::{
 };
 use super::placeholder::centered;
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   project::{ShownProject, TasksState},
   routes::{ProjectPage, Route, Screen, TaskList, TaskView},
   ui::{
@@ -159,21 +159,24 @@ impl Nav {
     Route::Project(self.project, page)
   }
 
-  /// The Tasks list; with `highlight`, the task Create just added, in the form's place so Back does not
-  /// return to a form that was used.
-  pub fn tasks(&self, highlight: Option<TaskKey>) {
-    match highlight {
-      Some(key) => self
-        .navigation
-        .replace(self.route(ProjectPage::Tasks(TaskList::default().with_highlight(key)))),
-      None => self.navigation.go(self.route(ProjectPage::Tasks(TaskList::default()))),
-    }
-  }
-
-  pub fn task(&self, key: &TaskKey) {
+  /// The Tasks list with `highlight`, the task Create just added, in the form's place so Back does not return to a
+  /// form that was used.
+  pub fn tasks(&self, highlight: TaskKey) {
     self
       .navigation
-      .go(self.route(ProjectPage::Task(key.clone(), TaskView::Summary)));
+      .replace(self.route(ProjectPage::Tasks(TaskList::default().with_highlight(highlight))));
+  }
+
+  /// What opens the Tasks list where a press asks (`navigation::link`).
+  pub fn to_tasks(&self) -> Open {
+    self.navigation.to(self.route(ProjectPage::Tasks(TaskList::default())))
+  }
+
+  /// What opens the Summary of the task `key` where a press asks.
+  pub fn to_task(&self, key: &TaskKey) -> Open {
+    self
+      .navigation
+      .to(self.route(ProjectPage::Task(key.clone(), TaskView::Summary)))
   }
 
   /// The task whose run was asked to start, in the form's place: its Conversation, or its Summary, which says why,
@@ -188,7 +191,8 @@ impl Nav {
       .replace(self.route(ProjectPage::Task(key.clone(), view)));
   }
 
-  pub fn pipelines(&self) {
-    self.navigation.go(self.route(ProjectPage::Pipelines));
+  /// What opens the Pipelines library where a press asks.
+  pub fn to_pipelines(&self) -> Open {
+    self.navigation.to(self.route(ProjectPage::Pipelines))
   }
 }

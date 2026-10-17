@@ -84,6 +84,10 @@ function newInvite(world: World, request: Request, me: string): Answer {
   if (typeof email === "string" && email.startsWith("limit")) {
     return refuse(429, "rate_limited", 3 * 3600);
   }
+  // The server makes invites only for a sign-in with two-factor authentication (`mfa_required`).
+  if (world.state.no_mfa === true || (typeof email === "string" && email.startsWith("no-mfa"))) {
+    return refuse(403, "mfa_required");
+  }
   if (kind === "account" && world.state.users.find((u) => u.id === user)?.admin === true) {
     return refuse(403, "forbidden");
   }
@@ -135,6 +139,15 @@ function updateUser(world: World, request: Request, userId: string): Answer {
   if (typeof disabled === "boolean") {
     user.disabled = disabled;
   }
+  return ok({ user: userJson(user) });
+}
+
+function unlinkUser(world: World, userId: string): Answer {
+  const user = world.state.users.find((u) => u.id === userId);
+  if (user === undefined) {
+    return refuse(404, "not_found");
+  }
+  user.cloud = false;
   return ok({ user: userJson(user) });
 }
 
@@ -208,6 +221,7 @@ const ROUTES: Route[] = [
   ["DELETE", /^\/api\/v1\/invites\/([^/]+)$/, (w, _r, me, m) => revoke(w, m[1] ?? "", me), false],
   ["GET", /^\/api\/v1\/admin\/users$/, (w) => users(w), true],
   ["PATCH", /^\/api\/v1\/admin\/users\/([^/]+)$/, (w, r, _, m) => updateUser(w, r, m[1] ?? ""), true],
+  ["DELETE", /^\/api\/v1\/admin\/users\/([^/]+)\/cloud$/, (w, _r, _me, m) => unlinkUser(w, m[1] ?? ""), true],
   ["GET", /^\/api\/v1\/admin\/sessions$/, (w) => sessions(w), true],
   ["DELETE", /^\/api\/v1\/admin\/sessions\/([^/]+)$/, (w, _r, _me, m) => {
     w.state.devices = w.state.devices.filter((d) => d.id !== m[1]);

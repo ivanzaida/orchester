@@ -78,7 +78,7 @@ impl Link {
       ctx.t_args("sharing.link.unconnected.connect", [("host", host.as_str())]),
     )
     .icon(Icon::Server)
-    .on_click(move || navigation.go(Route::Orchester(OrchesterView::connect())));
+    .opens(navigation.to(Route::Orchester(OrchesterView::connect())));
     let title = ctx.t(if project.is_some() {
       "sharing.link.unconnected.title"
     } else {

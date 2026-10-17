@@ -2,8 +2,9 @@
 //! only the gate shows, and nothing behind it is reachable; signing in opens the window with the tabs it had; the
 //! refusals in place; signed in, the app stays open while the cloud cannot be reached and says so in the status bar;
 //! each reason the cloud gives brings the gate back with its notice and the email filled in; *Sign out and lock* in
-//! Settings › Orchester locks; synthetic input never signs in nor changes the cloud's address; and the card and
-//! *Advanced* are forms, which Tab goes through and Enter submits ([`keyboard`]).
+//! Settings › Orchester locks; synthetic input never signs in nor changes the cloud's address; the card and
+//! *Advanced* are forms, which Tab goes through and Enter submits ([`keyboard`]); and an account with two-factor
+//! authentication finishes its sign-in with a code ([`two_factor`]).
 //!
 //! `cargo test -p orchester-app --test gate gate_`
 
@@ -15,6 +16,7 @@ mod server_support;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
+mod two_factor;
 
 use lurq::app::events::with_synthetic_input;
 use orchester_api::client::ServerAddress;
