@@ -4,6 +4,7 @@ mod draft;
 mod hook;
 mod path;
 mod process;
+mod rebase;
 mod record;
 mod recovery;
 mod resolution;
@@ -12,6 +13,7 @@ pub use draft::{ConflictKind, DraftChoice, DraftIdentity, DraftRecord, EditorCan
 pub use hook::HookChange;
 pub use path::LocalPath;
 pub use process::{ExecutorIdentity, LocalProcess, LocalProcessStore, ProcessIdentity, ProcessJournal};
+pub use rebase::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase};
 pub use record::{CheckedResult, LocalOperation, LocalPhase, Preservation};
 pub use recovery::{LocalRecoveryStore, RecoveryLayer};
 pub use resolution::{PendingResolution, ResolutionWrite};

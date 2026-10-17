@@ -300,6 +300,16 @@ locks (`orchester_core::integration`).
   work. Should git still stop part way, e.g. at a file another program holds open, the files it
   wrote are put back; any it could not put back are named. A branch that already holds every
   commit of the run is recorded as merged without a change.
+- **Rebased runs.** A run keeps the base it started from, so after its branch was rebased onto
+  newer commits of the branch it merges into, the commits between the two would read as the run's
+  own work already integrated. When git proves the rebase, the base its own commits sit on now is
+  recorded (`run_rebases`, one row per run, a newer rebase replacing it) and external evidence reads
+  the run from there: the branch's reflog names the commit the newest rebase put it onto, that commit
+  descends from the recorded base and is below both the branch tip and the target, and no checkpoint
+  of the run lies between the recorded base and it (else the target has work of the run's own). A
+  last checkpoint the rebase rewrote is read as the branch tip when their commits are each other's
+  rebased form, patch for patch. A run whose own commits the target has, picked or merged, still
+  shows as integrated.
 - **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
   afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped

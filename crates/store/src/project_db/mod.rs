@@ -34,6 +34,7 @@ mod pull_requests;
 mod questions;
 mod queue_holds;
 mod read_only;
+mod rebases;
 mod repository;
 mod repository_import;
 mod resources;

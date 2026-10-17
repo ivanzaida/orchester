@@ -31,6 +31,7 @@ mod questions;
 mod queue_holds;
 mod recovery;
 mod reviewer_usage;
+mod run_rebases;
 mod shared_members;
 mod sharing;
 mod sources;
@@ -556,4 +557,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   worktree_not_created::MIGRATION,
   shared_members::MIGRATION,
   shared_members::READ_AS_MIGRATION,
+  run_rebases::MIGRATION,
 ];
