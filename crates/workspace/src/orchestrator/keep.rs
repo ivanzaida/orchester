@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use super::tools::ChatScope;
 use crate::{
-  app_mcp::{ToolError, Translate},
+  app_mcp::{ToolError, Translate, find_task},
   tasks::hold,
 };
 
@@ -97,10 +97,13 @@ pub(super) async fn keep(
   }
 }
 
-/// The key of the task `named` names, as people read it; `None` when it cannot be found.
+/// The key of the task `named` names, as people read it, also when the call named it in another case or by its id;
+/// `None` when the run it names cannot be found.
 fn task_key(db: &ProjectDb, named: Named) -> Option<String> {
   match named {
-    Named::Task(key) => Some(key),
+    // A name no task answers to, or tasks that cannot be read, keep the name as the call gave it: the card still
+    // shows what the agent named.
+    Named::Task(named) => Some(find_task(db, &named).map_or(named, |task| task.key().to_string())),
     Named::Run(run) => {
       let run = db.run(run.parse::<RunId>().ok()?).ok()??;
       Some(db.task(run.task()).ok()??.key().to_string())

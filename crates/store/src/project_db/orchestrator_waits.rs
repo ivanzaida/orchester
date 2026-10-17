@@ -17,9 +17,10 @@ use crate::{
   rows::{corrupt, parse},
 };
 
-/// A wait kept without a turn, which may start one.
+/// A wait kept without a turn, which may start one, and the conversation it was kept in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KeptWait {
+  pub chat: ChatId,
   pub seq: i64,
   pub key: String,
   pub wait: AgentWait,
@@ -60,25 +61,27 @@ impl ProjectDb {
     Ok(kept == 1)
   }
 
-  /// The waits of `chat` that have no turn, oldest first.
-  pub fn waits_without_turn(&self, chat: ChatId) -> Result<Vec<KeptWait>, StoreError> {
+  /// The waits of every conversation that have no turn, oldest first.
+  pub fn waits_without_turn(&self) -> Result<Vec<KeptWait>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT seq, wait_key, body FROM orchestrator_entries
-       WHERE chat_id = ?1 AND kind = 'wait' AND message_id IS NULL ORDER BY seq",
+      "SELECT chat_id, seq, wait_key, body FROM orchestrator_entries
+       WHERE kind = 'wait' AND message_id IS NULL ORDER BY seq",
     )?;
     let rows = statement
-      .query_map([chat.to_string()], |row| {
+      .query_map([], |row| {
         Ok((
-          row.get::<_, i64>(0)?,
-          row.get::<_, String>(1)?,
+          row.get::<_, String>(0)?,
+          row.get::<_, i64>(1)?,
           row.get::<_, String>(2)?,
+          row.get::<_, String>(3)?,
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
     rows
       .into_iter()
-      .map(|(seq, key, body)| {
+      .map(|(chat, seq, key, body)| {
         Ok(KeptWait {
+          chat: parse("chat id", &chat)?,
           seq,
           key,
           wait: wait_of(&body)?,
