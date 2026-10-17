@@ -140,7 +140,7 @@ fn a_segmented_control_is_26_high_2_inside_its_segments_22_high() {
           segment("light", "Light"),
           segment("system", "System"),
         ],
-        Focus::Form,
+        Focus::Keyboard,
       ))
       .child(segmented(
         "view",

@@ -75,7 +75,7 @@ pub fn rows(ctx: &mut Ctx, state: &State, step: &Step, locked: bool) -> Element 
   body = body.child(control(
     "step-access",
     &ctx.t("pipelines.access"),
-    segmented("step-access-choice", segments, Focus::Form),
+    segmented("step-access-choice", segments, Focus::Keyboard),
   ));
   let Some(choice) = choice else {
     return body
