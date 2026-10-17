@@ -1371,7 +1371,7 @@ Row 45: address plus an 8-character code, for networks without the internet.
   the new one. With `proxy_certificate = "auto"` (only with `tls = "off"` and an `https://` `address`) the server reads
   the certificate itself: it connects to its own configured `address`, as an app does, through the API client's
   verifier over the operating system's trust store, which checks the chain and the name, asks `GET /server`, and keeps
-  the leaf that connection presented. It reads it at start and every hour, before a proof when the last read is older
+  the leaf that connection presented. It reads it at start and every hour (30 seconds after a read that failed), before a proof when the last read is older
   than ten minutes, and when an app names, in the header `Orchester-Presented-Certificate`, a certificate it has not
   seen (at most twice a minute, so requests cannot make it connect out at will). After it sees a renewal, it still
   names the certificate before it for an hour, as `previous_certificate`, but only to an app that sent the header, which
