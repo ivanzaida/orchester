@@ -78,7 +78,10 @@ fn pr_create_opens_a_draft_from_the_head_into_the_base_with_the_body_on_standard
   assert_eq!(command.stdin(), Some(new(true).body.as_str()));
   assert!(command.env().contains(&("GH_PROMPT_DISABLED".into(), "1".into())));
   let ready = gh_pr_create_command(&gh(), &repo(), &new(false));
-  assert!(!ready.args().contains(&"--draft".to_owned()), "ready for review is asked for");
+  assert!(
+    !ready.args().contains(&"--draft".to_owned()),
+    "ready for review is asked for"
+  );
   assert_eq!(
     parse_gh_pr_create(&repo(), &ok(fixture!("gh_pr_create_synthetic.stdout"))),
     Ok(OpenedPullRequest {
@@ -91,17 +94,11 @@ fn pr_create_opens_a_draft_from_the_head_into_the_base_with_the_body_on_standard
 #[test]
 fn pr_create_failures_name_an_open_pull_request_no_commits_and_github_errors() {
   assert_eq!(
-    parse_gh_pr_create(
-      &repo(),
-      &failed(fixture!("gh_pr_create_synthetic_exists.stderr"))
-    ),
+    parse_gh_pr_create(&repo(), &failed(fixture!("gh_pr_create_synthetic_exists.stderr"))),
     Err(CreateFailure::AlreadyExists { number: Some(141) })
   );
   assert_eq!(
-    parse_gh_pr_create(
-      &repo(),
-      &failed(fixture!("gh_pr_create_synthetic_no_commits.stderr"))
-    ),
+    parse_gh_pr_create(&repo(), &failed(fixture!("gh_pr_create_synthetic_no_commits.stderr"))),
     Err(CreateFailure::NoCommits)
   );
   assert_eq!(
@@ -167,7 +164,10 @@ fn git_push_refusals_tell_a_missing_sign_in_from_a_refused_branch() {
     panic!("an unreachable host is a failure");
   };
   assert!(reason.ends_with("Could not resolve host: github.com"), "{reason}");
-  assert!(!reason.contains("ghp_example"), "credentials in the URL are redacted: {reason}");
+  assert!(
+    !reason.contains("ghp_example"),
+    "credentials in the URL are redacted: {reason}"
+  );
 }
 
 #[test]
@@ -222,7 +222,10 @@ fn opening_pushes_nothing_for_another_account_and_stops_at_a_refused_push() {
       Ok(failed_with(128, fixture!("git_push_synthetic_https_auth.stderr"))),
     ),
   ]);
-  let push = Push { runner: &runner, ..push };
+  let push = Push {
+    runner: &runner,
+    ..push
+  };
   let attempt = open_pull_request(
     &GhCli::new(&runner, &connection),
     push,
@@ -235,7 +238,10 @@ fn opening_pushes_nothing_for_another_account_and_stops_at_a_refused_push() {
     (AUTH_STATUS, Ok(ok(fixture!("gh_auth_status_signed_in.stdout")))),
     (PUSH, Err(CommandError::NotFound)),
   ]);
-  let push = Push { runner: &runner, ..push };
+  let push = Push {
+    runner: &runner,
+    ..push
+  };
   let attempt = open_pull_request(
     &GhCli::new(&runner, &connection),
     push,
@@ -288,7 +294,11 @@ fn a_tasks_pull_request_says_its_key_title_summary_criteria_and_link() {
     title: Name::new("Add retry to webhook sender").expect("valid title"),
     brief: "Retry failed webhook deliveries with backoff.\nKeep the order.\n\nBackground: the sender drops them today."
       .to_owned(),
-    acceptance_criteria: vec!["Failed deliveries retry".to_owned(), "  ".to_owned(), "Order is kept".to_owned()],
+    acceptance_criteria: vec![
+      "Failed deliveries retry".to_owned(),
+      "  ".to_owned(),
+      "Order is kept".to_owned(),
+    ],
     pipeline: None,
     limits: TaskLimits::NONE,
   };
@@ -308,5 +318,8 @@ fn a_tasks_pull_request_says_its_key_title_summary_criteria_and_link() {
     acceptance_criteria: Vec::new(),
     ..details
   };
-  assert_eq!(task_pull_request(&key, &bare, &link).1, format!("Task KON-12 in Orchester: {link}"));
+  assert_eq!(
+    task_pull_request(&key, &bare, &link).1,
+    format!("Task KON-12 in Orchester: {link}")
+  );
 }

@@ -44,10 +44,8 @@ use super::{
 
 const READY: &str = "ready for review, merges cleanly";
 const NO_BRANCH: &str = "ready for review, no branch to merge into";
-const SIGNED_IN: &str =
-  r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"repo"}]}}"#;
-const OTHER_ACCOUNT: &str =
-  r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivan-work","scopes":"repo"}]}}"#;
+const SIGNED_IN: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"repo"}]}}"#;
+const OTHER_ACCOUNT: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivan-work","scopes":"repo"}]}}"#;
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"read:org"}]}}"#;
 const SIGN_IN_REFUSED: &str = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n";
 
@@ -220,7 +218,10 @@ fn knob_at_end(window: &mut super::support::Window) -> bool {
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
-  let (track, knob) = (bounds("task-pull-request-draft-mark"), bounds("task-pull-request-draft-knob"));
+  let (track, knob) = (
+    bounds("task-pull-request-draft-mark"),
+    bounds("task-pull-request-draft-knob"),
+  );
   knob.x + knob.width / 2.0 > track.x + track.width / 2.0
 }
 
@@ -264,12 +265,22 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   let PullRequestList::Linked(list) = load_list_in(&page.repo).expect("the pull requests") else {
     panic!("the project is linked");
   };
-  let linked = list.find(143).and_then(|listed| listed.task.as_ref()).expect("linked to its task");
-  assert_eq!(linked.run, run.id(), "the Pull requests list links it to the task's run");
+  let linked = list
+    .find(143)
+    .and_then(|listed| listed.task.as_ref())
+    .expect("linked to its task");
+  assert_eq!(
+    linked.run,
+    run.id(),
+    "the Pull requests list links it to the task's run"
+  );
   page.click("task-review-pull-request");
   assert_eq!(
     page.window.navigation().route_now(),
-    Route::Project(page.project, ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number")))
+    Route::Project(
+      page.project,
+      ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number"))
+    )
   );
 }
 
@@ -304,13 +315,19 @@ fn decision_create_pull_request_says_why_it_is_unavailable() {
     assert!(page.locked("task-create-pull-request"));
   };
   reopen(&mut page, "Create pull request needs a GitHub remote");
-  git(&page, &["remote", "add", "origin", "https://github.com/ivanzaida/kontur.git"]);
+  git(
+    &page,
+    &["remote", "add", "origin", "https://github.com/ivanzaida/kontur.git"],
+  );
   reopen(&mut page, "Create pull request needs a usable GitHub connection");
   link(&page);
   *fake.auth.lock() = OTHER_ACCOUNT;
   reopen(&mut page, "Signed in as ivan-work, expected ivanzaida.");
   *fake.auth.lock() = NO_REPO_SCOPE;
-  reopen(&mut page, "Missing scope: repo. Run gh auth refresh -h github.com -s repo");
+  reopen(
+    &mut page,
+    "Missing scope: repo. Run gh auth refresh -h github.com -s repo",
+  );
   *fake.auth.lock() = SIGNED_IN;
   page.open(NO_BRANCH, "task-create-pull-request");
   page.until_says(
@@ -364,7 +381,10 @@ fn decision_create_pull_request_refused_push_names_setup_git_and_tries_again() {
   );
   // The command row lays out each word with the space after it.
   let command = page.text("task-pull-request-command");
-  assert_eq!(command.split_whitespace().collect::<Vec<_>>(), ["gh", "auth", "setup-git"]);
+  assert_eq!(
+    command.split_whitespace().collect::<Vec<_>>(),
+    ["gh", "auth", "setup-git"]
+  );
   assert!(fake.created.lock().is_none(), "GitHub was asked nothing");
   assert!(!page.locked("task-merge"), "Merge into main stays offered");
   assert!(page.has("task-create-pull-request"), "and so does Create pull request");
@@ -396,7 +416,10 @@ fn decision_create_pull_request_failed_gh_says_why_in_place() {
     format!("GitHub found no commits on {branch} that main doesn't have, so there is nothing to review.")
   );
   assert!(page.has("task-pull-request-retry"));
-  assert!(!page.has("task-pull-request-command"), "only a refused sign-in names gh auth setup-git");
+  assert!(
+    !page.has("task-pull-request-command"),
+    "only a refused sign-in names gh auth setup-git"
+  );
   *fake.create.lock() = output(1, "", "HTTP 502: Server Error (https://api.github.com/graphql)\n");
   page.window.until("gh's trouble", |window| {
     if let Some(mut retry) = window.tree.get_element_by_id_mut("task-pull-request-retry") {

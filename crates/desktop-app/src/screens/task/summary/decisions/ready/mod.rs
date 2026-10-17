@@ -66,9 +66,7 @@ impl Component for ReadyForReview {
         .into_iter()
         .chain(runs_section(ctx, &props))
         .collect(),
-      (None, JobState::Failed(problem)) => {
-        card::not_merged(ctx, &props, run, (problem, None), (&job.conflicts, &pull))
-      }
+      (None, JobState::Failed(problem)) => card::not_merged(ctx, &props, run, (problem, None), (&job.conflicts, &pull)),
       (None, _) => vec![
         external.unwrap_or_else(|| card::ready(ctx, &props, run, &pull)),
         stages(run, None, now),

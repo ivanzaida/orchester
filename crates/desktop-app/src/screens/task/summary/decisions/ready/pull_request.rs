@@ -66,7 +66,11 @@ pub struct PullRequestRead {
 pub fn read(ctx: &mut Ctx, task: &TaskContext, settled: bool) -> Option<Result<Readiness, Message>> {
   let programs = Services::of(ctx).programs;
   let run = task.detail.run.as_ref().map(RunView::id).filter(|_| settled);
-  let deps = (task.project.open.repo_root.clone(), run, task.project.feed.revision.get());
+  let deps = (
+    task.project.open.repo_root.clone(),
+    run,
+    task.project.feed.revision.get(),
+  );
   let load = ctx.future(deps, move |(root, run, _)| {
     let programs = programs.clone();
     async move {
@@ -286,17 +290,24 @@ fn failure(ctx: &mut Ctx, run: &RunView, problem: &CreateProblem, again: Option<
   ) {
     let copier = Copier::of(ctx);
     notice.part(
-      CommandRow::new("task-pull-request-command", SETUP_GIT, ctx.t("common.copy"), move || {
-        copier.copy(SETUP_GIT)
-      })
+      CommandRow::new(
+        "task-pull-request-command",
+        SETUP_GIT,
+        ctx.t("common.copy"),
+        move || copier.copy(SETUP_GIT),
+      )
       .dollar_prompt()
       .render(ctx),
     )
   } else {
     notice
   };
-  let retry = ActionButton::new("task-pull-request-retry", ButtonKind::Secondary, ctx.t("common.tryAgain"))
-    .icon(Icon::RefreshCw);
+  let retry = ActionButton::new(
+    "task-pull-request-retry",
+    ButtonKind::Secondary,
+    ctx.t("common.tryAgain"),
+  )
+  .icon(Icon::RefreshCw);
   let retry = match again {
     Some(again) => retry.on_click(move || again()),
     None => retry.disabled(),
@@ -352,7 +363,10 @@ fn push_words(ctx: &Ctx, failure: &PushFailure, (branch, remote, host): (&str, &
     ),
     PushFailure::Failed { reason } => (
       ctx.t_args("decisions.ready.pullRequest.failure.pushTitle", [("branch", branch)]),
-      ctx.t_args("decisions.ready.pullRequest.failure.pushFailed", [("reason", reason.as_str())]),
+      ctx.t_args(
+        "decisions.ready.pullRequest.failure.pushFailed",
+        [("reason", reason.as_str())],
+      ),
     ),
     PushFailure::NotRun(CommandError::NotFound) => (
       ctx.t_args("decisions.ready.pullRequest.failure.pushTitle", [("branch", branch)]),

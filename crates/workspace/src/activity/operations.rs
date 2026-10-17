@@ -272,7 +272,11 @@ pub fn run_cleanup(open: &OpenProject, task: TaskId, (key, number): (&str, u32))
 
 /// Pushing the branch of run `number` of task `key` ("ORC-12", 3) and opening a pull request from it.
 pub fn run_pull_request(open: &OpenProject, task: TaskId, (key, number): (&str, u32)) -> OperationSpec {
-  let message = |text| Message::new(text).with("task", key.to_owned()).with("run", number.to_string());
+  let message = |text| {
+    Message::new(text)
+      .with("task", key.to_owned())
+      .with("run", number.to_string())
+  };
   OperationSpec::new(
     message("statusBar.operations.runPullRequest.running"),
     message("statusBar.operations.runPullRequest.done"),

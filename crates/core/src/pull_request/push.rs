@@ -88,7 +88,11 @@ pub fn parse_git_push(output: &CommandOutput) -> Result<(), PushFailure> {
 /// Git's first error line without its `fatal:` or `error:`, else its first line.
 fn said(stderr: &str) -> String {
   let lines = || stderr.lines().map(str::trim).filter(|line| !line.is_empty());
-  let error = lines().find_map(|line| ["fatal: ", "error: "].iter().find_map(|prefix| line.strip_prefix(prefix)));
+  let error = lines().find_map(|line| {
+    ["fatal: ", "error: "]
+      .iter()
+      .find_map(|prefix| line.strip_prefix(prefix))
+  });
   error.or_else(|| lines().next()).unwrap_or_default().to_owned()
 }
 

@@ -29,14 +29,16 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::{link, pull_request, repo, support::{Fixture, at}};
+use super::{
+  link, pull_request, repo,
+  support::{Fixture, at},
+};
 
-const SIGNED_IN: &str =
-  r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"repo"}]}}"#;
-const OTHER_ACCOUNT: &str =
-  r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivan-work","scopes":"repo"}]}}"#;
+const SIGNED_IN: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"repo"}]}}"#;
+const OTHER_ACCOUNT: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivan-work","scopes":"repo"}]}}"#;
 const NO_REPO_SCOPE: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"read:org"}]}}"#;
-const ORIGIN_ON_GITHUB: &str = "origin\thttps://github.com/ivanzaida/kontur.git (fetch)\norigin\thttps://github.com/ivanzaida/kontur.git (push)\n";
+const ORIGIN_ON_GITHUB: &str =
+  "origin\thttps://github.com/ivanzaida/kontur.git (fetch)\norigin\thttps://github.com/ivanzaida/kontur.git (push)\n";
 
 fn answer(code: i32, stdout: &str, stderr: &str) -> CommandOutput {
   CommandOutput {
@@ -138,10 +140,7 @@ fn pull_request_readiness_says_why_a_run_cannot_have_one() {
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.remotes = "";
   let readiness = |fake: FakeGitHub| readiness_in(&root, &programs(&Arc::new(fake)), run.id()).expect("readiness");
-  assert_eq!(
-    readiness(fake),
-    Readiness::Unavailable(Unavailable::NoGitHubRemote)
-  );
+  assert_eq!(readiness(fake), Readiness::Unavailable(Unavailable::NoGitHubRemote));
   let fake = FakeGitHub::new(run.branch().as_str());
   assert_eq!(
     readiness(fake),
@@ -169,17 +168,30 @@ fn pull_request_readiness_says_why_a_run_cannot_have_one() {
   );
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.auth = r#"{"hosts":{}}"#;
-  assert_eq!(readiness(fake), Readiness::Unavailable(Unavailable::NoConnection), "gh signed out");
+  assert_eq!(
+    readiness(fake),
+    Readiness::Unavailable(Unavailable::NoConnection),
+    "gh signed out"
+  );
   assert_eq!(readiness(FakeGitHub::new(run.branch().as_str())), Readiness::Ready);
   fixture
     .db
     .replace_pull_requests(
       &repo(),
-      &[pull_request(141, run.branch().as_str(), PullRequestState::Draft, None, 900)],
+      &[pull_request(
+        141,
+        run.branch().as_str(),
+        PullRequestState::Draft,
+        None,
+        900,
+      )],
       at(1_000),
     )
     .expect("stored");
-  assert_eq!(readiness(FakeGitHub::new(run.branch().as_str())), Readiness::Open { number: 141 });
+  assert_eq!(
+    readiness(FakeGitHub::new(run.branch().as_str())),
+    Readiness::Open { number: 141 }
+  );
 }
 
 #[test]
@@ -218,17 +230,34 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
   let create = fake.ran_one("pr create").expect("gh pr create ran");
   assert_eq!(
     create.args().join(" "),
-    format!("pr create -R github.com/ivanzaida/kontur --base main --head {branch} --title KON-1 · Typed errors --body-file - --draft")
+    format!(
+      "pr create -R github.com/ivanzaida/kontur --base main --head {branch} --title KON-1 · Typed errors --body-file - --draft"
+    )
   );
   let body = create.stdin().expect("the body on standard input");
-  assert!(body.starts_with("Sign in with a password.\n\n## Acceptance criteria\n\n1. A person can sign in"), "{body}");
+  assert!(
+    body.starts_with("Sign in with a password.\n\n## Acceptance criteria\n\n1. A person can sign in"),
+    "{body}"
+  );
   let project = fixture.db.project().id();
-  assert!(body.ends_with(&format!("orchester:/project/{project}/tasks/KON-1")), "{body}");
+  assert!(
+    body.ends_with(&format!("orchester:/project/{project}/tasks/KON-1")),
+    "{body}"
+  );
   let ran = fake.ran();
   let pushed = ran.iter().position(|args| args.starts_with("push")).expect("pushed");
-  let opened = ran.iter().position(|args| args.starts_with("pr create")).expect("opened");
-  assert!(pushed < opened, "the branch is on GitHub before the pull request asks for it");
-  assert!(ran[opened..].iter().any(|args| args.starts_with("pr list")), "a sync followed: {ran:?}");
+  let opened = ran
+    .iter()
+    .position(|args| args.starts_with("pr create"))
+    .expect("opened");
+  assert!(
+    pushed < opened,
+    "the branch is on GitHub before the pull request asks for it"
+  );
+  assert!(
+    ran[opened..].iter().any(|args| args.starts_with("pr list")),
+    "a sync followed: {ran:?}"
+  );
   let PullRequestList::Linked(list) = load_list_in(fixture.repo.path()).expect("the list") else {
     panic!("the project is linked");
   };
@@ -244,7 +273,11 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   link(&mut fixture);
   let root = fixture.repo.path().to_path_buf();
   let mut fake = FakeGitHub::new(run.branch().as_str());
-  fake.push = answer(128, "", "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n");
+  fake.push = answer(
+    128,
+    "",
+    "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n",
+  );
   let fake = Arc::new(fake);
   assert!(matches!(
     create_in(&root, &programs(&fake), (run.id(), true)),
@@ -255,7 +288,11 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   ));
   assert!(fake.ran_one("pr create").is_none(), "GitHub was asked nothing");
   let mut fake = FakeGitHub::new(run.branch().as_str());
-  fake.create = answer(1, "", "pull request create failed: GraphQL: No commits between main and the branch (createPullRequest)\n");
+  fake.create = answer(
+    1,
+    "",
+    "pull request create failed: GraphQL: No commits between main and the branch (createPullRequest)\n",
+  );
   assert_eq!(
     create_in(&root, &programs(&Arc::new(fake)), (run.id(), true)),
     Err(CreateProblem::NoCommits)
@@ -264,7 +301,10 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   fake.create = answer(1, "", "HTTP 502: Server Error (https://api.github.com/graphql)\n");
   assert!(matches!(
     create_in(&root, &programs(&Arc::new(fake)), (run.id(), false)),
-    Err(CreateProblem::GitHub(RepositoryError::ServerError { status: Some(502), .. }))
+    Err(CreateProblem::GitHub(RepositoryError::ServerError {
+      status: Some(502),
+      ..
+    }))
   ));
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.auth = OTHER_ACCOUNT;
@@ -298,7 +338,13 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
     .db
     .replace_pull_requests(
       &repo(),
-      &[pull_request(141, run.branch().as_str(), PullRequestState::Open, None, 900)],
+      &[pull_request(
+        141,
+        run.branch().as_str(),
+        PullRequestState::Open,
+        None,
+        900,
+      )],
       at(1_000),
     )
     .expect("stored");
@@ -307,7 +353,10 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
     create_in(fixture.repo.path(), &programs(&fake), (run.id(), true)),
     Err(CreateProblem::AlreadyOpen { number: Some(141) })
   );
-  assert!(fake.ran_one("push").is_none(), "an open one stored refuses before anything runs");
+  assert!(
+    fake.ran_one("push").is_none(),
+    "an open one stored refuses before anything runs"
+  );
 }
 
 #[test]
@@ -335,7 +384,11 @@ fn pull_request_job_runs_on_the_shared_operations_once() {
   assert!(jobs.of(run.id()).start_pull_request(args.clone()));
   let deadline = Instant::now() + Duration::from_secs(10);
   while !matches!(jobs.state().run(run.id()).pull_request, PullRequestJob::Created(_)) {
-    assert!(Instant::now() < deadline, "{:?}", jobs.state().run(run.id()).pull_request);
+    assert!(
+      Instant::now() < deadline,
+      "{:?}",
+      jobs.state().run(run.id()).pull_request
+    );
     std::thread::sleep(Duration::from_millis(5));
   }
   assert!(!jobs.state().run(run.id()).busy());

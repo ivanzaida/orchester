@@ -70,7 +70,9 @@ impl Unavailable {
 pub enum Readiness {
   Ready,
   /// The run's branch has open pull request `number`, as the last sync read it: Review PR is offered instead.
-  Open { number: u64 },
+  Open {
+    number: u64,
+  },
   Unavailable(Unavailable),
 }
 
@@ -167,7 +169,9 @@ pub struct Created {
 pub enum CreateProblem {
   Unavailable(Unavailable),
   /// The run's branch has an open pull request already: `number`, when known.
-  AlreadyOpen { number: Option<u64> },
+  AlreadyOpen {
+    number: Option<u64>,
+  },
   /// The run is not its task's latest run, or did not succeed.
   NotReady,
   /// Git did not push the branch to `remote` on `host`; nothing was asked of GitHub.
@@ -193,11 +197,7 @@ impl From<StoreError> for CreateProblem {
 
 /// Creates a pull request from run `run`'s branch of the project at `repo_root` with `programs`, a draft when
 /// `draft`, then syncs the pull requests.
-pub fn create_in(
-  repo_root: &Path,
-  programs: &Programs,
-  (run, draft): (RunId, bool),
-) -> Result<Created, CreateProblem> {
+pub fn create_in(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> Result<Created, CreateProblem> {
   let outcome = open(repo_root, programs, (run, draft));
   if matches!(&outcome, Ok(_) | Err(CreateProblem::AlreadyOpen { .. })) {
     // The pull request stands either way; the Pull requests page says why a sync failed.
@@ -222,11 +222,7 @@ fn open(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> R
     return Err(CreateProblem::AlreadyOpen { number: Some(number) });
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
-  let (title, body) = task_pull_request(
-    task.key(),
-    task.details(),
-    &task_link(db.project().id(), task.key()),
-  );
+  let (title, body) = task_pull_request(task.key(), task.details(), &task_link(db.project().id(), task.key()));
   let new = NewPullRequest {
     base,
     head: run.branch().clone(),
@@ -234,7 +230,8 @@ fn open(repo_root: &Path, programs: &Programs, (run, draft): (RunId, bool)) -> R
     body,
     draft,
   };
-  let mut connection = github_connection(&db, link.connection()).map_err(|error| CreateProblem::Store(error.message()))?;
+  let mut connection =
+    github_connection(&db, link.connection()).map_err(|error| CreateProblem::Store(error.message()))?;
   let push = Push {
     runner: programs.git_work(),
     git: Path::new(GIT),
@@ -265,9 +262,10 @@ fn latest_succeeded(db: &ProjectDb, run: RunId) -> Result<Run, CreateProblem> {
     .map_err(run_store_error)?
     .iter()
     .filter_map(|listed| {
-      listed
-        .as_ref()
-        .map_or_else(|bad| bad.number.map(|number| number.get()), |run| Some(run.number().get()))
+      listed.as_ref().map_or_else(
+        |bad| bad.number.map(|number| number.get()),
+        |run| Some(run.number().get()),
+      )
     })
     .max();
   if run.status() != &RunStatus::Succeeded || latest != Some(run.number().get()) {
