@@ -163,7 +163,7 @@ impl ConnectBlock {
           Cli::Codex,
         ),
       ],
-      Focus::Form,
+      Focus::Keyboard,
     );
     let mut row = Row::new()
       .width(Dimension::Pct(100.0))

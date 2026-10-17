@@ -195,7 +195,7 @@ impl From<OptionCard> for Element {
       )
       .child(text.with_children(card.content));
     match card.choice {
-      Choice::Choose(choose) => Focus::Form
+      Choice::Choose(choose) => Focus::Keyboard
         .apply(frame)
         .cursor(CursorIcon::Pointer)
         .on_click(move |event: MouseEvent| {

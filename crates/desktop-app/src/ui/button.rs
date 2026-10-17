@@ -235,7 +235,7 @@ impl ActionButton {
 
   /// A button of a form or a card: a Tab stop with the focus ring.
   pub fn in_form(mut self) -> Self {
-    self.focus = Focus::Form;
+    self.focus = Focus::Keyboard;
     self
   }
 

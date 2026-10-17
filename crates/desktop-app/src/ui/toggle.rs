@@ -224,7 +224,7 @@ impl From<Toggle> for Element {
     let wraps = toggle.wrap_label;
     let wanted = toggle.kind == ToggleKind::Radio || !toggle.on;
     let button = match toggle.change {
-      Some(change) => Focus::Form
+      Some(change) => Focus::Keyboard
         .apply(pressable(move || change(wanted)))
         .describe("state", "enabled"),
       None if toggle.settled => inert(Button::empty()).describe("state", "fixed"),

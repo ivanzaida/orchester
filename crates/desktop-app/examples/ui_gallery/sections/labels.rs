@@ -149,7 +149,7 @@ fn segments(state: &State) -> Row {
       segment("messages", "Messages"),
       segment("tools", "Tools"),
     ],
-    Focus::Form,
+    Focus::Keyboard,
   )
 }
 
