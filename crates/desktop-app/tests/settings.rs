@@ -1,10 +1,12 @@
-//! Settings › *Let automation change agent permissions* and *Let the Orchestrator publish drafts*: each off until
-//! a person turns it on in the window, where it reads the stored value and saves what the person chooses.
+//! Settings › *Let automation change agent permissions* and the Orchestrator's switches (*publish drafts*, *answer
+//! agents*, *merge runs*): each off until a person turns it on in the window, where it reads the stored value and
+//! saves what the person chooses; synthetic input never flips one.
 
 mod support;
 
 use lurq::app::events::MouseButton;
 use orchester_app::routes::Route;
+use orchester_workspace::workspace::OrchestratorConsent;
 use support::Window;
 
 const SWITCH: &str = "settings-change-permissions";
@@ -154,57 +156,82 @@ fn press_element(window: &mut Window, id: &str) {
   window.pass();
 }
 
+/// The Orchestrator's switches: each one's element id, its title, and the consent it saves.
+const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 3] = [
+  (
+    PUBLISH,
+    "Let the Orchestrator publish drafts",
+    OrchestratorConsent::PublishDrafts,
+  ),
+  (
+    "settings-answer-agents",
+    "Let the Orchestrator answer agents",
+    OrchestratorConsent::AnswerAgents,
+  ),
+  (
+    "settings-merge-runs",
+    "Let the Orchestrator merge runs",
+    OrchestratorConsent::MergeRuns,
+  ),
+];
+
 #[test]
-fn settings_only_a_person_lets_the_orchestrator_publish_drafts() {
+fn settings_only_a_person_lets_the_orchestrator_publish_answer_or_merge() {
   use lurq::app::events::with_synthetic_input;
   let mut window = Window::open();
   let workspace = window.launch.workspace().expect("session").clone();
   window.navigation().go(Route::Settings);
-  window.until("the setting's row", |window| {
-    window.texts(&format!("{PUBLISH}-row")).is_some()
-  });
-  let texts = window.texts(&format!("{PUBLISH}-row")).expect("the row shows");
-  assert!(
-    texts.iter().any(|text| text == "Let the Orchestrator publish drafts"),
-    "{texts:?}"
-  );
-  assert!(!switch_on(&mut window, PUBLISH), "off until turned on");
-  window.until("synthetic input rejected", |window| {
-    with_synthetic_input(|| press_element(window, PUBLISH));
-    window.texts(&format!("{PUBLISH}-blocked")).is_some()
-  });
-  assert!(!workspace.orchestrator_publishes_drafts().expect("the setting reads"));
-  window.until("the person's choice to be saved", |window| {
-    let stored = workspace.orchestrator_publishes_drafts().expect("the setting reads");
-    if !stored {
-      press_element(window, PUBLISH);
-    }
-    stored
-  });
-  window.until("the switch to show it", |window| switch_on(window, PUBLISH));
+  for (switch, title, consent) in ORCHESTRATOR_SWITCHES {
+    window.until("the setting's row", |window| {
+      window.texts(&format!("{switch}-row")).is_some()
+    });
+    let texts = window.texts(&format!("{switch}-row")).expect("the row shows");
+    assert!(texts.iter().any(|text| text == title), "{texts:?}");
+    assert!(!switch_on(&mut window, switch), "{title} is off until turned on");
+    window.until("synthetic input rejected", |window| {
+      with_synthetic_input(|| press_element(window, switch));
+      window.texts(&format!("{switch}-blocked")).is_some()
+    });
+    assert!(
+      !workspace.orchestrator_allows(consent).expect("the setting reads"),
+      "synthetic input does not turn {title} on"
+    );
+    window.until("the person's choice to be saved", |window| {
+      let stored = workspace.orchestrator_allows(consent).expect("the setting reads");
+      if !stored {
+        press_element(window, switch);
+      }
+      stored
+    });
+    window.until("the switch to show it", |window| switch_on(window, switch));
+  }
   assert!(
     !workspace
       .automation_changes_permissions()
       .expect("the other setting reads"),
-    "publishing drafts turns nothing else on"
+    "the Orchestrator's switches turn nothing else on"
   );
 }
 
 #[test]
-fn settings_turning_off_publishing_drafts_holds_from_the_click() {
+fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
   let mut window = Window::open();
   let workspace = window.launch.workspace().expect("session").clone();
-  workspace
-    .set_orchestrator_publishes_drafts(true)
-    .expect("the person turned it on");
+  for (_, _, consent) in ORCHESTRATOR_SWITCHES {
+    workspace
+      .set_orchestrator_allows(consent, true)
+      .expect("the person turned it on");
+  }
   window.navigation().go(Route::Settings);
-  window.until("the switch on", |window| {
-    window.texts(&format!("{PUBLISH}-row")).is_some() && switch_on(window, PUBLISH)
-  });
-  // The person's click; its save has not run yet.
-  window.tree.get_element_by_id_mut(PUBLISH).expect("the switch").click();
-  assert!(
-    !workspace.orchestrator_publishes_drafts().expect("read"),
-    "the chat stops publishing from the click, before the save"
-  );
+  for (switch, title, consent) in ORCHESTRATOR_SWITCHES {
+    window.until("the switch on", |window| {
+      window.texts(&format!("{switch}-row")).is_some() && switch_on(window, switch)
+    });
+    // The person's click; its save has not run yet.
+    window.tree.get_element_by_id_mut(switch).expect("the switch").click();
+    assert!(
+      !workspace.orchestrator_allows(consent).expect("read"),
+      "{title} holds off from the click, before the save"
+    );
+  }
 }

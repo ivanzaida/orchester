@@ -53,11 +53,28 @@ pub fn send_in(
   (recipient, timing): (Recipient, Timing),
   text: &str,
 ) -> Result<Message, SendError> {
+  send_as(repo_root, key, (task, run, recovery_after), (recipient, timing), (text, false))
+}
+
+/// [`send_in`], for the project's Orchestrator chat when `by_orchestrator`: it wrote `text` on the person's side, and
+/// the conversation names it as the chat's.
+pub(super) fn send_as(
+  repo_root: &Path,
+  key: IdempotencyKey,
+  (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
+  (recipient, timing): (Recipient, Timing),
+  (text, by_orchestrator): (&str, bool),
+) -> Result<Message, SendError> {
   // A new message's text is only checked for being blank.
   let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
   let message = Message::from_person(task, run, recipient, body, Timestamp::now())
     .sent(timing)
     .expect("a new message is a person's");
+  let message = if by_orchestrator {
+    message.sent_by_orchestrator().expect("a new message is a person's")
+  } else {
+    message
+  };
   let message = match recovery_after {
     Some(sequence) => message
       .recovering_after(sequence)

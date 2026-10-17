@@ -1,11 +1,12 @@
 //! *What automation may do* (`Form section title` `De1nE`) with a row (`Form row` `XaNIz` with a switch) per consent
-//! only a person gives: *Let automation change agent permissions*, and *Let the Orchestrator publish drafts* (the
-//! same row; `docs/design/orchestrator-toolset.md`, "Decisions" 3). Each is an application setting that is off until a
-//! person turns it on here. While the first is off, the MCP server's setup tools refuse whatever would widen what
-//! agents may do (`person_only`), including matching window confirmations; while the second is off, the Orchestrator
-//! chat proposes each publication to the person. A setting is read and saved off the UI thread; while either runs,
-//! its switch cannot be flipped. While a row is mounted, the app's MCP server refuses window input
-//! (`mcp::input_gate`), and the row refuses lurq's synthetic input, so only a person flips it.
+//! only a person gives: *Let automation change agent permissions*, *Let the Orchestrator publish drafts*, *Let the
+//! Orchestrator answer agents* and *Let the Orchestrator merge runs* (the same row; `docs/design/orchestrator-toolset.md`,
+//! "Decisions" 3 and 5). Each is an application setting that is off until a person turns it on here. While the first
+//! is off, the MCP server's setup tools refuse whatever would widen what agents may do (`person_only`), including
+//! matching window confirmations; while one of the Orchestrator's is off, the Orchestrator chat proposes what it names
+//! to the person. A setting is read and saved off the UI thread; while either runs, its switch cannot be flipped.
+//! While a row is mounted, the app's MCP server refuses window input (`mcp::input_gate`), and the row refuses lurq's
+//! synthetic input, so only a person flips it.
 
 use lurq::{
   app::{
@@ -23,7 +24,7 @@ use orchester_store::StoreError;
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  workspace::Workspace,
+  workspace::{OrchestratorConsent, Workspace},
 };
 
 use crate::{
@@ -44,8 +45,8 @@ use crate::{
 pub enum Consent {
   /// *Let automation change agent permissions*.
   ChangePermissions,
-  /// *Let the Orchestrator publish drafts*.
-  PublishDrafts,
+  /// *Let the Orchestrator publish drafts*, *answer agents* or *merge runs*.
+  Orchestrator(OrchestratorConsent),
 }
 
 impl lurq::app::component::DevtoolsInspectable for Consent {}
@@ -64,7 +65,9 @@ impl Consent {
   const fn id(self) -> &'static str {
     match self {
       Self::ChangePermissions => "settings-change-permissions",
-      Self::PublishDrafts => "settings-publish-drafts",
+      Self::Orchestrator(OrchestratorConsent::PublishDrafts) => "settings-publish-drafts",
+      Self::Orchestrator(OrchestratorConsent::AnswerAgents) => "settings-answer-agents",
+      Self::Orchestrator(OrchestratorConsent::MergeRuns) => "settings-merge-runs",
     }
   }
 
@@ -77,12 +80,26 @@ impl Consent {
         not_saved: "settings.automation.changePermissions.notSaved",
         blocked: "settings.automation.changePermissions.blocked",
       },
-      Self::PublishDrafts => Words {
+      Self::Orchestrator(OrchestratorConsent::PublishDrafts) => Words {
         title: "settings.automation.publishDrafts.title",
         description: "settings.automation.publishDrafts.description",
         unreadable: "settings.automation.publishDrafts.unreadable",
         not_saved: "settings.automation.publishDrafts.notSaved",
         blocked: "settings.automation.publishDrafts.blocked",
+      },
+      Self::Orchestrator(OrchestratorConsent::AnswerAgents) => Words {
+        title: "settings.automation.answerAgents.title",
+        description: "settings.automation.answerAgents.description",
+        unreadable: "settings.automation.answerAgents.unreadable",
+        not_saved: "settings.automation.answerAgents.notSaved",
+        blocked: "settings.automation.answerAgents.blocked",
+      },
+      Self::Orchestrator(OrchestratorConsent::MergeRuns) => Words {
+        title: "settings.automation.mergeRuns.title",
+        description: "settings.automation.mergeRuns.description",
+        unreadable: "settings.automation.mergeRuns.unreadable",
+        not_saved: "settings.automation.mergeRuns.notSaved",
+        blocked: "settings.automation.mergeRuns.blocked",
       },
     }
   }
@@ -91,7 +108,9 @@ impl Consent {
   const fn logged(self) -> &'static str {
     match self {
       Self::ChangePermissions => "Let automation change agent permissions",
-      Self::PublishDrafts => "Let the Orchestrator publish drafts",
+      Self::Orchestrator(OrchestratorConsent::PublishDrafts) => "Let the Orchestrator publish drafts",
+      Self::Orchestrator(OrchestratorConsent::AnswerAgents) => "Let the Orchestrator answer agents",
+      Self::Orchestrator(OrchestratorConsent::MergeRuns) => "Let the Orchestrator merge runs",
     }
   }
 
@@ -99,7 +118,7 @@ impl Consent {
   fn read(self, workspace: &Workspace) -> Result<bool, StoreError> {
     match self {
       Self::ChangePermissions => workspace.automation_changes_permissions(),
-      Self::PublishDrafts => workspace.orchestrator_publishes_drafts(),
+      Self::Orchestrator(consent) => workspace.orchestrator_allows(consent),
     }
   }
 
@@ -107,19 +126,28 @@ impl Consent {
   fn save(self, workspace: &Workspace, allowed: bool) -> Result<(), StoreError> {
     match self {
       Self::ChangePermissions => workspace.set_automation_changes_permissions(allowed),
-      Self::PublishDrafts => workspace.set_orchestrator_publishes_drafts(allowed),
+      Self::Orchestrator(consent) => workspace.set_orchestrator_allows(consent, allowed),
     }
   }
 }
 
 /// The section: its title over a row per consent.
 pub fn section(ctx: &mut Ctx) -> Element {
+  let rows = [
+    ("change-permissions", Consent::ChangePermissions),
+    ("publish-drafts", Consent::Orchestrator(OrchestratorConsent::PublishDrafts)),
+    ("answer-agents", Consent::Orchestrator(OrchestratorConsent::AnswerAgents)),
+    ("merge-runs", Consent::Orchestrator(OrchestratorConsent::MergeRuns)),
+  ];
+  let rows: Vec<Element> = rows
+    .into_iter()
+    .map(|(key, consent)| ctx.mount_keyed::<ConsentRow>(key, consent))
+    .collect();
   Column::new()
     .id("settings-automation")
     .width(Dimension::Pct(100.0))
     .child(section_title(&ctx.t("settings.automation.section")))
-    .child(ctx.mount_keyed::<ConsentRow>("change-permissions", Consent::ChangePermissions))
-    .child(ctx.mount_keyed::<ConsentRow>("publish-drafts", Consent::PublishDrafts))
+    .with_children(rows)
     .into()
 }
 
@@ -184,7 +212,8 @@ impl Component for ConsentRow {
       .get()
       .then(|| field_error(&format!("{id}-blocked"), &ctx.t(words.blocked)));
     // What a switch that is on says beside it (`Hint · publishes directly` `Bj5aS` in `IJOOq`).
-    let on = (consent == Consent::PublishDrafts && shown == Some(true)).then(|| {
+    let publishes = consent == Consent::Orchestrator(OrchestratorConsent::PublishDrafts);
+    let on = (publishes && shown == Some(true)).then(|| {
       Column::new()
         .width(Dimension::Pct(100.0))
         .padding_bottom(ExtraSpacing::Snug.role())
@@ -254,7 +283,7 @@ impl ConsentRow {
         // Off holds from the person's click, before the save runs and if it fails.
         match consent {
           Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
-          Consent::PublishDrafts => workspace.revoke_orchestrator_publish_consent(),
+          Consent::Orchestrator(consent) => workspace.revoke_orchestrator_consent(consent),
         }
       }
       saved.set(Some(chosen));

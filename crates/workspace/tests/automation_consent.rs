@@ -5,7 +5,7 @@ use std::{
 };
 
 use orchester_store::AppDb;
-use orchester_workspace::workspace::Workspace;
+use orchester_workspace::workspace::{OrchestratorConsent, Workspace};
 
 #[test]
 fn automation_consent_is_unknown_until_read_and_separate_from_approvals() {
@@ -155,19 +155,43 @@ fn automation_consent_old_pending_grant_cannot_clear_a_later_human_revocation() 
   );
 }
 
+const ORCHESTRATOR_CONSENTS: [OrchestratorConsent; 3] = [
+  OrchestratorConsent::PublishDrafts,
+  OrchestratorConsent::AnswerAgents,
+  OrchestratorConsent::MergeRuns,
+];
+
 #[test]
-fn orchestrator_publish_consent_is_off_from_a_persons_revocation_before_it_is_saved() {
+fn orchestrator_consents_are_off_until_a_person_turns_each_on() {
   let dir = tempfile::tempdir().expect("private consent directory");
   let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
-  workspace.set_orchestrator_publishes_drafts(true).expect("human opt-in");
-  assert!(workspace.orchestrator_publishes_drafts().expect("read"));
-  workspace.revoke_orchestrator_publish_consent();
-  assert!(
-    !workspace.orchestrator_publishes_drafts().expect("read"),
-    "off from the person's click, though the stored setting is still on"
-  );
+  for consent in ORCHESTRATOR_CONSENTS {
+    assert!(!workspace.orchestrator_allows(consent).expect("read"), "{consent:?} is off by default");
+  }
   workspace
-    .set_orchestrator_publishes_drafts(true)
-    .expect("turned on again");
-  assert!(workspace.orchestrator_publishes_drafts().expect("read"));
+    .set_orchestrator_allows(OrchestratorConsent::AnswerAgents, true)
+    .expect("human opt-in");
+  assert!(workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents).expect("read"));
+  assert!(
+    !workspace.orchestrator_allows(OrchestratorConsent::MergeRuns).expect("read")
+      && !workspace.orchestrator_allows(OrchestratorConsent::PublishDrafts).expect("read"),
+    "each switch is its own"
+  );
+}
+
+#[test]
+fn orchestrator_consents_are_off_from_a_persons_revocation_before_it_is_saved() {
+  let dir = tempfile::tempdir().expect("private consent directory");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
+  for consent in ORCHESTRATOR_CONSENTS {
+    workspace.set_orchestrator_allows(consent, true).expect("human opt-in");
+    assert!(workspace.orchestrator_allows(consent).expect("read"));
+    workspace.revoke_orchestrator_consent(consent);
+    assert!(
+      !workspace.orchestrator_allows(consent).expect("read"),
+      "{consent:?}: off from the person's click, though the stored setting is still on"
+    );
+    workspace.set_orchestrator_allows(consent, true).expect("turned on again");
+    assert!(workspace.orchestrator_allows(consent).expect("read"));
+  }
 }

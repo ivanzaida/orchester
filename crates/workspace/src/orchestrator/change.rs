@@ -1,10 +1,13 @@
-//! Publishing a draft, canceling a run and merging one wait for the person when the Orchestrator's agent asks for
-//! them (`docs/design/orchestrator-toolset.md`, "Decisions" 3 and 4; publishing only while the person has not turned
-//! on *Let the Orchestrator publish drafts*). The agent's call checks what it names and changes nothing: the
-//! conversation keeps the proposed change and the agent is told it waits. The person applies it through the same
-//! tool any client of the app calls, as their own decision (what it widens is theirs to decide, as in the window), or
-//! dismisses it ([`super::proposal::decide`]); a draft saved again or published meanwhile, or a run with a newer
-//! checkpoint, is refused and needs a fresh proposal.
+//! Publishing a draft, canceling a run, merging one, answering an agent's question and sending a run's agents a
+//! message wait for the person when the Orchestrator's agent asks for them (`docs/design/orchestrator-toolset.md`,
+//! "Decisions" 3 to 5), unless the person's switch lets the chat do it itself: *Let the Orchestrator publish drafts*,
+//! *merge runs* or *answer agents*. The agent's call checks what it names and changes nothing: the conversation keeps
+//! the proposed change and the agent is told it waits. The person applies it through the same tool any client of the
+//! app calls, as their own decision (what it widens is theirs to decide, as in the window), or dismisses it
+//! ([`super::proposal::decide`]); a draft saved again or published meanwhile, or a run with a newer checkpoint, is
+//! refused and needs a fresh proposal. An answer or a message is sent as the chat's, recorded as automation's.
+
+mod answer;
 
 use std::path::Path;
 
@@ -22,17 +25,20 @@ use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
 use super::{
-  tools::{CANCEL_RUN, ChatScope, MERGE_RUN, app_tool},
+  tools::{ANSWER_QUESTION, CANCEL_RUN, ChatScope, MERGE_RUN, SEND_MESSAGE, app_tool},
   widening,
 };
 use crate::{
-  app_mcp::{Missing, PersonDecision, Services, ToolError, Translate, blocking, find_run, setup::merge_proposed},
+  app_mcp::{
+    Missing, PersonDecision, Services, ToolError, Translate, answer_for_orchestrator, blocking, find_run,
+    setup::merge_proposed,
+  },
   display,
   messages::Message,
 };
 
-/// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels or merges, and the key of the
-/// task it names; a refusal when there is nothing to change.
+/// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers or sends,
+/// and the key of the task it names; a refusal when there is nothing to change.
 pub(super) async fn subject(
   scope: &ChatScope,
   name: &str,
@@ -46,12 +52,20 @@ pub(super) async fn subject(
       .ok_or_else(|| ToolError::InvalidArguments(format!("{argument}: required")))
   };
   let root = scope.root.clone();
-  let (change, task) = match Publishing::of_tool(name) {
-    Some(kind) => {
+  let (change, task) = match (Publishing::of_tool(name), name) {
+    (Some(kind), _) => {
       let named = text(kind.argument())?;
       (blocking(move || publication(&root, kind, &named)).await?, None)
     }
-    None => {
+    (None, ANSWER_QUESTION) => {
+      let asked = answer::Asked::of(arguments)?;
+      blocking(move || answer::answer_change(&root, asked)).await?
+    }
+    (None, SEND_MESSAGE) => {
+      let sending = answer::Sending::of(arguments)?;
+      blocking(move || answer::message_change(&root, sending)).await?
+    }
+    (None, _) => {
       let (named, cancel) = (text("run")?, name == CANCEL_RUN);
       blocking(move || run_change(&root, cancel, &named)).await?
     }
@@ -115,20 +129,28 @@ pub(super) async fn apply(
       blocking(move || unchanged_run(&root, (run, number), Some(&checkpoint))).await?;
       merge_proposed(services, translate, (project, run.to_string()), expected).await
     }
+    // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
+    Change::Answer { .. } | Change::Message { .. } => {
+      let (tool, arguments) = tool_arguments(scope, change);
+      answer_for_orchestrator(services, translate, tool, arguments).await
+    }
   }
 }
 
 /// The tool that carries out `change` in `scope`, and its arguments: the chat's project and what the change acts on,
-/// by its id.
+/// by its id, with an answer's or a message's words.
 pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'static str, JsonObject) {
   let (tool, argument, named) = match &change.change {
     Change::Publish { of, resource, .. } => (of.tool(), of.argument(), resource.to_string()),
     Change::Cancel { run, .. } => (CANCEL_RUN, "run", run.to_string()),
     Change::Merge { run, .. } => (MERGE_RUN, "run", run.to_string()),
+    Change::Answer { run, .. } => (ANSWER_QUESTION, "run", run.to_string()),
+    Change::Message { run, .. } => (SEND_MESSAGE, "run", run.to_string()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
   arguments.insert(argument.to_owned(), Value::String(named));
+  answer::words(&change.change, &mut arguments);
   (tool, arguments)
 }
 
@@ -149,16 +171,22 @@ fn publication(root: &Path, kind: Publishing, named: &str) -> Result<ProposedCha
   })
 }
 
-/// Canceling (`cancel`) or merging the run `named` in the project at `root`, and the key of its task. A run that
-/// ended has nothing to cancel. Blocks on SQLite.
-fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange, Option<String>), ToolError> {
-  let db = ProjectDb::open(root)?;
-  let run = find_run(&db, named)?;
+/// The title of `run`'s task, what a change of the run names as its subject, and the task's key.
+fn run_subject(db: &ProjectDb, run: &Run) -> Result<(String, Option<String>), ToolError> {
   let task = db.task(run.task())?;
   let subject = task
     .as_ref()
     .map(|task| task.details().title.as_str().to_owned())
     .unwrap_or_default();
+  Ok((subject, task.map(|task| task.key().to_string())))
+}
+
+/// Canceling (`cancel`) or merging the run `named` in the project at `root`, and the key of its task. A run that
+/// ended has nothing to cancel. Blocks on SQLite.
+fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange, Option<String>), ToolError> {
+  let db = ProjectDb::open(root)?;
+  let run = find_run(&db, named)?;
+  let (subject, task) = run_subject(&db, &run)?;
   let (id, number) = (run.id(), run.number().get());
   let change = if cancel {
     if run.status().is_terminal() {
@@ -180,10 +208,7 @@ fn run_change(root: &Path, cancel: bool, named: &str) -> Result<(ProposedChange,
       into: run.base_branch().map(|branch| branch.as_str().to_owned()),
     }
   };
-  Ok((
-    ProposedChange { subject, change },
-    task.map(|task| task.key().to_string()),
-  ))
+  Ok((ProposedChange { subject, change }, task))
 }
 
 /// Refused unless the draft of `resource` is still the one saved at `saved`, to be published as `version`, and
@@ -253,6 +278,20 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
     Change::Merge { number, .. } => (
       Message::new("orchestrator.tools.mergeWaits").with("run", number.to_string()),
       json!({ "merge": { "run": number, "task": subject } }),
+    ),
+    Change::Answer {
+      number,
+      request,
+      choices,
+      text,
+      ..
+    } => (
+      Message::new("orchestrator.tools.answerWaits").with("run", number.to_string()),
+      json!({ "answer": { "run": number, "task": subject, "question": request, "choices": choices, "text": text } }),
+    ),
+    Change::Message { number, text, .. } => (
+      Message::new("orchestrator.tools.messageWaits").with("run", number.to_string()),
+      json!({ "message": { "run": number, "task": subject, "text": text } }),
     ),
   };
   json!({

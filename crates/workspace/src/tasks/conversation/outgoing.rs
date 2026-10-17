@@ -21,7 +21,7 @@ use orchester_store::StoreError;
 use super::{
   Conversation, PanelState, SendError,
   composer::{ComposerMode, Then},
-  send_in,
+  send::send_as,
 };
 use crate::{
   messages::{self, Message as UiMessage},
@@ -230,6 +230,26 @@ pub fn store_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
+  store_as(root, prepared, (key, way), (text, false))
+}
+
+/// [`store_in`] for the project's Orchestrator chat, which wrote `text` on the person's side: the conversation names
+/// it as the chat's.
+pub fn store_by_orchestrator_in(
+  root: &Path,
+  prepared: &Prepared,
+  (key, way): (IdempotencyKey, Way),
+  text: &str,
+) -> Result<(Then, Message), OutgoingError> {
+  store_as(root, prepared, (key, way), (text, true))
+}
+
+fn store_as(
+  root: &Path,
+  prepared: &Prepared,
+  (key, way): (IdempotencyKey, Way),
+  (text, by_orchestrator): (&str, bool),
+) -> Result<(Then, Message), OutgoingError> {
   let then = match way {
     Way::Primary => prepared.mode.then(),
     Way::Second => prepared.mode.then_later(),
@@ -249,12 +269,12 @@ pub fn store_in(
     .recovery_after
     .filter(|_| prepared.mode == ComposerMode::Continue);
   let task = prepared.detail.task.id();
-  let stored = send_in(
+  let stored = send_as(
     root,
     key,
     (task, run, recovery_after),
     (prepared.recipient, timing),
-    text,
+    (text, by_orchestrator),
   )
   .map_err(OutgoingError::Send)?;
   Ok((then, stored))

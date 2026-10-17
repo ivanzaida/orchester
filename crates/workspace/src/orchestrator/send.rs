@@ -9,7 +9,7 @@ use std::path::Path;
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
-  orchestrator::Chat,
+  orchestrator::{Chat, TurnFailure, TurnState},
   time::Timestamp,
 };
 use orchester_ipc::{ChatTools, Rejection};
@@ -58,8 +58,7 @@ pub async fn send(
     .and_then(|kept| kept)
     .map_err(SendError::NotSent)?;
   runners.chat_changed(&project.repo_root);
-  let asked = runners.answer_in_chat(project, outgoing.message, tools).await;
-  let Err(error) = asked else {
+  let Err(error) = runners.answer_in_chat(project, outgoing.message, tools).await else {
     return Ok(());
   };
   if matches!(error, RunRequestError::Request(RequestError::Lost)) {
@@ -76,6 +75,46 @@ pub async fn send(
   }
   runners.chat_changed(&project.repo_root);
   Err(SendError::NotSent(not_sent(&error)))
+}
+
+/// Asks `project`'s runner to answer the turn a wait of an agent started by itself, kept under `message`
+/// (`super::waits`), with the domain tools at `tools`. A turn the runner did not take ends failed and is never asked
+/// for again: a wait starts one turn at most, so a runner that cannot answer never makes the chat ask in a loop.
+pub async fn answer_wait(
+  runners: &Runners,
+  project: &OpenProject,
+  message: ChatMessageId,
+  tools: ChatTools,
+) -> Result<(), SendError> {
+  let asked = match runners.chat_runner(project).await {
+    Ok(()) => runners.answer_in_chat(project, message, tools).await,
+    Err(error) => Err(RunRequestError::Request(error)),
+  };
+  let Err(error) = asked else {
+    return Ok(());
+  };
+  if matches!(error, RunRequestError::Request(RequestError::Lost)) {
+    return Err(SendError::Unconfirmed(Message::new("orchestrator.send.lost")));
+  }
+  end_wait_turn(runners, project, message, format!("{error:?}")).await;
+  Err(SendError::NotSent(not_sent(&error)))
+}
+
+/// Ends the turn a wait started by itself under `message`, which no runner answers, as failed for `reason` (what the
+/// developer log reads): its tools could not be served, or the runner did not take it.
+pub async fn end_wait_turn(runners: &Runners, project: &OpenProject, message: ChatMessageId, reason: String) {
+  let root = project.repo_root.clone();
+  let failed = TurnState::Failed(TurnFailure::CannotStart { reason });
+  let ended =
+    background::run(move || ProjectDb::open(&root).and_then(|mut db| db.end_chat_turn(message, &failed, Timestamp::now())))
+      .await;
+  // A turn left thinking ends as interrupted once a runner attaches and does not answer it.
+  match ended {
+    Ok(Ok(_)) => {}
+    Ok(Err(error)) => tracing::warn!(%error, "cannot end a turn of the Orchestrator no runner took"),
+    Err(error) => tracing::warn!(?error, "cannot end a turn of the Orchestrator no runner took"),
+  }
+  runners.chat_changed(&project.repo_root);
 }
 
 /// The app could not serve the conversation's tools, so nothing was sent.

@@ -11,13 +11,15 @@ pub mod chat;
 pub mod instructions;
 pub mod proposal;
 pub mod settings;
+pub mod wait;
 
 pub use self::{
   chat::{
     ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, HeldWork, SessionChange,
-    TurnFailure, TurnState,
+    TurnFailure, TurnState, WaitTurn,
   },
   settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},
+  wait::{AgentWait, WaitKind},
 };
 
 /// The agentic turns one answer may take at most (`--max-turns`): reading, searching and calling tools, each a

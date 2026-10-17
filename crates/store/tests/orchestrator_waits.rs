@@ -1,0 +1,206 @@
+//! The waits of the project's agents in the Orchestrator chat (ORC-42): each kept once by its key, read back as a
+//! wait, and the turn a wait starts by itself, which starts only while no turn of its conversation thinks, once, and
+//! reads as the wait's prompt; messages and answers the chat sent are named its; and the migration that makes the
+//! conversation's entries hold waits keeps the entries it had.
+//! `cargo test -p orchester-store --test orchestrator_waits waits`.
+
+mod support;
+
+use orchester_core::{
+  conversation::{AgentMessage, Message, MessageBody, Recipient},
+  id::{ChatId, ChatMessageId, IdempotencyKey, RunId},
+  orchestrator::{AgentWait, Chat, EntryKind, TurnFailure, TurnState, WaitKind},
+  question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
+  run::Answerer,
+  store::{ActivityStore, ConversationStore},
+};
+use orchester_store::ProjectDb;
+use support::{at, copied_at_version, model, started_run};
+
+fn wait(run: RunId) -> AgentWait {
+  AgentWait {
+    kind: WaitKind::Message,
+    task: "ORC-1".to_owned(),
+    title: "Say hello".to_owned(),
+    run,
+    number: 1,
+    step: Some("Implement".to_owned()),
+    agent: Some("Builder".to_owned()),
+    link: "/project/p/tasks/ORC-1/conversation".to_owned(),
+    own: false,
+    automatic: true,
+  }
+}
+
+fn body(text: &str) -> MessageBody {
+  MessageBody::new(text).expect("text")
+}
+
+#[test]
+fn waits_are_kept_once_and_read_back_as_waits() {
+  let (_repo, mut db, run, _execution) = started_run();
+  let chat = Chat::named(ChatId::generate(), "ORC-1 · Say hello", at(10));
+  assert_eq!(db.latest_chat().expect("read"), None);
+  assert!(
+    db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(10))
+      .expect("kept")
+  );
+  assert_eq!(db.latest_chat().expect("read"), Some(chat.id()), "the wait opened the conversation");
+  let elsewhere = Chat::named(ChatId::generate(), "Another", at(11));
+  assert!(
+    !db
+      .keep_agent_wait(&elsewhere, ("message:x:1", &wait(run.id())), at(11))
+      .expect("again"),
+    "a wait is kept once, whichever conversation asks"
+  );
+  let entries = db.chat_entries(chat.id()).expect("entries");
+  assert_eq!(entries.len(), 1);
+  assert_eq!(
+    entries[0].kind,
+    EntryKind::Wait {
+      wait: wait(run.id()),
+      turn: None,
+    }
+  );
+  assert!(db.kept_wait_keys().expect("keys").contains("message:x:1"));
+  let listed = db.chats().expect("History");
+  assert_eq!(listed[0].messages, 0, "a wait is no message of the person's or the agent's");
+}
+
+#[test]
+fn waits_start_one_turn_only_while_no_turn_of_the_conversation_thinks() {
+  let (_repo, mut db, run, _execution) = started_run();
+  let chat = Chat::named(ChatId::generate(), "Plan", at(10));
+  let person = ChatMessageId::generate();
+  assert!(db.keep_chat_message(&chat, (person, &body("How is ORC-1?")), at(10)).expect("kept"));
+  db.keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(11))
+    .expect("kept");
+  let waiting = db.waits_without_turn(chat.id()).expect("waits");
+  assert_eq!(waiting.len(), 1);
+  let seq = waiting[0].seq;
+  let turn = ChatMessageId::generate();
+  assert!(
+    !db.start_wait_turn((chat.id(), seq), turn).expect("refused"),
+    "the person's turn thinks: the wait waits for it"
+  );
+  db.end_chat_turn(person, &TurnState::Answered, at(12)).expect("ended");
+  assert!(db.start_wait_turn((chat.id(), seq), turn).expect("started"));
+  assert!(
+    !db
+      .start_wait_turn((chat.id(), seq), ChatMessageId::generate())
+      .expect("not again"),
+    "a wait starts one turn"
+  );
+  assert!(db.waits_without_turn(chat.id()).expect("waits").is_empty());
+  let kept = db.chat_turn(turn).expect("read").expect("the turn");
+  assert_eq!(kept.turn, TurnState::Thinking);
+  assert!(
+    kept.text.as_str().contains("waits for a message") && kept.text.as_str().contains("run #1 of ORC-1"),
+    "the runner reads the wait's prompt: {}",
+    kept.text.as_str()
+  );
+  assert!(matches!(
+    &db.chat_entries(chat.id()).expect("entries")[1].kind,
+    EntryKind::Wait { turn: Some(started), .. } if started.message == turn
+  ));
+  // A turn no runner answers ends as any turn does.
+  db.interrupt_chat_turns(&[], None).expect("interrupted");
+  assert_eq!(
+    db.chat_turn(turn).expect("read").expect("the turn").turn,
+    TurnState::Failed(TurnFailure::Interrupted)
+  );
+}
+
+#[test]
+fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
+  let (_repo, mut db, run, execution) = started_run();
+  let sent = Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body("Keep it."), at(20))
+    .sent_by_orchestrator()
+    .expect("a message on the person's side");
+  db.send_message(IdempotencyKey::generate(), &sent).expect("stored");
+  let own = Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body("Mine."), at(21));
+  db.send_message(IdempotencyKey::generate(), &own).expect("stored");
+  let stored = db.messages(run.task()).expect("messages");
+  assert_eq!(
+    stored.iter().map(Message::by_orchestrator).collect::<Vec<_>>(),
+    [true, false]
+  );
+  let invocation = db.start_invocation(run.id(), execution, &model(), at(22)).expect("invocation");
+  let reply = Message::from_agent(
+    run.task(),
+    run.id(),
+    (execution, invocation.id),
+    AgentMessage::Reply,
+    body("Done."),
+    at(23),
+  );
+  assert!(reply.sent_by_orchestrator().is_err(), "an agent's message is never the chat's");
+
+  let question = Question::new(
+    "Where?",
+    None,
+    vec![QuestionOption::new("Top", None), QuestionOption::new("Bottom", None)],
+    false,
+  )
+  .expect("a question");
+  let asked = QuestionRequest::new(
+    "ask-1".to_owned(),
+    (run.id(), execution, invocation.id),
+    "Builder".to_owned(),
+    vec![question],
+    (at(24), QuestionTurn::InTurn),
+  )
+  .expect("a request");
+  db.ask_questions(&asked).expect("asked");
+  assert!(
+    !db.mark_answered_by_orchestrator(run.id(), "ask-1").expect("read"),
+    "a question still waiting is no one's answer"
+  );
+  let given = asked
+    .answer(&[GivenAnswer {
+      choices: vec!["Top".to_owned()],
+      text: None,
+    }])
+    .expect("answers");
+  db.answer_questions((run.id(), "ask-1"), &given, (Answerer::Automation, at(25)), None)
+    .expect("answered");
+  assert!(db.mark_answered_by_orchestrator(run.id(), "ask-1").expect("marked"));
+  assert!(db.questions(run.id()).expect("questions")[0].by_orchestrator);
+}
+
+fn schema_version(path: &std::path::Path) -> u32 {
+  rusqlite::Connection::open(path)
+    .expect("open")
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("version")
+}
+
+#[test]
+fn waits_migration_keeps_the_conversations_entries() {
+  let (repo, mut db, run, _execution) = started_run();
+  let chat = Chat::named(ChatId::generate(), "Plan", at(10));
+  let person = ChatMessageId::generate();
+  db.keep_chat_message(&chat, (person, &body("Plan ORC-1")), at(10))
+    .expect("kept");
+  db.add_chat_reply(chat.id(), ("Planned.", &model()), at(11))
+    .expect("reply");
+  db.end_chat_turn(person, &TurnState::Answered, at(12)).expect("ended");
+  drop(db);
+  let current = repo.path().join(".orchester/orchester.db");
+  let latest = schema_version(&current);
+  let old = copied_at_version(&current, latest - 1);
+  let mut upgraded = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(schema_version(&old.path().join(".orchester/orchester.db")), latest);
+  let entries = upgraded.chat_entries(chat.id()).expect("entries");
+  assert!(
+    matches!(&entries[..], [first, second]
+      if matches!(first.kind, EntryKind::Person { .. }) && matches!(second.kind, EntryKind::Reply { .. })),
+    "{entries:?}"
+  );
+  assert!(
+    upgraded
+      .keep_agent_wait(&chat, ("message:x:1", &wait(run.id())), at(20))
+      .expect("a wait after the migration")
+  );
+  assert_eq!(upgraded.chat_entries(chat.id()).expect("entries").len(), 3);
+}

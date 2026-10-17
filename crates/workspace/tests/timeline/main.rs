@@ -357,6 +357,7 @@ fn sent_now(execution: StepExecutionId, at: Timestamp) -> Item {
       },
       execution: Some(execution),
       sent_now: true,
+      by_orchestrator: false,
     }),
   }
 }
@@ -525,6 +526,7 @@ fn timeline_search_finds_a_question_with_its_step() {
         state: EntryState::Question { open: true },
         execution: Some(execution),
         sent_now: false,
+        by_orchestrator: false,
       },
       step: Some("Implement".into()),
     },
