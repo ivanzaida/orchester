@@ -128,7 +128,7 @@ pub struct ComposerState {
 
 impl ComposerState {
   /// The composer of `task`, the task `key` of `project`: made once, in its page's `create`.
-  pub fn new(ctx: &mut Ctx, project: &ShownProject, (task, key): (TaskId, &TaskKey)) -> Self {
+  pub fn new(ctx: &mut Ctx, project: &ShownProject, (task, key, kept): (TaskId, &TaskKey, bool)) -> Self {
     let (send, after_turn) = (send_action(ctx), after_turn_action(ctx));
     let flight = kept::flight(task);
     let state = Self {
@@ -146,7 +146,7 @@ impl ComposerState {
     let navigation = Navigation::of(ctx);
     let summary = Route::Project(
       project.open.project.id(),
-      ProjectPage::Task(key.clone(), TaskView::Summary),
+      ProjectPage::task(key.clone(), TaskView::Summary, kept),
     );
     let (feed, done) = (project.feed.clone(), state.clone());
     ctx.watch(&state.send.state(), move |result| {

@@ -36,7 +36,7 @@ use self::runs::Runs;
 use super::{PageState, TaskContext, sharing};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{Route, TaskTab, TaskView},
   services::Services,
   theme::{TaskSpacing, TaskText},
   ui::{
@@ -191,10 +191,7 @@ fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
     props.task.project.open.project.id(),
-    ProjectPage::Task(
-      props.task.detail.task.key().clone(),
-      TaskView::of(TaskTab::Conversation),
-    ),
+    props.task.page(TaskView::of(TaskTab::Conversation)),
   );
   ActionButton::new(
     "task-open-conversation",

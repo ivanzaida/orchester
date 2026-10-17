@@ -28,6 +28,11 @@ pub struct TaskContext {
 impl lurq::app::component::DevtoolsInspectable for TaskContext {}
 
 impl TaskContext {
+  /// The page of this task on `view`, at the address of a task kept *Not shared* when it is one.
+  pub fn page(&self, view: crate::routes::TaskView) -> crate::routes::ProjectPage {
+    crate::routes::ProjectPage::task(self.detail.task.key().clone(), view, self.detail.not_shared())
+  }
+
   /// The run is recorded as running while no runner looks after it: it is interrupted until one does.
   pub fn lost(&self) -> bool {
     self.detail.lost_its_runner(self.online)

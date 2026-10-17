@@ -131,6 +131,23 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
   });
   assert!(window.tree.get_element_by_id("task-not-shared").is_none());
 
+  // The kept page's own links keep its address: its tabs open the kept task, not Alice's.
+  let kept = |view| Route::Project(project, ProjectPage::KeptTask("KON-2".parse().expect("key"), view));
+  harness::go(
+    &mut window,
+    kept(TaskView::of(TaskTab::Summary)),
+    "task-tab-conversation",
+  );
+  press(&mut window, "task-tab-conversation");
+  window.until("the kept task's conversation", |window| {
+    window.navigation().route_now() == kept(TaskView::Conversation)
+  });
+  press(&mut window, "task-tab-changes");
+  window.until("the kept task's changes", |window| {
+    window.navigation().route_now() == kept(TaskView::Changes(None))
+  });
+  assert_eq!(window.text("task-title"), "Retry exports");
+
   // Share task from the kept page leaves Alice's KON-2 as it was.
   harness::go(
     &mut window,

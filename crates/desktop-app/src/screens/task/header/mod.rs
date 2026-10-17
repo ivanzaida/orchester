@@ -244,12 +244,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
         TaskTab::Summary | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
       };
-      let page = if kept {
-        ProjectPage::KeptTask(key.clone(), view)
-      } else {
-        ProjectPage::Task(key.clone(), view)
-      };
-      navigation.open(Route::Project(project, page), at);
+      navigation.open(Route::Project(project, ProjectPage::task(key.clone(), view, kept)), at);
     })
   };
   let tab =

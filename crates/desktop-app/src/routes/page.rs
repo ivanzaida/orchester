@@ -85,6 +85,24 @@ pub enum ProjectPage {
 }
 
 impl ProjectPage {
+  /// The page of the task `key` on `view`; `kept`: the task kept *Not shared* with that key, which a shared task may
+  /// have too. Every link from a task's page to the task itself goes through here.
+  pub const fn task(key: TaskKey, view: TaskView, kept: bool) -> Self {
+    if kept {
+      Self::KeptTask(key, view)
+    } else {
+      Self::Task(key, view)
+    }
+  }
+
+  /// The task a task's page shows and its view, kept *Not shared* or not.
+  pub const fn task_view(&self) -> Option<(&TaskKey, &TaskView)> {
+    match self {
+      Self::Task(key, view) | Self::KeptTask(key, view) => Some((key, view)),
+      _ => None,
+    }
+  }
+
   /// The page of a project screen that names nothing but the project, as it opens: every one but the
   /// screens of a task.
   pub fn of(screen: Screen) -> Option<Self> {

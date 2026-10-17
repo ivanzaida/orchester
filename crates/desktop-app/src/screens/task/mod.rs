@@ -96,20 +96,22 @@ impl Component for TaskPage {
       TasksState::Ready(tasks) => {
         let find =
           |list: &[orchester_core::task::Task]| list.iter().find(|task| *task.key() == props.key).map(|task| task.id());
+        let kept = || find(&tasks.not_shared).map(|task| (task, true));
         if props.kept {
-          find(&tasks.not_shared)
+          kept()
         } else {
-          find(&tasks.tasks).or_else(|| find(&tasks.not_shared))
+          find(&tasks.tasks).map(|task| (task, false)).or_else(kept)
         }
       }
     };
-    let Some(task) = found else {
+    let Some((task, kept)) = found else {
       return page(not_found(ctx, &props));
     };
     let frame = FrameProps {
       project: props.project,
       task,
       key: props.key,
+      kept,
       tab: props.tab,
     };
     page(ctx.mount_keyed::<TaskFrame>(&format!("task-frame-{task}"), frame))
@@ -176,6 +178,8 @@ struct FrameProps {
   project: ShownProject,
   task: TaskId,
   key: TaskKey,
+  /// The task is one kept *Not shared*: its page's links keep its own address.
+  kept: bool,
   tab: TaskTab,
 }
 
@@ -264,7 +268,7 @@ impl Component for TaskFrame {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<FrameProps>().clone();
-    let composer = conversation::ComposerState::new(ctx, &props.project, (props.task, &props.key));
+    let composer = conversation::ComposerState::new(ctx, &props.project, (props.task, &props.key, props.kept));
     Self {
       composer,
       retries: ctx.signal(0),

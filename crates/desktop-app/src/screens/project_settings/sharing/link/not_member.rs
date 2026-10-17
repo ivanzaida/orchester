@@ -32,6 +32,9 @@ use crate::{
   },
 };
 
+/// *Check again*, which only a person presses.
+const CHECK: &str = "sharing-not-member-check";
+
 impl Link {
   /// The notice and what can be known, for `address` as the server answered at `checked`; `again` asks again.
   pub(super) fn not_member(
@@ -119,17 +122,18 @@ impl Link {
         value,
       )
     });
-    let check = ActionButton::new(
-      "sharing-not-member-check",
-      ButtonKind::Secondary,
-      ctx.t("sharing.link.notMember.checkAgain"),
-    )
-    .icon(Icon::RefreshCw);
+    let check =
+      ActionButton::new(CHECK, ButtonKind::Secondary, ctx.t("sharing.link.notMember.checkAgain")).icon(Icon::RefreshCw);
     let check = match again {
       _ if self.resolve.state().get().is_pending() => check.loading(),
+      // It asks the server again and may open what linking does: a person's, as *Link to …* is.
       Some(choice) => {
-        let resolve = self.resolve.clone();
-        check.on_click(move || resolve.run(choice.clone()))
+        let (resolve, person) = (self.resolve.clone(), self.person.clone());
+        check.on_click(move || {
+          if person.allows(CHECK) {
+            resolve.run(choice.clone());
+          }
+        })
       }
       None => check.disabled(),
     };
@@ -154,6 +158,7 @@ impl Link {
               .variant(ExtraTypography::Note.role()),
           ),
       )
+      .with_children(self.person.reason(ctx, CHECK))
       .into()
   }
 }
