@@ -142,7 +142,13 @@ impl Worktree {
 }
 
 /// Merges the branch of `run`, which succeeded, into the branch it started from in `repo`, as Merge into
-/// main does; the merge to record.
+/// main does; the merge to record. A temporary worktree that stayed fails the seed, which owns the repository.
 pub fn merge(repo: &Path, (run, task): (&Run, &TaskKey), now: Timestamp) -> Result<RunMerge, MergeError> {
-  merge_run(&RUNNER, Path::new(GIT), repo, (run, task), now)
+  let outcome = merge_run(&RUNNER, Path::new(GIT), repo, (run, task), now)?;
+  match outcome.left {
+    None => Ok(outcome.merge),
+    Some(left) => Err(MergeError::Git(orchester_core::integration::GitError::Failed(
+      left.detail,
+    ))),
+  }
 }

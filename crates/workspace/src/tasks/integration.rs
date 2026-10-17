@@ -12,7 +12,7 @@ use orchester_core::{
   id::{RunId, StepExecutionId},
   integration::{
     Cleanup, CleanupError, FolderListing, GitError, KeepReason, LeftWorktree, Leftovers, MergeError,
-    RecordedCleanupError, RunMerge, clean_up_recorded_as_seen, leftovers_of, merge_run_at,
+    RecordedCleanupError, RunMerge, TemporaryLeft, clean_up_recorded_as_seen, leftovers_of, merge_run_at,
   },
   revision::Revision,
   run::{BranchName, Run},
@@ -24,7 +24,11 @@ use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, detail::run_store_error};
-use crate::{activity::Running, messages::Message};
+use crate::{
+  activity::{Activity, Running, operations},
+  messages::Message,
+  workspace::OpenProject,
+};
 
 /// Names shown of a longer list of files, which then ends in an ellipsis.
 const SHOWN_FILES: usize = 5;
@@ -149,8 +153,12 @@ fn merge_message(error: &MergeError, separator: &str) -> Message {
       expected,
       current: None,
     } => Message::new("runs.merge.failure.detached").with("branch", expected.to_string()),
-    MergeError::Uncommitted { files } => with_files("runs.merge.failure.uncommitted", files),
+    MergeError::UncommittedInTheWay { files } => with_files("runs.merge.failure.uncommitted", files),
     MergeError::InProgress => Message::new("runs.merge.failure.inProgress"),
+    MergeError::BaseMoved { branch } => Message::new("runs.merge.failure.baseMoved").with("branch", branch.to_string()),
+    MergeError::LeftChanged { files, detail } => {
+      with_files("runs.merge.failure.leftChanged", files).with("detail", detail.clone())
+    }
     MergeError::BranchMissing(branch) => {
       Message::new("runs.merge.failure.branchMissing").with("branch", branch.to_string())
     }
@@ -242,8 +250,28 @@ pub fn file_list(files: &[String], separator: &str) -> String {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Merged {
   pub merge: RunMerge,
+  /// The temporary worktree of the merge commit, when it could not be removed.
+  pub temporary: Option<TemporaryLeft>,
   /// Clearing up can fail on its own; the merge stands either way.
   pub cleanup: Result<Cleanup, IntegrationProblem>,
+}
+
+impl Merged {
+  /// Ends `running`, the merge of run `run` of `task` in `open`, as done, and records a temporary
+  /// worktree that stayed beside it for the person to delete; the merge.
+  pub fn finish(
+    self,
+    running: Running,
+    activity: &Activity,
+    (open, task, run): (&OpenProject, orchester_core::id::TaskId, (&str, u32)),
+  ) -> RunMerge {
+    running.finish();
+    if let Some(left) = &self.temporary {
+      let (project, title, target) = operations::run_merge_left(open, task, run, &left.path);
+      activity.record(Some(project), title, target);
+    }
+    self.merge
+  }
 }
 
 /// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
@@ -302,7 +330,7 @@ pub fn merge_in(
     return Err(IntegrationProblem::Store(Message::new("appMcp.errors.notLatestRun")));
   }
   let git = programs.git_work();
-  let merge = merge_run_at(
+  let outcome = merge_run_at(
     &git,
     (Path::new(GIT), repo_root),
     (&run, task.key()),
@@ -310,6 +338,10 @@ pub fn merge_in(
     Timestamp::now(),
   )
   .map_err(IntegrationProblem::Merge)?;
+  if let Some(left) = &outcome.left {
+    tracing::warn!(path = %left.path, detail = %left.detail, "merged, but the temporary worktree of the merge commit stayed");
+  }
+  let (merge, temporary) = (outcome.merge, outcome.left);
   if merge.kind == orchester_core::integration::MergeKind::AlreadyMerged {
     return Err(IntegrationProblem::Store(Message::new(
       "localIntegration.externalResult",
@@ -327,7 +359,11 @@ pub fn merge_in(
   if cleanup.is_err() {
     tracing::warn!("the run was merged, but what it left could not be cleared");
   }
-  Ok(Merged { merge, cleanup })
+  Ok(Merged {
+    merge,
+    temporary,
+    cleanup,
+  })
 }
 
 /// What the task's runs left in the repository, by run, as the task page holds it.

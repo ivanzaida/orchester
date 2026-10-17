@@ -99,7 +99,7 @@ pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 /// its number (`#142`, `e3Wty`).
 pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
-    Route::Project(_, ProjectPage::Task(key, _)) => key.to_string(),
+    Route::Project(_, ProjectPage::Task(key, _) | ProjectPage::KeptTask(key, _)) => key.to_string(),
     Route::Project(_, ProjectPage::NewPipeline) => ctx.t("pipelines.new").to_string(),
     Route::Project(project, ProjectPage::Pipeline(id, _) | ProjectPage::PipelineVersion(id, ..)) => projects
       .feed(*project)

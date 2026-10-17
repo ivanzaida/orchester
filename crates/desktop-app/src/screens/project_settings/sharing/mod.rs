@@ -7,6 +7,7 @@
 //! (the server admin, in the browser), *Make local* and *Leave* ([`linked`]).
 
 mod confirm;
+mod join;
 mod link;
 mod linked;
 mod make_local;
@@ -36,7 +37,10 @@ use orchester_workspace::{
   },
 };
 
-pub(super) use self::upload::{LinkPage, link_page};
+pub(super) use self::{
+  join::screen as join_screen,
+  upload::{LinkPage, link_page},
+};
 use super::{TabProps, page};
 use crate::{
   screens::settings::orchester::{Said, follow, follow_shared},
@@ -61,6 +65,10 @@ pub(super) struct Facts {
   pub linked: Option<ServerEntry>,
   /// A linked project's repository hint as last read, and when, for while the server doesn't say.
   pub cached_hint: Option<(Option<RepositoryIdentity>, orchester_core::time::Timestamp)>,
+  /// The keys the local tasks had when the project joined, for *Keys before joining*; empty for one that didn't.
+  pub joined: Vec<orchester_store::JoinedKey>,
+  /// What the join left to say, until the person dismisses it.
+  pub joined_note: Option<linked::joined::Note>,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -108,13 +116,17 @@ impl Component for Sharing {
     let revision =
       follow(ctx, (&services.servers, &services.cloud)) + follow_shared(ctx, &services.servers) + self.revision.get();
     let root = props.project.open.repo_root.clone();
+    let workspace = services.workspace.clone();
     let state = ctx
       .future(
         (revision, root, services.servers.clone(), services.programs.clone()),
-        |(_, root, servers, programs)| async move {
-          background::run(move || read(&servers, &programs, &root))
-            .await
-            .map_err(|_| Said::new("cloud.errors.local"))?
+        move |(_, root, servers, programs)| {
+          let workspace = workspace.clone();
+          async move {
+            background::run(move || read((&servers, &workspace), &programs, &root))
+              .await
+              .map_err(|_| Said::new("cloud.errors.local"))?
+          }
         },
       )
       .state()
@@ -162,13 +174,17 @@ impl Component for Sharing {
 }
 
 fn read(
-  servers: &Servers,
+  (servers, workspace): (&Servers, &orchester_workspace::workspace::Workspace),
   programs: &orchester_exec::programs::Programs,
   root: &std::path::Path,
 ) -> Result<Facts, Said> {
   let local = |_| Said::new("cloud.errors.local");
   let db = ProjectDb::open(root).map_err(local)?;
   let link = db.sharing().map_err(local)?;
+  let joined = db.joined_keys().map_err(local)?;
+  let joined_note = (!joined.is_empty())
+    .then(|| linked::joined::read(workspace, db.project().id()))
+    .flatten();
   let tasks = db.tasks().map_err(local)?.len();
   // A hint that no longer parses is left out; the row then waits for the server's.
   let cached_hint = db
@@ -193,5 +209,7 @@ fn read(
     linked_discovery,
     linked,
     cached_hint,
+    joined,
+    joined_note,
   })
 }

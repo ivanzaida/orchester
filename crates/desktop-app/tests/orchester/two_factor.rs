@@ -216,7 +216,8 @@ fn orchester_two_factor_signs_in_again_with_a_code_and_accepts() {
     &format!("{card}-accept"),
   );
   press(&mut window, &format!("{card}-accept"));
-  shows(&mut window, "orchester-invite-joined");
+  // A project invite goes on to which checkout to link (`xeFRB`).
+  shows(&mut window, "orchester-landing");
   assert!(services.servers.entries().expect("entries")[0].in_use(), "joined");
 }
 

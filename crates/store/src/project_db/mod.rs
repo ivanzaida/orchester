@@ -35,6 +35,7 @@ mod pull_requests;
 mod questions;
 mod queue_holds;
 mod read_only;
+mod rebases;
 mod repository;
 mod repository_import;
 mod resources;
@@ -162,6 +163,15 @@ impl ProjectDb {
     migrate::open(&database, migrations)
   }
 
+  /// Applies `migration` again to the database of `connection`, which a test shaped as the schema
+  /// before it: a named migration, rather than every one after a rewound version, so later ones
+  /// that cannot run twice stay out of the test.
+  #[cfg(feature = "test-support")]
+  pub fn apply_migration_for_test(connection: &Connection, migration: ProjectMigration) -> Result<(), StoreError> {
+    connection.execute_batch(schema::named(migration))?;
+    Ok(())
+  }
+
   /// Replaces the timeout with a fixture's lock-wait observer for deterministic concurrency tests.
   #[cfg(feature = "test-support")]
   pub fn set_busy_handler_for_test(&self, callback: fn(i32) -> bool) -> Result<(), StoreError> {
@@ -188,4 +198,14 @@ fn load_project(connection: &Connection) -> Result<Project, StoreError> {
     ProjectKey::new(&key).map_err(|error| corrupt("project key", error))?,
     Name::new(&name).map_err(|error| corrupt("project name", error))?,
   ))
+}
+
+/// A project schema migration a test applies again by name ([`ProjectDb::apply_migration_for_test`]).
+#[cfg(feature = "test-support")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProjectMigration {
+  /// The local integration journal, its retained content and its process record.
+  LocalIntegration,
+  /// Retained content that also keeps editor drafts.
+  EditorDrafts,
 }

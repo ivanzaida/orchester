@@ -97,6 +97,77 @@ impl From<FilterButton> for Element {
   }
 }
 
+/// A filter that is on or off, as a filter button that opens no menu (`Not shared · 2` in `Xr4Wb`, on in `A7PKfL`):
+/// on, it has a cross in place of the chevron; a press turns it on or off.
+pub struct FilterToggle {
+  id: Arc<str>,
+  label: Arc<str>,
+  on: bool,
+  press: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl FilterToggle {
+  /// The toggle `id` saying `label`, `on` or not; `press` turns it the other way.
+  pub fn new(
+    id: impl Into<Arc<str>>,
+    label: impl Into<Arc<str>>,
+    on: bool,
+    press: impl Fn() + Send + Sync + 'static,
+  ) -> Self {
+    Self {
+      id: id.into(),
+      label: label.into(),
+      on,
+      press: Arc::new(press),
+    }
+  }
+}
+
+impl From<FilterToggle> for Element {
+  fn from(toggle: FilterToggle) -> Self {
+    let (fill, stroke, text, glyph) = if toggle.on {
+      (
+        PaletteColor::AccentMuted,
+        PaletteColor::BorderStrong,
+        PaletteColor::TextPrimary,
+        Some(icon(Icon::X, IconSize::Base, PaletteColor::TextSecondary)),
+      )
+    } else {
+      (
+        PaletteColor::SurfaceInput,
+        PaletteColor::Border,
+        PaletteColor::TextSecondary,
+        None,
+      )
+    };
+    let press = toggle.press.clone();
+    pressable(move || press())
+      .id(toggle.id.clone())
+      .height(Dimension::Px(ControlHeight::Md.value()))
+      .padding(Padding::new().left(ExtraSpacing::Loose.role()).right(if toggle.on {
+        SpacingSize::Sm
+      } else {
+        ExtraSpacing::Loose.role()
+      }))
+      .spacing(ExtraSpacing::Snug.role())
+      .background(fill)
+      .border(Border::inside(BorderSize::Sm, stroke))
+      .rounded(RadiusSize::Md)
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+      .describe("a11y_name", toggle.label.clone())
+      .describe("active", if toggle.on { "true" } else { "false" })
+      .child(
+        Text::new(&toggle.label)
+          .id(format!("{}-label", toggle.id))
+          .variant(TypographyStyle::Label)
+          .color(text)
+          .nowrap(),
+      )
+      .with_children(glyph)
+      .into()
+  }
+}
+
 pub struct FilterChip {
   id: Arc<str>,
   facet: Arc<str>,

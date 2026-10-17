@@ -99,7 +99,7 @@ impl Composing {
   fn open(&self, ctx: &mut Ctx, view: TaskView) -> Open {
     Navigation::of(ctx).to(Route::Project(
       self.project.open.project.id(),
-      ProjectPage::Task(self.key.clone(), view),
+      ProjectPage::task(self.key.clone(), view, self.detail.not_shared()),
     ))
   }
 }

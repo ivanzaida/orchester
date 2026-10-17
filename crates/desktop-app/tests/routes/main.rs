@@ -8,9 +8,10 @@ mod views;
 
 use std::num::NonZeroU64;
 
+use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
-  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage,
+  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -25,12 +26,22 @@ const CONNECTION: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 /// A search and a file path with every character a query must escape, and some it need not.
 const AWKWARD: &str = "retry & jitter #2 ? 100% = ü/слово+";
 
+/// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
+fn matched(chain: &[RouteMatch]) -> String {
+  chain.iter().skip(1).map(RouteMatch::pattern_raw).collect()
+}
+
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
 }
 
 fn connection() -> ConnectionId {
   CONNECTION.parse().expect("a connection id")
+}
+
+/// Kontur on the server the list has as [`CONNECTION`]'s id.
+fn join_target() -> JoinTarget {
+  JoinTarget::new(CONNECTION.parse().expect("a server id"), "kontur").expect("a target")
 }
 
 fn pull_request() -> NonZeroU64 {
@@ -64,6 +75,13 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::Tasks(TaskList::default().with_search("retry"))),
     at(ProjectPage::Tasks(TaskList::default().with_search(AWKWARD))),
     at(ProjectPage::Tasks(TaskList::default().with_highlight(key("KON-13")))),
+    at(ProjectPage::Tasks(
+      TaskList::default().with_search("KON-12").with_not_shared(true),
+    )),
+    at(ProjectPage::Join(join_target())),
+    Route::Invite(join_target()),
+    at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
+    at(ProjectPage::KeptTask(key("KON-12"), TaskView::Conversation)),
     at(ProjectPage::Tasks(
       TaskList::new(TaskListTab::InReview)
         .with_search("  spaced  ")
@@ -204,13 +222,39 @@ fn paths_are_the_documented_ones() {
 }
 
 #[test]
+fn joining_paths_are_the_documented_ones() {
+  let root = format!("/project/{PROJECT}");
+  let paths = [
+    (
+      at(ProjectPage::Join(join_target())),
+      format!("{root}/settings?tab=sharing&view=join&server={CONNECTION}&project=kontur"),
+    ),
+    (
+      Route::Invite(join_target()),
+      format!("/settings/invite?server={CONNECTION}&project=kontur"),
+    ),
+    (
+      at(ProjectPage::Tasks(TaskList::default().with_not_shared(true))),
+      format!("{root}/tasks?show=not-shared"),
+    ),
+    (
+      at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
+      format!("{root}/tasks/kept/KON-12/summary"),
+    ),
+  ];
+  for (route, path) in paths {
+    assert_eq!(route.path(), path);
+  }
+}
+
+#[test]
 fn the_router_table_resolves_every_route_to_its_screen() {
   let table = routes();
   for route in every_route() {
     let path = route.path();
     let chain = table.resolve(&path);
-    let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
-    assert_eq!(leaf.pattern_raw(), route.pattern(), "{path}");
+    assert!(!chain.is_empty(), "{path} resolves");
+    assert_eq!(matched(&chain), route.pattern(), "{path}");
   }
 }
 

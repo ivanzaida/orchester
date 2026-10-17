@@ -8,9 +8,9 @@ use orchester_core::{
 use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, NEW, NewConnection, ORCHESTRATOR,
-  OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS, Screen,
-  SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, NEW, NewConnection,
+  ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS,
+  Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
   query::{Params, with_query},
@@ -21,6 +21,11 @@ const FILE: &str = "file";
 /// What Project settings' Sharing tab asks once open.
 const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
+/// A task kept Not shared, by its kept key (`/tasks/kept/KON-2/summary`).
+const KEPT: &str = "kept";
+/// What Project settings' Sharing tab shows in place of itself: the join review.
+const VIEW: &str = "view";
+const JOIN: &str = "join";
 
 /// A screen of one project, with what its path names besides the project.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -31,6 +36,8 @@ pub enum ProjectPage {
   Tasks(TaskList),
   NewTask,
   EditTask(TaskKey),
+  /// A task kept *Not shared* when the project joined, by its kept key, which a shared task may have too (`R4elt`).
+  KeptTask(TaskKey, TaskView),
   Task(TaskKey, TaskView),
   MergeQueue,
   /// The Pull requests page on its tab.
@@ -70,11 +77,32 @@ pub enum ProjectPage {
   /// Project settings on its Sharing tab with *Make local*'s question open (the task list's *no longer a
   /// member* notice).
   MakeLocal,
+  /// The join review (`AiCwO`) of the project `JoinTarget` names, over Project settings › Sharing
+  /// (`/settings?tab=sharing&view=join&server=…&project=…`).
+  Join(JoinTarget),
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
 }
 
 impl ProjectPage {
+  /// The page of the task `key` on `view`; `kept`: the task kept *Not shared* with that key, which a shared task may
+  /// have too. Every link from a task's page to the task itself goes through here.
+  pub const fn task(key: TaskKey, view: TaskView, kept: bool) -> Self {
+    if kept {
+      Self::KeptTask(key, view)
+    } else {
+      Self::Task(key, view)
+    }
+  }
+
+  /// The task a task's page shows and its view, kept *Not shared* or not.
+  pub const fn task_view(&self) -> Option<(&TaskKey, &TaskView)> {
+    match self {
+      Self::Task(key, view) | Self::KeptTask(key, view) => Some((key, view)),
+      _ => None,
+    }
+  }
+
   /// The page of a project screen that names nothing but the project, as it opens: every one but the
   /// screens of a task.
   pub fn of(screen: Screen) -> Option<Self> {
@@ -117,7 +145,7 @@ impl ProjectPage {
       Self::Tasks(_) => Screen::Tasks,
       Self::NewTask => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
-      Self::Task(..) => Screen::Task,
+      Self::Task(..) | Self::KeptTask(..) => Screen::Task,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
       Self::Usage(_) => Screen::Usage,
@@ -133,7 +161,7 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings(_) | Self::MakeLocal => Screen::ProjectSettings,
+      Self::Settings(_) | Self::MakeLocal | Self::Join(_) => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
     }
   }
@@ -153,6 +181,7 @@ impl ProjectPage {
       Self::NewTask => format!("{tasks}/{NEW}"),
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
+      Self::KeptTask(key, view) => view.path(&format!("{tasks}/{KEPT}/{key}")),
       Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
@@ -188,6 +217,18 @@ impl ProjectPage {
         segment(Screen::ProjectSettings),
         &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
       ),
+      Self::Join(target) => {
+        let [server, project] = target.params();
+        with_query(
+          segment(Screen::ProjectSettings),
+          &[
+            ProjectSettingsTab::Sharing.param(),
+            (VIEW, Some(JOIN)),
+            (server.0, Some(&server.1)),
+            (project.0, Some(&project.1)),
+          ],
+        )
+      }
       page => segment(page.screen()),
     }
   }
@@ -200,6 +241,10 @@ impl ProjectPage {
       [ORCHESTRATOR, SETTINGS] => Ok(Self::OrchestratorSettings),
       [TASKS] => TaskList::take(params).map(Self::Tasks),
       [TASKS, NEW] => Ok(Self::NewTask),
+      [TASKS, KEPT, key, rest @ ..] => {
+        let key = task_key(key)?;
+        TaskView::parse(rest, params).map(|view| Self::KeptTask(key, view))
+      }
       [TASKS, key, rest @ ..] => {
         let key = task_key(key)?;
         match rest {
@@ -280,9 +325,24 @@ fn task_key(value: &str) -> Result<TaskKey, RouteError> {
   })
 }
 
-/// Project settings on the tab the query names, or *Make local*'s question on Sharing (`ask=make-local`).
+/// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), or the join
+/// review there (`view=join` with the project).
 fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
   let tab = ProjectSettingsTab::take(params)?;
+  match (tab, params.take(VIEW)?) {
+    (_, None) => {}
+    (ProjectSettingsTab::Sharing, Some(view)) if view == JOIN => {
+      return JoinTarget::take(params)?
+        .map(ProjectPage::Join)
+        .ok_or(RouteError::NoScreen);
+    }
+    (_, Some(value)) => {
+      return Err(RouteError::InvalidParam {
+        param: VIEW.to_owned(),
+        value,
+      });
+    }
+  }
   match (tab, params.take(ASK)?) {
     (_, None) => Ok(ProjectPage::Settings(tab)),
     (ProjectSettingsTab::Sharing, Some(ask)) if ask == MAKE_LOCAL => Ok(ProjectPage::MakeLocal),

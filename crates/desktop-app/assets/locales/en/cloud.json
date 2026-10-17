@@ -214,13 +214,12 @@
         "member": "Member",
         "notHere": "not on this computer",
         "open": "Open",
-        "explanation": "Each project is linked to one checkout on this computer. A project of yours without a checkout here: clone it yourself, add the folder in All projects, then link it in its Project settings › Sharing.",
+        "explanation": "Each project is linked to one checkout on this computer. For a project of yours without a checkout here, Link a checkout… picks one, or shows the git clone to run first.",
         "signedOut": "Join again to read your projects there; the ones linked here are listed below.",
         "offline": "{{server}} can't be reached, so your projects there can't be read now. The ones linked on this computer are listed below.",
         "offlineNoneHere": "{{server}} can't be reached, so your projects there can't be read now. None of them is linked on this computer.",
         "signedOutNoneHere": "Join again to read your projects there. None of them is linked on this computer.",
-        "link": "Link a checkout…",
-        "linkLater": "Linking from here isn't in this version of the app yet: clone the project yourself, add the folder in All projects, then link it in its Project settings › Sharing."
+        "link": "Link a checkout…"
       },
       "computers": {
         "title": "Your other computers",

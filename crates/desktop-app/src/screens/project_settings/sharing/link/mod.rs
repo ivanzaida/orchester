@@ -3,11 +3,13 @@
 //! `orchester.toml` only when the person takes it), the repository compared with the project's hint ([`rows`]), and
 //! *Link to Kontur…*, which asks in place about a mismatch (*Choose another project* or *Link anyway…*) and then
 //! opens what goes up on a page of its own (`KSnOW`, `super::upload`) ([`confirm`]). A checkout with tasks linked to a
-//! project with tasks is joined through its review, which this version does not have yet, and says so. What linking
+//! project with tasks is joined through its review (`AiCwO`, `super::join`). An address with no project the person is
+//! a member of says so, and to ask for an invite; nothing is sent. What linking
 //! sends closes the page ([`parts`]). After *Make local* the page says what it did until the person dismisses it.
 
 mod confirm;
 mod discovery;
+mod not_member;
 mod parts;
 mod rows;
 
@@ -33,14 +35,16 @@ use orchester_workspace::sharing::{
   },
 };
 
-pub(super) use self::parts::sends;
+pub(super) use self::parts::{join_sends, sends};
 use super::{
   Facts,
   make_local::Made,
   upload::{LinkPage, Upload},
 };
 use crate::{
+  navigation::Navigation,
   project::ShownProject,
+  routes::{JoinTarget, ProjectPage, Route},
   screens::settings::orchester::{PersonOnly, Said, sharing_said},
   services::Services,
   theme::ExtraSpacing,
@@ -80,10 +84,8 @@ impl DevtoolsInspectable for Picked {}
 enum Problem {
   /// The address is on a server this computer is not connected to; nothing was sent there.
   NotConnected(String),
-  /// No project there the person is a member of; the server answers both alike.
-  NoProject(String),
-  /// The checkout and the project both have tasks: joining it is its review, not built in this version.
-  Taken(String),
+  /// No project there the person is a member of; the server answers both alike. The address, and when it answered.
+  NoProject(String, orchester_core::time::Timestamp),
   Other(Said),
 }
 
@@ -114,6 +116,18 @@ impl PartialEq for Target {
 }
 
 impl Target {
+  /// Goes on with this target: a checkout with tasks linked to a project with tasks opens the join review; any other
+  /// opens the first link's page.
+  fn open(&self, page: &Signal<LinkPage>, (navigation, project): (&Navigation, ProjectId)) {
+    if let LinkKind::Review { .. } = self.1.kind {
+      if let Some(target) = JoinTarget::new(self.0.entry.stored.id, &self.0.project.slug) {
+        navigation.go(Route::Project(project, ProjectPage::Join(target)));
+      }
+      return;
+    }
+    page.set(self.upload());
+  }
+
   /// The first link's page for this target, with a new upload key.
   fn upload(&self) -> LinkPage {
     let remote = match &self.0.remote {
@@ -185,13 +199,14 @@ impl Component for Link {
     });
     let first = props.facts.servers.first().map(|entry| entry.stored.id);
     let asking = ctx.signal(Asking::Nothing);
-    let (next, page) = (asking.clone(), props.page);
+    let (next, page, navigation) = (asking.clone(), props.page, Navigation::of(ctx));
+    let project = props.project.open.project.id();
     ctx.watch(&resolve.state(), move |state| {
       if let Some(target) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
         if target.0.remote.warns() {
           next.set(Asking::Mismatch);
         } else {
-          page.set(target.upload());
+          target.open(&page, (&navigation, project));
         }
       }
     });
@@ -257,7 +272,7 @@ impl Link {
 }
 
 /// The target `choice` names, with the checkout's `origin` compared and what linking it would do. A checkout with
-/// tasks of its own linked to a project with tasks is a join, reviewed first: not in this version.
+/// tasks of its own linked to a project with tasks is a join, reviewed first.
 async fn resolve(
   servers: &Servers,
   root: &std::path::Path,
@@ -283,15 +298,12 @@ async fn resolve(
     .link_plan(&target.entry, root, target.project.clone())
     .await
     .map_err(|error| sharing_problem(&error, &target.project.address))?;
-  if let LinkKind::Review { .. } = plan.kind {
-    return Err(Problem::Taken(target.project.name.clone()));
-  }
   Ok(Target(target, plan))
 }
 
 fn sharing_problem(error: &SharingError, address: &str) -> Problem {
   match error {
-    SharingError::NoProject => Problem::NoProject(address.to_owned()),
+    SharingError::NoProject => Problem::NoProject(address.to_owned(), orchester_core::time::Timestamp::now()),
     error => Problem::Other(sharing_said(error)),
   }
 }

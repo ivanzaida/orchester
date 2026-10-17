@@ -11,6 +11,7 @@ mod metadata;
 mod poll;
 mod preserve;
 mod process;
+mod rebase;
 mod recover;
 mod resolution;
 mod restore;

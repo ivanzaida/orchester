@@ -6,6 +6,8 @@
 //! names. Without the project's server in the list, what needs it says why before any press. No test calls an
 //! endpoint of the server admin.
 //!
+//! N3 (`joining`): the join review, its failures, the keys before joining, the *Not shared* tasks and *Share task*.
+//!
 //! `cargo test -p orchester-app --test shared_project shared_project_`
 
 mod conflict;
@@ -13,10 +15,14 @@ mod discovery;
 #[allow(dead_code, reason = "the N1 harness, of which these tests use a part")]
 #[path = "../orchester/harness.rs"]
 mod harness;
+mod joining;
 mod linking;
 mod make_local;
 mod members;
 mod no_server;
+mod rejoin;
+#[path = "../project_settings/run_fixture.rs"]
+mod run_fixture;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
 #[path = "../support/mod.rs"]
