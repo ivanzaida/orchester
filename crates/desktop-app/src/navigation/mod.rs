@@ -147,14 +147,9 @@ impl Navigation {
     before
   }
 
-  /// Goes to `route` like [`go`](Self::go), pointing at `card` on the page it opens; also when the active
-  /// tab is there already. A departure an editor holds points at nothing.
-  pub fn go_to_card(&self, route: &Route, card: Pointed) {
-    self.open_to_card(route, OpenIn::ActiveTab, card);
-  }
-
   /// Opens `route` like [`open`](Self::open), pointing at `card` on the page it opens when the window shows it
-  /// then: a page opened in a background tab is not shown, and nothing points at its card.
+  /// then, also when the active tab is there already: a page opened in a background tab is not shown, and nothing
+  /// points at its card. A departure an editor holds points at nothing.
   pub fn open_to_card(&self, route: &Route, open: OpenIn, card: Pointed) {
     self.open(route.clone(), open);
     if open != OpenIn::BackgroundTab && self.route_now() == *route {
