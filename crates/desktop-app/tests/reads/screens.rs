@@ -36,7 +36,7 @@ fn reads_agents_again_when_a_run_changes_state_not_on_its_lines() {
 fn reads_the_code_index_again_on_its_own_changes_not_on_lines() {
   // No run runs.
   let mut index = Counted::open("empty");
-  index.show(ProjectPage::Settings, "screen-project_settings");
+  index.show(ProjectPage::Settings(Default::default()), "screen-project_settings");
   index.window.press("settings-tab-codeIndex");
   index.settle();
   index.report(false);
@@ -57,7 +57,7 @@ fn reads_the_code_index_again_on_its_own_changes_not_on_lines() {
 #[test]
 fn reads_skills_again_when_a_run_changes_state_not_when_tasks_are_saved() {
   let mut skills = Counted::open("tasks");
-  skills.show(ProjectPage::Skills, "screen-skills");
+  skills.show(ProjectPage::Skills(Default::default()), "screen-skills");
   draft(&skills.root());
   skills.window.projects().feed(skills.seeded.project).saved();
   let saved = skills.settle();
@@ -150,7 +150,7 @@ fn reads_no_listed_project_again_when_the_list_changes_after_a_report() {
 fn reads_the_code_index_on_a_line_while_a_run_runs() {
   // KON-12 runs: its runner may start building an index the tab does not know of yet.
   let mut index = Counted::open("conversation");
-  index.show(ProjectPage::Settings, "screen-project_settings");
+  index.show(ProjectPage::Settings(Default::default()), "screen-project_settings");
   index.window.press("settings-tab-codeIndex");
   index.settle();
   index.report(false);

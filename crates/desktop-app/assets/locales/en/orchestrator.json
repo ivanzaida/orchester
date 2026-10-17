@@ -170,6 +170,22 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "wait": {
+      "question": "{{agent}} asks a question · {{task}} run #{{run}}",
+      "questionAnyone": "An agent asks a question · {{task}} run #{{run}}",
+      "message": "{{agent}} waits for a reply · {{task}} run #{{run}}",
+      "messageAnyone": "An agent waits for a reply · {{task}} run #{{run}}",
+      "plan": "{{agent}}'s plan waits for a decision · {{task}} run #{{run}}",
+      "planAnyone": "A plan waits for a decision · {{task}} run #{{run}}",
+      "noticed": "Waits · {{time}}",
+      "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
+      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
+      "effectOwn": "The agent asks again after the Orchestrator's own answer, so it waits for you: the Orchestrator doesn't answer it by itself.",
+      "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
+      "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
+      "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
+      "open": "Open {{task}}'s conversation"
+    },
     "held": {
       "projectTitle": "New starts held in {{project}}",
       "projectEffect": "No waiting task in {{project}} starts until you resume. Running tasks keep running.",
@@ -290,7 +306,31 @@
       "personOnly": {
         "publish": "Only a person publishes a draft the Orchestrator proposed: input from automation is refused here.",
         "cancel": "Only a person cancels a run the Orchestrator proposed: input from automation is refused here.",
-        "merge": "Only a person merges a run the Orchestrator proposed: input from automation is refused here."
+        "merge": "Only a person merges a run the Orchestrator proposed: input from automation is refused here.",
+        "answer": "Only a person sends an answer the Orchestrator proposed: input from automation is refused here.",
+        "message": "Only a person sends a message the Orchestrator proposed: input from automation is refused here."
+      },
+      "answer": {
+        "waits": "Answer the question in run #{{run}} of {{task}}?",
+        "done": "Answered the question in run #{{run}} of {{task}}",
+        "dismissed": "Answer to run #{{run}} of {{task}} · dismissed",
+        "refused": "Answer to run #{{run}} of {{task}} · not done",
+        "byYou": "Sent by you · {{time}}",
+        "effectWaits": "Nothing is sent yet. Send answer gives the asking agent this answer: {{answer}}. The task's conversation shows it as the Orchestrator's.",
+        "effectSent": "The agent got this answer at {{time}}: {{answer}}. The task's conversation shows it as the Orchestrator's.",
+        "effectDismissed": "You dismissed it. Nothing was sent; the agent still waits for an answer.",
+        "accept": "Send answer"
+      },
+      "message": {
+        "waits": "Send a message to the agents of run #{{run}} of {{task}}?",
+        "done": "Sent a message to run #{{run}} of {{task}}",
+        "dismissed": "Message to run #{{run}} of {{task}} · dismissed",
+        "refused": "Message to run #{{run}} of {{task}} · not done",
+        "byYou": "Sent by you · {{time}}",
+        "effectWaits": "Nothing is sent yet. Send message gives the run's agents this message, as the task's composer would: {{text}}",
+        "effectSent": "Sent at {{time}}, as the task's composer sends it; the task's conversation shows it as the Orchestrator's: {{text}}",
+        "effectDismissed": "You dismissed it. Nothing was sent.",
+        "accept": "Send message"
       },
       "publish": {
         "waits": "Publish {{name}} v{{version}}?",

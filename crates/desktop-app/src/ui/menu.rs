@@ -163,7 +163,7 @@ impl MenuItem {
 
   /// A choice within a form's field menu: reachable with Tab and activated with Enter or Space.
   pub fn in_form(mut self) -> Self {
-    self.focus = Focus::Form;
+    self.focus = Focus::Keyboard;
     self
   }
 

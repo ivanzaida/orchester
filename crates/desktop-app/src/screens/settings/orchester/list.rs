@@ -23,14 +23,14 @@ use super::{
   words::{Look, counted, server_look},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{OrchesterPanel, OrchesterView, Route},
   theme::{AccountsSpacing, AccountsText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     inspector,
-    pressable::pressable,
+    pressable::opening,
   },
 };
 
@@ -154,13 +154,12 @@ fn cloud_row(ctx: &Ctx, snapshot: &Snapshot, invites: &Invites, selected: bool, 
   } else {
     Icon::Cloud
   };
-  let navigation = navigation.clone();
   row(
     ctx,
     ("orchester-row-cloud", glyph, selected),
     (&name, &second, &third),
     &state,
-    move || navigation.replace(Route::Orchester(OrchesterView::default())),
+    navigation.to(Route::Orchester(OrchesterView::default())),
   )
 }
 
@@ -172,13 +171,12 @@ fn server_row(
 ) -> Element {
   let id = entry.stored.id;
   let second = ctx.t_args(trust_key(entry), [("host", entry.address.authority())]);
-  let navigation = navigation.clone();
   row(
     ctx,
     (&format!("orchester-row-{id}"), Icon::Server, selected),
     (&entry.stored.name, &second, &third_line(ctx, entry, linked)),
     &server_look(entry),
-    move || navigation.replace(Route::Orchester(OrchesterView::server(id))),
+    navigation.to(Route::Orchester(OrchesterView::server(id))),
   )
 }
 
@@ -254,7 +252,7 @@ fn row(
   (id, glyph, selected): (&str, Icon, bool),
   (name, second, third): (&str, &str, &str),
   look: &Look,
-  open: impl Fn() + Send + Sync + 'static,
+  open: Open,
 ) -> Element {
   let lines = Column::new()
     .flex(1.0)
@@ -304,7 +302,7 @@ fn row(
   } else {
     row
   };
-  pressable(open)
+  opening(open)
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .describe("selected", if selected { "true" } else { "false" })

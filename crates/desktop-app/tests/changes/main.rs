@@ -231,7 +231,7 @@ fn changes_lists_both_groups_with_counts_line_numbers_and_a_chosen_file() {
     .texts("changes-file:migrations/0042_delivery_attempts.sql-path")
     .concat();
   assert_eq!(migration, "migrations/0042_de…_attempts.sql");
-  // Choosing a worktree file puts it in the path, in place of the current entry.
+  // Choosing a worktree file puts it in the path, as a new entry of the tab's history.
   page.click("changes-worktree-file:src/webhooks/log.rs");
   page.window.until("the worktree file", |window| {
     window

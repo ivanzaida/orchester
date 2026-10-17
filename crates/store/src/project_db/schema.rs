@@ -22,6 +22,7 @@ mod native_conversations;
 mod optional_daily_budget;
 mod optional_limits;
 mod orchestrator;
+mod orchestrator_waits;
 mod organization;
 mod permitted_decisions;
 mod plan_decided_by;
@@ -557,6 +558,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   worktree_not_created::MIGRATION,
   shared_members::MIGRATION,
   shared_members::READ_AS_MIGRATION,
+  orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
 ];
 

@@ -108,7 +108,7 @@ impl Component for Summary {
     }
     .render(ctx);
     let mut body = summary_metadata(ctx, &editing, name, description);
-    let history = props.state.clone();
+    let history = editing.panels.clone();
     if editing.opened.latest.is_some() {
       body = body.child(
         ActionButton::new(
@@ -116,7 +116,7 @@ impl Component for Summary {
           ButtonKind::Secondary,
           ctx.t("pipelines.history"),
         )
-        .on_click(move || history.update(|s| s.panel = Panel::History)),
+        .on_click(move || history.choose(Panel::History)),
       );
     }
     if editing.opened.latest.is_none() {
@@ -126,14 +126,14 @@ impl Component for Summary {
         &ctx.t("pipelines.notAvailableDetail"),
       ));
     }
-    let state = props.state;
+    let settings = editing.panels.clone();
     body = body.child(
       ActionButton::new(
         "pipeline-summary-settings",
         ButtonKind::Secondary,
         ctx.t("pipelines.settings"),
       )
-      .on_click(move || state.update(|s| s.panel = Panel::Settings)),
+      .on_click(move || settings.choose(Panel::Settings)),
     );
     parts::panel(
       ctx,
@@ -265,17 +265,18 @@ impl StepInspector {
   }
   fn actions(&self, ctx: &Ctx, props: &Props) -> Element {
     let (state, key) = (props.state.clone(), props.step.key.clone());
+    let panels = state.get_untracked().panels;
     if self.removing.get() {
       let keep = self.removing.clone();
       let confirm =
         ActionButton::new("step-remove-confirm", ButtonKind::Danger, ctx.t("pipelines.remove")).on_click(move || {
           state.update(|s| {
             s.edit.remove_step(&key);
-            s.panel = Panel::Pipeline;
             let prefix = format!("{key}:");
             s.errors.retain(|id, _| !id.starts_with(&prefix));
             s.inputs.retain(|id, _| !id.starts_with(&prefix));
-          })
+          });
+          panels.close();
         });
       return Column::new()
         .padding(SpacingSize::Md)
@@ -295,11 +296,11 @@ impl StepInspector {
     let duplicate = ActionButton::new("step-duplicate", ButtonKind::Secondary, ctx.t("pipelines.duplicate"))
       .icon(crate::ui::icon::Icon::Copy)
       .on_click(move || {
-        state.update(|s| {
-          if let Some(key) = s.edit.duplicate_step(&key) {
-            s.panel = Panel::Step(key);
-          }
-        })
+        let mut copy = None;
+        state.update(|s| copy = s.edit.duplicate_step(&key));
+        if let Some(copy) = copy {
+          panels.choose(Panel::Step(copy));
+        }
       });
     let remove = self.removing.clone();
     let remove = ActionButton::new("step-remove", ButtonKind::DangerGhost, ctx.t("pipelines.remove"))

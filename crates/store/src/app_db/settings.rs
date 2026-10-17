@@ -5,8 +5,8 @@
 //! may control its window through its MCP server (the build decides until it is set), whether
 //! automation may widen what agents may do through Orchester's MCP server (off until a person turns it on
 //! in the window), the installed app's own MCP server: whether it listens, on which port, and the id of
-//! this installation that names its token in the keychain, and whether the Orchestrator chat publishes drafts
-//! itself (off until a person turns it on in the window).
+//! this installation that names its token in the keychain, and whether the Orchestrator chat publishes drafts,
+//! answers agents and merges runs itself (each off until a person turns it on in the window).
 
 use orchester_core::{app_mcp::McpPort, appearance::ThemeSetting, id::InstallationId, usage::limits::WarningThreshold};
 use rusqlite::params;
@@ -55,6 +55,15 @@ pub(super) const ORCHESTRATOR_PUBLISHES_MIGRATION: &str = r"
 -- Let the Orchestrator publish drafts (docs/design/orchestrator-toolset.md): off until a person turns it on.
 ALTER TABLE app_settings ADD COLUMN orchestrator_publishes_drafts INTEGER NOT NULL DEFAULT 0
   CHECK (orchestrator_publishes_drafts IN (0, 1));
+";
+
+pub(super) const ORCHESTRATOR_ANSWERS_MERGES_MIGRATION: &str = r"
+-- Let the Orchestrator answer agents and Let the Orchestrator merge runs (docs/design/orchestrator-toolset.md,
+-- decision 5): each off until a person turns it on.
+ALTER TABLE app_settings ADD COLUMN orchestrator_answers_agents INTEGER NOT NULL DEFAULT 0
+  CHECK (orchestrator_answers_agents IN (0, 1));
+ALTER TABLE app_settings ADD COLUMN orchestrator_merges_runs INTEGER NOT NULL DEFAULT 0
+  CHECK (orchestrator_merges_runs IN (0, 1));
 ";
 
 impl AppDb {
@@ -164,6 +173,43 @@ impl AppDb {
   pub fn set_orchestrator_publishes_drafts(&mut self, allowed: bool) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE app_settings SET orchestrator_publishes_drafts = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether the Orchestrator chat answers agents' questions and sends a run's agents messages itself (*Let the
+  /// Orchestrator answer agents*) instead of proposing each to the person; a wait of an agent then also starts an
+  /// Orchestrator turn by itself.
+  pub fn orchestrator_answers_agents(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT orchestrator_answers_agents FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_orchestrator_answers_agents(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET orchestrator_answers_agents = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether the Orchestrator chat's `merge_run` merges at once (*Let the Orchestrator merge runs*) instead of
+  /// proposing the merge to the person; `merge_run`'s own rules hold either way.
+  pub fn orchestrator_merges_runs(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT orchestrator_merges_runs FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_orchestrator_merges_runs(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET orchestrator_merges_runs = ?1 WHERE id = 1",
       params![allowed],
     )?;
     Ok(())

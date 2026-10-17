@@ -1,0 +1,132 @@
+//! The Orchestrator chat follows the agents of an open project (`orchester_workspace::orchestrator::waits`): whenever
+//! the project's runs change state or its conversations change, its new waits are kept in the conversation, and a
+//! wait that starts an Orchestrator turn by itself gets its turn as a person's message does: the project's runner
+//! attached first, its tools served (`mcp::chat`) and the runner asked to answer it. Mounted with the project's feed,
+//! so it follows the project while its tabs are inactive and whether or not the Orchestrator's screen is open.
+
+use std::path::PathBuf;
+
+use lurq::app::{
+  ctx::{Ctx, StreamEmitter},
+  i18n::I18n,
+};
+use orchester_workspace::{
+  background,
+  messages::{self, Message},
+  orchestrator::{
+    send::{self, SendError},
+    tools::ChatScope,
+    waits::{self, Followed, WaitTurn},
+  },
+  runner::Runners,
+  workspace::{OpenProject, OrchestratorConsent},
+};
+
+use crate::services::Services;
+
+/// One follower keeps waits at a time, so two that overlap never both open a conversation for the same new wait.
+static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Follows `open`'s waits again whenever its run `states` or its conversations change. Renders nothing.
+pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
+  let services = Services::of(ctx);
+  let chats = chats(ctx, (services.runners.clone(), open.repo_root.clone()));
+  let i18n = ctx.i18n().clone();
+  let open = open.clone();
+  ctx.future((open.repo_root.clone(), states, chats), move |_| {
+    let (services, i18n, open) = (services.clone(), i18n.clone(), open.clone());
+    async move {
+      // A future whose deps change is replaced and aborted, and the turn a follower starts changes them (its
+      // conversation thinks, its tools change runs): following runs as a task of its own, so a turn it marked
+      // thinking is always asked for or ended.
+      let runtime = services.runtime.clone();
+      let following = runtime.spawn(async move { follow_once(&services, i18n, &open).await });
+      let followed = following.await.unwrap_or_else(|error| {
+        tracing::error!(%error, "following the waits of the project's agents did not finish");
+        Err(messages::interrupted())
+      });
+      if let Err(error) = &followed {
+        tracing::error!(?error, "cannot follow the waits of the project's agents");
+      }
+      followed
+    }
+  });
+}
+
+/// Keeps the project's new waits, and asks the runner for the turn a wait started by itself, if one did; a turn
+/// starts only once the runner attached, since one that attaches ends the turns still thinking as interrupted. The
+/// conversations are told of a change only when there was one: telling them wakes this follower again.
+async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Result<(), Message> {
+  let answers = {
+    let workspace = services.workspace.clone();
+    background::run(move || workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents))
+      .await?
+      .map_err(|error| messages::store_error(&error))?
+  };
+  let mut followed = keep(open, (answers, false)).await?;
+  if followed.pending {
+    match services.runners.chat_runner(open).await {
+      Ok(()) => {
+        let started = keep(open, (answers, true)).await?;
+        followed.kept |= started.kept;
+        followed.turn = started.turn;
+      }
+      Err(error) => tracing::info!(%error, "no runner attached for the turn an agent's wait starts; it starts later"),
+    }
+  }
+  if followed.kept || followed.turn.is_some() {
+    services.runners.chat_changed(&open.repo_root);
+  }
+  if let Some(turn) = followed.turn {
+    answer(services, i18n, open, turn).await;
+  }
+  Ok(())
+}
+
+/// Follows `open`'s waits once, with *Let the Orchestrator answer agents* on when `answers`, and starting a turn only
+/// when the runner is `attached`.
+async fn keep(open: &OpenProject, (answers, attached): (bool, bool)) -> Result<Followed, Message> {
+  let (root, project) = (open.repo_root.clone(), open.project.id());
+  let _keeping = KEEPING.lock().await;
+  background::run(move || waits::follow_in(&root, project, (answers, attached))).await?
+}
+
+/// Serves the tools of `turn` and asks `open`'s runner to answer it; a turn neither takes ends failed.
+async fn answer(services: &Services, i18n: I18n, open: &OpenProject, turn: WaitTurn) {
+  let scope = ChatScope {
+    project: open.project.id(),
+    name: open.project.name().as_str().to_owned(),
+    root: open.repo_root.clone(),
+    chat: turn.chat,
+  };
+  let tools = match services.chat_tools.serve_turn(services, i18n, (scope, turn.message)) {
+    Ok(tools) => tools,
+    Err(error) => {
+      tracing::error!(%error, "the Orchestrator's tools could not be served for a wait's turn");
+      send::end_wait_turn(&services.runners, open, turn.message, error.to_string()).await;
+      return;
+    }
+  };
+  match send::answer_wait(&services.runners, open, turn.message, tools).await {
+    Err(SendError::NotSent(_)) => services.chat_tools.end(turn.message),
+    Ok(()) | Err(SendError::Unconfirmed(_)) => {
+      services
+        .chat_tools
+        .end_with_turn(services, open.repo_root.clone(), turn.message);
+    }
+  }
+}
+
+/// How often the project's conversations changed; changes of other projects wake the stream without a render.
+fn chats(ctx: &mut Ctx, deps: (Runners, PathBuf)) -> u64 {
+  let count = ctx.stream(deps, |(runners, root), emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = runners.chats_of(&root);
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  count.state().get().data.unwrap_or(0)
+}

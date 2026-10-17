@@ -26,6 +26,7 @@ pub mod hold;
 pub mod index_use;
 pub mod integration;
 pub mod integration_jobs;
+pub mod last_words;
 pub mod list;
 pub mod local_integration;
 pub mod needs_you;

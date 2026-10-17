@@ -9,7 +9,7 @@
 mod body;
 mod header;
 
-use std::sync::Arc;
+use std::{num::NonZeroU64, sync::Arc};
 
 use lurq::{
   app::{
@@ -30,17 +30,24 @@ use orchester_workspace::{
 };
 
 use super::states;
-use crate::{project::ShownProject, services::Services};
+use crate::{
+  navigation::Navigation,
+  project::ShownProject,
+  routes::{ProjectPage, Route},
+  screens::task::changes::listed::Listed,
+  services::Services,
+};
 
 type PageAction = FutureAction<(), PullRequestPage, Message>;
 type OpenAction = FutureAction<Arc<str>, (), Message>;
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, number: u64) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, file: Option<&str>) -> Element {
   ctx.mount_keyed::<PullRequestScreen>(
     &format!("pull-request-{}-{number}", project.open.project.id()),
     Props {
       project: project.clone(),
       number,
+      file: file.map(Arc::from),
     },
   )
 }
@@ -48,7 +55,9 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, number: u64) -> Element {
 #[derive(Clone, PartialEq)]
 struct Props {
   project: ShownProject,
-  number: u64,
+  number: NonZeroU64,
+  /// The file whose diff shows, as the route names it.
+  file: Option<Arc<str>>,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -60,8 +69,6 @@ struct PullRequestScreen {
   latest: Signal<Option<PullRequestPage>>,
   /// Why the latest read could not run at all.
   failed: Signal<Option<Message>>,
-  /// The file whose diff shows, by its path; the first while none is chosen.
-  selected: Signal<Option<Arc<str>>>,
   /// What Find a file narrows the list to.
   find: Signal<String>,
 }
@@ -70,13 +77,12 @@ impl Component for PullRequestScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let Props { project, number } = ctx.props::<Props>().clone();
-    let refresh = refresh_action(ctx, &project.open, number);
+    let Props { project, number, .. } = ctx.props::<Props>().clone();
+    let refresh = refresh_action(ctx, &project.open, number.get());
     let screen = Self {
-      open: open_action(ctx, &project.open, number),
+      open: open_action(ctx, &project.open, number.get()),
       latest: ctx.signal(None),
       failed: ctx.signal(None),
-      selected: ctx.signal(None),
       find: ctx.signal(String::new()),
       refresh: refresh.clone(),
     };
@@ -97,7 +103,12 @@ impl Component for PullRequestScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, number } = ctx.props::<Props>().clone();
+    let Props {
+      project,
+      number: page_number,
+      file,
+    } = ctx.props::<Props>().clone();
+    let number = page_number.get();
     let stored = load(ctx, &project.open, number).state().get();
     let page = self.latest.get().or(stored.data);
     let reading = self.refresh.state().get().is_pending();
@@ -132,8 +143,14 @@ impl Component for PullRequestScreen {
         Arc::new(move || open.run(url.clone())) as Arc<dyn Fn() + Send + Sync>
       }),
     };
+    let navigation = Navigation::of(ctx);
+    let id = project.open.project.id();
     let shown = body::Shown {
-      selected: self.selected.clone(),
+      selected: file,
+      select: Arc::new(move |listed: &Listed, at| {
+        let page = ProjectPage::PullRequest(page_number, Some(listed.path.to_string()));
+        navigation.open(Route::Project(id, page), at);
+      }),
       find: self.find.clone(),
       open: actions.open.clone(),
       reading,

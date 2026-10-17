@@ -285,7 +285,7 @@ fn tile(
   }
   let asking = answering.asking.clone();
   let asked = asking.get() == Some(given);
-  Focus::Form
+  Focus::Keyboard
     .apply(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)

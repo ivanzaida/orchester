@@ -2,6 +2,7 @@
 //! follows the design's rules, the window shows the active tab's route, and the shortcuts ask for the
 //! right moves.
 
+mod history;
 mod list;
 mod strip;
 #[path = "../support/mod.rs"]
@@ -262,13 +263,16 @@ fn press(window: &mut Window, id: &str, button: MouseButton) {
 fn the_tab_strip_opens_switches_and_closes_tabs_by_pointer() {
   let mut window = Window::open();
   let navigation = window.navigation();
-  navigation.go(project(ProjectPage::Secrets));
+  navigation.go(project(ProjectPage::Secrets(Default::default())));
   window.pass();
   press(&mut window, "new-tab", MouseButton::Left);
   assert_eq!(navigation.tabs_now().tabs().len(), 2);
   assert_eq!(navigation.route_now(), Route::AllProjects, "the new tab is active");
   press(&mut window, "tab-1", MouseButton::Left);
-  assert_eq!(navigation.route_now(), project(ProjectPage::Secrets));
+  assert_eq!(
+    navigation.route_now(),
+    project(ProjectPage::Secrets(Default::default()))
+  );
   press(&mut window, "tab-2", MouseButton::Middle);
   assert_eq!(navigation.tabs_now().tabs().len(), 1, "a middle click closes a tab");
   press(&mut window, "tab-1-close", MouseButton::Left);

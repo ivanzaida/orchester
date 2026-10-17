@@ -1,11 +1,13 @@
 //! The domain tools the Orchestrator's agent gets (`docs/design/orchestrator-toolset.md`): a part of Orchester's own
 //! MCP tools ([`crate::app_mcp`]). Each call goes through the same tool an MCP client of the app calls, so it is
 //! refused or carried out exactly as for that client: what only a person decides stays refused (`person_only`),
-//! approvals stay with people and runs start through the scheduling checks. It reads every project; a change that
-//! names another project is refused before it reaches the tool, and a change is given the chat's project by its id,
-//! never by a name. Publishing a draft, canceling and merging a run wait for the person ([`super::change`]), and so
-//! does starting a run unless auto mode is on for the project ([`super::proposal`]). What the agent changed, or tried
-//! to, is kept in its conversation as an action.
+//! approvals and plan decisions stay with people and runs start through the scheduling checks. It reads every
+//! project; a change that names another project is refused before it reaches the tool, and a change is given the
+//! chat's project by its id, never by a name. Publishing a draft, canceling, merging a run, answering an agent's
+//! question and sending a run's agents a message wait for the person ([`super::change`]) unless the person's switch
+//! lets the chat do it itself (publishing, merging, answering; never canceling), and so does starting a run unless
+//! auto mode is on for the project ([`super::proposal`]). What the agent changed, or tried to, is kept in its
+//! conversation as an action.
 
 use std::path::PathBuf;
 
@@ -29,14 +31,16 @@ use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
   messages::Message,
   runner::Runners,
+  workspace::OrchestratorConsent,
 };
 
-/// The tools of the chat, by name: reading every project's work and setup, task drafts and drafts of what agents
-/// run on, pausing and resuming a run, holding and releasing new starts, and what waits for the person: starting a
-/// run, publishing a draft, canceling and merging a run. Approvals, questions, plans, project setup, connections,
+/// The tools of the chat, by name: reading every project's work, setup and tasks' conversations, task drafts and
+/// drafts of what agents run on, pausing and resuming a run, holding and releasing new starts, and what waits for the
+/// person or the person's switch: starting a run, publishing a draft, canceling and merging a run, answering an
+/// agent's question and sending a run's agents a message. Approvals, plan decisions, project setup, connections,
 /// MCP servers, the environment and what removes work are not among them. A name whose tool the app does not have
 /// (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 49] = [
+pub const TOOLS: [&str; 52] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -46,11 +50,14 @@ pub const TOOLS: [&str; 49] = [
   "list_runs",
   "get_run",
   "get_changes",
+  "get_conversation",
   "run_task",
   "pause_run",
   "resume_run",
   "cancel_run",
   "merge_run",
+  "answer_question",
+  "send_message",
   "list_approvals",
   "list_questions",
   "get_plan",
@@ -90,9 +97,13 @@ pub const TOOLS: [&str; 49] = [
 
 /// The tool whose call starts a run, or proposes it.
 pub(super) const RUN_TASK: &str = "run_task";
-/// The tools whose calls always wait for the person.
+/// The tool whose calls always wait for the person.
 pub(super) const CANCEL_RUN: &str = "cancel_run";
+/// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
 pub(super) const MERGE_RUN: &str = "merge_run";
+/// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
+pub(super) const ANSWER_QUESTION: &str = "answer_question";
+pub(super) const SEND_MESSAGE: &str = "send_message";
 /// The tool whose copy the chat saves as a draft before it publishes it by the publication rule.
 pub(super) const DUPLICATE_PIPELINE: &str = "duplicate_pipeline";
 
@@ -115,16 +126,16 @@ pub fn listed() -> Vec<Tool> {
 fn in_chat(tool: &Tool) -> Option<String> {
   let name = tool.name.as_ref();
   let own = tool.description.as_deref().unwrap_or_default();
-  if name == RUN_TASK {
-    return Some(PROPOSE_RUN.to_owned());
-  }
-  if name == DUPLICATE_PIPELINE {
-    return Some(format!("{DUPLICATE_AS_DRAFT} {own}"));
-  }
-  if name == CANCEL_RUN || name == MERGE_RUN {
-    return Some(format!("{PROPOSE_CHANGE} {own}"));
-  }
-  Publishing::of_tool(name).map(|_| format!("{PROPOSE_PUBLISH} {own}"))
+  let first = match name {
+    RUN_TASK => return Some(PROPOSE_RUN.to_owned()),
+    DUPLICATE_PIPELINE => DUPLICATE_AS_DRAFT,
+    CANCEL_RUN => PROPOSE_CHANGE,
+    MERGE_RUN => PROPOSE_MERGE,
+    ANSWER_QUESTION | SEND_MESSAGE => PROPOSE_ANSWER,
+    _ if Publishing::of_tool(name).is_some() => PROPOSE_PUBLISH,
+    _ => return None,
+  };
+  Some(format!("{first} {own}"))
 }
 
 /// What the agent reads of `run_task`: here it proposes the start, unless auto mode is on.
@@ -138,9 +149,24 @@ const DUPLICATE_AS_DRAFT: &str = "In this chat it saves the copy as a draft, and
   publish_pipeline publishes in this chat: proposed to the person, unless they turned on Let the Orchestrator publish \
   drafts and what it widens is allowed. The answer names the copy and how its publication went.";
 
-/// What the agent reads first of `cancel_run` and `merge_run`.
+/// What the agent reads first of `cancel_run`.
 const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks what the call names and proposes the \
   change to the person, who applies or dismisses it in the conversation; once applied, it is done as follows.";
+
+/// What the agent reads first of `merge_run`.
+const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the merge to the person, who applies or \
+  dismisses it in the conversation, unless the person turned on Let the Orchestrator merge runs in Settings: then it \
+  merges at once. Call it only for a run the person asked you in this chat to merge. Either way the merge keeps the \
+  rules below: only a task's latest run that succeeded, and only when the main checkout needs no local integration; \
+  a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to the person on \
+  the Local integration page.";
+
+/// What the agent reads first of `answer_question` and `send_message`.
+const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \
+  dismisses it in the conversation, unless the person turned on Let the Orchestrator answer agents in Settings: then \
+  it is sent at once. Either way it is recorded as automation's and the task's conversation names you as its \
+  sender. A message that would decide the plan a run waits on is refused (plan_decision_person_only): plan \
+  decisions are the person's. It is done as follows.";
 
 /// What the agent reads first of a tool that publishes a draft.
 const PROPOSE_PUBLISH: &str = "In this chat it proposes the publication to the person, who applies or dismisses it \
@@ -247,13 +273,55 @@ async fn act(
 ) -> Acted {
   let acted = match name {
     RUN_TASK => start((services, translate), scope, arguments).await,
-    CANCEL_RUN | MERGE_RUN => propose_change(translate, scope, name, arguments).await,
+    CANCEL_RUN => propose_change(translate, scope, name, arguments).await,
+    MERGE_RUN => {
+      switched(
+        (services, translate),
+        scope,
+        (name, arguments),
+        OrchestratorConsent::MergeRuns,
+      )
+      .await
+    }
+    ANSWER_QUESTION | SEND_MESSAGE => {
+      switched(
+        (services, translate),
+        scope,
+        (name, arguments),
+        OrchestratorConsent::AnswerAgents,
+      )
+      .await
+    }
     _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
     _ => Ok(Acted::done(
       app_tool((services, translate), name, arguments.clone()).await,
     )),
   };
   acted.unwrap_or_else(|error| Acted::done(Err(error)))
+}
+
+/// A merge, an answer or a message: proposed to the person, unless the person's switch `consent` lets the chat do it;
+/// then done at once, exactly as it was checked ([`change::apply`]: a merge merges only the commit checked), and kept
+/// as the chat's own action.
+async fn switched(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  (name, arguments): (&str, &JsonObject),
+  consent: OrchestratorConsent,
+) -> Result<Acted, ToolError> {
+  if !allows(services, consent).await? {
+    return propose_change(translate, scope, name, arguments).await;
+  }
+  let (change, task) = change::subject(scope, name, arguments).await?;
+  let result = change::apply((services, translate), scope, &change, &[]).await;
+  Ok(Acted {
+    result,
+    kept: Kept {
+      task,
+      change: Some(change),
+      ..Kept::default()
+    },
+  })
 }
 
 /// `run_task`: a start proposed to the person, or, while auto mode is on for the project, the run started.
@@ -321,7 +389,7 @@ async fn publish(
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  if !publishes_drafts(services).await? {
+  if !allows(services, OrchestratorConsent::PublishDrafts).await? {
     return propose_change(translate, scope, name, arguments).await;
   }
   let (change, _) = change::subject(scope, name, arguments).await?;
@@ -346,10 +414,10 @@ async fn auto_mode(scope: &ChatScope) -> Result<bool, ToolError> {
   blocking(move || Ok(ProjectDb::open(&root)?.auto_mode_settings()?.new_runs)).await
 }
 
-/// Whether the person lets the Orchestrator publish its drafts itself.
-async fn publishes_drafts(services: &Services) -> Result<bool, ToolError> {
+/// Whether the person lets the Orchestrator chat do what `consent` names itself.
+async fn allows(services: &Services, consent: OrchestratorConsent) -> Result<bool, ToolError> {
   let workspace = services.workspace().clone();
-  blocking(move || Ok(workspace.orchestrator_publishes_drafts()?)).await
+  blocking(move || Ok(workspace.orchestrator_allows(consent)?)).await
 }
 
 /// Whether the person lets automation widen what agents may do.

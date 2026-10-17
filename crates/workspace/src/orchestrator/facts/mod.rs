@@ -130,9 +130,10 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
         version,
         saved,
       } => publication::read(&db, (*of, *resource), (*version, *saved)).map(|found| found.map(Facts::Publication)),
-      Change::Cancel { run, .. } | Change::Merge { run, .. } => {
-        run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run))
-      }
+      Change::Cancel { run, .. }
+      | Change::Merge { run, .. }
+      | Change::Answer { run, .. }
+      | Change::Message { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
     },
     (None, Some(run)) => run::read(root, &db, programs, run).map(|found| found.map(Facts::Run)),
     (None, None) => Ok(None),

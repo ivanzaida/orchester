@@ -50,18 +50,18 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
     );
   for (index, problem) in editing.edit.problems().iter().enumerate() {
     let view = problem_view(&editing.edit, problem, &ctx.t("pipelines.then"));
-    let target = state.clone();
+    let target = editing.panels.clone();
     let text = message_text(ctx, &view.message);
     let mut link =
       ActionButton::new(format!("pipeline-problem-{index}"), ButtonKind::Ghost, text.clone()).bounded_label();
     if let Some(step) = view.step {
-      link = link.on_click(move || target.update(|s| s.panel = Panel::Step(step.clone())));
+      link = link.on_click(move || target.choose(Panel::Step(step.clone())));
     }
     strip = strip.child(link);
   }
   for step in editing.edit.steps() {
     if narrowing::check_step(step, &editing.opened.assignables).is_err() {
-      let (target, key) = (state.clone(), step.key.clone());
+      let (target, key) = (editing.panels.clone(), step.key.clone());
       strip = strip.child(
         ActionButton::new(
           format!("pipeline-problem-executor-{}", step.key),
@@ -69,7 +69,7 @@ pub fn problems(ctx: &Ctx, state: &State) -> Option<Element> {
           ctx.t_args("pipelines.executorProblem", [("step", step.name.as_str())]),
         )
         .bounded_label()
-        .on_click(move || target.update(|s| s.panel = Panel::Step(key.clone()))),
+        .on_click(move || target.choose(Panel::Step(key.clone()))),
       );
     }
   }
@@ -232,7 +232,7 @@ pub fn with_success(ctx: &mut Ctx, state: &State, content: Element) -> Element {
 
 /// D8r7o: fixed actions below the scrollable review, inset from the inspector edges.
 pub fn footer(ctx: &Ctx, state: &State, publish: ActionButton) -> Element {
-  let cancel = state.clone();
+  let cancel = state.get_untracked().panels;
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(48.0))
@@ -250,7 +250,7 @@ pub fn footer(ctx: &Ctx, state: &State, publish: ActionButton) -> Element {
         ButtonKind::Secondary,
         ctx.t("pipelines.cancel"),
       )
-      .on_click(move || cancel.update(|s| s.panel = Panel::Pipeline)),
+      .on_click(move || cancel.close()),
     )
     .child(publish)
     .into()

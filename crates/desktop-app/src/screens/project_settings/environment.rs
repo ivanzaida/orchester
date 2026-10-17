@@ -395,7 +395,7 @@ fn helper(ctx: &mut Ctx, props: &TabProps) -> Element {
       .in_form()
       .opens(nav.to(crate::routes::Route::Project(
         project,
-        crate::routes::ProjectPage::Secrets,
+        crate::routes::ProjectPage::Secrets(crate::routes::SecretsView::default()),
       ))),
     )
     .into()

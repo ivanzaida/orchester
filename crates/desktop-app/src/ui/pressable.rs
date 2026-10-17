@@ -82,12 +82,9 @@ pub enum Focus {
   /// With the pointer only: never a Tab stop, no focus ring.
   #[default]
   Pointer,
-  /// A form control: a Tab stop that Enter or Space presses, with the focus ring inside its edge while
-  /// focused. lurq 0.42 has no
-  /// keyboard-only focus state, so a pointer press that focuses the control shows the ring too.
-  Form,
-  /// A control outside forms the keyboard reaches too: a Tab stop that Enter or Space presses, with the
-  /// focus ring only while the keyboard moved the focus there, never after a press.
+  /// A control the keyboard reaches too, a form's or any other: a Tab stop that Enter or Space presses, with the
+  /// focus ring inside its edge only while the keyboard moved the focus there, never after a press or when the
+  /// page focuses it by itself.
   Keyboard,
   /// A form control that is only words, with no padding of its own (a link, a disclosure line): a Tab stop that
   /// Enter or Space presses, with the link's ring outside its words, corners rounded, only while the keyboard moved
@@ -102,11 +99,6 @@ impl Focus {
   pub fn apply(self, button: Button) -> Button {
     match self {
       Self::Pointer => button.focusable(false),
-      Self::Form => button
-        .button()
-        .focusable(true)
-        .tab_index(TAB_STOP)
-        .focused_style(Style::new().box_shadow(ExtraShadow::FocusRing.role())),
       Self::Keyboard => button
         .button()
         .focusable(true)

@@ -59,13 +59,14 @@ pub fn panel_with_title(
   close: Option<super::state::State>,
 ) -> Element {
   let close = close.map(|state| {
+    let panels = state.get_untracked().panels;
     crate::ui::icon_button::IconButton::new(
       "pipeline-inspector-close",
       crate::ui::icon::Icon::X,
       ctx.t("pipelines.closeInspector"),
     )
     .small()
-    .on_click(move || state.update(|s| s.panel = super::state::Panel::Pipeline))
+    .on_click(move || panels.close())
     .render(ctx)
   });
   Column::new()

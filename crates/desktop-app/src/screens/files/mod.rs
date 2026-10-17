@@ -180,21 +180,21 @@ impl Page<'_> {
     Navigation::of(ctx).to(self.route_to(Some(file), self.at().clone()))
   }
 
-  /// Shows the same file and lines at `at`, in place of the current entry.
+  /// Shows the same file and lines at `at`, as a new entry of the tab's history.
   pub fn switch_to(&self, ctx: &mut Ctx, at: Version) -> impl Fn() + Send + Sync + 'static + use<> {
     let navigation = Navigation::of(ctx);
     let view = self.route.clone().at_version(at);
     let route = Route::Project(self.project.open.project.id(), ProjectPage::Files(view));
-    move || navigation.replace(route.clone())
+    move || navigation.go(route.clone())
   }
 
-  /// Selects `lines` of the file, in place of the current entry.
+  /// Selects `lines` of the file, as a new entry of the tab's history.
   pub fn select_lines(&self, ctx: &mut Ctx) -> impl Fn(Option<LineRange>) + Send + Sync + 'static + use<> {
     let navigation = Navigation::of(ctx);
     let (project, view) = (self.project.open.project.id(), self.route.clone());
     move |lines| {
       let view = view.clone().with_line(lines);
-      navigation.replace(Route::Project(project, ProjectPage::Files(view)));
+      navigation.go(Route::Project(project, ProjectPage::Files(view)));
     }
   }
 }
@@ -270,6 +270,9 @@ impl Component for FilesScreen {
       .wake(ctx, &props.project, (props.route.at(), view.retry.get()));
     let file = path.as_ref().and_then(|path| path.as_ref().ok());
     let choices = reads::choices(ctx, &root, (props.route.at(), run, file), wake);
+    // A future belongs to its place among the render's futures: the tree's comes before those read only with a
+    // file, so selecting the first file does not read the tree again.
+    let list = reads::list(ctx, &root, props.route.at(), (wake, &self.following.list));
     let following = (
       wake,
       &self.following.file,
@@ -288,7 +291,6 @@ impl Component for FilesScreen {
       stale: stale.flatten(),
       view,
     };
-    let list = reads::list(ctx, &root, page.at(), (wake, &self.following.list));
     let gone = matches!(&list, Shown::Failed(failure) if failure.gone());
     let header = header::header(ctx, &page, gone);
     let body = if gone {

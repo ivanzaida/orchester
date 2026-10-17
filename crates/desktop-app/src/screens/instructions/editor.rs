@@ -25,9 +25,8 @@ use super::{
   autosave::Autosave,
   availability::{self, Availability},
   fields::Fields,
-  library,
-  panels::{self, Panel},
-  state::{Saved, Selection, Tab, View},
+  library, panels,
+  state::{Panel, Saved, Selection, SidePanel, Tab, View},
   words,
   work::{self, Change, Failure, Write},
 };
@@ -50,6 +49,8 @@ pub struct Props {
   pub data: ProjectInstructions,
   pub entry: Option<InstructionEntry>,
   pub tab: Tab,
+  /// The panel the route shows beside the rule.
+  pub panel: Panel,
   pub selection: Selection,
   /// Counts the reloads, each of which reads the list again.
   pub reloads: Signal<u64>,
@@ -61,6 +62,7 @@ impl PartialEq for Props {
       && self.data == other.data
       && self.entry == other.entry
       && self.tab == other.tab
+      && self.panel == other.panel
       && self.reading == other.reading
   }
 }
@@ -72,7 +74,7 @@ pub struct Editor {
   autosave: Autosave,
   /// What the preview is for: the panels choose it, the editor reads what it says about the variables.
   choice: Signal<PreviewChoice>,
-  panel: Signal<Panel>,
+  panel: SidePanel,
   published: Signal<Option<u32>>,
 }
 impl Component for Editor {
@@ -90,11 +92,7 @@ impl Component for Editor {
       work,
       autosave: autosave.clone(),
       choice: ctx.signal(PreviewChoice::default()),
-      panel: ctx.signal(match props.tab {
-        Tab::Roles => Panel::Hidden,
-        Tab::Steps => Panel::Preview,
-        _ => Panel::Variables,
-      }),
+      panel: SidePanel::new(ctx.signal(props.panel), props.selection.clone()),
       published: published.clone(),
     };
     let (selection, reloads) = (props.selection.clone(), props.reloads.clone());
@@ -114,13 +112,11 @@ impl Component for Editor {
           published.set(done.entry.state.published().map(|v| v.get()));
         }
         autosave.again();
-        // Opening the newly created resource preserves the complete body just saved.
-        if matches!(selection.view.get_untracked(), View::New(_)) {
+        // Opening the newly created resource preserves the complete body just saved, and its panel.
+        if let View::New(_, panel) = selection.now() {
           selection.created.set(Saved(Some(done.entry.clone())));
           selection.dirty.set(false);
-          selection
-            .view
-            .set(View::Rule(Tab::of(done.entry.body.scope()), Some(done.entry.id)));
+          selection.saved(View::Rule(Tab::of(done.entry.body.scope()), Some(done.entry.id), panel));
         }
       }
     });
@@ -128,10 +124,7 @@ impl Component for Editor {
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let full = self.panel.get() == Panel::Full;
-    if props.selection.full.get_untracked() != full {
-      props.selection.full.set(full);
-    }
+    self.panel.follow(props.panel);
     let parsed = self.fields.instruction();
     let saved = self.saved.get().0;
     let dirty = parsed
@@ -449,7 +442,7 @@ impl Editor {
           ctx.t("instructions.previewPrompt"),
         )
         .icon(Icon::Eye)
-        .on_click(move || panel.set(Panel::Preview));
+        .on_click(move || panel.choose(Panel::Preview));
       }
       let entry = entry.clone();
       let publish = ActionButton::new(

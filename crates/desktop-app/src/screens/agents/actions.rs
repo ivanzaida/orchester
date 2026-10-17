@@ -16,7 +16,7 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::{View, editor::Props};
+use super::editor::Props;
 use crate::{
   screens::connections::widen::{WidenConfirm, WidenProps},
   services::Services,
@@ -55,7 +55,7 @@ pub fn follow(ctx: &mut Ctx, work: &Work, pending: Signal<Pending>, busy: Signal
       match done.outcome {
         Outcome::Saved(id) => {
           pending.set(Pending(None));
-          props.view.set(View::Edit(id));
+          props.nav.saved(id);
           // Every other screen that shows the profiles reads them again; this one reads them again once.
           props
             .profiles

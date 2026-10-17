@@ -13,6 +13,7 @@ mod host;
 mod known;
 pub mod own;
 mod state;
+mod waits;
 
 use orchester_core::id::ProjectId;
 use orchester_store::StoreError;

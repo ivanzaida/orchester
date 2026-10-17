@@ -83,6 +83,8 @@ fn run(processes: &RunProcesses, worktree: &Path, call: &AppCall, qa: Option<&St
     .ok_or(AppError::AppName)?;
   let app = match app {
     name if name.eq_ignore_ascii_case("orchester-app") => "orchester-app",
+    // `tools/qa-app.ps1` names the copy of the new app it starts so; only the step's QA app goes by that name.
+    name if target.is_some() && name.eq_ignore_ascii_case("orchester-app-qa") => "orchester-app",
     name if name.eq_ignore_ascii_case("orchester") => "orchester",
     _ => return Err(AppError::AppName),
   };

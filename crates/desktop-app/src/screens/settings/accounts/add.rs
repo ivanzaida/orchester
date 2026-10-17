@@ -413,7 +413,7 @@ fn footer(ctx: &mut Ctx, work: &Work, blocked: bool) -> Element {
     ButtonKind::Secondary,
     t(ctx, "accounts.add.cancel"),
   )
-  .on_click(move || navigation.replace(Route::Accounts(AccountsView::default())));
+  .on_click(move || navigation.close_panel(Route::Accounts(AccountsView::default())));
   let error = work
     .change_error()
     .map(|error| field_error("account-add-error", &message_text(ctx, &error)));

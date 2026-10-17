@@ -13,7 +13,7 @@ use orchester_workspace::agents::usage::PipelineUse;
 use super::{editor::Props, words};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route},
+  routes::{PipelinePanel, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -166,7 +166,10 @@ fn open_pipeline(ctx: &mut Ctx, props: &Props, index: usize, step: &PipelineUse,
     button
   } else {
     let navigation = Navigation::of(ctx);
-    let route = Route::Project(props.project.open.project.id(), ProjectPage::Pipeline(step.pipeline));
+    let route = Route::Project(
+      props.project.open.project.id(),
+      ProjectPage::Pipeline(step.pipeline, PipelinePanel::default()),
+    );
     button.opens(navigation.to(route))
   };
   button.render(ctx)

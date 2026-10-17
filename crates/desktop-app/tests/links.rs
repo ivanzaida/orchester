@@ -6,6 +6,7 @@
 use std::num::NonZeroU64;
 
 use chrono::NaiveDate;
+use lurq::router::RouteMatch;
 use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, FilesView, OverviewTab, ProjectPage, Route, RouteError, TaskView,
   ToolTab, routes,
@@ -29,6 +30,11 @@ const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
 const KINDS: usize = 15;
+
+/// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
+fn matched(chain: &[RouteMatch]) -> String {
+  chain.iter().skip(1).map(RouteMatch::pattern_raw).collect()
+}
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
@@ -121,15 +127,24 @@ fn every_link() -> Vec<(Link, Route)> {
       Link::Task(project, key(), TaskPage::Changes),
       at(ProjectPage::Task(key(), TaskView::Changes(None))),
     ),
-    (Link::Pipeline(project, id()), at(ProjectPage::Pipeline(id()))),
-    (Link::Profile(project, id()), at(ProjectPage::Agent(id()))),
-    (Link::Instructions(project), at(ProjectPage::Instructions)),
+    (
+      Link::Pipeline(project, id()),
+      at(ProjectPage::Pipeline(id(), Default::default())),
+    ),
+    (
+      Link::Profile(project, id()),
+      at(ProjectPage::Agent(id(), Default::default())),
+    ),
+    (
+      Link::Instructions(project),
+      at(ProjectPage::Instructions(Default::default())),
+    ),
     (Link::Skill(project, id()), at(ProjectPage::Skill(id()))),
     (
       Link::Tool(project, id()),
       at(ProjectPage::Tool(id(), ToolTab::Configuration)),
     ),
-    (Link::Secrets(project), at(ProjectPage::Secrets)),
+    (Link::Secrets(project), at(ProjectPage::Secrets(Default::default()))),
     (
       Link::Connection(project, id()),
       at(ProjectPage::Connections(ConnectionsView::default().with_selected(id()))),
@@ -140,7 +155,7 @@ fn every_link() -> Vec<(Link, Route)> {
     ),
     (
       Link::PullRequest(project, number(42)),
-      at(ProjectPage::PullRequest(number(42))),
+      at(ProjectPage::PullRequest(number(42), None)),
     ),
     (
       Link::PullRequests(project, PullRequestTab::Open),
@@ -230,8 +245,8 @@ fn links_resolve_to_their_screen_in_the_router_table() {
   for (link, route) in every_link() {
     let path = link.path();
     let chain = table.resolve(&path);
-    let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
-    assert_eq!(leaf.pattern_raw(), route.pattern(), "{path}");
+    assert!(!chain.is_empty(), "{path} resolves");
+    assert_eq!(matched(&chain), route.pattern(), "{path}");
   }
 }
 
