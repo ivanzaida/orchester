@@ -106,6 +106,8 @@ const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 /// A file of the code viewer: its path is the rest of the address, however many segments it has.
 const FILE_PATTERN: &str = "/project/:project/files/**path";
+/// A file's route under the code viewer's layout (`table`): [`FILE_PATTERN`] after the screen's own.
+const FILE_REST: &str = "/**path";
 const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 /// A task's path without its tab, which reads as its Summary.
 const TASK_SUMMARY_PATTERN: &str = "/project/:project/tasks/:key";
