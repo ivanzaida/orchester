@@ -55,6 +55,14 @@ by default; `compose.traefik.yaml` makes its network internal, so that holds the
 `compose.traefik.yaml` give that network the subnet `172.29.0.0/24`; if another network on the host has it, set
 `ORCHESTER_SUBNET_PREFIX`.
 
+Behind Caddy or Traefik the server signs the proxy's certificate into the key proof an app checks before it enters a
+code. With `ORCHESTER_SERVER_PROXY_CERTIFICATE=auto` (the default) the server reads that certificate itself at
+`https://<ORCHESTER_HOST>`, checked by the image's certificate authorities, so the proxy's renewals need nothing; a
+fingerprint there instead must be set again after each renewal. `compose.yaml` maps `ORCHESTER_HOST` to Caddy for the
+server (`extra_hosts`), so it reads on the stack's network. Until Caddy has its certificate, right after the first
+start, the server's log may say once that it cannot read it; it reads again when an app asks. How it works and why it
+is safe: [docs/server-hosting.md](../../docs/server-hosting.md), "The server admin".
+
 ## Orchester Cloud (optional)
 
 With `ORCHESTER_ADMIN_CLOUD_URL` set (the default, `https://orchester-cloud.lurq.dev`), the admin offers *Link to
@@ -177,7 +185,11 @@ redirects plain HTTP to HTTPS.
    setup code.
 
 Only the server joins Traefik's network. Its own network is internal, so the admin has no route out: invites by email
-are carried to Orchester Cloud by the inviter's browser instead of the admin. The admin's paths carry no codes or
+are carried to Orchester Cloud by the inviter's browser instead of the admin. The server reads Traefik's certificate
+(`auto`) at `https://<ORCHESTER_HOST>` through Traefik's network, which has a route out: the host must reach its own
+public name (hairpin NAT). If it cannot, and Traefik's HTTPS entry point listens on 443 in its container, give the
+server `extra_hosts: ["<ORCHESTER_HOST>:<TRAEFIK_ADDRESS>"]`, or set the fingerprint instead. The server's log says
+when it cannot read it, and apps then enter no codes. The admin's paths carry no codes or
 tokens, so Traefik's access log needs nothing special for this host.
 
 ## Portainer
