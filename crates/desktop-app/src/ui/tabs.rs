@@ -43,6 +43,8 @@ const ICON_SEGMENT_WIDTH: f32 = 28.0;
 #[derive(Clone)]
 enum TabState {
   Open(Press),
+  /// The page shown, which a press does not open again: it keeps the panel it shows.
+  Here,
   /// Not built yet, for this reason.
   Unavailable(Arc<str>),
 }
@@ -96,6 +98,18 @@ impl PageTab {
     }
   }
 
+  /// The current tab, which a press leaves as it is: no action, and no place to open again, e.g. a page that keeps
+  /// the panel it shows.
+  pub fn current(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+    Self {
+      id: id.into(),
+      label: label.into(),
+      current: true,
+      state: TabState::Here,
+      explanation: None,
+    }
+  }
+
   /// Opens an explanation panel for an unavailable feature, with the design's lock glyph.
   pub fn explanation(mut self, reason: impl Into<Arc<str>>) -> Self {
     self.explanation = Some(reason.into());
@@ -124,7 +138,8 @@ impl PageTab {
           .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", self.id)));
         return Tooltip::new(self.id, reason).wrap(ctx, tab);
       }
-      TabState::Open(open) => open,
+      TabState::Open(open) => Some(open),
+      TabState::Here => None,
     };
     let (typography, color) = if self.current {
       (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
@@ -132,8 +147,9 @@ impl PageTab {
       (TypographyStyle::Body, PaletteColor::TextSecondary)
     };
     let button = open
-      .button()
+      .map_or_else(|| Button::empty().focusable(false), Press::button)
       .id(self.id.clone())
+
       .height(Dimension::Px(TAB_HEIGHT))
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
       .spacing(ExtraSpacing::Pair.role())

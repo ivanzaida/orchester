@@ -84,11 +84,12 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
     Some(count) => counted(ctx, &accounts_label, count),
     None => accounts_label,
   };
-  // Each tab is a place of its own; the current one keeps the panel it shows.
+  // Each tab is a place of its own; the current one keeps the panel it shows, so a press on it opens nothing.
   let tab_to = |id: &str, label: Arc<str>, current: bool, route: Route| {
     if current {
-      PageTab::new(id.to_owned(), label, true, || {})
+      PageTab::current(id.to_owned(), label)
     } else {
+
       PageTab::to(id.to_owned(), label, false, navigation.to(route))
     }
   };
