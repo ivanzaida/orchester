@@ -12,6 +12,7 @@ use lurq::{
 use orchester_core::{
   conversation::Recipient,
   id::{RunId, TaskId},
+  run::Answerer,
   sharing::TaskRevision,
 };
 use orchester_workspace::{
@@ -27,6 +28,7 @@ use super::{
   controls::Sending,
   state::{ComposerState, Request},
 };
+use crate::mcp::input_gate::{Guarded, answerer};
 
 /// Whose message a press sends, as the person reads the run: for `task`'s latest run `written_for`, `lost`
 /// its runner, the mode's context `left`.
@@ -84,6 +86,16 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       expected,
       key: state.key_for(&text, (way, expected)),
       text,
+      by: expected.decision_kind().map_or_else(
+        || {
+          Some(if lurq::app::events::is_synthetic_input() {
+            Answerer::Automation
+          } else {
+            Answerer::Person
+          })
+        },
+        |kind| answerer(state.gate.as_ref(), Guarded::Decision(kind)),
+      ),
     });
   })
 }

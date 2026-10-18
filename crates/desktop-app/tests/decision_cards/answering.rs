@@ -309,7 +309,7 @@ fn card_question_own_answer_set_by_a_tool_counts_and_is_kept() {
 
 /// What the card says when input from an MCP client gives an answer while automation may not answer.
 const PERSON_ONLY: &str = "Only a person answers this here: input from an MCP client answers only while you let \
-                           automation answer approvals and change agent permissions.";
+                           automation answer approvals.";
 
 #[test]
 fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() {
@@ -324,9 +324,10 @@ fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() 
   workspace
     .set_automation_answers_approvals(true)
     .expect("the approvals opt-in");
-  workspace
-    .set_automation_changes_permissions(true)
-    .expect("the permissions opt-in");
+  assert!(
+    !workspace.automation_permission_consent(),
+    "permission setup is a separate consent"
+  );
   lurq::app::events::with_synthetic_input(|| click(&mut window, &approve));
   // No runner here: automation's answer reaches none, and the card says so instead.
   window.until("the client's answer sent", |window| {

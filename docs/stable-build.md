@@ -209,6 +209,15 @@ install, a network command) is refused (`person_only`, with the reason), as are 
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
 automation* or *denied by automation*, and the run's Approvals count them apart from yours.
 
+**Decision consent in the new app.** The window and domain tools use `orchester_workspace::decisions::DecisionKind`.
+*Let automation answer approvals* covers approval answers, question answers, every plan decision (including
+requesting changes), and retry, return, stop and Accept decisions on a waiting run. It does not require
+*Let automation change agent permissions*: that separate grant still governs permission setup. Without decision
+consent, synthetic window input and the corresponding domain tools refuse the decision. With consent, they record
+automation as the decider; a person's own press records the person. Approval answers retain their existing restrictions
+on approving risky requests or granting wider approval. Free-text answers and continuations keep their sender too.
+A native acceptance of an Orchestrator proposal is the person's decision; automatic answers still require consent.
+
 **The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
 `127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
 how the app was started (below). It hosts lurq's window tools, the app's

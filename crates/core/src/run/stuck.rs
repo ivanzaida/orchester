@@ -243,6 +243,20 @@ impl Run {
 
   /// Carries out a person's `decision` on a run that waits for them.
   pub fn decide_stuck(&mut self, decision: &StuckDecision, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    let by = match decision {
+      StuckDecision::Accept { by } => *by,
+      _ => super::Answerer::Person,
+    };
+    self.decide_stuck_as(decision, by, now)
+  }
+
+  /// Carries out and records a decision with the identity captured when input was delivered.
+  pub fn decide_stuck_as(
+    &mut self,
+    decision: &StuckDecision,
+    by: super::Answerer,
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
     let RunStatus::WaitingForPerson(stuck) = self.status().clone() else {
       return Err(RunError::InvalidRunTransition {
         status: self.status().clone(),
@@ -253,12 +267,16 @@ impl Run {
     let (reason, from) = match decision {
       StuckDecision::Stop => {
         return self.transition(now, |transition| {
+          transition.record(RunEventKind::StuckDecided {
+            decision: decision.clone(),
+            by,
+          })?;
           transition.record(RunEventKind::Failed {
             reason: stuck.failure(),
           })
         });
       }
-      StuckDecision::Accept { by } => return self.accept_stuck(&stuck, *by, now),
+      StuckDecision::Accept { .. } => return self.accept_stuck(&stuck, by, now),
       StuckDecision::Retry => match &stuck {
         Stuck::BrokeAgain(_) | Stuck::Unverified(_) | Stuck::Unchanged(_) => {
           (AttemptReason::Restart { step: step.clone() }, step)
@@ -291,6 +309,10 @@ impl Run {
       }
     };
     self.transition(now, |transition| {
+      transition.record(RunEventKind::StuckDecided {
+        decision: decision.clone(),
+        by,
+      })?;
       transition.record(RunEventKind::RetryAllowed)?;
       let attempt = transition.run.attempt(reason, &from);
       transition.record(attempt)
@@ -396,6 +418,25 @@ pub struct AttemptStart {
   pub attempt: AttemptId,
   pub at: Timestamp,
   pub by_person: bool,
+  pub by: Option<super::Answerer>,
+}
+
+fn attempt_decider(events: &[RunEvent]) -> Option<super::Answerer> {
+  events
+    .iter()
+    .rev()
+    .take_while(|event| !matches!(event.kind(), RunEventKind::AttemptStarted { .. }))
+    .find_map(|event| match event.kind() {
+      RunEventKind::StuckDecided { by, .. }
+      | RunEventKind::RecoveryDecided { by, .. }
+      | RunEventKind::StepAccepted { by, .. } => Some(*by),
+      _ => None,
+    })
+    .or_else(|| {
+      events
+        .last()
+        .and_then(|event| matches!(event.kind(), RunEventKind::RetryAllowed).then_some(super::Answerer::Person))
+    })
 }
 
 /// The start of every attempt in `events`, a run's log in sequence order.
@@ -407,7 +448,8 @@ pub fn attempt_starts(events: &[RunEvent]) -> Vec<AttemptStart> {
       RunEventKind::AttemptStarted { attempt, .. } => Some(AttemptStart {
         attempt: *attempt,
         at: event.at(),
-        by_person: index > 0 && matches!(events[index - 1].kind(), RunEventKind::RetryAllowed),
+        by_person: attempt_decider(&events[..index]) == Some(super::Answerer::Person),
+        by: attempt_decider(&events[..index]),
       }),
       _ => None,
     })

@@ -10,6 +10,7 @@ mod automation_answers;
 mod code_index;
 mod command_approvals;
 mod conversation;
+mod decision_authors;
 mod editor_drafts;
 mod import;
 mod invocation_permissions;
@@ -560,6 +561,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   shared_members::READ_AS_MIGRATION,
   orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
+  decision_authors::MIGRATION,
 ];
 
 /// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema

@@ -821,6 +821,30 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-31 · Person-only decisions refuse synthetic input everywhere · branch `orchester/orc-31-run-2`
+(implemented 2026-10-18 in run 1, carried onto master in run 2; pipeline Check and independent design Verify still follow).
+A shared workspace policy requires the approvals consent for approvals, questions, plans and stuck/retry/accept
+choices, independently of permission-setup consent. The window and domain tools use it; synthetic decisions record
+automation, native decisions record the person. Plan/retry/return/stop/accept audit events and persisted free-text
+answers retain their decider, and conversation captions name automation. Native acceptance of an Orchestrator
+proposal retains the person's identity. The frozen deprecated desktop is unchanged; its legacy IPC entry remains.
+Filtered core replay, storage, IPC, shared-policy and headless control tests cover the change. The new headless
+`mcp_domain person_decisions` group covers every changed control and all four domain tools, including refusal,
+consented automation and native authorship. `tools/check.ps1` is delegated to this run's Check step. macOS is not
+cross-checked on this machine (no macOS SDK/C cross-compiler); no new target-specific code was added. Verify the
+plan bar (`G5378f`), composer (`QQ2ZM`), retry card (`j7DjNG`), conversation cards (`YhiGC`) and Needs you (`HQ6Y1`).
+Accept/unverified still has no dedicated Pencil frame (D2); the verifier must report that limitation explicitly.
+
+Review corrections (2026-10-18): outgoing consent follows the message's actual effect on waiting agents,
+including Send after leaving a question's composer context. Attributed retry/return/stop/accept commands carry
+the displayed run event sequence (IPC 28); a different wait rejects them before any transition or Accept revision
+check. A failed task reread replaces retained controls with the existing load-error surface until fresh data
+succeeds, including during retries. Regressions cover the leave/send path, retained-data read failures and
+decisions from a previous wait. The failed-reread surface and Accept still need the verifier to identify missing
+design frames explicitly. Sending an undelivered message again (*Send after this turn* and its variants) follows the
+same rule: when the resent message would answer a free-text question its agent waits on, an MCP client's press needs
+the approvals consent, and an automation resend is recorded as automation's message (`send_after_turn_as`).
+
 Command classifier: compound lines and dependency sources · branch `claude/command-classifier` (2026-10-14).
 From the analysis of 16 runs (106 of the person's 134 approvals were Claude Code's compound lines read as Unknown).
 `echo` of `$?` / `${PIPESTATUS[N]}` (PowerShell `$?` / `$LASTEXITCODE`) is read, and a status anywhere else stays

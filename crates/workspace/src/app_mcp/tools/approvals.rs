@@ -26,7 +26,6 @@ use crate::{
     services::{Services, blocking},
   },
   links::TaskPage,
-  messages::Message,
   tasks::{
     approvals::{ShownApproval, pending},
     run::control_message,
@@ -104,12 +103,7 @@ pub async fn list_approvals(
 pub async fn decide_approval(services: &Services, args: DecideApproval) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, request) = blocking(move || {
-    if !reading.workspace.automation_answers_approvals()? {
-      return Err(ToolError::refused(
-        "automation_not_allowed",
-        vec![Message::new("appMcp.errors.automationNotAllowed")],
-      ));
-    }
+    crate::decisions::DecisionKind::Approval.require(&reading.workspace)?;
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let request = db
