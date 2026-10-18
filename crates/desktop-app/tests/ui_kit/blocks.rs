@@ -290,9 +290,15 @@ fn markdown_with_a_blank_line_between_paragraphs_keeps_one_line_of_its_body_betw
     Column::new()
       .width(Dimension::Px(600.0))
       .child(view("one", "Retry failed deliveries.").render(ctx))
-      .child(view("two", "Retry failed deliveries.
+      .child(
+        view(
+          "two",
+          "Retry failed deliveries.
 
-Also handle cancellation.").render(ctx))
+Also handle cancellation.",
+        )
+        .render(ctx),
+      )
       .into()
   });
   let line = kit.bounds("one").height;

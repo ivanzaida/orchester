@@ -367,7 +367,11 @@ fn summary_before_the_first_run_has_no_runs_yet() {
   let key = page.key("draft, ready to queue");
   page.open(&key, TaskTab::Summary, "task-summary-empty");
   assert_eq!(page.text("task-summary-empty-title"), "No runs yet");
-  assert_eq!(page.text("task-run-line"), "No runs yet", "the header in the Summary's words");
+  assert_eq!(
+    page.text("task-run-line"),
+    "No runs yet",
+    "the header in the Summary's words"
+  );
   assert!(page.locked("task-empty-start"), "Start run waits for a runner");
   assert_eq!(
     page.text("task-empty-start-reason"),
