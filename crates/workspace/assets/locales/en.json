@@ -1436,6 +1436,12 @@
         "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
         "notDone": "Worktrees of {{task}} run #{{run}} not removed"
       },
+      "runPullRequest": {
+        "running": "Opening a pull request for {{task}} run #{{run}}",
+        "done": "Opened a pull request for {{task}} run #{{run}}",
+        "failed": "Could not open a pull request for {{task}} run #{{run}}",
+        "notDone": "No pull request opened for {{task}} run #{{run}}"
+      },
       "projectEnvironment": {
         "running": "Saving the environment",
         "done": "Environment saved",

@@ -1,6 +1,7 @@
 //! The fake `gh` of the `pull-requests` scenario: a command script (`gh.cmd` on Windows, a shell script
 //! elsewhere) in `.orchester/qa-bin` that answers the read-only commands a sync runs from files beside it,
-//! as the real `gh` 2.97 answers them (`crates/core/tests/fixtures/github`). `gh-mode.txt` picks the answer.
+//! as the real `gh` 2.97 answers them (`crates/core/tests/fixtures/github`), and opens a pull request with the
+//! next number when asked to. `gh-mode.txt` picks the answer.
 
 use std::{
   fs,
@@ -46,6 +47,7 @@ pub fn install(kontur: &Kontur, pull_requests: &[PullRequest]) -> Result<PathBuf
     ("closed.json", list(&closed)),
     ("checks-open.json", checks(&open)),
     ("checks-closed.json", checks(&closed)),
+    ("created.json", created(pull_requests)),
     ("network.err", NETWORK.to_owned()),
     ("server.err", SERVER_ERROR.to_owned()),
     ("rate-limited.err", RATE_LIMITED.to_owned()),
@@ -78,6 +80,17 @@ fn auth(login: &str, scopes: &str) -> String {
     "tokenSource": "keyring", "scopes": scopes, "gitProtocol": "https",
   }] } })
   .to_string()
+}
+
+/// GitHub's answer to opening a pull request (`gh api --method POST …/pulls`): the next number after
+/// `pull_requests`, on their repository.
+fn created(pull_requests: &[PullRequest]) -> String {
+  let number = pull_requests.iter().map(PullRequest::number).max().unwrap_or(0) + 1;
+  let repository = pull_requests
+    .first()
+    .and_then(|pull_request| pull_request.url().rsplit_once("/pull/"))
+    .map_or("https://github.com/ivanzaida/kontur", |(repository, _)| repository);
+  json!({ "number": number, "html_url": format!("{repository}/pull/{number}"), "draft": true }).to_string()
 }
 
 /// `gh pr list --json …` of `pull_requests`.
@@ -216,8 +229,10 @@ mod program {
        if \"%~1\"==\"--version\" (type \"%A%version.txt\" & exit /b 0)\r\n\
        if \"%~1\"==\"auth\" goto auth\r\nif \"%~1 %~2\"==\"pr list\" goto list\r\n\
        if \"%~1 %~2\"==\"pr view\" goto view\r\nif \"%~2\"==\"--allow-escape-sequences\" goto compare\r\n\
-       if \"%~1 %~2\"==\"api graphql\" goto checks\r\nif \"%~1\"==\"api\" (type \"%A%rate.json\" & exit /b 0)\r\n\
+       if \"%~1 %~2\"==\"api graphql\" goto checks\r\nif \"%~1 %~2\"==\"api --method\" goto create\r\n\
+       if \"%~1\"==\"api\" (type \"%A%rate.json\" & exit /b 0)\r\n\
        exit /b 1\r\n\
+       :create\r\nfindstr \"^\" >nul\r\ntype \"%A%created.json\" & exit /b 0\r\n\
        :view\r\nif \"%MODE%\"==\"slow\" ping -n 4 127.0.0.1 >nul\r\n\
        if \"%MODE%\"==\"unreachable\" (type \"%A%network.err\" 1>&2 & exit /b 1)\r\n\
        if \"%MODE%\"==\"server-error\" (type \"%A%server.err\" 1>&2 & exit /b 1)\r\n\
@@ -286,6 +301,7 @@ mod program {
        \"api --allow-escape-sequences\") h=\"${{7##*...}}\"; cat \"$a/diff-$h.diff\"; exit 0;;\n\
        \"api graphql\") if grep -q \"{first_open}\"; then cat \"$a/checks-open.json\"; \
        else cat \"$a/checks-closed.json\"; fi; exit 0;;\n\
+       \"api --method\") cat >/dev/null; cat \"$a/created.json\"; exit 0;;\n\
        \"api \"*) cat \"$a/rate.json\"; exit 0;;\n\
        esac\nexit 1\n"
     );

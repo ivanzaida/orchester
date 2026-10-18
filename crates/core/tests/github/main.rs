@@ -6,6 +6,7 @@
 mod connection;
 mod detect;
 mod link;
+mod pull_request_create;
 mod pull_request_detail;
 mod pull_request_diff;
 mod pull_requests;
