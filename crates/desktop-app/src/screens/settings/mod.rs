@@ -19,7 +19,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::Column,
+  components::{Column, ScrollVertical},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -157,14 +157,20 @@ impl SettingsScreen {
   }
 }
 
-/// *Orchester MCP server* and *What automation may do*.
+/// *Orchester MCP server* and *What automation may do*, scrolling under the header: the switches sit below the
+/// server's section, out of a window's height.
 fn automation(ctx: &mut Ctx) -> Element {
-  Column::new()
+  let form = Column::new()
     .id("settings-form")
     .width(Dimension::Px(FORM_WIDTH))
     .padding_top(SpacingSize::Sm)
     .spacing(SpacingSize::Xl)
     .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
-    .child(automation::section(ctx))
+    .child(automation::section(ctx));
+  ScrollVertical::new(form)
+    .id("settings-automation-scroll")
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0))
     .into()
 }

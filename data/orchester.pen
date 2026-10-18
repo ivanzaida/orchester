@@ -886346,6 +886346,3725 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "aeYeI",
+      "x": 0,
+      "y": 59719,
+      "name": "ORC-24 · A · Profile draft · Codex command list unavailable",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$surface",
+      "children": [
+        {
+          "id": "oWKyw",
+          "type": "ref",
+          "ref": "zo9Py",
+          "name": "Sidebar",
+          "height": "fill_container",
+          "descendants": {
+            "JI3gd": {
+              "fill": "$sidebar"
+            },
+            "JI3gd/sQnmq": {
+              "fill": "$muted"
+            },
+            "JI3gd/YWsP0": {
+              "fill": "$muted"
+            },
+            "A028bq": {
+              "fill": "$hover"
+            },
+            "A028bq/sQnmq": {
+              "fill": "$text"
+            },
+            "A028bq/YWsP0": {
+              "fill": "$text"
+            },
+            "s9zzPC": {
+              "width": 192,
+              "x": 0,
+              "y": 0
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "lp0a8",
+          "name": "Workspace",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "v23gae",
+              "name": "Topbar",
+              "width": "fill_container",
+              "height": 64,
+              "stroke": "$hairline",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "gap": 12,
+              "padding": [
+                0,
+                32
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "P757x",
+                  "name": "Breadcrumb",
+                  "fill": "$muted",
+                  "content": "Kontur / Agents / Builder",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "cFNa6",
+                  "name": "Topbar space",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "Up4KZ",
+                  "name": "Save status",
+                  "fill": "$muted",
+                  "content": "Draft saved · Published v2",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "id": "ZRxjl",
+                  "type": "ref",
+                  "ref": "u1XBP",
+                  "name": "Publish v3",
+                  "height": 36,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "descendants": {
+                    "xfnek": {
+                      "icon": "check",
+                      "fill": "$inverse-text"
+                    },
+                    "Y7HQGw": {
+                      "content": "Publish v3",
+                      "fill": "$inverse-text"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Jaw95",
+              "name": "Page heading",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "padding": [
+                28,
+                32,
+                24,
+                32
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "A5zFg",
+                  "name": "Page title",
+                  "fill": "$text",
+                  "content": "Agents",
+                  "fontFamily": "$font",
+                  "fontSize": 27,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "EziGV",
+                  "name": "Page description",
+                  "fill": "$muted",
+                  "content": "Give each role its own instructions, connection and model. Mix providers in one pipeline.",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xtLqv",
+              "name": "Agent library and editor",
+              "width": "fill_container",
+              "height": "fill_container",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "a58iFN",
+                  "name": "Project agent profiles",
+                  "width": 264,
+                  "height": "fill_container",
+                  "fill": "$sidebar",
+                  "stroke": "$hairline",
+                  "strokeWidth": {
+                    "right": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "id": "kyMEx",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "New agent",
+                      "height": 36,
+                      "width": "fill_container",
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "plus"
+                        },
+                        "Y7HQGw": {
+                          "content": "New agent"
+                        }
+                      }
+                    },
+                    {
+                      "id": "EniYF",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Orchestrator profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Orchestrator"
+                        },
+                        "S9Jfg": {
+                          "content": "Codex / Sol"
+                        }
+                      }
+                    },
+                    {
+                      "id": "bOCdR",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Explorer profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Explorer"
+                        },
+                        "S9Jfg": {
+                          "content": "Claude / Opus"
+                        }
+                      }
+                    },
+                    {
+                      "id": "E2Rq82",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Planner profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Planner"
+                        },
+                        "S9Jfg": {
+                          "content": "Codex / Sol"
+                        }
+                      }
+                    },
+                    {
+                      "id": "H06aeS",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Builder profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$hover",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Builder"
+                        },
+                        "S9Jfg": {
+                          "content": "Codex / Sol"
+                        }
+                      }
+                    },
+                    {
+                      "id": "bYny6",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Reviewer profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Reviewer"
+                        },
+                        "S9Jfg": {
+                          "content": "Claude / Opus"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OsTxF",
+                      "name": "Agent library space",
+                      "width": "fill_container",
+                      "height": "fill_container"
+                    },
+                    {
+                      "id": "RJ3tk",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Import agents",
+                      "height": 36,
+                      "width": "fill_container",
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "download"
+                        },
+                        "Y7HQGw": {
+                          "content": "Import agents"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "dbNBN",
+                  "name": "Agent profile editor",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 22,
+                  "padding": [
+                    0,
+                    32,
+                    32,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "uzKAh",
+                      "name": "Profile editor tabs",
+                      "width": "fill_container",
+                      "height": 48,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 20,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "id": "S55zC",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Profile tab",
+                          "height": 40,
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Profile",
+                              "fill": "$muted"
+                            }
+                          }
+                        },
+                        {
+                          "id": "kRTfm",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Permissions tab",
+                          "height": 40,
+                          "stroke": "$text",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Permissions",
+                              "fill": "$text"
+                            }
+                          }
+                        },
+                        {
+                          "id": "luCNa",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Usage tab",
+                          "height": 40,
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Used in pipelines",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "enabled": true,
+                              "content": "2"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "DUOOl",
+                          "name": "Tabs space",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "I412OF",
+                          "name": "Permission summary",
+                          "height": 40,
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "u9Kxl",
+                              "name": "Permission summary icon",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "shield",
+                              "library": "lucide",
+                              "fill": "$subtle"
+                            },
+                            {
+                              "type": "text",
+                              "id": "RgkQd",
+                              "name": "Permission summary text",
+                              "fill": "$muted",
+                              "content": "Edits files · Commands ask · Network off",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZtLH5",
+                      "name": "Permissions body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "gap": 32,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "lKku8",
+                          "name": "Permission settings",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 22,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "QWwen",
+                              "name": "Permissions intro",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "What Builder may do inside a task’s worktree. Each agent invocation starts with these limits.",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "O7lRxM",
+                              "name": "Repository access setting",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Y8RBuo",
+                                  "name": "Repository access label",
+                                  "fill": "$text",
+                                  "content": "Repository access",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "auqSC",
+                                  "name": "Repository access options",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "children": [
+                                    {
+                                      "id": "UrQDg",
+                                      "type": "ref",
+                                      "ref": "lcwsy",
+                                      "name": "Read-only option",
+                                      "width": "fill_container",
+                                      "height": "fit_content",
+                                      "descendants": {
+                                        "K7EO4": {
+                                          "icon": "circle",
+                                          "fill": "$muted"
+                                        },
+                                        "D2t8u": {
+                                          "content": "Read-only"
+                                        },
+                                        "C85wh": {
+                                          "content": "Read files and history in the task worktree. No edits."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "jXiVb",
+                                      "type": "ref",
+                                      "ref": "lcwsy",
+                                      "name": "Edit files option",
+                                      "width": "fill_container",
+                                      "height": "fit_content",
+                                      "stroke": "$text",
+                                      "strokeWidth": 1.5,
+                                      "descendants": {
+                                        "K7EO4": {
+                                          "icon": "circle-dot",
+                                          "fill": "$text"
+                                        },
+                                        "D2t8u": {
+                                          "content": "Edit files in the task worktree"
+                                        },
+                                        "C85wh": {
+                                          "content": "Create and change files only inside this task’s worktree."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "OXIvF",
+                              "name": "Commands setting",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ZKdrM",
+                                  "name": "Commands label",
+                                  "fill": "$text",
+                                  "content": "Commands",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "id": "w4mqb",
+                                  "type": "ref",
+                                  "ref": "lcwsy",
+                                  "name": "Ask before running commands option",
+                                  "width": "fill_container",
+                                  "height": "fit_content",
+                                  "opacity": 1,
+                                  "stroke": "$text",
+                                  "strokeWidth": 1.5,
+                                  "descendants": {
+                                    "K7EO4": {
+                                      "icon": "circle-dot",
+                                      "fill": "$text"
+                                    },
+                                    "D2t8u": {
+                                      "content": "Ask before running commands"
+                                    },
+                                    "C85wh": {
+                                      "content": "Commands requiring approval wait for your decision. Approve only the requested action or deny it."
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "nTZb7",
+                                  "name": "Unavailable command list",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "id": "p9tck0",
+                                      "type": "ref",
+                                      "ref": "lcwsy",
+                                      "name": "Allowed commands option (unavailable)",
+                                      "width": "fill_container",
+                                      "height": "fit_content",
+                                      "opacity": 0.5,
+                                      "stroke": "$border",
+                                      "strokeWidth": 1,
+                                      "descendants": {
+                                        "K7EO4": {
+                                          "icon": "circle",
+                                          "fill": "$muted"
+                                        },
+                                        "D2t8u": {
+                                          "content": "Allowed commands"
+                                        },
+                                        "C85wh": {
+                                          "content": "Only these commands run. Anything else is denied and the agent is told why."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "LguTl",
+                                      "name": "Profile command reason · flush with card",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "zIpR9",
+                                          "name": "Lock",
+                                          "width": 11,
+                                          "height": 11,
+                                          "icon": "lock",
+                                          "library": "lucide",
+                                          "fill": "$subtle"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "SQg3V",
+                                          "name": "Reason",
+                                          "fill": "$subtle",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "Unavailable on this connection: Codex CLI can’t limit commands to a list.",
+                                          "lineHeight": 1.5,
+                                          "fontFamily": "$font",
+                                          "fontSize": 10,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "XQguq",
+                                  "type": "ref",
+                                  "ref": "lcwsy",
+                                  "name": "Any command option",
+                                  "width": "fill_container",
+                                  "height": "fit_content",
+                                  "opacity": 1,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "descendants": {
+                                    "K7EO4": {
+                                      "icon": "circle",
+                                      "fill": "$muted"
+                                    },
+                                    "D2t8u": {
+                                      "content": "Any command in the worktree"
+                                    },
+                                    "C85wh": {
+                                      "content": "Commands run inside the sandbox. Beyond the sandbox, commands ask you first."
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "D6KIo",
+                              "name": "Network setting",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "zmn8l",
+                                  "name": "Network label",
+                                  "fill": "$text",
+                                  "content": "Network",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "QlDzQ",
+                                  "name": "Network row",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "bs3ot",
+                                      "type": "ref",
+                                      "ref": "K8ItM",
+                                      "name": "Network switch"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "nv1AT",
+                                      "name": "Network state",
+                                      "fill": "$text",
+                                      "content": "Off",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "GeLci",
+                                      "name": "Network detail",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Package installs and web requests fail while network access is off.",
+                                      "fontFamily": "$font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "jKcbu",
+                          "name": "Enforcement panel",
+                          "width": 300,
+                          "fill": "$sidebar",
+                          "cornerRadius": "$radius-panel",
+                          "stroke": "$hairline",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 14,
+                          "padding": 20,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "gBsDf",
+                              "name": "Enforcement heading",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "i23Hx0",
+                                  "name": "Enforcement title",
+                                  "fill": "$text",
+                                  "content": "Enforced by Codex CLI",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "qButr",
+                                  "name": "Enforcement connection",
+                                  "fill": "$muted",
+                                  "content": "Codex · Kontur · checked 14:02",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "QrS9d",
+                              "name": "Repository access enforcement",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "F2teoF",
+                                  "name": "Enforced icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "circle-check",
+                                  "library": "lucide",
+                                  "fill": "$text"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "mRuAS",
+                                  "name": "Enforcement text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 4,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "eIMWQ",
+                                      "name": "Setting",
+                                      "fill": "$text",
+                                      "content": "Repository access · enforced",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "pDN6k",
+                                      "name": "Mechanism",
+                                      "fill": "$muted",
+                                      "content": "sandbox · workspace-write",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "M50IHx",
+                              "name": "Allowed commands enforcement",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "m2yupf",
+                                  "name": "Enforced icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "circle-check",
+                                  "library": "lucide",
+                                  "fill": "$text"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "KbDyn",
+                                  "name": "Enforcement text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 4,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "NFIsT",
+                                      "name": "Setting",
+                                      "fill": "$text",
+                                      "content": "Commands ask · enforced",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "f0WLvX",
+                                      "name": "Mechanism",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "App Server · approvals ask you",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "v5Yjv0",
+                              "name": "Network off enforcement",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "QCZcg",
+                                  "name": "Enforced icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "circle-check",
+                                  "library": "lucide",
+                                  "fill": "$text"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "cQRwg",
+                                  "name": "Enforcement text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 4,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "E2kgu",
+                                      "name": "Setting",
+                                      "fill": "$text",
+                                      "content": "Network off · enforced",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "NsF9A",
+                                      "name": "Mechanism",
+                                      "fill": "$muted",
+                                      "content": "sandbox · network access off",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "XD6jI",
+                              "name": "Enforcement divider",
+                              "fill": "$hairline",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "frame",
+                              "id": "KMpat",
+                              "name": "No bypass",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "Z9tbf",
+                                  "name": "No bypass icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "shield",
+                                  "library": "lucide",
+                                  "fill": "$muted"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "B2wMi",
+                                  "name": "No bypass text",
+                                  "fill": "$muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
+                                  "lineHeight": 1.6,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yy4i2",
+                              "name": "Steps narrow",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "LRmRk",
+                                  "name": "Steps narrow icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "workflow",
+                                  "library": "lucide",
+                                  "fill": "$muted"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "a0Aaa",
+                                  "name": "Steps narrow text",
+                                  "fill": "$muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "A pipeline step can make these stricter for its own work, never wider.",
+                                  "lineHeight": 1.6,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "id": "VNFtA",
+                      "type": "ref",
+                      "ref": "q5LzI",
+                      "name": "Runs keep the exact assignment",
+                      "width": "fill_container",
+                      "descendants": {
+                        "GkfFF": {
+                          "icon": "history"
+                        },
+                        "CoAOk": {
+                          "content": "Saved in draft v3 · applies to new runs after publishing"
+                        },
+                        "szYuk": {
+                          "content": "Runs keep the permissions they launched with. You can still change them for a single run from its task page."
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "l49cp8",
+      "x": 1520,
+      "y": 59719,
+      "name": "ORC-24 · B · Published profile · Claude command and network locks · 1440 × 1024",
+      "clip": true,
+      "width": 1440,
+      "height": 1024,
+      "fill": "$surface",
+      "children": [
+        {
+          "id": "zcLzf",
+          "type": "ref",
+          "ref": "zo9Py",
+          "name": "Sidebar",
+          "height": "fill_container",
+          "descendants": {
+            "JI3gd": {
+              "fill": "$sidebar"
+            },
+            "JI3gd/sQnmq": {
+              "fill": "$muted"
+            },
+            "JI3gd/YWsP0": {
+              "fill": "$muted"
+            },
+            "A028bq": {
+              "fill": "$hover"
+            },
+            "A028bq/sQnmq": {
+              "fill": "$text"
+            },
+            "A028bq/YWsP0": {
+              "fill": "$text"
+            },
+            "s9zzPC": {
+              "width": 192,
+              "x": 0,
+              "y": 0
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "pHoP2",
+          "name": "Workspace",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "WurhR",
+              "name": "Topbar",
+              "width": "fill_container",
+              "height": 64,
+              "stroke": "$hairline",
+              "strokeWidth": {
+                "bottom": 1
+              },
+              "gap": 12,
+              "padding": [
+                0,
+                32
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kvU3z",
+                  "name": "Breadcrumb",
+                  "fill": "$muted",
+                  "content": "Kontur / Agents / Builder",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "RNtzy",
+                  "name": "Topbar space",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "text",
+                  "id": "GpMpX",
+                  "name": "Save status",
+                  "fill": "$muted",
+                  "content": "Published v2",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "id": "o4Bb8",
+                  "type": "ref",
+                  "ref": "u1XBP",
+                  "name": "Publish v3 · unavailable, no draft",
+                  "opacity": 0.4,
+                  "height": 36,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "descendants": {
+                    "xfnek": {
+                      "icon": "check",
+                      "fill": "$inverse-text"
+                    },
+                    "Y7HQGw": {
+                      "content": "Publish v3",
+                      "fill": "$inverse-text"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "r1j5ZA",
+              "name": "Page heading",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "padding": [
+                28,
+                32,
+                24,
+                32
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "mOfHL",
+                  "name": "Page title",
+                  "fill": "$text",
+                  "content": "Agents",
+                  "fontFamily": "$font",
+                  "fontSize": 27,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "kbrJk",
+                  "name": "Page description",
+                  "fill": "$muted",
+                  "content": "Give each role its own instructions, connection and model. Mix providers in one pipeline.",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Tv8ON",
+              "name": "Agent library and editor",
+              "width": "fill_container",
+              "height": "fill_container",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "qWZ43",
+                  "name": "Project agent profiles",
+                  "width": 264,
+                  "height": "fill_container",
+                  "fill": "$sidebar",
+                  "stroke": "$hairline",
+                  "strokeWidth": {
+                    "right": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "id": "DBZ1t",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "New agent",
+                      "height": 36,
+                      "width": "fill_container",
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "plus"
+                        },
+                        "Y7HQGw": {
+                          "content": "New agent"
+                        }
+                      }
+                    },
+                    {
+                      "id": "GjYGH",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Orchestrator profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Orchestrator"
+                        },
+                        "S9Jfg": {
+                          "content": "Codex / Sol"
+                        }
+                      }
+                    },
+                    {
+                      "id": "v0O4r",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Explorer profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Explorer"
+                        },
+                        "S9Jfg": {
+                          "content": "Claude / Opus"
+                        }
+                      }
+                    },
+                    {
+                      "id": "LjN31",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Planner profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Planner"
+                        },
+                        "S9Jfg": {
+                          "content": "Codex / Sol"
+                        }
+                      }
+                    },
+                    {
+                      "id": "k0LpLe",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Builder profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$hover",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Builder"
+                        },
+                        "S9Jfg": {
+                          "content": "Claude / Opus"
+                        }
+                      }
+                    },
+                    {
+                      "id": "ALpdc",
+                      "type": "ref",
+                      "ref": "jNTVN",
+                      "name": "Reviewer profile",
+                      "width": "fill_container",
+                      "height": 70,
+                      "fill": "$sidebar",
+                      "descendants": {
+                        "H7IATK": {
+                          "content": "Reviewer"
+                        },
+                        "S9Jfg": {
+                          "content": "Claude / Opus"
+                        }
+                      }
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qFgjP",
+                      "name": "Agent library space",
+                      "width": "fill_container",
+                      "height": "fill_container"
+                    },
+                    {
+                      "id": "V8Ln2C",
+                      "type": "ref",
+                      "ref": "u1XBP",
+                      "name": "Import agents",
+                      "height": 36,
+                      "width": "fill_container",
+                      "descendants": {
+                        "xfnek": {
+                          "icon": "download"
+                        },
+                        "Y7HQGw": {
+                          "content": "Import agents"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "dEU8J",
+                  "name": "Agent profile editor",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 22,
+                  "padding": [
+                    0,
+                    32,
+                    32,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "u7vDo",
+                      "name": "Profile editor tabs",
+                      "width": "fill_container",
+                      "height": 48,
+                      "stroke": "$hairline",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 20,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "id": "d1Z3i",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Profile tab",
+                          "height": 40,
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Profile",
+                              "fill": "$muted"
+                            }
+                          }
+                        },
+                        {
+                          "id": "U8POb",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Permissions tab",
+                          "height": 40,
+                          "stroke": "$text",
+                          "strokeWidth": {
+                            "bottom": 2
+                          },
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Permissions",
+                              "fill": "$text"
+                            }
+                          }
+                        },
+                        {
+                          "id": "y3pKWd",
+                          "type": "ref",
+                          "ref": "SOW6S",
+                          "name": "Usage tab",
+                          "height": 40,
+                          "stroke": "$hairline",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "v66T9G": {
+                              "content": "Used in pipelines",
+                              "fill": "$muted"
+                            },
+                            "tidLB": {
+                              "enabled": true,
+                              "content": "2"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ye3u6",
+                          "name": "Tabs space",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "E0zbb",
+                          "name": "Permission summary",
+                          "height": 40,
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "ymKr3",
+                              "name": "Permission summary icon",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "shield",
+                              "library": "lucide",
+                              "fill": "$subtle"
+                            },
+                            {
+                              "type": "text",
+                              "id": "m8CzKZ",
+                              "name": "Permission summary text",
+                              "fill": "$muted",
+                              "content": "Edits files · Commands ask · Network stays on",
+                              "fontFamily": "$font",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RR4BK",
+                      "name": "Permissions body",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "gap": 32,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "coHLO",
+                          "name": "Permission settings",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 22,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "s8Oy1",
+                              "name": "Permissions intro",
+                              "fill": "$muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "What Builder may do inside a task’s worktree. Each agent invocation starts with these limits.",
+                              "fontFamily": "$font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "LAJ3q",
+                              "name": "Repository access setting",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "R78aI",
+                                  "name": "Repository access label",
+                                  "fill": "$text",
+                                  "content": "Repository access",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "lpbRs",
+                                  "name": "Repository access options",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "children": [
+                                    {
+                                      "id": "q8JNUz",
+                                      "type": "ref",
+                                      "ref": "lcwsy",
+                                      "name": "Read-only option",
+                                      "width": "fill_container",
+                                      "height": "fit_content",
+                                      "descendants": {
+                                        "K7EO4": {
+                                          "icon": "circle",
+                                          "fill": "$muted"
+                                        },
+                                        "D2t8u": {
+                                          "content": "Read-only"
+                                        },
+                                        "C85wh": {
+                                          "content": "Read files and history in the task worktree. No edits."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "U0MHUq",
+                                      "type": "ref",
+                                      "ref": "lcwsy",
+                                      "name": "Edit files option",
+                                      "width": "fill_container",
+                                      "height": "fit_content",
+                                      "stroke": "$text",
+                                      "strokeWidth": 1.5,
+                                      "descendants": {
+                                        "K7EO4": {
+                                          "icon": "circle-dot",
+                                          "fill": "$text"
+                                        },
+                                        "D2t8u": {
+                                          "content": "Edit files in the task worktree"
+                                        },
+                                        "C85wh": {
+                                          "content": "Create and change files only inside this task’s worktree."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "UwU82",
+                              "name": "Commands setting",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "I3ZsIz",
+                                  "name": "Commands label",
+                                  "fill": "$text",
+                                  "content": "Commands",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "id": "ahq8s",
+                                  "type": "ref",
+                                  "ref": "lcwsy",
+                                  "opacity": 1,
+                                  "name": "Ask before running commands option",
+                                  "width": "fill_container",
+                                  "height": "fit_content",
+                                  "stroke": "$text",
+                                  "strokeWidth": 1.5,
+                                  "descendants": {
+                                    "K7EO4": {
+                                      "icon": "circle-dot",
+                                      "fill": "$text"
+                                    },
+                                    "D2t8u": {
+                                      "content": "Ask before running commands"
+                                    },
+                                    "C85wh": {
+                                      "content": "Commands requiring approval wait for your decision. Approve only the requested action or deny it."
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "sRr7u",
+                                  "type": "ref",
+                                  "ref": "lcwsy",
+                                  "name": "Allowed commands option",
+                                  "width": "fill_container",
+                                  "height": "fit_content",
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "descendants": {
+                                    "K7EO4": {
+                                      "icon": "circle",
+                                      "fill": "$muted"
+                                    },
+                                    "D2t8u": {
+                                      "content": "Allowed commands"
+                                    },
+                                    "C85wh": {
+                                      "content": "These commands run, as do known-safe read-only commands such as ls, cat or git log. Other commands ask you first."
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "s0HPo",
+                                  "name": "Unavailable command option",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "id": "TwldE",
+                                      "type": "ref",
+                                      "ref": "lcwsy",
+                                      "name": "Any command option (unavailable)",
+                                      "width": "fill_container",
+                                      "height": "fit_content",
+                                      "opacity": 0.5,
+                                      "descendants": {
+                                        "K7EO4": {
+                                          "icon": "circle",
+                                          "fill": "$muted"
+                                        },
+                                        "D2t8u": {
+                                          "content": "Any command in the worktree"
+                                        },
+                                        "C85wh": {
+                                          "content": "Commands run inside the sandbox and cannot change files outside the worktree."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "AssVW",
+                                      "name": "Profile command reason · flush with card",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "smjjS",
+                                          "name": "Lock",
+                                          "width": 11,
+                                          "height": 11,
+                                          "icon": "lock",
+                                          "library": "lucide",
+                                          "fill": "$subtle"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "p8wPvZ",
+                                          "name": "Reason",
+                                          "fill": "$subtle",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "Unavailable on this connection: Claude Code can’t confine commands to the worktree.",
+                                          "lineHeight": 1.5,
+                                          "fontFamily": "$font",
+                                          "fontSize": 10,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Q3L8Fp",
+                              "name": "Network setting",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "N7vho",
+                                  "name": "Network label",
+                                  "fill": "$text",
+                                  "content": "Network",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "huEHU",
+                                  "name": "Locked network control and reason",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "ztO6m",
+                                      "name": "Network row · copied lW7Sp pattern",
+                                      "opacity": 0.45,
+                                      "gap": 10,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "id": "M7ldQ",
+                                          "type": "ref",
+                                          "ref": "K8ItM",
+                                          "name": "Network switch (on, locked)",
+                                          "fill": "$accent",
+                                          "stroke": "$accent",
+                                          "justifyContent": "end",
+                                          "descendants": {
+                                            "Y0aZS": {
+                                              "fill": "$inverse-text"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "gcihE",
+                                          "name": "Network state",
+                                          "fill": "$text",
+                                          "content": "On",
+                                          "fontFamily": "$font",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "aghtu",
+                                      "name": "Profile network reason · flush with switch",
+                                      "width": "fill_container",
+                                      "gap": 6,
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "fjYLn",
+                                          "name": "Lock",
+                                          "width": 11,
+                                          "height": 11,
+                                          "icon": "lock",
+                                          "library": "lucide",
+                                          "fill": "$subtle"
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "a7awZV",
+                                          "name": "Reason",
+                                          "fill": "$subtle",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "Off is unavailable on this connection: Claude Code can’t block network use by commands, so network stays on. The run summary says so.",
+                                          "lineHeight": 1.5,
+                                          "fontFamily": "$font",
+                                          "fontSize": 10,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "GAJ9a",
+                          "name": "Enforcement panel",
+                          "width": 300,
+                          "fill": "$sidebar",
+                          "cornerRadius": "$radius-panel",
+                          "stroke": "$hairline",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 14,
+                          "padding": 20,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "XlJzf",
+                              "name": "Enforcement heading",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "uXNxv",
+                                  "name": "Enforcement title",
+                                  "fill": "$text",
+                                  "content": "Enforced by Claude Code",
+                                  "fontFamily": "$font",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "WUB3H",
+                                  "name": "Enforcement connection",
+                                  "fill": "$muted",
+                                  "content": "Claude · Kontur · checked 14:02",
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ZHOCN",
+                              "name": "Repository access enforcement",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "xQJSr",
+                                  "name": "Enforced icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "circle-check",
+                                  "library": "lucide",
+                                  "fill": "$text"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "BUdUe",
+                                  "name": "Enforcement text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 4,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "pTpln",
+                                      "name": "Setting",
+                                      "fill": "$text",
+                                      "content": "Repository access · enforced",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "DQpHr",
+                                      "name": "Mechanism",
+                                      "fill": "$muted",
+                                      "content": "edit tools · worktree only",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vo4jC",
+                              "name": "Allowed commands enforcement",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "su0V8",
+                                  "name": "Enforced icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "circle-check",
+                                  "library": "lucide",
+                                  "fill": "$text"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "LfXLD",
+                                  "name": "Enforcement text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 4,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "eUwuZ",
+                                      "name": "Setting",
+                                      "fill": "$text",
+                                      "content": "Commands ask · enforced",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "WrPJ7",
+                                      "name": "Mechanism",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "permission prompt · commands ask",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "OJJ3j",
+                              "name": "Network off enforcement",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "SOTyA",
+                                  "name": "Enforced icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "lock",
+                                  "library": "lucide",
+                                  "fill": "$subtle"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Wo3x0",
+                                  "name": "Enforcement text",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 4,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "S7ZhXV",
+                                      "name": "Setting",
+                                      "fill": "$text",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Network stays on",
+                                      "fontFamily": "$font",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "q2T8S",
+                                      "name": "Mechanism",
+                                      "fill": "$muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "off is not enforceable",
+                                      "fontFamily": "$mono",
+                                      "fontSize": 10,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "mTiMx",
+                              "name": "Enforcement divider",
+                              "fill": "$hairline",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qvYXo",
+                              "name": "No bypass",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "kcIB0",
+                                  "name": "No bypass icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "shield",
+                                  "library": "lucide",
+                                  "fill": "$muted"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "g0697",
+                                  "name": "No bypass text",
+                                  "fill": "$muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Orchester never starts an agent in a bypass or skip-permissions mode. There is no setting for it.",
+                                  "lineHeight": 1.6,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "swv2t",
+                              "name": "Steps narrow",
+                              "width": "fill_container",
+                              "gap": 10,
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "NB3bu",
+                                  "name": "Steps narrow icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "workflow",
+                                  "library": "lucide",
+                                  "fill": "$muted"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "i0aSr",
+                                  "name": "Steps narrow text",
+                                  "fill": "$muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "A pipeline step can make these stricter for its own work, never wider.",
+                                  "lineHeight": 1.6,
+                                  "fontFamily": "$font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "id": "FLOi7",
+                      "type": "ref",
+                      "ref": "q5LzI",
+                      "name": "Runs keep the exact assignment",
+                      "width": "fill_container",
+                      "descendants": {
+                        "GkfFF": {
+                          "icon": "history"
+                        },
+                        "CoAOk": {
+                          "content": "Applies to new runs after publishing"
+                        },
+                        "szYuk": {
+                          "content": "Runs keep the permissions they launched with. You can still change them for a single run from its task page."
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "AQj7Y",
+      "x": 3040,
+      "y": 59719,
+      "name": "ORC-24 · C · Compact run popover · Claude locks retain 22px indent",
+      "clip": true,
+      "width": 460,
+      "fill": "$raised",
+      "cornerRadius": "$radius-panel",
+      "stroke": "$border",
+      "strokeWidth": 1,
+      "effect": {
+        "type": "shadow",
+        "shadowType": "outer",
+        "color": "#00000066",
+        "offset": {
+          "x": 0,
+          "y": 8
+        },
+        "blur": 24
+      },
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 16,
+      "children": [
+        {
+          "type": "frame",
+          "id": "VlG1q",
+          "name": "Popover header",
+          "width": "fill_container",
+          "gap": 8,
+          "children": [
+            {
+              "type": "frame",
+              "id": "JIu7H",
+              "name": "Popover title group",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "eq6WE",
+                  "name": "Popover title",
+                  "fill": "$text",
+                  "content": "Permissions for this run",
+                  "fontFamily": "$font",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "aEIIj",
+                  "name": "Popover subtitle",
+                  "fill": "$muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Explorer · Research · Claude / Opus · from profile v2",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "icon",
+              "id": "LQ3Br",
+              "name": "Close",
+              "width": 14,
+              "height": 14,
+              "icon": "x",
+              "library": "lucide",
+              "fill": "$muted"
+            }
+          ]
+        },
+        {
+          "id": "KXxdc",
+          "type": "ref",
+          "ref": "tfGRt",
+          "name": "Running with",
+          "width": "fill_container",
+          "descendants": {
+            "QkG27": {
+              "content": "Running with"
+            },
+            "yeeIR": {
+              "content": "Explorer · Read-only · 3 commands · Network stays on",
+              "fontSize": 10,
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "fill": "$text"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "d8Qups",
+          "name": "Takes effect notice",
+          "width": "fill_container",
+          "fill": "$surface",
+          "cornerRadius": 8,
+          "gap": 10,
+          "padding": 12,
+          "children": [
+            {
+              "type": "icon",
+              "id": "q8l6v",
+              "name": "Takes effect icon",
+              "width": 14,
+              "height": 14,
+              "icon": "clock",
+              "library": "lucide",
+              "fill": "$muted"
+            },
+            {
+              "type": "text",
+              "id": "m7Q9i",
+              "name": "Takes effect text",
+              "fill": "$muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Apply from next invocation: Explorer keeps these until it next starts. Apply now: it stops at its next checkpoint and Research restarts from it with the new permissions. Both change Run 128 only.",
+              "lineHeight": 1.6,
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Sx3eg",
+          "name": "Repository access group",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "vE57O",
+              "name": "Repository access label",
+              "fill": "$muted",
+              "content": "Repository access",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "AKnUw",
+              "name": "Repository options",
+              "gap": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "w2bQgT",
+                  "name": "Read-only option",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "AJ69v",
+                      "name": "Radio",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "circle-dot",
+                      "library": "lucide",
+                      "fill": "$text"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZEBun",
+                      "name": "Option label",
+                      "fill": "$text",
+                      "content": "Read-only",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "IyXim",
+                  "name": "Edit files in the task worktree option",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "vQlRM",
+                      "name": "Radio",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ayP5U",
+                      "name": "Option label",
+                      "fill": "$muted",
+                      "content": "Edit files in the task worktree",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "STIxY",
+          "name": "Commands group",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "Qb08f",
+              "name": "Commands label",
+              "fill": "$muted",
+              "content": "Commands",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "BwLaB",
+              "name": "Ask before commands option",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "LQLVB",
+                  "name": "Radio",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "circle",
+                  "library": "lucide",
+                  "fill": "$muted"
+                },
+                {
+                  "type": "text",
+                  "id": "qOzSn",
+                  "name": "Option label",
+                  "fill": "$muted",
+                  "content": "Ask before running commands",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "a9rJFP",
+              "name": "Allowed commands option",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "yARfO",
+                  "name": "Radio",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "circle-dot",
+                  "library": "lucide",
+                  "fill": "$text"
+                },
+                {
+                  "type": "text",
+                  "id": "oNZ7b",
+                  "name": "Option label",
+                  "fill": "$text",
+                  "content": "Allowed commands",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HGA0O",
+              "name": "Run command entries",
+              "gap": 6,
+              "padding": [
+                0,
+                0,
+                0,
+                22
+              ],
+              "children": [
+                {
+                  "id": "BwDM2",
+                  "type": "ref",
+                  "ref": "bpmzN",
+                  "name": "Command git log",
+                  "descendants": {
+                    "XCM24": {
+                      "content": "git log"
+                    }
+                  }
+                },
+                {
+                  "id": "gJYMB",
+                  "type": "ref",
+                  "ref": "bpmzN",
+                  "name": "Command git diff",
+                  "descendants": {
+                    "XCM24": {
+                      "content": "git diff"
+                    }
+                  }
+                },
+                {
+                  "id": "Re1Ix",
+                  "type": "ref",
+                  "ref": "bpmzN",
+                  "name": "Command rg",
+                  "descendants": {
+                    "XCM24": {
+                      "content": "rg"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "yS5XA",
+              "name": "Any command option (unavailable)",
+              "opacity": 0.45,
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "BXgkI",
+                  "name": "Radio",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "circle",
+                  "library": "lucide",
+                  "fill": "$muted"
+                },
+                {
+                  "type": "text",
+                  "id": "V4b8h",
+                  "name": "Option label",
+                  "fill": "$muted",
+                  "content": "Any command in the worktree",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "kAuTV",
+              "name": "Compact command reason · 22px indent",
+              "width": "fill_container",
+              "gap": 6,
+              "padding": [
+                0,
+                0,
+                0,
+                22
+              ],
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "B8BWJQ",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "O1ixYE",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Unavailable on this connection: Claude Code can’t confine commands to the worktree.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "EAQEL",
+          "name": "Network group",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "gKXUD",
+              "name": "Network label",
+              "fill": "$muted",
+              "content": "Network",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "xJvAD",
+              "name": "Locked network row",
+              "opacity": 0.45,
+              "gap": 10,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "ezGPf",
+                  "type": "ref",
+                  "ref": "K8ItM",
+                  "name": "Network switch (on, locked)",
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "justifyContent": "end",
+                  "descendants": {
+                    "Y0aZS": {
+                      "fill": "$inverse-text"
+                    }
+                  }
+                },
+                {
+                  "type": "text",
+                  "id": "PgYOw",
+                  "name": "Network state",
+                  "fill": "$text",
+                  "content": "On",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "C7YzC9",
+              "name": "Compact network reason · 22px indent",
+              "width": "fill_container",
+              "gap": 6,
+              "padding": [
+                0,
+                0,
+                0,
+                22
+              ],
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "lY7Ea",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "OSnT4",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Off is unavailable on this connection: Claude Code can’t block network use by commands, so network stays on. The run summary says so.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "CpzZB",
+          "name": "MCP servers group (read-only)",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "DMi3B",
+              "name": "MCP servers label",
+              "fill": "$muted",
+              "content": "MCP servers",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "lJjKd",
+              "name": "MCP servers value",
+              "fill": "$text",
+              "content": "project-knowledge, docs",
+              "fontFamily": "$mono",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "Fvu8y",
+              "name": "MCP servers hint",
+              "fill": "$muted",
+              "content": "From the profile version; they are not changed for a run.",
+              "lineHeight": 1.5,
+              "fontFamily": "$font",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "BetFm",
+          "name": "Popover divider",
+          "fill": "$hairline",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "frame",
+          "id": "EEvnF",
+          "name": "Save to profile",
+          "width": "fill_container",
+          "gap": 8,
+          "children": [
+            {
+              "type": "icon",
+              "id": "k9oPH",
+              "name": "Checkbox",
+              "width": 14,
+              "height": 14,
+              "icon": "square",
+              "library": "lucide",
+              "fill": "$muted"
+            },
+            {
+              "type": "frame",
+              "id": "kO3zy",
+              "name": "Save to profile text",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 3,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kT7XY",
+                  "name": "Save to profile label",
+                  "fill": "$text",
+                  "content": "Also save to the Explorer profile",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "X29dA",
+                  "name": "Save to profile hint",
+                  "fill": "$subtle",
+                  "content": "Adds the change to draft v3. New runs get it after you publish.",
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "YPoNm",
+          "name": "Popover footer",
+          "width": "fill_container",
+          "gap": 8,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "yULKB",
+              "name": "Footer space",
+              "width": "fill_container",
+              "height": 1
+            },
+            {
+              "id": "jUk5a",
+              "type": "ref",
+              "ref": "u1XBP",
+              "name": "Cancel",
+              "height": 30,
+              "descendants": {
+                "xfnek": {
+                  "enabled": false
+                },
+                "Y7HQGw": {
+                  "content": "Cancel",
+                  "fontSize": 11
+                }
+              }
+            },
+            {
+              "id": "W0WPDz",
+              "type": "ref",
+              "ref": "u1XBP",
+              "name": "Apply now",
+              "height": 30,
+              "descendants": {
+                "xfnek": {
+                  "enabled": true,
+                  "icon": "refresh-cw",
+                  "width": 12,
+                  "height": 12
+                },
+                "Y7HQGw": {
+                  "content": "Apply now",
+                  "fontSize": 11
+                }
+              }
+            },
+            {
+              "id": "ZMpj2",
+              "type": "ref",
+              "ref": "u1XBP",
+              "name": "Apply from next invocation",
+              "height": 30,
+              "fill": "$accent",
+              "stroke": "$accent",
+              "descendants": {
+                "xfnek": {
+                  "icon": "check",
+                  "width": 12,
+                  "height": 12,
+                  "fill": "$inverse-text"
+                },
+                "Y7HQGw": {
+                  "content": "Apply from next invocation",
+                  "fontSize": 11,
+                  "fill": "$inverse-text"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Dvpxa",
+      "x": 3580,
+      "y": 59719,
+      "name": "ORC-24 · D · Profile reasons · 300px content wrapping",
+      "clip": true,
+      "width": 340,
+      "fill": "$surface",
+      "cornerRadius": "$radius-panel",
+      "stroke": "$hairline",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "gap": 22,
+      "padding": 20,
+      "children": [
+        {
+          "type": "text",
+          "id": "ejTF1",
+          "name": "Narrow specimen title",
+          "fill": "$text",
+          "content": "Profile reasons · narrow",
+          "fontFamily": "$font",
+          "fontSize": 13,
+          "fontWeight": "500"
+        },
+        {
+          "type": "text",
+          "id": "vWuRS",
+          "name": "Codex commands label",
+          "fill": "$muted",
+          "content": "Commands · Codex CLI",
+          "fontFamily": "$font",
+          "fontSize": 11,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "zP834",
+          "name": "Unavailable command list · 300px",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "id": "TvJch",
+              "type": "ref",
+              "ref": "lcwsy",
+              "name": "Allowed commands option (unavailable)",
+              "width": "fill_container",
+              "height": "fit_content",
+              "opacity": 0.5,
+              "descendants": {
+                "D2t8u": {
+                  "content": "Allowed commands"
+                },
+                "C85wh": {
+                  "content": "Only these commands run. Anything else is denied and the agent is told why."
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "HIrMH",
+              "name": "Profile command reason · flush with card",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "S5T8ue",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "B3F3Y",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Unavailable on this connection: Codex CLI can’t limit commands to a list.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "vPYGV",
+          "name": "Claude network label",
+          "fill": "$muted",
+          "content": "Network · Claude Code",
+          "fontFamily": "$font",
+          "fontSize": 11,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "dXgjG",
+          "name": "Locked network and reason · 300px",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "frame",
+              "id": "A0vdYj",
+              "name": "Locked network row",
+              "opacity": 0.45,
+              "gap": 10,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "eJPb3",
+                  "type": "ref",
+                  "ref": "K8ItM",
+                  "name": "Network switch (on, locked)",
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "justifyContent": "end",
+                  "descendants": {
+                    "Y0aZS": {
+                      "fill": "$inverse-text"
+                    }
+                  }
+                },
+                {
+                  "type": "text",
+                  "id": "k70LSh",
+                  "name": "Network state",
+                  "fill": "$text",
+                  "content": "On",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Y4K0wu",
+              "name": "Profile network reason · flush with switch",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "DQMcA",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "oawNm",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Off is unavailable on this connection: Claude Code can’t block network use by commands, so network stays on. The run summary says so.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Z6kUZ",
+      "x": 4000,
+      "y": 59719,
+      "name": "ORC-24 · E · Profile helper audit · native approvals and MCP",
+      "clip": true,
+      "width": 540,
+      "fill": "$sidebar",
+      "cornerRadius": "$radius-panel",
+      "stroke": "$hairline",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 20,
+      "children": [
+        {
+          "type": "frame",
+          "id": "pXWpV",
+          "name": "Heading",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 4,
+          "children": [
+            {
+              "type": "text",
+              "id": "I4moU",
+              "name": "Title",
+              "fill": "$text",
+              "content": "Native profile · unavailable controls",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "nTnTR",
+              "name": "Subtitle",
+              "fill": "$muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "DeepSeek · Kontur · illustrative fixture",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "N3Xff4",
+          "name": "MCP approvals",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "EzpnF",
+              "name": "MCP approvals heading",
+              "fill": "$text",
+              "content": "MCP approvals",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "s9HNA",
+              "name": "MCP approvals locked control",
+              "opacity": 0.45,
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "kzBTm",
+                  "type": "ref",
+                  "ref": "K8ItM",
+                  "name": "Locked switch (off)"
+                },
+                {
+                  "type": "text",
+                  "id": "PBCje",
+                  "name": "Control label",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Ask before MCP actions that require approval",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "uuCCA",
+              "name": "MCP approvals reason · flush with switch",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "x4b6K",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "CXP4E",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Unavailable on this connection: DeepSeek agents get no MCP servers in this version, so they are left out.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "yxSqJ",
+          "name": "When the agent asks",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "LvHhM",
+              "name": "When the agent asks heading",
+              "fill": "$text",
+              "content": "When the agent asks",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "dyolr",
+              "name": "When the agent asks locked control",
+              "opacity": 0.45,
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "PostU",
+                  "type": "ref",
+                  "ref": "K8ItM",
+                  "name": "Locked switch (off)"
+                },
+                {
+                  "type": "text",
+                  "id": "a7WFhZ",
+                  "name": "Control label",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Approve automatically (don’t ask me)",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "o0hVq",
+              "name": "When the agent asks reason · flush with switch",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "i7xFes",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "KAGpr",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Unavailable on this connection: DeepSeek agents get no MCP servers in this version, so they are left out.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "yz1Jl",
+          "name": "MCP servers setting",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "LSysg",
+              "name": "MCP servers heading",
+              "fill": "$text",
+              "content": "MCP servers",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "TXEPQ",
+              "name": "Unavailable MCP server row",
+              "opacity": 0.45,
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "i5ff8",
+                  "type": "ref",
+                  "ref": "K8ItM",
+                  "name": "Locked server switch (off)"
+                },
+                {
+                  "type": "text",
+                  "id": "Ao4WA",
+                  "name": "Server name",
+                  "fill": "$text",
+                  "content": "docs",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "UmpQS",
+                  "name": "Server program",
+                  "fill": "$muted",
+                  "content": "Program · npx",
+                  "fontFamily": "$font",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xEKOQ",
+              "name": "MCP server reason · flush with switch",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "hyD8M",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "KfTtn",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Unavailable on this connection: DeepSeek agents get no MCP servers in this version, so they are left out.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "gjvya",
+              "name": "Empty MCP setting fixture",
+              "fill": "$muted",
+              "content": "Without project MCP servers",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "ytAoT",
+              "name": "Empty MCP hint",
+              "fill": "$subtle",
+              "content": "This project has no MCP servers yet.",
+              "fontFamily": "$font",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "id": "X8eFcy",
+              "type": "ref",
+              "ref": "u1XBP",
+              "name": "Add an MCP server",
+              "height": 36,
+              "descendants": {
+                "xfnek": {
+                  "icon": "plus"
+                },
+                "Y7HQGw": {
+                  "content": "Add an MCP server"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "Nu11C",
+              "name": "Empty MCP reason · flush with field edge",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "M35GM5",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "mR6Pf",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Unavailable on this connection: DeepSeek agents get no MCP servers in this version, so they are left out.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "EFoWX",
+          "name": "Divider",
+          "fill": "$hairline",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "text",
+          "id": "Nc4vw",
+          "name": "Rule",
+          "fill": "$subtle",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "The profile uses the same left edge for every standalone control’s reason. These fixtures show alignment, not new capabilities.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font",
+          "fontSize": 10,
+          "fontWeight": "normal"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "eW9Sf",
+      "x": 4620,
+      "y": 59719,
+      "name": "ORC-24 · F · Connection helper audit · presets, fallback, model in use",
+      "clip": true,
+      "width": 760,
+      "fill": "$sidebar",
+      "cornerRadius": "$radius-panel",
+      "stroke": "$hairline",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "gap": 16,
+      "padding": 20,
+      "children": [
+        {
+          "type": "frame",
+          "id": "IjgD4",
+          "name": "Heading",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 4,
+          "children": [
+            {
+              "type": "text",
+              "id": "G1zid1",
+              "name": "Title",
+              "fill": "$text",
+              "content": "Connections · unavailable controls",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "FyDgb",
+              "name": "Subtitle",
+              "fill": "$muted",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Illustrative form specimens · existing controls and messages",
+              "fontFamily": "$font",
+              "fontSize": 11,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "HYbbn",
+          "name": "Preset field · compact radios",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "S5Lse",
+              "name": "Preset label",
+              "fill": "$text",
+              "content": "Preset",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "V3k7lV",
+              "name": "Presets",
+              "width": "fill_container",
+              "gap": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "r4myE",
+                  "name": "Official preset",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "WmVEH",
+                      "name": "Radio",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "circle-dot",
+                      "library": "lucide",
+                      "fill": "$text"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YJcme",
+                      "name": "Preset name",
+                      "fill": "$text",
+                      "content": "Official",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "N1fWq",
+                      "name": "Preset host",
+                      "fill": "$subtle",
+                      "content": "api.anthropic.com",
+                      "fontFamily": "$mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rtXAF",
+                  "name": "DeepSeek preset",
+                  "opacity": 0.45,
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "xmoET",
+                      "name": "Radio",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "llZM6",
+                      "name": "Preset name",
+                      "fill": "$muted",
+                      "content": "DeepSeek",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "tVfZY",
+                      "name": "Preset host",
+                      "fill": "$subtle",
+                      "content": "api.deepseek.com",
+                      "fontFamily": "$mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a06z7",
+                  "name": "Custom preset",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Cnz4H",
+                      "name": "Radio",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "circle",
+                      "library": "lucide",
+                      "fill": "$muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GmWOv",
+                      "name": "Preset name",
+                      "fill": "$muted",
+                      "content": "Custom",
+                      "fontFamily": "$font",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "i9X2B5",
+                      "name": "Preset host",
+                      "fill": "$subtle",
+                      "content": "your server",
+                      "fontFamily": "$mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "s5cFG",
+              "name": "Preset reason · compact 22px indent",
+              "width": "fill_container",
+              "gap": 6,
+              "padding": [
+                0,
+                0,
+                0,
+                22
+              ],
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "jQviU",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "t9moV",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "The DeepSeek preset uses OpenAI Responses. DeepSeek’s Anthropic route is reachable through Custom.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "clO0S",
+          "name": "Provider fallback field",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "WyjFb",
+              "name": "Provider fallback label",
+              "fill": "$text",
+              "content": "Provider fallback",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "d0Mani",
+              "name": "Locked provider fallback row",
+              "opacity": 0.45,
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "U5NOF",
+                  "type": "ref",
+                  "ref": "K8ItM",
+                  "name": "Locked fallback switch (off)"
+                },
+                {
+                  "type": "text",
+                  "id": "IN3Y0",
+                  "name": "Fallback switch label",
+                  "fill": "$text",
+                  "content": "Retry declined requests on another model",
+                  "fontFamily": "$font",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Q1bnaP",
+              "name": "Fallback reason · flush with switch",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "LNxYt",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "EsO5z",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Not offered on this endpoint: only the official Anthropic API retries on another model.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RxckK",
+          "name": "Model in use row",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "W5Lj29",
+              "name": "Models heading",
+              "fill": "$text",
+              "content": "Models · Lab gateway · Kontur",
+              "fontFamily": "$font",
+              "fontSize": 13,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "siKjq",
+              "name": "Model and unavailable Remove",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "rKrTD",
+                  "name": "Model id",
+                  "fill": "$text",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "lab-mini-8b",
+                  "fontFamily": "$mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "id": "jMc9H",
+                  "type": "ref",
+                  "ref": "u1XBP",
+                  "name": "Remove (unavailable)",
+                  "height": 28,
+                  "opacity": 0.4,
+                  "descendants": {
+                    "xfnek": {
+                      "icon": "trash-2",
+                      "width": 13,
+                      "height": 13
+                    },
+                    "Y7HQGw": {
+                      "content": "Remove",
+                      "fontSize": 11
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "B0LRq",
+              "name": "Model removal reason · flush with model row",
+              "width": "fill_container",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "SxHVT",
+                  "name": "Lock",
+                  "width": 11,
+                  "height": 11,
+                  "icon": "lock",
+                  "library": "lucide",
+                  "fill": "$subtle"
+                },
+                {
+                  "type": "text",
+                  "id": "V7fkub",
+                  "name": "Reason",
+                  "fill": "$subtle",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Planner uses lab-mini-8b. Switch to another model before removing it.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "V4kgjS",
+          "name": "Divider",
+          "fill": "$hairline",
+          "width": "fill_container",
+          "height": 1
+        },
+        {
+          "type": "text",
+          "id": "JRSZJ",
+          "name": "Rule",
+          "fill": "$subtle",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "The compact Preset group keeps its 22px indent. Standalone fallback and model-row reasons use the field’s left edge.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font",
+          "fontSize": 10,
+          "fontWeight": "normal"
+        }
+      ]
     }
   ],
   "variables": {
