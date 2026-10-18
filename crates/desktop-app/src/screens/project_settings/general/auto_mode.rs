@@ -1,6 +1,7 @@
-//! Auto mode's reviewer and the input-locked, in-place person-only question.
+//! Auto mode's reviewer and the input-locked, in-place person-only question, and the project's approval rules.
 mod controls;
 mod feedback;
+mod rules;
 
 use std::sync::Arc;
 
@@ -260,6 +261,7 @@ impl AutoMode {
       WidenProps {
         id: "settings-auto-question".into(),
         card: false,
+        affirming: false,
         automation: crate::mcp::input_gate::Guarded::ApprovalWidening,
         title: ctx.t("project_settings.confirmAuto"),
         reasons: vec![ctx.t("project_settings.confirmAutoDetail")].into(),

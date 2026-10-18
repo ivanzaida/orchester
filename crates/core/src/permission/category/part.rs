@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
   CommandCategory,
+  build_output::BuildOutput,
   install::InstallSource,
   programs::{Judged, Kind},
 };
@@ -94,6 +95,8 @@ pub struct CommandPart {
   pub(super) through_path: bool,
   /// Its program only edits the files it names ([`Judged::edits`]).
   pub(super) edits: bool,
+  /// A Cargo build's target directory, where it writes its output ([`super::build_output`]).
+  pub(super) build_output: Option<BuildOutput>,
 }
 
 impl CommandPart {
@@ -125,6 +128,7 @@ impl CommandPart {
       runs_script: false,
       through_path: false,
       edits: judged.edits,
+      build_output: None,
     }
   }
 
@@ -187,6 +191,20 @@ impl CommandPart {
   /// Whether it writes a file outside the worktree, or deletes one outside the temporary folder.
   pub const fn writes_outside(&self) -> bool {
     self.outside_write.is_some() || self.outside_delete.is_some()
+  }
+
+  /// The target directory this part, a Cargo build, writes its output into, and nothing else Orchester can tell of
+  /// ([`super::build_output`]); `None` for any other part, and for one that also redirects into a file, reaches
+  /// outside the worktree and its writable folders, reads a credential, installs or was not read to the end.
+  pub fn build_output(&self) -> Option<&BuildOutput> {
+    self.build_output.as_ref().filter(|_| {
+      self.category == CommandCategory::Worktree
+        && !self.writes_output
+        && !self.reads_secrets
+        && !self.installs
+        && !self.runs_script
+        && self.outside.is_empty()
+    })
   }
 
   /// Whether it runs a script file of the worktree, whose content Orchester does not read.

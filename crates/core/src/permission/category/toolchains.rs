@@ -71,6 +71,10 @@ impl Toolchains {
     }
   }
 
+  pub(super) fn cargo_homes(&self) -> &[PathBuf] {
+    &self.cargo
+  }
+
   /// Where `path` (resolved) lies in the toolchains' homes: `Some(true)` in their dependency sources,
   /// `Some(false)` elsewhere in a home, `None` in none of them.
   pub(super) fn sources(&self, path: &Path) -> Option<bool> {

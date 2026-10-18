@@ -32,11 +32,12 @@ pub fn section(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings
   } else {
     reviewer_row(ctx, tab, options, busy)
   };
+  let rules = super::rules::row(ctx, props, settings, save);
   form_section(
     "settings-auto",
     &ctx.t("project_settings.auto"),
     None,
-    vec![on_row, reviewer],
+    vec![on_row, reviewer, rules],
   )
   .into()
 }
@@ -107,7 +108,7 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
     "settings-auto-reviewer",
     ("project_settings.reviewer", "project_settings.reviewerDetail"),
     control.into(),
-    Place::Last,
+    Place::Within,
   )
 }
 fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
@@ -115,11 +116,12 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
   let connections = std::iter::once((String::new(), default))
     .chain(options.connections.into_iter().map(|(id, name)| (id, name.into())))
     .collect();
+  let unavailable = on_providers(ctx, options.on_providers);
   let connection = select(
     ctx,
     "settings-reviewer-connection",
     "project_settings.connection",
-    &tab.connection,
+    (&tab.connection, unavailable),
     connections,
     busy,
   );
@@ -127,7 +129,7 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     ctx,
     "settings-reviewer-model",
     "project_settings.model",
-    &tab.model,
+    (&tab.model, Vec::new()),
     options
       .models
       .into_iter()
@@ -139,7 +141,7 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     ctx,
     "settings-reviewer-effort",
     "project_settings.effort",
-    &tab.effort,
+    (&tab.effort, Vec::new()),
     std::iter::once((String::new(), ctx.t("project_settings.defaultEffort")))
       .chain(
         options
@@ -187,7 +189,7 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     "settings-auto-reviewer",
     ("project_settings.reviewer", "project_settings.reviewerDetail"),
     controls.into(),
-    Place::Last,
+    Place::Within,
   )
 }
 
@@ -208,11 +210,21 @@ fn model_label(ctx: &Ctx, model: &str) -> Arc<str> {
   ctx.t(key)
 }
 
+/// The connections on an API provider, listed unavailable with why (`kGBHZ`): the reviewer starts its CLI on its own
+/// sign-in.
+fn on_providers(ctx: &Ctx, connections: Vec<(String, String)>) -> Vec<SelectOption<String>> {
+  let reason = ctx.t("project_settings.reviewerApiProvider");
+  connections
+    .into_iter()
+    .map(|(id, name)| SelectOption::new(id, name).detail(reason.clone()).disabled(true))
+    .collect()
+}
+
 fn select(
   ctx: &mut Ctx,
   id: &str,
   key: &str,
-  value: &Signal<String>,
+  (value, unavailable): (&Signal<String>, Vec<SelectOption<String>>),
   options: Vec<(String, Arc<str>)>,
   locked: bool,
 ) -> Element {
@@ -233,6 +245,7 @@ fn select(
       options
         .into_iter()
         .map(|(value, label)| SelectOption::new(value, label))
+        .chain(unavailable)
         .collect(),
     )
     .render(ctx)

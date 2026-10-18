@@ -459,8 +459,8 @@ fn needs_you_panel_asks_a_person_to_confirm_a_wider_answer() {
     format!("Approve similar requests until Run {run} ends?")
   );
   assert!(
-    window.link.input_gate().protecting(),
-    "while the question shows, MCP clients' window input is refused"
+    !window.link.input_gate().protecting(),
+    "the question locks no window input: an MCP client may still look, move and take it back"
   );
   settle(&mut window);
   assert!(
@@ -477,10 +477,6 @@ fn needs_you_panel_asks_a_person_to_confirm_a_wider_answer() {
   window.until("the question taken back", |window| {
     window.tree.get_element_by_id(&question).is_none()
   });
-  assert!(
-    !window.link.input_gate().protecting(),
-    "the lock lifts with the question"
-  );
   assert!(window.tree.get_element_by_id(&refused).is_none());
   click(&mut window, &similar);
   window.until("the question again", |window| {

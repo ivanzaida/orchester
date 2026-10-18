@@ -159,7 +159,10 @@ impl Decisions {
     if self.send.state().get_untracked().is_pending() {
       return;
     }
-    let wider = matches!(given, Given::ApproveSimilar | Given::ApproveEverything);
+    let wider = matches!(
+      given,
+      Given::ApproveSimilar | Given::ApproveProject | Given::ApproveEverything
+    );
     let by = input_gate::answerer(self.gate.as_ref(), Guarded::ApprovalWidening);
     let (by, stage) = match by {
       Some(Answerer::Automation) if wider => (Answerer::Automation, Stage::Refused(Refused::WiderPersonOnly)),

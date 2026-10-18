@@ -14,6 +14,7 @@ mod support;
 
 mod accounts;
 mod add_cli;
+mod api_provider;
 mod harness;
 mod list;
 mod mcp;

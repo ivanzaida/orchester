@@ -4,9 +4,12 @@
 //! program found on the search path, which Orchester checks at once (its version, sign-in and models).
 //! Only a copy found on the search path is offered: choosing another file is not built in this app.
 //! Save connection waits for a check that recognized the CLI; one that is not signed in may be saved and
-//! reads Sign-in required. The first reason it cannot be saved stays under the actions.
+//! reads Sign-in required. The CLI runs on its own sign-in, on an account, or on an API provider with a key
+//! ([`super::provider_form`]), which only a person chooses. The first reason it cannot be saved stays under the
+//! actions.
 
 mod check;
+mod naming;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -14,7 +17,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction, FutureHandle, FutureState},
-    i18n::I18n,
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
@@ -24,24 +26,31 @@ use lurq::{
 use orchester_core::{
   connection::{AgentProvider, ConnectionAccount, ConnectionCheck},
   name::Name,
+  secret::SecretValue,
 };
 use orchester_workspace::{
   activity::operations,
   background,
   connections::{
-    data::{ConnectionDraft, ProjectConnections, save_on_account_in},
+    api_provider::{RunsOn, save_cli_in},
+    data::{ConnectionDraft, ProjectConnections},
     probe,
   },
-  messages::{self, Message},
+  messages::Message,
   tasks::outside::Outside,
 };
 
-use self::check::{Checked, check_row, program_row};
+use self::{
+  check::{Checked, check_row, program_row},
+  naming::{name_problem, suggest, suggested_name},
+};
 use super::{
   data::{self, Saved},
   page::{Head, action_bar, page},
+  provider_form::ProviderForm,
 };
 use crate::{
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
@@ -93,7 +102,7 @@ struct Chosen(ConnectionAccount);
 
 impl DevtoolsInspectable for Chosen {}
 
-type SaveAction = FutureAction<(ConnectionDraft, ConnectionAccount), Saved, Message>;
+type SaveAction = FutureAction<(ConnectionDraft, RunsOn, Option<SecretValue>), Saved, Message>;
 
 pub struct AddAgent {
   save: SaveAction,
@@ -109,6 +118,8 @@ pub struct AddAgent {
   recheck: Signal<u64>,
   /// The account chosen, by id; empty while it is the CLI's Default.
   account: Signal<String>,
+  /// Whether it runs on an API provider instead, and the provider's fields.
+  provider: ProviderForm,
 }
 
 impl Component for AddAgent {
@@ -123,6 +134,7 @@ impl Component for AddAgent {
       program: ctx.signal(String::new()),
       recheck: ctx.signal(0),
       account: ctx.signal(String::new()),
+      provider: ProviderForm::new(ctx),
     };
     let save = page.save.clone();
     let project = ctx.props::<AddAgentProps>().project.open.project.id();
@@ -153,13 +165,21 @@ impl Component for AddAgent {
       .map_or(ConnectionAccount::Default, ConnectionAccount::of);
     let checked = checked(ctx, (provider, program.clone(), account.clone()), self.recheck.get());
     let state = Checked::of(&found, program.as_ref(), &checked);
-    let reason = self.reason(ctx, listed.data.as_ref(), &state, &save.state().get());
-    let sections = vec![
+    let known = listed.data.clone().unwrap_or_default();
+    let reason = self
+      .reason(ctx, listed.data.as_ref(), &state, &save.state().get())
+      .or_else(|| self.provider.reason(ctx, &known));
+    let mut sections = vec![
       self.kind_section(ctx, listed.data.as_ref(), props.project.open.project.name().as_str()),
       self.connection_section(ctx, listed.data.as_ref(), (&found, &state), &accounts),
-      after(ctx, provider, props.project.open.project.name().as_str()),
+      self.provider.section(ctx, provider, &known),
     ];
-    let bar = self.bar(ctx, &props, (&save, program, &state, account), reason.as_deref());
+    sections.push(match self.provider.on() {
+      true => ProviderForm::next_step(ctx),
+      false => after(ctx, provider, props.project.open.project.name().as_str()),
+    });
+    let runs_on = self.provider.runs_on(&known, account);
+    let bar = self.bar(ctx, &props, (&save, program, &state, runs_on), reason.as_deref());
     let head = head(ctx, &props, &save.state().get());
     page(ctx, Screen::NewConnection, head, sections, bar)
   }
@@ -198,7 +218,6 @@ impl AddAgent {
     found?.iter().find(|copy| copy.display().to_string() == chosen).cloned()
   }
 
-  /// Fills the name with the suggested one until the person types their own.
   /// The first reason Save connection cannot be used, in field order; `None` once it can.
   fn reason(
     &self,
@@ -227,7 +246,7 @@ impl AddAgent {
     &self,
     ctx: &mut Ctx,
     props: &AddAgentProps,
-    (save, program, state, account): (&SaveAction, Option<PathBuf>, &Checked, ConnectionAccount),
+    (save, program, state, runs_on): (&SaveAction, Option<PathBuf>, &Checked, Option<RunsOn>),
     reason: Option<&str>,
   ) -> Element {
     let navigation = Navigation::of(ctx);
@@ -240,25 +259,34 @@ impl AddAgent {
         ))
       });
     let button = ActionButton::new("connection-save", ButtonKind::Primary, ctx.t("connections.dialog.save"));
-    let draft = match (program, state.check(), Name::new(&self.name.get())) {
-      (Some(executable), Some(check), Ok(name)) if reason.is_none() => Some(ConnectionDraft {
-        id: None,
-        name,
-        provider: self.kind.get().0,
-        executable,
-        check: check.clone(),
-      }),
+    let draft = match (program, state.check(), Name::new(&self.name.get()), runs_on) {
+      (Some(executable), Some(check), Ok(name), Some(runs_on)) if reason.is_none() => Some((
+        ConnectionDraft {
+          id: None,
+          name,
+          provider: self.kind.get().0,
+          executable,
+          check: check.clone(),
+        },
+        runs_on,
+      )),
       _ => None,
     };
     let button = match (save.state().get().is_pending(), draft) {
       (true, _) => button.loading(),
-      (false, Some(draft)) => {
-        let save = save.clone();
-        button.on_click(move || save.run((draft.clone(), account.clone())))
+      (false, Some((draft, runs_on))) => {
+        let (save, guard) = (save.clone(), self.provider.save_guard());
+        let gate = ctx.use_context::<InputGate>();
+        button.on_click(move || {
+          if let Some(value) = guard.admit(&runs_on, gate.as_ref()) {
+            save.run((draft.clone(), runs_on.clone(), value));
+          }
+        })
       }
       (false, None) => button.disabled(),
     };
-    action_bar(vec![cancel.into(), button.into()], reason)
+    let refusal = self.provider.refusal(ctx);
+    action_bar(vec![cancel.into(), button.into()], refusal.as_deref().or(reason))
   }
 
   /// The kinds; choosing another CLI suggests its name, unless the person typed one.
@@ -358,13 +386,17 @@ impl AddAgent {
       Place::Within,
     );
     let program = program_row(ctx, provider, (found, &self.program));
-    let account = super::account::add_row(ctx, accounts, provider, &self.account);
-    let check = check_row(ctx, provider, state, &self.recheck);
+    let mut rows = vec![name, program];
+    // A connection on an API provider runs on its key, on no account of the CLI.
+    if !self.provider.on() {
+      rows.push(super::account::add_row(ctx, accounts, provider, &self.account));
+    }
+    rows.push(check_row(ctx, (provider, self.provider.on()), state, &self.recheck));
     section(
       "connection-section",
       &ctx.t("connections.dialog.connection"),
       None,
-      vec![name, program, account, check],
+      rows,
     )
     .into()
   }
@@ -397,87 +429,20 @@ fn checked(
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {
   let props = ctx.props::<AddAgentProps>().clone();
-  let activity = Services::of(ctx).activity;
-  ctx.future_action(move |(draft, account): (ConnectionDraft, ConnectionAccount)| {
-    let (activity, open) = (activity.clone(), props.project.open.clone());
-    async move {
-      let spec = operations::connection_save(&open, draft.name.as_str());
-      let save = async move {
-        background::run(move || save_on_account_in(&open.repo_root, draft, account).map(Saved))
-          .await?
-          .map_err(|error| {
-            tracing::error!(%error, "cannot save the connection");
-            error.message()
-          })
-      };
-      activity.track(spec, save).await
-    }
-  })
-}
-
-/// `{CLI} · {project}`, numbered when another connection of the project has the name.
-/// Puts `new` in the name while it holds the last suggestion or nothing: a name the person typed stays.
-fn suggest(name: &Signal<String>, suggested: &Signal<String>, new: String) {
-  let current = name.get_untracked();
-  let previous = suggested.get_untracked();
-  if (current.is_empty() || current == previous) && current != new {
-    name.set(new.clone());
-  }
-  if previous != new {
-    suggested.set(new);
-  }
-}
-
-fn suggested_name(i18n: &I18n, listed: &ProjectConnections, provider: AgentProvider, project: &str) -> String {
-  let short = i18n.t(short_key(provider));
-  let taken = |name: &str| taken_names(listed).any(|taken| taken == name);
-  let plain = i18n.t_args(
-    "connections.dialog.suggestedName",
-    [("provider", &*short), ("project", project)],
-  );
-  if !taken(&plain) {
-    return plain.to_string();
-  }
-  (2_usize..)
-    .map(|number| {
-      i18n
-        .t_args(
-          "connections.dialog.suggestedNameNumbered",
-          [
-            ("provider", &*short),
-            ("project", project),
-            ("number", &number.to_string()),
-          ],
-        )
-        .to_string()
-    })
-    .find(|name| !taken(name))
-    .expect("only finitely many connection names are taken")
-}
-
-const fn short_key(provider: AgentProvider) -> &'static str {
-  match provider {
-    AgentProvider::CodexCli => "connections.provider.codexShort",
-    AgentProvider::ClaudeCodeCli => "connections.provider.claudeShort",
-    AgentProvider::AnthropicApi => "connections.provider.anthropicApiShort",
-    AgentProvider::OpenAiApi => "connections.provider.openaiApiShort",
-  }
-}
-
-/// The names the project's agent and GitHub connections have; they share one list.
-fn taken_names(listed: &ProjectConnections) -> impl Iterator<Item = &str> {
-  let agents = listed.connections.iter().map(|connection| connection.name().as_str());
-  agents.chain(listed.github.iter().map(|connection| connection.name().as_str()))
-}
-
-/// Why `name` cannot be the connection's name.
-fn name_problem(ctx: &Ctx, listed: &ProjectConnections, name: &str) -> Option<Arc<str>> {
-  if let Err(error) = Name::new(name) {
-    return Some(message_text(ctx, &messages::name_error(&error)));
-  }
-  taken_names(listed)
-    .any(|taken| taken == name.trim())
-    .then(|| ctx.t("connections.dialog.nameTaken"))
+  let services = Services::of(ctx);
+  let (activity, vault) = (services.activity, services.vault);
+  ctx.future_action(
+    move |(draft, runs_on, value): (ConnectionDraft, RunsOn, Option<SecretValue>)| {
+      let (activity, open, vault) = (activity.clone(), props.project.open.clone(), vault.clone());
+      async move {
+        let spec = operations::connection_save(&open, draft.name.as_str());
+        let save = async move {
+          background::run(move || save_cli_in(&open.repo_root, vault.get(), draft, runs_on, value).map(Saved)).await?
+        };
+        activity.track(spec, save).await
+      }
+    },
+  )
 }
 
 fn head(ctx: &mut Ctx, props: &AddAgentProps, saving: &FutureState<Saved, Message>) -> Head {

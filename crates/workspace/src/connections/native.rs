@@ -60,24 +60,39 @@ pub fn save_native_in(
   value: Option<SecretValue>,
 ) -> Result<ConnectionId, Message> {
   let mut db = ProjectDb::open(repo_root).map_err(|error| store_failure(&error))?;
+  let now = Timestamp::now();
+  with_key(&mut db, vault, (&draft.key, value), |db, key| {
+    store_connection(db, draft, key, now)
+  })
+}
+
+/// What `store` does with the key secret `key` names: one the project has, or one added first with `value` into
+/// `vault`. If `store` fails then, the secret just added is archived: its value is removed from the keychain and it
+/// leaves the project's secrets, while its record stays in the project database as archived.
+pub(super) fn with_key<T>(
+  db: &mut ProjectDb,
+  vault: &dyn SecretVault,
+  (key, value): (&KeySecret, Option<SecretValue>),
+  store: impl FnOnce(&mut ProjectDb, SecretId) -> Result<T, Message>,
+) -> Result<T, Message> {
   let project = db.project().id();
   let now = Timestamp::now();
-  let (key, created) = match &draft.key {
+  let (key, created) = match key {
     KeySecret::Existing(id) => (*id, false),
     KeySecret::New(new) => {
       let value = value.ok_or_else(|| Message::new("connections.native.key.valueRequired"))?;
-      let added = secret::add(&mut db, vault, project, new.clone(), &value, now).map_err(|error| {
+      let added = secret::add(db, vault, project, new.clone(), &value, now).map_err(|error| {
         tracing::error!(%error, "cannot add the connection's key secret");
         messages::secret_error(&error)
       })?;
       (added.id(), true)
     }
   };
-  let saved = store_connection(&mut db, draft, key, now);
+  let saved = store(db, key);
   if saved.is_err() && created {
     // The connection was not stored, so nothing refers to the secret just added; archiving removes its
     // value but keeps its record.
-    if let Err(error) = secret::archive(&mut db, vault, project, key, now) {
+    if let Err(error) = secret::archive(db, vault, project, key, now) {
       tracing::error!(%error, "cannot archive the key secret of a connection that was not saved");
     }
   }
@@ -211,6 +226,8 @@ fn connection_failure(error: &ConnectionError) -> Message {
     | ConnectionError::CheckKindMismatch(_)
     | ConnectionError::EndpointMismatch(_)
     | ConnectionError::NoAccounts(_)
-    | ConnectionError::AccountOfOtherCli => Message::new("errors.storage"),
+    | ConnectionError::AccountOfOtherCli
+    | ConnectionError::NoApiProvider(_)
+    | ConnectionError::ApiProviderWithAccount => Message::new("errors.storage"),
   }
 }

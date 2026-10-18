@@ -8,6 +8,7 @@ use std::sync::Arc;
 use orchester_agent::{Endpoint, WireQuirks, check_anthropic};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
+  id::SecretId,
   secret::{SecretValue, SecretVault},
   store::SecretStore,
   time::Timestamp,
@@ -32,7 +33,7 @@ impl Scheduler {
       ));
     }
     let db = ProjectDb::open(&self.inner.project_root).map_err(|error| failed(error.to_string()))?;
-    let key = api_key(&db, self.inner.vault.as_ref(), &api).map_err(failed)?;
+    let key = api_key(&db, self.inner.vault.as_ref(), api.key()).map_err(failed)?;
     let endpoint = Endpoint::new(api.base_url().clone(), key, WireQuirks::anthropic(&api))
       .with_provider_fallback(api.provider_fallback());
     let checked = check_anthropic(endpoint).await;
@@ -49,11 +50,11 @@ impl Scheduler {
   }
 }
 
-/// The API key of `api`, read from `vault`; an archived or missing secret, or one the keychain does not
-/// give, is refused, named, never with its value.
-pub(super) fn api_key(db: &ProjectDb, vault: &dyn SecretVault, api: &ApiEndpoint) -> Result<Arc<SecretValue>, String> {
+/// The API key in project secret `key`, a native connection's or an API provider's, read from `vault`; an archived
+/// or missing secret, or one the keychain does not give, is refused, named, never with its value.
+pub(super) fn api_key(db: &ProjectDb, vault: &dyn SecretVault, key: SecretId) -> Result<Arc<SecretValue>, String> {
   let secret = db
-    .secret(api.key())
+    .secret(key)
     .map_err(|error| error.to_string())?
     .filter(|secret| !secret.is_archived())
     .ok_or_else(|| "the connection's API key secret is missing or archived".to_owned())?;
@@ -61,7 +62,7 @@ pub(super) fn api_key(db: &ProjectDb, vault: &dyn SecretVault, api: &ApiEndpoint
     .read(&secret.vault_key(db.project().id()))
     .map(Arc::new)
     .map_err(|error| {
-      tracing::warn!(secret = %secret.name(), %error, "the keychain did not give a native connection's API key");
+      tracing::warn!(secret = %secret.name(), %error, "the keychain did not give a connection's API key");
       format!("the keychain did not give the API key {}", secret.name())
     })
 }

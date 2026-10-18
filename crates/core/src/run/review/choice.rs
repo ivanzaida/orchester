@@ -84,6 +84,10 @@ pub struct ResolvedReviewer<'a> {
 
 /// The kind of reviewer that runs on `connection`; `None` for one no reviewer runs on yet.
 pub fn reviewer_kind(connection: &Connection) -> Option<ReviewerKind> {
+  // A reviewer CLI starts on its own sign-in; one on an API provider is not offered (`docs/design/api-providers.md`).
+  if connection.api_provider().is_some() {
+    return None;
+  }
   match connection.kind() {
     ConnectionKind::Agent(AgentProvider::ClaudeCodeCli) => {
       connection.executable().is_some().then_some(ReviewerKind::ClaudeCode)

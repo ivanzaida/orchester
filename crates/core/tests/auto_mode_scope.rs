@@ -121,6 +121,7 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
     permissions: Some(&writing),
     push: PushFacts::default(),
     escalation: false,
+    build_output: &[],
   };
   let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
   assert!(review.approves(), "{review:?}");
@@ -141,6 +142,7 @@ fn auto_mode_reviews_an_unknown_command_unless_the_step_is_confined() {
       permissions: Some(&confined),
       push: PushFacts::default(),
       escalation: false,
+      build_output: &[],
     };
     let review = review_request(Some(&reviewer), (&unknown, &rules), Ok(input("frobnicate --all", ""))).review;
     assert_eq!(
@@ -162,6 +164,7 @@ fn auto_mode_leaves_every_codex_escalation_to_the_person() {
       permissions: Some(permissions),
       push: PushFacts::default(),
       escalation: true,
+      build_output: &[],
     };
     review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", ""))).review
   };
@@ -202,6 +205,7 @@ fn auto_mode_reason_loses_its_invisible_characters() {
     permissions: Some(&writing),
     push: PushFacts::default(),
     escalation: false,
+    build_output: &[],
   };
   let review = review_request(Some(&reviewer), (&build, &rules), Ok(input("cargo build", ""))).review;
   assert_eq!(review.reason(), Some("okuoy yb devorppa fine"));
@@ -217,6 +221,7 @@ fn auto_mode_reviews_a_push_only_to_the_runs_origin_of_its_checked_out_branch() 
         permissions: Some(&writing),
         push,
         escalation: false,
+        build_output: &[],
       },
     )
   };
@@ -260,6 +265,7 @@ fn auto_mode_holds_git_run_in_a_form_the_push_rules_cannot_follow() {
       origin_kept: true,
     },
     escalation: false,
+    build_output: &[],
   };
   assert_eq!(review_hold(&subject("git push origin orc/kon-1").1, &rules), None);
   for command in [
@@ -325,6 +331,7 @@ fn auto_mode_reviewer_is_told_unread_parts_alone_are_no_reason_to_ask() {
     permissions: Some(&writing),
     push: PushFacts::default(),
     escalation: false,
+    build_output: &[],
   };
   let reviewer = ReadsItsPrompt {
     model: ModelId::new("claude-haiku-4-5-20251001").expect("model"),
@@ -378,6 +385,7 @@ fn auto_mode_reviewer_is_told_to_approve_reads_of_dependencies_outside_the_workt
     permissions: Some(&writing),
     push: PushFacts::default(),
     escalation: false,
+    build_output: &[],
   };
   let reviewer = ReadsInstructions {
     model: ModelId::new("claude-haiku-4-5-20251001").expect("model"),

@@ -2,7 +2,10 @@
 //! as `Confirm · Turn off` `D2FVJJ` asks): the reasons, `connections::mcp::widenings`' words, and a way back first.
 //! Each caller explicitly classifies its consent: domain setup permissions, automatic approvals, or always
 //! person-only. The stored human opt-in permits only its matching app-owned question, never Settings itself.
-//! No press is taken before one rendered pass; forwarded input rechecks live consent when the handler runs.
+//! No press is taken before one rendered pass; forwarded input rechecks live consent when the handler runs. An
+//! approval card's question locks no window input: only its confirm refuses an MCP client's press, and the card
+//! refuses a wider answer from one besides (`task::cards::decisions`); taking it back (*Keep asking*) only narrows,
+//! so a client can still move, look and close it.
 
 use std::sync::Arc;
 
@@ -34,6 +37,9 @@ type Handler = Arc<dyn Fn() + Send + Sync>;
 pub struct WidenProps {
   pub id: Arc<str>,
   pub card: bool,
+  /// The question confirms an approval rather than warning of a widening: its reasons and its confirm carry
+  /// shield-check (`HYB5f`).
+  pub affirming: bool,
   pub automation: Guarded,
   pub title: Arc<str>,
   pub reasons: Arc<[Arc<str>]>,
@@ -48,6 +54,7 @@ impl PartialEq for WidenProps {
   fn eq(&self, other: &Self) -> bool {
     (
       self.card,
+      self.affirming,
       self.automation,
       &self.id,
       &self.title,
@@ -56,6 +63,7 @@ impl PartialEq for WidenProps {
       &self.keep,
     ) == (
       other.card,
+      other.affirming,
       other.automation,
       &other.id,
       &other.title,
@@ -79,16 +87,23 @@ impl Component for WidenConfirm {
 
   fn create(ctx: &mut Ctx) -> Self {
     let gate = ctx.use_context::<InputGate>();
-    let policy = ctx.props::<WidenProps>().automation;
+    let props = ctx.props::<WidenProps>();
+    let policy = props.automation;
+    let locks = locks_input(props);
     Self {
-      protected: parking_lot::Mutex::new(gate.as_ref().map(|gate| (policy, gate.protect(policy)))),
+      protected: parking_lot::Mutex::new(
+        gate
+          .as_ref()
+          .filter(|_| locks)
+          .map(|gate| (policy, gate.protect(policy))),
+      ),
       gate,
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<WidenProps>().clone();
-    if let Some(gate) = &self.gate {
+    if let Some(gate) = self.gate.as_ref().filter(|_| locks_input(&props)) {
       let mut protected = self.protected.lock();
       if protected
         .as_ref()
@@ -107,15 +122,25 @@ impl Component for WidenConfirm {
       .get()
       .data
       .is_some();
-    let keep = ActionButton::new(format!("{}-keep", props.id), ButtonKind::Secondary, props.keep.clone()).on_click({
-      let keep = guarded_handler(self.gate.clone(), props.automation, props.on_keep.clone());
-      move || keep()
-    });
+    // An approval card's question only narrows when taken back: any input may. Elsewhere taking it back may discard
+    // a person's draft, which stays theirs.
+    let keep = if locks_input(&props) {
+      guarded_handler(self.gate.clone(), props.automation, props.on_keep.clone())
+    } else {
+      props.on_keep.clone()
+    };
+    let keep = ActionButton::new(format!("{}-keep", props.id), ButtonKind::Secondary, props.keep.clone())
+      .on_click(move || keep());
     let confirm = ActionButton::new(
       format!("{}-confirm", props.id),
       ButtonKind::Primary,
       props.confirm.clone(),
     );
+    let confirm = if props.affirming {
+      confirm.icon(Icon::ShieldCheck)
+    } else {
+      confirm
+    };
     let confirm = if armed {
       let handler = guarded_handler(self.gate.clone(), props.automation, props.on_confirm.clone());
       confirm.on_click(move || handler())
@@ -128,6 +153,11 @@ impl Component for WidenConfirm {
       question(&props, (keep, confirm))
     }
   }
+}
+
+/// Whether the question locks the window's input from MCP clients while it shows: every one but an approval card's.
+fn locks_input(props: &WidenProps) -> bool {
+  !(props.card && props.automation == Guarded::ApprovalWidening)
 }
 
 fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -> Handler {
@@ -220,7 +250,15 @@ fn card_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButto
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Start)
-      .child(icon(Icon::ShieldAlert, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(
+        if props.affirming {
+          Icon::ShieldCheck
+        } else {
+          Icon::ShieldAlert
+        },
+        IconSize::Base,
+        PaletteColor::TextMuted,
+      ))
       .child(
         Text::new(reason)
           .variant(lurq::app::theme::TypographyStyle::Description)

@@ -17,6 +17,7 @@ mod inspector;
 mod list;
 mod mcp_form;
 mod page;
+mod provider_form;
 pub(crate) mod widen;
 pub(super) mod words;
 mod work;

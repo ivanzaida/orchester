@@ -60,6 +60,17 @@ impl AgentProvider {
     matches!(self.runtime(), AgentRuntime::Native(_))
   }
 
+  /// The API an agent CLI speaks to an API provider it runs on (`docs/design/api-providers.md`): Claude Code
+  /// Anthropic Messages, Codex OpenAI Responses (the only wire current Codex takes); `None` for a native provider,
+  /// which runs on no API provider.
+  pub const fn provider_wire(self) -> Option<WireApi> {
+    match self {
+      Self::ClaudeCodeCli => Some(WireApi::AnthropicMessages),
+      Self::CodexCli => Some(WireApi::OpenAiResponses),
+      Self::AnthropicApi | Self::OpenAiApi => None,
+    }
+  }
+
   /// Whether this version can run agents on the provider. OpenAI Responses has no client yet (§9, P2):
   /// a step on such a connection does not start, and the app says why.
   pub const fn runs_agents(self) -> bool {

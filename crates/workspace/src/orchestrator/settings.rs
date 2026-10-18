@@ -93,7 +93,7 @@ impl OrchestratorSetup {
         id: connection.id(),
         name: Arc::from(connection.name().as_str()),
         provider: connection.provider(),
-        unavailable: unavailable(connection.provider()),
+        unavailable: unavailable(connection),
       })
       .collect()
   }
@@ -141,7 +141,7 @@ impl OrchestratorSetup {
     self
       .connections
       .iter()
-      .find(|connection| unavailable(connection.provider()).is_none())
+      .find(|connection| unavailable(connection).is_none())
       .map(|connection| connection.id())
   }
 
@@ -163,7 +163,7 @@ impl OrchestratorSetup {
     let Some(connection) = self.connection(settings.connection()) else {
       return Readiness::ConnectionGone;
     };
-    if let Some(reason) = unavailable(connection.provider()) {
+    if let Some(reason) = unavailable(connection) {
       return Readiness::Unusable(reason);
     }
     Readiness::Ready {
@@ -201,7 +201,7 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
     .map_err(|error| messages::store_error(&error))?
     .and_then(|connection| AgentConnection::try_from(connection).ok())
     .ok_or_else(|| Message::new("orchestrator.settings.connectionGone"))?;
-  if let Some(reason) = unavailable(connection.provider()) {
+  if let Some(reason) = unavailable(&connection) {
     return Err(reason);
   }
   let now = Timestamp::now();
@@ -212,8 +212,13 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
   saved.map_err(|error| messages::store_error(&error))
 }
 
-/// Why the Orchestrator cannot run on a connection of `provider`.
-fn unavailable(provider: AgentProvider) -> Option<Message> {
+/// Why the Orchestrator cannot run on `connection`: not on an API provider, whose key the chat's turns are not
+/// started with (`docs/design/api-providers.md`), nor on a provider it does not run on.
+fn unavailable(connection: &AgentConnection) -> Option<Message> {
+  if connection.api_provider().is_some() {
+    return Some(Message::new("orchestrator.settings.apiProvider"));
+  }
+  let provider = connection.provider();
   if codex_held_back(provider) {
     return Some(Message::new("orchestrator.settings.codexHeldBack"));
   }
