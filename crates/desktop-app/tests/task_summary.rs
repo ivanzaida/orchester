@@ -310,7 +310,7 @@ fn summary_controls_say_why_they_are_unavailable() {
   assert!(page.locked("task-cancel-run"), "Cancel waits for a runner");
   assert_eq!(page.text("task-action-reasons"), "Runner not connected");
   page.open("queued, run not started");
-  assert!(page.locked("task-start-run"), "Retry run waits for a runner");
+  assert!(page.locked("task-start-run"), "Start run waits for a runner");
   page.open("draft, ready to queue");
   assert!(page.locked("task-run"), "a ready draft runs once a runner is connected");
   page.open("draft, missing details");

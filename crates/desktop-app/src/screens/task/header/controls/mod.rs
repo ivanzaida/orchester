@@ -121,7 +121,8 @@ pub fn controls(ctx: &Ctx, controls: &Controls) -> Vec<Control> {
   shown.0
 }
 
-/// Run for a draft that has every detail, Retry run for a queued task whose run did not start.
+/// Run for a draft that has every detail, Start run for a queued task whose run did not start (`kh5Er` in
+/// `Xxrdy`).
 fn without_run(ctx: &Ctx, controls: &Controls, shown: &mut Shown) {
   let Some((id, label, control)) = first_run(&controls.detail.task) else {
     return;
@@ -137,7 +138,7 @@ fn first_run(task: &Task) -> Option<(&'static str, &'static str, RunControl)> {
     TaskStatus::Draft if task.details().missing().is_empty() => {
       Some(("task-run", "task.controls.run", RunControl::Run(task.id())))
     }
-    TaskStatus::Queued => Some(("task-start-run", "task.controls.retry", RunControl::Start(task.id()))),
+    TaskStatus::Queued => Some(("task-start-run", "task.controls.start", RunControl::Start(task.id()))),
     TaskStatus::Draft => None,
   }
 }

@@ -190,6 +190,7 @@ fn description(ctx: &mut Ctx, details: &TaskDetails) -> Element {
     let on_link = links(ctx);
     MarkdownView::new("task-details-description-text", details.brief.as_str(), on_link)
       .style(TaskText::DetailsBody.role(), PaletteColor::TextPrimary)
+      .blank_line_between_blocks()
       .render(ctx)
   };
   let heading = ctx.t("details.description");

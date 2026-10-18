@@ -5,10 +5,10 @@
     "criteria": "Acceptance criteria",
     "notice": {
       "theAgent": "The agent",
-      "draftTitle": "Draft · not run yet",
+      "draftTitle": "No runs yet",
       "draftBody": "Add what the task still needs in Edit, then run it.",
       "queuedTitle": "Queued · its run has not started",
-      "queuedBody": "Retry run asks the runner to start it; the task never gets a second run.",
+      "queuedBody": "Start run asks the runner to start it; the task never gets a second run.",
       "elsewhereTitle": "Run #{{run}} on {{holder}}’s computer · {{status}}",
       "elsewhereBody": "Its steps, results and changes are on that computer, not this one. Here you see only what its holder reports.",
       "pendingTitle": "Queued · waiting for its run to start",

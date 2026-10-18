@@ -39,14 +39,13 @@
       "paused": "paused {{time}}",
       "stopped": "stopped {{time}}",
       "finished": "finished at {{time}}",
-      "draft": "Draft · not run yet",
+      "draft": "No runs yet",
       "queued": "Queued · its run has not started",
       "unreadable": "Run {{run}} · could not be read",
       "unreadableUnnumbered": "Its latest run could not be read"
     },
     "controls": {
       "start": "Start run",
-      "retry": "Retry run",
       "pause": "Pause run",
       "pausing": "Pausing…",
       "resume": "Resume run",

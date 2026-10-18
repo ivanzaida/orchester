@@ -13,7 +13,7 @@ use lurq::{
   node::{dimension::Dimension, padding::Padding},
 };
 use orchester_app::{
-  theme::{ExtraRadius, ExtraTypography},
+  theme::{ExtraRadius, ExtraTypography, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -277,6 +277,27 @@ fn markdown_reads_headings_lists_and_links() {
   for part in ["Approach", "Wrap ", "send()", "Record each attempt", "the docs"] {
     assert!(texts.contains(part), "{part} in {texts}");
   }
+}
+
+#[test]
+fn markdown_with_a_blank_line_between_paragraphs_keeps_one_line_of_its_body_between_them() {
+  let mut kit = Kit::show(|ctx| {
+    let view = |id: &str, text: &str| {
+      MarkdownView::new(id, text, Arc::new(|_: &str, _: &lurq::app::events::MouseEvent| {}))
+        .style(TaskText::DetailsBody.role(), PaletteColor::TextPrimary)
+        .blank_line_between_blocks()
+    };
+    Column::new()
+      .width(Dimension::Px(600.0))
+      .child(view("one", "Retry failed deliveries.").render(ctx))
+      .child(view("two", "Retry failed deliveries.
+
+Also handle cancellation.").render(ctx))
+      .into()
+  });
+  let line = kit.bounds("one").height;
+  // Two lines and the empty one between them, as `bU9bE` in `ZSiHd` draws a description.
+  assert_close(kit.bounds("two").height, 3.0 * line, "two paragraphs");
 }
 
 #[test]
