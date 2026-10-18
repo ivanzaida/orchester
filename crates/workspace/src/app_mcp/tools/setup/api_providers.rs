@@ -20,7 +20,7 @@ use crate::{
     services::{Services, blocking},
   },
   connections::{
-    api_provider::{base_url, model_id, provider_of, set_provider_in},
+    api_provider::{base_url, model_id, provider_of, set_provider},
     data::{ProjectConnections, SaveError},
   },
   messages::Message,
@@ -58,7 +58,9 @@ pub async fn set_api_provider(services: &Services, args: SetApiProvider) -> Resu
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    // The widening is judged on the connection as read here, and that connection is what is written, through the same
+    // database handle.
+    let mut db = ProjectDb::open(&open.repo_root)?;
     let connection = agent_named(&db, &args.connection)?;
     let provider = match &args.api_provider {
       Some(input) => Some(provider_from(&db, input)?),
@@ -68,12 +70,12 @@ pub async fn set_api_provider(services: &Services, args: SetApiProvider) -> Resu
       let reasons = widens(&db, connection.name().as_str(), connection.api_provider(), provider)?;
       widening::allowed(&services, reasons)?;
     }
-    drop(db);
-    set_provider_in(&open.repo_root, connection.id(), provider).map_err(|error| saved(&error, &args.connection))?;
+    let id = connection.id();
+    set_provider(&mut db, connection.into_connection(), provider).map_err(|error| saved(&error, &args.connection))?;
     services.changes.record(open.project.id(), Outside::Connections);
     let listed = ProjectConnections::load_in(&open.repo_root)?;
     let connection = listed
-      .connection(connection.id())
+      .connection(id)
       .ok_or_else(|| ToolError::not_found(crate::app_mcp::error::Missing::Connection, &args.connection))?;
     Ok(json!({ "connection": agent_json(connection, &listed.secrets, open.project.id()) }))
   })

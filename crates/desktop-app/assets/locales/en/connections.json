@@ -410,7 +410,7 @@
       "urlPlaceholderClaude": "https://api.deepseek.com/anthropic",
       "urlPlaceholderCodex": "https://api.deepseek.com",
       "key": "API key",
-      "keyHint": "A project secret holds the key. Orchester gives it only to the CLI it starts, never shows it and never puts it in prompts or logs.",
+      "keyHint": "A project secret holds the key. Orchester gives it only to the CLI it starts, which keeps it from the commands and MCP servers it runs; it is never shown, nor put in prompts or logs.",
       "keyPlaceholder": "Choose a secret",
       "secretName": "{{name}} ({{environment}})",
       "newSecret": "New secret…",
@@ -425,7 +425,7 @@
       "modelsHint": "The model ids the provider serves, separated by commas. Agent profiles on this connection choose from them.",
       "modelsPlaceholder": "deepseek-flash, deepseek-v4-pro",
       "sentTo": "Prompts, repository content and command output are sent to {{host}}",
-      "sentToDetail": "Under the provider’s terms and data policy, with this key. The commands the agent runs can read the key from their environment.",
+      "sentToDetail": "Under the provider’s terms and data policy, with this key. The commands the agent runs and its MCP servers get neither the key nor other variables whose names look like credentials.",
       "notSupported": "On an API provider Orchester reads no plan limits, offers no reasoning effort, and counts tokens only where the provider reports them. The Orchestrator and auto mode’s reviewer don’t run on it.",
       "theHost": "the provider",
       "interface": "Interface",
@@ -438,7 +438,8 @@
         "secretName": "Name the new key secret.",
         "secretValue": "Enter the key.",
         "models": "Enter at least one model the provider serves."
-      }
+      },
+      "personOnly": "Only a person saves a connection on an API provider here: input from an MCP client is taken only while you let automation change agent permissions."
     }
   }
 }

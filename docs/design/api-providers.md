@@ -1,9 +1,9 @@
 # API providers: agent CLIs on third-party model APIs
 
 Asked 2026-10-18: *the ability to add agents from DeepSeek etc., through an API key, with an Anthropic/Codex
-interface.* This note is the design of what was built on branch `claude/api-providers`; it supersedes decision 7 of
-`docs/architecture/native-agent.md` (*no custom base URL or key for CLI connections*), which the person's request
-overrides. The native agent (Orchester's own loop on a model API) is unchanged and separate.
+interface.* This note is the design of what was built on branch `claude/api-providers`. The person lifted decision 7 of
+`docs/architecture/native-agent.md` (*no custom base URL or key for CLI connections*) on 2026-10-18: API providers
+on the CLI connections go first; the native agent plan stays as it is. The native agent (Orchester's own loop on a model API) is unchanged and separate.
 
 No Pencil frame exists for any of this. The UI below is built from the closest existing connection-form patterns and
 needs a design (see *Design needed*).
@@ -48,7 +48,7 @@ CLI configured for the provider.
 - The Orchestrator chat and auto mode's reviewer start their CLI on its own sign-in; a connection on a provider is
   not offered there (`orchestrator.settings.apiProvider`, `reviewer_kind` = `None`) rather than run on the wrong
   credentials.
-- Store: project database migration `api_providers` adds `connections.api_provider TEXT` (NULL, or
+- Store: project database migration 72, `api_providers` (after master's `run_rebases`, 71), adds `connections.api_provider TEXT` (NULL, or
   `{"schema":1,"body":{base_url,key,models:[…]}}`). Older builds refuse the newer database as for every migration,
   so none of them runs the connection on the CLI's own sign-in by ignoring the provider.
 
@@ -63,8 +63,13 @@ runner's redaction set masks it in every event, error and transcript line.
 |---|---|
 | `ANTHROPIC_BASE_URL` | the base URL |
 | `ANTHROPIC_AUTH_TOKEN` | the key (secret), sent as `Authorization: Bearer`; it takes precedence over a saved login at once (`ANTHROPIC_API_KEY` would need an interactive approval) |
-| `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `CLAUDE_CODE_SUBAGENT_MODEL` | the step's model, so aliases, background work (the Haiku slot) and subagents never ask the provider for a Claude model id it does not serve (`ANTHROPIC_SMALL_FAST_MODEL` is deprecated) |
+| `ANTHROPIC_MODEL`, `ANTHROPIC_DEFAULT_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `ANTHROPIC_DEFAULT_FABLE_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL` (deprecated), `CLAUDE_CODE_SUBAGENT_MODEL` | the step's model, so aliases, background work (the Haiku slot) and subagents never ask the provider for a Claude model id it does not serve |
+| `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` | `1`: the processes Claude Code starts don't get the key |
 
+Every other `ANTHROPIC_*` variable the project's environment sets is dropped (`ANTHROPIC_API_KEY` would reach the
+provider's host in `x-api-key`, `ANTHROPIC_CUSTOM_HEADERS` as headers, the `ANTHROPIC_*_BASE_URL` variables would
+route elsewhere), and so are the routing switches `CLAUDE_CODE_USE_{BEDROCK,VERTEX,FOUNDRY,MANTLE,ANTHROPIC_AWS}`,
+`CLAUDE_CODE_SKIP_*_AUTH` of those, `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST` and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`.
 `--model` keeps naming the step's model. Claude Code already runs with `--setting-sources ""`, so no settings file
 can override these.
 
@@ -96,14 +101,32 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
 - **Images, tools, thinking**: whatever the provider accepts of what the CLI sends; Orchester does not translate. A
   provider that rejects a request shows as the CLI's error in the run (e.g. DeepSeek's Anthropic route ignores
   `cache_control` and MCP tool blocks).
-- **The key and the agent's commands**: Claude Code and Codex pass their environment to the commands the agent runs,
-  so those commands can read the key, as they would if the person started the CLI with the variable themselves.
-  Claude Code's `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` and Codex's `shell_environment_policy.ignore_default_excludes=false`
-  could strip it; neither is turned on because the first also strips stdio MCP servers' variables (Orchester's own
-  permission prompt relay among them, unverified) and the second also drops project variables whose names contain
-  KEY, SECRET or TOKEN. A decision for the person.
+- **Who can read the key** (probed 2026-10-18 on Windows with fake values and no model turn; scratch scripts in
+  `.tmp/api-providers/`):
+  - Claude Code 2.1.301 with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`: a stdio MCP server started from the MCP
+    configuration no longer sees `ANTHROPIC_AUTH_TOKEN` (without the scrub it does), while the variables of its own
+    configuration stay (`PROBE_TOKEN` stayed), so Orchester's permission-prompt relay keeps its token. That Bash
+    commands and hooks are scrubbed too is the docs' word (`code.claude.com/docs/en/env-vars`, *What the subprocess
+    environment scrub removes*); proving it needs a model turn. The scrub also removes other credential-looking
+    variables (by name or value) from the commands of a provider run, and `CLAUDE_CONFIG_DIR`.
+  - Codex 0.159.2: `-c shell_environment_policy.ignore_default_excludes=false` keeps `ORCHESTER_PROVIDER_API_KEY` out
+    of commands (`codex sandbox` with a fake key: gone; a user's own `exclude` list still applied). An `exclude=[…]`
+    override was rejected: it replaced the user's own list (probed). Side effect: on a provider run, project variables
+    whose names contain KEY, SECRET or TOKEN don't reach the commands either. Codex starts stdio MCP servers with a
+    short whitelist only: a probe server saw neither the key nor any other variable of Codex's environment.
+  - The CLI process itself holds the key, as it must to call the provider.
+- **Telemetry**: Claude Code still sends its nonessential traffic (telemetry, update checks) to Anthropic without the
+  provider's key; `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` would stop it (and auto-updates). Left off: the
+  person's choice.
 - **Removing a connection**: Orchester has no removal of agent connections; *Edit connection* can switch a connection
   back to the CLI's own sign-in, which removes its provider.
+- **Plan limits**: a step stopped at an account's plan limit is never offered to continue on a provider connection
+  (`AgentConnection::continues_plan_limited`), in the window or the runner.
+- **Sessions**: a session continues only on what it was made on (`SessionOrigin`): the account (as before) and the
+  provider's base URL and key secret, recorded per invocation with the invocation's engine (`InvocationEngine::key`).
+  Another host or key, a provider where there was none, or none where there was one, starts a new session. A resumed
+  Codex thread is checked for its `modelProvider` like a new one.
+- **Orchester's tools' answers** leave out the provider key as well as the MCP servers' secrets.
 
 ## Domain MCP tools and the person gate
 

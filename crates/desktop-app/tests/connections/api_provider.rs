@@ -85,6 +85,12 @@ fn connections_api_provider_is_chosen_in_edit_connection_and_shown_in_the_inspec
   assert!(seeded.text("connection-form-reason").contains("at least one model"));
   seeded.set("connection-provider-models", "deepseek-flash, deepseek-v4-pro");
   assert!(!seeded.exists("connection-form-reason"), "nothing keeps it from saving");
+  lurq::app::events::with_synthetic_input(|| seeded.click("connection-edit-save"));
+  assert!(
+    seeded.text("connection-form-reason").contains("Only a person"),
+    "an MCP client's click is refused, and the page says so"
+  );
+  assert!(claude(&seeded).api_provider().is_none(), "nothing was saved");
   seeded.click("connection-edit-save");
   seeded.until("the inspector", |seeded| seeded.exists("connection-provider-base-url"));
 

@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform, plan_limits::LimitReading},
+  connection::{AgentConnection, plan_limits::LimitReading},
   id::{AgentAccountId, ConnectionId, RunId},
   run::{PauseReason, RunLimit, RunStatus},
   store::{ActivityStore, ConnectionStore, RunStore},
@@ -55,15 +55,7 @@ impl PlanStop {
       .connections()?
       .into_iter()
       .filter_map(|other| AgentConnection::try_from(other).ok())
-      .filter(|other| {
-        other.provider() == provider
-          && other.plan_account() != account
-          && other.status().is_usable()
-          && other
-            .account()
-            .start_problem(provider, Platform::current(), Path::is_dir)
-            .is_none()
-      })
+      .filter(|other| other.continues_plan_limited(provider, account))
       .collect();
     let started = db
       .invocations(run.id())?

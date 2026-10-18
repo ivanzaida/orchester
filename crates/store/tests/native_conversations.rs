@@ -103,6 +103,7 @@ fn native_invocation_engine_is_kept_once() {
     endpoint: BaseUrl::new("https://api.anthropic.com").expect("base URL"),
     vendor: EngineVendor::Provider(AgentProvider::AnthropicApi),
     effort: Some(Effort::High),
+    key: None,
   };
   db.save_invocation_engine(invocation.id, &engine).expect("save");
   assert_eq!(db.invocation_engine(invocation.id).expect("read"), Some(engine.clone()));

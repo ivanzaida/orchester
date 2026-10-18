@@ -47,10 +47,10 @@ use self::{
 use super::{
   data::{self, Saved},
   page::{Head, action_bar, page},
-  provider_form::{KeyValue, ProviderForm},
+  provider_form::ProviderForm,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, ProjectPage, Route, Screen},
@@ -278,13 +278,18 @@ impl AddAgent {
     let button = match (save.state().get().is_pending(), draft) {
       (true, _) => button.loading(),
       (false, Some((draft, runs_on))) => {
-        let (save, value) = (save.clone(), self.provider.key_value());
+        let (save, guard) = (save.clone(), self.provider.save_guard());
         let gate = ctx.use_context::<InputGate>();
-        button.on_click(move || saved(&save, (&draft, &runs_on), &value, gate.as_ref()))
+        button.on_click(move || {
+          if let Some(value) = guard.admit(&runs_on, gate.as_ref()) {
+            save.run((draft.clone(), runs_on.clone(), value));
+          }
+        })
       }
       (false, None) => button.disabled(),
     };
-    action_bar(vec![cancel.into(), button.into()], reason)
+    let refusal = self.provider.refusal(ctx);
+    action_bar(vec![cancel.into(), button.into()], refusal.as_deref().or(reason))
   }
 
   /// The kinds; choosing another CLI suggests its name, unless the person typed one.
@@ -423,16 +428,6 @@ fn checked(
     },
   );
   read.state().get()
-}
-
-/// Saves `draft` on `runs_on`, with the key typed for a new secret. Running a connection on an API provider widens
-/// what its agents send where, so automation's input saves one only where a person lets it.
-fn saved(save: &SaveAction, (draft, runs_on): (&ConnectionDraft, &RunsOn), value: &KeyValue, gate: Option<&InputGate>) {
-  if matches!(runs_on, RunsOn::Provider(_)) && !input_may_decide(gate, Guarded::PermissionWidening) {
-    tracing::warn!("synthetic input saved a connection on an API provider; not taken");
-    return;
-  }
-  save.run((draft.clone(), runs_on.clone(), value.for_saving(runs_on)));
 }
 
 fn save_action(ctx: &mut Ctx) -> SaveAction {

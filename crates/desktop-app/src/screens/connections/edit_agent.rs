@@ -37,11 +37,11 @@ use super::{
   account, data,
   mcp_form::{McpForm, McpFormProps},
   page::{Head, action_bar, page},
-  provider_form::{KeyValue, ProviderForm},
+  provider_form::ProviderForm,
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   project::ShownProject,
   routes::{ConnectionsView, ProjectPage, Route, Screen},
@@ -325,13 +325,17 @@ impl EditConnection {
     let save = match wanted {
       _ if state.is_pending() => save.loading(),
       Some(wanted) => {
-        let (action, value, repo) = (
+        let (action, guard, repo) = (
           self.runs_on.clone(),
-          self.provider.key_value(),
+          self.provider.save_guard(),
           props.project.open.repo_root.clone(),
         );
         let gate = ctx.use_context::<InputGate>();
-        save.on_click(move || saved(&action, (&repo, id, &wanted), &value, gate.as_ref()))
+        save.on_click(move || {
+          if let Some(value) = guard.admit(&wanted, gate.as_ref()) {
+            action.run((repo.clone(), id, wanted.clone(), value));
+          }
+        })
       }
       None => save.disabled(),
     };
@@ -341,7 +345,8 @@ impl EditConnection {
       .filter(|_| rejected)
       .map(|error| crate::ui::message::message_text(ctx, &error))
       .or_else(|| self.provider.reason(ctx, secrets));
-    action_bar(vec![cancel.into(), save.into()], reason.as_deref())
+    let refusal = self.provider.refusal(ctx);
+    action_bar(vec![cancel.into(), save.into()], refusal.or(reason).as_deref())
   }
 }
 
@@ -359,21 +364,6 @@ fn provider_changed(connection: &AgentConnection, wanted: Option<&RunsOn>, on: b
     }
     (Some(_), _) => true,
   }
-}
-
-/// Saves `wanted` for connection `id` of the project at `repo`, with the key typed for a new secret; automation's
-/// input does so for a provider only where a person lets it.
-fn saved(
-  action: &RunsOnSave,
-  (repo, id, wanted): (&PathBuf, ConnectionId, &RunsOn),
-  value: &KeyValue,
-  gate: Option<&InputGate>,
-) {
-  if matches!(wanted, RunsOn::Provider(_)) && !input_may_decide(gate, Guarded::PermissionWidening) {
-    tracing::warn!("synthetic input saved a connection on an API provider; not taken");
-    return;
-  }
-  action.run((repo.clone(), id, wanted.clone(), value.for_saving(wanted)));
 }
 
 fn runs_on_action(ctx: &mut Ctx) -> RunsOnSave {

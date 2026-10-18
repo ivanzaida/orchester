@@ -32,6 +32,7 @@ use orchester_workspace::{
 use zeroize::Zeroize;
 
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::ExtraTypography,
   ui::{
     field::{FieldInput, SelectField},
@@ -70,6 +71,8 @@ pub(super) struct ProviderForm {
   models: Signal<String>,
   /// Whether the fields were filled from the stored connection yet (Edit connection).
   seeded: Signal<bool>,
+  /// Whether automation's input tried to save the connection on a provider where only a person may.
+  refused: Signal<bool>,
 }
 
 impl ProviderForm {
@@ -82,6 +85,7 @@ impl ProviderForm {
       value: Signal::new(String::new()),
       models: ctx.signal(String::new()),
       seeded: ctx.signal(false),
+      refused: ctx.signal(false),
     }
   }
 
@@ -105,9 +109,12 @@ impl ProviderForm {
     self.on.get().0
   }
 
-  /// The key typed for a new secret, read when the page saves.
-  pub(super) fn key_value(&self) -> KeyValue {
-    KeyValue(self.value.clone())
+  /// What the page's Save goes through: the person gate and the key typed for a new secret.
+  pub(super) fn save_guard(&self) -> SaveGuard {
+    SaveGuard {
+      value: self.value.clone(),
+      refused: self.refused.clone(),
+    }
   }
 
   /// What the connection runs on; `None` while a field cannot be saved. On the sign-in it runs on `account`. A new
@@ -129,6 +136,12 @@ impl ProviderForm {
       ),
     };
     Some(RunsOn::Provider(ProviderDraft { base_url, key, models }))
+  }
+
+  /// That automation's input tried to save the connection on a provider where only a person may; Save stays for the
+  /// person.
+  pub(super) fn refusal(&self, ctx: &Ctx) -> Option<Arc<str>> {
+    (self.on() && self.refused.get()).then(|| ctx.t("connections.apiProvider.personOnly"))
   }
 
   /// The first reason the provider cannot be saved, in field order; `None` on the sign-in or once it can.
@@ -391,28 +404,44 @@ impl ProviderForm {
 
 impl Drop for ProviderForm {
   fn drop(&mut self) {
-    self.key_value().forget();
+    self.value.update(Zeroize::zeroize);
   }
 }
 
-/// The key typed for a new secret, shared with the page's Save.
+/// What the page's Save goes through, shared with its click handler: the person gate and the key typed for a new
+/// secret.
 #[derive(Clone)]
-pub(super) struct KeyValue(Signal<String>);
+pub(super) struct SaveGuard {
+  value: Signal<String>,
+  refused: Signal<bool>,
+}
 
-impl KeyValue {
-  /// The value to keep for `runs_on`: the typed key when it creates a secret, nothing otherwise.
-  pub(super) fn for_saving(&self, runs_on: &RunsOn) -> Option<SecretValue> {
-    match runs_on {
-      RunsOn::Provider(ProviderDraft {
-        key: KeySecret::New(_), ..
-      }) => self.0.with(|value| SecretValue::new(value.clone())).ok(),
-      _ => None,
+impl SaveGuard {
+  /// What saving `runs_on` takes along, or `None` when it is not saved: running a connection on an API provider
+  /// widens what its agents send where, so automation's input saves one only where a person lets it, and the page
+  /// says so. The key typed for a new secret comes along when it creates one.
+  pub(super) fn admit(&self, runs_on: &RunsOn, gate: Option<&InputGate>) -> Option<Option<SecretValue>> {
+    let RunsOn::Provider(draft) = runs_on else {
+      return Some(None);
+    };
+    if !input_may_decide(gate, Guarded::PermissionWidening) {
+      tracing::warn!("synthetic input saved a connection on an API provider; not taken");
+      self.refused.set(true);
+      return None;
     }
-  }
-
-  /// Wipes the typed key.
-  pub(super) fn forget(&self) {
-    self.0.update(Zeroize::zeroize);
+    self.refused.set(false);
+    if !matches!(draft.key, KeySecret::New(_)) {
+      return Some(None);
+    }
+    match self.value.with(|value| SecretValue::new(value.clone())) {
+      Ok(value) => Some(Some(value)),
+      // The form offers Save only once a key is typed (`runs_on`), so a blank one is a field that changed under the
+      // click; nothing is saved, and the reason shows again.
+      Err(error) => {
+        tracing::warn!(%error, "the key typed for a new secret is blank; not saved");
+        None
+      }
+    }
   }
 }
 

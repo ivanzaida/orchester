@@ -80,6 +80,7 @@ async fn native_step_reads_edits_and_finishes() {
       endpoint: BaseUrl::new(&server.base_url()).expect("base URL"),
       vendor: EngineVendor::Provider(AgentProvider::AnthropicApi),
       effort: Some(Effort::Low),
+      key: None,
     })
   );
   assert!(

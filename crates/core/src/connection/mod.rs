@@ -43,7 +43,7 @@ pub use self::{
     parse_version,
   },
   agent::{AgentConnection, CheckResult, ConnectionCheck, EngineVendor},
-  api_provider::{ApiProvider, ApiProviderError},
+  api_provider::{ApiProvider, ApiProviderError, SessionOrigin},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
   discovery::{Installed, compare_versions, rank_installed},

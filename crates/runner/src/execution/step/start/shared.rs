@@ -5,7 +5,7 @@
 //! not exist.
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, invocation::Platform, stream::RunnerProblem},
+  connection::{AgentConnection, AgentProvider, SessionOrigin, invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
   permission::{FolderBounds, ResolvedFolder, capability::EnforcedPermissions},
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
@@ -194,14 +194,22 @@ impl RunTask {
     else {
       return Ok(());
     };
-    let recorded = self
+    // A native agent's conversation is Orchester's own, kept whatever the connection runs on.
+    if connection.provider().is_native() {
+      return Ok(());
+    }
+    let account = self
       .db
       .invocation_accounts(self.run.id())?
       .into_iter()
       .find(|(invocation, _)| *invocation == last.id)
       .map(|(_, account)| account);
-    let now = connection.plan_account();
-    if recorded.is_some() && recorded != now {
+    let provider = self
+      .db
+      .invocation_engine(last.id)?
+      .and_then(|engine| engine.key.map(|key| (engine.endpoint, key)));
+    let made = SessionOrigin { account, provider };
+    if !made.continues_on(&SessionOrigin::of(&connection)) {
       continuation.session = None;
     }
     Ok(())

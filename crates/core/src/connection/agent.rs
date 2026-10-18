@@ -185,6 +185,25 @@ impl AgentConnection {
     self.connection.set_api_provider(provider)
   }
 
+  /// Whether a step of `provider`'s CLI that stopped at the plan limit of `account` can continue on this connection
+  /// (`docs/design/agent-accounts.md`): the same CLI, usable, on another account it can start on now. Not a
+  /// connection on an API provider: a key is not another account of the person's, and its host is not the one the
+  /// step's work went to (`docs/design/api-providers.md`).
+  pub fn continues_plan_limited(&self, provider: AgentProvider, account: Option<AgentAccountId>) -> bool {
+    self.provider == provider
+      && self.api_provider().is_none()
+      && self.plan_account() != account
+      && self.status().is_usable()
+      && self
+        .account()
+        .start_problem(
+          provider,
+          super::invocation::Platform::current(),
+          std::path::Path::is_dir,
+        )
+        .is_none()
+  }
+
   /// The account whose plan limits the CLI's runs count against: none on an API provider, whose key runs them, nor
   /// on a native connection.
   pub fn plan_account(&self) -> Option<AgentAccountId> {

@@ -117,12 +117,14 @@ pub fn model_id(value: &str) -> Result<ModelId, Message> {
   ModelId::new(value).map_err(|_| Message::new("connections.provider.modelInvalid").with("model", value.to_owned()))
 }
 
-/// Runs stored connection `id` of the project at `repo_root` on `provider`, or on its CLI's own sign-in again
-/// (`None`), on the CLI's Default account. Leaving another account drops the check made there, so the CLI is checked
-/// again on Default.
-pub fn set_provider_in(repo_root: &Path, id: ConnectionId, provider: Option<ApiProvider>) -> Result<(), SaveError> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let mut connection = db.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+/// Runs `connection`, as read from `db` and judged by the caller, on `provider`, or on its CLI's own sign-in again
+/// (`None`), on the CLI's Default account, and saves it through the same `db`: what is written is what was judged.
+/// Leaving another account drops the check made there, so the CLI is checked again on Default.
+pub fn set_provider(
+  db: &mut ProjectDb,
+  mut connection: Connection,
+  provider: Option<ApiProvider>,
+) -> Result<(), SaveError> {
   if provider.is_some() {
     connection.set_account(ConnectionAccount::Default)?;
   }

@@ -9,7 +9,7 @@ use orchester_core::{
     AgentConnection, AgentProvider, ApiEndpoint, ApiProvider, ApiProviderError, BaseUrl, CatalogSource, CheckResult,
     Connection, ConnectionAccount, ConnectionCheck, ConnectionError, ConnectionKind, ConnectionStatus, EndpointPreset,
     EngineVendor, GitHubHost, LastCheck, ModelCatalog, SignIn, WireApi,
-    invocation::{CLAUDE_KEY_VARIABLE, CODEX_KEY_VARIABLE, OnProvider},
+    invocation::{CLAUDE_KEY_VARIABLE, CLAUDE_MODEL_VARIABLES, CODEX_KEY_VARIABLE, OnProvider},
   },
   id::{AgentAccountId, ConnectionId, SecretId},
   name::Name,
@@ -216,27 +216,44 @@ fn api_providers_start_claude_code_with_their_url_models_and_the_key_in_a_secret
     model: &model,
     key: Arc::new(SecretValue::new(KEY.to_owned()).expect("not blank")),
   };
-  let before = Command::new(Path::new("claude"), ["-p"]).with_environment(vec![
-    ("PATH".to_owned(), "bin".to_owned()),
-    ("ANTHROPIC_API_KEY".to_owned(), "the project's own".to_owned()),
-    ("anthropic_base_url".to_owned(), "https://elsewhere.example".to_owned()),
-  ]);
+  let project = [
+    ("PATH", "bin"),
+    ("ANTHROPIC_API_KEY", "the project's own"),
+    ("anthropic_base_url", "https://elsewhere.example"),
+    ("ANTHROPIC_CUSTOM_HEADERS", "X-Key: elsewhere"),
+    ("ANTHROPIC_BEDROCK_BASE_URL", "https://bedrock.example"),
+    ("CLAUDE_CODE_USE_BEDROCK", "1"),
+    ("claude_code_use_vertex", "1"),
+    ("CLAUDE_CODE_SKIP_FOUNDRY_AUTH", "1"),
+    ("CLAUDE_CODE_USE_POWERSHELL_TOOL", "1"),
+  ];
+  let before = Command::new(Path::new("claude"), ["-p"]).with_environment(
+    project
+      .iter()
+      .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+      .collect(),
+  );
   let command = on.apply(before, AgentProvider::ClaudeCodeCli);
   let mut env: Vec<(String, String)> = command.env().to_vec();
   env.sort();
-  let expected: Vec<(String, String)> = [
-    ("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic"),
-    ("ANTHROPIC_DEFAULT_HAIKU_MODEL", "deepseek-flash"),
-    ("ANTHROPIC_DEFAULT_OPUS_MODEL", "deepseek-flash"),
-    ("ANTHROPIC_DEFAULT_SONNET_MODEL", "deepseek-flash"),
-    ("ANTHROPIC_MODEL", "deepseek-flash"),
-    ("CLAUDE_CODE_SUBAGENT_MODEL", "deepseek-flash"),
-    ("PATH", "bin"),
-  ]
-  .into_iter()
-  .map(|(name, value)| (name.to_owned(), value.to_owned()))
-  .collect();
-  assert_eq!(env, expected, "no other credential reaches the provider's host");
+  let mut expected: Vec<(String, String)> = CLAUDE_MODEL_VARIABLES
+    .iter()
+    .map(|name| ((*name).to_owned(), "deepseek-flash".to_owned()))
+    .chain(
+      [
+        ("ANTHROPIC_BASE_URL", "https://api.deepseek.com/anthropic"),
+        ("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB", "1"),
+        ("CLAUDE_CODE_USE_POWERSHELL_TOOL", "1"),
+        ("PATH", "bin"),
+      ]
+      .map(|(name, value)| (name.to_owned(), value.to_owned())),
+    )
+    .collect();
+  expected.sort();
+  assert_eq!(
+    env, expected,
+    "no other credential, header, base URL or cloud routing reaches the provider's host"
+  );
   assert_eq!(command.args(), ["-p"]);
   let secrets: Vec<&str> = command.secret_env().iter().map(|secret| secret.name()).collect();
   assert_eq!(secrets, [CLAUDE_KEY_VARIABLE]);
@@ -274,6 +291,8 @@ fn api_providers_start_codex_on_a_model_provider_of_their_own() {
       "-c",
       "model_providers.orchester={name=\"Orchester API provider\",base_url=\"https://api.deepseek.com\",\
        env_key=\"ORCHESTER_PROVIDER_API_KEY\",wire_api=\"responses\"}",
+      "-c",
+      "shell_environment_policy.ignore_default_excludes=false",
     ]
   );
   let secrets: Vec<&str> = command.secret_env().iter().map(|secret| secret.name()).collect();
@@ -306,5 +325,85 @@ fn api_providers_a_users_codex_provider_of_the_same_id_refuses_the_step() {
       "orchester"
     ),
     Err(ConfigReadError::ProviderNameTaken("orchester".to_owned()))
+  );
+}
+
+#[test]
+fn api_providers_a_step_stopped_at_a_plan_limit_does_not_continue_on_a_key() {
+  let signed_in = ConnectionCheck {
+    at: Timestamp::from_unix_millis(2_000),
+    result: CheckResult::Available {
+      version: "0.159.2".to_owned(),
+      sign_in: SignIn::SignedIn,
+      catalog: ModelCatalog::new(CatalogSource::Provider, Vec::new()),
+    },
+  };
+  let stopped = Some(AgentAccountId::generate());
+  let mut other_account = cli(AgentProvider::CodexCli);
+  other_account
+    .set_account(ConnectionAccount::Account {
+      id: AgentAccountId::generate(),
+      folder: std::env::temp_dir(),
+    })
+    .expect("an account of the CLI");
+  other_account.record_check(signed_in.clone()).expect("a CLI check");
+  assert!(other_account.continues_plan_limited(AgentProvider::CodexCli, stopped));
+  let mut on_key = cli(AgentProvider::CodexCli);
+  on_key.record_check(signed_in).expect("a CLI check");
+  assert!(
+    on_key.continues_plan_limited(AgentProvider::CodexCli, stopped),
+    "Default is another account"
+  );
+  on_key
+    .set_api_provider(Some(provider("https://api.deepseek.com", SecretId::generate())))
+    .expect("on Default");
+  assert!(
+    !on_key.continues_plan_limited(AgentProvider::CodexCli, stopped),
+    "a key is not another account"
+  );
+}
+
+#[test]
+fn api_providers_a_session_continues_only_on_the_provider_and_account_it_was_made_on() {
+  use orchester_core::connection::SessionOrigin;
+  let (key, other_key) = (SecretId::generate(), SecretId::generate());
+  let url = |value: &str| BaseUrl::new(value).expect("valid");
+  let on = |provider: Option<(&str, SecretId)>, account: Option<AgentAccountId>| SessionOrigin {
+    account,
+    provider: provider.map(|(value, key)| (url(value), key)),
+  };
+  let work = Some(AgentAccountId::generate());
+  let deepseek = Some(("https://api.deepseek.com/anthropic", key));
+  assert!(on(deepseek, None).continues_on(&on(deepseek, None)));
+  assert!(
+    !on(deepseek, None).continues_on(&on(Some(("https://gateway.example.com", key)), None)),
+    "another host"
+  );
+  assert!(
+    !on(deepseek, None).continues_on(&on(Some(("https://api.deepseek.com/anthropic", other_key)), None)),
+    "another key"
+  );
+  assert!(!on(deepseek, None).continues_on(&on(None, work)), "back on the sign-in");
+  assert!(
+    !on(None, work).continues_on(&on(deepseek, None)),
+    "from the sign-in to a key"
+  );
+  assert!(on(None, work).continues_on(&on(None, work)));
+  assert!(
+    !on(None, work).continues_on(&on(None, Some(AgentAccountId::generate()))),
+    "another account"
+  );
+  assert!(
+    on(None, None).continues_on(&on(None, work)),
+    "no account recorded: the folder is the same"
+  );
+
+  let mut connection = cli(AgentProvider::ClaudeCodeCli);
+  connection
+    .set_api_provider(Some(provider("https://api.deepseek.com/anthropic", key)))
+    .expect("on Default");
+  assert_eq!(
+    SessionOrigin::of(&connection),
+    on(Some(("https://api.deepseek.com/anthropic", key)), None)
   );
 }

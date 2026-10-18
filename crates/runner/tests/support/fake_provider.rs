@@ -35,3 +35,23 @@ pub fn claude() {
     .map(|url| format!("{url} {}", models.join(" ")));
   report(provider, "ANTHROPIC_AUTH_TOKEN");
 }
+
+/// Whether the provider's base URL asks the fake to play a user's own Codex configuration with a model provider of
+/// the same id as Orchester's.
+pub fn clashes(args: &[String]) -> bool {
+  args
+    .iter()
+    .any(|arg| arg.starts_with("model_providers.") && arg.contains("user-provider-clash"))
+}
+
+/// The model provider the fake reports a thread runs on: the one it was asked for, else the arguments', or `openai`
+/// where the provider's base URL asks it to pick another, as a Codex that ignored the request would.
+pub fn reported(args: &[String], asked: Option<&str>) -> String {
+  if args
+    .iter()
+    .any(|arg| arg.starts_with("model_providers.") && arg.contains("another-provider"))
+  {
+    return "openai".to_owned();
+  }
+  asked.map_or_else(|| codex_provider(args), str::to_owned)
+}

@@ -133,15 +133,13 @@ impl Command {
     self
   }
 
-  /// Leaves `key` out of the program's environment, whether the caller's or one this command sets (compared
-  /// without regard to case).
+  /// Leaves every variable whose name `matches` out of the program's environment as this command sets it. For a
+  /// command that does not inherit the caller's environment ([`Self::with_environment`]).
   #[must_use]
-  pub fn with_env_dropped(mut self, key: &str) -> Self {
-    self.env.retain(|(name, _)| !name.eq_ignore_ascii_case(key));
+  pub fn with_env_dropped_where(mut self, matches: impl Fn(&str) -> bool) -> Self {
+    self.env.retain(|(name, _)| !matches(name));
+    self.secret_env.retain(|existing| !matches(existing.name()));
     self
-      .secret_env
-      .retain(|existing| !existing.name().eq_ignore_ascii_case(key));
-    self.without_env(key)
   }
 
   /// `more` after the arguments the program already has.

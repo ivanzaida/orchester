@@ -20,7 +20,10 @@ pub use self::{
   codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
   orchester::CodexOrchester,
-  provider::{CLAUDE_KEY_VARIABLE, CODEX_KEY_VARIABLE, CODEX_PROVIDER_ID, OnProvider, codex_overrides},
+  provider::{
+    CLAUDE_KEY_VARIABLE, CLAUDE_MODEL_VARIABLES, CLAUDE_ROUTING, CODEX_KEY_VARIABLE, CODEX_PROVIDER_ID, OnProvider,
+    codex_overrides,
+  },
 };
 use crate::{
   command::{Command, SecretVariable},

@@ -300,7 +300,7 @@ impl Session {
     emit(&json!({"id": 3, "result": {
       "thread": {"id": self.thread, "environments": [{"environmentId": "local", "cwd": cwd, "runtimeWorkspaceRoots": roots}]},
       "approvalPolicy": params["approvalPolicy"], "approvalsReviewer": "user", "model": params["model"],
-      "modelProvider": params["modelProvider"].as_str().map_or_else(|| fake_provider::codex_provider(&self.args), str::to_owned),
+      "modelProvider": fake_provider::reported(&self.args, params["modelProvider"].as_str()),
       "sandbox": sandbox
     }}));
     self.roots = configured;
@@ -333,9 +333,12 @@ impl Session {
   /// The configuration's layers: the user's (with `user-global`), the arguments' and, for a worktree
   /// with a `.codex` folder, the project's, disabled while the worktree is untrusted.
   fn layers(&self, cwd: &std::path::Path) -> Vec<Value> {
+    let mut user = json!({"mcp_servers": {"user-global": {"command": "user-tool"}}});
+    if fake_provider::clashes(&self.args) {
+      user["model_providers"] = json!({"orchester": {"http_headers": {"X-Mine": "1"}}});
+    }
     let mut layers = vec![
-      json!({"name": {"type": "user", "file": "fake-codex-home/config.toml"},
-        "config": {"mcp_servers": {"user-global": {"command": "user-tool"}}}}),
+      json!({"name": {"type": "user", "file": "fake-codex-home/config.toml"}, "config": user}),
       json!({"name": {"type": "sessionFlags"}, "config": {}}),
     ];
     let folder = cwd.join(".codex");

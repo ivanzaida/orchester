@@ -160,3 +160,26 @@ async fn api_providers_no_agent_starts_without_the_key() {
   );
   assert!(reported(&db, run, "provider: ").is_empty(), "the CLI did not start");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_providers_codex_on_another_model_provider_is_refused() {
+  let project = on_provider(AgentProvider::CodexCli, "https://another-provider.example", true);
+  let (db, run, status) = ran(&project).await;
+  assert_ne!(status, RunStatus::Succeeded);
+  let activity = activity_text(&db, run);
+  assert!(
+    activity.contains("another model provider than the connection's API provider"),
+    "{activity}"
+  );
+  assert!(!activity.contains(KEY));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_providers_codex_refuses_a_users_provider_of_the_same_id() {
+  let project = on_provider(AgentProvider::CodexCli, "https://user-provider-clash.example", true);
+  let (db, run, status) = ran(&project).await;
+  assert_ne!(status, RunStatus::Succeeded);
+  let activity = activity_text(&db, run);
+  assert!(activity.contains("model provider named `orchester`"), "{activity}");
+  assert!(threads(&db, run).is_empty(), "no thread starts");
+}

@@ -131,6 +131,7 @@ impl RunTask {
         endpoint: api.base_url().clone(),
         vendor: connection.vendor(),
         effort,
+        key: None,
       }),
     })
   }

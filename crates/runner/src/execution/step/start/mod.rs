@@ -280,10 +280,12 @@ impl RunTask {
     let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
     let offered = self.offered_skills(&placed, (provider, worktree))?;
     let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let on_provider = self.on_provider(connection, model)?;
+    let provider_key = on_provider.as_ref().map(|on| on.key_variable(provider));
     let (tools, claude_approvals) = self.step_tools(
       (enforced.permissions(), &setup, offered),
       (execution, invocation, folders),
-      &environment,
+      (&environment, provider_key.clone()),
     )?;
     placed.read_with = skill_tool(&tools, &setup, claude_approvals.is_some());
     let parts = PromptParts {
@@ -302,8 +304,7 @@ impl RunTask {
     let mut secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let checks = tools.checks().to_vec();
-    let on_provider = self.on_provider(connection, model)?;
-    secrets.extend(on_provider.as_ref().map(|on| on.key_variable(provider)));
+    secrets.extend(provider_key);
     let cli = Cli {
       executable,
       account: connection.account(),
@@ -334,9 +335,20 @@ impl RunTask {
       account: connection.plan_account(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
-      engine: None,
+      engine: provider_engine(connection, on_provider.as_ref()),
     })
   }
+}
+
+/// What an agent CLI on an API provider reaches its model through, recorded with the invocation so a later one knows
+/// whether its session was made on the same provider; `None` on the CLI's own sign-in.
+fn provider_engine(connection: &AgentConnection, on: Option<&OnProvider<'_>>) -> Option<InvocationEngine> {
+  on.map(|on| InvocationEngine {
+    endpoint: on.provider.base_url().clone(),
+    vendor: connection.vendor(),
+    effort: None,
+    key: Some(on.provider.key()),
+  })
 }
 
 /// What starts for the CLI command `started`: with the code index's tools first on its `PATH` where it gets them, and
