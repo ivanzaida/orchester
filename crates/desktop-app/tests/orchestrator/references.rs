@@ -1,7 +1,7 @@
-//! Places an Orchestrator's reply names as plain text are links (`ui::chat::references`): a key of one of the
-//! project's tasks and an app route path of a place in a project, outside code; an unknown key, a route outside a
-//! project and code stay text. Every in-app link opens by a browser's rules (`support::link_press`); a link to the
-//! web never opens for synthetic input, whatever the button or keys.
+//! Places an Orchestrator's reply names are links (`ui::chat::references`): a key of one of the project's tasks and
+//! an app route path of a place in a project, as text or as all a code span holds; an unknown key, a route outside a
+//! project and a path inside longer code stay as written. Every in-app link opens by a browser's rules
+//! (`support::link_press`); a link to the web never opens for synthetic input, whatever the button or keys.
 
 use lurq::app::events::{MouseButton, with_synthetic_input};
 use orchester_app::{
@@ -25,9 +25,10 @@ fn orchestrator_reply_links_task_keys_and_routes_and_opens_them_by_browser_rules
   let conversation = format!("/project/{project}/tasks/{key}/conversation");
   let changes = format!("/project/{project}/tasks/{key}/changes");
   let nowhere = format!("/project/{project}/nowhere");
+  let longer = format!("/project/{project}/tasks");
   screen.go(OrchestratorChat::New);
   screen.send(&format!(
-    "Start with {key}, then {conversation}. Not KON-99, /settings or {nowhere}; not `{changes}`."
+    "Start with {key}, then {conversation} and `{changes}`. Not KON-99, /settings or {nowhere}; not `open {longer}`."
   ));
   screen.until("the linked reply", |screen| {
     screen
@@ -36,7 +37,7 @@ fn orchestrator_reply_links_task_keys_and_routes_and_opens_them_by_browser_rules
       .find_element(|element| element.text_content() == Some(&key))
       .is_some()
   });
-  for text in [conversation.as_str(), key.as_str()] {
+  for text in [conversation.as_str(), key.as_str(), changes.as_str()] {
     assert!(
       screen
         .window
@@ -46,7 +47,7 @@ fn orchestrator_reply_links_task_keys_and_routes_and_opens_them_by_browser_rules
       "{text} is a link"
     );
   }
-  for text in ["KON-99", "/settings", nowhere.as_str(), changes.as_str()] {
+  for text in ["KON-99", "/settings", nowhere.as_str(), longer.as_str()] {
     assert!(
       screen
         .window
