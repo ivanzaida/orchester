@@ -282,3 +282,29 @@ fn api_providers_start_codex_on_a_model_provider_of_their_own() {
   assert!(!command.args().iter().any(|arg| arg.contains(KEY)));
   assert!(!format!("{command:?}").contains(KEY));
 }
+
+#[test]
+fn api_providers_a_users_codex_provider_of_the_same_id_refuses_the_step() {
+  use orchester_core::connection::app_server_config::{ConfigReadError, refuse_taken_provider};
+  let layers = |own: serde_json::Value| {
+    serde_json::json!({"layers": [
+      {"name": {"type": "sessionFlags"}, "config": {"model_providers": {"orchester": {"base_url": "https://api.deepseek.com"}}}},
+      {"name": {"type": "user"}, "config": own},
+    ]})
+  };
+  assert_eq!(
+    refuse_taken_provider(
+      &layers(serde_json::json!({"model_providers": {"mine": {}}})),
+      "orchester"
+    ),
+    Ok(()),
+    "Orchester's own overrides and other providers are fine"
+  );
+  assert_eq!(
+    refuse_taken_provider(
+      &layers(serde_json::json!({"model_providers": {"orchester": {}}})),
+      "orchester"
+    ),
+    Err(ConfigReadError::ProviderNameTaken("orchester".to_owned()))
+  );
+}

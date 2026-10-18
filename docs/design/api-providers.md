@@ -76,7 +76,9 @@ can override these.
 ```
 
 and the key in `ORCHESTER_PROVIDER_API_KEY` (secret). The runner adds the key to App Server's redaction set and,
-since Codex needs no sign-in of its own there, no longer requires `account/read` to name an account. `wire_api = "responses"` is the only value current Codex takes,
+since Codex needs no sign-in of its own there, no longer requires `account/read` to name an account. A model provider `orchester` in the user's own Codex configuration would merge with Orchester's
+(its headers or query would reach requests carrying the key), so the step is refused then
+(`refuse_taken_provider`), as for MCP server names. `wire_api = "responses"` is the only value current Codex takes,
 so the provider must serve the OpenAI **Responses** API (DeepSeek does at `https://api.deepseek.com`); a server that
 only speaks Chat Completions cannot be used through Codex, and the form says so. `thread/start` and `thread/resume`
 name `modelProvider: "orchester"`, and the runner refuses the turn if Codex reports another `modelProvider` (Codex

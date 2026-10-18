@@ -25,7 +25,7 @@ use orchester_core::{
   command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
-    app_server_config::{refuse_taken_names, repository_settings},
+    app_server_config::{refuse_taken_names, refuse_taken_provider, repository_settings},
     app_server_mcp::{refuse_user_hooks, servers_to_turn_off, thread_config},
     mcp::InvocationExemptions,
     stream::{AgentEvent, OutputStream, RunnerProblem},
@@ -448,6 +448,9 @@ impl AppServerSession {
     refuse_user_hooks(result).map_err(|error| error.to_string())?;
     let ignored = repository_settings(result).map_err(|error| error.to_string())?;
     refuse_taken_names(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
+    if let Some(provider) = &self.setup.model_provider {
+      refuse_taken_provider(result, provider).map_err(|error| error.to_string())?;
+    }
     self.turned_off = servers_to_turn_off(result, &self.setup.expected_servers).map_err(|error| error.to_string())?;
     self.phase = Phase::Thread;
     self.start_thread(process).await.map_err(|error| io_message(&error))?;
