@@ -216,6 +216,9 @@ pub enum RunStoreError {
   /// Nothing was recorded.
   #[error("run {0} cannot continue: its worktree was removed")]
   WorktreeRemoved(RunId),
+  /// The events would return the work of run `0`, which was merged into its base branch. Nothing was recorded.
+  #[error("run {0} cannot be returned: its work was merged")]
+  Merged(RunId),
 }
 
 impl From<rusqlite::Error> for RunStoreError {

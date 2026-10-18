@@ -7,7 +7,10 @@ use std::{collections::BTreeMap, num::NonZeroU32};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
-  run::{BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
+  run::{
+    AttemptReason, BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber,
+    StepExecutor,
+  },
   sharing::TaskRevision,
   store::RunStore,
   time::Timestamp,
@@ -255,6 +258,10 @@ impl ProjectDb {
     let transaction = self.connection.transaction()?;
     if continues && super::worktree_removals::removal(&transaction, run.id())?.is_some() {
       return Err(RunStoreError::WorktreeRemoved(run.id()));
+    }
+    // Work returned after the run ended goes on only while it is not merged: the merge stands for what the run did.
+    if events.iter().any(returns_after_end) && merged(&transaction, run.id())? {
+      return Err(RunStoreError::Merged(run.id()));
     }
     let stored: Option<i64> = transaction
       .query_row(
@@ -526,4 +533,24 @@ pub(super) fn stored_status(
       )
     })
     .transpose()
+}
+
+/// Whether `event` starts an attempt that returns the work of an ended run.
+fn returns_after_end(event: &RunEvent) -> bool {
+  matches!(
+    event.kind(),
+    RunEventKind::AttemptStarted {
+      reason: AttemptReason::ReturnedAfterEnd { .. },
+      ..
+    }
+  )
+}
+
+/// Whether the work of `run` was merged into its base branch.
+fn merged(connection: &Connection, run: RunId) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM run_merges WHERE run_id = ?1)",
+    [run.to_string()],
+    |row| row.get(0),
+  )?)
 }

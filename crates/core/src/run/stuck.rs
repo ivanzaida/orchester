@@ -390,7 +390,7 @@ impl Run {
 }
 
 /// When an attempt started, and whether a person's decision started it (a retry or return they
-/// chose for a run that waited for them) rather than the run by itself.
+/// chose for a run that waited for them, or the work of an ended run they returned) rather than the run by itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AttemptStart {
   pub attempt: AttemptId,
@@ -404,10 +404,11 @@ pub fn attempt_starts(events: &[RunEvent]) -> Vec<AttemptStart> {
     .iter()
     .enumerate()
     .filter_map(|(index, event)| match event.kind() {
-      RunEventKind::AttemptStarted { attempt, .. } => Some(AttemptStart {
+      RunEventKind::AttemptStarted { attempt, reason, .. } => Some(AttemptStart {
         attempt: *attempt,
         at: event.at(),
-        by_person: index > 0 && matches!(events[index - 1].kind(), RunEventKind::RetryAllowed),
+        by_person: matches!(reason, AttemptReason::ReturnedAfterEnd { .. })
+          || (index > 0 && matches!(events[index - 1].kind(), RunEventKind::RetryAllowed)),
       }),
       _ => None,
     })

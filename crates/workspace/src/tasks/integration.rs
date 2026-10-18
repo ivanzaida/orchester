@@ -190,7 +190,7 @@ fn merge_message(error: &MergeError, separator: &str) -> Message {
   }
 }
 
-fn git_message(error: &GitError) -> Message {
+pub(crate) fn git_message(error: &GitError) -> Message {
   match error {
     GitError::Run(CommandError::NotFound) => Message::new("runs.changes.failure.gitMissing"),
     GitError::Run(_) | GitError::Unrecognized { .. } => Message::new("runs.merge.failure.gitStopped"),

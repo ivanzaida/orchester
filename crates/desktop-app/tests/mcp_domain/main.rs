@@ -28,6 +28,7 @@ mod pipeline_permissions;
 mod pull_requests;
 mod reads;
 mod reads_setup;
+mod resolve;
 #[path = "../support/signed_in.rs"]
 mod signed_in;
 mod skills_window;

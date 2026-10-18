@@ -194,6 +194,12 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonCol
     AttemptReason::Recovery { step } => ("recovery", None, Some(step.as_str()), None),
     AttemptReason::Restart { step } => ("restart", None, Some(step.as_str()), None),
     AttemptReason::Accepted { step } => ("accepted", None, Some(step.as_str()), None),
+    AttemptReason::ReturnedAfterEnd { return_to, note } => (
+      "returned_after_end",
+      None,
+      Some(return_to.as_str()),
+      Some(note.as_str()),
+    ),
     AttemptReason::Returned {
       failed_step,
       return_to,
@@ -227,6 +233,10 @@ pub(super) fn parse_attempt_reason(columns: &AttemptReasonColumns<'_>) -> Result
     ("accepted", None, Some(step), None) => Ok(AttemptReason::Accepted { step: step_key(step)? }),
     ("returned", Some(failed_step), Some(return_to), Some(note)) => Ok(AttemptReason::Returned {
       failed_step: step_key(failed_step)?,
+      return_to: step_key(return_to)?,
+      note: ReviewNote::new(note).map_err(|error| corrupt("attempt note", error))?,
+    }),
+    ("returned_after_end", None, Some(return_to), Some(note)) => Ok(AttemptReason::ReturnedAfterEnd {
       return_to: step_key(return_to)?,
       note: ReviewNote::new(note).map_err(|error| corrupt("attempt note", error))?,
     }),

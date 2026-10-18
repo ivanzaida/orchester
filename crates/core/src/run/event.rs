@@ -170,7 +170,8 @@ pub enum RunEventKind {
   },
   Succeeded,
   /// A succeeded run works again: a follow-up attempt comes with this event
-  /// ([`super::Run::follow_up`]).
+  /// ([`super::Run::follow_up`]); or an ended run, succeeded or failed, whose work a person returned to an agent
+  /// step ([`super::Run::return_ended`]).
   Reopened,
   /// A person resumes a failed run through its conversation; a recovery attempt follows.
   RecoveryRequested,

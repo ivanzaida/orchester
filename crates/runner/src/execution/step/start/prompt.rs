@@ -14,7 +14,7 @@ use orchester_core::{
   revision::Revision,
   run::{
     AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, PinnedVersion,
-    PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, Run, RunContext, StepOutput,
+    PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext, StepOutput,
   },
   store::{ActivityStore, ResourceStore, RunStore},
 };
@@ -108,7 +108,10 @@ impl RunTask {
         },
       ),
       memory,
-      retry: retry.as_ref().map(|loaded| loaded.report(self)),
+      retry: retry
+        .as_ref()
+        .map(|loaded| ReturnedWork::Retry(loaded.report(self)))
+        .or_else(|| self.run.returned_note(execution).map(ReturnedWork::AfterEnd)),
       working,
     };
     assemble(&input, event).map_err(|PromptAssemblyError::UnavailableVariable { variable, .. }| {

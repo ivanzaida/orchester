@@ -13,6 +13,7 @@ mod kontur;
 mod links;
 mod merge;
 mod pull_request;
+mod resolve;
 #[path = "../support/mod.rs"]
 mod support;
 mod unverified;
@@ -25,6 +26,7 @@ use orchester_app::{
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_exec::programs::Programs;
+use orchester_workspace::tasks::resolve::Editor;
 use support::{Data, Window};
 use tokio::runtime::Runtime;
 
@@ -57,18 +59,24 @@ impl Page {
   /// Seeds `scenario`; `prepare` is called with the temporary folder before seeding (no repository yet), and
   /// returns the fake Codex program to seed with, then again with the repository once seeded.
   fn seeded_with(scenario: &str, prepare: impl Fn(&Path, Option<&Path>) -> Option<PathBuf>) -> Self {
-    Self::seeded_running(scenario, prepare, None)
+    Self::seeded_running(scenario, prepare, (None, None))
   }
 
   /// [`Self::seeded`] whose window runs git and `gh` with `programs`.
   fn seeded_with_programs(scenario: &str, programs: Programs) -> Self {
-    Self::seeded_running(scenario, |_, _| None, Some(programs))
+    Self::seeded_running(scenario, |_, _| None, (Some(programs), None))
+  }
+
+  /// [`Self::seeded`] whose *Resolve in editor* starts `editor`, a stand-in. Every other page has no editor, so
+  /// none opens on the desktop of the computer the tests run on.
+  fn seeded_with_editor(scenario: &str, editor: Editor) -> Self {
+    Self::seeded_running(scenario, |_, _| None, (None, Some(editor)))
   }
 
   fn seeded_running(
     scenario: &str,
     prepare: impl Fn(&Path, Option<&Path>) -> Option<PathBuf>,
-    programs: Option<Programs>,
+    (programs, editor): (Option<Programs>, Option<Editor>),
   ) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     std::fs::create_dir_all(&scratch).expect("scratch");
@@ -87,6 +95,7 @@ impl Page {
       Some(programs) => data.launch().with_programs(programs),
       None => data.launch(),
     };
+    let launch = launch.with_editor(editor);
     let window = Window::of(data, launch);
     let tasks = seeded.tasks.into_iter().map(|task| (task.key, task.state)).collect();
     Self {

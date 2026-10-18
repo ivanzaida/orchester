@@ -1,6 +1,6 @@
 //! Returns and restarts (02.B7 `zyusO`): an attempt that a failure's route returned to an earlier
-//! step, that restarted a step which broke, or that a person returned with a note, starts with a
-//! mark of its own before the header of the step it starts from. It is never part of a tool group.
+//! step, that restarted a step which broke, or that a person returned with a note (also after the run ended), starts
+//! with a mark of its own before the header of the step it starts from. It is never part of a tool group.
 
 use std::sync::Arc;
 
@@ -70,10 +70,12 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
       after: others(attempt, return_to).map(name).collect(),
     },
     AttemptReason::Restart { step } => MarkKind::Restarted { step: name(step) },
-    AttemptReason::Returned { return_to, note, .. } => MarkKind::ReturnedWithNote {
-      to: name(return_to),
-      note: note.as_str().into(),
-    },
+    AttemptReason::Returned { return_to, note, .. } | AttemptReason::ReturnedAfterEnd { return_to, note } => {
+      MarkKind::ReturnedWithNote {
+        to: name(return_to),
+        note: note.as_str().into(),
+      }
+    }
     // An accepted step passed in the attempt before: what runs after it starts no return of its own.
     AttemptReason::Initial
     | AttemptReason::FollowUp { .. }

@@ -367,6 +367,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::RunNotPaused
       | Rejection::NotAnotherAccount
       | Rejection::RunEnded
+      | Rejection::RunNotEnded
+      | Rejection::RunMerged
       | Rejection::WorktreeRemoved
       | Rejection::LimitNotRaised { .. }
       | Rejection::LimitNotAboveUsed { .. }
@@ -461,6 +463,8 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::NotAnotherAccount) => Message::new("runs.control.notAnotherAccount"),
     RunRequestError::Rejected(Rejection::RunEnded) => Message::new("runs.control.ended"),
     RunRequestError::Rejected(Rejection::WorktreeRemoved) => Message::new("runs.control.worktreeRemoved"),
+    RunRequestError::Rejected(Rejection::RunNotEnded) => Message::new("runs.control.notEnded"),
+    RunRequestError::Rejected(Rejection::RunMerged) => Message::new("runs.control.merged"),
     RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
     RunRequestError::Rejected(Rejection::RunNotWaiting) => Message::new("runs.control.notWaiting"),
     RunRequestError::Rejected(Rejection::TaskGroupWaiting { hold }) => super::group::hold_messages(hold)

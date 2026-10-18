@@ -115,7 +115,11 @@ impl Run {
           Err(RunError::StepsNotPassed)
         }
       }
-      RunEventKind::Reopened => self.expect_status(kind, self.status == RunStatus::Succeeded),
+      // A succeeded run reopens for a follow-up or a return; a failed one only for a return.
+      RunEventKind::Reopened => self.expect_status(
+        kind,
+        self.status == RunStatus::Succeeded || (self.can_return_ended() && matches!(self.status, RunStatus::Failed(_))),
+      ),
       // A run that never started has no worktree to resume in.
       RunEventKind::RecoveryRequested => self.expect_status(
         kind,
@@ -323,6 +327,9 @@ impl Run {
       (false, AttemptReason::Restart { step }) => self.check_restart(step, executions),
       (false, AttemptReason::Returned { return_to, .. }) => self.check_returned(return_to, executions),
       (false, AttemptReason::Accepted { step }) => self.check_accepted(step, executions),
+      (false, AttemptReason::ReturnedAfterEnd { return_to, .. }) => {
+        self.check_returned_after_end(return_to, executions)
+      }
       (false, AttemptReason::Initial) => Err(RunError::InvalidAttempt("only the first attempt is initial")),
     }
   }

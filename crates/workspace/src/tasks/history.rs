@@ -7,7 +7,7 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::RunId,
   resource::{AgentProfile, StepKey},
-  run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, StepExecutor, StepStatus, TaskPhase},
+  run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, StepExecutor, StepStatus, TaskPhase, attempt_starts},
   store::{ActivityStore, ResourceStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
@@ -168,7 +168,8 @@ pub(crate) fn last_step(db: &ProjectDb, run: &Run) -> Result<Option<String>, Sto
 }
 
 /// "Implement · Builder at work": the first step an agent of the run works on, with the agent role
-/// of its profile version while that exists.
+/// of its profile version while that exists; and when and with which branch its work was returned to it to resolve a
+/// merge's conflicts.
 fn at_work(db: &ProjectDb, run: &Run) -> Result<Message, StoreError> {
   let working = run.current_attempt().and_then(|attempt| {
     attempt
@@ -186,10 +187,36 @@ fn at_work(db: &ProjectDb, run: &Run) -> Result<Message, StoreError> {
       .map(|version| version.body().role().as_str().to_owned()),
     _ => None,
   };
+  if let Some(resolving) = resolving(db, run)? {
+    let message = match role {
+      Some(agent) => Message::new("runs.history.atWorkResolving").with("agent", agent),
+      None => Message::new("runs.history.stepAtWorkResolving"),
+    };
+    return Ok(
+      message
+        .with("step", step)
+        .with("time", resolving.0)
+        .with("branch", resolving.1),
+    );
+  }
   Ok(match role {
     Some(agent) => Message::new("runs.history.atWork")
       .with("step", step)
       .with("agent", agent),
     None => Message::new("runs.history.stepAtWork").with("step", step),
   })
+}
+
+/// When the run's work was returned to resolve a merge's conflicts, and with which branch, while its step works on
+/// it ([`super::return_work::resolving_conflicts`]).
+fn resolving(db: &ProjectDb, run: &Run) -> Result<Option<(String, String)>, StoreError> {
+  let (Some((_, conflict)), Some(attempt)) = (super::return_work::resolving_conflicts(run), run.current_attempt())
+  else {
+    return Ok(None);
+  };
+  let started = attempt_starts(&db.events(run.id()).map_err(run_store_error)?)
+    .into_iter()
+    .find(|start| start.attempt == attempt.id())
+    .map(|start| crate::display::clock(start.at));
+  Ok(started.map(|time| (time, conflict.base)))
 }

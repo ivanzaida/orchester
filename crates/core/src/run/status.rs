@@ -277,6 +277,12 @@ pub enum AttemptReason {
     return_to: StepKey,
     note: ReviewNote,
   },
+  /// The run had ended — succeeded, or failed after it started — and a person returned its work to the agent step
+  /// `return_to` with `note`, the instruction its prompt carries ([`super::Run::return_ended`]).
+  ReturnedAfterEnd {
+    return_to: StepKey,
+    note: ReviewNote,
+  },
   /// A person (or automation they let answer) accepted `step`, which waited for them unverified or unchanged, as
   /// it is: the attempt passes it with the accepted execution's work and result, then runs the steps after it and
   /// those that had not passed.

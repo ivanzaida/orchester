@@ -32,6 +32,7 @@ mod pull_request_syncs;
 mod questions;
 mod queue_holds;
 mod recovery;
+mod returned_after_end;
 mod reviewer_usage;
 mod run_rebases;
 mod shared_members;
@@ -562,6 +563,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
   creation_snapshots::MIGRATION,
+  returned_after_end::MIGRATION,
 ];
 
 /// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema

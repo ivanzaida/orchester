@@ -15,7 +15,7 @@ use orchester_core::{
   resource::StepKey,
   run::{
     AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion,
-    PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
+    PreflightProblem, ReviewNote, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
   },
   tokens::TokenBudget,
 };
@@ -42,6 +42,14 @@ impl fmt::Display for RequestId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "request {}", self.0)
   }
+}
+
+/// The work of run `run` returned to its agent step `step` with `note` ([`Command::ReturnRun`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkReturn {
+  pub run: RunId,
+  pub step: StepKey,
+  pub note: ReviewNote,
 }
 
 /// Desktop to runner.
@@ -161,6 +169,11 @@ pub enum Command {
   /// attempt, answered with [`Reply::Accepted`] once it runs again; a stop fails it, answered once
   /// that is recorded. [`Rejection::RunNotWaiting`] when the run does not wait for a person.
   DecideStuckRun { run: RunId, decision: StuckDecision },
+  /// A person returns the work of a run that ended (succeeded, or failed after it started) to one of its agent steps
+  /// with a note (protocol 27): the run works again in a new attempt from that step, answered with
+  /// [`Reply::Accepted`] once it runs. [`Rejection::RunNotEnded`] for a run that has not ended so,
+  /// [`Rejection::RunMerged`] for one whose work was merged, [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  ReturnRun(WorkReturn),
   /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
   /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
   /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and
@@ -438,6 +451,10 @@ pub enum Rejection {
   RunNotWaiting,
   /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
+  /// Returning the work of a run needs one that ended: succeeded, or failed after it started.
+  RunNotEnded,
+  /// The run's work was merged into its base branch: it is not returned to a step any more.
+  RunMerged,
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)
   /// is refused before the run changes, and its messages stay queued.
   WorktreeRemoved,
