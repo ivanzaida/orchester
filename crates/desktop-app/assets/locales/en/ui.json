@@ -5,7 +5,10 @@
     "tabCount": "{{label}} {{count}}",
     "link": {
       "addressNote": "({{address}})",
-      "opensBrowser": "Opens {{url}} in your browser"
+      "opensBrowser": "Opens {{url}} in your browser",
+      "opensHere": "{{place}} · opens in this tab",
+      "inProject": "{{project}} › {{page}}",
+      "taskTab": "{{key}} › {{tab}}"
     },
     "status": {
       "withDetail": "{{status}} · {{detail}}",

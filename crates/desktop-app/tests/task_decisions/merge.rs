@@ -13,10 +13,10 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::local_integration::LocalIntegration;
 
-use super::{Page, key_of};
+use super::{Page, checkout_page, key_of};
 
 /// The latest run of the task seeded in `state`.
-fn latest_run(page: &Page, state: &str) -> Run {
+pub(super) fn latest_run(page: &Page, state: &str) -> Run {
   let key = key_of(page, state);
   let db = ProjectDb::open(&page.repo).expect("the project database");
   let task = db
@@ -33,7 +33,7 @@ fn latest_run(page: &Page, state: &str) -> Run {
 }
 
 /// `git <args>` in the seeded repository, which must succeed.
-fn git(page: &Page, args: &[&str]) {
+pub(super) fn git(page: &Page, args: &[&str]) {
   let output = process::Command::new("git")
     .arg("-C")
     .arg(&page.repo)
@@ -124,6 +124,7 @@ fn merged(page: &Page, (run, tip): (&Run, &str)) -> bool {
 
 #[test]
 fn decision_merge_into_main_merges_beside_unrelated_uncommitted_work() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
   assert!(!changed_by(&page, &run).contains(&"README.md".to_owned()));
@@ -134,7 +135,7 @@ fn decision_merge_into_main_merges_beside_unrelated_uncommitted_work() {
   assert!(page.locked("task-review-pull-request"));
   assert_eq!(
     page.text("task-review-pull-request-reason"),
-    "Review PR needs a pull request, which no pipeline step opens yet."
+    "Review PR needs a pull request: create one for this run first."
   );
   assert!(page.locked("task-ask-agent"), "Ask agent waits for the composer");
   page.until_says("task-ready-changes-figure", "1 file");
@@ -160,6 +161,7 @@ fn decision_merge_into_main_merges_beside_unrelated_uncommitted_work() {
 
 #[test]
 fn decision_merge_merges_a_run_whose_local_integration_paused_at_review() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
   let work = person_work(&page, "README.md");
@@ -181,6 +183,7 @@ fn decision_merge_merges_a_run_whose_local_integration_paused_at_review() {
 
 #[test]
 fn decision_merge_at_a_dirty_path_says_why_and_offers_local_integration() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
   let touched = changed_by(&page, &run)
@@ -219,6 +222,7 @@ fn decision_merge_at_a_dirty_path_says_why_and_offers_local_integration() {
 
 #[test]
 fn decision_merge_conflict_lists_the_files_and_offers_local_integration() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, conflicts with main");
   let tip = tip(&page, &run);
@@ -234,6 +238,7 @@ fn decision_merge_conflict_lists_the_files_and_offers_local_integration() {
 
 #[test]
 fn decision_merge_is_unavailable_without_a_branch_and_merged_says_where() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   page.open("ready for review, no branch to merge into", "task-merge");
   assert!(page.locked("task-merge"));
@@ -251,6 +256,7 @@ fn decision_merge_is_unavailable_without_a_branch_and_merged_says_where() {
 
 #[test]
 fn decision_ready_work_merged_with_git_reads_merged_without_a_merge_action() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
   git(
@@ -272,6 +278,7 @@ fn decision_ready_work_merged_with_git_reads_merged_without_a_merge_action() {
 
 #[test]
 fn decision_a_run_that_committed_nothing_has_nothing_to_merge() {
+  let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
   let run = latest_run(&page, "ready for review, merges cleanly");
   let branch = format!("refs/heads/{}", run.branch());
@@ -283,6 +290,7 @@ fn decision_a_run_that_committed_nothing_has_nothing_to_merge() {
 
 #[test]
 fn decision_squashed_external_integration_replaces_ready_without_a_historical_merge_record() {
+  let _checkout = checkout_page();
   use orchester_core::{
     integration::local::LocalIntegrationStore,
     store::{MergeStore, RunStore, TaskStore},

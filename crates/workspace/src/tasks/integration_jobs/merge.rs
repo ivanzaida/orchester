@@ -12,7 +12,7 @@ use orchester_exec::programs::Programs;
 
 use super::{Active, JobState, RunJobs};
 use crate::{
-  activity::{Activity, operations},
+  activity::{Activity, run_operations},
   messages::{self, Message},
   secrets::Vault,
   tasks::{
@@ -36,12 +36,12 @@ impl RunJobs {
   }
 
   pub fn start_legacy_merge(&self, args: MergeArgs, policy: LegacyPolicy) -> bool {
-    self.start_merge_with(args, (Telling::Policy(policy), None))
+    self.start_merge_with(args, (Telling::Policy(Box::new(policy)), None))
   }
 
   /// [`Self::start_legacy_merge`], only while the run's branch is at `expected`, the commit a person reviewed.
   pub fn start_legacy_merge_at(&self, args: MergeArgs, policy: LegacyPolicy, expected: Revision) -> bool {
-    self.start_merge_with(args, (Telling::Policy(policy), Some(expected)))
+    self.start_merge_with(args, (Telling::Policy(Box::new(policy)), Some(expected)))
   }
 
   fn start_merge_with(&self, args: MergeArgs, (telling, expected): (Telling, Option<Revision>)) -> bool {
@@ -54,7 +54,7 @@ impl RunJobs {
       state.merged = None;
       state.continues_locally = false;
     });
-    let what = operations::run_merge(&args.open, args.task, (&args.key, args.number), &args.branch);
+    let what = run_operations::run_merge(&args.open, args.task, (&args.key, args.number), &args.branch);
     self.name(&args.open, &what, true);
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
@@ -81,7 +81,7 @@ impl RunJobs {
       separator,
       changed,
     } = args;
-    let running = activity.start(operations::run_merge(&open, task, (&key, number), &branch));
+    let running = activity.start(run_operations::run_merge(&open, task, (&key, number), &branch));
     let not_done = Message::new("statusBar.operations.runMerge.notDone")
       .with("task", key.clone())
       .with("run", number.to_string());
@@ -144,7 +144,7 @@ impl RunJobs {
 /// from the vault for an MCP client's input to the window.
 enum Telling {
   Person,
-  Policy(LegacyPolicy),
+  Policy(Box<LegacyPolicy>),
   Client(Vault),
 }
 
@@ -153,7 +153,7 @@ impl Telling {
   fn policy(self, root: &Path, run: RunId) -> Result<Option<LegacyPolicy>, IntegrationProblem> {
     match self {
       Self::Person => Ok(None),
-      Self::Policy(policy) => Ok(Some(policy)),
+      Self::Policy(policy) => Ok(Some(*policy)),
       Self::Client(vault) => LegacyPolicy::new(root, run, vault).map(Some).map_err(|error| {
         tracing::warn!(%error, "cannot make the policy of a merge an MCP client asked for");
         IntegrationProblem::Store(Message::new("localIntegration.preflightFailed"))

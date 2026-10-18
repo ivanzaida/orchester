@@ -1,11 +1,11 @@
 //! Messages of the chat. An agent's (`Agent message` `dcd0m`): a 24 avatar (`surface_raised` in a `border`
 //! stroke, radius 6, a 13 glyph in `text_secondary`), 10 from who wrote it (12/600) with its step and time
-//! (11 `text_muted`) and under them, 3 apart, what it wrote at 13/1.5, read as Markdown; then its tool groups
-//! ([`super::chips`]) at the chat's edge. A person's (`Your message` `mr4lC`): at the right, *You* and the
-//! time, the message as written in a bubble that hugs it up to 80 % of the chat (`own_message` in a `border`
-//! stroke, radius 10, 8 by 12 inside) and its delivery line (a 12 icon and 11 `text_muted`, 5 apart): sending
-//! now, queued and until when, delivered mid-turn or at the end of a turn (`check-check` in `success`), or not
-//! delivered, kept, with the composer's actions under it (`composer::undelivered`).
+//! (11 `text_muted`) and under them, 3 apart, what it wrote, as every chat draws it (`ui::chat::agent_text`); then
+//! its tool groups ([`super::chips`]) at the chat's edge. A person's (`Your message` `mr4lC`): at the right, *You*
+//! and the time, the message as written in a bubble that hugs it up to 80 % of the chat (`own_message` in a
+//! `border` stroke, radius 10, 8 by 12 inside) and its delivery line (a 12 icon and 11 `text_muted`, 5 apart):
+//! sending now, queued and until when, delivered mid-turn or at the end of a turn (`check-check` in `success`), or
+//! not delivered, kept, with the composer's actions under it (`composer::undelivered`).
 
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ use orchester_workspace::{
 use super::{Timeline, chips};
 pub(crate) use crate::ui::chat::links;
 use crate::ui::{
-  chat::{Avatar, chat_row, delivery_line, person_message as bubble, person_side_message, text},
+  chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
   icon::Icon,
 };
 
@@ -46,10 +46,13 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
   };
   let avatar = if row.tool_step { Avatar::Tool } else { Avatar::Agent };
   let message = row.text.as_ref().map(|said| {
-    let body = vec![text(
+    let on_link = links(ctx);
+    let body = vec![agent_text(
       ctx,
       &format!("conversation-text-{}", row.key),
-      (said, timeline.project),
+      said,
+      (timeline.project, &timeline.names),
+      &on_link,
     )];
     chat_row(
       format!("conversation-agent-{}", row.key),

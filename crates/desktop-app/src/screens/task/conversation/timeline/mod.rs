@@ -49,12 +49,15 @@ use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
+  ui::chat::names::ProjectNames,
 };
 
 /// What the chat's rows share: whose timeline it is, and what a person opened or folded in it.
 #[derive(Clone)]
 pub(super) struct Timeline {
   pub(super) project: ProjectId,
+  /// The projects' names, for what a link to another project's place says.
+  pub(super) names: ProjectNames,
   pub(super) key: TaskKey,
   /// The task, for the names and numbers of its run's steps.
   pub(super) detail: Arc<TaskDetail>,

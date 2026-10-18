@@ -21,7 +21,9 @@ pub use self::{
   detect::{DetectRequest, Detection, DetectionState, GhProgram, GitHubDetection, detect_repository},
   identity::{RepositoryIdentity, RepositoryIdentityError},
   link::link_repository,
-  remote::{Remote, git_remotes_command, parse_git_remotes, read_remotes},
+  remote::{
+    Remote, git_dir_remotes_command, git_remotes_command, parse_git_remotes, read_git_dir_remotes, read_remotes,
+  },
   url::{GitHubRepo, RepoNameError, redact_userinfo, strip_userinfo},
   view::{RepositoryView, gh_repo_view_command, parse_gh_repo_view},
 };

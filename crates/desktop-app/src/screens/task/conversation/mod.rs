@@ -49,7 +49,11 @@ use self::{
   toolbar::RunState,
 };
 use super::{TaskContext, cards::Decisions};
-use crate::{project::TasksState, services::Services, ui::markdown::plain};
+use crate::{
+  project::TasksState,
+  services::Services,
+  ui::{chat::names::ProjectNames, markdown::plain},
+};
 
 /// The tab's content for `task`, as the task page read it. Keyed by the task and its latest run, so a new
 /// run starts with nothing opened and following its end.
@@ -96,8 +100,11 @@ impl Component for ConversationTab {
       .and_then(Result::ok);
     let conversation = Conversation::of(detail, task.lost(), leftovers.as_ref());
     let composer = composer::dock(ctx, &self.follow, &task, &conversation);
+    // Read once while the tab shows the run, on every pass so the tab's hooks keep their order.
+    let workspace = Services::of(ctx).workspace;
+    let names = ProjectNames::read(ctx, workspace, 0);
     let (body, state) = match &detail.run {
-      Some(run) => self.run_body(ctx, &task, run, &conversation),
+      Some(run) => self.run_body(ctx, &task, (run, &conversation), names),
       None => (states::without_run(ctx, detail, &conversation), None),
     };
     let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
@@ -119,13 +126,14 @@ impl Component for ConversationTab {
 }
 
 impl ConversationTab {
-  /// The chat of `run`, or why it cannot be shown yet; and the toolbar's state while it follows the run.
+  /// The chat of `run`, or why it cannot be shown yet; and the toolbar's state while it follows the run. `names` are
+  /// the projects', for what a link to another project's place says.
   fn run_body(
     &self,
     ctx: &mut Ctx,
     task: &TaskContext,
-    run: &RunView,
-    conversation: &Conversation,
+    (run, conversation): (&RunView, &Conversation),
+    names: ProjectNames,
   ) -> (Element, Option<RunState>) {
     let live = conversation.state == PanelState::Live;
     let (loaded, stale) = match self.read(ctx, task, run) {
@@ -164,6 +172,7 @@ impl ConversationTab {
     );
     ctx.provide(Timeline {
       project: task.project.open.project.id(),
+      names,
       key: task.key.clone(),
       detail: task.detail.clone(),
       toggles: self.toggles.clone(),

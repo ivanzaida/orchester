@@ -25,7 +25,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{changes::GIT, detail::run_store_error, local_integration::CheckoutHolder};
 use crate::{
-  activity::{Activity, Running, operations},
+  activity::{Activity, Running, run_operations},
   messages::Message,
   workspace::OpenProject,
 };
@@ -286,7 +286,7 @@ impl Merged {
   ) -> RunMerge {
     running.finish();
     if let Some(left) = &self.temporary {
-      let (project, title, target) = operations::run_merge_left(open, task, run, &left.path);
+      let (project, title, target) = run_operations::run_merge_left(open, task, run, &left.path);
       activity.record(Some(project), title, target);
     }
     self.merge
