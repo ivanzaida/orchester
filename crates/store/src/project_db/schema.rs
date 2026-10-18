@@ -10,6 +10,7 @@ mod automation_answers;
 mod code_index;
 mod command_approvals;
 mod conversation;
+mod creation_snapshots;
 mod editor_drafts;
 mod import;
 mod invocation_permissions;
@@ -561,6 +562,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   shared_members::READ_AS_MIGRATION,
   orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
+  creation_snapshots::MIGRATION,
   project_approval_rules::MIGRATION,
 ];
 

@@ -68,6 +68,7 @@ pub use self::{
   gate::{GateSpacing, GateText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
+  markdown::blank_line_between_blocks,
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
