@@ -8,7 +8,7 @@ use lurq::app::i18n::I18n;
 use orchester_core::id::ProjectId;
 
 use super::names::ProjectNames;
-use crate::routes::{ProjectPage, Route, TaskTab};
+use crate::routes::{Route, TaskTab};
 
 /// The tooltip of a link to `route`, in a chat of `project`; `names` are the projects'.
 pub(super) fn tip(i18n: &I18n, route: &Route, (project, names): (ProjectId, &ProjectNames)) -> Arc<str> {
@@ -19,8 +19,12 @@ pub(super) fn tip(i18n: &I18n, route: &Route, (project, names): (ProjectId, &Pro
 /// The place `route` names: a task by its key and the tab it opens on, any other page by its screen's name; after
 /// the project's name when the place is in another project.
 fn place(i18n: &I18n, route: &Route, (project, names): (ProjectId, &ProjectNames)) -> String {
-  let page = match route {
-    Route::Project(_, ProjectPage::Task(key, view)) => match view.tab() {
+  let task = match route {
+    Route::Project(_, page) => page.task_view(),
+    _ => None,
+  };
+  let page = match (task, route) {
+    (Some((key, view)), _) => match view.tab() {
       TaskTab::Summary => key.to_string(),
       tab => i18n
         .t_args(
@@ -29,7 +33,7 @@ fn place(i18n: &I18n, route: &Route, (project, names): (ProjectId, &ProjectNames
         )
         .to_string(),
     },
-    route => i18n.t(route.screen().title_key()).to_string(),
+    (None, route) => i18n.t(route.screen().title_key()).to_string(),
   };
   let other = route.project().filter(|other| *other != project);
   match other.and_then(|other| names.get(other)) {

@@ -135,7 +135,7 @@ impl IconButton {
 
   /// A button of a form: a Tab stop with the focus ring.
   pub fn in_form(mut self) -> Self {
-    self.focus = Focus::Form;
+    self.focus = Focus::Keyboard;
     self
   }
 

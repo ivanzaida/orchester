@@ -14,12 +14,18 @@
 //! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
 //! `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
-//! `/project/<id>/pull-requests/<number>`. A tab, source or kind left out of the query is the one the screen opens on.
+//! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Secrets, the Skills
+//! library, an agent profile, Instructions, a pipeline's editor and Project settings keep their tab, filter,
+//! item and panel in the query too ([`SecretsView`], [`SkillsFilter`], [`AgentTab`], [`InstructionsView`],
+//! [`PipelinePanel`], [`ProjectSettingsTab`]); `/project/<id>/settings?tab=sharing&ask=make-local` opens
+//! Sharing with *Make local*'s question. A tab, source or kind left out of the query is the one the screen
+//! opens on.
 //!
-//! Another screen or another tab (`tab`, a task's `<tab>`) is a new entry of the tab's history
-//! (`Navigation::go`); what a screen refines on its tab, `q`, `highlight` and `file` with `from`, takes the
-//! current entry's place (`Navigation::replace`), so Back leaves the screen instead of replaying it; so does
-//! the connection Connections shows in its inspector (`selected`).
+//! Every place a person chooses — another screen, tab, filter, item or panel — is a new entry of the tab's
+//! history (`Navigation::go`), so Back returns to it as in a browser. Only what chooses no place takes the
+//! current entry's place (`Navigation::replace`): a route the app corrects (`highlight` after a Create, a
+//! saved draft's id, a removed item) and the Tasks list's search `q` as it is typed; a closed panel leaves
+//! no entry behind (`Navigation::close_panel`).
 //!
 //! A project is named by its id (`orchester_core::id::ProjectId`), not its key or name: the id never
 //! changes, so a path a tab keeps still finds its project after a rename or a new key. A task is named
@@ -27,15 +33,22 @@
 //! as a [`RouteError`] that says why.
 
 mod accounts;
+mod agents;
 mod connections;
 mod error;
 mod files;
+mod instructions;
+mod join;
 mod orchester;
 mod orchestrator;
 mod overview;
 mod page;
+mod pipeline;
+mod project_settings;
 mod query;
 mod screen;
+mod secrets;
+mod skills;
 mod table;
 mod task;
 mod tasks;
@@ -50,14 +63,21 @@ use orchester_workspace::usage::UsageQuery;
 use self::query::{Params, with_query};
 pub use self::{
   accounts::{AccountsPanel, AccountsView},
+  agents::AgentTab,
   connections::{ConnectionsTab, ConnectionsView, NewConnection},
   error::RouteError,
   files::FilesView,
+  instructions::{InstructionsPanel, InstructionsTab, InstructionsView},
+  join::JoinTarget,
   orchester::{OrchesterPanel, OrchesterView},
   orchestrator::OrchestratorChat,
   overview::OverviewTab,
   page::ProjectPage,
+  pipeline::PipelinePanel,
+  project_settings::ProjectSettingsTab,
   screen::Screen,
+  secrets::{SecretsPanel, SecretsTab, SecretsView},
+  skills::SkillsFilter,
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},
   tasks::{TaskList, TaskListTab},
@@ -81,6 +101,9 @@ const TAB: &str = "tab";
 const ACCOUNTS: &str = "accounts";
 /// Settings' Orchester tab.
 const ORCHESTER: &str = "orchester";
+/// The invite landing under Settings › Orchester.
+const INVITE: &str = "invite";
+const INVITE_PATTERN: &str = "/settings/invite";
 /// A project's path with its identifier as the router's parameter.
 const PROJECT_PATTERN: &str = "/project/:project";
 const NEW_PIPELINE_PATTERN: &str = "/project/:project/pipelines/new";
@@ -88,9 +111,11 @@ const PIPELINE_PATTERN: &str = "/project/:project/pipelines/:pipeline";
 const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 /// A file of the code viewer: its path is the rest of the address, however many segments it has.
 const FILE_PATTERN: &str = "/project/:project/files/**path";
+/// A file's route under the code viewer's layout (`table`): [`FILE_PATTERN`] after the screen's own.
+const FILE_REST: &str = "/**path";
 const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
-/// Project settings open on Sharing.
-const SHARING_PATTERN: &str = "/project/:project/settings/sharing";
+/// A task kept Not shared, by its kept key, on its tab.
+const KEPT_TASK_PATTERN: &str = "/project/:project/tasks/kept/:key/:tab";
 /// A task's path without its tab, which reads as its Summary.
 const TASK_SUMMARY_PATTERN: &str = "/project/:project/tasks/:key";
 /// All projects' *Usage* tab, a path of its own under the home screen.
@@ -129,6 +154,8 @@ pub enum Route {
   Accounts(AccountsView),
   /// Settings › Orchester, with the account or server it shows, or *Connect a server*.
   Orchester(OrchesterView),
+  /// The invite landing (`xeFRB`): which local checkout to link to the project an invite was to.
+  Invite(JoinTarget),
   Project(ProjectId, ProjectPage),
 }
 
@@ -137,11 +164,12 @@ impl Route {
   pub fn pattern(&self) -> String {
     match self {
       Self::Project(_, ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline) => NEW_PIPELINE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::Pipeline(_)) => PIPELINE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::Agent(_)) => AGENT_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Pipeline(..) | ProjectPage::PipelineVersion(..)) => PIPELINE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::PullRequest(_)) => PULL_REQUEST_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::Sharing { .. }) => SHARING_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::PullRequest(..)) => PULL_REQUEST_PATTERN.to_owned(),
+      Self::Invite(_) => INVITE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::KeptTask(..)) => KEPT_TASK_PATTERN.to_owned(),
       Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),
       _ => self.screen().pattern(),
     }
@@ -150,7 +178,7 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
-      Self::Settings | Self::Accounts(_) | Self::Orchester(_) => Screen::Settings,
+      Self::Settings | Self::Accounts(_) | Self::Orchester(_) | Self::Invite(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
@@ -169,7 +197,8 @@ impl Route {
       | Self::AddProject(_)
       | Self::Settings
       | Self::Accounts(_)
-      | Self::Orchester(_) => None,
+      | Self::Orchester(_)
+      | Self::Invite(_) => None,
     }
   }
 
@@ -194,6 +223,13 @@ impl Route {
       Self::Settings => format!("/{SETTINGS}"),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Orchester(view) => view.path(format!("/{SETTINGS}"), (TAB, ORCHESTER)),
+      Self::Invite(target) => {
+        let [server, project] = target.params();
+        with_query(
+          format!("/{SETTINGS}/{INVITE}"),
+          &[(server.0, Some(&server.1)), (project.0, Some(&project.1))],
+        )
+      }
       Self::Project(project, page) => page.path(&format!("/{PROJECT}/{project}")),
     }
   }
@@ -218,6 +254,7 @@ impl Route {
       [usage::SEGMENT] => Self::Usage(Box::new(usage::take_everywhere(&mut params)?)),
       [ADD_PROJECT] => Self::AddProject(params.take(FOLDER)?.map(RouteFolder)),
       [SETTINGS] => Self::settings(&mut params)?,
+      [SETTINGS, INVITE] => Self::Invite(JoinTarget::take(&mut params)?.ok_or(RouteError::NoScreen)?),
       [PROJECT, project, page @ ..] => {
         let project = project.parse().map_err(|_| RouteError::ProjectId {
           value: (*project).to_owned(),

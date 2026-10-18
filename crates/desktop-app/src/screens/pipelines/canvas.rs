@@ -70,11 +70,11 @@ fn graph(ctx: &Ctx, state: &State, readonly: bool) -> Element {
   let width = graph_width(&shown);
   let center = center + (width - GRAPH_WIDTH) / 2.0;
   let mut graph = Stack::new().width(Dimension::Px(width));
-  let start = state.clone();
+  let start = editing.panels;
   graph = graph.child(
     Column::new()
       .child(
-        pressable(move || start.update(|s| s.panel = Panel::Pipeline))
+        pressable(move || start.choose(Panel::Pipeline))
           .id("pipeline-start")
           .child(start_node(ctx)),
       )
@@ -162,6 +162,7 @@ fn add_action(ctx: &Ctx, state: &State) -> impl Fn() + Send + Sync + 'static {
   let first = ctx.t("pipelines.newStep");
   let numbered = ctx.t("pipelines.newStepNumber");
   move || {
+    let mut added = None;
     add_state.update(|s| {
       if s.viewing.is_some() {
         return;
@@ -173,18 +174,21 @@ fn add_action(ctx: &Ctx, state: &State) -> impl Fn() + Send + Sync + 'static {
         Panel::Step(key) => Some(key.clone()),
         _ => None,
       };
-      let key = s.edit.add_step(name, after.as_ref());
-      s.panel = Panel::Step(key);
-    })
+      added = Some(s.edit.add_step(name, after.as_ref()));
+    });
+    if let Some(key) = added {
+      add_state.get_untracked().panels.choose(Panel::Step(key));
+    }
   }
 }
 fn toolbar(ctx: &Ctx, state: &State, readonly: bool) -> Element {
-  if state.get().viewing.is_some() {
+  let editing = state.get();
+  if editing.viewing.is_some() {
     return super::history::toolbar(ctx, state);
   }
   let add = add_button(ctx, state, "pipeline-add-step");
-  let settings = state.clone();
-  let history = state.clone();
+  let settings = editing.panels.clone();
+  let history = editing.panels;
   Row::new()
     .padding(SpacingSize::Xs)
     .background(PaletteColor::SurfaceRaised)
@@ -195,12 +199,12 @@ fn toolbar(ctx: &Ctx, state: &State, readonly: bool) -> Element {
     .child(
       ActionButton::new("pipeline-settings", ButtonKind::Ghost, ctx.t("pipelines.settings"))
         .icon(Icon::Settings)
-        .on_click(move || settings.update(|s| s.panel = Panel::Settings)),
+        .on_click(move || settings.choose(Panel::Settings)),
     )
     .child(
       ActionButton::new("pipeline-history", ButtonKind::Ghost, ctx.t("pipelines.history"))
         .icon(Icon::History)
-        .on_click(move || history.update(|s| s.panel = Panel::History)),
+        .on_click(move || history.choose(Panel::History)),
     )
     .into()
 }
@@ -208,7 +212,7 @@ fn card(ctx: &Ctx, state: &State, step: &Step, index: usize) -> Element {
   let editing = state.get();
   let selected = editing.panel == Panel::Step(step.key.clone());
   let key = step.key.clone();
-  let select = state.clone();
+  let select = editing.panels.clone();
   let body = card_body(ctx, &editing, step, index, selected);
   let reference = if editing.comparing {
     Some(&editing.opened.body)
@@ -217,6 +221,7 @@ fn card(ctx: &Ctx, state: &State, step: &Step, index: usize) -> Element {
   } else {
     None
   };
+  let card = pressable(move || select.choose(Panel::Step(key.clone()))).id(format!("pipeline-step-{}", step.key));
   if reference.is_some_and(|before| before.steps().iter().find(|s| s.key == step.key) != Some(step)) {
     let tagged = Stack::new().child(body).child(
       Row::new()
@@ -230,15 +235,9 @@ fn card(ctx: &Ctx, state: &State, step: &Step, index: usize) -> Element {
         .hit_test(lurq::node::HitTestBehavior::None)
         .absolute_position(CARD_WIDTH - 88.0, 0.0),
     );
-    return pressable(move || select.update(|s| s.panel = Panel::Step(key.clone())))
-      .id(format!("pipeline-step-{}", step.key))
-      .child(tagged)
-      .into();
+    return card.child(tagged).into();
   }
-  pressable(move || select.update(|s| s.panel = Panel::Step(key.clone())))
-    .id(format!("pipeline-step-{}", step.key))
-    .child(body)
-    .into()
+  card.child(body).into()
 }
 /// Co8O6: compact rectangular badge, not the round status chip.
 fn step_badge(text: &str, glyph: Icon) -> Row {

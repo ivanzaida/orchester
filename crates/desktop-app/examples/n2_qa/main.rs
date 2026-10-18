@@ -53,7 +53,7 @@ pub enum State {
   Upload,
   /// The same page for a checkout without tasks: Kontur's tasks come down.
   Download,
-  /// A checkout with tasks and a project with tasks: the join review isn't in this version (`N9NFio`).
+  /// A checkout with tasks and a project with tasks: the join review (`AiCwO`).
   Review,
   /// Linked as a member: Sharing with the members read-only and no Manage (`N9NFio` *as a member*).
   Member,

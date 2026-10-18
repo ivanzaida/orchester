@@ -16,8 +16,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  Translate,
+  SentBy, Translate,
   across::{across, needs_project, oldest_first},
+  message_waits::project_message_waits,
   runs::find_run,
   wire,
 };
@@ -82,21 +83,27 @@ pub async fn list_questions(
   }
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |_, db| {
+    across(&services, args.project.as_deref(), |open, db| {
       let run = args.run.as_deref().map(|named| find_run(db, named)).transpose()?;
       let waiting = db.waiting_questions()?.into_iter();
-      Ok(
-        waiting
-          .filter(|asked| run.as_ref().is_none_or(|run| asked.request.run() == run.id()))
-          .map(|asked| with_run(db, asked))
-          .collect::<Vec<_>>(),
-      )
+      let asked = waiting
+        .filter(|asked| run.as_ref().is_none_or(|run| asked.request.run() == run.id()))
+        .map(|asked| with_run(db, asked))
+        .collect::<Vec<_>>();
+      let messages = project_message_waits(db, open.project.id(), run.as_ref())?;
+      Ok((asked, messages))
     })
   })
   .await?;
-  let mut questions = read.items(|open, asked| asked.iter().map(|asked| listed(asked, open.project.id())).collect());
+  let mut questions =
+    read.items(|open, (asked, _)| asked.iter().map(|asked| listed(asked, open.project.id())).collect());
   oldest_first(&mut questions, "asked_at");
-  Ok(json!({ "questions": questions, "unreadable_projects": read.unreadable(translate) }))
+  let messages = read.items(|_, (_, messages)| messages.clone());
+  Ok(json!({
+    "questions": questions,
+    "waiting_for_message": messages,
+    "unreadable_projects": read.unreadable(translate),
+  }))
 }
 
 /// `asked` with its run's number and task. A run or task that cannot be read leaves them out and the question is
@@ -148,7 +155,8 @@ pub fn waiting(questions: &[AskedQuestions], link: &str) -> Vec<Value> {
     .collect()
 }
 
-fn shown(asked: &AskedQuestions) -> Value {
+/// A request with its questions and their suggested answers, as every tool shows it.
+pub(super) fn shown(asked: &AskedQuestions) -> Value {
   let request = &asked.request;
   let questions: Vec<Value> = request.questions().iter().map(question).collect();
   json!({
@@ -176,7 +184,8 @@ fn question(question: &Question) -> Value {
   })
 }
 
-pub async fn answer_question(services: &Services, args: AnswerQuestion) -> Result<Value, ToolError> {
+/// `answer_question`, as automation; `by` the Orchestrator chat, the card names the chat once the runner recorded it.
+pub async fn answer_question(services: &Services, args: AnswerQuestion, by: SentBy) -> Result<Value, ToolError> {
   let reading = services.clone();
   let AnswerQuestion {
     project,
@@ -194,15 +203,7 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion) -> Resul
   })
   .await?;
   let given = GivenAnswer { choices, text };
-  let [one] = asked.request.questions() else {
-    return Err(ToolError::refused(
-      "several_questions",
-      vec![Message::new("appMcp.errors.severalQuestions")],
-    ));
-  };
-  one
-    .answer(&given.choices, given.text.as_deref())
-    .map_err(|error| refused(&error))?;
+  check_answer(&asked, &given)?;
   let answering = Answering {
     run: asked.request.run(),
     request: asked.request.id().to_owned(),
@@ -213,11 +214,37 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion) -> Resul
     .control_run_in(&project, answering.command(Answerer::Automation))
     .await
     .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
+  if by == SentBy::Orchestrator {
+    let (root, run, request) = (
+      project.repo_root.clone(),
+      asked.request.run(),
+      asked.request.id().to_owned(),
+    );
+    // The answer reached the agent; only the card's words depend on the mark, so a mark not kept is logged.
+    let marked = blocking(move || Ok(ProjectDb::open(&root)?.mark_answered_by_orchestrator(run, &request)?)).await;
+    if let Err(error) = marked {
+      tracing::warn!(?error, "cannot name the Orchestrator on the answer it gave");
+    }
+  }
   Ok(json!({ "question": { "id": asked.request.id(), "answered": true } }))
 }
 
+/// Refused unless `given` answers `asked`'s only question with the card's own rules.
+pub fn check_answer(asked: &AskedQuestions, given: &GivenAnswer) -> Result<(), ToolError> {
+  let [one] = asked.request.questions() else {
+    return Err(ToolError::refused(
+      "several_questions",
+      vec![Message::new("appMcp.errors.severalQuestions")],
+    ));
+  };
+  one
+    .answer(&given.choices, given.text.as_deref())
+    .map(drop)
+    .map_err(|error| refused(&error))
+}
+
 /// The waiting request named `id`, or the run's only one when none is named.
-fn waiting_request(questions: &[AskedQuestions], id: Option<&str>) -> Result<AskedQuestions, ToolError> {
+pub fn waiting_request(questions: &[AskedQuestions], id: Option<&str>) -> Result<AskedQuestions, ToolError> {
   let waiting: Vec<&AskedQuestions> = questions.iter().filter(|asked| asked.waits()).collect();
   match (id, waiting.as_slice()) {
     (Some(id), _) => waiting

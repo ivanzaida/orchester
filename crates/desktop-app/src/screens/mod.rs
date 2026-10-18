@@ -52,6 +52,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
+    Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }
@@ -89,26 +90,32 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),
-    ProjectPage::Task(key, view) => task::screen(ctx, project, key, view),
+    ProjectPage::Task(key, view) => task::screen(ctx, project, (key, false), view),
+    ProjectPage::KeptTask(key, view) => task::screen(ctx, project, (key, true), view),
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
-    ProjectPage::PullRequest(number) => pull_requests::pull_request(ctx, project, *number),
+    ProjectPage::PullRequest(number, file) => pull_requests::pull_request(ctx, project, *number, file.as_deref()),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline => pipelines::new_pipeline(ctx, project),
-    ProjectPage::Pipeline(id) => pipelines::editor(ctx, project, *id),
-    ProjectPage::Agents => agents::screen(ctx, project, None),
-    ProjectPage::Agent(id) => agents::screen(ctx, project, Some(*id)),
-    ProjectPage::Instructions => instructions::screen(ctx, project),
-    ProjectPage::Skills | ProjectPage::NewSkill | ProjectPage::Skill(_) | ProjectPage::ImportSkills => {
+    ProjectPage::Pipeline(id, panel) => pipelines::editor(ctx, project, *id, (panel.clone(), None)),
+    ProjectPage::PipelineVersion(id, version, panel) => {
+      pipelines::editor(ctx, project, *id, (panel.clone(), Some(*version)))
+    }
+    ProjectPage::Agents => agents::screen(ctx, project, agents::Shown::List),
+    ProjectPage::NewAgent(tab) => agents::screen(ctx, project, agents::Shown::New(*tab)),
+    ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
+    ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
+    ProjectPage::Skills(_) | ProjectPage::NewSkill | ProjectPage::Skill(_) | ProjectPage::ImportSkills => {
       skills::screen(ctx, project, page)
     }
     ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
-    ProjectPage::Secrets => secrets::screen(ctx, project),
+    ProjectPage::Secrets(view) => secrets::screen(ctx, project, *view),
     ProjectPage::Connections(view) => connections::screen(ctx, project, *view),
     ProjectPage::NewConnection(kind) => connections::new_connection(ctx, project, *kind),
     ProjectPage::EditConnection(id) => connections::edit_connection(ctx, project, *id),
-    ProjectPage::Settings => project_settings::screen(ctx, project),
-    ProjectPage::Sharing { make_local } => project_settings::sharing_screen(ctx, project, *make_local),
+    ProjectPage::Settings(tab) => project_settings::screen(ctx, project, *tab),
+    ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
+    ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
   }
 }

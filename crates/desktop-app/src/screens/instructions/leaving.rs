@@ -27,7 +27,7 @@ pub fn question(ctx: &mut Ctx, selection: &Selection, guard: &LeaveGuard) -> Opt
       if let Some(view) = leave.pending.get_untracked() {
         leave.dirty.set(false);
         leave.pending.set(None);
-        leave.view.set(view);
+        leave.show(view);
       } else {
         leave_guard.leave(&nav);
       }

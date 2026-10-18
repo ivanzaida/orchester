@@ -31,7 +31,7 @@ fn project_settings_environment_validates_each_line_and_saves_harmless_changes_o
   page.click("settings-open-secrets");
   assert!(matches!(
     page.window.navigation().route_now(),
-    orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Secrets)
+    orchester_app::routes::Route::Project(_, orchester_app::routes::ProjectPage::Secrets(_))
   ));
 }
 

@@ -32,7 +32,7 @@ use orchester_workspace::{
 use super::{Timeline, chips};
 pub(crate) use crate::ui::chat::links;
 use crate::ui::{
-  chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble},
+  chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
   icon::Icon,
 };
 
@@ -70,20 +70,24 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
     .into()
 }
 
-/// A person's message (`mr4lC`) at the right: *You*, its time, the bubble and its delivery line.
+/// A person's message (`mr4lC`) at the right: *You* (or the Orchestrator, for one the project's Orchestrator chat
+/// sent), its time, the bubble and its delivery line.
 pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element {
   let (glyph, color, words) = delivery(ctx, &entry.state);
   let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
   let undelivered = super::super::composer::undelivered(ctx, entry);
-  bubble(
-    ctx,
-    &format!("conversation-message-{}", entry.id),
-    (&entry.body, Some(entry.at)),
-    Some(delivery),
-  )
-  .with_children(undelivered)
-  .describe("delivery", delivery_name(&entry.state))
-  .into()
+  let id = format!("conversation-message-{}", entry.id);
+  let message = if entry.by_orchestrator {
+    let author = ctx.t("conversation.byOrchestrator");
+    person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
+  } else {
+    bubble(ctx, &id, (&entry.body, Some(entry.at)), Some(delivery))
+  };
+  message
+    .with_children(undelivered)
+    .describe("delivery", delivery_name(&entry.state))
+    .describe("by_orchestrator", entry.by_orchestrator.to_string())
+    .into()
 }
 
 /// A note the person returned the work with, as their message, without a delivery line.

@@ -275,14 +275,45 @@ none on a detached HEAD, and none for runs recorded before it was kept, which ca
 Orchester). All of it is git through `orchester-exec`, with git's messages in English and no optional
 locks (`orchester_core::integration`).
 
-- **Only a checkout that is ready.** The checkout must be on that branch, have no uncommitted
-  changes (untracked files included) and no merge, cherry-pick or revert in progress; otherwise the
-  merge is refused with the reason and nothing changes. Nothing is ever stashed, reset or discarded.
+- **Only a checkout that is ready.** The checkout must be on that branch and have no merge,
+  cherry-pick or revert in progress; otherwise the merge is refused with the reason and nothing
+  changes. Uncommitted changes and untracked files may be there: nothing is ever stashed, reset or
+  discarded, and what the merge does not reach stays as it is.
 - **Merging.** A fast-forward when the branch did not move since the run started, else a merge commit
-  *Merge ORC-12 run #3* with the repository's git identity. The repository's own hooks run: they are
-  the user's. A conflict, or a hook that refuses the merge commit, is undone with `git merge
-  --abort` — safe because the checkout was clean — and the conflicting files are named. A branch that
-  already holds every commit of the run is recorded as merged without a change.
+  *Merge ORC-12 run #3* with the repository's git identity, made in a temporary worktree
+  (`<git common dir>/orchester-merge-<run id>`, removed again on every path; a folder git refuses to
+  remove or no longer knows goes as a folder, and one that still stays is reported beside the merge,
+  which stands) so that the merge never touches the checkout's files. A conflict, or a hook that
+  refuses the merge commit, ends with the temporary worktree removed, the checkout as it was, and the
+  conflicting files named. If the checkout moved to another branch, or its branch got a commit,
+  while the merge commit was made, the merge is dropped and refused.
+- **Hooks.** The repository's own hooks run: they are the user's. The merge commit's hooks
+  (`pre-merge-commit`, `prepare-commit-msg`, `commit-msg`, `post-merge`) come from the hooks folder
+  the checkout uses (`core.hooksPath`, a relative one resolved against the checkout) but run with the
+  temporary worktree as their working folder, which holds the tracked files only: nothing ignored,
+  untracked or uncommitted of the checkout's, so no installed tools. `post-merge` runs there and once
+  more in the checkout when the merge is brought in.
+- **Bringing it in.** Either result reaches the checkout as a fast-forward (`git merge --ff-only
+  --no-autostash`), which git refuses, changing nothing, when it would overwrite or remove a file
+  with uncommitted changes, an untracked file or an ignored one; the refusal names exactly those
+  files (or the folder that holds untracked files). `merge.autoStash` never stashes the person's
+  work. Should git still stop part way, e.g. at a file another program holds open, the files it
+  wrote are put back; any it could not put back are named. A branch that already holds every
+  commit of the run is recorded as merged without a change.
+- **Rebased runs.** A run keeps the base it started from, so after its branch was rebased onto
+  newer commits of the branch it merges into, the commits between the two would read as the run's
+  own work already integrated. When git proves the rebase, the base its own commits sit on now is
+  recorded (`run_rebases`, one row per run, a newer rebase replacing it) and external evidence reads
+  the run from there: the branch's reflog names the commit the newest rebase put it onto, that commit
+  descends from the recorded base and is below both the branch tip and the target, and no checkpoint
+  of the run lies between the recorded base and it (else the target has work of the run's own). A
+  last checkpoint the rebase rewrote is read as the branch tip when their commits are the same
+  patches, whitespace included (`git patch-id --verbatim`). Without a rebase, a run whose own
+  commits the target has, by ancestry, a pick or the same tree, still shows as integrated. After a
+  proven rebase, only the run's checkpointed commits the target has by ancestry stop the base from
+  moving: a commit of the run's the target has as a pick, or one never checkpointed, below the
+  commit the branch was rebased onto, is not told apart from the target's own (the rebase itself
+  leaves out of the branch a commit whose patch the target already has).
 - **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
   afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped

@@ -82,7 +82,7 @@ fn tab_labels_name_a_pull_request_by_its_number() {
   let number = std::num::NonZeroU64::new(142).expect("a pull request number");
   window
     .navigation()
-    .go(Route::Project(project, ProjectPage::PullRequest(number)));
+    .go(Route::Project(project, ProjectPage::PullRequest(number, None)));
   window.pass();
   assert_eq!(window.texts("tab-1"), Some(vec!["Kontur · #142".to_owned()]));
 }

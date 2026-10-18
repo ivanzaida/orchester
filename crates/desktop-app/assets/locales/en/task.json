@@ -18,7 +18,8 @@
       "toTasks": "Open the task list"
     },
     "crumbs": {
-      "tasks": "Tasks"
+      "tasks": "Tasks",
+      "notShared": "Not shared"
     },
     "edit": "Edit",
     "removeWorktree": "Remove worktree",
@@ -128,6 +129,49 @@
       "runAgainActive": "Run #{{run}} is active",
       "runAgainUnpublished": "{{pipeline}} isn't published",
       "runAgainDailyBudget": "Today's token budget is used"
+    },
+    "formerKey": "was {{key}}",
+    "notShared": {
+      "badge": "Not shared",
+      "share": "Share task",
+      "title": "Not shared · read-only",
+      "body": "{{task}} stayed on this computer when {{project}} joined {{key}} on {{day}}. Its runs, conversation and memory stay readable; nothing changes it and no run starts. Share task uploads it to {{server}} with the next {{key}} number, and it becomes a shared task like any other.",
+      "locked": "Edit, Start run and the organization pickers are unavailable while {{task}} is Not shared.",
+      "panel": "On this computer only",
+      "key": "Key",
+      "keyValue": "{{key}} · kept",
+      "leftOut": "Left out",
+      "leftOutValue": "{{day}}, when {{project}} joined {{key}}",
+      "would": "Would become",
+      "wouldValue": "{{key}}, the next number",
+      "wouldNext": "The next {{key}} number",
+      "similar": "Similar on {{key}}",
+      "similarValue": "{{key}} {{title}} · {{by}}",
+      "server": "Server",
+      "serverValue": "{{server}} · {{address}}"
+    },
+    "share": {
+      "title": "Share {{task}} on {{project}}?",
+      "goes": "It goes to {{project}} on {{server}} as {{next}}, the next number, with its title, brief, criteria, status, priority and tags. Every member sees it.",
+      "goesNext": "It goes to {{project}} on {{server}} with the next {{key}} number, with its title, brief, criteria, status, priority and tags. Every member sees it.",
+      "similar": "Similar on {{project}}: {{key}} {{title}} · {{by}}. If it's the same work, keep {{task}} here.",
+      "tags": "Tags match {{project}}'s by name; a link to a task that stays here is dropped.",
+      "stays": "Runs, the conversation and memory stay on this computer; run branches keep their names, and the next run is named by the new key.",
+      "confirm": "Share as {{key}}",
+      "confirmNext": "Share task",
+      "keep": "Keep it here"
+    },
+    "joined": {
+      "panel": "On {{server}}",
+      "key": "Key",
+      "before": "Before joining",
+      "shared": "Shared",
+      "sharedValue": "{{day}} · when {{project}} joined {{key}}",
+      "created": "Created",
+      "createdValue": "{{by}} · {{day}}, as {{former}}",
+      "changed": "Last change",
+      "changedValue": "{{by}} · {{time}}",
+      "note": "Briefs, criteria and messages written before the join still say {{former}}; Orchester doesn't rewrite them. Searching {{former}} finds this task."
     }
   }
 }

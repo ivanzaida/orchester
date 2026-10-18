@@ -376,14 +376,15 @@ fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {
       username,
     } => {
       let id = *id;
-      // The join review the design opens next is N3's; until then it stays in place, unavailable with why.
+      // A code names no project: the server's entry lists the person's projects there, each with *Link a checkout…*,
+      // which leads to the join review.
       let review = ActionButton::new(
         "orchester-connect-join-review",
         ButtonKind::Primary,
         ctx.t("sharing.connect.joined.review"),
       )
       .icon(Icon::ArrowRight)
-      .unavailable(ctx.t("sharing.connect.joined.reviewLater"));
+      .opens(navigation.to(Route::Orchester(OrchesterView::server(id))));
       let entry = ActionButton::new(
         "orchester-connect-open-joined",
         ButtonKind::Secondary,

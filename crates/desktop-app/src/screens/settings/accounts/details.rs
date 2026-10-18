@@ -200,7 +200,7 @@ fn actions(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) ->
   let check = super::state::check_again(ctx, parts, work, id, "account-check-again");
   let to = |panel: AccountsPanel| {
     let navigation = navigation.clone();
-    move || navigation.replace(Route::Accounts(AccountsView::of(id, panel)))
+    move || navigation.go(Route::Accounts(AccountsView::of(id, panel)))
   };
   let rename = ActionButton::new("account-rename", ButtonKind::Ghost, t(ctx, "accounts.actions.rename"))
     .icon(Icon::Pencil)
@@ -264,7 +264,7 @@ fn rename_field(ctx: &mut Ctx, work: &Work, account: &AgentAccount) -> Element {
     )
     .on_click(move || {
       rename.set(String::new());
-      navigation.replace(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)));
+      navigation.close_panel(Route::Accounts(AccountsView::of(id, AccountsPanel::Account)));
     })
   };
   let error = work
@@ -304,7 +304,7 @@ fn tabs(ctx: &mut Ctx, account: &AgentAccount, tab: AccountsPanel, uses: Option<
   let id = account.id();
   let to = |panel: AccountsPanel| {
     let navigation = navigation.clone();
-    move || navigation.replace(Route::Accounts(AccountsView::of(id, panel)))
+    move || navigation.go(Route::Accounts(AccountsView::of(id, panel)))
   };
   let used = uses.map_or(0, |uses| uses.connections.len());
   let tabs = [

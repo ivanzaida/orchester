@@ -15,8 +15,10 @@ pub use app_db::{
 };
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
+#[cfg(feature = "test-support")]
+pub use project_db::ProjectMigration;
 pub use project_db::{
   AutoModeSave, AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, ChatListing, ChatTurn, DecisionCounts,
-  JoinedKey, NotSent, ProjectDb, ReadOnlyProjectDb, ResourceUpdate, ReturnedTask, RunBranch, SharedMember,
+  JoinedKey, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResourceUpdate, ReturnedTask, RunBranch, SharedMember,
   SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
 };

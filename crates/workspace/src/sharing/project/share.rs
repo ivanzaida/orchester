@@ -198,6 +198,8 @@ impl Servers {
     (remote, key): (Option<RepositoryIdentity>, IdempotencyKey),
     write_discovery: bool,
   ) -> Result<Shared, ShareError> {
+    // Every first link goes through here: a checkout linked already uploads nothing into another project.
+    super::join::still_local(repo_root).await?;
     let address = ProjectAddress::reported(&project.address, &entry.address)?.to_text();
     let id = project.id;
     let on_server = self

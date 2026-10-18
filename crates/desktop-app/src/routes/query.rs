@@ -52,6 +52,20 @@ impl Params {
     })
   }
 
+  /// The value of `name` read as a `T` (an id, an environment), or `None` when the query has none.
+  pub(super) fn take_parsed<T: std::str::FromStr>(&mut self, name: &str) -> Result<Option<T>, RouteError> {
+    let Some(value) = self.take(name)? else {
+      return Ok(None);
+    };
+    match value.parse() {
+      Ok(parsed) => Ok(Some(parsed)),
+      Err(_) => Err(RouteError::InvalidParam {
+        param: name.to_owned(),
+        value,
+      }),
+    }
+  }
+
   /// Fails on the first parameter no parser took.
   pub(super) fn finish(self) -> Result<(), RouteError> {
     match self.0.into_iter().next() {

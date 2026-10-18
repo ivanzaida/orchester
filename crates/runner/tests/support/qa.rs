@@ -1,9 +1,9 @@
 //! Projects whose steps start a QA app through `start_qa_app`, for the QA app tests: a stand-in `tools/qa-app.ps1`
-//! committed in the repository, which copies `orchester-test-command` into `.tmp/qa/<name>/bin/orchester-app.exe` and
-//! starts it as a stand-in app with its MCP discovery file. It writes the app's pid to `<repo>/.orchester/qa-report/
-//! <name>.app` and its own to `<name>.script`. By scenario it prints the real script's `pid` and `discovery` lines
-//! (any), never ends (`hang`), ends without naming the app (`nopid`), or leaves a program that holds its output open
-//! (`holdpipe`, its pid in `<name>.holder`). It is a Windows PowerShell script.
+//! committed in the repository, which copies `orchester-test-command` into `.tmp/qa/<name>/bin/orchester-app-qa.exe`
+//! (the name the real script gives the app) and starts it as a stand-in app with its MCP discovery file. It writes the
+//! app's pid to `<repo>/.orchester/qa-report/<name>.app` and its own to `<name>.script`. By scenario it prints the real
+//! script's `pid` and `discovery` lines (any), never ends (`hang`), ends without naming the app (`nopid`), or leaves a
+//! program that holds its output open (`holdpipe`, its pid in `<name>.holder`). It is a Windows PowerShell script.
 
 use std::{
   fs,
@@ -42,7 +42,7 @@ $mcp = Join-Path $qa "mcp"
 $report = '{report}'
 New-Item -ItemType Directory -Force -Path $bin, $mcp, $report | Out-Null
 Set-Content -Path (Join-Path $report "$Name.script") -Value $PID
-$app = Join-Path $bin "orchester-app.exe"
+$app = Join-Path $bin "orchester-app-qa.exe"
 Copy-Item -LiteralPath '{TEST_COMMAND}' -Destination $app -Force
 $started = Start-Process -FilePath $app -ArgumentList "serve-app `"$mcp`"" -WindowStyle Hidden -PassThru
 Set-Content -Path (Join-Path $report "$Name.app") -Value $started.Id

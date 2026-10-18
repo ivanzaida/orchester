@@ -124,7 +124,7 @@ impl Picker {
       .filter(|_| props.icon_in_field)
       .map(|choice| icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary));
     let open = props.open.clone();
-    Focus::Form
+    Focus::Keyboard
       .apply(pressable(move || open.update(|open| *open = !*open)))
       .id(props.id.clone())
       .ref_element(self.anchor.clone())

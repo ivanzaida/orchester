@@ -51,7 +51,7 @@ impl Component for ScopePicker {
     let p = ctx.props::<Props>().clone();
     let open = self.open.clone();
     let locked = p.locked;
-    let trigger = Focus::Form
+    let trigger = Focus::Keyboard
       .apply(pressable(move || {
         if !locked {
           open.update(|o| *o = !*o);
@@ -198,7 +198,7 @@ impl ScopePicker {
     let scope = o.scope.clone();
     let open = self.open.clone();
     let item = if o.available {
-      Focus::Form.apply(pressable(move || {
+      Focus::Keyboard.apply(pressable(move || {
         open.set(false);
         value.set(Picked(scope.clone()));
       }))

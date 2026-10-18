@@ -218,6 +218,9 @@ pub struct Message {
   recovery_after: Option<EventSequence>,
   /// When a person's message reaches an agent at work; [`Timing::AfterTurn`] for an agent's.
   timing: Timing,
+  /// A message on the person's side that the project's Orchestrator chat wrote and sent
+  /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's.
+  by_orchestrator: bool,
 }
 
 impl Message {
@@ -241,6 +244,7 @@ impl Message {
       created_at: now,
       recovery_after: None,
       timing: Timing::AfterTurn,
+      by_orchestrator: false,
     }
   }
 
@@ -266,6 +270,7 @@ impl Message {
       created_at: now,
       recovery_after: None,
       timing: Timing::AfterTurn,
+      by_orchestrator: false,
     }
   }
 
@@ -294,6 +299,7 @@ impl Message {
       created_at,
       recovery_after: None,
       timing: Timing::AfterTurn,
+      by_orchestrator: false,
     })
   }
 
@@ -331,12 +337,26 @@ impl Message {
     self.timing
   }
 
+  /// Whether the project's Orchestrator chat wrote and sent it, on the person's side.
+  pub const fn by_orchestrator(&self) -> bool {
+    self.by_orchestrator
+  }
+
   /// A person's message sent as `timing` says.
   pub fn sent(mut self, timing: Timing) -> Result<Self, MessageError> {
     if !matches!(self.sender, Sender::Person { .. }) {
       return Err(MessageError::NotFromAPerson);
     }
     self.timing = timing;
+    Ok(self)
+  }
+
+  /// A message on the person's side that the Orchestrator chat wrote and sent; an agent's never is.
+  pub fn sent_by_orchestrator(mut self) -> Result<Self, MessageError> {
+    if !matches!(self.sender, Sender::Person { .. }) {
+      return Err(MessageError::NotFromAPerson);
+    }
+    self.by_orchestrator = true;
     Ok(self)
   }
 

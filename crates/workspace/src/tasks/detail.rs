@@ -298,8 +298,12 @@ impl TaskDetail {
   /// *Not shared*, which is read-only.
   pub fn editable(&self) -> bool {
     let has_run = self.run.is_some() || self.latest_unreadable.is_some();
-    let kept = self.shared.as_ref().is_some_and(|info| info.kept_tags.is_some());
-    !kept && self.task.check_editable(has_run).is_ok()
+    !self.not_shared() && self.task.check_editable(has_run).is_ok()
+  }
+
+  /// Whether the task was kept *Not shared* when its project joined: read-only until *Share task*.
+  pub fn not_shared(&self) -> bool {
+    self.shared.as_ref().is_some_and(|info| info.kept_tags.is_some())
   }
 
   /// Whether the run is recorded as running while no runner is `online`: its agent is gone and

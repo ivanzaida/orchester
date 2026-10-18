@@ -22,6 +22,7 @@ mod native_conversations;
 mod optional_daily_budget;
 mod optional_limits;
 mod orchestrator;
+mod orchestrator_waits;
 mod organization;
 mod permitted_decisions;
 mod plan_decided_by;
@@ -31,6 +32,7 @@ mod questions;
 mod queue_holds;
 mod recovery;
 mod reviewer_usage;
+mod run_rebases;
 mod shared_members;
 mod sharing;
 mod sources;
@@ -556,4 +558,16 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   worktree_not_created::MIGRATION,
   shared_members::MIGRATION,
   shared_members::READ_AS_MIGRATION,
+  orchestrator_waits::MIGRATION,
+  run_rebases::MIGRATION,
 ];
+
+/// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema
+/// before it ([`super::apply_migration_for_test`]).
+#[cfg(feature = "test-support")]
+pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
+  match migration {
+    super::ProjectMigration::LocalIntegration => local_integration::MIGRATION,
+    super::ProjectMigration::EditorDrafts => editor_drafts::MIGRATION,
+  }
+}

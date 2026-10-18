@@ -110,6 +110,8 @@ pub enum BadgeTone {
   Info,
   Warning,
   Danger,
+  /// A state without a tone, e.g. a task kept *Not shared* (`R4elt`): `text_secondary` on the `hover` fill.
+  Neutral,
 }
 
 impl BadgeTone {
@@ -119,6 +121,7 @@ impl BadgeTone {
       Self::Info => (PaletteColor::Info, PaletteColor::InfoMuted),
       Self::Warning => (PaletteColor::Warning, PaletteColor::WarningMuted),
       Self::Danger => (PaletteColor::Danger, PaletteColor::DangerMuted),
+      Self::Neutral => (PaletteColor::TextSecondary, PaletteColor::AccentMuted),
     }
   }
 }

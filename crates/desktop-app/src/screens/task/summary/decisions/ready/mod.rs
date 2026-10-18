@@ -63,7 +63,9 @@ impl Component for ReadyForReview {
     if let Some(reminder) = local::reminder(ctx, &props) {
       parts.insert(0, reminder);
     }
-    let side = run_details(ctx, &props, run);
+    let linked = crate::screens::task::sharing::linked(ctx, &props);
+    let section = crate::screens::task::sharing::section(ctx, &props, (linked.as_ref(), None));
+    let side = run_details(ctx, &props, run, section);
     arranged(ctx, parts, None, Some(side))
   }
 }

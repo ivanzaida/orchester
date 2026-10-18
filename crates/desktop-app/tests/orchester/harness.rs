@@ -117,6 +117,8 @@ struct Shared {
   down: AtomicBool,
   /// The next request whose line starts with this ends without an answer, as if the server went away.
   refuse: Mutex<Option<String>>,
+  /// The next request whose line starts with this reaches the server, and its answer is lost on the way back.
+  lose: Mutex<Option<String>>,
 }
 
 impl Recorder {
@@ -152,6 +154,16 @@ impl Recorder {
     *self.shared.refuse.lock() = Some(line.to_owned());
   }
 
+  /// The next request whose line starts with `line` reaches the server, which does what it asks, but its answer never
+  /// reaches the app: the connection ends instead.
+  #[allow(
+    dead_code,
+    reason = "the join's tests use it (`tests/shared_project`), which include this harness"
+  )]
+  pub fn lose_answer_once(&self, line: &str) {
+    *self.shared.lose.lock() = Some(line.to_owned());
+  }
+
   pub fn url(&self) -> String {
     format!("http://localhost:{}", self.port)
   }
@@ -166,12 +178,18 @@ impl Recorder {
 fn relay(client: TcpStream, server: TcpStream, shared: &Arc<Shared>) {
   let (mut client_read, mut server_write) = (client.try_clone().expect("client"), server.try_clone().expect("server"));
   let shared = shared.clone();
+  // This connection's next answer is lost: set before the request goes on, so the answer finds it set.
+  let losing = Arc::new(AtomicBool::new(false));
+  let lose = losing.clone();
   thread::spawn(move || {
     let mut buffer = [0_u8; 16 * 1024];
     while let Ok(read) = client_read.read(&mut buffer) {
       if shared.down.load(Ordering::SeqCst) || refused(&shared, &buffer[..read]) {
         let _ = client_read.shutdown(Shutdown::Both);
         break;
+      }
+      if matches(&shared.lose, &buffer[..read]) {
+        lose.store(true, Ordering::SeqCst);
       }
       if read == 0 || server_write.write_all(&buffer[..read]).is_err() {
         break;
@@ -191,6 +209,10 @@ fn relay(client: TcpStream, server: TcpStream, shared: &Arc<Shared>) {
   thread::spawn(move || {
     let mut buffer = [0_u8; 16 * 1024];
     while let Ok(read) = server_read.read(&mut buffer) {
+      if losing.load(Ordering::SeqCst) {
+        let _ = client_write.shutdown(Shutdown::Both);
+        break;
+      }
       if read == 0 || client_write.write_all(&buffer[..read]).is_err() {
         break;
       }
@@ -202,12 +224,17 @@ fn relay(client: TcpStream, server: TcpStream, shared: &Arc<Shared>) {
 
 /// Whether `chunk` starts the request the port refuses once; the refusal is used up then.
 fn refused(shared: &Shared, chunk: &[u8]) -> bool {
-  let mut refuse = shared.refuse.lock();
-  let hit = refuse
+  matches(&shared.refuse, chunk)
+}
+
+/// Whether `chunk` starts the request `once` names; it is used up then.
+fn matches(once: &Mutex<Option<String>>, chunk: &[u8]) -> bool {
+  let mut once = once.lock();
+  let hit = once
     .as_deref()
     .is_some_and(|line| String::from_utf8_lossy(chunk).starts_with(line));
   if hit {
-    *refuse = None;
+    *once = None;
   }
   hit
 }

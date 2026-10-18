@@ -28,7 +28,7 @@ impl Settings {
     window.tree.resize(1440, 1375);
     window
       .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Settings));
+      .go(Route::Project(project_id(), ProjectPage::Settings(Default::default())));
     window.until("settings General", |window| window.texts("settings-auto").is_some());
     Self {
       window,

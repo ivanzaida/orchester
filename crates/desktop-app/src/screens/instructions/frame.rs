@@ -28,8 +28,6 @@ pub fn header(
   tab: Tab,
   selection: &Selection,
 ) -> Element {
-  let import = selection.clone();
-  let new = selection.clone();
   let title = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
@@ -54,28 +52,27 @@ pub fn header(
         ctx.t("instructions.import"),
       )
       .icon(Icon::FolderOpen)
-      .on_click(move || import.open(View::Import)),
+      .opens(selection.to(View::Import)),
     )
     .child(
       ActionButton::new("instructions-new", ButtonKind::Primary, ctx.t("instructions.new"))
         .icon(Icon::Plus)
-        .on_click(move || new.open(View::New(tab))),
+        .opens(selection.to(View::new_rule(tab))),
     );
   let tabs = Tab::ALL
     .into_iter()
     .enumerate()
     .map(|(index, choice)| {
-      let selection = selection.clone();
       let count = data
         .entries
         .iter()
         .filter(|entry| Tab::of(entry.body.scope()) == choice)
         .count();
-      PageTab::new(
+      PageTab::to(
         format!("instruction-tab-{index}"),
         counted(ctx, &ctx.t(choice.key()), count),
         tab == choice,
-        move || selection.open(View::Rule(choice, None)),
+        selection.to(View::rule(choice, None)),
       )
     })
     .collect::<Vec<_>>();
@@ -101,13 +98,19 @@ pub fn header(
     .into()
 }
 
-pub fn empty(ctx: &mut Ctx, project: &ShownProject, data: &ProjectInstructions, selection: &Selection) -> Element {
+pub fn empty(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  (data, tab): (&ProjectInstructions, Tab),
+  selection: &Selection,
+) -> Element {
   ctx.mount_keyed::<super::empty::Empty>(
     "instructions-empty",
     super::empty::Props {
       project: project.clone(),
       selection: selection.clone(),
       all_empty: data.entries.is_empty(),
+      tab,
     },
   )
 }
