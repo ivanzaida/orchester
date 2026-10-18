@@ -244,7 +244,8 @@ pub(super) fn replace_tags(
 }
 
 /// Writes `cached` over the stored row of its id, or as a new row. The local pin of the pipeline
-/// version stays while the task stays queued: a version number means nothing on another computer.
+/// version stays while the task stays queued: a version number means nothing on another computer. A
+/// task this computer created (`batch`) keeps what it asked for as its creation version.
 pub(super) fn write_cached(
   transaction: &Transaction<'_>,
   cached: &CachedTask,
@@ -255,6 +256,7 @@ pub(super) fn write_cached(
   if let Some(before) = before.as_ref().filter(|before| content_differs(before, cached)) {
     tasks::snapshot_earlier_runs(transaction, before)?;
   }
+  let created_here = before.is_none() && batch.is_some();
   let (budget, duration) = tasks::limit_columns(cached.limits)?;
   transaction.execute(
     "INSERT INTO tasks (id, number, batch_key, title, brief, pipeline_id, budget_tokens, max_duration_ms, status, \
@@ -286,6 +288,9 @@ pub(super) fn write_cached(
     ],
   )?;
   tasks::write_criteria(transaction, cached.id, &cached.criteria)?;
+  if created_here {
+    super::task_snapshots::record_shared_creation(transaction, cached)?;
+  }
   organization::store_cached(transaction, cached.id, &cached.organization, cached.updated_at)?;
   write_claim(transaction, cached.id, cached.claim.as_ref())?;
   write_run_status(transaction, cached.id, cached.run.as_ref())

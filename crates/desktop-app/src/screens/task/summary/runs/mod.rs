@@ -3,7 +3,7 @@
 //! when, and *Remove worktree* while it has worktrees and no live work ([`row`]). A run that cannot be
 //! read is listed with its number alone.
 
-mod line;
+pub mod line;
 pub mod removal;
 mod row;
 
