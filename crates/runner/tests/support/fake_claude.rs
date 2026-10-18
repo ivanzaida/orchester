@@ -94,6 +94,8 @@ mod fake_claude_tools;
 mod fake_mcp;
 #[path = "fake_permission_prompt.rs"]
 mod fake_permission_prompt;
+#[path = "fake_provider.rs"]
+mod fake_provider;
 #[path = "fake_skill_calls.rs"]
 mod fake_skill_calls;
 #[path = "fake_tool_calls.rs"]
@@ -292,6 +294,7 @@ fn read_prompt(args: &[String]) -> Option<String> {
   if let Some(folder) = std::env::var_os("CLAUDE_CONFIG_DIR") {
     eprintln!("account folder: {}", folder.to_string_lossy());
   }
+  fake_provider::claude();
   eprintln!(
     "path: {}",
     std::env::var_os("PATH").unwrap_or_default().to_string_lossy()

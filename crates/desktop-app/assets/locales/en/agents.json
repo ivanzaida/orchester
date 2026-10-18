@@ -98,7 +98,7 @@
     "responsibilityHint": "One line on what this agent is for. People and planners read it.",
     "connectionModel": "Connection & model",
     "connection": "Project connection",
-    "connectionHint": "The agent CLI and sign-in this profile runs on.",
+    "connectionHint": "The agent CLI and what it runs on: a sign-in, or an API provider.",
     "model": "Model",
     "modelHint": "From the connection’s list, or Other model id… for one that isn’t listed.",
     "otherModel": "Other model id…",
@@ -234,6 +234,13 @@
     "cliTooOldHint": "Update the CLI to {{required}} or newer and check the connection again, or choose another model.",
     "connectionDetail": "{{cli}} · account {{account}}, {{detail}}",
     "connectionProblem": "{{cli}} · account {{account}} · {{problem}}, runs won't start",
-    "defaultAccount": "Default"
+    "defaultAccount": "Default",
+    "connectionApiProvider": "Runs on an API provider at {{host}}, with an API key",
+    "modelHintApiProvider": "From the models typed for the API provider in its connection.",
+    "effortHintApiProvider": "Optional. Any value the provider’s models accept, such as high; empty uses the provider’s default.",
+    "providerDefaultEffort": "Provider default",
+    "providerDefaultChange": "empty (provider default)",
+    "effortOneWord": "A reasoning effort is one word, such as high.",
+    "effortClaudeLevel": "Claude Code takes the effort levels low, medium, high, xhigh and max only."
   }
 }

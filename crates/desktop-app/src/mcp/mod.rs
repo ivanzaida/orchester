@@ -57,14 +57,14 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a \
   release build grants only when the app's settings allow it or ORCHESTER_APP_MCP_WINDOW_CONTROL=on. \
   The domain tools set a project up and drive its work through data, with the rules of the app's screens: \
-  add_project, connections (add_cli_connection, check_connection, list_models, add_mcp_server,   update_mcp_server, set_mcp_server_enabled, remove_mcp_server), agent profiles \
+  add_project, connections (add_cli_connection, set_api_provider, check_connection, list_models, add_mcp_server,   update_mcp_server, set_mcp_server_enabled, remove_mcp_server), agent profiles \
   (save_profile_draft, publish_profile), pipelines (create_pipeline, save_pipeline_draft, publish_pipeline), \
   instructions, project settings, then tasks (create_task, run_task), runs (get_run, send_message), \
   approvals, questions, plans, get_changes and merge_run. Name a project by its id or name, a task by its \
   key (KON-12), a run by its id or number. A refusal is a tool error with a stable `code` and the app's own \
   explanation in `reasons`. Answering approvals works only while a person turned on Let automation answer \
   approvals in the app; widening what agents may do (broader profile permissions or MCP servers, a CLI \
-  program not found on the search path, environment variables that change program loading, adding or widening   an MCP server or turning one on) is refused as \
+  program not found on the search path, environment variables that change program loading, running a CLI on an API provider's host or key, adding or widening   an MCP server or turning one on) is refused as \
   person_only unless a person turned on Let automation change agent permissions in Settings › What automation may do. \
   Narrowing is always allowed, and no tool takes or returns a secret's value. While Orchester is signed out of Orchester Cloud, every tool answers sign_in_required except sign_in_state; only a person signs in, in the window.";
 

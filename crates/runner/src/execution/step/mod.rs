@@ -284,12 +284,7 @@ impl RunTask {
     };
     self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
     invocation.permissions = Some(start.permissions.clone());
-    if let Some(engine) = &start.engine {
-      self.db.save_invocation_engine(invocation.id, engine)?;
-    }
-    if let Some(account) = start.account {
-      self.db.save_invocation_account(invocation.id, account)?;
-    }
+    self.record_reached(invocation.id, &start)?;
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
@@ -329,6 +324,25 @@ impl RunTask {
       tracing::warn!(?problem, "the step's checks could not be read for its approvals");
       Vec::new()
     })
+  }
+
+  /// Records what `invocation` reaches its model through and on: a native agent's engine, a CLI's account, or the API
+  /// provider a CLI runs on.
+  fn record_reached(
+    &mut self,
+    invocation: orchester_core::id::InvocationId,
+    start: &start::AgentStart,
+  ) -> Result<(), ExecutionError> {
+    if let Some(engine) = &start.engine {
+      self.db.save_invocation_engine(invocation, engine)?;
+    }
+    if let Some(account) = start.account {
+      self.db.save_invocation_account(invocation, account)?;
+    }
+    if let Some((base_url, key)) = &start.provider {
+      self.db.save_invocation_provider(invocation, base_url, *key)?;
+    }
+    Ok(())
   }
 
   /// Records what the agent of `invocation` works without: the MCP servers and the codebase index

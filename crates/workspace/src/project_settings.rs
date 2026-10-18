@@ -228,6 +228,9 @@ fn pick<T: Copy + PartialEq>(before: T, entered: T, stored: T) -> T {
 /// Options and read-back of the reviewer form, resolved by the domain rather than the component.
 pub struct ReviewOptions {
   pub connections: Vec<(String, String)>,
+  /// Agent CLI connections on an API provider, by id and name: listed, unavailable, since the reviewer starts its CLI
+  /// on its own sign-in (`docs/design/api-providers.md`).
+  pub on_providers: Vec<(String, String)>,
   pub default_connection: Option<String>,
   pub models: Vec<String>,
   pub efforts: Vec<String>,
@@ -272,6 +275,12 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
       .connections
       .iter()
       .filter(|c| reviewer_kind(c).is_some())
+      .map(|c| (c.id().to_string(), c.name().as_str().to_owned()))
+      .collect(),
+    on_providers: settings
+      .connections
+      .iter()
+      .filter(|c| c.api_provider().is_some())
       .map(|c| (c.id().to_string(), c.name().as_str().to_owned()))
       .collect(),
     models,

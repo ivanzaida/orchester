@@ -55,6 +55,13 @@ fn add_codex() {
     seeded.text("connection-check-detail"),
     format!("Codex CLI {VERSION} · signed in")
   );
+  // On an API provider the CLI's own sign-in is not used, and the check says so (`virfc`).
+  seeded.click("connection-runs-provider");
+  assert_eq!(
+    seeded.text("connection-check-detail"),
+    format!("Codex CLI {VERSION} · runs on the API provider; its own sign-in is not used")
+  );
+  seeded.click("connection-runs-sign-in");
   seeded.until("the completed check leaves the window settled", |s| {
     !s.window.tree.needs_redraw()
   });

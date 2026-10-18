@@ -84,6 +84,11 @@ impl AppServerSession {
     if result.get("model").and_then(Value::as_str) != Some(&self.setup.model) {
       return Err("Codex selected a different model for the tool-approval step".to_owned());
     }
+    if let Some(provider) = &self.setup.model_provider
+      && result.get("modelProvider").and_then(Value::as_str) != Some(provider)
+    {
+      return Err("Codex selected another model provider than the connection's API provider".to_owned());
+    }
     Ok(())
   }
 

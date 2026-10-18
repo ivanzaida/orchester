@@ -14,6 +14,7 @@ mod environment;
 mod import;
 mod invocation_accounts;
 mod invocation_prompts;
+mod invocation_providers;
 mod joining;
 mod limits;
 mod local_integration;
