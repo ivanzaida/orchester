@@ -125,13 +125,13 @@ impl RunTask {
       secrets: vec![SecretVariable::new("API key", key)],
       agent: body.role().as_str().to_owned(),
       account: None,
+      provider: None,
       memory: recalled.injected(),
       permissions: enforced.launch(),
       engine: Some(InvocationEngine {
         endpoint: api.base_url().clone(),
         vendor: connection.vendor(),
         effort,
-        key: None,
       }),
     })
   }

@@ -204,10 +204,7 @@ impl RunTask {
       .into_iter()
       .find(|(invocation, _)| *invocation == last.id)
       .map(|(_, account)| account);
-    let provider = self
-      .db
-      .invocation_engine(last.id)?
-      .and_then(|engine| engine.key.map(|key| (engine.endpoint, key)));
+    let provider = self.db.invocation_provider(last.id)?;
     let made = SessionOrigin { account, provider };
     if !made.continues_on(&SessionOrigin::of(&connection)) {
       continuation.session = None;

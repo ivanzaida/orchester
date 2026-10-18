@@ -55,9 +55,8 @@ pub struct Invocation {
   pub timing: InvocationTiming,
 }
 
-/// What an invocation reached its model through, recorded once before it starts: a native agent's (04.H9, 04.H10),
-/// or an agent CLI's on an API provider (`docs/design/api-providers.md`). Its connection may change or go afterwards,
-/// the record stays as the run used it.
+/// What a native agent's invocation reached its model through, recorded once before it starts (04.H9,
+/// 04.H10): its connection may change or go afterwards, the record stays as the run used it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InvocationEngine {
   /// The base URL of the model API, in full.
@@ -67,9 +66,6 @@ pub struct InvocationEngine {
   /// The effort the requests named; `None` left the endpoint's default.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub effort: Option<Effort>,
-  /// The project secret whose key an agent CLI on an API provider ran with; `None` for a native agent's record.
-  #[serde(default, skip_serializing_if = "Option::is_none")]
-  pub key: Option<crate::id::SecretId>,
 }
 
 /// A persisted stop watch for one invocation's interactive approval waits.

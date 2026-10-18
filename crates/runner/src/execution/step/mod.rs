@@ -290,6 +290,9 @@ impl RunTask {
     if let Some(account) = start.account {
       self.db.save_invocation_account(invocation.id, account)?;
     }
+    if let Some((base_url, key)) = &start.provider {
+      self.db.save_invocation_provider(invocation.id, base_url, *key)?;
+    }
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;

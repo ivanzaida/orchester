@@ -48,7 +48,9 @@ CLI configured for the provider.
 - The Orchestrator chat and auto mode's reviewer start their CLI on its own sign-in; a connection on a provider is
   not offered there (`orchestrator.settings.apiProvider`, `reviewer_kind` = `None`) rather than run on the wrong
   credentials.
-- Store: project database migration 72, `api_providers` (after master's `run_rebases`, 71), adds `connections.api_provider TEXT` (NULL, or
+- Store: project database migration 72, `api_providers` (after master's `run_rebases`, 71), adds the table
+  `invocation_providers` (the base URL and key secret each invocation on a provider started on) and
+  `connections.api_provider TEXT` (NULL, or
   `{"schema":1,"body":{base_url,key,models:[…]}}`). Older builds refuse the newer database as for every migration,
   so none of them runs the connection on the CLI's own sign-in by ignoring the provider.
 
@@ -127,7 +129,7 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
 - **Plan limits**: a step stopped at an account's plan limit is never offered to continue on a provider connection
   (`AgentConnection::continues_plan_limited`), in the window or the runner.
 - **Sessions**: a session continues only on what it was made on (`SessionOrigin`): the account (as before) and the
-  provider's base URL and key secret, recorded per invocation with the invocation's engine (`InvocationEngine::key`).
+  provider's base URL and key secret, recorded per invocation in `invocation_providers`.
   Another host or key, a provider where there was none, or none where there was one, starts a new session. A resumed
   Codex thread is checked for its `modelProvider` like a new one.
 - **Orchester's tools' answers** leave out the provider key as well as the MCP servers' secrets.

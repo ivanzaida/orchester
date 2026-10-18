@@ -21,12 +21,12 @@ use orchester_core::{
   code_index::CodeIndexUse,
   command::{Command, SecretVariable},
   connection::{
-    AgentConnection, REASONING_EFFORT,
+    AgentConnection, BaseUrl, REASONING_EFFORT,
     invocation::OnProvider,
     mcp::InvocationExemptions,
     stream::{AgentEvent, ClaudeStream, RunnerProblem},
   },
-  id::{AgentAccountId, InvocationId, StepExecutionId},
+  id::{AgentAccountId, InvocationId, SecretId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
   orchester_tools::OrchesterTool,
   permission::LaunchPermissions,
@@ -85,6 +85,9 @@ pub(super) struct AgentStart {
   pub(super) permissions: LaunchPermissions,
   /// What a native agent reaches its model through; `None` for a CLI.
   pub(super) engine: Option<InvocationEngine>,
+  /// The API provider an agent CLI runs on, by its base URL and key secret, recorded with the invocation so a later
+  /// one knows whether its session was made there; `None` on the CLI's own sign-in or for a native agent.
+  pub(super) provider: Option<(BaseUrl, SecretId)>,
 }
 
 /// What starts: an agent CLI's process, or a native agent's loop.
@@ -335,20 +338,12 @@ impl RunTask {
       account: connection.plan_account(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
-      engine: provider_engine(connection, on_provider.as_ref()),
+      engine: None,
+      provider: on_provider
+        .as_ref()
+        .map(|on| (on.provider.base_url().clone(), on.provider.key())),
     })
   }
-}
-
-/// What an agent CLI on an API provider reaches its model through, recorded with the invocation so a later one knows
-/// whether its session was made on the same provider; `None` on the CLI's own sign-in.
-fn provider_engine(connection: &AgentConnection, on: Option<&OnProvider<'_>>) -> Option<InvocationEngine> {
-  on.map(|on| InvocationEngine {
-    endpoint: on.provider.base_url().clone(),
-    vendor: connection.vendor(),
-    effort: None,
-    key: Some(on.provider.key()),
-  })
 }
 
 /// What starts for the CLI command `started`: with the code index's tools first on its `PATH` where it gets them, and

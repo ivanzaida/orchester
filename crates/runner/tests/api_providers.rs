@@ -112,6 +112,12 @@ async fn api_providers_claude_code_runs_on_the_providers_url_models_and_key() {
     db.invocation_accounts(run).expect("accounts").is_empty(),
     "a key's run counts against no account"
   );
+  let invocation = db.invocations(run).expect("invocations")[0].id;
+  let (base_url, _) = db
+    .invocation_provider(invocation)
+    .expect("read")
+    .expect("the provider it started on is recorded");
+  assert_eq!(base_url.as_str(), "https://api.deepseek.com/anthropic");
 }
 
 #[tokio::test(flavor = "multi_thread")]
