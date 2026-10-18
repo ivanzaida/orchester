@@ -156,7 +156,7 @@ fn links((project, atlas): (ProjectId, ProjectId), (key, title): (&str, &str)) -
 }
 
 /// The turn's events after the person approved `approved` at `start`, [`EVENT_MILLIS`] apart; `links` is the
-/// Builder's message with links, near the end.
+/// Builder's message with links, near the end: before its last tool group, which it would split.
 fn transcript(start: Timestamp, approved: &str, links: &str) -> Vec<(Timestamp, AgentEvent)> {
   let mut events = Vec::new();
   events.extend(command("approved-1", approved, "Adding rand v0.9 to dependencies", 0));
@@ -207,6 +207,7 @@ fn transcript(start: Timestamp, approved: &str, links: &str) -> Vec<(Timestamp, 
   events.push(AgentEvent::Error {
     message: "stream disconnected before completion; reconnecting (1/5)".to_owned(),
   });
+  events.push(message(links));
   for (index, path) in READ.into_iter().enumerate() {
     events.push(reasoning(&format!("Checking how {path} records an attempt.")));
     events.extend(command(
@@ -223,7 +224,6 @@ fn transcript(start: Timestamp, approved: &str, links: &str) -> Vec<(Timestamp, 
       ("tests/webhooks/jitter.rs", FileChangeKind::Added),
     ],
   ));
-  events.push(message(links));
   events.push(AgentEvent::CommandStarted {
     item: "test-2".to_owned(),
     command: "cargo test -p webhooks jitter".to_owned(),

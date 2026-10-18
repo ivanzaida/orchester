@@ -17,7 +17,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{Seeded, Window, key_of, open, seeded};
+use super::{Seeded, Window, key_of, open, seeded, walk, with_text};
 
 /// `text_primary` and `text_secondary` in the dark mode the window shows.
 const PRIMARY: &str = "#EDEDF0";
@@ -123,7 +123,13 @@ fn conversation_agent_text_draws_labelled_links_as_a_grid_and_names_places_as_th
   let notes = format!("{key} notes");
   window.until("the message", |window| has_text(window, &notes));
 
-  let grids = window.tree.get_elements_by_class_name("chat-link-grid").len();
+  // The scenario's own message with links has a grid too; count this message's.
+  let said = with_text(&mut window, "conversation-text-", &notes);
+  let mut grids = 0;
+  walk(
+    window.tree.get_element_by_id(&said).expect("the message"),
+    &mut |element| grids += usize::from(element.has_class("chat-link-grid")),
+  );
   assert_eq!(grids, 1, "only the list of labelled links is a grid");
   for label in ["Task", "Pull request"] {
     assert!(has_text(&mut window, label), "{label} is a label of its own");
