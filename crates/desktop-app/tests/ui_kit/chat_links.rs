@@ -70,6 +70,12 @@ fn chat_links_make_a_code_span_of_one_task_key_or_route_a_link() {
     format!("See [{words}]({destination}) and [KON\\-1](orchester:/project/{project}/tasks/KON-1/summary)."),
     "the spaces around what a span holds and the number of its backticks do not count"
   );
+  let key = format!(r"[KON\-1](orchester:/project/{project}/tasks/KON-1/summary)");
+  assert_eq!(
+    references("Done!`KON-1` and Done!KON-1", project),
+    format!(r"Done\!{key} and Done\!{key}"),
+    "a `!` right before a link stays a `!`, never making the link an image"
+  );
 }
 
 #[test]

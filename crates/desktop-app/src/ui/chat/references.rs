@@ -70,7 +70,15 @@ pub fn linked<'a>(text: &'a str, project: ProjectId, exists: &dyn Fn(&TaskKey) -
   let mut linked = String::with_capacity(text.len() + places.len() * 64);
   let mut at = 0;
   for place in places {
-    linked.push_str(&text[at..place.written.start]);
+    let before = &text[at..place.written.start];
+    // A `!` right before `[` would make the link an image: it is written escaped, as it shows.
+    match before.strip_suffix('!') {
+      Some(rest) if !rest.ends_with('\\') => {
+        linked.push_str(rest);
+        linked.push_str("\\!");
+      }
+      _ => linked.push_str(before),
+    }
     linked.push('[');
     for ch in text[place.words].chars() {
       if ch.is_ascii_punctuation() {
