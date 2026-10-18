@@ -5,19 +5,22 @@ use orchester_workspace::{background, tasks::local_integration::pending_restorat
 use super::TaskContext;
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskView},
+  routes::{Route, TaskView},
   ui::{
     button::{ActionButton, ButtonKind},
     notice::{Notice, NoticeTone},
   },
 };
 
-/// The merge stands while restoration remains pending. Summary keeps an entry to the durable operation.
-pub(super) fn reminder(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
-  let run = task.detail.run.as_ref()?.id();
+/// The merge stands while restoration remains pending. Summary keeps an entry to the durable operation. With it,
+/// whether reading it has settled: reads that run git in the checkout wait for it ([`super::pull_request::read`]).
+pub(super) fn reminder(ctx: &mut Ctx, task: &TaskContext) -> (Option<Element>, bool) {
+  let Some(run) = task.detail.run.as_ref().map(|run| run.id()) else {
+    return (None, true);
+  };
   let root = task.project.open.repo_root.clone();
   let revision = task.project.feed.revision.get();
-  let phase = ctx
+  let state = ctx
     .future((root, run, revision), |(root, run, _)| async move {
       background::run(move || {
         pending_restoration(&root, run).map(|phase| {
@@ -35,25 +38,22 @@ pub(super) fn reminder(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
       .map_err(|_| ())
     })
     .state()
-    .get()
-    .data
-    .flatten()?;
-  let route = Route::Project(
-    task.project.open.project.id(),
-    ProjectPage::Task(task.key.clone(), TaskView::LocalIntegration),
-  );
+    .get();
+  let settled = !state.is_pending() && (state.data.is_some() || state.error.is_some());
+  let Some(phase) = state.data.flatten() else {
+    return (None, settled);
+  };
+  let route = Route::Project(task.project.open.project.id(), task.page(TaskView::LocalIntegration));
   let navigation = Navigation::of(ctx);
-  Some(
-    Notice::new("task-local-recovery", NoticeTone::Warning, ctx.t(phase))
-      .body(ctx.t("local_integration.restoreBody"))
-      .action(
-        ActionButton::new(
-          "task-open-local-recovery",
-          ButtonKind::Primary,
-          ctx.t("local_integration.title"),
-        )
-        .opens(navigation.to(route)),
+  let notice = Notice::new("task-local-recovery", NoticeTone::Warning, ctx.t(phase))
+    .body(ctx.t("local_integration.restoreBody"))
+    .action(
+      ActionButton::new(
+        "task-open-local-recovery",
+        ButtonKind::Primary,
+        ctx.t("local_integration.title"),
       )
-      .into(),
-  )
+      .opens(navigation.to(route)),
+    );
+  (Some(notice.into()), settled)
 }

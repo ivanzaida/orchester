@@ -55,4 +55,42 @@ impl LocalGit {
     let text = self.text(&["cherry", target, source, base])?;
     Ok(text.lines().any(|line| line.starts_with("- ")))
   }
+
+  /// The exact patch ids of the commits reachable from `to` and not from `from`, merges left out,
+  /// sorted: `git patch-id --verbatim`, which counts every whitespace change, over their patches.
+  pub fn exact_patch_ids(&self, from: &str, to: &str) -> Result<Vec<String>, LocalGitError> {
+    validate_object(from)?;
+    validate_object(to)?;
+    let excluded = format!("^{from}");
+    let patches = self.raw(
+      &[
+        "log",
+        "--no-merges",
+        "--patch",
+        "--no-color",
+        "--no-ext-diff",
+        "--full-index",
+        to,
+        &excluded,
+        "--",
+      ],
+      None,
+      None,
+    )?;
+    if patches.code != Some(0) {
+      return Err(LocalGitError::Refused);
+    }
+    let ids = self.raw(&["patch-id", "--verbatim"], Some(&patches.bytes), None)?;
+    if ids.code != Some(0) {
+      return Err(LocalGitError::Refused);
+    }
+    let text = String::from_utf8(ids.bytes).map_err(|_| LocalGitError::Data)?;
+    let mut ids: Vec<String> = text
+      .lines()
+      .filter_map(|line| line.split(' ').next())
+      .map(str::to_owned)
+      .collect();
+    ids.sort();
+    Ok(ids)
+  }
 }

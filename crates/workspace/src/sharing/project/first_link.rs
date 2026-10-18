@@ -64,6 +64,7 @@ impl Servers {
     repo_root: &Path,
     project: SharedProject,
   ) -> Result<LinkPlan, SharingError> {
+    super::join::still_local(repo_root).await?;
     ProjectAddress::reported(&project.address, &entry.address)?;
     let id = project.id;
     let server = self
@@ -101,6 +102,7 @@ impl Servers {
     request: LinkRequest,
   ) -> Result<Shared, ShareError> {
     let _in_progress = InProgress::start(self, repo_root);
+    super::join::still_local(repo_root).await?;
     let reviewed = match &plan.kind {
       LinkKind::Upload { tasks, .. } => tasks.clone(),
       LinkKind::Download { .. } => Vec::new(),

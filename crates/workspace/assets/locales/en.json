@@ -454,8 +454,10 @@
       "failure": {
         "wrongBranch": "Your checkout is on {{current}}, not {{branch}}. Switch it to {{branch}}, then merge again. Nothing was changed.",
         "detached": "Your checkout has a detached HEAD. Switch it to {{branch}}, then merge again. Nothing was changed.",
-        "uncommitted": "Your checkout has uncommitted changes: {{files}}. Commit or stash them yourself, then merge again. Nothing was changed.",
+        "uncommitted": "Your checkout has uncommitted changes the merge would overwrite: {{files}}. Commit, stash or move them yourself, then merge again. Nothing was changed.",
         "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
+        "baseMoved": "{{branch}} got a new commit while the run was being merged. The merge was dropped and nothing was changed; merge again.",
+        "leftChanged": "Git stopped part way through the merge, and Orchester couldn’t put back {{files}}: they hold the run’s version now. Restore them yourself with git restore. Everything else is as it was. {{detail}}",
         "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
         "branchMoved": "The run’s branch {{branch}} is no longer at {{revision}}, the commit you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
@@ -1425,13 +1427,20 @@
         "running": "Merging {{task}} run #{{run}} into {{branch}}",
         "done": "Merged {{task}} run #{{run}} into {{branch}}",
         "failed": "Could not merge {{task}} run #{{run}} into {{branch}}",
-        "notDone": "{{task}} run #{{run}} not merged"
+        "notDone": "{{task}} run #{{run}} not merged",
+        "temporaryLeft": "{{task}} run #{{run}} was merged, but Orchester couldn’t delete its temporary folder {{path}}. Delete that folder yourself."
       },
       "runCleanup": {
         "running": "Removing the worktrees of {{task}} run #{{run}}",
         "done": "Removed the worktrees of {{task}} run #{{run}}",
         "failed": "Could not remove the worktrees of {{task}} run #{{run}}",
         "notDone": "Worktrees of {{task}} run #{{run}} not removed"
+      },
+      "runPullRequest": {
+        "running": "Opening a pull request for {{task}} run #{{run}}",
+        "done": "Opened a pull request for {{task}} run #{{run}}",
+        "failed": "Could not open a pull request for {{task}} run #{{run}}",
+        "notDone": "No pull request opened for {{task}} run #{{run}}"
       },
       "projectEnvironment": {
         "running": "Saving the environment",

@@ -12,6 +12,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::MemberRole;
+use orchester_core::id::ServerId;
 use orchester_workspace::{
   display::shorten_path,
   sharing::{LinkedProject, ServerProject},
@@ -25,7 +26,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{OverviewTab, ProjectPage, Route},
+  routes::{JoinTarget, OverviewTab, ProjectPage, Route},
   theme::{AccountsSpacing, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -59,13 +60,13 @@ pub(super) fn projects(ctx: &mut Ctx, props: &Props, projects: Option<&Result<Pr
       // Offline or signed out: the projects linked here are still known.
       parts.push(hint("orchester-server-projects-unread", &reason.text(ctx)).into());
       if !props.linked.is_empty() {
-        parts.push(list(ctx, props.linked.iter().map(Source::Linked).collect()));
+        parts.push(list(ctx, props, props.linked.iter().map(Source::Linked).collect()));
       }
     }
     Some(Ok(projects)) if projects.0.is_empty() => {
       parts.push(hint("orchester-server-projects-none", &ctx.t("cloud.server.projects.none")).into());
     }
-    Some(Ok(projects)) => parts.push(list(ctx, projects.0.iter().map(Source::Server).collect())),
+    Some(Ok(projects)) => parts.push(list(ctx, props, projects.0.iter().map(Source::Server).collect())),
   }
   parts.push(
     Text::new(&ctx.t("cloud.server.projects.explanation"))
@@ -93,11 +94,12 @@ enum Source<'a> {
   Linked(&'a LinkedProject),
 }
 
-/// What a row shows: the name, the role, the address and the checkout here.
+/// What a row shows: the name, the role, the address and its slug, and the checkout here.
 struct Shown<'a> {
   name: String,
   role: Option<MemberRole>,
   address: String,
+  slug: String,
   checkout: Option<&'a LinkedProject>,
 }
 
@@ -108,19 +110,24 @@ impl<'a> Source<'a> {
         name: project.project.name.clone(),
         role: project.project.role,
         address: project.project.address.clone(),
+        slug: project.project.slug.clone(),
         checkout: project.checkout.as_ref(),
       },
-      Self::Linked(linked) => Shown {
-        name: linked.name.as_str().to_owned(),
-        role: linked.link.role,
-        address: linked.link.address.clone().unwrap_or_default(),
-        checkout: Some(linked),
-      },
+      Self::Linked(linked) => {
+        let address = linked.link.address.clone().unwrap_or_default();
+        Shown {
+          name: linked.name.as_str().to_owned(),
+          role: linked.link.role,
+          slug: address.rsplit('/').next().unwrap_or_default().to_owned(),
+          address,
+          checkout: Some(linked),
+        }
+      }
     }
   }
 }
 
-fn list(ctx: &mut Ctx, rows: Vec<Source<'_>>) -> Element {
+fn list(ctx: &mut Ctx, props: &Props, rows: Vec<Source<'_>>) -> Element {
   let navigation = Navigation::of(ctx);
   let mut card = Column::new()
     .id("orchester-server-projects-list")
@@ -130,16 +137,13 @@ fn list(ctx: &mut Ctx, rows: Vec<Source<'_>>) -> Element {
     .rounded(RadiusSize::Lg)
     .clip();
   for row in rows {
-    card = card.child(project_row(ctx, &row.shown(), &navigation));
+    card = card.child(project_row(ctx, &row.shown(), (&navigation, props.entry.stored.id)));
   }
   card.into()
 }
 
-fn project_row(ctx: &Ctx, shown: &Shown<'_>, navigation: &Navigation) -> Element {
-  let id = format!(
-    "orchester-server-project-{}",
-    shown.address.rsplit('/').next().unwrap_or_default()
-  );
+fn project_row(ctx: &Ctx, shown: &Shown<'_>, (navigation, server): (&Navigation, ServerId)) -> Element {
+  let id = format!("orchester-server-project-{}", shown.slug);
   let action = match shown.checkout {
     Some(checkout) => ActionButton::new(
       format!("{id}-open"),
@@ -151,14 +155,19 @@ fn project_row(ctx: &Ctx, shown: &Shown<'_>, navigation: &Navigation) -> Element
       checkout.id,
       ProjectPage::Overview(OverviewTab::default()),
     ))),
-    // Cloning and linking from here is a later phase's; the button stays, unavailable with what to do instead.
-    None => ActionButton::new(
-      format!("{id}-link"),
-      ButtonKind::Secondary,
-      ctx.t("cloud.server.projects.link"),
-    )
-    .icon(Icon::FolderPlus)
-    .unavailable(ctx.t("cloud.server.projects.linkLater")),
+    // Which checkout to link, or the `git clone` to run first (`xeFRB`); nothing is sent before the join review.
+    None => {
+      let button = ActionButton::new(
+        format!("{id}-link"),
+        ButtonKind::Secondary,
+        ctx.t("cloud.server.projects.link"),
+      )
+      .icon(Icon::FolderPlus);
+      match JoinTarget::new(server, &shown.slug) {
+        Some(target) => button.opens(navigation.to(Route::Invite(target))),
+        None => button.disabled(),
+      }
+    }
   };
   let glyph = if shown.checkout.is_some() {
     Icon::FolderGit2

@@ -1,16 +1,24 @@
 //! Pull requests of the project's linked GitHub repository, as the signed-in account sees them
-//! (`docs/design/orchester-workspace.md`, "Pull requests" and "GitHub"). Orchester only reads
-//! them; a pull request's GitHub state is kept apart from agent readiness, which comes with runs.
+//! (`docs/design/orchester-workspace.md`, "Pull requests" and "GitHub"). Orchester reads them, and
+//! opens one for a run's branch when a person asks ([`open_pull_request`]); a pull request's GitHub state
+//! is kept apart from agent readiness, which comes with runs.
 
 mod checks;
+mod create;
 mod detail;
 mod gh;
+mod open;
+mod push;
 mod sync;
 
 use thiserror::Error;
 
 pub use self::{
   checks::{gh_check_rollups_command, parse_gh_check_rollups},
+  create::{
+    CreateFailure, NewPullRequest, OpenedPullRequest, gh_pr_create_command, parse_gh_pr_create, task_link,
+    task_pull_request,
+  },
   detail::{
     DetailRefresh, DiffRead, PullRequestHead, RefreshedDetail, gh_compare_diff_command, gh_pr_view_command,
     parse_gh_compare_diff, parse_gh_pr_view, refresh_pull_request,
@@ -19,6 +27,8 @@ pub use self::{
     Fields, ListedStates, PR_LIST_FIELDS, PR_PAGE_FIELDS, gh_pr_list_command, gh_rate_limit_command, parse_gh_pr_list,
     parse_gh_rate_limit,
   },
+  open::{OpenAttempt, OpenFailure, Push, open_pull_request},
+  push::{PushFailure, SETUP_GIT, git_push_command, parse_git_push},
   sync::{SYNC_LIMIT, SyncAttempt, SyncFailure, SyncResult, SyncScope, sync_pull_requests},
 };
 use crate::{diff::Changes, repository::GitHubRepo, revision::Revision, run::BranchName, time::Timestamp};

@@ -101,13 +101,17 @@ pub fn screen(header: Element, content: Element) -> Element {
     .into()
 }
 pub fn scroll(content: impl Into<Element>) -> Element {
-  scroller(content).into()
+  scroller(content, WIDTH).into()
 }
 /// [`scroll`] kept by `state`, which the page moves.
 pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element {
-  scroller(content).with_scroll_state(state.clone()).into()
+  scroller(content, WIDTH).with_scroll_state(state.clone()).into()
 }
-fn scroller(content: impl Into<Element>) -> ScrollVertical {
+/// [`scroll`] with its content `width` wide, for a page with a table (the join review, `AiCwO`).
+pub fn scroll_wide(content: impl Into<Element>, width: f32) -> Element {
+  scroller(content, width).into()
+}
+fn scroller(content: impl Into<Element>, width: f32) -> ScrollVertical {
   ScrollVertical::new(
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -121,7 +125,7 @@ fn scroller(content: impl Into<Element>) -> ScrollVertical {
       )
       .child(
         Column::new()
-          .width(Dimension::Px(WIDTH))
+          .width(Dimension::Px(width))
           .spacing(ExtraSpacing::Roomy.role())
           .child(content),
       ),

@@ -5,6 +5,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
+use orchester_exec::programs::Programs;
 use orchester_store::SessionEnd;
 use orchester_workspace::{
   app_paths,
@@ -125,6 +126,19 @@ impl Launch {
   /// What the window shows.
   pub fn start(&self) -> Start {
     self.start.clone()
+  }
+
+  /// The session with the window's git and `gh` run by `programs`, e.g. captured answers in a test, so it never
+  /// reaches the person's GitHub.
+  #[must_use]
+  pub fn with_programs(mut self, programs: Programs) -> Self {
+    if let Start::Ready(ready) = &mut self.start {
+      ready.services.programs = programs.clone();
+    }
+    if let Some(running) = &mut self.running {
+      running.services.programs = programs;
+    }
+    self
   }
 
   /// Where the session opens; `None` without a session.

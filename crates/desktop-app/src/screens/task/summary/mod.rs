@@ -35,10 +35,10 @@ use orchester_core::time::Timestamp;
 
 pub use self::decisions::decisions;
 use self::runs::Runs;
-use super::{PageState, TaskContext};
+use super::{PageState, TaskContext, sharing};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{Route, TaskTab, TaskView},
   services::Services,
   theme::{TaskSpacing, TaskText},
   ui::{
@@ -72,8 +72,14 @@ impl Component for TaskSummary {
       return decision;
     }
     let detail = &props.task.detail;
-    if detail.before_first_run() {
-      return empty::empty(ctx, &props.task);
+    let linked = sharing::linked(ctx, &props.task);
+    let next = sharing::next_key(ctx, &props.task);
+    let section = sharing::section(ctx, &props.task, (linked.as_ref(), next.as_ref()));
+    // A Not shared task runs only once it is shared, so it keeps its read-only Summary (`R4elt`).
+    if detail.before_first_run() && !detail.not_shared() {
+      // What the shared project says of the task stays beside it.
+      let panel = section.map(|section| this_task(ctx, &props.task, Some(section)));
+      return layout(empty::empty(ctx, &props.task), panel);
     }
     let state = PageState::of(ctx);
     let removal = state.removal.get();
@@ -103,20 +109,49 @@ impl Component for TaskSummary {
         .collect();
       return layout(column(parts, scroll), None);
     }
-    let parts = self.parts(ctx, &props, runs);
+    let parts = if detail.not_shared() {
+      self.kept_parts(ctx, &props, (linked.as_ref(), next.as_ref()), runs)
+    } else {
+      self.parts(ctx, &props, runs)
+    };
     let root = props.task.project.open.repo_root.clone();
-    let panel = detail.run.as_ref().map(|run| {
-      if run.run.status().is_terminal() {
-        run_details::run_details(ctx, &props.task, run)
-      } else {
-        this_run::this_run(ctx, run, &root, props.task.lost(), None)
-      }
-    });
-    layout(column(parts, scroll), panel)
+    let panel = match &detail.run {
+      Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run, section),
+      Some(run) => this_run::this_run(ctx, run, (&root, props.task.lost()), (None, section)),
+      None => this_task(ctx, &props.task, section),
+    };
+    layout(column(parts, scroll), Some(panel))
   }
 }
 
 impl TaskSummary {
+  /// A *Not shared* task's column (`R4elt`): why it is read-only, or *Share task*'s question in place (`TfVtK`), then
+  /// the brief and its runs.
+  fn kept_parts(
+    &self,
+    ctx: &mut Ctx,
+    props: &SummaryProps,
+    (linked, next): (Option<&sharing::Linked>, Option<&orchester_core::project::TaskKey>),
+    runs: Option<Element>,
+  ) -> Vec<Element> {
+    let top = if PageState::of(ctx).share.get() {
+      ctx.mount_keyed::<sharing::question::ShareQuestion>(
+        "task-share-question-component",
+        sharing::question::Props {
+          task: props.task.clone(),
+          linked: linked.cloned(),
+          next: next.cloned(),
+        },
+      )
+    } else {
+      sharing::notice(ctx, &props.task, linked)
+    };
+    std::iter::once(top)
+      .chain(brief::sections(ctx, props.task.detail.task.details()))
+      .chain(runs)
+      .collect()
+  }
+
   /// The column's sections, in the design's order.
   fn parts(&self, ctx: &mut Ctx, props: &SummaryProps, runs: Option<Element>) -> Vec<Element> {
     let detail = &props.task.detail;
@@ -158,10 +193,7 @@ fn open_conversation(ctx: &mut Ctx, props: &SummaryProps) -> ActionButton {
   let navigation = Navigation::of(ctx);
   let route = Route::Project(
     props.task.project.open.project.id(),
-    ProjectPage::Task(
-      props.task.detail.task.key().clone(),
-      TaskView::of(TaskTab::Conversation),
-    ),
+    props.task.page(TaskView::of(TaskTab::Conversation)),
   );
   ActionButton::new(
     "task-open-conversation",
@@ -208,6 +240,15 @@ fn column(parts: Vec<Element>, scroll: ScrollState) -> Element {
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()
+}
+
+/// *This task* beside a task without a run, with the shared project's `section` on top.
+fn this_task(ctx: &mut Ctx, task: &TaskContext, section: Option<Element>) -> Element {
+  let pipelines = match task.project.feed.tasks.get() {
+    crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
+    _ => Vec::new(),
+  };
+  this_run::this_task(ctx, &task.detail, &pipelines, section)
 }
 
 fn layout(column: Element, panel: Option<Element>) -> Element {

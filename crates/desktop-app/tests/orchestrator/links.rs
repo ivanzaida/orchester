@@ -436,11 +436,7 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
      - [KON-2](orchester:/project/{project}/tasks/KON-2) waits\n- Task: no link here"
   ));
   answer(&mut screen, "Noted: Status:");
-  let grids = screen
-    .window
-    .tree
-    .get_elements_by_class_name("orchestrator-link-grid")
-    .len();
+  let grids = screen.window.tree.get_elements_by_class_name("chat-link-grid").len();
   assert_eq!(grids, 1, "only the list of labelled links is a grid");
   for label in ["Task", "Pull request"] {
     assert!(is_shown_on_its_own(&mut screen, label), "{label} is a label of its own");

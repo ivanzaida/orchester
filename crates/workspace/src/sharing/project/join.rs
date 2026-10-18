@@ -136,13 +136,15 @@ impl Servers {
     self.review(entry, repo_root, project).await
   }
 
-  /// What joining `project` on `entry` would do for the project at `repo_root`.
+  /// What joining `project` on `entry` would do for the project at `repo_root`, which must still be local
+  /// ([`still_local`]).
   pub(super) async fn review(
     &self,
     entry: &ServerEntry,
     repo_root: &Path,
     project: SharedProject,
   ) -> Result<JoinReview, SharingError> {
+    still_local(repo_root).await?;
     let address = ProjectAddress::reported(&project.address, &entry.address)?.to_text();
     let id = project.id;
     let server_tasks = self
@@ -181,6 +183,8 @@ impl Servers {
     let _in_progress = share::InProgress::start(self, repo_root);
     let project = review.project;
     let failed = |uploaded: Option<bool>| move |error: SharingError| JoinFailed { uploaded, error };
+    // A checkout linked meanwhile, or opened at another project's review, uploads nothing into this one.
+    still_local(repo_root).await.map_err(failed(Some(false)))?;
     let on_server: HashSet<TaskId> = self
       .with_token(
         entry,
@@ -284,6 +288,17 @@ impl Servers {
     .await??;
     self.shared_changed();
     Ok(open)
+  }
+}
+
+/// Refuses, before anything is read from a server or sent, a checkout that is linked already: a checkout links to
+/// one project, and its tasks never go up into another ([`StoreError::AlreadyShared`]).
+pub(super) async fn still_local(repo_root: &Path) -> Result<(), SharingError> {
+  let root = repo_root.to_owned();
+  let link = background::run(move || ProjectDb::open(&root)?.sharing()).await??;
+  match link {
+    Some(_) => Err(StoreError::AlreadyShared.into()),
+    None => Ok(()),
   }
 }
 

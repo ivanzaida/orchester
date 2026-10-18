@@ -20,7 +20,7 @@ pub(super) fn mark(row: &TaskRow) -> (Icon, PaletteColor) {
     ReadinessKind::Missing => (Icon::PencilLine, PaletteColor::TextMuted),
     ReadinessKind::Held(hold) => held(hold),
     ReadinessKind::Blocked => (Icon::Ban, PaletteColor::TextSecondary),
-    ReadinessKind::NotShared => (Icon::Archive, PaletteColor::TextMuted),
+    ReadinessKind::NotShared => (Icon::Lock, PaletteColor::TextMuted),
     ReadinessKind::Run(phase) => phase_mark(*phase),
     ReadinessKind::Unreadable => (Icon::CircleHelp, PaletteColor::Danger),
   }

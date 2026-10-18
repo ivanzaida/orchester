@@ -14,6 +14,7 @@ mod code;
 pub mod connect;
 mod ended;
 mod invites;
+pub mod landing;
 mod list;
 mod notice;
 mod parts;

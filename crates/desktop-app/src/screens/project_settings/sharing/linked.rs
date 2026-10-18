@@ -24,6 +24,7 @@ use orchester_workspace::sharing::{
 };
 
 mod discovery;
+pub(super) mod joined;
 mod removed;
 mod rows;
 
@@ -68,6 +69,8 @@ pub(super) struct Linked {
   /// *Make local*'s question is open.
   making_local: Signal<bool>,
   leave: FutureAction<(), (), Said>,
+  /// Puts away what the join left to say.
+  dismiss: FutureAction<(), (), Said>,
   /// Leaving is a person's (review 1, M1).
   person: PersonOnly,
 }
@@ -83,9 +86,25 @@ impl Component for Linked {
     let (servers, root, revision) = (
       Services::of(ctx).servers,
       props.project.open.repo_root.clone(),
-      props.revision,
+      props.revision.clone(),
     );
+    let (workspace, project, again) = (
+      Services::of(ctx).workspace,
+      props.project.open.project.id(),
+      props.revision.clone(),
+    );
+    let dismiss = ctx.future_action(move |(): ()| {
+      let (workspace, again) = (workspace.clone(), again.clone());
+      async move {
+        orchester_workspace::background::run(move || joined::dismiss(&workspace, project))
+          .await
+          .map_err(|_| Said::new("cloud.errors.local"))?;
+        again.update(|count| *count += 1);
+        Ok(())
+      }
+    });
     Self {
+      dismiss,
       asking: ctx.signal(false),
       making_local: ctx.signal(props.ask_make_local),
       leave: ctx.future_action(move |(): ()| {
@@ -117,12 +136,7 @@ impl Component for Linked {
       .linked_server()
       .map_or_else(|| missing_server(ctx, link), |entry| entry.stored.name.clone());
     let name = props.project.open.project.name().as_str().to_owned();
-    let role = match link.role {
-      Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
-      Some(MemberRole::Member) => ctx.t("sharing.linked.member"),
-      None => ctx.t("sharing.linked.noRole"),
-    }
-    .to_string();
+    let role = role_words(ctx, link.role);
     let entry = props.facts.linked_server();
     let hint = shown_hint(ctx, (&props, link, entry), &name);
     // The server project's name as the server answered; this project's own until it has (`Kontur` in both, in the
@@ -176,10 +190,12 @@ impl Component for Linked {
       };
       removed::notice(ctx, (link, &names), (&servers, &self.making_local))
     });
+    let (joined_note, keys) = self.joined(ctx, &props, (link.key.as_str(), &server));
     Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
+      .with_children(joined_note)
       .with_children(notice)
       .child(section(
         "project-settings-sharing-task-list",
@@ -187,12 +203,28 @@ impl Component for Linked {
         None,
         vec![task_list, address_row, repository_row, discovery_row],
       ))
+      .with_children(keys)
       .child(members_section(ctx, &props, &shared, &server))
       .child(self.leave_section(ctx, &props, (&shared, &server), link.key.as_str()))
   }
 }
 
 impl Linked {
+  /// What the join did, until dismissed, and *Keys before joining*, for a project that joined.
+  fn joined(&self, ctx: &mut Ctx, props: &Props, (key, server): (&str, &str)) -> (Option<Element>, Option<Element>) {
+    let note = props.facts.joined_note.as_ref().map(|note| {
+      let dismiss = self.dismiss.clone();
+      joined::callout(
+        ctx,
+        (props.project.open.project.id(), key, server),
+        (note, &props.facts.joined),
+        move || dismiss.run(()),
+      )
+    });
+    let keys = (!props.facts.joined.is_empty()).then(|| joined::keys(ctx, &props.facts.joined, key));
+    (note, keys)
+  }
+
   /// *Leave or make local*: *Make local* and *Leave Kontur*, each asked in place.
   /// `shared` is the server project's name.
   fn leave_section(&self, ctx: &mut Ctx, props: &Props, (shared, server): (&str, &str), key: &str) -> Element {
@@ -301,6 +333,16 @@ impl Linked {
     )
     .into()
   }
+}
+
+/// The person's role there, as the page says it.
+fn role_words(ctx: &Ctx, role: Option<MemberRole>) -> String {
+  match role {
+    Some(MemberRole::Owner) => ctx.t("sharing.linked.owner"),
+    Some(MemberRole::Member) => ctx.t("sharing.linked.member"),
+    None => ctx.t("sharing.linked.noRole"),
+  }
+  .to_string()
 }
 
 /// *Shared on Kontur team* with the key, when it was linked and the person's role there.

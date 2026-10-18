@@ -7,6 +7,7 @@ pub mod bar;
 pub mod code_index_operations;
 mod log;
 pub mod operations;
+pub mod run_operations;
 pub mod skill_operations;
 
 use std::{

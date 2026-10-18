@@ -10,8 +10,8 @@ use std::num::NonZeroU64;
 
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, NewConnection, OverviewTab, ProjectPage, Route,
-  RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage,
+  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -37,6 +37,11 @@ fn project() -> ProjectId {
 
 fn connection() -> ConnectionId {
   CONNECTION.parse().expect("a connection id")
+}
+
+/// Kontur on the server the list has as [`CONNECTION`]'s id.
+fn join_target() -> JoinTarget {
+  JoinTarget::new(CONNECTION.parse().expect("a server id"), "kontur").expect("a target")
 }
 
 fn pull_request() -> NonZeroU64 {
@@ -70,6 +75,13 @@ fn every_route() -> Vec<Route> {
     at(ProjectPage::Tasks(TaskList::default().with_search("retry"))),
     at(ProjectPage::Tasks(TaskList::default().with_search(AWKWARD))),
     at(ProjectPage::Tasks(TaskList::default().with_highlight(key("KON-13")))),
+    at(ProjectPage::Tasks(
+      TaskList::default().with_search("KON-12").with_not_shared(true),
+    )),
+    at(ProjectPage::Join(join_target())),
+    Route::Invite(join_target()),
+    at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
+    at(ProjectPage::KeptTask(key("KON-12"), TaskView::Conversation)),
     at(ProjectPage::Tasks(
       TaskList::new(TaskListTab::InReview)
         .with_search("  spaced  ")
@@ -202,6 +214,32 @@ fn paths_are_the_documented_ones() {
     (
       at(ProjectPage::Settings(Default::default())),
       format!("{root}/settings"),
+    ),
+  ];
+  for (route, path) in paths {
+    assert_eq!(route.path(), path);
+  }
+}
+
+#[test]
+fn joining_paths_are_the_documented_ones() {
+  let root = format!("/project/{PROJECT}");
+  let paths = [
+    (
+      at(ProjectPage::Join(join_target())),
+      format!("{root}/settings?tab=sharing&view=join&server={CONNECTION}&project=kontur"),
+    ),
+    (
+      Route::Invite(join_target()),
+      format!("/settings/invite?server={CONNECTION}&project=kontur"),
+    ),
+    (
+      at(ProjectPage::Tasks(TaskList::default().with_not_shared(true))),
+      format!("{root}/tasks?show=not-shared"),
+    ),
+    (
+      at(ProjectPage::KeptTask(key("KON-12"), TaskView::Summary)),
+      format!("{root}/tasks/kept/KON-12/summary"),
     ),
   ];
   for (route, path) in paths {

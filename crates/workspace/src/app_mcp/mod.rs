@@ -19,7 +19,7 @@ pub use self::{
 pub(crate) use self::{
   services::{PersonDecision, blocking},
   tools::{
-    answer_for_orchestrator, check_answer, duplicate_pipeline_draft, outgoing_refusal, plan_person_only,
+    answer_for_orchestrator, check_answer, duplicate_pipeline_draft, find_task, outgoing_refusal, plan_person_only,
     waiting_request,
   },
 };

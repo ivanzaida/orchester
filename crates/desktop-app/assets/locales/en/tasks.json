@@ -106,6 +106,29 @@
       "makeLocal": "Make local…",
       "separator": "·",
       "withName": "{{role}} · {{username}}"
+    },
+    "formerKey": "was {{key}}",
+    "notShared": {
+      "filter": "Not shared · {{count}}",
+      "title": {
+        "one": "1 task stayed on this computer when {{project}} joined {{key}}",
+        "other": "{{count}} tasks stayed on this computer when {{project}} joined {{key}}"
+      },
+      "body": "{{keys}} weren't ticked on {{day}}. They keep their key, runs, conversations and memory here, read-only and out of the shared list. Share task on a task's page uploads it to {{server}} with the next {{key}} number.",
+      "and": " and ",
+      "footer": {
+        "one": "1 Not shared task · on this computer only",
+        "other": "{{count}} Not shared tasks · on this computer only"
+      },
+      "footerOf": "{{count}} of {{total}} Not shared tasks",
+      "foundByFormer": {
+        "one": "{{count}} task · found by its key before joining",
+        "other": "{{count}} tasks · found by their keys before joining"
+      },
+      "noShared": "No shared task has {{search}}",
+      "foundOne": "{{key}} {{title}} stayed on this computer as Not shared.",
+      "foundMany": "{{count}} tasks that match stayed on this computer as Not shared.",
+      "show": "Show Not shared tasks"
     }
   }
 }

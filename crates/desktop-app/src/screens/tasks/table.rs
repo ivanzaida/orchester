@@ -95,10 +95,40 @@ pub(super) fn table(ctx: &mut Ctx, shown: &Rows<'_>) -> Element {
     .into()
 }
 
+/// What the count under the rows says besides how many there are.
+pub(super) enum Count {
+  /// The list's tasks, with the runs they started or how many match.
+  Tasks,
+  /// Found by their keys before joining (`1 task · found by its key before joining`).
+  FormerKey,
+  /// The *Not shared* tasks, of these many (`1 of 2 Not shared tasks`).
+  NotShared(usize),
+}
+
 /// How many rows there are and how many runs they started, or how many match while the search or the
-/// pipeline narrows them.
-pub(super) fn footer(ctx: &Ctx, shown: &Rows<'_>, filtered: bool) -> Row {
-  let count = list::footer(shown.rows.len(), shown.tasks.runs_of(&shown.rows), filtered);
+/// pipeline narrows them; the *Not shared* ones, or those found by their keys before joining, as such.
+pub(super) fn footer(ctx: &Ctx, shown: &Rows<'_>, (filtered, kind): (bool, Count)) -> Row {
+  let rows = shown.rows.len();
+  let text = match kind {
+    Count::Tasks => message_text(ctx, &list::footer(rows, shown.tasks.runs_of(&shown.rows), filtered)),
+    Count::FormerKey => counted(
+      ctx,
+      (
+        "tasks.notShared.foundByFormer.one",
+        "tasks.notShared.foundByFormer.other",
+      ),
+      rows,
+    ),
+    Count::NotShared(total) if rows == total => counted(
+      ctx,
+      ("tasks.notShared.footer.one", "tasks.notShared.footer.other"),
+      rows,
+    ),
+    Count::NotShared(total) => ctx.t_args(
+      "tasks.notShared.footerOf",
+      [("count", rows.to_string()), ("total", total.to_string())],
+    ),
+  };
   Row::new()
     .id("tasks-footer")
     .width(Dimension::Pct(100.0))
@@ -109,5 +139,15 @@ pub(super) fn footer(ctx: &Ctx, shown: &Rows<'_>, filtered: bool) -> Row {
         .right(SpacingSize::Md)
         .bottom(ExtraSpacing::Loose.role()),
     )
-    .child(Text::new(&message_text(ctx, &count)).variant(ExtraTypography::Note.role()))
+    .child(
+      Text::new(&text)
+        .id("tasks-footer-text")
+        .variant(ExtraTypography::Note.role()),
+    )
+}
+
+/// `one` or `other` with `count`.
+fn counted(ctx: &Ctx, (one, other): (&str, &str), count: usize) -> Arc<str> {
+  let key = if count == 1 { one } else { other };
+  ctx.t_args(key, [("count", count.to_string())])
 }

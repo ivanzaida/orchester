@@ -33,7 +33,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{Route, TaskTab, TaskView},
   screens::task::{PageState, TaskContext},
   theme::DecisionText,
   ui::pressable::opening,
@@ -98,7 +98,12 @@ fn task_notice(ctx: &Ctx, props: &TaskContext) -> Said {
 fn this_run_panel(ctx: &mut Ctx, props: &TaskContext, lead: Option<Element>) -> Option<Element> {
   let run = props.detail.run.as_ref()?;
   let lost = props.lost();
-  Some(this_run::this_run(ctx, run, &props.project.open.repo_root, lost, lead))
+  Some(this_run::this_run(
+    ctx,
+    run,
+    (&props.project.open.repo_root, lost),
+    (lead, None),
+  ))
 }
 
 /// *Runs of this task*, as the usual Summary ends.
@@ -121,10 +126,7 @@ fn step_label(ctx: &Ctx, step: &StepView) -> Arc<str> {
 /// "Changes ↗": a link to another tab of the task, worded by `label` (`bUBJC`, `hFIV4`).
 fn tab_link(ctx: &mut Ctx, props: &TaskContext, (id, label): (&str, &str), tab: TaskTab) -> Element {
   let navigation = Navigation::of(ctx);
-  let route = Route::Project(
-    props.project.open.project.id(),
-    ProjectPage::Task(props.detail.task.key().clone(), TaskView::of(tab)),
-  );
+  let route = Route::Project(props.project.open.project.id(), props.page(TaskView::of(tab)));
   opening(navigation.to(route))
     .id(id.to_owned())
     .child(Text::new(&ctx.t(label)).variant(DecisionText::Link.role()).nowrap())

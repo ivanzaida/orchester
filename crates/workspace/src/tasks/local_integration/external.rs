@@ -32,7 +32,8 @@ pub fn external_integration(root: &Path, run: RunId) -> Result<Option<ContainedR
 }
 
 /// Everything external evidence depends on besides Git ancestry, which never changes for the same commits: while
-/// these are unchanged, an earlier answer still holds.
+/// these are unchanged, an earlier answer still holds. `base` and `recorded` are the run's own, or those of a rebase
+/// of its branch git proves ([`super::rebase`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EvidenceInputs {
   target: String,
@@ -54,19 +55,31 @@ impl EvidenceInputs {
     run: &Run,
     operation: Option<&orchester_core::integration::local::LocalOperation>,
   ) -> Result<Self, IntegrationError> {
+    let base_branch = run.base_branch().map(|branch| branch.as_str().to_owned());
+    let merged = db.run_merge(run.id())?.is_some()
+      || operation.is_some_and(|saved| saved.merged().is_some() || saved.merge_pending());
+    let branch_tip = main.branch_tip(run.branch())?;
+    // Only the target the run merges into can prove a rebase of its branch onto it.
+    let (base, recorded) = if !merged && base_branch.as_deref() == Some(checkout.branch.as_str()) {
+      super::rebase::effective(db, main, run, (branch_tip.as_deref(), &checkout.head))?
+    } else {
+      (
+        run.base().as_str().to_owned(),
+        run.last_checkpoint().map(|saved| saved.revision().as_str().to_owned()),
+      )
+    };
     Ok(Self {
       target: checkout.head.clone(),
       branch: checkout.branch.clone(),
       marker: checkout.operation.is_some(),
-      base_branch: run.base_branch().map(|branch| branch.as_str().to_owned()),
-      merged: db.run_merge(run.id())?.is_some()
-        || operation.is_some_and(|saved| saved.merged().is_some() || saved.merge_pending()),
+      base_branch,
+      merged,
       owned: operation
         .and_then(|saved| saved.owned_task())
         .map(|saved| saved.head.clone()),
-      recorded: run.last_checkpoint().map(|saved| saved.revision().as_str().to_owned()),
-      branch_tip: main.branch_tip(run.branch())?,
-      base: run.base().as_str().to_owned(),
+      recorded,
+      branch_tip,
+      base,
     })
   }
 }

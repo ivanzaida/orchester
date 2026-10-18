@@ -1,11 +1,14 @@
-//! What integrating runs stores: the branch a run started on, a run's merge, once, and when a run's
-//! worktree was removed.
+//! What integrating runs stores: the branch a run started on, a run's merge, once, when a run's
+//! worktree was removed, and the proven rebase of a run's branch.
 
 mod support;
 
 use orchester_core::{
   id::{IdempotencyKey, RunId},
-  integration::{MergeKind, RemovalStart, RunMerge},
+  integration::{
+    MergeKind, RemovalStart, RunMerge,
+    local::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase},
+  },
   revision::Revision,
   run::{BranchName, InterruptCause, NewRun},
   store::{MergeStore, RunStore, WorktreeStore},
@@ -171,4 +174,33 @@ fn integration_worktree_removals_migration_keeps_runs_of_schema_39() {
     RemovalStart::Recorded
   );
   assert!(db.interrupted_runs().expect("listed").is_empty());
+}
+
+#[test]
+fn integration_a_rebase_is_kept_per_run_and_a_newer_one_replaces_it() {
+  let (repo, mut db, run, _) = started_run();
+  assert_eq!(db.run_rebase(run.id()).expect("read"), None);
+  let revision = |c: &str| Revision::new(&c.repeat(40)).expect("revision");
+  let evidence = |onto: &str, checkpoint| RebaseEvidence {
+    onto: revision(onto),
+    newer_than_base: true,
+    under_tip_and_target: true,
+    own_work_below: false,
+    checkpoint,
+  };
+  let first = RunRebase::proven(run.id(), evidence("d", None), at(40)).expect("proven");
+  db.save_run_rebase(&first).expect("save");
+  let rewritten = RebasedCheckpoint {
+    replaces: revision("e"),
+    tip: revision("f"),
+  };
+  let newer = RunRebase::proven(run.id(), evidence("a", Some(rewritten)), at(50)).expect("proven");
+  db.save_run_rebase(&newer).expect("replace");
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  assert_eq!(reopened.run_rebase(run.id()).expect("read"), Some(newer));
+  let own_work = RebaseEvidence {
+    own_work_below: true,
+    ..evidence("b", None)
+  };
+  assert_eq!(RunRebase::proven(run.id(), own_work, at(60)), None);
 }

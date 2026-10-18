@@ -52,6 +52,7 @@ pub fn screen(ctx: &mut Ctx) -> Element {
     Ok(Route::Settings) => settings::screen(ctx, settings::SettingsTab::Automation),
     Ok(Route::Accounts(view)) => settings::screen(ctx, settings::SettingsTab::Accounts(view)),
     Ok(Route::Orchester(view)) => settings::screen(ctx, settings::SettingsTab::Orchester(view)),
+    Ok(Route::Invite(target)) => settings::orchester::landing::screen(ctx, &target),
     Ok(Route::Project(project, page)) => project_screen(ctx, project, &page),
     Err(error) => not_found::screen(ctx, &path, &error),
   }
@@ -89,7 +90,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),
-    ProjectPage::Task(key, view) => task::screen(ctx, project, key, view),
+    ProjectPage::Task(key, view) => task::screen(ctx, project, (key, false), view),
+    ProjectPage::KeptTask(key, view) => task::screen(ctx, project, (key, true), view),
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(ctx, project, *number, file.as_deref()),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
@@ -113,6 +115,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::EditConnection(id) => connections::edit_connection(ctx, project, *id),
     ProjectPage::Settings(tab) => project_settings::screen(ctx, project, *tab),
     ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
+    ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
   }
 }

@@ -1,12 +1,13 @@
 //! The Pull requests page's list: the stored pull requests of the linked repository, open and closed, each
 //! with the task whose run made its branch; the page's tabs, search, sort and footer; and the deprecated
-//! desktop's inbox, which keeps only the open ones (`list`); and syncing them through a fake `gh`: a rate limit
+//! desktop's inbox, which keeps only the open ones (`list`); syncing them through a fake `gh`: a rate limit
 //! that holds every later sync, how the latest sync went, and the closed ones a sync of the open ones keeps
-//! (`sync`).
+//! (`sync`); and creating one from a task's run (`create`).
 
 #[path = "../support/mod.rs"]
 mod support;
 
+mod create;
 mod list;
 mod sync;
 
