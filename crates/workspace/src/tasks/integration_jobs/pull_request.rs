@@ -14,7 +14,7 @@ use orchester_exec::programs::Programs;
 
 use super::{Active, RunJobs};
 use crate::{
-  activity::{Activity, operations},
+  activity::{Activity, run_operations},
   messages::Message,
   pull_requests::create::{CreateProblem, Created, create_in},
   workspace::OpenProject,
@@ -80,7 +80,7 @@ impl RunJobs {
       activity,
       changed,
     } = args;
-    let running = activity.start(operations::run_pull_request(&open, task, (&key, number)));
+    let running = activity.start(run_operations::run_pull_request(&open, task, (&key, number)));
     let result = catch_unwind(AssertUnwindSafe(|| create_in(&open.repo_root, &programs, (run, draft))));
     if let Ok(Err(problem)) = &result {
       tracing::warn!(?problem, %run, "no pull request was created for the run");

@@ -14,7 +14,7 @@ use super::{
   Active, JobState, RunJobs,
 };
 use crate::{
-  activity::{Activity, operations},
+  activity::{Activity, run_operations},
   messages::{self, Message},
   workspace::OpenProject,
 };
@@ -29,7 +29,7 @@ impl RunJobs {
     if !self.begin(Active::Remove) {
       return;
     }
-    let what = operations::run_cleanup(&args.open, args.task, (&args.key, args.number));
+    let what = run_operations::run_cleanup(&args.open, args.task, (&args.key, args.number));
     self.name(&args.open, &what, false);
     let automation = match &args.by {
       Remover::Person(_) => {
@@ -66,7 +66,7 @@ impl RunJobs {
       changed,
       by,
     } = args;
-    let running = activity.start(operations::run_cleanup(&open, task, (&key, number)));
+    let running = activity.start(run_operations::run_cleanup(&open, task, (&key, number)));
     let not_done = Message::new("statusBar.operations.runCleanup.notDone")
       .with("task", key)
       .with("run", number.to_string());

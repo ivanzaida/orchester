@@ -28,7 +28,7 @@ use tokio::sync::watch;
 
 use super::integration::{IntegrationProblem, merge_in};
 use crate::{
-  activity::{Activity, OperationSpec, operations},
+  activity::{Activity, OperationSpec, run_operations},
   messages::{self, Message},
   workspace::OpenProject,
 };
@@ -346,7 +346,7 @@ impl RunJobs {
       state.conflicts.clear();
       state.merged = None;
     });
-    let what = operations::run_merge(&args.open, args.task, (&args.key, args.number), &args.branch);
+    let what = run_operations::run_merge(&args.open, args.task, (&args.key, args.number), &args.branch);
     self.name(&args.open, &what, true);
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
@@ -377,7 +377,7 @@ impl RunJobs {
       separator,
       changed,
     } = args;
-    let running = activity.start(operations::run_merge(&open, task, (&key, number), &branch));
+    let running = activity.start(run_operations::run_merge(&open, task, (&key, number), &branch));
     let not_done = Message::new("statusBar.operations.runMerge.notDone")
       .with("task", key.clone())
       .with("run", number.to_string());
