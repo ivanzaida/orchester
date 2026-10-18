@@ -11,7 +11,7 @@ use std::{
 };
 
 use orchester_core::run::Run;
-use orchester_workspace::tasks::resolve::Editor;
+use orchester_workspace::tasks::resolve::{self, Editor};
 
 use super::{OFFLINE, Page, checkout_page, merge::latest_run};
 
@@ -161,7 +161,10 @@ fn decision_resolve_a_conflict_offers_three_ways_and_the_editor_merges_into_the_
     .window
     .until("the stand-in editor to write what it got", |_| record.is_file());
   let given = fs::read_to_string(&record).expect("the stand-in's record");
-  assert!(given.contains(&worktree.display().to_string()), "{given}");
+  assert!(
+    given.contains(&resolve::native(&worktree).display().to_string()),
+    "{given}"
+  );
   assert!(given.contains("sender.rs"), "{given}");
   assert_eq!(
     git_in(&page.repo, &["rev-parse", "HEAD"]),

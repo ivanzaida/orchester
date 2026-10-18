@@ -83,12 +83,18 @@ impl Editor {
       Self::Named(program) | Self::VsCode(program) => program,
       Self::SystemFolders => return external::open_path(worktree),
     };
-    let files: Vec<PathBuf> = files.iter().map(|file| worktree.join(file)).collect();
-    let args: Vec<&Path> = std::iter::once(worktree)
+    let worktree = native(worktree);
+    let files: Vec<PathBuf> = files.iter().map(|file| native(&worktree.join(file))).collect();
+    let args: Vec<&Path> = std::iter::once(worktree.as_path())
       .chain(files.iter().map(PathBuf::as_path))
       .collect();
     external::start_editor(program, &args)
   }
+}
+
+/// `path` with the platform's separators only, as an editor and a person read it: git names files with `/`.
+pub fn native(path: &Path) -> PathBuf {
+  path.components().collect()
 }
 
 /// The merge in progress in `run`'s worktree under `repo_root`, if any; `None` too once the worktree is gone.

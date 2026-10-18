@@ -50,7 +50,7 @@ pub fn resolving(
   run: &RunView,
   (resolution, pull): (&Resolution, &PullRequestRead),
 ) -> Vec<Element> {
-  let worktree = run_worktree(&task.project.open.repo_root, run.id());
+  let worktree = resolve::native(&run_worktree(&task.project.open.repo_root, run.id()));
   let base = run.run.base_branch().map_or("", |branch| branch.as_str()).to_owned();
   let job = task.jobs.run(run.id()).resolve;
   let body = ctx.t_args(
