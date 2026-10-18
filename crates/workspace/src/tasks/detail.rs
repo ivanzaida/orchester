@@ -6,20 +6,18 @@
 use std::{num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, Effort, EngineVendor},
+  connection::{AgentProvider, Effort, EngineVendor},
   conversation::Message,
-  id::{ConnectionId, InvocationId, RunId, StepExecutionId, TaskId},
+  id::{InvocationId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
   question::AskedQuestions,
-  resource::{AgentProfile, StepKey, VersionNumber},
+  resource::{StepKey, VersionNumber},
   run::{
-    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, PinnedVersion, Plan, Run, RunLimit, RunStatus,
-    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, Plan, Run, RunLimit, RunStatus, StepExecutor,
+    StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
-  store::{
-    ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
-  },
+  store::{ActivityStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
   task::{Task, requirements::TaskRequirements},
   task_group::GroupHold,
   time::Timestamp,
@@ -34,10 +32,10 @@ use super::{
   engines,
   history::{self, RunRecord},
   index_use::IndexUses,
-  permissions::run_permissions,
   requirements::LocalRuns,
   run_approvals::RunApprovals,
   run_times::{finished_at, paused_at, starts_of},
+  step_executors::{Reached, executed},
   unreadable::Unreadable,
 };
 
@@ -496,77 +494,6 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     version: pinned.number,
     steps,
     run,
-  })
-}
-
-/// Who executes a step (its agent role, or its tool's name), what it reaches, its model and its
-/// permissions in the run.
-type Executed = (Option<Arc<str>>, Reached, Option<Arc<str>>, Option<RunPermissions>);
-
-/// [`Executed`] of step `key`.
-fn executed(
-  db: &ProjectDb,
-  run: (&Run, &[Invocation]),
-  key: &StepKey,
-  executor: Option<&StepExecutor>,
-) -> Result<Executed, StoreError> {
-  Ok(match executor {
-    Some(StepExecutor::Agent { profile, model, .. }) => {
-      let (role, reached, permissions) = agent_step(db, run, key, *profile)?;
-      (role, reached, Some(Arc::<str>::from(model.as_str())), permissions)
-    }
-    Some(StepExecutor::Tool { tool }) => {
-      let name = db
-        .resource(tool.resource)?
-        .map(|tool| Arc::<str>::from(tool.name().as_str()));
-      (name, Reached::default(), None, None)
-    }
-    None => (None, Reached::default(), None, None),
-  })
-}
-
-/// The agent CLI of a connection, for a native one the base URL of its model API, and who receives the
-/// prompts.
-#[derive(Default)]
-struct Reached {
-  provider: Option<AgentProvider>,
-  endpoint: Option<Arc<str>>,
-  vendor: Option<EngineVendor>,
-}
-
-/// An agent step's role, CLI and model API, and permissions.
-type AgentStep = (Option<Arc<str>>, Reached, Option<RunPermissions>);
-
-/// The agent role, the CLI and the permissions of agent step `step`, which runs on `profile`; none
-/// of them once the profile version is gone.
-fn agent_step(
-  db: &ProjectDb,
-  run: (&Run, &[Invocation]),
-  step: &StepKey,
-  profile: PinnedVersion,
-) -> Result<AgentStep, StoreError> {
-  let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? else {
-    return Ok((None, Reached::default(), None));
-  };
-  let role = Arc::<str>::from(version.body().role().as_str());
-  let reached = reached(db, version.body().connection())?;
-  let permissions = run_permissions(db, run, step, (profile.resource, &version), reached.provider)?;
-  Ok((Some(role), reached, permissions))
-}
-
-fn reached(db: &ProjectDb, connection: ConnectionId) -> Result<Reached, StoreError> {
-  let Some(connection) = db.connection(connection)? else {
-    return Ok(Reached::default());
-  };
-  let endpoint = connection.endpoint().api().map(|api| api.base_url().as_str().into());
-  // Another kind of connection is no agent's: dropping the conversion error leaves it out.
-  let Ok(agent) = AgentConnection::try_from(connection) else {
-    return Ok(Reached::default());
-  };
-  Ok(Reached {
-    provider: Some(agent.provider()),
-    endpoint,
-    vendor: Some(agent.vendor()),
   })
 }
 
