@@ -24,10 +24,11 @@ CLI configured for the provider.
 
 ## Data model
 
-- Core: `connection::ApiProvider { base_url: BaseUrl, key: SecretId, models: ModelCatalog }`
+- Core: `connection::ApiProvider { base_url: BaseUrl, key: SecretId, models }`
   (`crates/core/src/connection/api_provider.rs`), constructed by `ApiProvider::new`, which refuses an empty model list
-  and drops repeated ids. The catalog's source is `CatalogSource::ApiProvider` (typed by a person), its models carry
-  no efforts.
+  and drops repeated ids; its models carry no efforts. No new `CatalogSource` was added: that enum is matched
+  exhaustively in the frozen `crates/desktop`, so a provider connection's `catalog()` is `None` and `models()` returns
+  the provider's models instead.
 - `Connection` gains `api_provider: Option<ApiProvider>`, set with `Connection::set_api_provider`. Only an agent CLI
   connection takes one (`ConnectionError::NoApiProvider` otherwise), and only while it runs on the CLI's Default
   account (`ConnectionError::ApiProviderWithAccount`); choosing another account on a provider connection is refused
@@ -36,12 +37,17 @@ CLI configured for the provider.
 - `AgentProvider::provider_wire()` names the interface (`WireApi::AnthropicMessages` / `WireApi::OpenAiResponses`),
   `None` for native providers.
 - On a provider connection:
-  - `models()` / `catalog()` are the provider's models, not the CLI's own catalog.
+  - `models()` are the provider's models; `catalog()` (the CLI's own listing) is `None`.
   - `status()` reads *Connected* once the program check found the CLI, whatever the CLI's own sign-in says (it is not
     used); `status_with(secrets)` reads *Key missing* while the key secret is archived or gone, as for native
     connections.
   - `vendor()` names the provider's host (`EngineVendor::Host`), since that host receives the prompts.
   - `plan_account()` is `None`: the runner records no plan-limit readings and keeps no account waits for it.
+  - `key()` (on `Connection`) names the key secret of a native connection or a provider; the secrets' *Used by* and
+    *needs a person to replace* rules use it.
+- The Orchestrator chat and auto mode's reviewer start their CLI on its own sign-in; a connection on a provider is
+  not offered there (`orchestrator.settings.apiProvider`, `reviewer_kind` = `None`) rather than run on the wrong
+  credentials.
 - Store: project database migration `api_providers` adds `connections.api_provider TEXT` (NULL, or
   `{"schema":1,"body":{base_url,key,models:[…]}}`). Older builds refuse the newer database as for every migration,
   so none of them runs the connection on the CLI's own sign-in by ignoring the provider.
@@ -69,7 +75,8 @@ can override these.
 -c model_providers.orchester={name="Orchester API provider",base_url="<url>",env_key="ORCHESTER_PROVIDER_API_KEY",wire_api="responses"}
 ```
 
-and the key in `ORCHESTER_PROVIDER_API_KEY` (secret). `wire_api = "responses"` is the only value current Codex takes,
+and the key in `ORCHESTER_PROVIDER_API_KEY` (secret). The runner adds the key to App Server's redaction set and,
+since Codex needs no sign-in of its own there, no longer requires `account/read` to name an account. `wire_api = "responses"` is the only value current Codex takes,
 so the provider must serve the OpenAI **Responses** API (DeepSeek does at `https://api.deepseek.com`); a server that
 only speaks Chat Completions cannot be used through Codex, and the form says so. `thread/start` and `thread/resume`
 name `modelProvider: "orchester"`, and the runner refuses the turn if Codex reports another `modelProvider` (Codex
@@ -101,18 +108,24 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
 - `add_cli_connection` takes an optional `api_provider: {base_url, key_secret, models}`; `key_secret` names an
   **existing** project secret by id or name (no tool takes or returns a secret value).
 - `set_api_provider {project, connection, api_provider | null}` changes or removes it.
-- Adding a provider, or changing its base URL, key or models, sends the project's prompts and code to another host
-  under another key: refused `person_only` unless a person turned on *Let automation change agent permissions*
-  (`widening::allowed`, reason `appMcp.widens.apiProvider`). Removing the provider (back to the CLI's sign-in) is a
-  narrowing and always allowed.
+- Adding a provider, or changing its base URL or key, sends the project's prompts and code to another host or under
+  another key: refused `person_only` unless a person turned on *Let automation change agent permissions*
+  (`widening::allowed`, reason `appMcp.widens.apiProvider`, together with any other widening of the same call, such as
+  a program not found on the search path). Changing only the models, or removing the provider (back to the CLI's
+  sign-in), is not a widening.
+- In the window, saving a connection on a provider with lurq's synthetic input (an MCP client driving the window) is
+  taken only where `input_may_decide(.., Guarded::PermissionWidening)` allows it, as for choosing an account.
 - `list_connections` / `list_models` show the provider's host, base URL, key secret's name and models, never a value.
 
 ## UI placement (desktop-app)
 
-- *Add connection* → Codex CLI / Claude Code CLI: a new *Runs on* choice after the program — *Its own sign-in*
-  (the existing Account row) or *An API provider*: Base URL, API key (existing secret select, or *New secret…* with
-  name, environment and value, as the Secrets page), Models (comma-separated ids), and the interface note.
-- *Edit connection* shows the same section for an agent CLI connection.
+- *Add connection* → Codex CLI / Claude Code CLI: a *Runs on* section after the connection section
+  (`screens/connections/provider_form.rs`) — *Its own sign-in* (the Account row stays in the connection section) or
+  *An API provider*, which hides the Account row and shows Base URL (with the CLI's interface as its description),
+  API key (a select of the project's secrets, or *New secret…* with its name and masked value, kept in Development),
+  Models (comma-separated ids), where requests go and what is not supported.
+- *Edit connection* shows the same section, filled from the stored provider; saving goes through
+  `set_runs_on_in`.
 - The inspector of a provider connection shows Interface, Base URL, API key (secret name), Models and *Prompts,
   repository content and command output are sent to <host>*; it shows no account or plan rows.
 - Agent profiles: the model menu lists the provider's models; the connection detail names the host.

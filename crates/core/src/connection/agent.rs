@@ -3,8 +3,8 @@
 use std::{ops::Deref, path::PathBuf};
 
 use super::{
-  AgentEndpoint, AgentProvider, ApiEndpoint, ApiProvider, Connection, ConnectionError, ConnectionKind, ConnectionStatus,
-  EndpointPreset, LastCheck, SignIn,
+  AgentEndpoint, AgentProvider, ApiEndpoint, ApiProvider, Connection, ConnectionError, ConnectionKind,
+  ConnectionStatus, EndpointPreset, LastCheck, SignIn,
   catalog::{CatalogModel, ModelCatalog},
   compare_versions,
   model_requirements::CliTooOld,

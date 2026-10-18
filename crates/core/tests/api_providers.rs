@@ -154,14 +154,23 @@ fn api_providers_run_only_agent_clis_on_their_default_account() {
   let mut on_account = cli(AgentProvider::ClaudeCodeCli);
   on_account.set_account(account.clone()).expect("an account of the CLI");
   assert_eq!(
-    on_account.set_api_provider(Some(provider("https://api.deepseek.com/anthropic", SecretId::generate()))),
+    on_account.set_api_provider(Some(provider(
+      "https://api.deepseek.com/anthropic",
+      SecretId::generate()
+    ))),
     Err(ConnectionError::ApiProviderWithAccount)
   );
   let mut on_provider = cli(AgentProvider::ClaudeCodeCli);
   on_provider
-    .set_api_provider(Some(provider("https://api.deepseek.com/anthropic", SecretId::generate())))
+    .set_api_provider(Some(provider(
+      "https://api.deepseek.com/anthropic",
+      SecretId::generate(),
+    )))
     .expect("on Default");
-  assert_eq!(on_provider.set_account(account), Err(ConnectionError::ApiProviderWithAccount));
+  assert_eq!(
+    on_provider.set_account(account),
+    Err(ConnectionError::ApiProviderWithAccount)
+  );
   on_provider.set_api_provider(None).expect("back to the sign-in");
   assert!(on_provider.api_provider().is_none());
 }
@@ -172,7 +181,10 @@ fn api_providers_give_the_models_status_vendor_and_key_of_their_connection() {
   let mut connection = cli(AgentProvider::ClaudeCodeCli);
   connection.record_check(signed_out()).expect("a CLI check");
   assert_eq!(connection.status(), ConnectionStatus::SignInRequired);
-  assert!(connection.plan_account().is_some(), "Default's limits are read on the sign-in");
+  assert!(
+    connection.plan_account().is_some(),
+    "Default's limits are read on the sign-in"
+  );
 
   connection
     .set_api_provider(Some(provider("https://api.deepseek.com/anthropic", key)))
@@ -190,11 +202,7 @@ fn api_providers_give_the_models_status_vendor_and_key_of_their_connection() {
   assert_eq!(connection.plan_account(), None, "a key has no plan limits");
   assert_eq!(connection.status_with(&[]), ConnectionStatus::KeyMissing);
   assert_eq!(connection.status_with(&[key_secret(key)]), ConnectionStatus::Connected);
-  assert_eq!(
-    reviewer_kind(&connection),
-    None,
-    "no reviewer runs on an API provider"
-  );
+  assert_eq!(reviewer_kind(&connection), None, "no reviewer runs on an API provider");
   let stored: Connection = connection.clone().into_connection();
   assert!(matches!(stored.last_check(), Some(LastCheck::Agent(_))));
 }
@@ -233,8 +241,14 @@ fn api_providers_start_claude_code_with_their_url_models_and_the_key_in_a_secret
   let secrets: Vec<&str> = command.secret_env().iter().map(|secret| secret.name()).collect();
   assert_eq!(secrets, [CLAUDE_KEY_VARIABLE]);
   assert_eq!(command.secret_env()[0].expose(), KEY);
-  assert!(!format!("{command:?}").contains(KEY), "the command's Debug shows no key");
-  assert!(!format!("{on:?}").contains(KEY), "the provider start's Debug shows no key");
+  assert!(
+    !format!("{command:?}").contains(KEY),
+    "the command's Debug shows no key"
+  );
+  assert!(
+    !format!("{on:?}").contains(KEY),
+    "the provider start's Debug shows no key"
+  );
 }
 
 #[test]

@@ -325,17 +325,7 @@ impl RunTask {
     let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
-      launch: Launch::Cli(Box::new(CliLaunch {
-        command: match &index.tools {
-          Some(tools) => with_tools_on_path(started.command, tools),
-          None => started.command,
-        },
-        mcp_file: started.mcp_file,
-        app_server: started.app_server,
-        claude_approvals,
-        tool_relay: started.tool_relay,
-        claude_exemptions,
-      })),
+      launch: cli_launch(started, index.tools.as_deref(), (claude_approvals, claude_exemptions)),
       prompt: sources,
       left_out,
       code_index: index.used,
@@ -347,6 +337,26 @@ impl RunTask {
       engine: None,
     })
   }
+}
+
+/// What starts for the CLI command `started`: with the code index's tools first on its `PATH` where it gets them, and
+/// Claude Code's permission prompt and the MCP tools that run without asking.
+fn cli_launch(
+  started: cli::CliCommand,
+  tools: Option<&Path>,
+  (claude_approvals, claude_exemptions): (Option<ClaudeApprovals>, InvocationExemptions),
+) -> Launch {
+  Launch::Cli(Box::new(CliLaunch {
+    command: match tools {
+      Some(tools) => with_tools_on_path(started.command, tools),
+      None => started.command,
+    },
+    mcp_file: started.mcp_file,
+    app_server: started.app_server,
+    claude_approvals,
+    tool_relay: started.tool_relay,
+    claude_exemptions,
+  }))
 }
 
 /// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:

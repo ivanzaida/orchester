@@ -37,10 +37,7 @@ impl ApiProvider {
     if kept.is_empty() {
       return Err(ApiProviderError::NoModels);
     }
-    let models = kept
-      .into_iter()
-      .map(|id| CatalogModel::new(id, Vec::new()))
-      .collect();
+    let models = kept.into_iter().map(|id| CatalogModel::new(id, Vec::new())).collect();
     Ok(Self { base_url, key, models })
   }
 

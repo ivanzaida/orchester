@@ -7,6 +7,7 @@
 mod agent;
 mod github;
 mod mcp;
+mod provider;
 
 use std::sync::Arc;
 

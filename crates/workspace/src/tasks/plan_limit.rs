@@ -50,9 +50,7 @@ impl PlanStop {
       return Ok(None);
     };
     let provider = connection.provider();
-    let account = db
-      .execution_account(execution)?
-      .or_else(|| connection.plan_account());
+    let account = db.execution_account(execution)?.or_else(|| connection.plan_account());
     let others = db
       .connections()?
       .into_iter()

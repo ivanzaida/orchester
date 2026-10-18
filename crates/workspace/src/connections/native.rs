@@ -61,7 +61,9 @@ pub fn save_native_in(
 ) -> Result<ConnectionId, Message> {
   let mut db = ProjectDb::open(repo_root).map_err(|error| store_failure(&error))?;
   let now = Timestamp::now();
-  with_key(&mut db, vault, (&draft.key, value), |db, key| store_connection(db, draft, key, now))
+  with_key(&mut db, vault, (&draft.key, value), |db, key| {
+    store_connection(db, draft, key, now)
+  })
 }
 
 /// What `store` does with the key secret `key` names: one the project has, or one added first with `value` into

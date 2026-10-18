@@ -443,7 +443,11 @@ impl Connection {
       Some(LastCheck::Agent(ConnectionCheck {
         result: CheckResult::Available { .. },
         ..
-      })) if self.api_provider.is_some() => ConnectionStatus::Connected,
+      }))
+        if self.api_provider.is_some() =>
+      {
+        ConnectionStatus::Connected
+      }
       Some(check) => check.status(),
     }
   }

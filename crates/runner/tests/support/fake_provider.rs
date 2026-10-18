@@ -24,8 +24,12 @@ pub fn codex_provider(args: &[String]) -> String {
 
 /// Reports Claude Code's provider variables: the base URL and the models of its aliases and subagents.
 pub fn claude() {
-  let models = ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"]
-    .map(|name| std::env::var(name).unwrap_or_default());
+  let models = [
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+  ]
+  .map(|name| std::env::var(name).unwrap_or_default());
   let provider = std::env::var("ANTHROPIC_BASE_URL")
     .ok()
     .map(|url| format!("{url} {}", models.join(" ")));

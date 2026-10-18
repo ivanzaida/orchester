@@ -4,12 +4,7 @@
 //! code to its host under its key, so a new host or key is refused as `person_only` unless a person lets automation
 //! widen; going back to the CLI's own sign-in, or changing only the models, is not a widening.
 
-use orchester_core::{
-  connection::ApiProvider,
-  resource::ModelId,
-  secret::Secret,
-  store::SecretStore,
-};
+use orchester_core::{connection::ApiProvider, resource::ModelId, secret::Secret, store::SecretStore};
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
@@ -25,7 +20,7 @@ use crate::{
     services::{Services, blocking},
   },
   connections::{
-    api_provider::{base_url, model_ids, provider_of, set_provider_in},
+    api_provider::{base_url, model_id, provider_of, set_provider_in},
     data::{ProjectConnections, SaveError},
   },
   messages::Message,
@@ -88,7 +83,12 @@ pub async fn set_api_provider(services: &Services, args: SetApiProvider) -> Resu
 /// The provider `input` describes in the project of `db`, or why it cannot be one.
 pub(super) fn provider_from(db: &ProjectDb, input: &ApiProviderInput) -> Result<ApiProvider, ToolError> {
   let base_url = base_url(&input.base_url).map_err(|reason| ToolError::refused("invalid_base_url", vec![reason]))?;
-  let models = model_ids(&input.models.join(",")).map_err(|reason| ToolError::refused("invalid_model", vec![reason]))?;
+  let models = input
+    .models
+    .iter()
+    .map(|model| model_id(model.trim()))
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|reason| ToolError::refused("invalid_model", vec![reason]))?;
   let key = secret_named(db, &input.key_secret)?;
   provider_of(base_url, key.id(), models).map_err(|reason| ToolError::refused("invalid_api_provider", vec![reason]))
 }
@@ -100,7 +100,8 @@ pub(super) fn widens(
   current: Option<&ApiProvider>,
   provider: &ApiProvider,
 ) -> Result<Vec<Message>, ToolError> {
-  let same = current.is_some_and(|current| current.base_url() == provider.base_url() && current.key() == provider.key());
+  let same =
+    current.is_some_and(|current| current.base_url() == provider.base_url() && current.key() == provider.key());
   if same {
     return Ok(Vec::new());
   }
@@ -117,7 +118,11 @@ pub(super) fn widens(
 
 /// The project's secret that is not archived named by `named`: its id or, when only one secret has it, its name.
 fn secret_named(db: &ProjectDb, named: &str) -> Result<Secret, ToolError> {
-  let active: Vec<Secret> = db.secrets()?.into_iter().filter(|secret| !secret.is_archived()).collect();
+  let active: Vec<Secret> = db
+    .secrets()?
+    .into_iter()
+    .filter(|secret| !secret.is_archived())
+    .collect();
   if let Some(secret) = active.iter().find(|secret| secret.id().to_string() == named) {
     return Ok(secret.clone());
   }

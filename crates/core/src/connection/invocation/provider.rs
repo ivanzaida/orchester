@@ -2,12 +2,11 @@
 //! step's model as plain variables or configuration overrides, the key as a secret variable only, so that it reaches
 //! the CLI's process and the runner's redaction set and nothing else.
 //!
-//! - Claude Code (`code.claude.com/docs/en/llm-gateway-connect`, `env-vars`, checked 2026-10-18):
-//!   `ANTHROPIC_BASE_URL`, the key in `ANTHROPIC_AUTH_TOKEN` (sent as `Authorization: Bearer`, used at once over a
-//!   saved login), and the step's model in `ANTHROPIC_MODEL`, the three `ANTHROPIC_DEFAULT_*_MODEL` aliases and
-//!   `CLAUDE_CODE_SUBAGENT_MODEL`, so that aliases, background work (the Haiku slot) and subagents never ask the
-//!   provider for a Claude model it does not serve. `ANTHROPIC_API_KEY` is dropped: Claude Code would send it too, in
-//!   `x-api-key`, to the provider's host.
+//! - Claude Code (`code.claude.com/docs/en/llm-gateway-connect`, `env-vars`, checked 2026-10-18): `ANTHROPIC_BASE_URL`,
+//!   the key in `ANTHROPIC_AUTH_TOKEN` (sent as `Authorization: Bearer`, used at once over a saved login), and the
+//!   step's model in `ANTHROPIC_MODEL`, the three `ANTHROPIC_DEFAULT_*_MODEL` aliases and `CLAUDE_CODE_SUBAGENT_MODEL`,
+//!   so that aliases, background work (the Haiku slot) and subagents never ask the provider for a Claude model it does
+//!   not serve. `ANTHROPIC_API_KEY` is dropped: Claude Code would send it too, in `x-api-key`, to the provider's host.
 //! - Codex (`learn.chatgpt.com/docs/config-file/config-reference`, checked 2026-10-18): a model provider of its own
 //!   through configuration overrides, `model_provider` naming it and `model_providers.<id>` with the base URL, the
 //!   variable holding the key (`env_key`) and `wire_api = "responses"`, the only wire current Codex takes. The runner
@@ -76,9 +75,9 @@ impl OnProvider<'_> {
     let command = command
       .with_env_dropped(CLAUDE_OTHER_KEY)
       .with_env_replaced("ANTHROPIC_BASE_URL", self.provider.base_url().as_str());
-    let command = CLAUDE_MODEL_VARIABLES
-      .iter()
-      .fold(command, |command, name| command.with_env_replaced(name, self.model.as_str()));
+    let command = CLAUDE_MODEL_VARIABLES.iter().fold(command, |command, name| {
+      command.with_env_replaced(name, self.model.as_str())
+    });
     command.with_secret_env(self.key_variable(AgentProvider::ClaudeCodeCli))
   }
 

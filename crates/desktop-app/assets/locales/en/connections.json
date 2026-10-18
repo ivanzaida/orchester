@@ -53,7 +53,8 @@
       "native": "{{provider}} · {{host}}",
       "github": "gh · {{host}}",
       "githubSignedIn": "gh · {{host}} · signed in as {{account}}",
-      "withAccount": "{{line}} · account {{account}}"
+      "withAccount": "{{line}} · account {{account}}",
+      "apiProvider": "{{program}} · {{host}}"
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
@@ -131,7 +132,8 @@
     "modelSource": {
       "provider": "Listed by the model catalog bundled with the CLI.",
       "aliases": "The CLI did not list its models; these are the current model ids and the aliases its help documents.",
-      "providerAndCurrentIds": "The current model ids, then the models the CLI lists."
+      "providerAndCurrentIds": "The current model ids, then the models the CLI lists.",
+      "apiProvider": "Typed for the API provider; Orchester does not check that it serves them."
     },
     "cliTooOld": {
       "heading": "{{cli}} {{installed}} can’t run {{model}}; version {{required}} or newer is needed",
@@ -393,6 +395,49 @@
         "cliMissing": "CLI not found · install it, then check again in Settings",
         "folderMissing": "folder missing · runs won't start · choose it in Settings",
         "unsupported": "not supported on macOS yet"
+      }
+    },
+    "apiProvider": {
+      "label": "Runs on",
+      "signIn": "Its own sign-in",
+      "signInDetail": "The CLI uses the account it is signed in to on this computer.",
+      "api": "An API provider",
+      "apiDetailClaude": "Claude Code runs on an Anthropic-compatible API, such as DeepSeek’s, with an API key.",
+      "apiDetailCodex": "Codex runs on an OpenAI Responses-compatible API, such as DeepSeek’s, with an API key.",
+      "url": "Base URL",
+      "interfaceClaude": "Claude Code speaks the Anthropic Messages API: use the provider’s Anthropic-compatible address.",
+      "interfaceCodex": "Codex speaks the OpenAI Responses API; a server that only speaks Chat Completions can’t run Codex.",
+      "urlPlaceholderClaude": "https://api.deepseek.com/anthropic",
+      "urlPlaceholderCodex": "https://api.deepseek.com",
+      "key": "API key",
+      "keyHint": "A project secret holds the key. Orchester gives it only to the CLI it starts, never shows it and never puts it in prompts or logs.",
+      "keyPlaceholder": "Choose a secret",
+      "secretName": "{{name}} ({{environment}})",
+      "newSecret": "New secret…",
+      "secretNameLabel": "Secret name",
+      "secretNamePlaceholder": "DEEPSEEK_API_KEY",
+      "secretNameHint": "Kept with the project’s secrets, in Development.",
+      "secretNameInvalid": "Start with a capital letter and use capital letters, digits and underscores, such as DEEPSEEK_API_KEY.",
+      "secretNameTaken": "Development already has a secret with this name; choose it above.",
+      "secretValue": "Key",
+      "secretValueHint": "Stored in this computer’s secret store when you save; it is not shown again.",
+      "models": "Models",
+      "modelsHint": "The model ids the provider serves, separated by commas. Agent profiles on this connection choose from them.",
+      "modelsPlaceholder": "deepseek-flash, deepseek-v4-pro",
+      "sentTo": "Prompts, repository content and command output are sent to {{host}}",
+      "sentToDetail": "Under the provider’s terms and data policy, with this key. The commands the agent runs can read the key from their environment.",
+      "notSupported": "On an API provider Orchester reads no plan limits, offers no reasoning effort, and counts tokens only where the provider reports them. The Orchestrator and auto mode’s reviewer don’t run on it.",
+      "theHost": "the provider",
+      "interface": "Interface",
+      "wireClaude": "Anthropic Messages API",
+      "wireCodex": "OpenAI Responses API",
+      "keyGone": "Key secret missing",
+      "authentication": "API key",
+      "reasons": {
+        "key": "Choose the secret holding the API key, or New secret….",
+        "secretName": "Name the new key secret.",
+        "secretValue": "Enter the key.",
+        "models": "Enter at least one model the provider serves."
       }
     }
   }

@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  connection::{ApiProvider, ApiProviderError, BaseUrl, ConnectionAccount, EndpointError},
+  connection::{ApiProvider, ApiProviderError, BaseUrl, Connection, ConnectionAccount, ConnectionError, EndpointError},
   id::{ConnectionId, SecretId},
   resource::ModelId,
   secret::{SecretValue, SecretVault},
@@ -108,10 +108,13 @@ pub fn model_ids(value: &str) -> Result<Vec<ModelId>, Message> {
   value
     .split(|c: char| c == ',' || c.is_whitespace())
     .filter(|part| !part.is_empty())
-    .map(|part| {
-      ModelId::new(part).map_err(|_| Message::new("connections.provider.modelInvalid").with("model", part.to_owned()))
-    })
+    .map(model_id)
     .collect()
+}
+
+/// The model id `value`, or why it is not one.
+pub fn model_id(value: &str) -> Result<ModelId, Message> {
+  ModelId::new(value).map_err(|_| Message::new("connections.provider.modelInvalid").with("model", value.to_owned()))
 }
 
 /// Runs stored connection `id` of the project at `repo_root` on `provider`, or on its CLI's own sign-in again
@@ -133,6 +136,56 @@ pub fn set_provider_in(repo_root: &Path, id: ConnectionId, provider: Option<ApiP
   }
   db.save_connection(&connection)?;
   Ok(())
+}
+
+/// Runs stored connection `id` of the project at `repo_root` on what `runs_on` names, as Edit connection saves it: an
+/// account of its CLI, or a provider whose new key secret is added first with `value` (and archived again if the
+/// connection cannot be saved). A check made on another account is dropped, so the CLI is checked again.
+pub fn set_runs_on_in(
+  repo_root: &Path,
+  vault: &dyn SecretVault,
+  id: ConnectionId,
+  runs_on: RunsOn,
+  value: Option<SecretValue>,
+) -> Result<(), Message> {
+  let mut db = ProjectDb::open(repo_root).map_err(|error| SaveError::from(error).message())?;
+  let stored = |db: &ProjectDb| -> Result<Connection, Message> {
+    db.connection(id)
+      .map_err(|error| SaveError::from(error).message())?
+      .ok_or_else(|| SaveError::from(StoreError::ConnectionNotFound(id)).message())
+  };
+  match runs_on {
+    RunsOn::Account(account) => {
+      let mut connection = stored(&db)?;
+      runs_on_and_saved(&mut db, &mut connection, (account, None))
+    }
+    RunsOn::Provider(provider) => with_key(&mut db, vault, (&provider.key, value), |db, key| {
+      let api = provider_of(provider.base_url, key, provider.models)?;
+      let mut connection = stored(db)?;
+      runs_on_and_saved(db, &mut connection, (ConnectionAccount::Default, Some(api)))
+    }),
+  }
+}
+
+/// `connection` on `account` and `provider`, checked again when that dropped its check, and saved.
+fn runs_on_and_saved(
+  db: &mut ProjectDb,
+  connection: &mut Connection,
+  (account, provider): (ConnectionAccount, Option<ApiProvider>),
+) -> Result<(), Message> {
+  let refused = |error: ConnectionError| failure(&SaveError::from(error));
+  connection.set_api_provider(None).map_err(refused)?;
+  connection.set_account(account).map_err(refused)?;
+  connection.set_api_provider(provider).map_err(refused)?;
+  if connection.last_check().is_none()
+    && let Some(check) = probe::recheck(connection)
+  {
+    connection
+      .record_check(check)
+      .expect("the check was made for the connection's own kind");
+  }
+  db.save_connection(connection)
+    .map_err(|error| failure(&SaveError::from(error)))
 }
 
 fn failure(error: &SaveError) -> Message {

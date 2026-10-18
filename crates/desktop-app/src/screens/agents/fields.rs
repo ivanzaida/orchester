@@ -455,6 +455,10 @@ fn connection_detail(
   readings: &orchester_core::connection::plan_limits::PlanReadings,
 ) -> (String, bool) {
   use crate::services::accounts::{DetailPlace, account_name, identity_detail, short_state};
+  if let Some(provider) = connection.api_provider() {
+    let text = ctx.t_args("agents.connectionApiProvider", [("host", provider.base_url().host())]);
+    return (text.to_string(), false);
+  }
   let (Some(cli), Some(account)) = (
     orchester_core::account::AccountCli::of(connection.provider()),
     accounts.of_connection(connection.account(), connection.provider()),

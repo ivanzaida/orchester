@@ -3,7 +3,8 @@
 //! a model it is too old for (`Claude Code 2.1.89 can't run …`); the profiles that run on it; and in the
 //! footer what its status means, the sign-in command to run in a terminal, Test connection and Edit
 //! connection. A native connection (`cC6TI`) says that native agents are not available yet and shows its
-//! endpoint, key and models, its test and editing unavailable.
+//! endpoint, key and models, its test and editing unavailable. A CLI on an API provider shows the provider
+//! ([`super::provider`]) instead of an account.
 
 use std::sync::Arc;
 
@@ -83,11 +84,10 @@ fn cli(
 ) -> Parts {
   let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   body.push(properties(ctx, connection, inspecting).into());
-  body.push(super::super::account::inspector_rows(
-    ctx,
-    inspecting.accounts,
-    connection,
-  ));
+  body.push(match connection.api_provider() {
+    Some(provider) => super::provider::rows(ctx, connection.provider(), provider, &inspecting.listed.secrets),
+    None => super::super::account::inspector_rows(ctx, inspecting.accounts, connection),
+  });
   body.push(models(ctx, connection, inspecting, actions));
   body.push(used);
   let status = connection.status_with(&inspecting.listed.secrets);
@@ -193,10 +193,14 @@ fn properties(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'
     &ctx.t("connections.thisComputer"),
     PropertyValue::Plain,
   ));
+  let authentication = match connection.api_provider() {
+    Some(_) => "connections.apiProvider.authentication",
+    None => "connections.cliLogin",
+  };
   rows.push(property(
     "connection-authentication",
     &ctx.t("connections.property.authentication"),
-    &ctx.t("connections.cliLogin"),
+    &ctx.t(authentication),
     PropertyValue::Plain,
   ));
   let (checked, kind) = last_checked(ctx, inspecting.now, connection.last_check().map(|check| check.at));
@@ -285,6 +289,7 @@ fn models(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, 
       }
     }));
   let note = match connection.catalog().map(|catalog| catalog.source()) {
+    _ if connection.api_provider().is_some() => "connections.modelSource.apiProvider",
     _ if connection.models().is_empty() && connection.last_check().is_some_and(|check| check.result.is_verified()) => {
       "connections.noModelsListed"
     }

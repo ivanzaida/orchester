@@ -4,10 +4,10 @@
 //! editor offers for one. A CLI added on an API provider names its key secret ([`super::api_providers`]); no secret's
 //! value is listed.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use orchester_core::{
-  connection::{AgentConnection, AgentProvider, ApiProvider, CheckResult, Connection, ConnectionCheck, ConnectionError},
+  connection::{AgentConnection, AgentProvider, CheckResult, Connection, ConnectionCheck, ConnectionError},
   id::{ConnectionId, ProjectId},
   name::Name,
   secret::Secret,
@@ -153,20 +153,26 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
     }
     // A program of automation's own choosing would run as the project's agent: a person's decision,
     // made before anything runs it. A copy found on the search path is saved as the search path names it,
-    // never as the client named it: a link the client chose could be pointed elsewhere later.
+    // never as the client named it: a link the client chose could be pointed elsewhere later. So is an API
+    // provider, which would get the project's prompts and code.
+    let mut reasons = Vec::new();
     let program = match probe::found_copy(&found, &program) {
       Some(copy) => copy.to_path_buf(),
       None => {
-        let reason = Message::new("appMcp.widens.program").with("program", program.display().to_string());
-        widening::allowed(&services, vec![reason])?;
+        reasons.push(Message::new("appMcp.widens.program").with("program", program.display().to_string()));
         program
       }
     };
-    let api = args
-      .api_provider
-      .as_ref()
-      .map(|input| on_provider(&services, &open.repo_root, (input, &name)))
-      .transpose()?;
+    let api = match &args.api_provider {
+      Some(input) => {
+        let db = ProjectDb::open(&open.repo_root)?;
+        let provider = provider_from(&db, input)?;
+        reasons.extend(widens(&db, name.as_str(), None, &provider)?);
+        Some(provider)
+      }
+      None => None,
+    };
+    widening::allowed(&services, reasons)?;
     let check = probe::check(provider, &program).expect("an agent CLI is checked by running it");
     let draft = ConnectionDraft {
       id: None,
@@ -260,18 +266,6 @@ pub(super) fn agent_named(db: &ProjectDb, named: &str) -> Result<AgentConnection
 /// The agent connection `id` among `connections`, by its id.
 pub(super) fn agent_by_id(connections: &[AgentConnection], id: ConnectionId) -> Option<&AgentConnection> {
   connections.iter().find(|connection| connection.id() == id)
-}
-
-/// The provider `input` describes for a new connection named `name`, once a person lets automation run one there.
-fn on_provider(
-  services: &Services,
-  repo_root: &Path,
-  (input, name): (&ApiProviderInput, &Name),
-) -> Result<ApiProvider, ToolError> {
-  let db = ProjectDb::open(repo_root)?;
-  let provider = provider_from(&db, input)?;
-  widening::allowed(services, widens(&db, name.as_str(), None, &provider)?)?;
-  Ok(provider)
 }
 
 /// An agent connection of `project` as Connections lists it, with its link: its inspector.

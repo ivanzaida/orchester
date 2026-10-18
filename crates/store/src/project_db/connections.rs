@@ -6,8 +6,9 @@ use std::path::PathBuf;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, ApiProvider, CheckResult, Connection, ConnectionAccount,
-    ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck, ModelRequirements,
+    AgentConnection, AgentEndpoint, AgentProvider, ApiEndpoint, ApiProvider, CheckResult, Connection,
+    ConnectionAccount, ConnectionCheck, ConnectionKind, GitHubCheck, GitHubCheckResult, GitHubHost, LastCheck,
+    ModelRequirements,
   },
   id::ConnectionId,
   name::Name,

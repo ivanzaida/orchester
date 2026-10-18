@@ -127,7 +127,10 @@ fn api_providers_a_damaged_provider_is_reported() {
     .expect("damage");
   drop(raw);
   let db = ProjectDb::open(repo.path()).expect("reopen");
-  assert!(db.connections().is_err(), "a provider without models is not read as one");
+  assert!(
+    db.connections().is_err(),
+    "a provider without models is not read as one"
+  );
 }
 
 #[test]
