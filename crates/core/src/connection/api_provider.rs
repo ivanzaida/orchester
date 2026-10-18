@@ -11,6 +11,33 @@ use crate::{
   resource::ModelId,
 };
 
+/// The effort levels Claude Code's `--effort` takes (`claude --help`, 2.1.301); it refuses any other value.
+pub const CLAUDE_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+
+/// Why a reasoning effort typed for a model of an API provider cannot be passed to the CLI.
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+pub enum ProviderEffortError {
+  /// Codex takes any value the model advertises, as one word.
+  #[error("a reasoning effort is one word")]
+  NotOneWord,
+  #[error("Claude Code takes the effort levels low, medium, high, xhigh and max only")]
+  NotClaudeLevel,
+}
+
+/// The reasoning effort `value` (trimmed, not empty) as `cli` takes it for a model of an API provider, whose models
+/// Orchester does not know: Codex any one word its model advertises (App Server's `ReasoningEffort` is any non-empty
+/// string, 0.159.2), Claude Code only its own levels ([`CLAUDE_EFFORTS`]).
+pub fn provider_effort(cli: super::AgentProvider, value: &str) -> Result<String, ProviderEffortError> {
+  let value = value.trim();
+  if value.is_empty() || value.chars().any(|c| c.is_whitespace() || c.is_control()) {
+    return Err(ProviderEffortError::NotOneWord);
+  }
+  if cli == super::AgentProvider::ClaudeCodeCli && !CLAUDE_EFFORTS.contains(&value) {
+    return Err(ProviderEffortError::NotClaudeLevel);
+  }
+  Ok(value.to_owned())
+}
+
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ApiProviderError {
   /// Profiles on the connection choose from its models, so it needs at least one.

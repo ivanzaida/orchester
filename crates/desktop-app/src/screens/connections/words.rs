@@ -154,16 +154,19 @@ pub(super) const fn mcp_glyph(server: &McpServer) -> Icon {
 
 /// What the agent connection is, under its name: the vendor, the CLI and its version once checked
 /// (`Anthropic · Claude Code CLI 2.1.89`), a native connection's provider and endpoint host, or the CLI and the
-/// host of the API provider it runs on.
+/// host of the API provider it runs on, after its version once checked (`Claude Code CLI 2.1.89 · api.deepseek.com`).
 pub(super) fn agent_line(ctx: &Ctx, connection: &AgentConnection) -> String {
   let provider = ctx.t(provider_key(connection.provider()));
   if let Some(api) = connection.api_provider() {
-    return ctx
-      .t_args(
-        "connections.row.apiProvider",
-        [("program", &*provider), ("host", api.base_url().host())],
-      )
-      .to_string();
+    let host = api.base_url().host();
+    return match checked_version(connection) {
+      Some(version) => ctx.t_args(
+        "connections.row.apiProviderVersion",
+        [("program", &*provider), ("version", version), ("host", host)],
+      ),
+      None => ctx.t_args("connections.row.apiProvider", [("program", &*provider), ("host", host)]),
+    }
+    .to_string();
   }
   if let Some(api) = connection.api() {
     return ctx

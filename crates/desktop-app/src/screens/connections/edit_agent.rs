@@ -20,14 +20,14 @@ use lurq::{
 use orchester_core::{
   connection::{AgentConnection, ConnectionAccount},
   id::ConnectionId,
-  secret::{Secret, SecretValue},
+  secret::SecretValue,
 };
 use orchester_workspace::{
   activity::operations,
   background,
   connections::{
-    api_provider::{ProviderDraft, RunsOn, set_runs_on_in},
-    native::KeySecret,
+    api_provider::{RunsOn, set_runs_on_in},
+    data::ProjectConnections,
   },
   messages::Message,
   tasks::outside::Outside,
@@ -37,7 +37,7 @@ use super::{
   account, data,
   mcp_form::{McpForm, McpFormProps},
   page::{Head, action_bar, page},
-  provider_form::ProviderForm,
+  provider_form::{ProviderForm, off_provider_notice},
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
@@ -137,7 +137,7 @@ impl Component for EditConnection {
         },
       );
     };
-    self.agent_page(ctx, &props, (&connection, &listed.secrets))
+    self.agent_page(ctx, &props, (&connection, &listed))
   }
 }
 
@@ -146,7 +146,7 @@ impl EditConnection {
     &self,
     ctx: &mut Ctx,
     props: &EditProps,
-    (connection, listed_secrets): (&AgentConnection, &[Secret]),
+    (connection, known): (&AgentConnection, &ProjectConnections),
   ) -> Element {
     let accounts = listed(ctx);
     let provider = connection.provider();
@@ -161,8 +161,11 @@ impl EditConnection {
     let account_changed = !self.chosen.get().is_empty() && self.chosen.get() != current;
     let account = super::account::chosen_account(&accounts, provider, &self.chosen.get())
       .map_or(ConnectionAccount::Default, ConnectionAccount::of);
-    let wanted = self.provider.runs_on(listed_secrets, account);
-    let provider_changed = provider_changed(connection, wanted.as_ref(), self.provider.on());
+    let wanted = self.provider.runs_on(known, account);
+    let provider_changed = match connection.api_provider() {
+      None => self.provider.on(),
+      Some(current) => !self.provider.holds(current),
+    };
     let changed = account_changed || provider_changed;
     let rows = Column::new()
       .id("connection-edit-properties")
@@ -182,22 +185,31 @@ impl EditConnection {
           .unwrap_or_default(),
         PropertyValue::Mono,
       ));
-    let mut sections = vec![rows.into()];
-    if !self.provider.on() {
-      sections.push(account::add_row(ctx, &accounts, provider, &self.chosen));
-    }
-    sections.push(
+    let mut sections = vec![
+      rows.into(),
       inspector::note(
         "connection-account-note",
         Icon::Info,
         &ctx.t("connections.account.changeNote"),
       )
       .into(),
-    );
-    sections.push(self.provider.section(ctx, provider, listed_secrets));
+    ];
+    if !self.provider.on() {
+      sections.push(account::add_row(ctx, &accounts, provider, &self.chosen));
+    }
+    sections.push(self.provider.section(ctx, provider, known));
+    if let Some(current) = connection.api_provider().filter(|_| !self.provider.on()) {
+      let secret = known
+        .secrets
+        .iter()
+        .chain(known.archived_keys.iter())
+        .find(|secret| secret.id() == current.key())
+        .map(|secret| secret.name().as_str());
+      sections.push(off_provider_notice(ctx, connection.name().as_str(), provider, secret));
+    }
     let head = self.head(ctx, props, connection, changed);
-    let bar = if provider_changed {
-      self.provider_bar(ctx, props, connection, wanted, listed_secrets)
+    let bar = if connection.api_provider().is_some() || self.provider.on() {
+      self.provider_bar(ctx, props, connection, (wanted.filter(|_| provider_changed), known))
     } else {
       self.bar(ctx, props, connection, changed)
     };
@@ -300,8 +312,7 @@ impl EditConnection {
     ctx: &mut Ctx,
     props: &EditProps,
     connection: &AgentConnection,
-    wanted: Option<RunsOn>,
-    secrets: &[Secret],
+    (wanted, known): (Option<RunsOn>, &ProjectConnections),
   ) -> Element {
     let navigation = Navigation::of(ctx);
     let (project, id) = (props.project.open.project.id(), connection.id());
@@ -344,25 +355,9 @@ impl EditConnection {
       .error
       .filter(|_| rejected)
       .map(|error| crate::ui::message::message_text(ctx, &error))
-      .or_else(|| self.provider.reason(ctx, secrets));
+      .or_else(|| self.provider.reason(ctx, known));
     let refusal = self.provider.refusal(ctx);
     action_bar(vec![cancel.into(), save.into()], refusal.or(reason).as_deref())
-  }
-}
-
-/// Whether the page would change what `connection` runs on as to its API provider: one it does not run on, another
-/// URL, key or models, or none any more.
-fn provider_changed(connection: &AgentConnection, wanted: Option<&RunsOn>, on: bool) -> bool {
-  let current = connection.api_provider();
-  match (current, wanted) {
-    (None, _) => on,
-    (Some(_), _) if !on => true,
-    (Some(current), Some(RunsOn::Provider(ProviderDraft { base_url, key, models }))) => {
-      current.base_url() != base_url
-        || !matches!(key, KeySecret::Existing(id) if *id == current.key())
-        || !current.model_ids().eq(models.iter())
-    }
-    (Some(_), _) => true,
   }
 }
 

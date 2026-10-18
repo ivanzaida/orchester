@@ -54,6 +54,8 @@ pub struct ProjectConnections {
   pub mcp: Arc<Vec<McpServer>>,
   /// The project's secrets that are not archived.
   pub secrets: Arc<Vec<Secret>>,
+  /// The archived secrets a connection still names as its key, so a page can say which one went.
+  pub archived_keys: Arc<Vec<Secret>>,
   pub uses: Arc<Vec<ProfileUse>>,
   /// Who runs on which model of each agent connection.
   pub model_uses: Arc<Vec<ModelUse>>,
@@ -93,11 +95,21 @@ impl ProjectConnections {
         "an MCP server cannot be read and is left out of the connections"
       );
     }
+    let secrets = store.secrets()?;
+    let mut archived_keys = Vec::new();
+    for key in connections.iter().filter_map(Connection::key) {
+      if !secrets.iter().any(|secret| secret.id() == key)
+        && let Some(secret) = store.secret(key)?
+      {
+        archived_keys.push(secret);
+      }
+    }
     Ok(Self {
       github: Arc::new(github_connections(connections.clone())),
       connections: Arc::new(agent_connections(connections)),
       mcp: Arc::new(store.mcp_servers()?),
-      secrets: Arc::new(store.secrets()?),
+      secrets: Arc::new(secrets),
+      archived_keys: Arc::new(archived_keys),
       uses: Arc::new(uses),
       model_uses: Arc::new(model_uses::load(store)?),
       link: store.repository_link()?.map(Arc::new),

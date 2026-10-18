@@ -5,8 +5,8 @@ interface.* This note is the design of what was built on branch `claude/api-prov
 `docs/architecture/native-agent.md` (*no custom base URL or key for CLI connections*) on 2026-10-18: API providers
 on the CLI connections go first; the native agent plan stays as it is. The native agent (Orchester's own loop on a model API) is unchanged and separate.
 
-No Pencil frame exists for any of this. The UI below is built from the closest existing connection-form patterns and
-needs a design (see *Design needed*).
+The design is in `data/orchester2.pen`, Connections column `mKKPM`: `virfc`, `UW2bO`, `VvWpe`, `FsIt3`, `y2qhJ`,
+`tnEKp`, `b3aoUZ`, `NNYyh` and `kGBHZ` (see *Design*).
 
 ## What a person gets
 
@@ -17,7 +17,7 @@ An agent CLI connection (Claude Code or Codex) can **run on an API provider** in
 | Interface | Implied by the CLI: Claude Code speaks the **Anthropic Messages** API, Codex the **OpenAI Responses** API. Choosing the interface chooses the CLI. |
 | Base URL | Same rules as a native connection's (`BaseUrl`): `https://`, or `http://` for this computer only; no user name, password, query or fragment. E.g. DeepSeek: `https://api.deepseek.com/anthropic` (Claude Code), `https://api.deepseek.com` (Codex). |
 | API key | A **project secret** (kind API key), picked or created with the connection, as native connections do. The connection stores the `SecretId` only. |
-| Models | The model ids the provider serves, typed by the person (one or more, kept once each, in order). They are the connection's model list: agent profiles on the connection choose from them. |
+| Models | The model ids the provider serves, added by the person (one or more, kept once each, in order). They are the connection's model list: agent profiles on the connection choose from them. |
 
 Agent profiles pick the connection and one of its models as for every connection; a run of such a profile starts the
 CLI configured for the provider.
@@ -92,7 +92,11 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
 ## What is not supported, said where it matters
 
 - **Plan limits**: none are read or shown for provider connections (they describe a CLI sign-in).
-- **Reasoning effort**: typed models offer no effort, so profiles on them set none; the provider's default applies.
+- **Reasoning effort** (the person's decision of 2026-10-18): Orchester does not know a provider's models, so a
+  profile on a provider connection types its effort, optionally; empty uses the provider's default. Codex takes any
+  one word its model advertises (App Server's `ReasoningEffort` is any non-empty string in 0.159.2) and gets it as the
+  turn's `effort`; Claude Code's `--effort` takes only `low`, `medium`, `high`, `xhigh` and `max` (`claude --help`,
+  2.1.301), so for Claude Code the value is checked against that set with a clear error (`provider_effort`).
 - **Tokens**: counted as before whenever the CLI reports them — Claude Code's stream-json `usage`, Codex's
   `thread/tokenUsage/updated` — which depends on the provider returning usage in its API's format (DeepSeek does).
   Nothing estimates tokens a CLI does not report.
@@ -142,18 +146,28 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
   taken only where `input_may_decide(.., Guarded::PermissionWidening)` allows it, as for choosing an account.
 - `list_connections` / `list_models` show the provider's host, base URL, key secret's name and models, never a value.
 
-## UI placement (desktop-app)
+## Design
 
-- *Add connection* → Codex CLI / Claude Code CLI: a *Runs on* section after the connection section
-  (`screens/connections/provider_form.rs`) — *Its own sign-in* (the Account row stays in the connection section) or
-  *An API provider*, which hides the Account row and shows Base URL (with the CLI's interface as its description),
-  API key (a select of the project's secrets, or *New secret…* with its name and masked value, kept in Development),
-  Models (comma-separated ids), where requests go and what is not supported.
-- *Edit connection* shows the same section, filled from the stored provider; saving goes through
-  `set_runs_on_in`.
-- The inspector of a provider connection shows Interface, Base URL, API key (secret name), Models and *Prompts,
-  repository content and command output are sent to <host>*; it shows no account or plan rows.
-- Agent profiles: the model menu lists the provider's models; the connection detail names the host.
+- *Add connection* (`virfc`, states `UW2bO`) → Codex CLI / Claude Code CLI: the check row reads *Found · <CLI>
+  <version> · runs on the API provider; its own sign-in is not used* on a provider; a *Runs on* section after the
+  connection section (`screens/connections/provider_form/`) — *Its own sign-in* (the Account row stays in the
+  connection section) or *An API provider*, which hides the Account row and shows Base URL (with the CLI's interface
+  as its description), API key (a select of the project's secrets, the archived one a connection still names as
+  *<name> · archived* with its error, or *New secret…* with its name and masked key under it, kept in Development),
+  Models (removable chips with a field and *Add model*, as allowed commands are added: a decision of 2026-10-18 over
+  the frame's comma field), where requests go and what is not supported, then the next step.
+- *Edit connection* (`VvWpe`, `FsIt3`): the properties, the change note, the Account row on the sign-in, the same
+  section filled from the stored provider, and when the page takes a connection off its provider *Saving takes
+  <name> off the API provider*; saving goes through `set_runs_on_in`.
+- The inspector (`y2qhJ`, `tnEKp`, `b3aoUZ`): *Authentication · API key*, *Plan limits · Not read on an API
+  provider*, *Runs on* (Interface, Base URL, API key by name or *Key secret missing*, where requests go), the typed
+  models (no Refresh), and the footer sentence for Connected or Key missing (Edit first then). The list row reads
+  *<CLI> <version> · <host>*.
+- Agent profiles (`NNYyh`, `kGBHZ`): the connection menu names the host; the model menu lists the provider's models;
+  the effort is an optional text field (*Provider default* when empty). The Orchestrator's and auto mode's reviewer's
+  menus list provider connections, unavailable, with why.
+- QA: the seed scenario `api-providers` (Claude · DeepSeek, Codex · DeepSeek, Claude · Gateway not checked, Claude ·
+  Old gateway with an archived key, profile Researcher on Codex · DeepSeek).
 
 ## Decisions taken here, with the alternative
 
@@ -165,7 +179,3 @@ name `modelProvider: "orchester"`, and the runner refuses the turn if Codex repo
    (`ANTHROPIC_API_KEY`) for gateways that read only that header.
 4. **Models typed** in v1. Alternative: fetch with the runner's `GET /models` check.
 
-## Design needed
-
-Pencil frames for: the *Runs on* section of Add/Edit connection (both CLIs, existing and new secret, errors), the
-provider connection's inspector and list row, and the profile's connection detail with a provider.

@@ -103,10 +103,11 @@ pub fn base_url(value: &str) -> Result<BaseUrl, Message> {
   })
 }
 
-/// The model ids typed as `value`, separated by commas, spaces or line breaks, or the first that is not one.
+/// The model ids typed as `value`, separated by commas, or the first that is not one (a model id has no spaces).
 pub fn model_ids(value: &str) -> Result<Vec<ModelId>, Message> {
   value
-    .split(|c: char| c == ',' || c.is_whitespace())
+    .split(',')
+    .map(str::trim)
     .filter(|part| !part.is_empty())
     .map(model_id)
     .collect()

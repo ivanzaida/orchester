@@ -165,23 +165,20 @@ impl Component for AddAgent {
       .map_or(ConnectionAccount::Default, ConnectionAccount::of);
     let checked = checked(ctx, (provider, program.clone(), account.clone()), self.recheck.get());
     let state = Checked::of(&found, program.as_ref(), &checked);
-    let secrets = listed
-      .data
-      .as_ref()
-      .map(|listed| listed.secrets.clone())
-      .unwrap_or_default();
+    let known = listed.data.clone().unwrap_or_default();
     let reason = self
       .reason(ctx, listed.data.as_ref(), &state, &save.state().get())
-      .or_else(|| self.provider.reason(ctx, &secrets));
+      .or_else(|| self.provider.reason(ctx, &known));
     let mut sections = vec![
       self.kind_section(ctx, listed.data.as_ref(), props.project.open.project.name().as_str()),
       self.connection_section(ctx, listed.data.as_ref(), (&found, &state), &accounts),
-      self.provider.section(ctx, provider, &secrets),
+      self.provider.section(ctx, provider, &known),
     ];
-    if !self.provider.on() {
-      sections.push(after(ctx, provider, props.project.open.project.name().as_str()));
-    }
-    let runs_on = self.provider.runs_on(&secrets, account);
+    sections.push(match self.provider.on() {
+      true => ProviderForm::next_step(ctx),
+      false => after(ctx, provider, props.project.open.project.name().as_str()),
+    });
+    let runs_on = self.provider.runs_on(&known, account);
     let bar = self.bar(ctx, &props, (&save, program, &state, runs_on), reason.as_deref());
     let head = head(ctx, &props, &save.state().get());
     page(ctx, Screen::NewConnection, head, sections, bar)
@@ -394,7 +391,7 @@ impl AddAgent {
     if !self.provider.on() {
       rows.push(super::account::add_row(ctx, accounts, provider, &self.account));
     }
-    rows.push(check_row(ctx, provider, state, &self.recheck));
+    rows.push(check_row(ctx, (provider, self.provider.on()), state, &self.recheck));
     section(
       "connection-section",
       &ctx.t("connections.dialog.connection"),

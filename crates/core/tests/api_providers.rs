@@ -407,3 +407,18 @@ fn api_providers_a_session_continues_only_on_the_provider_and_account_it_was_mad
     on(Some(("https://api.deepseek.com/anthropic", key)), None)
   );
 }
+
+#[test]
+fn api_providers_take_the_effort_each_cli_does() {
+  use orchester_core::connection::{ProviderEffortError, provider_effort};
+  assert_eq!(provider_effort(AgentProvider::CodexCli, " ultra "), Ok("ultra".to_owned()));
+  assert_eq!(
+    provider_effort(AgentProvider::CodexCli, "very high"),
+    Err(ProviderEffortError::NotOneWord)
+  );
+  assert_eq!(provider_effort(AgentProvider::ClaudeCodeCli, "xhigh"), Ok("xhigh".to_owned()));
+  assert_eq!(
+    provider_effort(AgentProvider::ClaudeCodeCli, "ultra"),
+    Err(ProviderEffortError::NotClaudeLevel)
+  );
+}

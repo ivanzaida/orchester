@@ -82,12 +82,16 @@ fn cli(
   inspecting: &Inspecting<'_>,
   actions: &Actions,
 ) -> Parts {
+  if let Some(api) = connection.api_provider() {
+    return super::provider::parts(ctx, (connection, api), (header, used), inspecting, actions);
+  }
   let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   body.push(properties(ctx, connection, inspecting).into());
-  body.push(match connection.api_provider() {
-    Some(provider) => super::provider::rows(ctx, connection.provider(), provider, &inspecting.listed.secrets),
-    None => super::super::account::inspector_rows(ctx, inspecting.accounts, connection),
-  });
+  body.push(super::super::account::inspector_rows(
+    ctx,
+    inspecting.accounts,
+    connection,
+  ));
   body.push(models(ctx, connection, inspecting, actions));
   body.push(used);
   let status = connection.status_with(&inspecting.listed.secrets);
@@ -154,7 +158,11 @@ fn cli(
   }
 }
 
-fn properties(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>) -> lurq::components::Column {
+pub(super) fn properties(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  inspecting: &Inspecting<'_>,
+) -> lurq::components::Column {
   let status = connection.status_with(&inspecting.listed.secrets);
   let mut rows = vec![property(
     "connection-provider",
@@ -203,6 +211,14 @@ fn properties(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'
     &ctx.t(authentication),
     PropertyValue::Plain,
   ));
+  if connection.api_provider().is_some() {
+    rows.push(property(
+      "connection-plan-limits",
+      &ctx.t("connections.account.planLimits"),
+      &ctx.t("connections.apiProvider.planLimits"),
+      PropertyValue::Muted,
+    ));
+  }
   let (checked, kind) = last_checked(ctx, inspecting.now, connection.last_check().map(|check| check.at));
   rows.push(property(
     "connection-checked",
@@ -269,7 +285,12 @@ fn too_old(ctx: &Ctx, connection: &AgentConnection) -> Option<Element> {
 
 /// The models the last check listed, a model the CLI is too old for marked, where the list came from, and
 /// Refresh models.
-fn models(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, actions: &Actions) -> Element {
+pub(super) fn models(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  inspecting: &Inspecting<'_>,
+  actions: &Actions,
+) -> Element {
   let chips = Row::new()
     .id("connection-models")
     .width(Dimension::Pct(100.0))
@@ -312,7 +333,8 @@ fn models(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, 
     ))
     .with_children((!connection.models().is_empty()).then_some(chips))
     .child(Text::new(&ctx.t(note)).variant(ExtraTypography::Note.role()))
-    .child(Row::new().child(refresh))
+    // An API provider's models are typed in Edit connection; a check of the CLI lists none of them.
+    .with_children(connection.api_provider().is_none().then(|| Row::new().child(refresh)))
     .into()
 }
 

@@ -7,7 +7,7 @@
     "cancel": "Cancel",
     "editAgent": {
       "title": "Edit {{connection}}",
-      "description": "Which account this connection's CLI runs on. Its name and program stay as they are.",
+      "description": "What this connection’s CLI runs on: its own sign-in on an account, or an API provider. Its name and program stay as they are.",
       "saved": "Saved",
       "save": "Save connection"
     },
@@ -54,7 +54,8 @@
       "github": "gh · {{host}}",
       "githubSignedIn": "gh · {{host}} · signed in as {{account}}",
       "withAccount": "{{line}} · account {{account}}",
-      "apiProvider": "{{program}} · {{host}}"
+      "apiProvider": "{{program}} · {{host}}",
+      "apiProviderVersion": "{{program}} {{version}} · {{host}}"
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
@@ -369,7 +370,7 @@
       "notChecked": "Not checked yet · Settings › Accounts checks it",
       "signedInInline": "signed in · the CLI doesn't say who",
       "notCheckedInline": "not checked yet · Settings › Accounts checks it",
-      "changeNote": "Takes effect at each agent's next start: a paused or stopped step continues on the new account as a new session.",
+      "changeNote": "Takes effect at each agent’s next start: a paused or stopped step continues on the new provider or account as a new session.",
       "plan": "{{plan}} plan",
       "weekly": "weekly {{used}}% used",
       "planLimits": "Plan limits",
@@ -410,7 +411,7 @@
       "urlPlaceholderClaude": "https://api.deepseek.com/anthropic",
       "urlPlaceholderCodex": "https://api.deepseek.com",
       "key": "API key",
-      "keyHint": "A project secret holds the key. Orchester gives it only to the CLI it starts, which keeps it from the commands and MCP servers it runs; it is never shown, nor put in prompts or logs.",
+      "keyHint": "A project secret holds the key. Orchester gives it only to the CLI it starts, never shows it and never puts it in prompts or logs.",
       "keyPlaceholder": "Choose a secret",
       "secretName": "{{name}} ({{environment}})",
       "newSecret": "New secret…",
@@ -422,11 +423,11 @@
       "secretValue": "Key",
       "secretValueHint": "Stored in this computer’s secret store when you save; it is not shown again.",
       "models": "Models",
-      "modelsHint": "The model ids the provider serves, separated by commas. Agent profiles on this connection choose from them.",
-      "modelsPlaceholder": "deepseek-flash, deepseek-v4-pro",
+      "modelsHint": "The model ids the provider serves. Agent profiles on this connection choose from them.",
+      "modelsPlaceholder": "deepseek-v4-pro",
       "sentTo": "Prompts, repository content and command output are sent to {{host}}",
-      "sentToDetail": "Under the provider’s terms and data policy, with this key. The commands the agent runs and its MCP servers get neither the key nor other variables whose names look like credentials.",
-      "notSupported": "On an API provider Orchester reads no plan limits, offers no reasoning effort, and counts tokens only where the provider reports them. The Orchestrator and auto mode’s reviewer don’t run on it.",
+      "sentToDetail": "Under the provider’s terms and data policy, with this key. Orchester gives the key only to the CLI it starts, which keeps it out of the commands the agent runs and the MCP servers it starts.",
+      "notSupported": "On an API provider Orchester reads no plan limits and counts tokens only where the provider reports them. The Orchestrator and auto mode’s reviewer don’t run on it.",
       "theHost": "the provider",
       "interface": "Interface",
       "wireClaude": "Anthropic Messages API",
@@ -439,7 +440,21 @@
         "secretValue": "Enter the key.",
         "models": "Enter at least one model the provider serves."
       },
-      "personOnly": "Only a person saves a connection on an API provider here: input from an MCP client is taken only while you let automation change agent permissions."
+      "personOnly": "Only a person saves a connection on an API provider here: input from an MCP client is taken only while you let automation change agent permissions.",
+      "model": "Model id",
+      "addModel": "Add model",
+      "removeModel": "Remove model",
+      "found": "Found",
+      "checkFound": "{{program}} {{version}} · runs on the API provider; its own sign-in is not used",
+      "nextStep": "After saving, select this connection in an agent profile and choose one of its models.",
+      "archived": "{{secret}} · archived",
+      "keyArchived": "Key secret missing: {{secret}} was archived. Choose a secret, or New secret….",
+      "planLimits": "Not read on an API provider",
+      "detailConnected": "The CLI answers. Orchester starts it on the API provider with the key from {{secret}}; the CLI’s own sign-in is not used.",
+      "detailKeyMissing": "The key’s secret is archived or gone, so runs on this connection don’t start. Choose another secret in Edit connection, or restore it in Secrets.",
+      "offProvider": "Saving takes {{name}} off the API provider",
+      "offProviderDetail": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in. {{secret}} stays in Secrets.",
+      "offProviderDetailNoSecret": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in."
     }
   }
 }
