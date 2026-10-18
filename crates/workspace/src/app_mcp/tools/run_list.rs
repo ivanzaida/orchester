@@ -20,7 +20,10 @@ use crate::{
     services::{Services, blocking},
   },
   links::{Link, TaskPage},
-  tasks::history::{RunRecord, runs_of},
+  tasks::{
+    delivery::settle_records,
+    history::{RunRecord, runs_of},
+  },
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -54,7 +57,7 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
   }
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |_, db| {
+    across(&services, args.project.as_deref(), |open, db| {
       let tasks = match &args.task {
         Some(named) => vec![find_task(db, named)?],
         None => db.tasks()?,
@@ -62,7 +65,9 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
       tasks
         .into_iter()
         .map(|task| {
-          let runs = runs_of(db, &task)?;
+          let mut runs = runs_of(db, &task)?;
+          // Git tells the runs merged outside Orchester, as the task's Summary reads them.
+          settle_records(&services.programs, &open.repo_root, &mut runs);
           Ok((task, runs))
         })
         .collect::<Result<Vec<_>, ToolError>>()

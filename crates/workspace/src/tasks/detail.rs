@@ -282,14 +282,17 @@ impl TaskDetail {
     }
   }
 
-  /// [`Self::load_in`] with what git, through `programs`, tells of a latest run that passed every step and that
-  /// Orchester did not merge ([`super::delivery`]), as the task list's rows read it.
+  /// [`Self::load_in`] with what git, through `programs`, tells of the runs that passed every step and that
+  /// Orchester did not merge ([`super::delivery`]): the latest as the task list's rows read it, and each of
+  /// [`Self::history`].
   pub fn load_settled(repo_root: &Path, task: TaskId, programs: &Programs) -> Result<Self, StoreError> {
     let mut detail = Self::load_in(repo_root, task)?;
+    let settled = delivery::settle_records(programs, repo_root, &mut detail.history);
     if detail.phase() == TaskPhase::Succeeded
       && let Some(run) = &detail.run
+      && let Some((_, latest)) = settled.into_iter().find(|(id, _)| *id == run.run.id())
     {
-      detail.delivery = delivery::of_run(programs, repo_root, &run.run);
+      detail.delivery = latest;
     }
     Ok(detail)
   }

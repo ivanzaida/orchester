@@ -424,6 +424,7 @@
         "ready": "ready for review since {{time}}",
         "readyNow": "ready for review",
         "merged": "merged {{time}}",
+        "mergedOutside": "merged into {{into}} without Orchester",
         "failed": "failed",
         "started": "started {{time}} · at {{step}}",
         "startedAt": "started {{time}}",

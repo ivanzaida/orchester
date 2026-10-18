@@ -12,7 +12,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::TaskId,
+  id::{RunId, TaskId},
   integration::{Branches, Delivered, GitError, RunWork},
   run::{BranchName, Run, TaskPhase},
 };
@@ -21,8 +21,10 @@ use parking_lot::Mutex;
 
 use super::{
   changes::GIT,
+  history::RunRecord,
   list::{Latest, Phases},
 };
+use crate::messages::Message;
 
 /// What became of a succeeded run's work that Orchester did not merge.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -39,6 +41,31 @@ pub enum Delivery {
 /// What became of `run`'s work, a succeeded run that Orchester did not merge, in the checkout at `repo_root`.
 pub fn of_run(programs: &Programs, repo_root: &Path, run: &Run) -> Delivery {
   deliveries(programs, repo_root, &[RunWork::of(run)]).remove(0)
+}
+
+/// Settles each of `records`, runs as *Runs of this task* lists them, that passed every step and that Orchester did
+/// not merge, as git in the checkout at `repo_root` tells them, the way the Summary reads the latest: one whose work
+/// its base branch holds reads as merged into it. Gives what became of each of them, by run.
+pub fn settle_records(programs: &Programs, repo_root: &Path, records: &mut [RunRecord]) -> Vec<(RunId, Delivery)> {
+  let unmerged: Vec<(usize, RunWork)> = records
+    .iter()
+    .enumerate()
+    .filter(|(_, record)| record.phase == Some(TaskPhase::Succeeded))
+    .filter_map(|(at, record)| Some((at, RunWork::of(record.run.as_deref()?))))
+    .collect();
+  let (places, works): (Vec<usize>, Vec<RunWork>) = unmerged.into_iter().unzip();
+  places
+    .into_iter()
+    .zip(deliveries(programs, repo_root, &works))
+    .map(|(at, delivery)| {
+      let record = &mut records[at];
+      if let Delivery::MergedOutside(into) = &delivery {
+        record.phase = Some(TaskPhase::Merged);
+        record.detail = Message::new("runs.history.mergedOutside").with("branch", into.to_string());
+      }
+      (record.id, delivery)
+    })
+    .collect()
 }
 
 /// The latest runs a reading of the tasks found succeeded and not merged in Orchester, by task.

@@ -59,7 +59,7 @@ fn build_programs() -> (PathBuf, PathBuf) {
   (runner_beside(&profile.join("orchester-app")), fake)
 }
 
-fn git(repo: &Path, args: &[&str]) -> String {
+pub(super) fn git(repo: &Path, args: &[&str]) -> String {
   let output = Command::new("git")
     .arg("-C")
     .arg(repo)
