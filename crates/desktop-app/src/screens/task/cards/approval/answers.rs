@@ -8,8 +8,10 @@
 //!
 //! A wider answer lets the run's agents do more, so it is a person's (`docs/stable-build.md`): its tile asks in
 //! place under the tiles, as a Connections page asks what a save widens (`In-place confirmation` `RWODj`), and
-//! only that question's confirm sends it. While the question shows, window input from MCP clients is refused
-//! unless the person let automation answer approvals.
+//! only that question's confirm sends it. That confirm refuses an MCP client's press unless the person let
+//! automation answer approvals, and the card refuses a wider answer from one even then; the rest of the window,
+//! *Keep asking* included, takes a client's input, so a client can take the question back. The tile being confirmed
+//! stays marked (`$hover` fill, `$border_focus` stroke) while the question shows.
 
 use std::sync::Arc;
 
@@ -294,8 +296,17 @@ fn tile(
   }
   let asking = answering.asking.clone();
   let asked = asking.get() == Some(given);
+  let frame = tile_frame(&id, glyph, (&ctx.t(title), &covers));
+  // The tile being confirmed stays marked once the pointer leaves it: the hover fill in a `border_focus` stroke.
+  let frame = if asked {
+    frame
+      .background(ExtraColor::Hover.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+  } else {
+    frame
+  };
   Focus::Keyboard
-    .apply(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
+    .apply(frame)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)
     .describe("state", if asked { "asking" } else { "enabled" })
@@ -325,6 +336,7 @@ fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers:
     WidenProps {
       id: format!("{}-widen", answering.id).into(),
       card: true,
+      affirming: given == Given::ApproveProject,
       automation: Guarded::ApprovalWidening,
       title: ctx.t_args(
         title,

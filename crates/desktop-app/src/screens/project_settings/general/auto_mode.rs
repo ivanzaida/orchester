@@ -261,6 +261,7 @@ impl AutoMode {
       WidenProps {
         id: "settings-auto-question".into(),
         card: false,
+        affirming: false,
         automation: crate::mcp::input_gate::Guarded::ApprovalWidening,
         title: ctx.t("project_settings.confirmAuto"),
         reasons: vec![ctx.t("project_settings.confirmAutoDetail")].into(),

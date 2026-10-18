@@ -5,7 +5,8 @@
 //! by the person, denied by the person, approved by automation and ended without an answer; a plan longer
 //! than its card shows waiting (v1), and a plan revised after changes were asked for (v2); Orchester's
 //! `start_qa_app` waiting for approval, which offers *Approve for every run of this project*, with a rule of the
-//! project kept for an earlier version of the QA script (Project settings › Auto mode lists it).
+//! project kept for an earlier version of the QA script (Project settings › Auto mode lists it), made by approving a
+//! `start_qa_app` of another task for every run of the project.
 //!
 //! Its runs are recorded, not executed: without a runner a run recorded at work reads interrupted, and so does
 //! what its agent asked in its turn; a runner that attaches ends it. So that the waiting command and
@@ -16,10 +17,7 @@
 use orchester_core::{
   orchester_tools::{self, OrchesterTool, QaApproval},
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
-  run::{
-    Answerer, ApprovalSubject, DecidedBy, Invocation, PendingToolApproval, ProjectScope, Run, ToolApprovalDecision,
-    ToolReach, WaitReason,
-  },
+  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, ProjectScope, Run, ToolApprovalDecision, WaitReason},
   store::{ActivityStore, RunStore},
   task::Task,
   time::Timestamp,
@@ -55,8 +53,9 @@ enum Card {
   Plan(&'static str),
   /// Orchester's own `read_external_file` asks to read in a folder beside the repository, held waiting.
   OutsideRead,
-  /// Orchester's own `start_qa_app` asks to start a QA copy, held waiting.
-  QaStart,
+  /// Orchester's own `start_qa_app` asks to start a QA copy: held waiting, or approved by the person for every run of
+  /// the project.
+  QaStart { decided: bool },
 }
 
 /// How a question with suggested answers ended.
@@ -78,7 +77,7 @@ enum Decision {
 const QA_SCRIPT: &str = "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345";
 const EARLIER_QA_SCRIPT: &str = "77aa0012bb34cc56dd78ee90ff12aa34bb56cc78";
 
-const CARDS: [(&str, Card, &str); 17] = [
+const CARDS: [(&str, Card, &str); 18] = [
   (
     "Sync contacts with HubSpot",
     Card::Shape(Shape::Question("implement")),
@@ -189,8 +188,13 @@ const CARDS: [(&str, Card, &str); 17] = [
   ),
   (
     "Check the board in a QA copy",
-    Card::QaStart,
+    Card::QaStart { decided: false },
     "Orchester's start_qa_app waiting for approval",
+  ),
+  (
+    "Check the settings page in a QA copy",
+    Card::QaStart { decided: true },
+    "Orchester's start_qa_app approved by you for every run of this project",
   ),
 ];
 
@@ -226,9 +230,9 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
           outside_read(kontur, (&run, &invocation), at)?;
           hold(kontur, run, (&invocation, true))?;
         }
-        Card::QaStart => {
-          qa_start(kontur, (&run, &invocation), at)?;
-          hold(kontur, run, (&invocation, true))?;
+        Card::QaStart { decided } => {
+          qa_start(kontur, (&run, &invocation), (decided, at))?;
+          hold(kontur, run, (&invocation, !decided))?;
         }
         Card::Shape(_) | Card::Plan(_) => {}
       }
@@ -366,11 +370,17 @@ fn outside_read(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at:
   Ok(())
 }
 
-/// Orchester's own `start_qa_app` asks, at `at`, to start a QA copy on the `tasks` scenario; the project keeps a rule
-/// for an earlier version of the QA script, which a person made in this run.
-fn qa_start(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at: Timestamp) -> Result<(), SeedError> {
+/// Orchester's own `start_qa_app` asks, at `at`, to start a QA copy on the `tasks` scenario. Waiting, it names the
+/// QA script as it is now; `decided`, an earlier version of it, which the person approved for every run of the
+/// project a minute later: the rule of the project names that request, and answered three later calls.
+fn qa_start(
+  kontur: &mut Kontur,
+  (run, invocation): (&Run, &Invocation),
+  (decided, at): (bool, Timestamp),
+) -> Result<(), SeedError> {
+  let script = if decided { EARLIER_QA_SCRIPT } else { QA_SCRIPT };
   let target = QaApproval {
-    script: QA_SCRIPT.to_owned(),
+    script: script.to_owned(),
     scenario: "tasks".to_owned(),
     changed: Vec::new(),
   };
@@ -389,18 +399,20 @@ fn qa_start(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at: Tim
     native: None,
   };
   kontur.db.request_tool_approval(&request)?;
-  let earlier = ProjectScope::of(&ApprovalSubject::McpTool {
-    server: orchester_tools::SERVER.to_owned(),
-    tool: OrchesterTool::StartQaApp.as_str().to_owned(),
-    reach: ToolReach::Script {
-      blob: EARLIER_QA_SCRIPT.to_owned(),
-    },
-  })
-  .ok_or_else(|| invalid("a start_qa_app rule"))?;
-  let made = Timestamp::from_unix_millis(at.unix_millis() - 60_000);
+  if !decided {
+    return Ok(());
+  }
+  let answered = Timestamp::from_unix_millis(at.unix_millis() + 60_000);
+  kontur
+    .db
+    .claim_tool_approval(run.id(), &request.id, DecidedBy::PersonSimilar, answered)?;
+  kontur
+    .db
+    .delivered_tool_approval(run.id(), &request.id, ToolApprovalDecision::Approved)?;
+  let scope = ProjectScope::of_request(&request).ok_or_else(|| invalid("a start_qa_app rule"))?;
   let rule = kontur
     .db
-    .add_project_approval_rule(&earlier, (run.id(), &format!("{}:qa_0", invocation.id)), made)?;
+    .add_project_approval_rule(&scope, (run.id(), &request.id), answered)?;
   for _ in 0..3 {
     kontur.db.project_rule_answered(rule.id)?;
   }

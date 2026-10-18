@@ -82,6 +82,7 @@ pub fn confirm(ctx: &mut Ctx, pending: &Signal<Pending>, busy: &Signal<bool>, wo
   let question = WidenProps {
     id: "agent-confirm".into(),
     card: false,
+    affirming: false,
     automation: if stale {
       crate::mcp::input_gate::Guarded::WideningQuestion
     } else if request

@@ -278,6 +278,7 @@ impl ToolEditor {
       WidenProps {
         id: "tool-confirm".into(),
         card: true,
+        affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("tools.confirmTitle"),
         reasons: words.into(),
