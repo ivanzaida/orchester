@@ -279,6 +279,6 @@ fn ready_to_merge_runs_of_many_tasks_are_settled_in_one_reading_of_the_branches(
   assert_eq!(
     counted.runs.load(Ordering::Relaxed),
     3,
-    "one listing of the branches and one of what main holds, however many tasks, and one ancestry check of the      merged run's branch"
+    "one branch listing and one of what main holds for all tasks, and one ancestry check of the merged run"
   );
 }

@@ -40,7 +40,7 @@ impl LocalOperation {
 
   /// Whether a merge made without Orchester can be recorded as this record's own: only at a step that left nothing
   /// under way — a review, a prepared or checked checkout, or a cancellation, also one paused or stopped for
-  /// reconciliation since — with no resolution, unsaved editor decisions, task commit or abort in flight, and any
+  /// reconciliation since — with no resolution, unsaved editor decisions or task abort in flight, and any
   /// preservation verified, so the originals can be put back afterwards. Mid-step records reconcile first.
   pub fn can_record_merged_outside(&self) -> bool {
     let step = match self.phase {
@@ -53,8 +53,6 @@ impl LocalOperation {
     ) && self.merged.is_none()
       && self.pending_resolution.is_none()
       && self.editor_drafts.is_empty()
-      && self.sync_result.is_none()
-      && self.task_commit_action.is_none()
       && self.task_abort_result.is_none()
       && self.preservation.as_ref().is_none_or(|saved| saved.verified)
   }

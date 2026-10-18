@@ -37,7 +37,7 @@ equal tree still wait for the person. Its local integration record then settles 
   another local integration works or a Git process of this one has not finished; a later reading settles it.
 - A record that holds the person's work keeps its card beside *Merged*. Where it stopped between steps (a review, a
   prepared or checked checkout, or a cancellation, also one paused or stopped for reconciliation since), with no
-  resolution, unsaved editor decisions, task commit or abort in flight and any preserved originals verified, *Record
+  resolution, unsaved editor decisions or task abort in flight and any preserved originals verified, *Record
   this merge and finish* records the merge Git proves as the record's own, as a merge Orchester recorded would be:
   preserved originals are put back next (*Restore*) and removed as usual, and a record with nothing else to finish
   completes. The merge stays one made without Orchester: reconciling it later never writes an Orchester merge record.

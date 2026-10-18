@@ -5,7 +5,8 @@ use orchester_core::{
   blob::ContentHash,
   id::RunId,
   integration::local::{
-    Checkout, ContainedResult, LocalError, LocalFile, LocalOperation, LocalPath, LocalPhase, ResultEvidenceKind,
+    CheckedResult, Checkout, ContainedResult, LocalError, LocalFile, LocalOperation, LocalPath, LocalPhase,
+    ResultEvidenceKind,
   },
   revision::Revision,
 };
@@ -126,4 +127,41 @@ fn local_merged_outside_is_recorded_where_the_record_stopped_between_steps() {
     LocalPhase::MergedAwaitingRestore,
     "the originals are put back next"
   );
+}
+
+#[test]
+fn local_merged_outside_after_a_real_sync_and_check_restores_and_completes() {
+  let dirty = checkout('a', vec![edited()]);
+  let base = checkout('a', Vec::new());
+  let mut operation = LocalOperation::new(RunId::generate(), dirty.clone()).expect("review");
+  operation
+    .begin_preserve(&dirty, "Before the merge")
+    .expect("preserving");
+  operation.preservation_verified().expect("verified");
+  operation.preservation_finished(base.clone()).expect("prepared");
+  operation.begin_sync(&base).expect("syncing");
+  operation
+    .plan_sync_result(checkout('f', Vec::new()))
+    .expect("sync planned");
+  operation.own_task(checkout('f', Vec::new()));
+  operation.begin_check().expect("checking");
+  operation
+    .checked_result(CheckedResult {
+      base: base.clone(),
+      result: checkout('f', Vec::new()),
+    })
+    .expect("checked");
+  assert_eq!(operation.phase(), LocalPhase::AwaitingApproval);
+  assert!(operation.sync_result().is_some(), "the sync left its result recorded");
+  let mut paused = operation.clone();
+  paused.paused();
+  assert!(paused.can_record_merged_outside(), "paused after the check");
+  let mut operation = recorded(operation, "awaiting approval after a sync");
+  assert_eq!(operation.phase(), LocalPhase::MergedAwaitingRestore);
+  operation.begin_restore().expect("restoring");
+  operation.restoration_verified().expect("restored");
+  operation.begin_cleanup().expect("cleanup");
+  operation.cleanup_finished().expect("removed");
+  assert_eq!(operation.phase(), LocalPhase::Complete);
+  assert!(!operation.reserves_checkout());
 }

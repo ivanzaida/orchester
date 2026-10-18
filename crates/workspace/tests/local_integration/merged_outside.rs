@@ -172,3 +172,50 @@ the person's commit
   assert_eq!(session.operation().phase(), LocalPhase::Canceled);
   assert!(!session.operation().reserves_checkout());
 }
+
+#[test]
+fn local_integration_merged_outside_after_sync_and_check_records_restores_and_completes() {
+  let fixture = Fixture::new(false);
+  fs::write(
+    fixture.root().join("local.txt"),
+    "base
+the person's edit
+",
+  )
+  .expect("edit");
+  let mut session = fixture.open();
+  session.preserve("Before the merge").expect("preserve");
+  session.sync().expect("sync and a fresh Check");
+  assert_eq!(session.operation().phase(), LocalPhase::AwaitingApproval);
+  drop(session);
+  // Merged on GitHub and pulled: main takes the checked task branch as it is.
+  let task = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  git(fixture.root(), &["merge", "--ff-only", &task]);
+  let head = git(fixture.root(), &["rev-parse", "HEAD"]);
+  let mut session = fixture.open();
+  assert!(session.operation().can_record_merged_outside());
+  session.record_merged_outside().expect("record the merge found in git");
+  assert_eq!(session.operation().phase(), LocalPhase::MergedAwaitingRestore);
+  session.restore().expect("put the originals back");
+  assert_eq!(
+    fs::read_to_string(fixture.root().join("local.txt")).expect("the person's file"),
+    "base
+the person's edit
+"
+  );
+  session.remove_preservation().expect("remove the kept originals");
+  assert_eq!(session.operation().phase(), LocalPhase::Complete);
+  assert!(!session.operation().reserves_checkout());
+  assert_eq!(
+    git(fixture.root(), &["rev-parse", "HEAD"]),
+    head,
+    "nothing was merged again"
+  );
+  assert!(
+    ProjectDb::open(fixture.root())
+      .expect("db")
+      .run_merge(fixture.run)
+      .expect("merge record")
+      .is_none()
+  );
+}

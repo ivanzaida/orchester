@@ -78,7 +78,9 @@ pub(super) fn column(
 /// restoring them comes next (`Restore step · next` in `pdT4W`).
 fn restore_next(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
   let operation = view.operation.as_ref()?;
-  let retained = operation.preservation().is_some_and(|saved| saved.retained);
+  // A cancellation put its originals back already: removing the kept ones follows, not a restoration.
+  let retained =
+    operation.phase() != LocalPhase::Canceled && operation.preservation().is_some_and(|saved| saved.retained);
   (view.external.as_ref().is_some_and(words::merged_outside) && operation.can_record_merged_outside() && retained).then(
     || {
       notes::panel(
