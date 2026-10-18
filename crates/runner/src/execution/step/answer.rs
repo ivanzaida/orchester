@@ -2,7 +2,8 @@
 //! requests"): Orchester answers it itself when its server lists the tool to run without asking since
 //! the agent started (Always allow), the step's own permissions run every part of the command on its
 //! own (`orchester_core::run::permitted`), a rule of the run covers it (Approve similar, or a command Always
-//! allowed during the run), or the run auto-approves and the request is not one auto-approval leaves to
+//! allowed during the run), a rule of the project does (Approve for every run of this project, `start_qa_app` only),
+//! or the run auto-approves and the request is not one auto-approval leaves to
 //! a person. Otherwise a person answers, and a wider answer first leaves what it promises: a rule, a
 //! profile version or a server setting, or the run's auto-approval. Each answer is recorded with who
 //! gave it, delivered to the one call that asked, and marked in the activity; Deny tells the agent what
@@ -16,8 +17,9 @@ use orchester_core::{
   resource::ApprovalMode,
   run::{
     Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
-    PendingToolApproval, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, allowing_tool, answering,
-    auto_approves, auto_verdict, codex_denial, denial_message, permitted, review::Review,
+    PendingToolApproval, ProjectRuleId, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, allowing_tool,
+    answering, answering_in_project, auto_approves, auto_verdict, codex_denial, denial_message, permitted,
+    review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -31,11 +33,18 @@ use super::{
   worker::{Watch, Worker},
 };
 
+/// The rule that gives an answer: one of the run's, or one of the project's.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Answering {
+  Run(ApprovalRuleId),
+  Project(ProjectRuleId),
+}
+
 /// An answer about to be given: who gives it, the rule that does, a command's category for its mark,
 /// and what a denial tells the agent.
 pub(super) struct Settled {
   pub(super) decided_by: DecidedBy,
-  pub(super) rule: Option<ApprovalRuleId>,
+  pub(super) rule: Option<Answering>,
   pub(super) category: Option<CommandCategory>,
   /// A command that reads a credential location, which its mark names; only a person answers one.
   pub(super) secrets: bool,
@@ -82,8 +91,14 @@ impl Worker {
         DecidedBy::AlwaysAllowed
       };
       return Ok(Some(Settled {
-        rule: Some(rule.id),
+        rule: Some(Answering::Run(rule.id)),
         ..Settled::by(decided_by, category)
+      }));
+    }
+    if let Some(rule) = answering_in_project(&watch.db.project_approval_rules()?, &subject) {
+      return Ok(Some(Settled {
+        rule: Some(Answering::Project(rule.id)),
+        ..Settled::by(DecidedBy::SimilarRule, category)
       }));
     }
     let profile = watch
@@ -169,6 +184,12 @@ impl Worker {
         };
         watch.db.add_approval_rule(approval.run, &scope, now)?;
       }
+      ApprovalAnswer::SimilarProject => {
+        let Some(scope) = RuleScope::project(&subject) else {
+          return Ok(Err(unavailable("Approve for every run of this project")));
+        };
+        watch.db.add_project_approval_rule(&scope, approval.run, now)?;
+      }
       ApprovalAnswer::Always { prefix } => {
         if let Err(rejection) = self.always_allow(watch, approval, &subject, prefix.as_ref())? {
           return Ok(Err(rejection));
@@ -249,8 +270,10 @@ impl Worker {
     {
       return Ok(Err(refusal(&watch.db, run, &approval.id)?));
     }
-    if let Some(rule) = settled.rule {
-      watch.db.rule_answered(run, rule, &approval.id)?;
+    match settled.rule {
+      Some(Answering::Run(rule)) => watch.db.rule_answered(run, rule, &approval.id)?,
+      Some(Answering::Project(rule)) => watch.db.project_rule_answered(rule)?,
+      None => {}
     }
     if settled.decided_by.answered_waiting() {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });

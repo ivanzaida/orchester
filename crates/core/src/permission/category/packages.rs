@@ -6,6 +6,7 @@
 //! is Unknown.
 
 use super::{
+  build_output::BuildWords,
   install::InstallSource,
   programs::{Judged, Kind, has_option},
 };
@@ -179,7 +180,10 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
       .prefix_stays()
       .installed_from(InstallSource::of(manager.registry.unwrap_or(program), rest))
   } else if manager.builds.contains(&sub) {
-    let judged = Judged::of(Kind::Worktree).inside_all(rest);
+    let mut judged = Judged::of(Kind::Worktree).inside_all(rest);
+    if program == "cargo" {
+      judged.build_words = BuildWords::of(sub, rest);
+    }
     if sub == "clean" { judged } else { judged.prefix_stays() }
   } else if manager.reads.contains(&sub) {
     Judged::of(Kind::ReadOnly).inside_all(rest)

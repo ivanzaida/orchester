@@ -181,6 +181,13 @@ impl ApprovalChoices {
   }
 }
 
+/// The QA script's git blob *Approve for every run of this project* keeps a rule of `approval` to
+/// (`RuleScope::project`); `None` for a request it is not offered, any but Orchester's `start_qa_app` naming its
+/// script.
+pub fn project_script(approval: &PendingToolApproval) -> Option<Arc<str>> {
+  RuleScope::project_of(approval)?.script().map(Arc::from)
+}
+
 /// The checks the step of `approval` is offered, for a `run_check` call; none for any other. A run or a list that
 /// cannot be read leaves the check unknown, so Approve similar is unavailable for it, the safe side.
 fn run_checks(db: &ProjectDb, approval: &PendingToolApproval) -> Vec<orchester_tools::ProjectTool> {

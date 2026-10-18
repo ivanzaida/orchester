@@ -448,10 +448,17 @@ before `push`, `HEAD` only while the run's branch is checked out, `origin` still
 the run started, nothing else in the line changing git's configuration, remotes or folder); every Codex
 escalation; anything outside the step's
 permissions (a write in a read-only step, the network or an install while it is off, a write outside the
-worktree and its writable folders); Orchester's `run_project_tool`; and a request longer than a review
+worktree and its writable folders); Orchester's `run_check` and `start_qa_app`; and a request longer than a review
 reads whole (8,000 characters; it is never cut) all ask the person. A part Orchester cannot read to the
 end (an unknown program, a script) goes to the reviewer, which is told so, except in a step whose
 network is off or that only reads.
+In a read-only step a Cargo build, check, test, clippy, doc or bench that writes only its build output (a
+target directory in a writable folder outside the worktree, or one in the worktree that git ignores and
+tracks nothing in) is no write and goes to the reviewer (2026-10-18); `cargo fmt`, `fix`, `add`, `install`,
+`publish`, `--manifest-path` and a target directory elsewhere still ask. *Approve for every run of this
+project* on a `start_qa_app` card keeps a rule of the project, by the QA script's git blob, which answers the
+tool in every run until the script changes or the rule is revoked in Project settings › Auto mode; only a
+person makes it.
 A reviewer that fails, takes longer than 60 seconds or
 answers with something unreadable asks the person too. The reviewer is any agent connection of the
 project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model

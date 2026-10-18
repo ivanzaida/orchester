@@ -136,6 +136,10 @@ fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
       } else {
         ToolApprovalDecision::Approved
       };
+      // The record names a rule of the project as any rule a person made; the card says which it was.
+      if (*given, *by) == (Given::ApproveProject, Answerer::Person) {
+        return Some(Decided::Project { at: *at });
+      }
       // Automation gives only Approve once and Deny ([`Decisions::answer`]).
       let by = match by {
         Answerer::Person => approval_answer(*given).decided_by(),

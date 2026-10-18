@@ -80,7 +80,9 @@ pub fn review_prompt(input: &ReviewInput) -> String {
 fn step_facts(input: &ReviewInput) -> String {
   let step = input.step();
   let repository = match step.repository {
-    RepositoryAccess::ReadOnly => "reads the repository only; may write nothing",
+    RepositoryAccess::ReadOnly => {
+      "reads the repository only; may write nothing but the build output of a Cargo build or test"
+    }
     RepositoryAccess::Write => "may write in its worktree",
   };
   let network = match step.network {

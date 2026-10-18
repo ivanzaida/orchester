@@ -59,6 +59,55 @@ fn approval_rules_are_kept_revoked_and_counted() {
   assert_ne!(renewed.id, rule.id);
 }
 
+/// The rule *Approve for every run of this project* keeps for `start_qa_app` at the QA script's `blob`.
+fn qa_rule(blob: &str) -> RuleScope {
+  RuleScope::SimilarMcpTool {
+    server: "Orchester".to_owned(),
+    tool: "start_qa_app".to_owned(),
+    folder: None,
+    check: Some(blob.to_owned()),
+  }
+}
+
+#[test]
+fn approval_rules_of_the_project_outlive_their_run_and_are_revoked() {
+  let (repo, mut db, run, _) = started_run();
+  assert!(db.project_approval_rules().expect("none yet").is_empty());
+  let rule = db
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(10))
+    .expect("rule");
+  let again = db
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(11))
+    .expect("same rule");
+  assert_eq!(again.id, rule.id);
+  let other = db
+    .add_project_approval_rule(&qa_rule("77aa00"), run.id(), at(12))
+    .expect("another script");
+  assert_ne!(other.id, rule.id);
+  db.project_rule_answered(rule.id).expect("answered");
+  drop(db);
+  let mut db = ProjectDb::open(repo.path()).expect("reopen");
+  let rules = db.project_approval_rules().expect("rules");
+  assert_eq!(rules.len(), 2);
+  assert_eq!(
+    (rules[0].made_in, rules[0].answered, rules[0].script()),
+    (run.id(), 1, Some("3f2a1b9c"))
+  );
+  assert!(db.revoke_project_approval_rule(rule.id, at(13)).expect("revoked"));
+  assert!(!db.revoke_project_approval_rule(rule.id, at(14)).expect("once"));
+  let rules = db.project_approval_rules().expect("rules");
+  assert_eq!(rules[0].revoked_at, Some(at(13)));
+  assert!(!rules[0].is_active() && rules[1].is_active());
+  // Rules are revoked, never deleted, and keep the scope they were made with.
+  let connection = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("raw");
+  assert!(connection.execute("DELETE FROM project_approval_rules", []).is_err());
+  assert!(
+    connection
+      .execute("UPDATE project_approval_rules SET scope = '{}'", [])
+      .is_err()
+  );
+}
+
 #[test]
 fn approval_rules_run_auto_approval_choice() {
   let (_repo, mut db, run, _) = started_run();

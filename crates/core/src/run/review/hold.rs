@@ -5,13 +5,22 @@
 //! network while it is off, or writes outside the worktree and the step's writable folders sends the
 //! whole line to the person.
 //!
+//! In a read-only step a Cargo build, check, test, clippy, doc or bench whose only write is its build output (the
+//! person's decision of 2026-10-18) is no write: its target directory ([`CommandPart::build_output`]) lies in a
+//! writable folder outside the worktree, or in the worktree where its repository ignores it and tracks nothing in it
+//! ([`HoldRules::build_output`]). Such a build goes to the reviewer; every other hard rule still applies to it, and
+//! `cargo fmt`, `fix`, `add`, `install` or `publish`, a build pointed at a manifest or target directory elsewhere, and
+//! a target directory the repository does not ignore still hold.
+//!
 //! A part Orchester cannot read to the end (an unknown program or form, a script whose content it does
 //! not read) goes to the reviewer, which is told so ([`unread_parts`]), except in a step whose network is
 //! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides.
 //! Where its output goes is checked all the same. A Codex escalation (a command outside its sandbox)
-//! always goes to the person. Orchester's
-//! `run_check` (a project program outside every sandbox) and a request too long to be reviewed
-//! whole go to the person too.
+//! always goes to the person. Orchester's `run_check` and `start_qa_app` (a project program outside every
+//! sandbox) and a request too long to be reviewed whole go to the person too; a project rule a person made
+//! for `start_qa_app` answers before auto mode looks ([`crate::run::ProjectRule`]).
+
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -54,12 +63,17 @@ pub enum ReviewHold {
 }
 
 /// What the hard rules know besides the request: the step's recorded permissions, where a push of the
-/// run would go, and whether the request is a Codex escalation.
+/// run would go, whether the request is a Codex escalation, and which build output folders the worktree's
+/// repository ignores.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HoldRules<'a> {
   pub permissions: Option<&'a AgentPermissions>,
   pub push: PushFacts<'a>,
   pub escalation: bool,
+  /// The target directories of the request's Cargo builds in the worktree
+  /// ([`crate::permission::category::BuildOutput::folder`]) that its repository ignores and tracks no file in, as
+  /// git told; none known holds every build in the worktree in a read-only step.
+  pub build_output: &'a [PathBuf],
 }
 
 /// The hard rule that sends `subject` to the person without a review, under `rules`; `None` when the
@@ -95,14 +109,21 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   {
     return Some(ReviewHold::Destructive);
   }
-  outside_permissions(parts, permissions)
+  outside_permissions(parts, permissions, rules.build_output)
 }
 
-/// The hard rule a part outside the step's permissions breaks: a write in a read-only step, the network
-/// or an install while it is off, a write outside the folders.
-fn outside_permissions(parts: &[CommandPart], permissions: &AgentPermissions) -> Option<ReviewHold> {
+/// The hard rule a part outside the step's permissions breaks: a write in a read-only step but a build's
+/// output in `ignored` ([`writes_build_output`]), the network or an install while it is off, a write outside the
+/// folders.
+fn outside_permissions(
+  parts: &[CommandPart],
+  permissions: &AgentPermissions,
+  ignored: &[PathBuf],
+) -> Option<ReviewHold> {
   if permissions.repository() == RepositoryAccess::ReadOnly
-    && parts.iter().any(|part| part.category() != CommandCategory::ReadOnly)
+    && parts
+      .iter()
+      .any(|part| part.category() != CommandCategory::ReadOnly && !writes_build_output(part, ignored))
   {
     return Some(ReviewHold::ReadOnlyStep);
   }
@@ -117,6 +138,14 @@ fn outside_permissions(parts: &[CommandPart], permissions: &AgentPermissions) ->
     .iter()
     .any(|part| part.category() == CommandCategory::OutsideWrite || part.writes_outside())
     .then_some(ReviewHold::OutsideFolders)
+}
+
+/// Whether `part` writes only a Cargo build's output: into a writable folder outside the worktree, or into a folder
+/// of the worktree that git told is `ignored`.
+fn writes_build_output(part: &CommandPart, ignored: &[PathBuf]) -> bool {
+  part
+    .build_output()
+    .is_some_and(|output| output.in_worktree().is_none() || ignored.iter().any(|folder| folder == output.folder()))
 }
 
 /// Whether Orchester could not read `part` to the end: an unknown program or form, or a script.

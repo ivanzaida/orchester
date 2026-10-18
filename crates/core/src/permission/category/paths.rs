@@ -39,6 +39,8 @@ pub struct CommandScope {
   temp: Option<PathBuf>,
   /// The Cargo and rustup homes, whose dependency sources are read like the worktree.
   toolchains: Toolchains,
+  /// Cargo's target directory as the shell's `CARGO_TARGET_DIR` (or `CARGO_BUILD_TARGET_DIR`) names it, as written.
+  cargo_target: Option<PathBuf>,
 }
 
 impl CommandScope {
@@ -54,6 +56,7 @@ impl CommandScope {
       profile: home.map(Path::to_path_buf),
       temp: temp.map(resolved),
       toolchains: Toolchains::default(),
+      cargo_target: None,
     };
     scope.add_home(home);
     scope
@@ -92,14 +95,36 @@ impl CommandScope {
     self
   }
 
+  /// This scope for a shell whose environment names Cargo's target directory `folder` (`CARGO_TARGET_DIR`, else
+  /// `CARGO_BUILD_TARGET_DIR`), as written: a Cargo build writes there unless it names another
+  /// ([`super::build_output`]).
+  #[must_use]
+  pub fn with_cargo_target_dir(mut self, folder: &Path) -> Self {
+    self.cargo_target = Some(folder.to_path_buf());
+    self
+  }
+
   /// The scope of the host's user: their home folder and the system's temporary folder, for a shell
-  /// with the host's `HOME`, `USERPROFILE`, `CARGO_HOME` and `RUSTUP_HOME`, which the agent's CLI inherits.
+  /// with the host's `HOME`, `USERPROFILE`, `CARGO_HOME`, `RUSTUP_HOME` and Cargo's target directory, which
+  /// the agent's CLI inherits.
   pub fn on_host(worktree: &Path, writable: &[PathBuf]) -> Self {
     let variable = |name: &str| std::env::var_os(name).map(PathBuf::from);
     let home = variable(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
-    Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
+    let mut scope = Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
       .with_shell_homes(variable("HOME").as_deref(), variable("USERPROFILE").as_deref())
-      .with_toolchain_homes(variable("CARGO_HOME").as_deref(), variable("RUSTUP_HOME").as_deref())
+      .with_toolchain_homes(variable("CARGO_HOME").as_deref(), variable("RUSTUP_HOME").as_deref());
+    scope.cargo_target = variable("CARGO_TARGET_DIR").or_else(|| variable("CARGO_BUILD_TARGET_DIR"));
+    scope
+  }
+
+  /// Cargo's target directory as the shell's environment names it, as written.
+  pub(super) fn cargo_target(&self) -> Option<&Path> {
+    self.cargo_target.as_deref()
+  }
+
+  /// The Cargo homes, resolved, whose `config.toml` Cargo reads.
+  pub(super) fn cargo_homes(&self) -> &[PathBuf] {
+    self.toolchains.cargo_homes()
   }
 
   /// The value of the shell's `HOME` or `USERPROFILE` (`name`); `None` for another name or when unset.

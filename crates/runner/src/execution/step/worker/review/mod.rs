@@ -33,7 +33,7 @@ pub(in crate::execution::step) use self::setup::ReviewerKeys;
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
-  setup::{PushPlace, ReviewJob, hold_now},
+  setup::{PushPlace, ReviewJob, hold_now, ignored_build_output},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -99,7 +99,8 @@ impl Worker {
       origin: watch.db.run_origin(approval.run)?,
     };
     // A hard rule asks the person at once; anything else waits, without asking, for the reviewer.
-    if let Some(hold) = hold_now((&subject, permissions.as_ref(), escalation), &push, &input) {
+    let ignored = ignored_build_output(self.scope.worktree(), &subject, permissions.as_ref());
+    if let Some(hold) = hold_now((&subject, permissions.as_ref(), escalation), (&push, &ignored), &input) {
       watch
         .db
         .record_review(approval.run, &approval.id, &Review::Held { hold })?;
@@ -113,6 +114,7 @@ impl Worker {
       subject,
       permissions,
       push,
+      ignored,
       escalation,
       input,
       runtime: Handle::current(),

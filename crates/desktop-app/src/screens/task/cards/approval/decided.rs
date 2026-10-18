@@ -31,6 +31,8 @@ pub(super) enum Decided {
     by: Option<DecidedBy>,
     at: Option<Timestamp>,
   },
+  /// The person approved it for every run of the project, as the runner took it at `at`.
+  Project { at: Timestamp },
   /// Someone answered it before the person's answer reached the runner.
   AnsweredAlready,
   /// It waits while its run is interrupted: no agent waits for the answer now.
@@ -78,6 +80,16 @@ pub(super) fn row(ctx: &Ctx, id: &str, request: &PendingToolApproval, decided: &
 fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, PaletteColor, std::sync::Arc<str>) {
   let (decision, by, at) = match decided {
     Decided::Recorded { decision, by, at } => (decision, by, at),
+    Decided::Project { at } => {
+      return (
+        Icon::ShieldCheck,
+        PaletteColor::Success,
+        ctx.t_args(
+          "cards.approval.decided.project",
+          [("time", display::clock(*at).as_str())],
+        ),
+      );
+    }
     Decided::AnsweredAlready => {
       return (
         Icon::CircleCheck,

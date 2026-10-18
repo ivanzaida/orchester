@@ -36,10 +36,10 @@ use orchester_core::{
   id::StepExecutionId,
   memory::MemoryStore,
   permission::{LaunchPermissions, category::CommandScope},
-  resource::ModelId,
+  resource::{CommandEnvironment, ModelId},
   revision::Revision,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, ConversationStore, RunStore},
+  store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -375,7 +375,12 @@ impl RunTask {
     // A CLI's agent waits in its turn for an answer; a native agent's question ends its step instead.
     let asks_in_turn = !matches!(driver, worker::Driver::Native(_));
     let worker = Worker {
-      scope: command_scope(&self.root, workspace.path(), &permissions),
+      scope: command_scope(
+        &self.root,
+        workspace.path(),
+        &permissions,
+        &self.db.project_environment()?,
+      ),
       profile: self.profile_of(execution),
       checks: self.checks_of(execution),
       root: self.root.clone(),
@@ -559,8 +564,13 @@ impl RunTask {
 
 /// Where the commands of an agent working in `worktree` with `launch` permissions run and may write:
 /// the worktree and the extra writable folders it was given, as written (relative to the repository
-/// `root`), for the host's user.
-fn command_scope(root: &Path, worktree: &Path, launch: &LaunchPermissions) -> CommandScope {
+/// `root`), for the host's user, with Cargo's target directory the project's `environment` names.
+fn command_scope(
+  root: &Path,
+  worktree: &Path,
+  launch: &LaunchPermissions,
+  environment: &CommandEnvironment,
+) -> CommandScope {
   let writable: Vec<PathBuf> = launch
     .permissions()
     .granted_folders()
@@ -572,5 +582,12 @@ fn command_scope(root: &Path, worktree: &Path, launch: &LaunchPermissions) -> Co
         .collect()
     })
     .unwrap_or_default();
-  CommandScope::on_host(worktree, &writable)
+  let scope = CommandScope::on_host(worktree, &writable);
+  match ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"]
+    .into_iter()
+    .find_map(|name| environment.get(name))
+  {
+    Some(folder) => scope.with_cargo_target_dir(Path::new(folder)),
+    None => scope,
+  }
 }

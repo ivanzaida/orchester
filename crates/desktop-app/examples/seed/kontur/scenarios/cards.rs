@@ -3,7 +3,9 @@
 //! on; questions with suggested answers waiting (one answer, several answers), answered by the person,
 //! answered by automation and ended before an answer; a command waiting for approval; commands approved once
 //! by the person, denied by the person, approved by automation and ended without an answer; a plan longer
-//! than its card shows waiting (v1), and a plan revised after changes were asked for (v2).
+//! than its card shows waiting (v1), and a plan revised after changes were asked for (v2); Orchester's
+//! `start_qa_app` waiting for approval, which offers *Approve for every run of this project*, with a rule of the
+//! project kept for an earlier version of the QA script (Project settings › Auto mode lists it).
 //!
 //! Its runs are recorded, not executed: without a runner a run recorded at work reads interrupted, and so does
 //! what its agent asked in its turn; a runner that attaches ends it. So that the waiting command and
@@ -12,9 +14,9 @@
 //! work, so they read interrupted. Live runs (`live`) show them as the runner keeps them.
 
 use orchester_core::{
-  orchester_tools::{self, OrchesterTool},
+  orchester_tools::{self, OrchesterTool, QaApproval},
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
-  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, Run, ToolApprovalDecision, WaitReason},
+  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, RuleScope, Run, ToolApprovalDecision, WaitReason},
   store::{ActivityStore, RunStore},
   task::Task,
   time::Timestamp,
@@ -50,6 +52,8 @@ enum Card {
   Plan(&'static str),
   /// Orchester's own `read_external_file` asks to read in a folder beside the repository, held waiting.
   OutsideRead,
+  /// Orchester's own `start_qa_app` asks to start a QA copy, held waiting.
+  QaStart,
 }
 
 /// How a question with suggested answers ended.
@@ -67,7 +71,11 @@ enum Decision {
   Ended,
 }
 
-const CARDS: [(&str, Card, &str); 16] = [
+/// The QA script's git blob the waiting `start_qa_app` names, and the one a rule of the project was kept for.
+const QA_SCRIPT: &str = "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345";
+const EARLIER_QA_SCRIPT: &str = "77aa0012bb34cc56dd78ee90ff12aa34bb56cc78";
+
+const CARDS: [(&str, Card, &str); 17] = [
   (
     "Sync contacts with HubSpot",
     Card::Shape(Shape::Question("implement")),
@@ -176,6 +184,11 @@ const CARDS: [(&str, Card, &str); 16] = [
     Card::Shape(Shape::PlanRevised),
     "plan v2 waiting",
   ),
+  (
+    "Check the board in a QA copy",
+    Card::QaStart,
+    "Orchester's start_qa_app waiting for approval",
+  ),
 ];
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -208,6 +221,10 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
         }
         Card::OutsideRead => {
           outside_read(kontur, (&run, &invocation), at)?;
+          hold(kontur, run, (&invocation, true))?;
+        }
+        Card::QaStart => {
+          qa_start(kontur, (&run, &invocation), at)?;
           hold(kontur, run, (&invocation, true))?;
         }
         Card::Shape(_) | Card::Plan(_) => {}
@@ -343,6 +360,43 @@ fn outside_read(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at:
     native: None,
   };
   kontur.db.request_tool_approval(&request)?;
+  Ok(())
+}
+
+/// Orchester's own `start_qa_app` asks, at `at`, to start a QA copy on the `tasks` scenario; the project keeps a rule
+/// for an earlier version of the QA script, which a person made in this run.
+fn qa_start(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at: Timestamp) -> Result<(), SeedError> {
+  let target = QaApproval {
+    script: QA_SCRIPT.to_owned(),
+    scenario: "tasks".to_owned(),
+    changed: Vec::new(),
+  };
+  let request = PendingToolApproval {
+    id: format!("{}:qa_1", invocation.id),
+    run: run.id(),
+    execution: invocation.execution,
+    invocation: invocation.id,
+    agent: AGENT.to_owned(),
+    command: false,
+    scope: Some(r#"{"scenario":"tasks"}"#.to_owned()),
+    server: orchester_tools::SERVER.to_owned(),
+    action: OrchesterTool::StartQaApp.as_str().to_owned(),
+    target: Some(target.target()),
+    requested_at: at,
+    native: None,
+  };
+  kontur.db.request_tool_approval(&request)?;
+  let earlier = RuleScope::SimilarMcpTool {
+    server: orchester_tools::SERVER.to_owned(),
+    tool: OrchesterTool::StartQaApp.as_str().to_owned(),
+    folder: None,
+    check: Some(EARLIER_QA_SCRIPT.to_owned()),
+  };
+  let made = Timestamp::from_unix_millis(at.unix_millis() - 60_000);
+  let rule = kontur.db.add_project_approval_rule(&earlier, run.id(), made)?;
+  for _ in 0..3 {
+    kontur.db.project_rule_answered(rule.id)?;
+  }
   Ok(())
 }
 

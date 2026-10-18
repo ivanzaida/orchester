@@ -1,8 +1,9 @@
 //! Auto mode end to end with `orchester-fake-claude` as both the agent and the reviewer: a command the
 //! rules leave to a person is approved by the reviewer without the person, in an empty folder of its own
 //! with its system prompt, an unknown command too while the step's network is on, and a plain push of the
-//! run's branch to the origin recorded at its start; a credential read, a force push, and an unknown command
-//! in a step that only reads, and every Codex escalation still ask the person without a review; a question of the
+//! run's branch to the origin recorded at its start, and a Cargo test in a step that only reads whose output git
+//! ignores; a credential read, a force push, an unknown command or a test whose output git does not ignore in a
+//! step that only reads, and every Codex escalation still ask the person without a review; a question of the
 //! reviewer and an answer it cannot read leave the request to the person with what auto mode said; a review whose run
 //! turned auto mode off meanwhile is dropped; and a reviewer still at work when the person answers is stopped. A Codex
 //! connection reviews through `codex exec` in its read-only sandbox (`orchester-fake-codex` as the reviewer). Needs
@@ -317,6 +318,55 @@ async fn auto_mode_reviews_a_plain_push_of_the_runs_branch_and_holds_a_force_pus
   forced.deny(request).await;
   forced.ended().await;
   assert!(forced.logged("pid").is_empty(), "no reviewer ran");
+}
+
+/// A run whose read-only step asks about `cargo test`, in a Cargo workspace whose repository ignores `ignored`.
+async fn testing_in_a_read_only_step(ignored: &str) -> Started {
+  let project = project(&asking_in(
+    "Run `cargo test -p kontur --test smoke _`.",
+    RepositoryAccess::ReadOnly,
+  ));
+  let root = project.repo.path();
+  std::fs::write(
+    root.join("Cargo.toml"),
+    "[workspace]
+members = []
+",
+  )
+  .expect("manifest");
+  std::fs::write(
+    root.join(".gitignore"),
+    format!(
+      "{ignored}
+"
+    ),
+  )
+  .expect("ignore");
+  support::git(root, &["add", "Cargo.toml", ".gitignore"]);
+  support::git(root, &["commit", "--quiet", "-m", "A Cargo workspace"]);
+  Started::of(project, None).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn auto_mode_reviews_a_build_in_a_read_only_step_that_writes_only_ignored_output() {
+  let mut ignored = testing_in_a_read_only_step("/target").await;
+  ignored.ended().await;
+  let decisions = ignored.decisions();
+  assert_eq!(decisions.len(), 1, "{decisions:?}");
+  assert_eq!(decisions[0].0, DecidedBy::Reviewer);
+  assert_eq!(ignored.logged("pid").len(), 1, "the reviewer judged it");
+
+  let mut tracked = testing_in_a_read_only_step("/out").await;
+  let (request, review) = tracked.left_to_person().await;
+  assert_eq!(
+    review,
+    Review::Held {
+      hold: ReviewHold::ReadOnlyStep
+    }
+  );
+  tracked.deny(request).await;
+  tracked.ended().await;
+  assert!(tracked.logged("pid").is_empty(), "no reviewer ran");
 }
 
 /// A Codex Builder with any command in the worktree in a step with `repository` access, reviewed by its

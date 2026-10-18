@@ -1,6 +1,7 @@
-//! Auto mode's reviewer and the input-locked, in-place person-only question.
+//! Auto mode's reviewer and the input-locked, in-place person-only question, and the project's approval rules.
 mod controls;
 mod feedback;
+mod rules;
 
 use std::sync::Arc;
 

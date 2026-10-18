@@ -32,11 +32,12 @@ pub fn section(ctx: &mut Ctx, tab: &AutoMode, props: &Props, settings: &Settings
   } else {
     reviewer_row(ctx, tab, options, busy)
   };
+  let rules = super::rules::row(ctx, props, settings, save);
   form_section(
     "settings-auto",
     &ctx.t("project_settings.auto"),
     None,
-    vec![on_row, reviewer],
+    vec![on_row, reviewer, rules],
   )
   .into()
 }
@@ -107,7 +108,7 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
     "settings-auto-reviewer",
     ("project_settings.reviewer", "project_settings.reviewerDetail"),
     control.into(),
-    Place::Last,
+    Place::Within,
   )
 }
 fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
@@ -187,7 +188,7 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     "settings-auto-reviewer",
     ("project_settings.reviewer", "project_settings.reviewerDetail"),
     controls.into(),
-    Place::Last,
+    Place::Within,
   )
 }
 
