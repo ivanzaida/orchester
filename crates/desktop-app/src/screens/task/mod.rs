@@ -31,7 +31,6 @@ use lurq::{
 use orchester_core::{
   id::{RunId, TaskId},
   project::TaskKey,
-  task::requirements::RequirementsSource,
 };
 use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
@@ -39,7 +38,7 @@ pub use self::context::TaskContext;
 pub(crate) use self::conversation::{links, step_label};
 use self::{
   changes::{ChangesReads, FileCount, Follow},
-  details::{DetailsProps, TaskDetailsTab},
+  details::{DetailsProps, TaskDetailsTab, Version},
   header::{
     HeaderProps, TaskHeader,
     controls::{RunControls, control_action},
@@ -224,7 +223,7 @@ pub struct PageState {
   pub summary_scroll: ScrollState,
   /// The version of the task's requirements the Details show, once one was shown or chosen; kept as the
   /// tabs switch and the task is read again.
-  pub requirements: Signal<Option<RequirementsSource>>,
+  pub requirements: Signal<Option<Version>>,
   /// Where the Details are scrolled, kept as the tabs switch.
   pub details_scroll: ScrollState,
 }

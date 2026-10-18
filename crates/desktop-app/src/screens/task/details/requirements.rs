@@ -22,6 +22,7 @@ use orchester_core::task::{
   requirements::{CurrentStanding, Fallback, LatestRun, RequirementsSource, TaskRequirements},
 };
 
+use super::Version;
 use crate::{
   screens::task::TaskContext,
   theme::{ExtraTypography, TaskSpacing, TaskText},
@@ -39,7 +40,7 @@ const PICKER_WIDTH: f32 = 280.0;
 pub fn column(
   ctx: &mut Ctx,
   task: &TaskContext,
-  (shown, chosen): (RequirementsSource, &Signal<Option<RequirementsSource>>),
+  (shown, chosen): (RequirementsSource, &Signal<Option<Version>>),
   narrow: bool,
 ) -> Element {
   let requirements = &task.detail.requirements;
@@ -76,11 +77,11 @@ pub fn column(
 }
 
 /// The versions the task kept, the one shown chosen.
-fn picker(ctx: &Ctx, requirements: &TaskRequirements, chosen: &Signal<Option<RequirementsSource>>) -> Element {
+fn picker(ctx: &Ctx, requirements: &TaskRequirements, chosen: &Signal<Option<Version>>) -> Element {
   let options = requirements
     .sources()
     .into_iter()
-    .map(|source| SelectOption::new(Some(source), source_label(ctx, requirements, source)))
+    .map(|source| SelectOption::new(Some(Version(source)), source_label(ctx, requirements, source)))
     .collect();
   let label = ctx.t("details.source.label");
   let select = SelectField::new("task-details-source", label.clone(), chosen.clone(), options).render(ctx);

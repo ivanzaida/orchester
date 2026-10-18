@@ -19,12 +19,20 @@ use lurq::{
   components::{Column, Row, ScrollVertical},
   node::{Element, border::Border, dimension::Dimension},
 };
+use orchester_core::task::requirements::RequirementsSource;
 
 use super::{PageState, TaskContext};
 use crate::theme::TaskSpacing;
 
 /// The side column's width (`j9Jzun`).
 const SIDE_WIDTH: f32 = 340.0;
+
+/// A version of the requirements as the page and its picker hold it: lurq's DevTools marker, which signal
+/// values need, cannot be given to core's type here (orphan rule).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Version(pub RequirementsSource);
+
+impl lurq::app::component::DevtoolsInspectable for Version {}
 
 #[derive(Clone, PartialEq)]
 pub struct DetailsProps {
@@ -46,11 +54,11 @@ impl Component for TaskDetailsTab {
     let props = ctx.props::<DetailsProps>().clone();
     let state = PageState::of(ctx);
     let requirements = &props.task.detail.requirements;
-    let chosen = state.requirements.get();
+    let chosen = state.requirements.get().map(|Version(source)| source);
     let shown = requirements.shown(chosen);
     // Set only when it changes: what is shown is then what the picker holds.
     if chosen != Some(shown) {
-      state.requirements.set(Some(shown));
+      state.requirements.set(Some(Version(shown)));
     }
     let narrow = ctx.breakpoint() < Some(Breakpoint::Xl);
     let column = requirements::column(ctx, &props.task, (shown, &state.requirements), narrow);

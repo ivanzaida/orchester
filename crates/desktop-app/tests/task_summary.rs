@@ -226,7 +226,11 @@ fn summary_notice_says_where_each_task_stands() {
     assert_eq!(page.text("task-notice-title"), title, "{state}");
   }
   // Before the first run there is no run to say anything of (`Xxrdy`).
-  for state in ["draft, ready to queue", "draft, missing details", "queued, run not started"] {
+  for state in [
+    "draft, ready to queue",
+    "draft, missing details",
+    "queued, run not started",
+  ] {
     page.open(state);
     assert_eq!(page.text("task-summary-empty-title"), "No runs yet", "{state}");
     assert!(!page.has("task-notice"), "{state}");
