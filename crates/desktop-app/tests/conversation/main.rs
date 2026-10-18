@@ -5,6 +5,7 @@
 //! ([`states`]). The window's runner program does not exist, so a run recorded as running reads as
 //! interrupted: the working line and *Following live* need a live run (QA's `live` scenario). Needs `git`.
 
+mod agent_text;
 mod denied;
 mod jump;
 #[allow(
@@ -163,7 +164,18 @@ fn timeline_chips_summarize_tool_groups_and_mark_a_failed_command() {
   );
   // No agent works (the window has no runner): the last command has no end, and never reads as running.
   assert!(text.contains("cargo test -p webhooks jitter without an end"), "{text}");
-  assert!(!text.contains("running"), "{text}");
+  // Only what the Builder wrote may say it: its message with links reports "2 of 5 checks running".
+  let written: Vec<String> = ids(&mut window, "conversation-text-")
+    .iter()
+    .flat_map(|id| window.texts(id).unwrap_or_default())
+    .collect();
+  let running: Vec<String> = window
+    .texts("conversation")
+    .unwrap_or_default()
+    .into_iter()
+    .filter(|line| line.contains("running") && !written.contains(line))
+    .collect();
+  assert!(running.is_empty(), "{running:?} in {text}");
 }
 
 #[test]

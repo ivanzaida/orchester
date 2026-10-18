@@ -6,14 +6,8 @@ use lurq::{
   app::events::{MouseButton, with_synthetic_input},
   layout::quad::QuadContent,
 };
-use orchester_core::{
-  connection::stream::AgentEvent,
-  store::{ActivityStore, RunStore, TaskStore},
-  time::Timestamp,
-};
-use orchester_store::ProjectDb;
 
-use super::{Window, key_of, open, seeded};
+use super::{Window, agent_text::agent_says, key_of, open, seeded};
 
 /// Says one address, opens another.
 const LYING: &str = "The fix is in [github.com/acme/kontur](https://evil.example/login).";
@@ -51,30 +45,7 @@ pub fn press(window: &mut Window, words: &str) {
 fn conversation_link_shows_the_host_it_opens_and_synthetic_input_opens_nothing() {
   let (mut window, seeded) = seeded("conversation");
   let key = key_of(&seeded, "Add retry to webhook sender");
-  let mut db = ProjectDb::open(&seeded.repo).expect("the project's database");
-  let task = db
-    .tasks()
-    .expect("tasks")
-    .into_iter()
-    .find(|task| task.key() == &key)
-    .expect("the task");
-  let run = db
-    .runs_of_task(task.id())
-    .expect("runs")
-    .into_iter()
-    .filter_map(Result::ok)
-    .next_back()
-    .expect("a run");
-  let invocation = db
-    .invocations(run.id())
-    .expect("invocations")
-    .pop()
-    .expect("an invocation");
-  db.append_activity(
-    &invocation,
-    &[(Timestamp::now(), AgentEvent::Message { text: LYING.to_owned() })],
-  )
-  .expect("the message");
+  agent_says(&seeded, &key, LYING);
   open(&mut window, &seeded, &key, "conversation-chat");
   window.until("the message", |window| {
     window

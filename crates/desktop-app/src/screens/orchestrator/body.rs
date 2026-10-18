@@ -23,7 +23,7 @@ use orchester_workspace::{
 use super::{
   View,
   composer::{ComposerBox, Sending, composer, keys},
-  data::{ProjectNames, Read, Reads, Shown},
+  data::{Read, Reads, Shown},
   start::start,
   timeline::{TurnEnv, TurnRow, list},
   turns::{Turn, turns},
@@ -36,6 +36,7 @@ use crate::{
   theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
+    chat::names::ProjectNames,
     icon::{Icon, icon},
     message::message_text,
     notice::{Notice, NoticeTone},
