@@ -87,6 +87,21 @@ focus rings. Note the behaviour changes: `focus()` now scrolls into view; create
 
 ### A5 · Follow-ups found during review and QA
 
+- Codex steps that do NOT ask before MCP actions decline every MCP tool Codex itself asks about (non-read-only tools
+  such as Pencil's `execute`): `runner/src/execution/step/app_server/mod.rs` `screen()` declines when
+  `tool_approvals` is off, and `invocation/mcp.rs` `without_exemptions` drops the server's exempt tools. Such a step
+  should approve the tools it gives the agent (or at least its exempt ones). Workaround today: the profile asks before
+  tool calls, so exemptions apply.
+- Program places (after `claude/app-connections`): `program_place` checks only the final target and the found
+  file's folder, not links in the middle of a chain (refuse when any link on it lies inside the repository); the
+  App Execution Alias exception accepts any file in `WindowsApps` without reading its reparse tag; launch checks skip
+  programs stored by name or relative to the worktree before this change (show a problem for stored `InWorktree`
+  programs); agent CLI connections get no `program_place` check at launch; the deprecated app's MCP dialog saves with
+  `Allowed::Anything`; the Connections list shows a server whose secret is archived as plain "On".
+- Command (tool) steps run agent-written worktree content (`tools/check.ps1`, build.rs, cargo/npm/git configs) with
+  the person's rights, network on and no sandbox (`crates/runner/src/execution/tool/mod.rs`), escaping a writing
+  step's narrowing. Run tool steps under the narrowest preceding writer's sandbox, or require an approval gate before a
+  tool step that follows a writing agent.
 - Secret values written literally into a command or an agent's description reach the approval card, the MCP tree and
   Copy (old app too): redact known secret values in approval text.
 - Confirm the agent CLIs' sandboxes cannot write the project database (`.orchester/orchester.db`) or `.git` hooks; every
