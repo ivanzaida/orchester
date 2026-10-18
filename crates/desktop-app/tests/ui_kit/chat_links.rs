@@ -55,12 +55,33 @@ fn chat_links_make_task_keys_and_routes_written_as_text_links() {
 }
 
 #[test]
+fn chat_links_make_a_code_span_of_one_task_key_or_route_a_link() {
+  let project = ProjectId::generate();
+  let path = format!("/project/{project}/tasks/KON-2/summary");
+  let destination = format!("orchester:{}", Route::parse(&path).expect("a route").path());
+  let words = path.replace('/', "\\/").replace('-', "\\-");
+  assert_eq!(
+    references(&format!("Link: `{path}`"), project),
+    format!("Link: [{words}]({destination})"),
+    "a code span of a route path is a link to its route, its words the path as written"
+  );
+  assert_eq!(
+    references(&format!("See `` {path} `` and `KON-1`."), project),
+    format!("See [{words}]({destination}) and [KON\\-1](orchester:/project/{project}/tasks/KON-1/summary)."),
+    "the spaces around what a span holds and the number of its backticks do not count"
+  );
+}
+
+#[test]
 fn chat_links_leave_code_links_words_and_places_outside_a_project_as_text() {
   let project = ProjectId::generate();
   let path = format!("/project/{project}/tasks/KON-1/summary");
   for text in [
-    "`KON-1`".to_owned(),
+    "`KON-1 is done`, `see KON-1`, `KON-3`, `KON-01`, `kon-1`".to_owned(),
+    format!("`{path}.`, `open {path}`, `{path} KON-1`, `/settings`, `/project/{project}/nowhere`"),
     format!("```\n{path}\nKON-1\n```"),
+    "```\nKON-1\n```".to_owned(),
+    format!("~~~\n{path}\n~~~"),
     format!("    {path}"),
     format!("[KON-1](https://example.com/{path})"),
     format!("<https://example.com{path}>"),
