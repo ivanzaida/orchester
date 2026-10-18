@@ -13,6 +13,7 @@ use orchester_core::{
   conversation::{Message, Recipient, Timing},
   id::{IdempotencyKey, MessageId, RunId, TaskId},
   integration::Leftovers,
+  orchestrator::FromOrchestrator,
   run::{Answerer, PlanDecision, PlanVersion, ReviewNote},
 };
 use orchester_ipc::Command;
@@ -230,25 +231,25 @@ pub fn store_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, false))
+  store_as(root, prepared, (key, way), (text, None))
 }
 
 /// [`store_in`] for the project's Orchestrator chat, which wrote `text` on the person's side: the conversation names
-/// it as the chat's.
+/// it as the chat's, with where it came from and how it went out (`from`).
 pub fn store_by_orchestrator_in(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  text: &str,
+  (text, from): (&str, FromOrchestrator),
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, true))
+  store_as(root, prepared, (key, way), (text, Some(from)))
 }
 
 fn store_as(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  (text, by_orchestrator): (&str, bool),
+  (text, by_orchestrator): (&str, Option<FromOrchestrator>),
 ) -> Result<(Then, Message), OutgoingError> {
   let then = match way {
     Way::Primary => prepared.mode.then(),

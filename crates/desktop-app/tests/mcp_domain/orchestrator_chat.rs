@@ -37,12 +37,12 @@ use super::Served;
 
 /// What the seed's agent asks in "Sync contacts with HubSpot" (`shapes::QUESTION`).
 const ASKED: &str = "Should a contact that exists in both keep the HubSpot owner or ours?";
-const ASKING: &str = "Sync contacts with HubSpot";
+pub(super) const ASKING: &str = "Sync contacts with HubSpot";
 const READY: &str = "Show the signed-in account";
 const PLANNING: &str = "Plan the GitHub app permissions";
 
 /// The seeded task titled `title` and its latest run.
-fn task_run(db: &ProjectDb, title: &str) -> (Task, Run) {
+pub(super) fn task_run(db: &ProjectDb, title: &str) -> (Task, Run) {
   let task = db
     .tasks()
     .expect("tasks")
@@ -59,7 +59,7 @@ fn task_run(db: &ProjectDb, title: &str) -> (Task, Run) {
 }
 
 /// A conversation of the project's Orchestrator chat, its person's turn answered: what the chat's tools act in.
-fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
+pub(super) fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
   let text = MessageBody::new("Merge and answer for me").expect("text");
   let chat = Chat::start(ChatId::generate(), &text, Timestamp::now());
   let message = ChatMessageId::generate();
@@ -77,7 +77,12 @@ fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
 }
 
 /// Calls the chat's tool `name` with `arguments` in `scope` as its agent does, while the window runs.
-fn chat_call(served: &mut Served, scope: &ChatScope, name: &str, arguments: Value) -> Result<Value, ToolError> {
+pub(super) fn chat_call(
+  served: &mut Served,
+  scope: &ChatScope,
+  name: &str,
+  arguments: Value,
+) -> Result<Value, ToolError> {
   let s = served.services();
   let services = app_mcp::Services::new(
     s.workspace.clone(),
@@ -103,7 +108,7 @@ fn chat_call(served: &mut Served, scope: &ChatScope, name: &str, arguments: Valu
 }
 
 /// The actions of `scope`'s conversation, in order.
-fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
+pub(super) fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
   db.chat_entries(scope.chat)
     .expect("entries")
     .into_iter()
@@ -114,7 +119,7 @@ fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
     .collect()
 }
 
-fn allow(served: &Served, consent: OrchestratorConsent) {
+pub(super) fn allow(served: &Served, consent: OrchestratorConsent) {
   served
     .services()
     .workspace

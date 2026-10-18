@@ -10,6 +10,7 @@ mod conversation;
 mod limits;
 mod message_waits;
 mod messages;
+mod orchestrated;
 mod pipeline_copy;
 mod plan_read;
 mod plans;
@@ -32,6 +33,7 @@ mod worktree;
 
 use std::sync::Arc;
 
+use orchester_core::orchestrator::FromOrchestrator;
 use rmcp::{
   handler::server::common::schema_for_type,
   model::{JsonObject, Tool, ToolAnnotations},
@@ -69,11 +71,12 @@ impl Translate {
 }
 
 /// Who sends an answer or a message to a run's agents: a client of the app's MCP server, or the project's
-/// Orchestrator chat, whose answers the task's conversation names as the chat's.
+/// Orchestrator chat, whose answers the task's conversation names as the chat's, with the conversation it wrote them
+/// in and how they went out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SentBy {
   Client,
-  Orchestrator,
+  Orchestrator(FromOrchestrator),
 }
 
 /// One tool as clients list it.
@@ -380,17 +383,18 @@ async fn dispatch_answers(
 }
 
 /// Calls `answer_question` or `send_message` (`name`) with `arguments` for the project's Orchestrator chat: as
-/// automation, named the chat's in the task's conversation, and refused where it would decide a waiting plan.
+/// automation, named the chat's in the task's conversation with where it came from and how it went out (`from`), and
+/// refused where it would decide a waiting plan.
 pub async fn answer_for_orchestrator(
-  services: &Services,
-  translate: &Translate,
-  name: &str,
-  arguments: JsonObject,
+  (services, translate): (&Services, &Translate),
+  (name, arguments): (&str, JsonObject),
+  from: FromOrchestrator,
 ) -> Result<Value, ToolError> {
   let arguments = Value::Object(arguments);
+  let by = SentBy::Orchestrator(from);
   match name {
-    "answer_question" => questions::answer_question(services, parse(arguments)?, SentBy::Orchestrator).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Orchestrator)).await,
+    "answer_question" => questions::answer_question(services, parse(arguments)?, by).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, by)).await,
     other => Err(ToolError::InvalidArguments(format!("{other} answers no agent"))),
   }
 }

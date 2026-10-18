@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use orchester_core::{
   id::{ChatId, ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, ChatAction,
+    ActionOutcome, ChatAction, SentWay,
     change::{ProposedChange, Publishing},
   },
 };
@@ -313,7 +313,7 @@ async fn switched(
     return propose_change(translate, scope, name, arguments).await;
   }
   let (change, task) = change::subject(scope, name, arguments).await?;
-  let result = change::apply((services, translate), scope, &change, &[]).await;
+  let result = change::apply((services, translate), scope, &change, (&[], SentWay::Direct)).await;
   Ok(Acted {
     result,
     kept: Kept {

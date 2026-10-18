@@ -23,6 +23,7 @@ mod native_conversations;
 mod optional_daily_budget;
 mod optional_limits;
 mod orchestrator;
+mod orchestrator_sent;
 mod orchestrator_waits;
 mod organization;
 mod permitted_decisions;
@@ -562,6 +563,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
   creation_snapshots::MIGRATION,
+  orchestrator_sent::MIGRATION,
 ];
 
 /// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema

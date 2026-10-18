@@ -92,20 +92,21 @@ pub(super) fn note(id: &str, suffix: &str, (glyph, color): (Icon, PaletteColor),
 
 /// A decision to take on a proposal.
 #[derive(Clone)]
-pub(super) struct Deciding {
-  pub(super) scope: ChatScope,
-  pub(super) seq: i64,
-  pub(super) decision: Decision,
+pub(in crate::screens) struct Deciding {
+  pub(in crate::screens) scope: ChatScope,
+  pub(in crate::screens) seq: i64,
+  pub(in crate::screens) decision: Decision,
 }
 
 impl DevtoolsInspectable for Deciding {}
 
-pub(super) type DecideAction = FutureAction<Deciding, (), Message>;
+pub(in crate::screens) type DecideAction = FutureAction<Deciding, (), Message>;
 
 /// The person's decisions on a card's proposal, carried out through the domain tools of the session. Each is spawned
 /// on the session's runtime when it is taken, so it is carried out and its outcome kept even when the card goes away
-/// (another tab, another page) before it ends; the card only waits for it.
-pub(super) fn decide_action(ctx: &mut Ctx) -> DecideAction {
+/// (another tab, another page) before it ends; the card only waits for it. A task's conversation takes its decisions
+/// on the same proposals the same way (ORC-45).
+pub(in crate::screens) fn decide_action(ctx: &mut Ctx) -> DecideAction {
   let services = Services::of(ctx);
   let i18n = ctx.i18n().clone();
   ctx.future_action(move |deciding: Deciding| {

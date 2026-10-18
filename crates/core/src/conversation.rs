@@ -27,6 +27,7 @@ use thiserror::Error;
 
 use crate::{
   id::{InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
+  orchestrator::FromOrchestrator,
   resource::StepKey,
   run::{EventSequence, Run, StepStatus, WaitReason},
   time::Timestamp,
@@ -219,8 +220,9 @@ pub struct Message {
   /// When a person's message reaches an agent at work; [`Timing::AfterTurn`] for an agent's.
   timing: Timing,
   /// A message on the person's side that the project's Orchestrator chat wrote and sent
-  /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's.
-  by_orchestrator: bool,
+  /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's, with
+  /// the chat's conversation it came from and how it went out (ORC-45).
+  from_orchestrator: Option<FromOrchestrator>,
 }
 
 impl Message {
@@ -244,7 +246,7 @@ impl Message {
       created_at: now,
       recovery_after: None,
       timing: Timing::AfterTurn,
-      by_orchestrator: false,
+      from_orchestrator: None,
     }
   }
 
@@ -270,7 +272,7 @@ impl Message {
       created_at: now,
       recovery_after: None,
       timing: Timing::AfterTurn,
-      by_orchestrator: false,
+      from_orchestrator: None,
     }
   }
 
@@ -299,7 +301,7 @@ impl Message {
       created_at,
       recovery_after: None,
       timing: Timing::AfterTurn,
-      by_orchestrator: false,
+      from_orchestrator: None,
     })
   }
 
@@ -339,7 +341,12 @@ impl Message {
 
   /// Whether the project's Orchestrator chat wrote and sent it, on the person's side.
   pub const fn by_orchestrator(&self) -> bool {
-    self.by_orchestrator
+    self.from_orchestrator.is_some()
+  }
+
+  /// Where it came from and how it went out, when the project's Orchestrator chat wrote it.
+  pub const fn from_orchestrator(&self) -> Option<FromOrchestrator> {
+    self.from_orchestrator
   }
 
   /// A person's message sent as `timing` says.
@@ -351,12 +358,12 @@ impl Message {
     Ok(self)
   }
 
-  /// A message on the person's side that the Orchestrator chat wrote and sent; an agent's never is.
-  pub fn sent_by_orchestrator(mut self) -> Result<Self, MessageError> {
+  /// A message on the person's side that the Orchestrator chat wrote and sent, as `from` says; an agent's never is.
+  pub fn sent_by_orchestrator(mut self, from: FromOrchestrator) -> Result<Self, MessageError> {
     if !matches!(self.sender, Sender::Person { .. }) {
       return Err(MessageError::NotFromAPerson);
     }
-    self.by_orchestrator = true;
+    self.from_orchestrator = Some(from);
     Ok(self)
   }
 

@@ -7,7 +7,10 @@
 //! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
 //! reaches [`decide`].
 
-use orchester_core::{orchestrator::ActionOutcome, time::Timestamp};
+use orchester_core::{
+  orchestrator::{ActionOutcome, SentWay},
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -91,7 +94,13 @@ pub async fn decide(
       ActionOutcome::Done,
     ),
     (_, ActionOutcome::Waits, Some(proposed)) => (
-      change::apply((services, translate), scope, &proposed, &widens).await,
+      change::apply(
+        (services, translate),
+        scope,
+        &proposed,
+        (&widens, SentWay::AppliedByPerson),
+      )
+      .await,
       ActionOutcome::Applied,
     ),
     _ => (

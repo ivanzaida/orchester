@@ -1,10 +1,11 @@
 //! The chat (`Chat` `RM1e7` in `D1PYAe`): the run's timeline as rows 12 apart, 32 in from the sides, in a
 //! virtualized list that follows the run ([`follow`]): a step's divider, finished steps folded into one line,
 //! the steps a failure kept from starting, returns and restarts and the run's end ([`divider`]); an agent's
-//! message with its tool groups ([`message`], [`chips`]); the person's message; a card that waits for or
-//! records a decision ([`cards`], C3's); a problem row ([`entry`]); a step's result card ([`result`]); and
-//! last, while an agent works, the working line ([`working`]). A person's choice to open or fold a step or a
-//! group is kept while the timeline grows ([`Toggles`]).
+//! message with its tool groups ([`message`], [`chips`]); the person's message, or the Orchestrator chat's; a card
+//! that waits for or records a decision ([`cards`], C3's); a problem row ([`entry`]); a step's result card
+//! ([`result`]); after them the answers and messages the Orchestrator chat proposed that no one applied
+//! ([`proposal`]); and last, while an agent works, the working line ([`working`]). A person's choice to open or fold a
+//! step or a group is kept while the timeline grows ([`Toggles`]).
 
 mod cards;
 mod chips;
@@ -12,6 +13,7 @@ mod divider;
 mod entry;
 mod follow;
 mod message;
+mod proposal;
 mod result;
 mod working;
 
@@ -30,6 +32,7 @@ use orchester_core::{
   run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
 use orchester_workspace::tasks::{
+  conversation::orchestrator::Proposal,
   detail::TaskDetail,
   timeline::{
     Item, ItemKind,
@@ -39,10 +42,12 @@ use orchester_workspace::tasks::{
   transcript::{Entry, EntryKind},
 };
 
+use self::proposal::{ProposalProps, ProposalRow};
 pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
   follow::Follow,
   message::person_message,
+  proposal::ChatProject,
   working::{Wait, Working},
 };
 use crate::{
@@ -56,6 +61,8 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct Timeline {
   pub(super) project: ProjectId,
+  /// The project as the Orchestrator chat's proposals are decided in it.
+  pub(super) chat_project: ChatProject,
   /// The projects' names, for what a link to another project's place says.
   pub(super) names: ProjectNames,
   pub(super) key: TaskKey,
@@ -171,6 +178,8 @@ impl Toggles {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Line {
   Row(Box<Row>),
+  /// An answer or a message the Orchestrator chat proposed for the run and no one applied ([`proposal`]).
+  Proposal(Box<Proposal>),
   /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
   Working(Working),
   /// Room under the last row while *Jump to latest* floats over the chat's foot, so the row can scroll clear
@@ -181,28 +190,37 @@ enum Line {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RowProps {
   line: Line,
+  /// The row's key in the list.
+  key: Arc<str>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RowProps {}
 
 impl RowProps {
+  fn of(line: Line) -> Self {
+    let key = match &line {
+      Line::Row(row) => row.key().clone(),
+      Line::Proposal(proposal) => proposal.key(),
+      Line::Working(_) => "conversation-working".into(),
+      Line::JumpRoom => "conversation-jump-room".into(),
+    };
+    Self { line, key }
+  }
+
   /// The row's key in the list.
   fn key(&self) -> &str {
-    match &self.line {
-      Line::Row(row) => row.key(),
-      Line::Working(_) => "conversation-working",
-      Line::JumpRoom => "conversation-jump-room",
-    }
+    &self.key
   }
 }
 
-/// The chat of `shown`, the rows of the timeline `items`, then `working`, the working line while an agent
-/// works; *Jump to latest* under it while it does not follow the run, with what arrived since (`arrived`
-/// counts the transcript's entries and the conversation's messages so far).
+/// The chat of `shown`, the rows of the timeline `items`, then the Orchestrator chat's `proposals` for the run, then
+/// `working`, the working line while an agent works; *Jump to latest* under it while it does not follow the run, with
+/// what arrived since (`arrived` counts the transcript's entries, the conversation's messages and the proposals so
+/// far).
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
-  (shown, items): (&Shown, &[Item]),
+  (shown, items, proposals): (&Shown, &[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
 ) -> Element {
   let reveal = follow.follow(shown, items, arrived);
@@ -211,9 +229,14 @@ pub(super) fn chat(
       .rows
       .iter()
       .map(|row| Line::Row(Box::new(row.clone())))
+      .chain(
+        proposals
+          .iter()
+          .map(|proposal| Line::Proposal(Box::new(proposal.clone()))),
+      )
       .chain(working.map(Line::Working))
       .chain((!follow.following.get()).then_some(Line::JumpRoom))
-      .map(|line| RowProps { line })
+      .map(RowProps::of)
       .collect(),
   );
   let list = follow.list(VirtualizedList::new_shared(ctx, rows), arrived, reveal);
@@ -276,6 +299,13 @@ impl Component for RowView {
       Line::Working(working) => ctx.mount_keyed::<working::WorkingLine>("conversation-working-line", working.clone()),
       Line::JumpRoom => follow::jump_room(),
       Line::Row(row) => row_content(ctx, row),
+      Line::Proposal(proposal) => {
+        let props = ProposalProps {
+          project: Timeline::of(ctx).chat_project,
+          proposal: (**proposal).clone(),
+        };
+        ctx.mount_keyed::<ProposalRow>(&props.proposal.key(), props)
+      }
     };
     // Half the chat's 12 between rows above and under each (`gap` of `RM1e7`).
     Column::new()
@@ -304,7 +334,7 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
 /// A person's message, a card, a problem, a return or restart, a step's result or the run's end.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
   match &item.kind {
-    ItemKind::Message(entry) => person_message(ctx, entry),
+    ItemKind::Message(entry) => person_message(ctx, (timeline.project, entry)),
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {
       cards::card(ctx, timeline, item)
     }

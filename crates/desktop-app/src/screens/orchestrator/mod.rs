@@ -8,10 +8,10 @@
 
 mod action;
 mod body;
-mod card;
+pub(in crate::screens) mod card;
 mod change;
 mod composer;
-mod data;
+pub(in crate::screens) mod data;
 mod header;
 mod held;
 mod history;

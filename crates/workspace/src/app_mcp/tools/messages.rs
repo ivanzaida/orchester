@@ -89,7 +89,7 @@ pub async fn send_message(
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
-    if by == SentBy::Orchestrator {
+    if let SentBy::Orchestrator(_) = by {
       return Err(plan_person_only());
     }
     let command = plan_changes(&prepared, &args.text, (Answerer::Automation, None)).map_err(refusal)?;
@@ -108,11 +108,11 @@ pub async fn send_message(
   };
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then) = blocking(move || {
-    let store = match by {
-      SentBy::Client => store_in,
-      SentBy::Orchestrator => store_by_orchestrator_in,
+    let stored = match by {
+      SentBy::Client => store_in(&root, &prepared, (key, way), &text),
+      SentBy::Orchestrator(from) => store_by_orchestrator_in(&root, &prepared, (key, way), (&text, from)),
     };
-    let (then, _) = store(&root, &prepared, (key, way), &text).map_err(refusal)?;
+    let (then, _) = stored.map_err(refusal)?;
     Ok((prepared, then))
   })
   .await?;

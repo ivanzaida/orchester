@@ -393,6 +393,23 @@
     "workingStartedUnnamed": "The agent is starting",
     "workingUnnamed": "The agent is working · last event {{elapsed}} ago",
     "you": "You",
-    "byOrchestrator": "Orchestrator"
+    "byOrchestrator": "Orchestrator",
+    "orchestrator": {
+      "sentDirectly": "Sent by the Orchestrator",
+      "appliedByYou": "Proposed by the Orchestrator · applied by you",
+      "openChat": "Open in Orchestrator chat",
+      "proposal": {
+        "waits": "Waiting for you in the Orchestrator chat",
+        "applying": "Being applied…",
+        "choice": "Answer: {{choice}}",
+        "ownWords": "In its words: “{{text}}”",
+        "apply": "Apply",
+        "dismiss": "Dismiss",
+        "personOnly": "Only a person can apply the Orchestrator’s proposal; nothing was sent.",
+        "dismissed": "The Orchestrator’s proposal was dismissed · nothing was sent",
+        "stale": "The Orchestrator’s proposal no longer applies · nothing was sent",
+        "refused": "The Orchestrator’s proposal could not be applied · nothing was sent: {{reason}}"
+      }
+    }
   }
 }

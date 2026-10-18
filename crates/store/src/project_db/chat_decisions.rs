@@ -1,10 +1,10 @@
 //! Decisions on the Orchestrator chat's proposals (`orchester_core::orchestrator::ChatAction`): a dismissal settles a
 //! proposal that waits; a person's start or apply first claims it, then settles it once carried out; and the claims
 //! no settlement followed are found again. Each change is one transaction, so two decisions never both take a
-//! proposal.
+//! proposal. A run's task conversation reads the answers and messages the chat proposed or sent its agents (ORC-45).
 
 use orchester_core::{
-  id::ChatId,
+  id::{ChatId, RunId},
   orchestrator::{ActionOutcome, ChatAction},
   time::Timestamp,
 };
@@ -16,7 +16,47 @@ use crate::{
   rows::{corrupt, parse},
 };
 
+/// An action of the Orchestrator chat as kept: its conversation, its entry, when it was kept, and what it is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeptAction {
+  pub chat: ChatId,
+  pub seq: i64,
+  pub at: Timestamp,
+  pub action: ChatAction,
+}
+
 impl ProjectDb {
+  /// The actions of every conversation that answer an agent of `run` or send its agents a message, whatever became
+  /// of them, in the order they were kept.
+  pub fn run_answer_actions(&self, run: RunId) -> Result<Vec<KeptAction>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT chat_id, seq, at, body FROM orchestrator_entries
+       WHERE kind = 'action' AND json_extract(body, '$.change.change.run') = ?1
+         AND json_extract(body, '$.change.change.kind') IN ('answer', 'message')
+       ORDER BY seq",
+    )?;
+    let rows = statement
+      .query_map([run.to_string()], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          row.get::<_, i64>(1)?,
+          row.get::<_, i64>(2)?,
+          row.get::<_, String>(3)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(chat, seq, at, body)| {
+        Ok(KeptAction {
+          chat: parse("chat id", &chat)?,
+          seq,
+          at: Timestamp::from_unix_millis(at),
+          action: serde_json::from_str(&body).map_err(|error| corrupt("chat action", error))?,
+        })
+      })
+      .collect()
+  }
   /// Settles the proposed action `seq` of conversation `chat` with `outcome` at `at`, e.g. dismissed: the action as
   /// it was, or `None` when there is no such action or it no longer waits for a person.
   pub fn settle_chat_action(

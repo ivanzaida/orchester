@@ -13,7 +13,10 @@ use std::path::Path;
 
 use orchester_core::{
   id::{ResourceId, RunId},
-  orchestrator::change::{Change, ProposedChange, Publishing},
+  orchestrator::{
+    FromOrchestrator, SentWay,
+    change::{Change, ProposedChange, Publishing},
+  },
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
   revision::Revision,
   run::Run,
@@ -85,12 +88,12 @@ pub(super) async fn widens(scope: &ChatScope, change: &ProposedChange) -> Result
 /// Applies `change`, proposed in `scope`, through the tool that carries it out, as the person's own decision:
 /// refused as for any client but for what widens what agents may do, which the person decided when it is exactly
 /// what they were shown (`shown`); refused when what it names changed since it was proposed. A merge merges only the
-/// commit that was proposed.
+/// commit that was proposed. An answer or a message goes out `way`: sent by the chat itself, or applied by the person.
 pub(super) async fn apply(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   change: &ProposedChange,
-  shown: &[Message],
+  (shown, way): (&[Message], SentWay),
 ) -> Result<Value, ToolError> {
   let root = scope.root.clone();
   let project = scope.project.to_string();
@@ -132,7 +135,8 @@ pub(super) async fn apply(
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
     Change::Answer { .. } | Change::Message { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
-      answer_for_orchestrator(services, translate, tool, arguments).await
+      let from = FromOrchestrator::new(scope.chat, way);
+      answer_for_orchestrator((services, translate), (tool, arguments), from).await
     }
   }
 }
