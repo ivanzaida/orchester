@@ -52,6 +52,7 @@ mod step_outputs;
 mod step_progress;
 mod tags;
 mod task_groups;
+mod task_snapshots;
 mod tasks;
 mod tool_approvals;
 mod usage;

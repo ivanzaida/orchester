@@ -4,11 +4,13 @@
 //! the run waits for a decision (its plan, a raised limit, how it goes on after its retries, its merge),
 //! the Summary is that decision's ([`decisions`]): those designs draw the run's stages in place of its
 //! steps, leave the brief out, pin a decision bar or put the decision above *This run*. A task whose
-//! latest run cannot be read shows why, that the run's actions are unavailable, and its runs. The
-//! organization history comes later (agreed deviation D4).
+//! latest run cannot be read shows why, that the run's actions are unavailable, and its runs. Before the
+//! task's first run it says there are no runs yet (`empty`, `Xxrdy`). The organization history comes
+//! later (agreed deviation D4).
 
 mod brief;
 mod decisions;
+mod empty;
 mod live;
 mod notice;
 mod run_account;
@@ -70,6 +72,9 @@ impl Component for TaskSummary {
       return decision;
     }
     let detail = &props.task.detail;
+    if detail.before_first_run() {
+      return empty::empty(ctx, &props.task);
+    }
     let state = PageState::of(ctx);
     let removal = state.removal.get();
     let runs = runs::section(
@@ -100,18 +105,14 @@ impl Component for TaskSummary {
     }
     let parts = self.parts(ctx, &props, runs);
     let root = props.task.project.open.repo_root.clone();
-    let panel = match &detail.run {
-      Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run),
-      Some(run) => this_run::this_run(ctx, run, &root, props.task.lost(), None),
-      None => {
-        let pipelines = match props.task.project.feed.tasks.get() {
-          crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
-          _ => Vec::new(),
-        };
-        this_run::this_task(ctx, detail, &pipelines)
+    let panel = detail.run.as_ref().map(|run| {
+      if run.run.status().is_terminal() {
+        run_details::run_details(ctx, &props.task, run)
+      } else {
+        this_run::this_run(ctx, run, &root, props.task.lost(), None)
       }
-    };
-    layout(column(parts, scroll), Some(panel))
+    });
+    layout(column(parts, scroll), panel)
   }
 }
 

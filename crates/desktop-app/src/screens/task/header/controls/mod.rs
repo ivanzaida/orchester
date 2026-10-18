@@ -15,7 +15,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::{
   run::{PauseReason, RunLimit, RunStatus},
-  task::TaskStatus,
+  task::{Task, TaskStatus},
 };
 use orchester_workspace::tasks::detail::{RunView, TaskDetail};
 
@@ -47,6 +47,32 @@ pub struct Requested {
 }
 
 impl lurq::app::component::DevtoolsInspectable for Requested {}
+
+/// The page's run controls: its request to the runner and the control last pressed, which the header and
+/// the Summary's Start run share, so a press on either shows under way on both and a refusal is said once.
+#[derive(Clone)]
+pub struct RunControls {
+  pub action: ControlAction,
+  pub requested: Signal<Option<Requested>>,
+}
+
+impl RunControls {
+  pub fn of(ctx: &mut Ctx) -> Self {
+    ctx
+      .use_context::<Self>()
+      .expect("the task frame provides its run controls before mounting its parts")
+  }
+
+  /// The control a request is under way for.
+  pub fn pending(&self) -> Option<RunControl> {
+    let state = self.action.state().get();
+    state
+      .is_pending()
+      .then_some(self.requested.get())
+      .flatten()
+      .map(|requested| requested.control)
+  }
+}
 
 /// What the controls are drawn from.
 pub struct Controls<'a> {
@@ -97,16 +123,34 @@ pub fn controls(ctx: &Ctx, controls: &Controls) -> Vec<Control> {
 
 /// Run for a draft that has every detail, Retry run for a queued task whose run did not start.
 fn without_run(ctx: &Ctx, controls: &Controls, shown: &mut Shown) {
-  let task = &controls.detail.task;
-  let (id, label, control) = match task.status() {
-    TaskStatus::Draft if task.details().missing().is_empty() => {
-      ("task-run", "task.controls.run", RunControl::Run(task.id()))
-    }
-    TaskStatus::Queued => ("task-start-run", "task.controls.retry", RunControl::Start(task.id())),
-    _ => return,
+  let Some((id, label, control)) = first_run(&controls.detail.task) else {
+    return;
   };
   let start = button(ctx, id, ButtonKind::Primary, (label, Icon::Play));
   shown.offer(ctx, controls, start, control, Gate::Work);
+}
+
+/// The control that starts a task's first run, its button's id and its label: none for a draft that misses
+/// details.
+fn first_run(task: &Task) -> Option<(&'static str, &'static str, RunControl)> {
+  match task.status() {
+    TaskStatus::Draft if task.details().missing().is_empty() => {
+      Some(("task-run", "task.controls.run", RunControl::Run(task.id())))
+    }
+    TaskStatus::Queued => Some(("task-start-run", "task.controls.retry", RunControl::Start(task.id()))),
+    TaskStatus::Draft => None,
+  }
+}
+
+/// *Start run* of the Summary before the task's first run (`kh5Er` in `Xxrdy`), as `id`: the header's control
+/// for the first run in the design's words, unavailable for the same reasons; none for a draft that misses
+/// details.
+pub fn first_start(ctx: &Ctx, controls: &Controls, id: &str) -> Option<Control> {
+  let (_, _, control) = first_run(&controls.detail.task)?;
+  let start = button(ctx, id, ButtonKind::Primary, ("task.controls.start", Icon::Play));
+  let mut shown = Shown::default();
+  shown.offer(ctx, controls, start, control, Gate::Work);
+  shown.0.pop()
 }
 
 /// What a control needs besides a free request: a runner, and for work, no unfinished blocking task.

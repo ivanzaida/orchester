@@ -5,7 +5,7 @@
 //! confirmation stays as the tabs switch.
 
 mod actions;
-mod controls;
+pub(super) mod controls;
 mod notices;
 mod refusal;
 mod run_again;
@@ -22,7 +22,7 @@ use lurq::{
 use orchester_workspace::{messages::Message, tasks::run_again::RunAgainCheck};
 
 use self::{
-  controls::{Controls, Requested, control_action, controls},
+  controls::{Controls, RunControls, controls},
   refusal::Refusals,
   run_again::{Confirmation, Confirming, StartAction},
 };
@@ -52,8 +52,6 @@ pub struct HeaderProps {
 impl lurq::app::component::DevtoolsInspectable for HeaderProps {}
 
 pub struct TaskHeader {
-  /// The control last pressed; under way while the control action is pending.
-  requested: Signal<Option<Requested>>,
   refusals: Refusals,
   /// Run again's confirmation.
   confirming: Signal<Confirming>,
@@ -66,7 +64,6 @@ impl Component for TaskHeader {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      requested: ctx.signal(None),
       refusals: Refusals::new(ctx),
       confirming: ctx.signal(Confirming::default()),
       remove: ctx.signal(false),
@@ -79,7 +76,7 @@ impl Component for TaskHeader {
     let (open, feed) = (props.task.project.open.clone(), props.task.project.feed.clone());
     let detail = props.task.detail.clone();
     let runners = (services.runners.clone(), services.servers.clone());
-    let action = control_action(ctx, (open.clone(), detail.task.id()), runners.clone());
+    let run_controls = RunControls::of(ctx);
     let again = (
       feed.revision.get() + feed.outside.get().tasks,
       // It checks only after a run that ended; what the project's other runs used today grows with their
@@ -89,22 +86,17 @@ impl Component for TaskHeader {
     );
     let check = run_again::check(ctx, (open.repo_root.clone(), services.programs), &detail, again);
     let start = run_again::start_action(ctx, runners, (open, feed), self.confirming.clone());
-    let state = action.state().get();
-    let requested = self.requested.get();
-    let pending = state
-      .is_pending()
-      .then_some(requested)
-      .flatten()
-      .map(|requested| requested.control);
-    let refused = self.refusals.shown(&state, requested, &detail);
+    let state = run_controls.action.state().get();
+    let pending = run_controls.pending();
+    let refused = self.refusals.shown(&state, run_controls.requested.get(), &detail);
     let mut shown = controls(
       ctx,
       &Controls {
         detail: &detail,
         online: props.task.online,
-        action: &action,
+        action: &run_controls.action,
         pending,
-        requested: &self.requested,
+        requested: &run_controls.requested,
         approval_waits: props.task.waiting_approval().is_some(),
       },
     );
@@ -218,8 +210,8 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   confirm_for(ctx, &runs, run)
 }
 
-/// Summary, Conversation and Changes with the count of the files it lists, then Artifacts and Memory,
-/// which are not built yet.
+/// Summary, Details, Conversation and Changes with the count of the files it lists, then Artifacts and
+/// Memory, which are not built yet.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let changes_reads = super::changes::ChangesReads::of(ctx);
@@ -233,7 +225,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     Arc::new(move |at| {
       let view = match tab {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
-        TaskTab::Summary | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
+        TaskTab::Summary | TaskTab::Details | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
       };
       navigation.open(Route::Project(project, ProjectPage::Task(key.clone(), view)), at);
     })
@@ -245,6 +237,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let changes = super::changes::tab_label(ctx, &changes, count);
   let tabs = vec![
     tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
+    tab(TaskTab::Details, ctx.t(TaskTab::Details.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
     tab(TaskTab::LocalIntegration, ctx.t(TaskTab::LocalIntegration.title_key())),
@@ -260,7 +253,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     ),
   ];
   let tabs = if props.tab == TaskTab::LocalIntegration {
-    tabs.into_iter().take(4).collect()
+    tabs.into_iter().take(5).collect()
   } else {
     tabs
   };

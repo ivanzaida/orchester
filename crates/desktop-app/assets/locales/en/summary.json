@@ -194,8 +194,11 @@
       "accountUnknown": "An account no longer known",
       "defaultAccount": "Default"
     },
-    "thisTask": {
-      "title": "This task"
+    "empty": {
+      "title": "No runs yet",
+      "text": "Start a run to see its progress and results here.\nThe task description and acceptance criteria are in Details.",
+      "details": "View task details",
+      "missing": "Start run is unavailable: the draft is missing details. Add them in Edit first."
     },
     "runDetails": {
       "title": "Run details",

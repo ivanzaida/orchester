@@ -3,6 +3,7 @@
     "tabs": {
       "conversation": "Conversation",
       "summary": "Summary",
+      "details": "Details",
       "changes": "Changes",
       "artifacts": "Artifacts",
       "artifactsReason": "Artifacts are planned · not available yet",

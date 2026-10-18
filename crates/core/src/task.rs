@@ -5,6 +5,7 @@ use std::time::Duration;
 
 pub mod content;
 pub mod organization;
+pub mod requirements;
 
 use thiserror::Error;
 

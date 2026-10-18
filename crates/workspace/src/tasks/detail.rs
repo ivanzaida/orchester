@@ -20,7 +20,7 @@ use orchester_core::{
   store::{
     ActivityStore, ConnectionStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore,
   },
-  task::Task,
+  task::{Task, requirements::TaskRequirements},
   task_group::GroupHold,
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -241,6 +241,8 @@ pub struct TaskDetail {
   pub task: Task,
   /// The task details pinned by the latest readable run, for run-specific review UI.
   pub run_task: Option<Task>,
+  /// What the task asked for when it was created, when its latest run started and now (Details).
+  pub requirements: TaskRequirements,
   /// The latest run, when it can be read.
   pub run: Option<RunView>,
   /// The merge of the latest run into its base branch, once it was merged.
@@ -322,6 +324,7 @@ impl TaskDetail {
     let history = history::read(&db, &task, &runs)?;
     let latest = runs.pop();
     if let Some(Err(latest)) = &latest {
+      let requirements = super::requirements::read(&db, &task, (None, true))?;
       return Ok(Self {
         latest_unreadable: Some(Unreadable::of(latest)),
         history,
@@ -329,7 +332,7 @@ impl TaskDetail {
         missing_pipeline,
         unsent_status,
         shared,
-        ..Self::without_runs(task, messages)
+        ..Self::without_runs(task, messages, requirements)
       });
     }
     let earlier_unreadable = runs
@@ -338,6 +341,7 @@ impl TaskDetail {
       .map(Unreadable::of)
       .collect();
     let latest = latest.and_then(Result::ok);
+    let requirements = super::requirements::read(&db, &task, (latest.as_ref(), false))?;
     let run_task = latest
       .as_ref()
       .map(|run| db.task_for_run(task.id(), run.id()))
@@ -362,14 +366,15 @@ impl TaskDetail {
       missing_pipeline,
       unsent_status,
       shared,
-      ..Self::without_runs(task, messages)
+      ..Self::without_runs(task, messages, requirements)
     })
   }
 
-  fn without_runs(task: Task, messages: Vec<Message>) -> Self {
+  fn without_runs(task: Task, messages: Vec<Message>, requirements: TaskRequirements) -> Self {
     Self {
       task,
       run_task: None,
+      requirements,
       run: None,
       merge: None,
       delivery: Delivery::Waiting,

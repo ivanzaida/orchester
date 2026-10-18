@@ -2,8 +2,9 @@
 //! `F2LtFn`): one frame for every tab of the task (`/tasks/<key>/<tab>`), so switching tabs keeps it and
 //! what it holds. The frame is the header (`header`: breadcrumb, title, run controls, status and run
 //! line, the frame's notices, Run again's confirmation in place) with the page tabs, and under it the
-//! tab: the Summary (`summary`), the Conversation and Changes, which their own tasks build and mount at
-//! [`conversation_tab`] and [`changes_tab`].
+//! tab: the Summary (`summary`), the Details (`details`), the Conversation and Changes, which their own
+//! tasks build and mount at [`conversation_tab`] and [`changes_tab`]. The frame holds the run controls'
+//! request, so the header and the Summary share it.
 //!
 //! The task is read off the UI thread (`read`) and again whenever the runner changes one of the
 //! project's runs, tasks are saved, or the person tries again after a failed reading; a failed reading
@@ -14,6 +15,7 @@ pub(crate) mod cards;
 pub(crate) mod changes;
 mod context;
 mod conversation;
+mod details;
 mod header;
 mod local_integration;
 mod read;
@@ -29,6 +31,7 @@ use lurq::{
 use orchester_core::{
   id::{RunId, TaskId},
   project::TaskKey,
+  task::requirements::RequirementsSource,
 };
 use orchester_workspace::{messages::Message, runner::state::RunnerState};
 
@@ -36,7 +39,11 @@ pub use self::context::TaskContext;
 pub(crate) use self::conversation::{links, step_label};
 use self::{
   changes::{ChangesReads, FileCount, Follow},
-  header::{HeaderProps, TaskHeader},
+  details::{DetailsProps, TaskDetailsTab},
+  header::{
+    HeaderProps, TaskHeader,
+    controls::{RunControls, control_action},
+  },
   read::{ReadAgain, TaskRead},
   summary::{SummaryProps, TaskSummary},
 };
@@ -215,6 +222,11 @@ pub struct PageState {
   pub discard: Signal<bool>,
   /// Where the Summary's column is scrolled, kept as the tabs switch.
   pub summary_scroll: ScrollState,
+  /// The version of the task's requirements the Details show, once one was shown or chosen; kept as the
+  /// tabs switch and the task is read again.
+  pub requirements: Signal<Option<RequirementsSource>>,
+  /// Where the Details are scrolled, kept as the tabs switch.
+  pub details_scroll: ScrollState,
 }
 
 impl PageState {
@@ -239,6 +251,8 @@ struct TaskFrame {
   /// Why the task could not be read again, kept while it is read again until a reading succeeds.
   stale: Signal<StaleRead>,
   state: PageState,
+  /// The run control last pressed, in the header or the Summary.
+  requested: Signal<Option<header::controls::Requested>>,
   /// The composer's draft and sends, kept across the page's tabs and the task's runs.
   composer: conversation::ComposerState,
   /// Whether the task's latest run ran when the task was last read: only then do its transcript's lines
@@ -261,7 +275,10 @@ impl Component for TaskFrame {
         removal: ctx.signal(Removal::closed()),
         discard: ctx.signal(false),
         summary_scroll: ScrollState::new(),
+        requirements: ctx.signal(None),
+        details_scroll: ScrollState::new(),
       },
+      requested: ctx.signal(None),
       live: ctx.signal(false),
     }
   }
@@ -271,6 +288,13 @@ impl Component for TaskFrame {
     // First: lurq keeps a component's futures by the order it asks for them, and a page asks for this one
     // only when it was made while a send ran, which holds for the page's life.
     self.composer.await_flight(ctx);
+    let services = Services::of(ctx);
+    let runners = (services.runners.clone(), services.servers.clone());
+    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
+    ctx.provide(RunControls {
+      action,
+      requested: self.requested.clone(),
+    });
     ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
     ctx.provide(self.changes.clone());
@@ -292,7 +316,6 @@ impl Component for TaskFrame {
     if self.live.get_untracked() != live {
       self.live.set(live);
     }
-    let services = Services::of(ctx);
     let jobs = feed.job_state.get();
     let separator = ctx.t("task.listSeparator");
     let left = read::leftovers(
@@ -322,6 +345,7 @@ impl Component for TaskFrame {
     };
     let body = match props.tab {
       TaskTab::Summary => ctx.mount_keyed::<TaskSummary>("task-summary", SummaryProps { task }),
+      TaskTab::Details => ctx.mount_keyed::<TaskDetailsTab>("task-details", DetailsProps { task }),
       TaskTab::Conversation => conversation_tab(ctx, &task),
       TaskTab::Changes => changes_tab(ctx, &task),
       TaskTab::LocalIntegration => local_integration::tab(ctx, &task),

@@ -1,7 +1,6 @@
 //! *This run* beside the Summary (`This run` `W73m1n` in `lUXff`): what the run pinned and where it
 //! works, its limits and usage, its active agent time going on while an agent works, and what the
-//! current step's agent may do. A task without a run shows *This task* instead: the pipeline and limits
-//! its first run would use. A limit that is not set reads *No limit*. The run's approvals section and
+//! current step's agent may do. A limit that is not set reads *No limit*. The run's approvals section and
 //! its permissions popover come later (agreed deviation D4).
 
 use std::{path::Path, sync::Arc};
@@ -19,7 +18,6 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
   resource::RepositoryAccess,
   run::{ActiveClock, RunStatus, StepStatus},
-  task::TaskLimits,
   tokens::compact_tokens,
 };
 use orchester_workspace::{
@@ -27,8 +25,7 @@ use orchester_workspace::{
   display,
   tasks::{
     changes::run_worktree,
-    data::PipelineChoice,
-    detail::{RunView, StepView, TaskDetail},
+    detail::{RunView, StepView},
   },
 };
 
@@ -337,52 +334,6 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
   let value = Tooltip::new("task-this-run-worktree-tooltip", path.display().to_string()).wrap(ctx, shown);
   let value = Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value);
   detail_row_of("task-this-run-worktree", &ctx.t("summary.thisRun.worktree"), value).into()
-}
-
-/// *This task* of a task without a run: the pipeline and limits its first run would use.
-pub fn this_task(ctx: &mut Ctx, detail: &TaskDetail, pipelines: &[PipelineChoice]) -> Element {
-  let details = detail.task.details();
-  let missing = detail.missing_pipeline.as_ref().map(|slug| {
-    let label = orchester_workspace::tasks::list::PipelineLabel::Missing {
-      slug: std::sync::Arc::from(slug.as_str()),
-    };
-    crate::ui::message::message_text(ctx, &label.message())
-  });
-  let pipeline = details
-    .pipeline
-    .and_then(|chosen| pipelines.iter().find(|pipeline| pipeline.id == chosen))
-    .map_or_else(
-      || ctx.t("summary.thisRun.notChosen"),
-      |pipeline| {
-        ctx.t_args(
-          "summary.thisRun.pipelineValue",
-          [
-            ("pipeline", &*pipeline.name),
-            ("version", pipeline.version.to_string().as_str()),
-          ],
-        )
-      },
-    );
-  let pipeline = missing.unwrap_or(pipeline);
-  let mut rows = vec![row(ctx, "summary.thisRun.pipeline", &pipeline, DetailValue::Text)];
-  rows.extend(limit_rows(ctx, details.limits));
-  panel("task-this-task", &ctx.t("summary.thisTask.title"), rows, None)
-}
-
-fn limit_rows(ctx: &Ctx, limits: TaskLimits) -> [Element; 2] {
-  let budget = limits.budget().map_or_else(
-    || ctx.t("summary.thisRun.noLimit"),
-    |budget| ctx.t_args("summary.thisRun.tokens", [("budget", compact_tokens(budget.get()))]),
-  );
-  [
-    row(ctx, "summary.thisRun.budget", &budget, DetailValue::Text),
-    row(
-      ctx,
-      "summary.thisRun.timeLimit",
-      &time_limit(ctx, limits.max_duration()),
-      DetailValue::Text,
-    ),
-  ]
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
