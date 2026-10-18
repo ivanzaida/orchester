@@ -106,6 +106,22 @@ fn requirements_without_any_kept_version_show_the_current_one_honestly() {
   );
   let unreadable = TaskRequirements::new(now, None, LatestRun::Unknown);
   assert_eq!(unreadable.current_standing(), CurrentStanding::RunUnknown);
+  assert!(!LatestRun::None.ran());
+  assert!(LatestRun::Unknown.ran());
+}
+
+#[test]
+fn requirements_a_run_on_another_computer_is_a_run_whose_start_is_not_here() {
+  let now = details("Retry webhooks", &["Backs off."]);
+  let number = RunNumber::new(NonZeroU32::new(7).expect("7"));
+  let elsewhere = TaskRequirements::new(now.clone(), Some(now), LatestRun::Elsewhere(number));
+  assert!(elsewhere.latest_run().ran(), "the task had a run");
+  assert_eq!(
+    elsewhere.sources(),
+    vec![RequirementsSource::Creation, RequirementsSource::Current],
+    "no run-start version is offered: none is kept here"
+  );
+  assert_eq!(elsewhere.current_standing(), CurrentStanding::RunElsewhere(number));
 }
 
 #[test]

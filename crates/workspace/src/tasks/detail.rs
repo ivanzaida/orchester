@@ -35,6 +35,7 @@ use super::{
   history::{self, RunRecord},
   index_use::IndexUses,
   permissions::run_permissions,
+  requirements::LocalRuns,
   run_approvals::RunApprovals,
   run_times::{finished_at, paused_at, starts_of},
   unreadable::Unreadable,
@@ -324,7 +325,11 @@ impl TaskDetail {
     let history = history::read(&db, &task, &runs)?;
     let latest = runs.pop();
     if let Some(Err(latest)) = &latest {
-      let requirements = super::requirements::read(&db, &task, (None, true))?;
+      let local = LocalRuns {
+        latest: None,
+        unreadable: true,
+      };
+      let requirements = super::requirements::read(&db, &task, local, shared.as_ref())?;
       return Ok(Self {
         latest_unreadable: Some(Unreadable::of(latest)),
         history,
@@ -341,7 +346,11 @@ impl TaskDetail {
       .map(Unreadable::of)
       .collect();
     let latest = latest.and_then(Result::ok);
-    let requirements = super::requirements::read(&db, &task, (latest.as_ref(), false))?;
+    let local = LocalRuns {
+      latest: latest.as_ref(),
+      unreadable: false,
+    };
+    let requirements = super::requirements::read(&db, &task, local, shared.as_ref())?;
     let run_task = latest
       .as_ref()
       .map(|run| db.task_for_run(task.id(), run.id()))

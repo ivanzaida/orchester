@@ -32,7 +32,17 @@ pub enum LatestRun {
   None,
   /// It had runs, but which one is the latest cannot be read.
   Unknown,
+  /// Its runs ran on another computer: a shared task's holder reported this one, and nothing it started
+  /// with is on this computer.
+  Elsewhere(RunNumber),
   Run(RunStart),
+}
+
+impl LatestRun {
+  /// Whether the task had a run, readable here or not.
+  pub const fn ran(&self) -> bool {
+    !matches!(self, Self::None)
+  }
 }
 
 /// Why the version shown stands in for the creation version, which was not recorded.
@@ -54,6 +64,8 @@ pub enum CurrentStanding {
   RunStartNotRecorded(RunNumber),
   /// The latest run cannot be read, so whether the task changed since it started is not known.
   RunUnknown,
+  /// The latest run ran on another computer, so what it started with is not known here.
+  RunElsewhere(RunNumber),
 }
 
 /// A task's recorded versions of its requirements and its current one.
@@ -135,6 +147,7 @@ impl TaskRequirements {
     let run = match &self.latest {
       LatestRun::None => return CurrentStanding::NoRun,
       LatestRun::Unknown => return CurrentStanding::RunUnknown,
+      LatestRun::Elsewhere(number) => return CurrentStanding::RunElsewhere(*number),
       LatestRun::Run(run) => run,
     };
     match &run.details {

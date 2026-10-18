@@ -2,8 +2,8 @@
 //! run was captured with (`Execution setup · selected run` `qWSNJ`: its pipeline version and the limits it
 //! started with), apart from the task's organization as it is now (`Current task organization` `V9hfw`:
 //! status, priority, tags, what it depends on and when it was created). Before the first run the setup is
-//! what the run would start with now, said so; a run that cannot be read has its setup *Not recorded*, never
-//! taken from the task.
+//! what the run would start with now, said so; a run that cannot be read, or that ran only on a teammate's
+//! computer, has its setup *Not recorded*, never taken from the task.
 
 use std::{sync::Arc, time::Duration};
 
@@ -78,14 +78,16 @@ fn setup(ctx: &Ctx, task: &TaskContext, tasks: Option<&ProjectTasks>) -> Element
       ctx.t("details.setup.notStarted"),
       first_values(ctx, task, tasks),
     ),
-    _ => {
-      let unknown = ctx.t("details.setup.notRecorded");
-      (
-        ctx.t("details.setup.unknown"),
-        ctx.t("details.setup.unreadable"),
-        [unknown.clone(), unknown.clone(), unknown],
-      )
-    }
+    (LatestRun::Elsewhere(number), _) => (
+      ctx.t_args("details.setup.run", [("run", number.get().to_string())]),
+      ctx.t("details.setup.elsewhere"),
+      not_recorded(ctx),
+    ),
+    _ => (
+      ctx.t("details.setup.unknown"),
+      ctx.t("details.setup.unreadable"),
+      not_recorded(ctx),
+    ),
   };
   let [pipeline, tokens, time] = values;
   let rows = vec![
@@ -98,6 +100,12 @@ fn setup(ctx: &Ctx, task: &TaskContext, tasks: Option<&ProjectTasks>) -> Element
     row(ctx, ("task-details-setup-time", "details.setup.time"), &time),
   ];
   section(id, (&heading, &note), rows)
+}
+
+/// A run's setup this computer does not have.
+fn not_recorded(ctx: &Ctx) -> [Arc<str>; 3] {
+  let unknown = ctx.t("details.setup.notRecorded");
+  [unknown.clone(), unknown.clone(), unknown]
 }
 
 /// The pipeline version `run` pinned and the limits it was created with.

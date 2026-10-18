@@ -104,6 +104,7 @@ fn source_label(ctx: &Ctx, requirements: &TaskRequirements, source: Requirements
 fn run_number(requirements: &TaskRequirements) -> String {
   match requirements.latest_run() {
     LatestRun::Run(run) => run.number.get().to_string(),
+    LatestRun::Elsewhere(number) => number.get().to_string(),
     LatestRun::None | LatestRun::Unknown => String::new(),
   }
 }
@@ -121,6 +122,7 @@ fn provenance(ctx: &Ctx, requirements: &TaskRequirements, shown: RequirementsSou
       CurrentStanding::UnchangedSince(number) => run("details.provenance.currentUnchanged", number.get()),
       CurrentStanding::RunStartNotRecorded(number) => run("details.provenance.currentNotRecorded", number.get()),
       CurrentStanding::RunUnknown => ctx.t("details.provenance.currentRunUnknown"),
+      CurrentStanding::RunElsewhere(number) => run("details.provenance.currentElsewhere", number.get()),
     },
   }
 }
