@@ -81,7 +81,9 @@ impl Turn {
       other => cannot(format!("cannot read the Orchestrator's connection: {other}")),
     })?;
     let provider = connection.provider();
-    if !runs_orchestrator(provider) {
+    // Not one the Orchestrator runs on, as the settings say; nor is a connection on an API provider, whose key a
+    // chat turn is not started with.
+    if !runs_orchestrator(provider) || connection.api_provider().is_some() {
       return Err(TurnFailure::ConnectionGone);
     }
     if let Some(problem) = connection

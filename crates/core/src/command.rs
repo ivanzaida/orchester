@@ -133,6 +133,22 @@ impl Command {
     self
   }
 
+  /// Leaves every variable whose name `matches` out of the program's environment as this command sets it. For a
+  /// command that does not inherit the caller's environment ([`Self::with_environment`]).
+  #[must_use]
+  pub fn with_env_dropped_where(mut self, matches: impl Fn(&str) -> bool) -> Self {
+    self.env.retain(|(name, _)| !matches(name));
+    self.secret_env.retain(|existing| !matches(existing.name()));
+    self
+  }
+
+  /// `more` after the arguments the program already has.
+  #[must_use]
+  pub fn with_args(mut self, more: impl IntoIterator<Item = String>) -> Self {
+    self.args.extend(more);
+    self
+  }
+
   /// Gives the program exactly `variables` instead of the caller's environment.
   #[must_use]
   pub fn with_environment(mut self, variables: Vec<(String, String)>) -> Self {

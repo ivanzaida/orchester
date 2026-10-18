@@ -4,6 +4,7 @@
 mod agent_accounts;
 mod agent_files;
 mod agent_slots;
+mod api_providers;
 mod approval_choices;
 mod auto_mode;
 mod automation_answers;
@@ -563,6 +564,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   orchestrator_waits::MIGRATION,
   run_rebases::MIGRATION,
   creation_snapshots::MIGRATION,
+  api_providers::MIGRATION,
   project_approval_rules::MIGRATION,
 ];
 

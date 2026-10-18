@@ -202,6 +202,7 @@
     "fable51": "Fable 5.1",
     "dailyBudgetReadback": "= {{count}} tokens · default",
     "indexDirect": "Agents read and search the repository directly",
-    "noneKept": "None kept"
+    "noneKept": "None kept",
+    "reviewerApiProvider": "Auto mode’s reviewer runs on a CLI’s own sign-in. This connection runs on an API provider; choose another one."
   }
 }
