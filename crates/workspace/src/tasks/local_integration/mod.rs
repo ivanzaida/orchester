@@ -27,7 +27,7 @@ use std::path::Path;
 pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
 pub use external::{EvidenceInputs, external_integration};
 pub use legacy::LegacyPolicy;
-pub(crate) use legacy::managed_checkout;
+pub(crate) use legacy::{CheckoutHolder, checkout_holder, managed_checkout, settle_review};
 pub use metadata::metadata_allowed;
 use orchester_core::{
   id::RunId,

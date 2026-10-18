@@ -269,3 +269,30 @@ fn local_integration_unchanged_sync_intent_releases_only_exact_clean_checkouts()
   recovered.cancellation_verified().expect("verified release");
   assert!(!recovered.reserves_checkout());
 }
+
+#[test]
+fn local_integration_a_review_paused_before_it_held_anything_releases_the_checkout() {
+  let base = checkout('a');
+  let mut review = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  review.paused();
+  assert_eq!(review.phase(), LocalPhase::Paused);
+  assert!(!review.reserves_checkout(), "a paused read-only review holds nothing");
+  review.resume_saved_phase();
+  review.prepared(base.clone()).expect("read-only preparation");
+  review.paused();
+  assert!(!review.reserves_checkout());
+
+  let mut syncing = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  syncing.prepared(base.clone()).expect("prepared");
+  syncing.begin_sync(&base).expect("sync");
+  syncing.paused();
+  assert!(syncing.reserves_checkout(), "a paused sync keeps the checkout");
+
+  let mut owned = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  owned.own_task(base);
+  owned.paused();
+  assert!(
+    owned.reserves_checkout(),
+    "the run's worktree it took over stays reserved"
+  );
+}
