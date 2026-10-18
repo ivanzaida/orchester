@@ -4,10 +4,25 @@ The person approved this feature design on 2026-10-11 and confirmed saving the n
 The source is `data/orchester2.pen`, section `zMOBO`, **ORC-24 · Local integration · editable feature design**.
 Read the encrypted document only through Pencil. The earlier browser prototype is not the design source.
 
-The feature lets a person finish local integration inside Orchester when their main checkout has local changes or
-the task merge needs conflict resolution. Existing Task, Summary and Delivery entry points lead into the reviewed
-flow. Confirmations are inline; new and editing surfaces are pages. Fixture names, paths, commits and task data in
-Pencil are examples, never defaults or shipped project data.
+The feature lets a person finish local integration inside Orchester when their main checkout has local changes the
+merge would overwrite or the task merge needs conflict resolution. Confirmations are inline; new and editing surfaces
+are pages. Fixture names, paths, commits and task data in Pencil are examples, never defaults or shipped project data.
+
+**Entry from the Summary (2026-10-18).** *Merge into main* on the Ready card merges the run directly, as the domain
+tool `merge_run` does (`orchester_core::integration::merge`): in a temporary worktree, brought into the checkout as a
+fast-forward that leaves uncommitted and untracked files it does not reach exactly as they are. It does not open
+Local integration first. The card offers *Local integration* (an action in *Not merged into main*) only where it
+carries on: the merge would overwrite files with uncommitted changes, untracked or ignored files; the run conflicts
+with the branch; or this run's local integration holds work it must finish, put back or clean up (preserved originals, also
+originals kept after a cancellation, a commit, a sync, the run's worktree taken over, a resolution, unsaved editor
+decisions, or a Git process that has not finished). A checkout on another
+branch or with a git operation in progress, and another task's local integration holding the checkout, are refused
+with the reason and no Local integration action. A review that only read the checkout, also one paused or stopped
+since, or a cancellation whose kept originals were removed, holds nothing: it does not stand in the way of the
+direct merge, and once the run is merged it reads as complete (only originals still kept wait to be put back). While
+Local integration asks a person for a decision in the project, or works in the checkout, *Merge into main* waits
+and says so. A press that comes from an MCP client through the window goes through `merge_run`'s policy, which
+refuses and redacts what that tool would.
 
 ## Reviewed native states
 

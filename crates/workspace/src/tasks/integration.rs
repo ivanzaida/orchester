@@ -23,7 +23,7 @@ use orchester_exec::programs::Programs;
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{changes::GIT, detail::run_store_error};
+use super::{changes::GIT, detail::run_store_error, local_integration::CheckoutHolder};
 use crate::{
   activity::{Activity, Running, run_operations},
   messages::Message,
@@ -54,6 +54,9 @@ pub enum IntegrationProblem {
     path: String,
     detail: String,
   },
+  /// A local integration holds the checkout with work it must finish, put back or clean up first: this run's, or
+  /// another task's. Nothing was merged.
+  HeldLocally(CheckoutHolder),
   /// Git merged the run, but saving its receipt failed; external evidence prevents a repeated merge.
   NotRecorded {
     merge: RunMerge,
@@ -117,6 +120,18 @@ impl IntegrationProblem {
     running.fail(reason);
   }
 
+  /// Whether Local integration carries on where the direct merge stopped: it commits or preserves uncommitted
+  /// files the merge would overwrite, resolves a conflict in the run's worktree, or holds the checkout for this
+  /// run's own review already. A checkout on another branch, a git operation in progress or another run's local
+  /// integration are not its to settle.
+  pub fn continues_locally(&self) -> bool {
+    matches!(
+      self,
+      Self::Merge(MergeError::UncommittedInTheWay { .. } | MergeError::Conflict { .. })
+        | Self::HeldLocally(CheckoutHolder::ThisRun)
+    )
+  }
+
   /// What to tell the user; `separator` joins file names ("a.rs, b.rs").
   pub fn message(&self, separator: &str) -> Message {
     match self {
@@ -126,6 +141,10 @@ impl IntegrationProblem {
       Self::Cleanup(CleanupError::Git(error)) | Self::Read(error) => git_message(error),
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
+      Self::HeldLocally(CheckoutHolder::ThisRun) => Message::new("runs.merge.failure.heldLocally"),
+      Self::HeldLocally(CheckoutHolder::OtherRun { task }) => {
+        Message::new("runs.merge.failure.heldByOther").with("task", task.to_string())
+      }
       Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", short_path(path)),
       Self::RunChanged => Message::new("runs.worktree.failure.runChanged"),
       Self::NotRecorded { merge, .. } => {
@@ -303,10 +322,8 @@ pub fn merge_in(
     return Err(IntegrationProblem::AlreadyMerged);
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
-  if super::local_integration::managed_checkout(&db, run.id())? {
-    return Err(IntegrationProblem::Store(Message::new(
-      "localIntegration.personRequired",
-    )));
+  if let Some(holder) = super::local_integration::checkout_holder(&db, run.id())? {
+    return Err(IntegrationProblem::HeldLocally(holder));
   }
   if super::local_integration::external_integration(repo_root, run.id())
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?
@@ -355,6 +372,7 @@ pub fn merge_in(
       other => other,
     });
   }
+  super::local_integration::settle_review(&mut db, &merge);
   let cleanup = clear(&mut db, programs, repo_root, &run, None);
   if cleanup.is_err() {
     tracing::warn!("the run was merged, but what it left could not be cleared");

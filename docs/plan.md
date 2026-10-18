@@ -41,8 +41,9 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 5. Environment: nothing for builds. Cargo builds into each worktree's own git-ignored `target/`, which goes away
    with the worktree. A new worktree starts cold (several GB, several minutes).
 6. Limits: start at about 3M tokens and 45 minutes of active agent time per run.
-7. *Merge into main* merges into the user's checkout, which must be on `master` with no uncommitted changes. Do not
-   merge from Orchester while another agent is merging branches into `master` by hand.
+7. *Merge into main* merges into the user's checkout, which must be on `master`; uncommitted and untracked files the
+   run does not change stay as they are (a run that changes one of them is refused, with Local integration offered).
+   Do not merge from Orchester while another agent is merging branches into `master` by hand.
 
 ### D2 · Verify that could not verify, and the QA slot · branch `claude/verify-flow` (implemented 2026-10-14, waiting for review and design verification)
 

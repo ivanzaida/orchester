@@ -198,8 +198,14 @@ impl Window {
 
   /// Delivers what the window's futures finished, and lays the window out, until `done` holds; panics
   /// with `what` after a few seconds.
-  pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(10);
+  pub fn until(&mut self, what: &str, done: impl FnMut(&mut Self) -> bool) {
+    self.until_within(Duration::from_secs(10), what, done);
+  }
+
+  /// [`Self::until`] with a deadline of `wait`, for work that takes longer than drawing, such as a git merge on a
+  /// loaded machine.
+  pub fn until_within(&mut self, wait: Duration, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
+    let deadline = Instant::now() + wait;
     loop {
       self.tree.tick_futures();
       self.pass();
