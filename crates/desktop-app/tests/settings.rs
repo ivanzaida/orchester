@@ -4,7 +4,7 @@
 
 mod support;
 
-use lurq::app::events::MouseButton;
+use lurq::app::events::{MouseButton, ScrollPhase};
 use orchester_app::routes::Route;
 use orchester_workspace::workspace::OrchestratorConsent;
 use support::Window;
@@ -234,4 +234,42 @@ fn settings_turning_off_an_orchestrator_switch_holds_from_the_click() {
       "{title} holds off from the click, before the save"
     );
   }
+}
+
+/// The bottom of `id` as laid out.
+fn bottom(window: &mut Window, id: &str) -> f32 {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  bounds.y + bounds.height
+}
+
+#[test]
+fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
+  let mut window = Window::open();
+  window.tree.resize(1440, 600);
+  window.navigation().go(Route::Settings);
+  window.until("the last switch", |window| {
+    window.tree.get_element_by_id("settings-merge-runs").is_some()
+  });
+  assert!(
+    bottom(&mut window, "settings-merge-runs") > 600.0,
+    "below the window's height before scrolling"
+  );
+  let bounds = window
+    .tree
+    .get_element_by_id_mut("settings-automation-scroll")
+    .and_then(|element| element.bounds())
+    .expect("the tab scrolls");
+  let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+  window.tree.mouse_move(x, y);
+  window.tree.scroll(x, y, 0.0, -2000.0, ScrollPhase::Scroll);
+  window.pass();
+  window.pass();
+  assert!(
+    bottom(&mut window, "settings-merge-runs") <= 600.0,
+    "scrolled into the window"
+  );
 }
