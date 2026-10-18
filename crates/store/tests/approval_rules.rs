@@ -121,10 +121,13 @@ fn approval_rules_of_the_project_outlive_their_run_and_are_revoked() {
 fn approval_rules_of_the_project_are_added_once_under_the_write_lock() {
   let (repo, mut db, run, _) = started_run();
   let other = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("raw");
-  other.execute_batch("BEGIN IMMEDIATE").expect("another writer holds the lock");
+  other
+    .execute_batch("BEGIN IMMEDIATE")
+    .expect("another writer holds the lock");
   db.set_busy_handler_for_test(|_| false).expect("no wait for the lock");
   assert!(
-    db.add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(10)).is_err(),
+    db.add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(10))
+      .is_err(),
     "the check and the insert wait for the write lock together"
   );
   other.execute_batch("ROLLBACK").expect("released");
