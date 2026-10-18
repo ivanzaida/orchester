@@ -41,14 +41,19 @@ pub(in super::super) struct BuildWords {
   pub(super) manifest: bool,
   /// `clippy`, which is no built-in subcommand: an `[alias]` of a configuration may stand in its place.
   pub(super) clippy: bool,
+  /// The subcommand, by its full name.
+  pub(super) subcommand: String,
 }
 
 impl BuildWords {
-  /// The words of `cargo <sub> <rest>` when it writes only build output; `None` for another subcommand or an alias,
-  /// a refused option anywhere, `--target-dir` given twice or without a value, or an argument after `--` that is not
-  /// listed for the subcommand.
-  pub(in super::super) fn of(sub: &str, rest: &[String]) -> Option<Self> {
-    if !SUBCOMMANDS.contains(&sub) {
+  /// The words of `cargo <before> <sub> <rest>` when it writes only build output; `None` for another subcommand or
+  /// an alias, a toolchain named with a folder or drive (`+../x`, `+C:\x`), a refused option anywhere, `--target-dir`
+  /// given twice or without a value, or an argument after `--` that is not listed for the subcommand.
+  pub(in super::super) fn of(before: &[String], sub: &str, rest: &[String]) -> Option<Self> {
+    let toolchain_path = before
+      .iter()
+      .any(|arg| arg.starts_with('+') && arg.contains(['/', '\\', ':']));
+    if !SUBCOMMANDS.contains(&sub) || toolchain_path {
       return None;
     }
     let name = |arg: &str| arg.split_once('=').map_or(arg, |(name, _)| name).to_owned();
@@ -66,6 +71,7 @@ impl BuildWords {
       target_dir: None,
       manifest: false,
       clippy: sub == "clippy",
+      subcommand: sub.to_owned(),
     };
     let mut args = cargo.iter();
     while let Some(arg) = args.next() {

@@ -398,7 +398,9 @@ fn qa_start(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at: Tim
   })
   .ok_or_else(|| invalid("a start_qa_app rule"))?;
   let made = Timestamp::from_unix_millis(at.unix_millis() - 60_000);
-  let rule = kontur.db.add_project_approval_rule(&earlier, run.id(), made)?;
+  let rule = kontur
+    .db
+    .add_project_approval_rule(&earlier, (run.id(), &format!("{}:qa_0", invocation.id)), made)?;
   for _ in 0..3 {
     kontur.db.project_rule_answered(rule.id)?;
   }

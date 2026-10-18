@@ -51,7 +51,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-  build_output::BuildOutput,
+  build_output::{BuildOutput, build_variables},
   part::{CommandPart, SimilarCommand},
   paths::CommandScope,
   reason::CommandReason,

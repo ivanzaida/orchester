@@ -13,12 +13,17 @@
 //! tell ([`crate::run::review::HoldRules::build_output`]).
 
 mod config;
+mod environment;
 mod words;
 
 use std::path::{Path, PathBuf};
 
 use self::config::{config_mentions, workspace_root};
-pub(super) use self::words::BuildWords;
+pub use self::environment::build_variables;
+pub(super) use self::{
+  environment::{CargoEnvironment, variable},
+  words::BuildWords,
+};
 use super::{CommandScope, part::CommandPart, paths::Place, place::Placing};
 
 /// What in a configuration file may move the target directory: the setting, a key spelled with an escape, or another
@@ -54,7 +59,9 @@ pub(super) fn place(part: &mut CommandPart, words: &BuildWords, placing: Placing
   let Some(folders) = placing.folders else {
     return;
   };
-  if words.clippy && folders.iter().any(|folder| config_mentions(scope, folder, &MAY_ALIAS)) {
+  let aliased = scope.cargo().may_alias(&words.subcommand, !words.clippy)
+    || (words.clippy && folders.iter().any(|folder| config_mentions(scope, folder, &MAY_ALIAS)));
+  if aliased {
     return;
   }
   let targets: Option<Vec<(PathBuf, Place)>> = folders.iter().map(|folder| target(scope, folder, words)).collect();
@@ -84,7 +91,7 @@ fn target(scope: &CommandScope, folder: &Path, words: &BuildWords) -> Option<(Pa
   if let Some(word) = &words.target_dir {
     return named(word);
   }
-  if let Some(variable) = scope.cargo_target() {
+  if let Some(variable) = &scope.cargo().target {
     return named(&variable.to_string_lossy());
   }
   let worktree = scope.worktree();

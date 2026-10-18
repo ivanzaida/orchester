@@ -122,7 +122,7 @@ fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
       },
     })
     .expect("a project rule");
-    db.add_project_approval_rule(&scope, run, Timestamp::now())
+    db.add_project_approval_rule(&scope, (run, "invocation:qa"), Timestamp::now())
       .expect("rule")
   };
   // General reads the settings again when it opens.

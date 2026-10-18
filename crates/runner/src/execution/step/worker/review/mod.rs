@@ -17,12 +17,12 @@ mod setup;
 use std::time::Duration;
 
 use orchester_core::{
-  permission::AgentPermissions,
+  permission::{AgentPermissions, category::build_variables},
   run::{
     ApprovalSubject, DecidedBy, PendingToolApproval,
     review::{Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
   },
-  store::{ActivityStore, RunStore, TaskStore},
+  store::{ActivityStore, RunStore, SettingsStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -232,7 +232,8 @@ impl Worker {
       note: approval.command.then(|| approval.scope.clone()).flatten(),
       working_folder: approval.target.clone(),
     };
-    Ok(ReviewInput::new(request, step, task, &messages))
+    let variables = build_variables(&watch.db.project_environment()?);
+    Ok(ReviewInput::new(request, step, task, &messages).map(|input| input.with_build_variables(variables)))
   }
 
   /// The name of the step that asks, from the run's pipeline; the agent's when it is not found.

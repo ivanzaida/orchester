@@ -77,14 +77,14 @@ fn approval_rules_of_the_project_outlive_their_run_and_are_revoked() {
   let (repo, mut db, run, _) = started_run();
   assert!(db.project_approval_rules().expect("none yet").is_empty());
   let rule = db
-    .add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(10))
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), (run.id(), "invocation:qa"), at(10))
     .expect("rule");
   let again = db
-    .add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(11))
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), (run.id(), "invocation:qa"), at(11))
     .expect("same rule");
   assert_eq!(again.id, rule.id);
   let other = db
-    .add_project_approval_rule(&qa_rule("77aa00"), run.id(), at(12))
+    .add_project_approval_rule(&qa_rule("77aa00"), (run.id(), "invocation:qa"), at(12))
     .expect("another script");
   assert_ne!(other.id, rule.id);
   db.project_rule_answered(rule.id).expect("answered");
@@ -126,13 +126,13 @@ fn approval_rules_of_the_project_are_added_once_under_the_write_lock() {
     .expect("another writer holds the lock");
   db.set_busy_handler_for_test(|_| false).expect("no wait for the lock");
   assert!(
-    db.add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(10))
+    db.add_project_approval_rule(&qa_rule("3f2a1b9c"), (run.id(), "invocation:qa"), at(10))
       .is_err(),
     "the check and the insert wait for the write lock together"
   );
   other.execute_batch("ROLLBACK").expect("released");
   let rule = db
-    .add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(11))
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), (run.id(), "invocation:qa"), at(11))
     .expect("rule");
   assert_eq!(db.project_approval_rules().expect("rules"), vec![rule]);
 }
@@ -405,10 +405,14 @@ fn approval_rules_of_the_project_mark_the_answer_that_made_them() {
       .collect()
   };
   assert_eq!(marked(&db), [false, false], "no rule of the project yet");
-  db.add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(20))
+  let first = db
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), (run.id(), &request("qa-1", 11).id), at(20))
     .expect("rule");
-  assert_eq!(marked(&db), [true, true]);
-  db.add_project_approval_rule(&qa_rule("77aa00"), run.id(), at(21))
-    .expect("another script's rule");
+  assert_eq!(marked(&db), [true, false], "only the answer that made it");
+  // Revoked, the rule still names the answer that made it; a later answer of the run is one of the run's.
+  db.revoke_project_approval_rule(first.id, at(21)).expect("revoked");
+  assert_eq!(marked(&db), [true, false]);
+  db.add_project_approval_rule(&qa_rule("3f2a1b9c"), (run.id(), &request("qa-2", 12).id), at(22))
+    .expect("a new rule");
   assert_eq!(marked(&db), [true, true]);
 }

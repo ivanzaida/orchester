@@ -188,7 +188,9 @@ impl Worker {
         let Some(scope) = ProjectScope::of(&subject) else {
           return Ok(Err(unavailable("Approve for every run of this project")));
         };
-        watch.db.add_project_approval_rule(&scope, approval.run, now)?;
+        watch
+          .db
+          .add_project_approval_rule(&scope, (approval.run, &approval.id), now)?;
       }
       ApprovalAnswer::Always { prefix } => {
         if let Err(rejection) = self.always_allow(watch, approval, &subject, prefix.as_ref())? {

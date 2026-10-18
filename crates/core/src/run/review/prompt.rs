@@ -89,13 +89,18 @@ fn step_facts(input: &ReviewInput) -> String {
     NetworkAccess::On => "on",
     NetworkAccess::Off => "off: nothing may reach the network",
   };
-  one_line(&json!({
+  let mut facts = json!({
     "step": step.name,
     "repository": repository,
     "network": network,
     "writable_folders_besides_the_worktree": step.writable_folders,
     "command_parts_orchester_could_not_read": input.unread(),
-  }))
+  });
+  // Only their names: the project set them, and a build runs what they name.
+  if !input.build_variables().is_empty() {
+    facts["project_variables_that_change_what_a_build_runs"] = json!(input.build_variables());
+  }
+  one_line(&facts)
 }
 
 /// The request and the agent's context, as one JSON line.

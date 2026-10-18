@@ -79,7 +79,7 @@ impl ProjectDb {
           && ProjectScope::of_request(&request).is_some_and(|scope| {
             project_rules
               .iter()
-              .any(|rule| rule.made_in == run && rule.scope == scope)
+              .any(|rule| rule.made_in == run && rule.made_by == request.id && rule.scope == scope)
           });
         Ok(DecidedToolApproval {
           request,

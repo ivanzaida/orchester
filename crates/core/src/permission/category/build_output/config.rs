@@ -28,8 +28,12 @@ fn missing(path: &Path) -> bool {
   matches!(std::fs::symlink_metadata(path), Err(error) if error.kind() == io::ErrorKind::NotFound)
 }
 
-/// Whether a configuration file Cargo reads when it runs in `folder` holds any of `words`, or cannot be read.
+/// Whether a configuration file Cargo reads when it runs in `folder` holds any of `words`, or cannot be read, or
+/// which files Cargo reads is not known.
 pub(super) fn config_mentions(scope: &CommandScope, folder: &Path, words: &[&str]) -> bool {
+  if scope.cargo().config_unknown {
+    return true;
+  }
   let in_folders = folder
     .ancestors()
     .flat_map(|above| CONFIG_FILES.map(|name| above.join(".cargo").join(name)));

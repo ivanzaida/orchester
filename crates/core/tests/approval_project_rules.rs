@@ -26,6 +26,7 @@ fn rule(id: i64, subject: &ApprovalSubject, revoked: bool) -> ProjectRule {
     id: ProjectRuleId::new(id),
     scope: ProjectScope::of(subject).expect("a project rule"),
     made_in: RunId::generate(),
+    made_by: "invocation:qa".to_owned(),
     created_at: Timestamp::from_unix_millis(1),
     revoked_at: revoked.then(|| Timestamp::from_unix_millis(2)),
     answered: 0,

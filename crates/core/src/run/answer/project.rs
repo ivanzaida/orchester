@@ -124,8 +124,9 @@ const SHORT_SCRIPT: usize = 7;
 pub struct ProjectRule {
   pub id: ProjectRuleId,
   pub scope: ProjectScope,
-  /// The run whose request a person approved with it.
+  /// The run whose request a person approved with it, and that request's id.
   pub made_in: RunId,
+  pub made_by: String,
   pub created_at: Timestamp,
   /// When a person revoked it; it answers nothing since.
   pub revoked_at: Option<Timestamp>,

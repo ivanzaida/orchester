@@ -22,44 +22,32 @@ const SCOPE_SCHEMA: u32 = 1;
 impl ProjectDb {
   /// The project's rules, oldest first, revoked ones included.
   pub fn project_approval_rules(&self) -> Result<Vec<ProjectRule>, StoreError> {
-    let mut query = self
-      .connection
-      .prepare("SELECT id, scope, made_in, created_at, revoked_at, answered FROM project_approval_rules ORDER BY id")?;
+    let mut query = self.connection.prepare(
+      "SELECT id, scope, made_in, made_by, created_at, revoked_at, answered FROM project_approval_rules ORDER BY id",
+    )?;
     let rows = query
       .query_map([], |row| {
-        Ok((
-          row.get::<_, i64>(0)?,
-          row.get::<_, String>(1)?,
-          row.get::<_, String>(2)?,
-          row.get::<_, i64>(3)?,
-          row.get::<_, Option<i64>>(4)?,
-          row.get::<_, u32>(5)?,
-        ))
+        Ok(StoredRule {
+          id: row.get(0)?,
+          scope: row.get(1)?,
+          made_in: row.get(2)?,
+          made_by: row.get(3)?,
+          created_at: row.get(4)?,
+          revoked_at: row.get(5)?,
+          answered: row.get(6)?,
+        })
       })?
       .collect::<Result<Vec<_>, _>>()?;
-    rows
-      .into_iter()
-      .map(|(id, scope, made_in, created_at, revoked_at, answered)| {
-        Ok(ProjectRule {
-          id: ProjectRuleId::new(id),
-          scope: ProjectScope::stored(decode_json::<RuleScope>(SCOPE, SCOPE_SCHEMA, &scope)?)
-            .ok_or_else(|| corrupt(SCOPE, "not a rule of start_qa_app kept to a script"))?,
-          made_in: parse("run id", &made_in)?,
-          created_at: Timestamp::from_unix_millis(created_at),
-          revoked_at: revoked_at.map(Timestamp::from_unix_millis),
-          answered,
-        })
-      })
-      .collect()
+    rows.into_iter().map(StoredRule::into_rule).collect()
   }
 
-  /// Adds a rule of `scope`, made by answering a request of run `made_in`. The same scope while one is active adds
-  /// nothing and returns that one; the check and the insert share one write transaction, so two answers at once
+  /// Adds a rule of `scope`, made by answering request `made_by` of run `made_in`. The same scope while one is active
+  /// adds nothing and returns that one; the check and the insert share one write transaction, so two answers at once
   /// never keep two.
   pub fn add_project_approval_rule(
     &mut self,
     scope: &ProjectScope,
-    made_in: RunId,
+    (made_in, made_by): (RunId, &str),
     at: Timestamp,
   ) -> Result<ProjectRule, StoreError> {
     self.with_write_transaction(
@@ -72,10 +60,11 @@ impl ProjectDb {
           return Ok(active);
         }
         db.connection.execute(
-          "INSERT INTO project_approval_rules (scope, made_in, created_at) VALUES (?1, ?2, ?3)",
+          "INSERT INTO project_approval_rules (scope, made_in, made_by, created_at) VALUES (?1, ?2, ?3, ?4)",
           params![
             encode_json(SCOPE, SCOPE_SCHEMA, &scope.rule_scope())?,
             made_in.to_string(),
+            made_by,
             at.unix_millis()
           ],
         )?;
@@ -83,6 +72,7 @@ impl ProjectDb {
           id: ProjectRuleId::new(db.connection.last_insert_rowid()),
           scope: scope.clone(),
           made_in,
+          made_by: made_by.to_owned(),
           created_at: at,
           revoked_at: None,
           answered: 0,
@@ -110,5 +100,31 @@ impl ProjectDb {
       [rule.get()],
     )?;
     Ok(())
+  }
+}
+
+/// A rule as stored.
+struct StoredRule {
+  id: i64,
+  scope: String,
+  made_in: String,
+  made_by: String,
+  created_at: i64,
+  revoked_at: Option<i64>,
+  answered: u32,
+}
+
+impl StoredRule {
+  fn into_rule(self) -> Result<ProjectRule, StoreError> {
+    Ok(ProjectRule {
+      id: ProjectRuleId::new(self.id),
+      scope: ProjectScope::stored(decode_json::<RuleScope>(SCOPE, SCOPE_SCHEMA, &self.scope)?)
+        .ok_or_else(|| corrupt(SCOPE, "not a rule of start_qa_app kept to a script"))?,
+      made_in: parse("run id", &self.made_in)?,
+      made_by: self.made_by,
+      created_at: Timestamp::from_unix_millis(self.created_at),
+      revoked_at: self.revoked_at.map(Timestamp::from_unix_millis),
+      answered: self.answered,
+    })
   }
 }

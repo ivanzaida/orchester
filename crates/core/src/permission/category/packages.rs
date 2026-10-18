@@ -188,7 +188,7 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
           .iter()
           .filter_map(|arg| arg.rsplit_once('=').map(|(_, path)| path.to_owned())),
       );
-      judged.build_words = BuildWords::of(sub, rest);
+      judged.build_words = BuildWords::of(&args[..at], sub, rest);
     }
     if sub == "clean" { judged } else { judged.prefix_stays() }
   } else if manager.reads.contains(&sub) {
