@@ -269,3 +269,52 @@ fn local_integration_unchanged_sync_intent_releases_only_exact_clean_checkouts()
   recovered.cancellation_verified().expect("verified release");
   assert!(!recovered.reserves_checkout());
 }
+
+#[test]
+fn local_integration_a_review_paused_before_it_held_anything_releases_the_checkout() {
+  let base = checkout('a');
+  let mut review = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  review.paused();
+  assert_eq!(review.phase(), LocalPhase::Paused);
+  assert!(!review.reserves_checkout(), "a paused read-only review holds nothing");
+  review.resume_saved_phase();
+  review.prepared(base.clone()).expect("read-only preparation");
+  review.paused();
+  assert!(!review.reserves_checkout());
+
+  let mut syncing = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  syncing.prepared(base.clone()).expect("prepared");
+  syncing.begin_sync(&base).expect("sync");
+  syncing.paused();
+  assert!(syncing.reserves_checkout(), "a paused sync keeps the checkout");
+
+  let mut owned = LocalOperation::new(RunId::generate(), base.clone()).expect("review");
+  owned.own_task(base);
+  owned.paused();
+  assert!(
+    owned.reserves_checkout(),
+    "the run's worktree it took over stays reserved"
+  );
+}
+
+#[test]
+fn local_integration_a_merge_recorded_beside_a_paused_review_completes_it_for_good() {
+  let mut review = LocalOperation::new(RunId::generate(), checkout('a')).expect("review");
+  review.paused();
+  let merge = orchester_core::integration::RunMerge {
+    run: review.run(),
+    into: orchester_core::run::BranchName::new("main").expect("branch"),
+    revision: orchester_core::revision::Revision::new(&"b".repeat(40)).expect("revision"),
+    kind: orchester_core::integration::MergeKind::FastForward,
+    merged_at: orchester_core::time::Timestamp::from_unix_millis(1),
+  };
+  review.reconcile_recorded_merge(&merge).expect("reconciled");
+  assert_eq!(review.phase(), LocalPhase::Complete);
+  review.resume_saved_phase();
+  assert_eq!(
+    review.phase(),
+    LocalPhase::Complete,
+    "no paused phase is left to return to"
+  );
+  assert!(!review.reserves_checkout());
+}

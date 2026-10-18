@@ -24,7 +24,7 @@ use support::{at, copied_at_version, name};
 use tempfile::TempDir;
 
 /// The schema before connections kept an API provider (`api_providers`, the 72nd). Migrations are append-only.
-const BEFORE_API_PROVIDERS: u32 = 71;
+const BEFORE_API_PROVIDERS: u32 = 72;
 
 fn project() -> (TempDir, ProjectDb) {
   let repo = tempfile::tempdir().expect("temporary directory");

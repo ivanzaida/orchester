@@ -1,8 +1,10 @@
 //! Where the run's work stands and what can be done with it. The Ready card (`Ready card` `hyzq2`): ready
 //! for review, *Merge into main*, *Create pull request* ([`super::pull_request`]), *Ask agent* and *Review PR*,
-//! and why the ones that cannot be used are unavailable (`Unavailable reason` `QR1ER`). *Merged into main*
-//! (`nqp68`): where the work went and what was cleared after it. *Not merged into main* (`D3kggY`): why, the
-//! files that conflicted (`Conflicts` `IBx7h`), and the same actions to merge again.
+//! and why the ones that cannot be used are unavailable (`Unavailable reason` `QR1ER`). *Merge into main* merges the
+//! run into the checkout's branch beside the person's uncommitted work, on the job `merge_run` uses. *Merged into
+//! main* (`nqp68`): where the work went and what was cleared after it. *Not merged into main* (`D3kggY`): why, the
+//! files that conflicted (`Conflicts` `IBx7h`), *Local integration* where it carries on (uncommitted files the merge
+//! would overwrite, a conflict, this run's local integration holding work), and the same actions to merge again.
 
 use std::{num::NonZeroU64, sync::Arc};
 
@@ -19,7 +21,10 @@ use orchester_core::integration::{Leftovers, MergeKind, RunMerge};
 use orchester_workspace::{
   display,
   messages::Message,
-  tasks::{detail::RunView, integration_jobs::JobState},
+  tasks::{
+    detail::RunView,
+    integration_jobs::{JobState, MergeArgs},
+  },
 };
 
 use super::{
@@ -27,6 +32,9 @@ use super::{
   pull_request::{self, PullRequestRead},
 };
 use crate::{
+  navigation::Navigation,
+  routes::{Route, TaskView},
+  services::Services,
   theme::{DecisionSpacing, DecisionText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -152,6 +160,11 @@ pub fn not_merged(
   let notice = Notice::new("task-notice", NoticeTone::Warning, title)
     .icon(Icon::TriangleAlert)
     .body(message_text(ctx, problem));
+  let notice = if task.jobs.run(run.id()).continues_locally {
+    notice.action(local_integration(ctx, task))
+  } else {
+    notice
+  };
   let files = (!conflicts.is_empty()).then(|| conflicting(ctx, conflicts));
   let (actions, reasons) = actions(ctx, task, run, pull);
   let actions = Column::new()
@@ -163,6 +176,17 @@ pub fn not_merged(
     .chain(files)
     .chain(std::iter::once(actions.into()))
     .collect()
+}
+
+/// Opens the task's Local integration, which carries on where the merge stopped.
+fn local_integration(ctx: &mut Ctx, task: &TaskContext) -> ActionButton {
+  let route = Route::Project(task.project.open.project.id(), task.page(TaskView::LocalIntegration));
+  ActionButton::new(
+    "task-open-local-integration",
+    ButtonKind::Secondary,
+    ctx.t("local_integration.title"),
+  )
+  .opens(Navigation::of(ctx).to(route))
 }
 
 /// *Conflicting files* with their count, a row per file.
@@ -241,8 +265,12 @@ fn review_button(ctx: &mut Ctx, task: &TaskContext, number: Option<NonZeroU64>) 
   (review.opens(navigation.to(route)), None)
 }
 
-/// *Merge into main*: under way while git merges, waiting while the run's worktree is removed, its pull request
-/// is created or another run of the project merges, and unavailable with why when the run did not record the
+/// *Merge into main*: merges the run on the project's shared operations, the job Orchester's `merge_run` uses. A
+/// person's press tells them the outcome in full; an MCP client's press through the window goes through `merge_run`'s
+/// policy (`RunJobs::start_synthetic_merge`), which refuses and redacts what the tool would. Under way while git
+/// merges, waiting while the run's worktree is removed, its pull request is created, Local integration works in the
+/// checkout, another run of the project merges or a decision of Local integration waits, and unavailable with why
+/// when the run did not record the
 /// branch it started from.
 fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButton, Option<Arc<str>>) {
   let Some(branch) = run.run.base_branch() else {
@@ -264,13 +292,48 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   if job.creating_pull_request() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaitsPullRequest")));
   }
-  if job.busy() {
+  if job.removing() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));
   }
-  let navigation = crate::navigation::Navigation::of(ctx);
-  let route = crate::routes::Route::Project(
-    task.project.open.project.id(),
-    task.page(crate::routes::TaskView::LocalIntegration),
+  if job.busy() {
+    return (button.disabled(), Some(ctx.t("decisions.ready.mergeLocalWork")));
+  }
+  // A merge would not begin while a person answers Local integration (`RunJobs::local_decision`).
+  if task.jobs.local_decision_pending() {
+    return (button.disabled(), Some(ctx.t("decisions.ready.mergeDecision")));
+  }
+  let services = Services::of(ctx);
+  let (jobs, vault) = (
+    services.jobs.of(task.project.open.project.id()).of(run.id()),
+    services.vault,
   );
-  (button.opens(navigation.to(route)), None)
+  let args = merge_args(ctx, task, run, branch.as_str());
+  // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which
+  // the card shows, as it is.
+  let start = move || {
+    if lurq::app::events::is_synthetic_input() {
+      jobs.start_synthetic_merge(args.clone(), vault.clone());
+    } else {
+      jobs.start_merge(args.clone());
+    }
+  };
+  (button.on_click(start), None)
+}
+
+/// The merge of `run` into `branch`, reported in the status bar; once it ends the task is read again.
+fn merge_args(ctx: &mut Ctx, task: &TaskContext, run: &RunView, branch: &str) -> MergeArgs {
+  let services = Services::of(ctx);
+  let feed = task.project.feed.clone();
+  MergeArgs {
+    open: task.project.open.clone(),
+    task: task.detail.task.id(),
+    key: task.detail.task.key().to_string(),
+    number: run.run.number().get(),
+    branch: branch.to_owned(),
+    run: run.id(),
+    programs: services.programs,
+    activity: services.activity,
+    separator: ctx.t("task.listSeparator"),
+    changed: Arc::new(move || feed.saved()),
+  }
 }

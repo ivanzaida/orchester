@@ -48,7 +48,7 @@ CLI configured for the provider.
 - The Orchestrator chat and auto mode's reviewer start their CLI on its own sign-in; a connection on a provider is
   not offered there (`orchestrator.settings.apiProvider`, `reviewer_kind` = `None`) rather than run on the wrong
   credentials.
-- Store: project database migration 72, `api_providers` (after master's `run_rebases`, 71), adds the table
+- Store: project database migration 73, `api_providers` (after master's `run_rebases`, 71, and `creation_snapshots`, 72), adds the table
   `invocation_providers` (the base URL and key secret each invocation on a provider started on) and
   `connections.api_provider TEXT` (NULL, or
   `{"schema":1,"body":{base_url,key,models:[…]}}`). Older builds refuse the newer database as for every migration,

@@ -1,14 +1,17 @@
-//! Ready for review with Merge into main: opening the local checkout review (also for a task that will conflict),
-//! unavailable without a branch to merge into, merged; and what git tells of the work without Orchester: merged by
-//! a person, or nothing to merge, and current external Git evidence in place of Ready.
+//! Ready for review with Merge into main: merging beside the person's uncommitted work (also past a local
+//! integration paused at its review), refused at a dirty path the run changes and at a conflict with Local
+//! integration offered, unavailable without a branch to merge into, merged; and what git tells of the work without
+//! Orchester: merged by a person, or nothing to merge, and current external Git evidence in place of Ready.
 
-use std::process;
+use std::{fs, process};
 
 use orchester_core::{
+  integration::local::{LocalIntegrationStore, LocalPhase},
   run::Run,
-  store::{RunStore, TaskStore},
+  store::{MergeStore, RunStore, TaskStore},
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::tasks::local_integration::LocalIntegration;
 
 use super::{Page, checkout_page, key_of};
 
@@ -44,10 +47,89 @@ pub(super) fn git(page: &Page, args: &[&str]) {
   );
 }
 
+/// `git <args>` in the seeded repository, which must succeed; what it printed.
+fn git_out(page: &Page, args: &[&str]) -> String {
+  let output = process::Command::new("git")
+    .arg("-C")
+    .arg(&page.repo)
+    .args(args)
+    .output()
+    .expect("run git");
+  assert!(output.status.success(), "git {args:?}");
+  String::from_utf8(output.stdout).expect("text").trim().to_owned()
+}
+
+/// The files `run` changed on its branch.
+fn changed_by(page: &Page, run: &Run) -> Vec<String> {
+  git_out(
+    page,
+    &["diff", "--name-only", run.base().as_str(), run.branch().as_str()],
+  )
+  .lines()
+  .map(str::to_owned)
+  .collect()
+}
+
+/// Writes the person's work into the checkout: `modified` changed and not staged (or, where the checkout has no such
+/// file, written there untracked), and an untracked file of its own; their paths and bytes.
+fn person_work(page: &Page, modified: &str) -> Vec<(String, Vec<u8>)> {
+  let path = page.repo.join(modified);
+  let mut edited = if path.exists() {
+    fs::read(&path).expect("the tracked file")
+  } else {
+    fs::create_dir_all(path.parent().expect("a file in the repository")).expect("its folder");
+    Vec::new()
+  };
+  edited.extend_from_slice(b"\nThe person's edit, not committed.\n");
+  fs::write(page.repo.join(modified), &edited).expect("edit");
+  fs::write(page.repo.join("handover-notes.md"), "Untracked notes.\n").expect("untracked");
+  [modified, "handover-notes.md"]
+    .into_iter()
+    .map(|path| (path.to_owned(), fs::read(page.repo.join(path)).expect("bytes")))
+    .collect()
+}
+
+fn unchanged(page: &Page, work: &[(String, Vec<u8>)]) {
+  for (path, bytes) in work {
+    assert_eq!(
+      &fs::read(page.repo.join(path)).expect("bytes"),
+      bytes,
+      "{path} is the person's"
+    );
+  }
+}
+
+/// The commit `run`'s branch is at; its merge removes the branch.
+fn tip(page: &Page, run: &Run) -> String {
+  git_out(page, &["rev-parse", run.branch().as_str()])
+}
+
+/// Whether Merged into main stands for `run`, whose branch was at `tip`: that commit is in the checkout's branch and
+/// the merge is recorded.
+fn merged(page: &Page, (run, tip): (&Run, &str)) -> bool {
+  let ancestor = process::Command::new("git")
+    .arg("-C")
+    .arg(&page.repo)
+    .args(["merge-base", "--is-ancestor", tip, "HEAD"])
+    .status()
+    .expect("run git")
+    .success();
+  let recorded = ProjectDb::open(&page.repo)
+    .expect("the project database")
+    .run_merge(run.id())
+    .expect("the merge record")
+    .is_some();
+  ancestor && recorded
+}
+
 #[test]
-fn decision_ready_for_review_opens_local_integration_before_any_merge() {
+fn decision_merge_into_main_merges_beside_unrelated_uncommitted_work() {
   let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
+  let run = latest_run(&page, "ready for review, merges cleanly");
+  assert!(!changed_by(&page, &run).contains(&"README.md".to_owned()));
+  let work = person_work(&page, "README.md");
+  let tip = tip(&page, &run);
   page.open("ready for review, merges cleanly", "task-merge");
   assert_eq!(page.text("task-notice-title"), "Ready for your review");
   assert!(page.locked("task-review-pull-request"));
@@ -59,28 +141,73 @@ fn decision_ready_for_review_opens_local_integration_before_any_merge() {
   page.until_says("task-ready-changes-figure", "1 file");
   assert!(page.has("task-ready-check-review"), "Review verified the work");
   assert!(page.has("task-run-details"));
-  page.click("task-merge");
-  page.window.until("local checkout review", |window| {
-    window.tree.get_element_by_id("task-local-integration").is_some()
-  });
+  page.merge_until(("task-merge", "task-notice-title"), "Merged into main");
+  assert!(page.text("task-notice").contains("main got merge commit"));
   assert!(
-    page
-      .window
-      .navigation()
-      .route_now()
-      .path()
-      .ends_with("/local-integration")
+    !page.has("task-local-integration"),
+    "no detour through Local integration"
   );
-  assert!(!page.has("local-confirm"), "no merge approval before a fresh Check");
+  assert!(merged(&page, (&run, &tip)));
+  unchanged(&page, &work);
+  assert_eq!(
+    git_out(
+      &page,
+      &["status", "--porcelain", "--", "README.md", "handover-notes.md"]
+    ),
+    "M README.md\n?? handover-notes.md",
+    "git_out trims the first line's leading space"
+  );
 }
 
 #[test]
-fn decision_merge_opens_local_review_for_a_task_that_will_conflict() {
+fn decision_merge_merges_a_run_whose_local_integration_paused_at_review() {
   let _checkout = checkout_page();
   let mut page = Page::seeded("decisions");
-  page.open("ready for review, conflicts with main", "task-merge");
-  page.click("task-merge");
-  page.window.until("local checkout review", |window| {
+  let run = latest_run(&page, "ready for review, merges cleanly");
+  let work = person_work(&page, "README.md");
+  let tip = tip(&page, &run);
+  let mut review = LocalIntegration::open(&page.repo, run.id()).expect("the review of the checkout");
+  review.pause().expect("paused at its review");
+  drop(review);
+  let paused = ProjectDb::open(&page.repo)
+    .expect("the project database")
+    .local_operation(run.id())
+    .expect("read")
+    .expect("the paused review");
+  assert_eq!(paused.phase(), LocalPhase::Paused);
+  page.open("ready for review, merges cleanly", "task-merge");
+  page.merge_until(("task-merge", "task-notice-title"), "Merged into main");
+  assert!(merged(&page, (&run, &tip)));
+  unchanged(&page, &work);
+}
+
+#[test]
+fn decision_merge_at_a_dirty_path_says_why_and_offers_local_integration() {
+  let _checkout = checkout_page();
+  let mut page = Page::seeded("decisions");
+  let run = latest_run(&page, "ready for review, merges cleanly");
+  let touched = changed_by(&page, &run)
+    .into_iter()
+    .next()
+    .expect("a file the run changed");
+  let work = person_work(&page, &touched);
+  let tip = tip(&page, &run);
+  let head = git_out(&page, &["rev-parse", "HEAD"]);
+  page.open("ready for review, merges cleanly", "task-merge");
+  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
+  assert!(
+    page
+      .text("task-notice")
+      .contains("uncommitted changes the merge would overwrite"),
+    "{}",
+    page.text("task-notice")
+  );
+  assert_eq!(git_out(&page, &["rev-parse", "HEAD"]), head);
+  unchanged(&page, &work);
+  assert!(!merged(&page, (&run, &tip)));
+  assert!(page.has("task-merge"), "Merge into main stays for another try");
+  page.click("task-open-local-integration");
+  page.window.until("Local integration", |window| {
     window.tree.get_element_by_id("task-local-integration").is_some()
   });
   assert!(
@@ -91,10 +218,22 @@ fn decision_merge_opens_local_review_for_a_task_that_will_conflict() {
       .path()
       .ends_with("/local-integration")
   );
-  assert!(
-    !page.has("local-result-editor"),
-    "sync has not begun from an entry click"
-  );
+}
+
+#[test]
+fn decision_merge_conflict_lists_the_files_and_offers_local_integration() {
+  let _checkout = checkout_page();
+  let mut page = Page::seeded("decisions");
+  let run = latest_run(&page, "ready for review, conflicts with main");
+  let tip = tip(&page, &run);
+  let head = git_out(&page, &["rev-parse", "HEAD"]);
+  page.open("ready for review, conflicts with main", "task-merge");
+  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
+  page.until_says("task-merge-conflicts", "src/webhooks/sender.rs");
+  assert!(page.text("task-merge-conflicts").contains("src/webhooks/settings.rs"));
+  assert!(page.has("task-open-local-integration"));
+  assert_eq!(git_out(&page, &["rev-parse", "HEAD"]), head, "the merge was undone");
+  assert!(!merged(&page, (&run, &tip)));
 }
 
 #[test]
