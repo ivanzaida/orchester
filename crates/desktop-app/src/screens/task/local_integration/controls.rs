@@ -4,6 +4,7 @@
 
 mod acknowledgement;
 mod confirmation;
+mod finishing;
 mod preparation;
 mod recovery;
 
@@ -23,7 +24,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::integration::local::LocalPhase;
+use orchester_core::integration::local::{LocalOperation, LocalPhase};
 use orchester_workspace::tasks::local_integration::IntegrationView;
 pub(super) use recovery::aborted;
 
@@ -220,10 +221,29 @@ impl Component for Inspector {
 }
 
 impl Inspector {
+  /// The step's card. Beside work found integrated outside Orchester, its card first; a record that still holds the
+  /// person's work keeps the actions that finish, put back or cancel it under that card.
   fn actions(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
-    if let Some(evidence) = &props.view.external {
-      return external_panel(ctx, props, evidence);
+    let Some(evidence) = &props.view.external else {
+      return self.step(ctx, props, mode, phase);
+    };
+    if !props
+      .view
+      .operation
+      .as_ref()
+      .is_some_and(LocalOperation::reserves_checkout)
+    {
+      return external_panel(ctx, props, evidence, "local-actions");
     }
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Lg)
+      .child(external_panel(ctx, props, evidence, "local-external"))
+      .child(self.step(ctx, props, mode, phase))
+      .into()
+  }
+
+  fn step(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
     if props.busy {
       let stop = props.trigger.stop.clone();
       return action_panel(ctx, phase_title(phase), None)
@@ -235,6 +255,7 @@ impl Inspector {
     }
     match decision(props, mode, phase) {
       Some(decision) => self.confirmation(ctx, props, (mode, phase), decision),
+      None if props.view.external.is_some() => self.finishing(ctx, props, phase),
       None => self.available(ctx, props, phase),
     }
   }
@@ -330,34 +351,39 @@ impl Inspector {
 
 /// The step's card for an integration made outside Orchester: merged without Orchester, as the Summary says, or
 /// blocked until it is reconciled.
-fn external_panel(ctx: &Ctx, props: &Props, evidence: &orchester_core::integration::local::ContainedResult) -> Element {
-  if !super::words::merged_outside(evidence) {
-    return action_panel(
-      ctx,
-      "local_integration.externalTitle",
-      Some("local_integration.externalBody"),
+fn external_panel(
+  ctx: &Ctx,
+  props: &Props,
+  evidence: &orchester_core::integration::local::ContainedResult,
+  id: &str,
+) -> Element {
+  let (title, body) = if super::words::merged_outside(evidence) {
+    let branch = props
+      .trigger
+      .task
+      .detail
+      .run
+      .as_ref()
+      .map(|run| run.run.branch().as_str())
+      .unwrap_or_default();
+    super::words::merged_outside_words(ctx, branch, &props.view.checkout.branch)
+  } else {
+    (
+      ctx.t("local_integration.externalTitle"),
+      ctx.t("local_integration.externalBody"),
     )
-    .into();
-  }
-  let task = &props.trigger.task;
-  let branch = task
-    .detail
-    .run
-    .as_ref()
-    .map(|run| run.run.branch().as_str())
-    .unwrap_or_default();
-  let (title, body) = super::words::merged_outside_words(ctx, branch, &props.view.checkout.branch);
-  card_frame("local-actions", CardSurface::Pending)
+  };
+  card_frame(id, CardSurface::Pending)
     .padding(SpacingSize::Lg)
     .spacing(SpacingSize::Sm)
     .child(
       Text::new(&title)
-        .id("local-actions-title")
+        .id(format!("{id}-title"))
         .variant(LocalText::Heading.role()),
     )
     .child(
       Text::new(&body)
-        .id("local-actions-body")
+        .id(format!("{id}-body"))
         .variant(LocalText::Explanation.role()),
     )
     .into()
