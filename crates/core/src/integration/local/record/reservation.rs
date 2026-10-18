@@ -15,6 +15,17 @@ impl LocalOperation {
     }
   }
 
+  /// The phase once the run's merge is recorded. Only originals still retained are put back
+  /// ([`LocalPhase::MergedAwaitingRestore`]); a cancellation already put them back, so it stays canceled until its
+  /// retained originals are removed, which then completes it. Originals removed already leave nothing to restore.
+  pub(super) fn merged_phase(&self) -> LocalPhase {
+    match &self.preservation {
+      Some(saved) if saved.retained && self.phase == LocalPhase::Canceled => LocalPhase::Canceled,
+      Some(saved) if saved.retained => LocalPhase::MergedAwaitingRestore,
+      _ => LocalPhase::Complete,
+    }
+  }
+
   /// What a review has started and must keep: preserved originals, a merge, a commit, the run's worktree it took
   /// over, a resolution under way or unsaved editor decisions.
   fn holds_work(&self) -> bool {

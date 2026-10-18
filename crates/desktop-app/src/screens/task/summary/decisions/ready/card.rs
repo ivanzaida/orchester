@@ -249,10 +249,12 @@ fn actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (Element, Vec<El
   (row.into(), reasons)
 }
 
-/// *Merge into main*: merges the run on the project's shared operations, as Orchester's `merge_run` does, so a
-/// client's press through the window merges as that tool would. Under way while git merges, waiting while the run's
-/// worktree is removed, another run of the project merges or a decision of Local integration waits, and
-/// unavailable with why when the run did not record the branch it started from.
+/// *Merge into main*: merges the run on the project's shared operations, the job Orchester's `merge_run` uses. A
+/// person's press tells them the outcome in full; an MCP client's press through the window goes through `merge_run`'s
+/// policy (`RunJobs::start_synthetic_merge`), which refuses and redacts what the tool would. Under way while git
+/// merges, waiting while the run's worktree is removed, Local integration works in the checkout, another run of the
+/// project merges or a decision of Local integration waits, and unavailable with why when the run did not record the
+/// branch it started from.
 fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButton, Option<Arc<str>>) {
   let Some(branch) = run.run.base_branch() else {
     let reason = ctx.t("decisions.ready.mergeNoBranch");
@@ -270,21 +272,30 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   if task.jobs.merging().is_some_and(|other| other != run.id()) {
     return (button.disabled(), Some(ctx.t("decisions.ready.anotherMerge")));
   }
-  if job.busy() {
+  if job.removing() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));
+  }
+  if job.busy() {
+    return (button.disabled(), Some(ctx.t("decisions.ready.mergeLocalWork")));
   }
   // A merge would not begin while a person answers Local integration (`RunJobs::local_decision`).
   if task.jobs.local_decision_pending() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeDecision")));
   }
-  let (jobs, args) = (
-    Services::of(ctx).jobs.of(task.project.open.project.id()).of(run.id()),
-    merge_args(ctx, task, run, branch.as_str()),
+  let services = Services::of(ctx);
+  let (jobs, vault) = (
+    services.jobs.of(task.project.open.project.id()).of(run.id()),
+    services.vault,
   );
+  let args = merge_args(ctx, task, run, branch.as_str());
   // A merge that does not begin (another one took the project meanwhile) leaves the job's state, which
   // the card shows, as it is.
   let start = move || {
-    jobs.start_merge(args.clone());
+    if lurq::app::events::is_synthetic_input() {
+      jobs.start_synthetic_merge(args.clone(), vault.clone());
+    } else {
+      jobs.start_merge(args.clone());
+    }
   };
   (button.on_click(start), None)
 }

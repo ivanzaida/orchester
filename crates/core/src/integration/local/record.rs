@@ -418,11 +418,7 @@ impl LocalOperation {
     }
     self.merged = Some(commit);
     self.approved = None;
-    self.phase = if self.preservation.is_some() {
-      LocalPhase::MergedAwaitingRestore
-    } else {
-      LocalPhase::Complete
-    };
+    self.phase = self.merged_phase();
     Ok(())
   }
 
@@ -437,11 +433,8 @@ impl LocalOperation {
     }
     self.merged = Some(merge.revision.as_str().to_owned());
     self.approved = None;
-    self.phase = if self.preservation.is_some() {
-      LocalPhase::MergedAwaitingRestore
-    } else {
-      LocalPhase::Complete
-    };
+    self.phase = self.merged_phase();
+    self.paused_from = None;
     Ok(())
   }
 

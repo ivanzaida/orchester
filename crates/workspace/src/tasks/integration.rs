@@ -23,7 +23,7 @@ use orchester_exec::programs::Programs;
 use orchester_index::CodebaseIndexes;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{changes::GIT, detail::run_store_error};
+use super::{changes::GIT, detail::run_store_error, local_integration::CheckoutHolder};
 use crate::{
   activity::{Activity, Running, operations},
   messages::Message,
@@ -54,11 +54,9 @@ pub enum IntegrationProblem {
     path: String,
     detail: String,
   },
-  /// A local integration started work in the checkout that it must finish or put back first: this run's
-  /// (`this_run`), or another run's. Nothing was merged.
-  HeldLocally {
-    this_run: bool,
-  },
+  /// A local integration holds the checkout with work it must finish, put back or clean up first: this run's, or
+  /// another task's. Nothing was merged.
+  HeldLocally(CheckoutHolder),
   /// Git merged the run, but saving its receipt failed; external evidence prevents a repeated merge.
   NotRecorded {
     merge: RunMerge,
@@ -130,7 +128,7 @@ impl IntegrationProblem {
     matches!(
       self,
       Self::Merge(MergeError::UncommittedInTheWay { .. } | MergeError::Conflict { .. })
-        | Self::HeldLocally { this_run: true }
+        | Self::HeldLocally(CheckoutHolder::ThisRun)
     )
   }
 
@@ -143,8 +141,10 @@ impl IntegrationProblem {
       Self::Cleanup(CleanupError::Git(error)) | Self::Read(error) => git_message(error),
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
-      Self::HeldLocally { this_run: true } => Message::new("runs.merge.failure.heldLocally"),
-      Self::HeldLocally { this_run: false } => Message::new("runs.merge.failure.heldByOther"),
+      Self::HeldLocally(CheckoutHolder::ThisRun) => Message::new("runs.merge.failure.heldLocally"),
+      Self::HeldLocally(CheckoutHolder::OtherRun { task }) => {
+        Message::new("runs.merge.failure.heldByOther").with("task", task.to_string())
+      }
       Self::NewChanges { path } => Message::new("runs.worktree.failure.newChanges").with("path", short_path(path)),
       Self::RunChanged => Message::new("runs.worktree.failure.runChanged"),
       Self::NotRecorded { merge, .. } => {
@@ -323,9 +323,7 @@ pub fn merge_in(
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   if let Some(holder) = super::local_integration::checkout_holder(&db, run.id())? {
-    return Err(IntegrationProblem::HeldLocally {
-      this_run: holder == super::local_integration::CheckoutHolder::ThisRun,
-    });
+    return Err(IntegrationProblem::HeldLocally(holder));
   }
   if super::local_integration::external_integration(repo_root, run.id())
     .map_err(|_| IntegrationProblem::Store(Message::new("localIntegration.preflightFailed")))?

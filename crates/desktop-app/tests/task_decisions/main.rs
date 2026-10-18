@@ -183,7 +183,23 @@ impl Page {
       window.texts(id).is_some_and(|texts| texts.join(" ").contains(words))
     });
   }
+
+  /// Presses `id`, which starts a git merge, and waits until the element `notice` says `words`: git merges in a
+  /// temporary worktree and the task is read again, which takes longer than drawing while other tests run.
+  fn merge_until(&mut self, (id, notice): (&str, &str), words: &str) {
+    self.click(id);
+    self
+      .window
+      .until_within(MERGE_WAIT, &format!("{notice} to say {words}"), |window| {
+        window
+          .texts(notice)
+          .is_some_and(|texts| texts.join(" ").contains(words))
+      });
+  }
 }
+
+/// How long a merge may take before a test gives up on it.
+const MERGE_WAIT: std::time::Duration = std::time::Duration::from_secs(90);
 
 #[test]
 fn decision_plan_review_lists_versions_and_request_changes_needs_a_note() {

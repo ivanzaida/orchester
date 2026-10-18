@@ -296,3 +296,25 @@ fn local_integration_a_review_paused_before_it_held_anything_releases_the_checko
     "the run's worktree it took over stays reserved"
   );
 }
+
+#[test]
+fn local_integration_a_merge_recorded_beside_a_paused_review_completes_it_for_good() {
+  let mut review = LocalOperation::new(RunId::generate(), checkout('a')).expect("review");
+  review.paused();
+  let merge = orchester_core::integration::RunMerge {
+    run: review.run(),
+    into: orchester_core::run::BranchName::new("main").expect("branch"),
+    revision: orchester_core::revision::Revision::new(&"b".repeat(40)).expect("revision"),
+    kind: orchester_core::integration::MergeKind::FastForward,
+    merged_at: orchester_core::time::Timestamp::from_unix_millis(1),
+  };
+  review.reconcile_recorded_merge(&merge).expect("reconciled");
+  assert_eq!(review.phase(), LocalPhase::Complete);
+  review.resume_saved_phase();
+  assert_eq!(
+    review.phase(),
+    LocalPhase::Complete,
+    "no paused phase is left to return to"
+  );
+  assert!(!review.reserves_checkout());
+}

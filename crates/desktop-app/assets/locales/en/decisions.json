@@ -126,6 +126,7 @@
       "mergeUnknown": "Merge",
       "mergeNoBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
       "mergeWaits": "Merge waits until the run's worktree is removed.",
+      "mergeLocalWork": "Merge waits while Local integration works in your checkout.",
       "mergeDecision": "Merge waits for the decision Local integration asks for in this project.",
       "ask": "Ask agent",
       "askUnavailable": "Ask agent needs the conversation's composer, which this app doesn't have yet.",

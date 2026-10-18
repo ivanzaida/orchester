@@ -13,12 +13,16 @@ tool `merge_run` does (`orchester_core::integration::merge`): in a temporary wor
 fast-forward that leaves uncommitted and untracked files it does not reach exactly as they are. It does not open
 Local integration first. The card offers *Local integration* (an action in *Not merged into main*) only where it
 carries on: the merge would overwrite files with uncommitted changes, untracked or ignored files; the run conflicts
-with the branch; or this run's local integration has started work it must finish or put back (preserved originals,
-a commit, a sync, the run's worktree taken over, a resolution or unsaved editor decisions). A checkout on another
+with the branch; or this run's local integration holds work it must finish, put back or clean up (preserved originals, also
+originals kept after a cancellation, a commit, a sync, the run's worktree taken over, a resolution, unsaved editor
+decisions, or a Git process that has not finished). A checkout on another
 branch or with a git operation in progress, and another task's local integration holding the checkout, are refused
 with the reason and no Local integration action. A review that only read the checkout, also one paused or stopped
-since, holds nothing: it does not stand in the way of the direct merge, and once the run is merged it reads as
-complete. While Local integration asks a person for a decision in the project, *Merge into main* waits and says so.
+since, or a cancellation whose kept originals were removed, holds nothing: it does not stand in the way of the
+direct merge, and once the run is merged it reads as complete (only originals still kept wait to be put back). While
+Local integration asks a person for a decision in the project, or works in the checkout, *Merge into main* waits
+and says so. A press that comes from an MCP client through the window goes through `merge_run`'s policy, which
+refuses and redacts what that tool would.
 
 ## Reviewed native states
 
