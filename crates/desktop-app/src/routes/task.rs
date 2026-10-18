@@ -6,24 +6,32 @@ use super::{
 const FILE: &str = "file";
 const FROM: &str = "from";
 
-/// A tab of a task's page, in the design's order (`Page tabs` `L9OIIZ` in `lUXff`); Summary is the one it
-/// opens on.
+/// A tab of a task's page, in the design's order (`Page tabs` `L9OIIZ` in `lUXff`, Details after Summary in
+/// `vShIt`); Summary is the one it opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskTab {
   #[default]
   Summary,
+  Details,
   Conversation,
   Changes,
   LocalIntegration,
 }
 
 impl TaskTab {
-  pub const ALL: [Self; 4] = [Self::Summary, Self::Conversation, Self::Changes, Self::LocalIntegration];
+  pub const ALL: [Self; 5] = [
+    Self::Summary,
+    Self::Details,
+    Self::Conversation,
+    Self::Changes,
+    Self::LocalIntegration,
+  ];
 
   /// The tab's name: the last segment of its path, and its name in the app's MCP tools.
   pub const fn name(self) -> &'static str {
     match self {
       Self::Summary => "summary",
+      Self::Details => "details",
       Self::Conversation => "conversation",
       Self::Changes => "changes",
       Self::LocalIntegration => "local-integration",
@@ -38,6 +46,7 @@ impl TaskTab {
   pub const fn title_key(self) -> &'static str {
     match self {
       Self::Summary => "task.tabs.summary",
+      Self::Details => "task.tabs.details",
       Self::Conversation => "task.tabs.conversation",
       Self::Changes => "task.tabs.changes",
       Self::LocalIntegration => "local_integration.title",
@@ -50,6 +59,7 @@ impl TaskTab {
 pub enum TaskView {
   #[default]
   Summary,
+  Details,
   Conversation,
   Changes(Option<ChangedFile>),
   LocalIntegration,
@@ -60,6 +70,7 @@ impl TaskView {
   pub const fn of(tab: TaskTab) -> Self {
     match tab {
       TaskTab::Summary => Self::Summary,
+      TaskTab::Details => Self::Details,
       TaskTab::Conversation => Self::Conversation,
       TaskTab::Changes => Self::Changes(None),
       TaskTab::LocalIntegration => Self::LocalIntegration,
@@ -69,6 +80,7 @@ impl TaskView {
   pub const fn tab(&self) -> TaskTab {
     match self {
       Self::Summary => TaskTab::Summary,
+      Self::Details => TaskTab::Details,
       Self::Conversation => TaskTab::Conversation,
       Self::Changes(_) => TaskTab::Changes,
       Self::LocalIntegration => TaskTab::LocalIntegration,
@@ -78,7 +90,7 @@ impl TaskView {
   pub const fn file(&self) -> Option<&ChangedFile> {
     match self {
       Self::Changes(file) => file.as_ref(),
-      Self::Summary | Self::Conversation | Self::LocalIntegration => None,
+      Self::Summary | Self::Details | Self::Conversation | Self::LocalIntegration => None,
     }
   }
 

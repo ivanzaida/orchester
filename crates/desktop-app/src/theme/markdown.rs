@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use lurq::{
   app::theme::{MarkdownBlockStyle, MarkdownFocusRing, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
-  layout::text_style::{FontFeature, FontFeatures, FontWeight},
+  layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::{border::BorderRadius, color::Color, padding::Padding},
 };
 
@@ -152,5 +152,14 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
       ..MarkdownBlockStyle::new()
     },
     ..ThemeMarkdown::default()
+  }
+}
+
+/// `markdown` for a text the design draws with an empty line between its paragraphs, one line of its `body`
+/// apart: a task's description in Details (`bU9bE` in `ZSiHd`, 12/1.6).
+pub fn blank_line_between_blocks(markdown: &ThemeMarkdown, body: &TextStyle) -> ThemeMarkdown {
+  ThemeMarkdown {
+    document_spacing: body.font_size * body.line_height,
+    ..markdown.clone()
   }
 }

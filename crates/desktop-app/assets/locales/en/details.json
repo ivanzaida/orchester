@@ -1,0 +1,61 @@
+{
+  "details": {
+    "source": {
+      "label": "Requirements version",
+      "creation": "At task creation",
+      "runStart": "Run #{{run}} · at start",
+      "current": "Current task"
+    },
+    "provenance": {
+      "creation": "Read-only · original task saved at creation",
+      "runStart": "Read-only · requirements given to Run #{{run}}",
+      "currentNoRun": "Current task · no run has started yet",
+      "currentEdited": "Current task · edited after Run #{{run}}",
+      "currentUnchanged": "Current task · unchanged since Run #{{run}} started",
+      "currentNotRecorded": "Current task · what Run #{{run}} was given was not recorded",
+      "currentRunUnknown": "Current task · its latest run can't be read",
+      "currentElsewhere": "Current task · Run #{{run}} ran on another computer, which keeps what it was given"
+    },
+    "fallback": {
+      "title": "Creation version not recorded",
+      "runStart": "This older task has no creation snapshot. The saved run-start version is shown instead.",
+      "current": "This older task has no creation snapshot, and this computer keeps no version a run started with. Its current requirements are shown instead."
+    },
+    "title": "Task title",
+    "description": "Description",
+    "noDescription": "No description yet",
+    "criteria": "Acceptance criteria · {{count}}",
+    "noCriteria": "No acceptance criteria yet",
+    "setup": {
+      "run": "Run #{{run}} setup",
+      "captured": "Captured for this run",
+      "first": "First run setup",
+      "notStarted": "No run yet · what its first run would start with now",
+      "unknown": "Run setup",
+      "unreadable": "Its latest run can't be read",
+      "elsewhere": "Ran on another computer · its setup is not on this one",
+      "pipeline": "Pipeline",
+      "pipelineValue": "{{pipeline}} {{version}}",
+      "pipelineGone": "{{version}} of a pipeline no longer in the project",
+      "notChosen": "Not chosen yet",
+      "tokens": "Token limit",
+      "tokensValue": "{{budget}} tokens",
+      "time": "Time limit",
+      "minutes": "{{minutes}} min",
+      "notSet": "Not set",
+      "notRecorded": "Not recorded"
+    },
+    "organization": {
+      "title": "Task organization",
+      "current": "Current values · not a historical snapshot",
+      "status": "Status",
+      "priority": "Priority",
+      "tags": "Tags",
+      "dependsOn": "Depends on",
+      "created": "Created",
+      "none": "None",
+      "separator": " · ",
+      "notKnown": "Not known yet"
+    }
+  }
+}

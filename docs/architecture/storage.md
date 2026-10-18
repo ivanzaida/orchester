@@ -473,6 +473,7 @@ it as missing. A tool copy keeps allowed callers only for pipelines copied with 
 | Table | Purpose |
 | --- | --- |
 | `tasks` | key, title, brief, acceptance criteria, pipeline resource, limits (token budget and time limit, each `NULL` for no limit), status (`draft` or `queued`: submitted, which a finished run does not change; see "State machines"), idempotency key |
+| `task_creation_snapshots` | task, title, brief, criteria, pipeline (local id or shared slug), limits — what a task asked for when it was created, immutable (triggers refuse update and delete); a task created before the table has no row, never reconstructed (ORC-25) |
 | `task_dependencies` | task, prerequisite, condition (`ready_for_review`, `merged`) |
 | `run_groups` | mode (parallel with limit / sequential with gate), budget cap, failure policy, scheduling paused, pinned versions |
 | `run_group_items` | group, task, position |

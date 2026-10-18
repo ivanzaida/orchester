@@ -128,7 +128,9 @@ impl Page {
       window
         .texts("task-title-row")
         .is_some_and(|texts| texts.contains(&title))
-        && (window.texts("task-notice-title").is_some() || window.texts("task-steps").is_some())
+        && (window.texts("task-notice-title").is_some()
+          || window.texts("task-steps").is_some()
+          || window.texts("task-summary-empty").is_some())
     });
     key
   }
@@ -208,9 +210,6 @@ fn ids_in(element: ElementRef<'_>, prefix: &str, into: &mut Vec<String>) {
 fn summary_notice_says_where_each_task_stands() {
   let mut page = Page::seeded("task-states");
   let cases = [
-    ("draft, ready to queue", "Draft · ready to run"),
-    ("draft, missing details", "Draft · not run yet"),
-    ("queued, run not started", "Queued · its run has not started"),
     // No runner is connected: a run recorded as running is interrupted until one is.
     ("running", "Interrupted at Implement"),
     ("stopped by the daily budget", "Stopped at the daily token budget"),
@@ -225,6 +224,16 @@ fn summary_notice_says_where_each_task_stands() {
   for (state, title) in cases {
     page.open(state);
     assert_eq!(page.text("task-notice-title"), title, "{state}");
+  }
+  // Before the first run there is no run to say anything of (`Xxrdy`).
+  for state in [
+    "draft, ready to queue",
+    "draft, missing details",
+    "queued, run not started",
+  ] {
+    page.open(state);
+    assert_eq!(page.text("task-summary-empty-title"), "No runs yet", "{state}");
+    assert!(!page.has("task-notice"), "{state}");
   }
   page.open("stopped at its token limit");
   let limit = page.text("task-notice-title");
@@ -301,7 +310,7 @@ fn summary_controls_say_why_they_are_unavailable() {
   assert!(page.locked("task-cancel-run"), "Cancel waits for a runner");
   assert_eq!(page.text("task-action-reasons"), "Runner not connected");
   page.open("queued, run not started");
-  assert!(page.locked("task-start-run"), "Retry run waits for a runner");
+  assert!(page.locked("task-start-run"), "Start run waits for a runner");
   page.open("draft, ready to queue");
   assert!(page.locked("task-run"), "a ready draft runs once a runner is connected");
   page.open("draft, missing details");
