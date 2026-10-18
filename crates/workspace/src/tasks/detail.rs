@@ -288,7 +288,7 @@ impl TaskDetail {
   /// [`Self::history`].
   pub fn load_settled(repo_root: &Path, task: TaskId, programs: &Programs) -> Result<Self, StoreError> {
     let mut detail = Self::load_in(repo_root, task)?;
-    let settled = delivery::settle_records(programs, repo_root, &mut detail.history);
+    let settled = delivery::settle_records(programs, repo_root, detail.history.iter_mut());
     if detail.phase() == TaskPhase::Succeeded
       && let Some(run) = &detail.run
       && let Some((_, latest)) = settled.into_iter().find(|(id, _)| *id == run.run.id())

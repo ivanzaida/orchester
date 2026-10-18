@@ -5,7 +5,7 @@ use std::{fs, path::Path};
 
 use orchester_core::{
   id::RunId,
-  integration::local::{LocalIntegrationStore, LocalOperation, LocalPhase},
+  integration::local::{LocalIntegrationStore, LocalOperation, LocalPath, LocalPhase},
 };
 use orchester_store::ProjectDb;
 
@@ -25,12 +25,11 @@ fn stored(root: &Path, run: RunId) -> Option<LocalOperation> {
     .expect("journal")
 }
 
-/// The *Merged* card, alone in the inspector (`local-actions`) or above the step's (`local-external`).
-fn merged_card(page: &mut Page, id: &str) {
-  let title = format!("{id}-title");
+/// The *Merged* card, once, on the evidence side (`itt7z`, `pdT4W`).
+fn merged_card(page: &mut Page) {
   page.until("the merged card", |window| {
     window
-      .texts(&title)
+      .texts("local-external-integration")
       .is_some_and(|texts| texts.iter().any(|text| text == "Merged"))
   });
 }
@@ -43,7 +42,7 @@ fn local_integration_page_merged_outside_completes_a_paused_review_that_held_not
   drop(session);
   git(fixture.root(), &["merge", "--ff-only", "task"]);
   let mut page = Page::new(fixture);
-  merged_card(&mut page, "local-actions");
+  merged_card(&mut page);
   let (root, run) = (page.root().to_path_buf(), page.run());
   page.until("the record completes", |_| {
     stored(&root, run).is_some_and(|operation| operation.phase() == LocalPhase::Complete)
@@ -54,7 +53,15 @@ fn local_integration_page_merged_outside_completes_a_paused_review_that_held_not
     !settled.reserves_checkout(),
     "other tasks' local integration is not blocked"
   );
-  assert!(!page.has("local-reconcile"), "nothing is left to reconcile");
+  assert!(
+    !page.has("local-actions"),
+    "nothing is left to do, and Merged is not said twice"
+  );
+  page.until("the record says the merge was made without Orchester", |window| {
+    window
+      .texts("local-recovery")
+      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Without Orchester")))
+  });
 }
 
 #[test]
@@ -67,8 +74,9 @@ fn local_integration_page_merged_outside_offers_recording_the_merge_for_preserve
   git(fixture.root(), &["merge", "--ff-only", "task"]);
   let head = git(fixture.root(), &["rev-parse", "HEAD"]);
   let mut page = Page::new(fixture);
-  merged_card(&mut page, "local-external");
+  merged_card(&mut page);
   page.ready("local-record-outside");
+  assert!(page.has("local-restore-next"), "restoring the originals comes next");
   page.click("local-record-outside");
   page.ready("local-restore");
   let recorded = record(&page).expect("the record");
@@ -85,4 +93,50 @@ fn local_integration_page_merged_outside_offers_recording_the_merge_for_preserve
     head,
     "nothing was merged again"
   );
+}
+
+#[test]
+fn local_integration_page_part_merged_outside_reconciles_a_held_commit_then_cancels() {
+  let fixture = Fixture::new(false);
+  fs::write(
+    fixture.root().join("local.txt"),
+    "base
+the person's commit
+",
+  )
+  .expect("edit");
+  git(fixture.root(), &["add", "local.txt"]);
+  let mut session = fixture.open();
+  session.refresh().expect("review the edit");
+  let path = LocalPath::new("local.txt").expect("path");
+  let tree = session.selected_commit_tree(std::slice::from_ref(&path)).expect("tree");
+  session.commit(&[path], &tree, "the person's commit").expect("commit");
+  drop(session);
+  let first = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  fs::write(
+    fixture.task_root.join("remaining.txt"),
+    "not delivered
+",
+  )
+  .expect("edit");
+  git(&fixture.task_root, &["add", "remaining.txt"]);
+  git(&fixture.task_root, &["commit", "-m", "second result"]);
+  git(fixture.root(), &["merge", "--no-edit", &first]);
+  let mut page = Page::new(fixture);
+  page.ready("local-external-integration");
+  assert!(
+    !page.has("local-record-outside"),
+    "part of the work is no merge to record"
+  );
+  page.ready("local-reconcile");
+  page.click("local-reconcile");
+  page.ready("local-finish-cancel");
+  page.click("local-finish-cancel");
+  page.click("local-confirm-scope");
+  page.click("local-confirm");
+  let (root, run) = (page.root().to_path_buf(), page.run());
+  page.until("the integration is cancelled", |_| {
+    stored(&root, run).is_some_and(|operation| operation.phase() == LocalPhase::Canceled)
+  });
+  assert!(!record(&page).expect("the record").reserves_checkout());
 }

@@ -1,16 +1,22 @@
 //! `list_runs`: the runs of a task, of a project or of every project the app knows, newest first, each as its
 //! task's Summary lists it (*Runs of this task*): where it stands, what happened and its link.
 
-use std::cmp::Reverse;
+use std::{cmp::Reverse, collections::HashSet};
 
-use orchester_core::{id::ProjectId, run::RunNumber, store::TaskStore, task::Task, tokens::TokenBudget};
+use orchester_core::{
+  id::{ProjectId, RunId},
+  run::RunNumber,
+  store::TaskStore,
+  task::Task,
+  tokens::TokenBudget,
+};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
   Translate,
-  across::{across, needs_project},
+  across::{Across, across, needs_project},
   tasks::find_task,
   wire,
 };
@@ -57,7 +63,7 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
   }
   let services = services.clone();
   let read = blocking(move || {
-    across(&services, args.project.as_deref(), |open, db| {
+    let mut read = across(&services, args.project.as_deref(), |_, db| {
       let tasks = match &args.task {
         Some(named) => vec![find_task(db, named)?],
         None => db.tasks()?,
@@ -65,13 +71,22 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
       tasks
         .into_iter()
         .map(|task| {
-          let mut runs = runs_of(db, &task)?;
-          // Git tells the runs merged outside Orchester, as the task's Summary reads them.
-          settle_records(&services.programs, &open.repo_root, &mut runs);
+          let runs = runs_of(db, &task)?;
           Ok((task, runs))
         })
         .collect::<Result<Vec<_>, ToolError>>()
-    })
+    })?;
+    // Git tells the runs merged outside Orchester, as the task's Summary reads them: only for the runs given, and
+    // once for each project.
+    let given = newest(&read, limit);
+    read.each_mut(|open, tasks| {
+      let runs = tasks
+        .iter_mut()
+        .flat_map(|(_, runs)| runs.iter_mut())
+        .filter(|run| given.contains(&run.id));
+      settle_records(&services.programs, &open.repo_root, runs);
+    });
+    Ok(read)
   })
   .await?;
   let mut runs = read.items(|open, tasks| {
@@ -85,6 +100,18 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
   let more = runs.len() > limit;
   runs.truncate(limit);
   Ok(json!({ "runs": runs, "more": more, "unreadable_projects": read.unreadable(translate) }))
+}
+
+/// The `limit` runs of `read` the answer gives, newest first as it sorts them: the items' order, then by when they
+/// started, a run that cannot be read last.
+fn newest(read: &Across<Vec<(Task, Vec<RunRecord>)>>, limit: usize) -> HashSet<RunId> {
+  let mut runs: Vec<(RunId, Option<i64>)> = read
+    .found()
+    .flat_map(|(_, tasks)| tasks.iter().flat_map(|(_, runs)| runs.iter()))
+    .map(|run| (run.id, run.run.as_ref().map(|run| wire::time(run.created_at()))))
+    .collect();
+  runs.sort_by_key(|(_, created)| Reverse(*created));
+  runs.into_iter().take(limit).map(|(id, _)| id).collect()
 }
 
 /// A run of `task` of `project` as the task's Summary lists it, with its state, its tokens and its link: the

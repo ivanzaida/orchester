@@ -215,32 +215,22 @@ impl Component for Inspector {
       .id("local-side")
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
-      .child(panel)
+      .with_children(panel)
       .with_children(recovery::card(ctx, &props.view, &mode, props.narrow))
   }
 }
 
 impl Inspector {
-  /// The step's card. Beside work found integrated outside Orchester, its card first; a record that still holds the
-  /// person's work keeps the actions that finish, put back or cancel it under that card.
-  fn actions(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
-    let Some(evidence) = &props.view.external else {
-      return self.step(ctx, props, mode, phase);
-    };
-    if !props
+  /// The step's card. Beside work found integrated outside Orchester, whose card the evidence side shows, none
+  /// unless the record still holds the person's work: then the actions that finish, put back or reconcile it
+  /// (`itt7z`, `pdT4W`, `UWLNj`).
+  fn actions(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Option<Element> {
+    let holds = props
       .view
       .operation
       .as_ref()
-      .is_some_and(LocalOperation::reserves_checkout)
-    {
-      return external_panel(ctx, props, evidence, "local-actions");
-    }
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Lg)
-      .child(external_panel(ctx, props, evidence, "local-external"))
-      .child(self.step(ctx, props, mode, phase))
-      .into()
+      .is_some_and(LocalOperation::reserves_checkout);
+    (props.view.external.is_none() || holds).then(|| self.step(ctx, props, mode, phase))
   }
 
   fn step(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
@@ -347,46 +337,6 @@ impl Inspector {
       panel
     }
   }
-}
-
-/// The step's card for an integration made outside Orchester: merged without Orchester, as the Summary says, or
-/// blocked until it is reconciled.
-fn external_panel(
-  ctx: &Ctx,
-  props: &Props,
-  evidence: &orchester_core::integration::local::ContainedResult,
-  id: &str,
-) -> Element {
-  let (title, body) = if super::words::merged_outside(evidence) {
-    let branch = props
-      .trigger
-      .task
-      .detail
-      .run
-      .as_ref()
-      .map(|run| run.run.branch().as_str())
-      .unwrap_or_default();
-    super::words::merged_outside_words(ctx, branch, &props.view.checkout.branch)
-  } else {
-    (
-      ctx.t("local_integration.externalTitle"),
-      ctx.t("local_integration.externalBody"),
-    )
-  };
-  card_frame(id, CardSurface::Pending)
-    .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Sm)
-    .child(
-      Text::new(&title)
-        .id(format!("{id}-title"))
-        .variant(LocalText::Heading.role()),
-    )
-    .child(
-      Text::new(&body)
-        .id(format!("{id}-body"))
-        .variant(LocalText::Explanation.role()),
-    )
-    .into()
 }
 
 /// The step's card: `title` and what `body` explains; add its actions and note.

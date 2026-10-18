@@ -67,6 +67,8 @@
     "restored": "Local changes restored and placement verified",
     "complete": "Delivery complete",
     "completeBody": "The actual merge and restoration are recorded. Local recovery cleanup is a separate person decision.",
+    "completeOutsideBody": "The run’s work was merged without Orchester; nothing of this integration is left to finish.",
+    "restoreNext": "Restore preserved local changes · next",
     "recovery": "Recovery record",
     "operation": "Operation",
     "preparation": "Preparation",

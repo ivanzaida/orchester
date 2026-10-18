@@ -63,11 +63,12 @@ fn rows(ctx: &Ctx, operation: &LocalOperation, reviewing_commit: bool) -> Elemen
     .into()
 }
 
-/// The run's merge: Orchester's, or the commit that held its work when it was found merged without Orchester.
+/// The run's merge: the commit that held its work when it was found merged without Orchester, also once recorded as
+/// the record's own, or Orchester's.
 fn merge(ctx: &Ctx, operation: &LocalOperation) -> String {
   match (operation.merged(), operation.merged_outside()) {
-    (Some(merged), _) => display::short_revision(merged).to_owned(),
-    (None, Some(outside)) => ctx
+    (Some(merged), None) => display::short_revision(merged).to_owned(),
+    (_, Some(outside)) => ctx
       .t_args(
         "local_integration.mergedOutside",
         [("commit", display::short_revision(outside))],

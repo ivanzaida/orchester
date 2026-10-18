@@ -5,7 +5,10 @@
 
 use std::fs;
 
-use orchester_core::integration::local::{LocalIntegrationStore, LocalPhase, ResultEvidenceKind};
+use orchester_core::{
+  integration::local::{LocalIntegrationStore, LocalPath, LocalPhase, ResultEvidenceKind},
+  store::MergeStore,
+};
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::local_integration::{IntegrationError, external_integration};
 
@@ -69,6 +72,13 @@ fn local_integration_merged_outside_keeps_preserved_originals_for_the_person_to_
   assert_eq!(session.operation().phase(), LocalPhase::MergedAwaitingRestore);
   assert_eq!(session.operation().merged(), Some(head.as_str()));
   assert_eq!(session.operation().merged_outside(), Some(head.as_str()));
+  session.pause().expect("pause before restoring");
+  session.reconcile().expect("reconcile the recorded merge");
+  assert_eq!(session.operation().phase(), LocalPhase::MergedAwaitingRestore);
+  assert!(
+    db.run_merge(fixture.run).expect("merge record").is_none(),
+    "a merge made without Orchester never becomes an Orchester merge record"
+  );
   session.restore().expect("put the originals back");
   assert_eq!(
     fs::read_to_string(fixture.root().join("local.txt")).expect("the person's file"),
@@ -113,4 +123,52 @@ fn local_integration_partial_containment_settles_nothing_and_cannot_be_recorded(
     Err(IntegrationError::State(_))
   ));
   assert!(session.operation().merged().is_none());
+}
+
+#[test]
+fn local_integration_partial_containment_with_a_held_commit_reconciles_then_cancels() {
+  let fixture = Fixture::new(false);
+  fs::write(
+    fixture.root().join("local.txt"),
+    "base
+the person's commit
+",
+  )
+  .expect("edit");
+  git(fixture.root(), &["add", "local.txt"]);
+  let mut session = fixture.open();
+  session.refresh().expect("review the edit");
+  let path = LocalPath::new("local.txt").expect("path");
+  let tree = session.selected_commit_tree(std::slice::from_ref(&path)).expect("tree");
+  session.commit(&[path], &tree, "the person's commit").expect("commit");
+  assert!(session.operation().reserves_checkout(), "the commit is held");
+  drop(session);
+  let first = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  fs::write(
+    fixture.task_root.join("remaining.txt"),
+    "not delivered
+",
+  )
+  .expect("edit");
+  git(&fixture.task_root, &["add", "remaining.txt"]);
+  git(&fixture.task_root, &["commit", "-m", "second result"]);
+  git(fixture.root(), &["merge", "--no-edit", &first]);
+  let evidence = external_integration(fixture.root(), fixture.run)
+    .expect("evidence")
+    .expect("partial");
+  assert_eq!(evidence.kind, ResultEvidenceKind::PartialAncestry);
+  let mut session = fixture.open();
+  assert!(
+    session.cancel_preservation().is_err(),
+    "the checkout moved since the review"
+  );
+  drop(session);
+  let mut session = fixture.open();
+  session.reconcile().expect("reconcile reviews the moved checkout");
+  assert_eq!(session.operation().phase(), LocalPhase::Prepared);
+  session
+    .cancel_preservation()
+    .expect("then the integration is cancelled");
+  assert_eq!(session.operation().phase(), LocalPhase::Canceled);
+  assert!(!session.operation().reserves_checkout());
 }

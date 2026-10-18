@@ -40,8 +40,9 @@ pub(super) fn panel(id: &str, surface: CardSurface, title: &str, body: &str) -> 
     )
 }
 
-/// What the page is about now, first on its evidence side.
-pub(super) fn phase(ctx: &Ctx, phase: LocalPhase, mode: &Mode, narrow: bool) -> Element {
+/// What the page is about now, first on its evidence side; `outside` once the record took a merge made without
+/// Orchester, which nothing of Orchester's recorded.
+pub(super) fn phase(ctx: &Ctx, (phase, outside): (LocalPhase, bool), mode: &Mode, narrow: bool) -> Element {
   let (surface, title, body) = match mode {
     Mode::Commit { .. } => (
       CardSurface::Outline,
@@ -64,8 +65,13 @@ pub(super) fn phase(ctx: &Ctx, phase: LocalPhase, mode: &Mode, narrow: bool) -> 
       "local_integration.dirtyBody",
     ),
     _ => {
+      let body = if outside && phase == LocalPhase::Complete {
+        "local_integration.completeOutsideBody"
+      } else {
+        phase_body(phase)
+      };
       return Notice::new("local-phase", tone(phase), ctx.t(phase_title(phase)))
-        .body(ctx.t(phase_body(phase)))
+        .body(ctx.t(body))
         .into();
     }
   };

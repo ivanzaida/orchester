@@ -72,20 +72,19 @@ fn local_policy_legacy_domain_external_complete_partial_and_scoped_results_make_
       .texts("local-external-integration")
       .expect("notice")
       .join(" ");
-    let panel = page.window.texts("local-actions").expect("inspector").join(" ");
+    // The evidence card says it once; with no record holding anything there is no step to take (`itt7z`).
+    assert!(!page.has("local-actions"), "the inspector repeats nothing");
     if scope == "complete" {
       // The tab says what the Summary says of a complete merge done outside Orchester.
       assert!(
         notice.contains("Merged") && notice.contains("it was merged without Orchester"),
         "{notice}"
       );
-      assert!(panel.contains("it was merged without Orchester"), "{panel}");
       let trail = page.window.texts("local-phase-trail").expect("trail").join(" ");
       assert!(trail.ends_with("Merged"), "{trail}");
-      assert!(!notice.contains("reconciliation") && !panel.contains("blocked"));
+      assert!(!notice.contains("reconciliation"));
     } else {
       assert!(notice.contains("Integration result needs reconciliation"), "{notice}");
-      assert!(panel.contains("blocked"), "{panel}");
     }
     let before = git(page.root(), &["rev-parse", "HEAD"]);
     let client = Client::new(&mut page, false);
@@ -95,7 +94,7 @@ fn local_policy_legacy_domain_external_complete_partial_and_scoped_results_make_
     assert_eq!(
       value(&result)["code"],
       if scope == "complete" {
-        "already_integrated"
+        "already_merged"
       } else {
         "scoped_integration_required"
       }
