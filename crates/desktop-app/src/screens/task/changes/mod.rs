@@ -2,8 +2,8 @@
 //! toolbar names the run's base and its latest checkpoint; the file list (`qT0kd`) holds the files of the
 //! run's diff from its base to that checkpoint, then what its worktree holds beyond it, listed apart as
 //! not checkpointed; beside it, the selected file's unified diff with line numbers and syntax colors
-//! (`RsPIH`). The file shown is part of the path (`?file=`, `&from=worktree`), and choosing another takes
-//! the current entry's place in the tab's history.
+//! (`RsPIH`). The file shown is part of the path (`?file=`, `&from=worktree`), and choosing another is a
+//! new entry of the tab's history.
 //!
 //! The task page's frame owns the reads ([`ChangesReads::new`] in its `create`, provided to its parts
 //! with `ctx.provide`) and reads with them on every render ([`ChangesReads::read`] with [`Follow::of`]);
@@ -52,7 +52,7 @@ use self::{
 };
 use super::TaskContext;
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
   ui::message::message_text,
 };
@@ -80,7 +80,7 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
 /// The task page's view the window's path names.
 fn route_view(ctx: &mut Ctx) -> Option<TaskView> {
   match Route::parse(&ctx.route_path()) {
-    Ok(Route::Project(_, ProjectPage::Task(_, view))) => Some(view),
+    Ok(Route::Project(_, page)) => page.task_view().map(|(_, view)| view.clone()),
     _ => None,
   }
 }
@@ -348,15 +348,19 @@ impl ChangesTab {
     items
   }
 
-  /// Choosing a file shows it in place of the current one in the tab's history.
+  /// Choosing a file opens it where the press asks; in the active tab as a new entry of its history.
   fn select(&self, props: &ChangesProps) -> files::SelectFile {
     let navigation = self.navigation.clone();
-    let (project, key) = (props.project, props.detail.task.key().clone());
+    let (project, key, kept) = (
+      props.project,
+      props.detail.task.key().clone(),
+      props.detail.not_shared(),
+    );
     Arc::new(
-      move |listed: &Listed| match ChangedFile::new(listed.path.to_string(), listed.source) {
+      move |listed: &Listed, at| match ChangedFile::new(listed.path.to_string(), listed.source) {
         Ok(file) => {
-          let page = ProjectPage::Task(key.clone(), TaskView::Changes(Some(file)));
-          navigation.replace(Route::Project(project, page));
+          let page = ProjectPage::task(key.clone(), TaskView::Changes(Some(file)), kept);
+          navigation.open(Route::Project(project, page), at);
         }
         Err(error) => tracing::error!(%error, "a listed file has no path"),
       },
@@ -384,7 +388,7 @@ pub(crate) fn arrow_keys(
     };
     if let Some(file) = files.get(next) {
       event.prevent_default();
-      select(file);
+      select(file, OpenIn::ActiveTab);
     }
   }
 }

@@ -24,6 +24,8 @@ pub(crate) struct Claims {
   pub invite: Option<String>,
   /// `None` to join with a device; otherwise the one use the cloud issued the token for.
   pub purpose: Option<TokenPurpose>,
+  /// The cloud device signed in with two-factor authentication: a device token issued for it may send invites.
+  pub mfa: bool,
   pub jti: String,
   pub exp: i64,
   pub kid: String,
@@ -53,6 +55,7 @@ impl Claims {
       name: claims.name,
       invite: claims.invite,
       purpose: claims.purpose,
+      mfa: claims.mfa,
       jti: claims.jti,
       exp: claims.exp,
       kid,
@@ -113,6 +116,7 @@ impl Link {
       server: keys.id.to_string(),
       root_fingerprint: self.root_key.fingerprint(),
       accepting: self.accepting,
+      codes_need_two_factor: true,
     }
   }
 
@@ -129,6 +133,19 @@ impl Link {
     if !self.accepting {
       return Err(ErrorCode::CloudOff.into());
     }
+    self.check(db, keys, token, offered, now_ms)
+  }
+
+  /// Verifies an identity token as [`Self::verify`] does, whether or not the server accepts cloud identities to join
+  /// with: what a code join in the app shows with it is only that its person signed in with two-factor authentication.
+  pub fn check(
+    &mut self,
+    db: &Connection,
+    keys: &ServerKeys,
+    token: &str,
+    offered: Option<&str>,
+    now_ms: i64,
+  ) -> Result<Claims, ServerError> {
     let now = now_ms.div_euclid(1000);
     if let Some(offered) = offered {
       self.offer(db, offered, now)?;

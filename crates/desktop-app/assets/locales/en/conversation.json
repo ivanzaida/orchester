@@ -392,6 +392,7 @@
     "workingStarted": "{{agent}} is starting",
     "workingStartedUnnamed": "The agent is starting",
     "workingUnnamed": "The agent is working · last event {{elapsed}} ago",
-    "you": "You"
+    "you": "You",
+    "byOrchestrator": "Orchestrator"
   }
 }

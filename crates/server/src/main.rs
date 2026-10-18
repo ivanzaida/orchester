@@ -18,11 +18,20 @@ mod shutdown;
 
 enum Command {
   Serve,
-  Backup { path: PathBuf },
+  Backup {
+    path: PathBuf,
+  },
   TlsShow,
   TlsRegenerate,
   SetupCode,
-  AccountCode { username: String },
+  AccountCode {
+    username: String,
+  },
+  /// `account-cloud <username>` shows the account's cloud link; `account-unlink <username>` ends it.
+  AccountCloud {
+    username: String,
+    unlink: bool,
+  },
   Cloud(CloudCommand),
 }
 
@@ -76,6 +85,14 @@ SHA-256 fingerprint: {}",
       let server = Server::open(config, Arc::new(SystemClock)).await?;
       let code = server.host_account_code(username).await?;
       console(&format!("Account code: {}", code.expose()))
+    }
+    Command::AccountCloud { username, unlink } => {
+      let server = Server::open(config, Arc::new(SystemClock)).await?;
+      let linked = server.host_account_cloud(username.clone(), unlink).await?;
+      console(&match linked {
+        Some(subject) => format!("{username} is linked to the Orchester Cloud account {subject}"),
+        None => format!("{username} is linked to no Orchester Cloud account"),
+      })
     }
     Command::Cloud(command) => {
       let server = Server::open(config, Arc::new(SystemClock)).await?;
@@ -170,6 +187,14 @@ fn arguments() -> Result<(Command, Option<PathBuf>), ServerError> {
     ["account-code", username] => Command::AccountCode {
       username: (*username).to_owned(),
     },
+    ["account-cloud", username] => Command::AccountCloud {
+      username: (*username).to_owned(),
+      unlink: false,
+    },
+    ["account-unlink", username] => Command::AccountCloud {
+      username: (*username).to_owned(),
+      unlink: true,
+    },
     ["cloud", "show"] => Command::Cloud(CloudCommand::Show),
     ["cloud", "on"] => Command::Cloud(CloudCommand::On),
     ["cloud", "off"] => Command::Cloud(CloudCommand::Off),
@@ -182,6 +207,6 @@ fn arguments() -> Result<(Command, Option<PathBuf>), ServerError> {
 
 fn usage() -> ServerError {
   ServerError::Configuration(
-    "usage: orchester-server [--config server.toml] [serve | backup <path> | tls show | tls regenerate | setup-code | account-code <username> | cloud show|on|off|unlink | cloud pin <root public key>]",
+    "usage: orchester-server [--config server.toml] [serve | backup <path> | tls show | tls regenerate | setup-code | account-code <username> | account-cloud <username> | account-unlink <username> | cloud show|on|off|unlink | cloud pin <root public key>]",
   )
 }

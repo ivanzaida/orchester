@@ -45,6 +45,7 @@ fn agents_network_summary_reports_effective_access_in_list_header_and_panel() {
   };
   assert!(screen.text(&format!("agent-{id}")).contains(expected));
   screen.click(&format!("agent-{id}"));
+  screen.until("the profile's editor", |s| s.exists("agent-permission-summary"));
   assert!(screen.text("agent-permission-summary").contains(expected));
   if fallback {
     assert!(!screen.text("agent-permission-summary").contains("Enforced by"));
@@ -148,8 +149,9 @@ fn agents_cli_to_native_transition_can_save_without_hidden_cli_values() {
       .contains("does not offer approval switches")
   );
   screen.click("agent-save");
+  // The saved profile opens on the tab the route names, Permissions.
   screen.until("saved native", |s| {
-    s.exists("agent-role") && !s.exists("agent-save") && !s.exists("agent-saving")
+    s.exists("agent-approvals") && !s.exists("agent-save") && !s.exists("agent-saving")
   });
   let saved = screen.listed().profile(id).expect("profile").profile.clone();
   assert_eq!(saved.connection(), native.id());

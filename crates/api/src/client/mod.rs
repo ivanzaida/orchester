@@ -9,6 +9,7 @@ mod address;
 mod cloud;
 mod error;
 mod pinned;
+mod recorded;
 mod sharing;
 
 use std::time::Duration;
@@ -25,14 +26,17 @@ use reqwest::{
 use serde::{Serialize, de::DeserializeOwned};
 use zeroize::Zeroize;
 
+#[cfg(feature = "test-support")]
+pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
-  cloud::CloudClient,
+  cloud::{CloudClient, SignInAnswer},
   error::ClientError,
 };
 use crate::{
-  ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, PairingCode, ServerInfo, Session,
-  SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse, UsersResponse, certificate::CertificatePin,
+  ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, KeyProofRequest, KeyProofResponse,
+  PairingCode, ServerInfo, Session, SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse,
+  UsersResponse, certificate::CertificatePin,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -45,6 +49,16 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct Client {
   http: reqwest::Client,
   address: ServerAddress,
+  certificate: Certificate,
+}
+
+/// What a client knows of the certificate its connections present.
+#[derive(Clone)]
+enum Certificate {
+  /// Exactly this one, pinned.
+  Pinned(CertificatePin),
+  /// The leaf of the last connection the trust store accepted; `None` before one, or over plain HTTP.
+  Recorded(recorded::Presented),
 }
 
 impl std::fmt::Debug for Client {
@@ -63,8 +77,17 @@ impl Client {
     // reqwest's rustls takes the process's crypto provider; ring is the one the workspace builds.
     // Installing fails only when a provider is installed already, which then serves as well.
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let http = builder().build().map_err(|error| ClientError::transport(&error))?;
-    Ok(Self { http, address })
+    let presented = recorded::Presented::default();
+    let tls = recorded::Recorded::config(presented.clone()).map_err(|_| ClientError::Setup)?;
+    let http = builder()
+      .tls_backend_preconfigured(tls)
+      .build()
+      .map_err(|error| ClientError::transport(&error))?;
+    Ok(Self {
+      http,
+      address,
+      certificate: Certificate::Recorded(presented),
+    })
   }
 
   /// A client of the team server at the `https` `address` that accepts exactly the certificate `pin` names: the
@@ -78,7 +101,11 @@ impl Client {
       .tls_backend_preconfigured(tls)
       .build()
       .map_err(|error| ClientError::transport(&error))?;
-    Ok(Self { http, address })
+    Ok(Self {
+      http,
+      address,
+      certificate: Certificate::Pinned(pin),
+    })
   }
 
   /// The certificate the team server at the `https` `address` presents, read without trusting it, for the person to
@@ -109,9 +136,32 @@ impl Client {
     &self.address
   }
 
+  /// The certificate this client's connections present: the pinned one, or the leaf of the last connection the
+  /// operating system's store accepted (its chain and name checked); `None` before any, or over plain HTTP. Read after
+  /// a request, it is that request's connection's.
+  pub fn certificate(&self) -> Option<CertificatePin> {
+    match &self.certificate {
+      Certificate::Pinned(pin) => Some(*pin),
+      Certificate::Recorded(presented) => *presented.lock(),
+    }
+  }
+
   /// `GET /server`: what answers at the address, asked before signing in.
   pub async fn server_info(&self) -> Result<ServerInfo, ClientError> {
     self.call(self.request(Method::GET, "/server")?).await
+  }
+
+  /// `POST /server/key-proof`: the server's public key and its signature of `nonce`, which the caller verifies. Names
+  /// the certificate this client's connections last presented, when it knows one ([`crate::PRESENTED_CERTIFICATE`]).
+  pub async fn key_proof(&self, nonce: &str) -> Result<KeyProofResponse, ClientError> {
+    let request = KeyProofRequest {
+      nonce: nonce.to_owned(),
+    };
+    let mut request = self.json(Method::POST, "/server/key-proof", &request)?;
+    if let Some(presented) = self.certificate() {
+      request = request.header(crate::PRESENTED_CERTIFICATE, presented.to_hex());
+    }
+    self.call(request).await
   }
 
   /// `POST /auth/code`: joins with a setup, invite, account or pairing code and returns this device's token.

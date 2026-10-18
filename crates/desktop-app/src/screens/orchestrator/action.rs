@@ -269,7 +269,7 @@ pub(super) fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Optio
       .child(
         ActionButton::new(format!("{id}-open"), ButtonKind::Ghost, label)
           .icon(Icon::ArrowUpRight)
-          .on_click(move || navigation.go(route.clone())),
+          .opens(navigation.to(route)),
       )
       .into(),
   )

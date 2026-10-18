@@ -30,7 +30,7 @@ impl Editor {
     });
   }
   pub fn open(&mut self, id: ResourceId) {
-    self.go(ProjectPage::Pipeline(id));
+    self.go(ProjectPage::Pipeline(id, Default::default()));
     self.until("editor", |e| e.exists("pipeline-add-step"));
   }
   pub fn until(&mut self, what: &str, mut done: impl FnMut(&mut Self) -> bool) {
@@ -88,7 +88,7 @@ impl Editor {
   }
   pub fn selected(&self) -> ResourceId {
     match self.window.navigation().route_now() {
-      Route::Project(_, ProjectPage::Pipeline(id)) => id,
+      Route::Project(_, ProjectPage::Pipeline(id, _)) => id,
       other => panic!("pipeline route: {other:?}"),
     }
   }

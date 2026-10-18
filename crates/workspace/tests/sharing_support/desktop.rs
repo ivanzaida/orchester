@@ -83,6 +83,12 @@ impl Desktop {
       .expect("nobody's");
   }
 
+  /// Keeps `invite` as accepted here, as an earlier ask of this computer left it.
+  pub fn keep_accepted(&self, invite: &orchester_store::AcceptedInvite) {
+    let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");
+    db.keep_accepted_invite(invite).expect("kept");
+  }
+
   /// Records the signed-in account as signed in at the cloud at `address`, as if the account's cloud moved there.
   pub fn move_account_to(&self, address: &str) {
     let mut db = AppDb::open(&self._data.path().join("orchester.db")).expect("database");

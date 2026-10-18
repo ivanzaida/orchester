@@ -19,6 +19,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::workspace::OrchestratorConsent;
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -247,7 +248,7 @@ fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
 fn orchestrator_publishes_itself_once_the_person_lets_it() {
   let mut screen = Orchestrator::new(Setup::Ready);
   with_instruction_draft(&screen);
-  screen.let_orchestrator_publish(true);
+  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
   screen.go(OrchestratorChat::New);
   call(&mut screen, PUBLISH_INSTRUCTION, 1);
   assert_eq!(actions(&screen)[0].outcome, ActionOutcome::Done);
@@ -273,7 +274,7 @@ fn orchestrator_proposes_what_widens_even_when_it_may_publish() {
   let builder = screen.builder();
   let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
   screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  screen.let_orchestrator_publish(true);
+  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
   screen.go(OrchestratorChat::New);
   call(&mut screen, PUBLISH_PIPELINE, 1);
   assert_eq!(

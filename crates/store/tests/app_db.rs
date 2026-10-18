@@ -10,8 +10,7 @@ use orchester_core::{
   usage::limits::WarningThreshold,
 };
 use orchester_store::{
-  AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd,
-  StoreError, StoredCloudAccount, StoredServer,
+  AppDb, JoinedWith, PreviousSession, ProjectDb, ServerAccount, SessionEnd, StoreError, StoredServer,
 };
 
 fn at(millis: i64) -> Timestamp {
@@ -211,6 +210,28 @@ fn orchestrator_publishes_drafts_only_once_a_person_turned_it_on() {
   );
   db.set_orchestrator_publishes_drafts(false).expect("store");
   assert!(!db.orchestrator_publishes_drafts().expect("read"));
+}
+
+#[test]
+fn orchestrator_answers_agents_and_merges_runs_only_once_a_person_turned_each_on() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert!(!db.orchestrator_answers_agents().expect("read"), "off until turned on");
+  assert!(!db.orchestrator_merges_runs().expect("read"), "off until turned on");
+  db.set_orchestrator_answers_agents(true).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(db.orchestrator_answers_agents().expect("read"));
+  assert!(!db.orchestrator_merges_runs().expect("read"), "a setting of its own");
+  assert!(
+    !db.orchestrator_publishes_drafts().expect("read"),
+    "a setting of its own"
+  );
+  db.set_orchestrator_merges_runs(true).expect("store");
+  db.set_orchestrator_answers_agents(false).expect("store");
+  assert!(db.orchestrator_merges_runs().expect("read"));
+  assert!(!db.orchestrator_answers_agents().expect("read"));
 }
 
 #[test]
@@ -495,58 +516,4 @@ fn servers_keep_how_this_computer_joined_them() {
   let servers = db.servers_of(None).expect("servers");
   assert_eq!(servers[0].joined_with, Some(JoinedWith::Cloud(audience)));
   assert_eq!(servers[1].joined_with, Some(JoinedWith::Code));
-}
-
-#[test]
-fn the_cloud_account_is_one_row_and_the_address_a_setting() {
-  let dir = tempfile::tempdir().expect("temporary directory");
-  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  assert_eq!(db.cloud_account().expect("account"), None);
-  assert_eq!(db.cloud_address().expect("address"), None);
-  let account = StoredCloudAccount {
-    account: orchester_core::id::CloudAccountId::generate(),
-    email: "ivan@example.com".into(),
-    display_name: "Ivan Zaida".into(),
-    device_name: "IVAN-PC".into(),
-    signed_in_at: at(5),
-    cloud_address: "https://cloud.test.lurq.dev".into(),
-  };
-  db.set_cloud_account(Some(&account)).expect("signed in");
-  let other = StoredCloudAccount {
-    email: "maria@example.com".into(),
-    ..account.clone()
-  };
-  db.set_cloud_account(Some(&other)).expect("another account replaces it");
-  assert_eq!(db.cloud_account().expect("account"), Some(other));
-  db.set_cloud_account(None).expect("signed out");
-  assert_eq!(db.cloud_account().expect("account"), None);
-  db.set_cloud_address(Some("https://cloud.test.lurq.dev"))
-    .expect("a test cloud");
-  assert_eq!(
-    db.cloud_address().expect("address").as_deref(),
-    Some("https://cloud.test.lurq.dev")
-  );
-}
-
-#[test]
-fn why_the_last_cloud_sign_in_ended_is_one_row() {
-  let dir = tempfile::tempdir().expect("temporary directory");
-  let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");
-  assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
-  let revoked = EndedCloudSignIn {
-    email: "ivan@example.com".into(),
-    reason: CloudSignInEnd::Revoked,
-    ended_at: at(7),
-  };
-  db.set_cloud_sign_in_ended(Some(&revoked)).expect("recorded");
-  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(revoked.clone()));
-  let reset = EndedCloudSignIn {
-    reason: CloudSignInEnd::PasswordReset,
-    ..revoked
-  };
-  db.set_cloud_sign_in_ended(Some(&reset))
-    .expect("the newer one replaces it");
-  assert_eq!(db.cloud_sign_in_ended().expect("ended"), Some(reset));
-  db.set_cloud_sign_in_ended(None).expect("signed in again");
-  assert_eq!(db.cloud_sign_in_ended().expect("ended"), None);
 }

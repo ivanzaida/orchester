@@ -30,7 +30,7 @@ use super::parts;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route},
+  routes::{PipelinePanel, ProjectPage, Route},
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -157,7 +157,10 @@ impl NewPipeline {
         && state.error.is_none()
         && let Some(Created(project, created)) = state.data
       {
-        nav.replace(Route::Project(project, ProjectPage::Pipeline(created)));
+        nav.replace(Route::Project(
+          project,
+          ProjectPage::Pipeline(created, PipelinePanel::default()),
+        ));
       }
     });
   }
@@ -173,7 +176,7 @@ impl NewPipeline {
     parts::header()
       .spacing(ExtraSpacing::Snug.role())
       .child(
-        crate::ui::pressable::pressable(move || nav.go(Route::Project(id, ProjectPage::Pipelines)))
+        crate::ui::pressable::opening(nav.to(Route::Project(id, ProjectPage::Pipelines)))
           .id("pipeline-parent")
           .child(Text::new(&ctx.t("pipelines.title")).variant(TypographyStyle::Button)),
       )
@@ -425,7 +428,10 @@ fn collision_strip(
           ctx.t_args("pipelines.openPipeline", [("name", existing.name.to_string())]),
         )
         .icon(Icon::ArrowUpRight)
-        .on_click(move || nav.go(Route::Project(id, ProjectPage::Pipeline(existing.id)))),
+        .opens(nav.to(Route::Project(
+          id,
+          ProjectPage::Pipeline(existing.id, PipelinePanel::default()),
+        ))),
       )
       .into()
   })

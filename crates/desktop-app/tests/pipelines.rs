@@ -244,6 +244,8 @@ mod async_failures;
 mod history_safety;
 #[path = "pipelines/layout.rs"]
 mod layout;
+#[path = "pipelines/panel_history.rs"]
+mod panel_history;
 #[path = "pipelines/permissions.rs"]
 mod permissions;
 #[path = "pipelines/regressions.rs"]

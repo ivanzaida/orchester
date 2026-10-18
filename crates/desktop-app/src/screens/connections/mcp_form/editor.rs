@@ -290,13 +290,10 @@ fn lowercase_first(text: &str) -> String {
 fn head(ctx: &mut Ctx, props: &EditorProps, unchanged: bool, saving: &FutureState<Saved, Message>) -> Head {
   let navigation = Navigation::of(ctx);
   let project = props.project.open.project.id();
-  let to = move |view: ConnectionsView| {
-    let navigation = navigation.clone();
-    move || navigation.go(Route::Project(project, ProjectPage::Connections(view)))
-  };
+  let to = move |view: ConnectionsView| navigation.to(Route::Project(project, ProjectPage::Connections(view)));
   let mut crumbs = vec![
-    Crumb::link(ctx.t("connections.title"), to(ConnectionsView::default())),
-    Crumb::link(
+    Crumb::to(ctx.t("connections.title"), to(ConnectionsView::default())),
+    Crumb::to(
       ctx.t("connections.tabs.mcpServers"),
       to(ConnectionsView::new(ConnectionsTab::McpServers)),
     ),
@@ -304,7 +301,7 @@ fn head(ctx: &mut Ctx, props: &EditorProps, unchanged: bool, saving: &FutureStat
   let (title, status) = match props.stored.as_ref() {
     Some(server) => {
       let view = ConnectionsView::new(ConnectionsTab::McpServers).with_selected(server.id());
-      crumbs.push(Crumb::link(server.name().as_str(), to(view)));
+      crumbs.push(Crumb::to(server.name().as_str(), to(view)));
       crumbs.push(Crumb::here(ctx.t("connections.mcp.dialog.editCrumb")));
       let status = if unchanged {
         (

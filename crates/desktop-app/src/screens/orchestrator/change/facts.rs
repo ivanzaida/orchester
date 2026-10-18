@@ -32,9 +32,9 @@ use orchester_workspace::{
 use super::{widens, words::View};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView, ToolTab},
+  routes::{AgentTab, InstructionsView, PipelinePanel, ProjectPage, Route, TaskTab, TaskView, ToolTab},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, OrchestratorText},
-  ui::pressable::pressable,
+  ui::pressable::opening,
 };
 
 /// A fact's key column (`u5vGv`).
@@ -93,14 +93,11 @@ fn row(id: &str, key: &str, parts: Vec<Part>, navigation: &Navigation) -> Row {
 
 fn part_element(part: Part, navigation: &Navigation) -> Element {
   match part {
-    Part::Link(words, route) => {
-      let navigation = navigation.clone();
-      pressable(move || navigation.go(route.clone()))
-        .padding_bottom(ExtraSpacing::Hair.role())
-        .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted))
-        .child(Text::new(&words).variant(OrchestratorText::FactLink.role()).nowrap())
-        .into()
-    }
+    Part::Link(words, route) => opening(navigation.to(route))
+      .padding_bottom(ExtraSpacing::Hair.role())
+      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted))
+      .child(Text::new(&words).variant(OrchestratorText::FactLink.role()).nowrap())
+      .into(),
     Part::Value(words) => Text::new(&words)
       .variant(OrchestratorText::FactValue.role())
       .flex_shrink(1.0)
@@ -122,9 +119,9 @@ pub(super) fn draft_route(project: ProjectId, publication: (Publishing, orcheste
   Route::Project(
     project,
     match of {
-      Publishing::Pipeline => ProjectPage::Pipeline(resource),
-      Publishing::Profile => ProjectPage::Agent(resource),
-      Publishing::Instruction => ProjectPage::Instructions,
+      Publishing::Pipeline => ProjectPage::Pipeline(resource, PipelinePanel::default()),
+      Publishing::Profile => ProjectPage::Agent(resource, AgentTab::default()),
+      Publishing::Instruction => ProjectPage::Instructions(InstructionsView::default()),
       Publishing::Skill => ProjectPage::Skill(resource),
       Publishing::Tool => ProjectPage::Tool(resource, ToolTab::default()),
     },
@@ -274,14 +271,14 @@ fn place_part(ctx: &Ctx, place: &Place, project: ProjectId) -> Part {
     Place::Role(role) => Part::Value(ctx.t_args("orchestrator.change.facts.role", [("role", role.as_str())])),
     Place::Pipeline { pipeline, name } => Part::Link(
       name.as_str().into(),
-      Route::Project(project, ProjectPage::Pipeline(*pipeline)),
+      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelinePanel::default())),
     ),
     Place::Step { pipeline, name, step } => Part::Link(
       ctx.t_args(
         "orchestrator.change.facts.step",
         [("pipeline", name.as_str()), ("step", step.as_str())],
       ),
-      Route::Project(project, ProjectPage::Pipeline(*pipeline)),
+      Route::Project(project, ProjectPage::Pipeline(*pipeline, PipelinePanel::default())),
     ),
   }
 }

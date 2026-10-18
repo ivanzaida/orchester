@@ -5,8 +5,6 @@
 //! version. Counts are plain numbers, one space after their label; a dash only means "not known yet".
 //! Agents opens Tasks, Queued and Needs you the Overview's list of them, the tokens Usage.
 
-use std::sync::Arc;
-
 use lurq::{
   app::{
     ctx::Ctx,
@@ -21,7 +19,7 @@ use orchester_core::tokens::compact_tokens;
 use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks};
 
 use super::{
-  facts::{BarAction, Dispatch, ProjectFacts},
+  facts::{Dispatch, ProjectFacts, go},
   item::{ITEM_HEIGHT, dropping, give_way, glyph, item, label, pressed},
   mcp::mcp_item,
 };
@@ -29,10 +27,8 @@ use crate::{
   mcp::McpStatus,
   routes::{OverviewTab, ProjectPage, Route, TaskList},
   theme::ExtraSpacing,
-  ui::{icon::Icon, pressable::pressable},
+  ui::{icon::Icon, pressable::Press},
 };
-
-type Press = Arc<dyn Fn() + Send + Sync>;
 
 /// The project's counts, in the bar's order. While the tasks are not known, Queued and Needs you show a
 /// dash, so the bar does not move once they are. The three counts are one part of the bar whose labels
@@ -40,10 +36,7 @@ type Press = Arc<dyn Fn() + Send + Sync>;
 /// each count is laid out as pieces of that line — its icon, its words and its value — each pressing the
 /// same way.
 pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Element> {
-  let go = |page: ProjectPage| -> Press {
-    let (dispatch, route) = (dispatch.clone(), Route::Project(project.id, page));
-    Arc::new(move || dispatch(BarAction::Go(route.clone())))
-  };
+  let open = |page: ProjectPage| go(dispatch, Route::Project(project.id, page));
   let unknown = ctx.t("shell.status.unknown").to_string();
   let agents = agents(project).unwrap_or_else(|| unknown.clone());
   let tasks = project.tasks.as_ref();
@@ -65,7 +58,7 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       color: PaletteColor::TextMuted,
       words: (&ctx.t("shell.status.agents"), true),
       value: &agents,
-      press: go(ProjectPage::Tasks(TaskList::default())),
+      press: open(ProjectPage::Tasks(TaskList::default())),
     },
     Count {
       id: "status-queued",
@@ -73,7 +66,7 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       color: PaletteColor::TextMuted,
       words: (&ctx.t("shell.status.queued"), true),
       value: &queued,
-      press: go(ProjectPage::Overview(OverviewTab::Queued)),
+      press: open(ProjectPage::Overview(OverviewTab::Queued)),
     },
     Count {
       id: "status-needs-you",
@@ -85,7 +78,7 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       },
       words: (&needs_words, false),
       value: &waiting_value,
-      press: go(ProjectPage::Overview(OverviewTab::NeedsYou)),
+      press: open(ProjectPage::Overview(OverviewTab::NeedsYou)),
     },
   ];
   let group = counts.into_iter().flat_map(Count::pieces).fold(
@@ -97,8 +90,8 @@ pub fn counts(ctx: &Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec<Ele
       .align_items(Alignment::Center),
     Row::child,
   );
-  let usage = go(ProjectPage::Usage(Box::default()));
-  vec![group.into(), tokens(ctx, project, &unknown, move || usage())]
+  let usage = open(ProjectPage::Usage(Box::default()));
+  vec![group.into(), tokens(ctx, project, &unknown, usage)]
 }
 
 /// One count: *Agents 3/4* (its words before its value) or *4 need you* (after it).
@@ -141,8 +134,10 @@ impl Count<'_> {
   }
 
   fn piece(&self, id: String, padding: Padding) -> Button {
-    let press = self.press.clone();
-    pressable(move || press())
+    self
+      .press
+      .clone()
+      .button()
       .id(id)
       .height(Dimension::Px(ITEM_HEIGHT))
       .padding(padding)
@@ -163,7 +158,7 @@ fn agents(project: &ProjectFacts) -> Option<String> {
 }
 
 /// *3.8M / 20M today*; it drops out whole after the version.
-fn tokens(ctx: &Ctx, project: &ProjectFacts, unknown: &str, press: impl Fn() + Send + Sync + 'static) -> Element {
+fn tokens(ctx: &Ctx, project: &ProjectFacts, unknown: &str, press: Press) -> Element {
   let (used, budget) = project.usage.map_or_else(
     || (unknown.to_owned(), unknown.to_owned()),
     |usage| {

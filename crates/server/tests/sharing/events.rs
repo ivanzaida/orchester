@@ -302,7 +302,7 @@ async fn s1b_sse_keepalive_checks_idle_expiry_and_server_shutdown() {
     .host_account_code("alice".into())
     .await
     .expect("account code");
-  let fresh = server.join(&code, None, "rejoined laptop").await;
+  let fresh = server.join_as(&code, "alice", "rejoined laptop").await;
   let mut open = Stream::open(&server, &fresh.token, project, created.cursor).await;
   assert!(open.frame().await.expect("initial").comment);
   server.finish().await;

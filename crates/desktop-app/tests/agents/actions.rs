@@ -5,6 +5,7 @@ fn agents_create_first_draft_and_publish() {
   let mut screen = Agents::new(true);
   screen.go();
   screen.click("agents-new");
+  screen.until("the new profile's editor", |s| s.exists("agent-role"));
   screen.set("agent-role", "Reviewer");
   screen.set("agent-instructions", "Review the implementation.");
   screen.set("agent-custom-model", "test-model");

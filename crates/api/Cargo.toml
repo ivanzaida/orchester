@@ -11,7 +11,10 @@ workspace = true
 
 [features]
 # The HTTP client the desktop talks to a server with (`client` module).
-client = ["dep:reqwest", "dep:rustls", "dep:serde_json", "dep:thiserror"]
+client = ["dep:parking_lot", "dep:reqwest", "dep:rustls", "dep:rustls-platform-verifier", "dep:serde_json", "dep:thiserror"]
+# Tests that serve a certificate from a test authority trust it besides the operating system's store
+# (`client::trust_for_tests`).
+test-support = ["client"]
 # Orchester Cloud's identity tokens and signed key sets (`identity` module): signing for the cloud, verifying for team
 # servers.
 identity = ["dep:base64", "dep:ring", "dep:serde_json", "dep:thiserror"]
@@ -19,9 +22,13 @@ identity = ["dep:base64", "dep:ring", "dep:serde_json", "dep:thiserror"]
 [dependencies]
 orchester-core.workspace = true
 base64 = { workspace = true, optional = true }
+# The client's record of the certificate its connections present (`client/recorded.rs`); already built.
+parking_lot = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 ring = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
+# The operating system's trust store, as reqwest uses it, wrapped to record the verified leaf (`client/recorded.rs`).
+rustls-platform-verifier = { workspace = true, optional = true }
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
 # A team server's certificate pin and check code: the SHA-256 of its certificate.
@@ -43,6 +50,10 @@ tracing-subscriber.workspace = true
 
 [[test]]
 name = "identity"
+required-features = ["identity"]
+
+[[test]]
+name = "totp"
 required-features = ["identity"]
 
 [[test]]

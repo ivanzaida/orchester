@@ -2,8 +2,9 @@
 //! server and a stand-in for Orchester Cloud's account API on loopback: signing in, the cloud's pages opened in the
 //! browser, accepting an invite with the certificate pin it carries, connecting with an invite code after the check
 //! code, linking a local project by address with and without a remote mismatch, a pairing code for a second computer,
-//! signing out naming the projects it affects, and that the app never calls an endpoint of the server admin. The
-//! sign-in against the real cloud is in `crates/cloud/tests/cloud/desktop.rs`.
+//! signing out naming the projects it affects, the server's version kept while its projects are read again, and that
+//! the app never calls an endpoint of the server admin. The sign-in against the real cloud is in
+//! `crates/cloud/tests/cloud/desktop.rs`.
 //!
 //! `cargo test -p orchester-app --test orchester orchester_`
 
@@ -11,11 +12,14 @@ mod accepting;
 mod clipboard;
 mod design;
 mod harness;
+mod history;
+mod landing;
 mod person_only;
 #[path = "../../../workspace/tests/server_support/mod.rs"]
 mod server_support;
 #[path = "../support/mod.rs"]
 mod support;
+mod two_factor;
 
 use harness::{Recorder, administrative, block_on, go, press, shows, window};
 use orchester_api::{
@@ -81,7 +85,8 @@ fn orchester_signs_in_and_accepts_an_invite_with_its_pin() {
   invite_notice(&mut window, &invite);
   go(&mut window, Route::Orchester(OrchesterView::default()), &accept);
   press(&mut window, &accept);
-  shows(&mut window, "orchester-invite-joined");
+  // A project invite goes on to which checkout to link: Billing has none here, so its clone is offered.
+  shows(&mut window, "orchester-landing-none");
   username_suggested(&mut window);
 
   let entry = services.servers.entries().expect("entries").remove(0);
@@ -133,6 +138,8 @@ fn orchester_connects_with_an_invite_code_after_the_check_code() {
   server.create_user("alice", "Alice Moreau", true);
   let kontur = server.create_named_project(("Kontur", "KTR"), "kontur", Some(KONTUR_REMOTE));
   let code = server.project_code(&kontur);
+  // Its admin pins the tests' cloud root, so the server checks the two-factor identity a code needs.
+  server.cloud_audience();
   server.serve_self_signed();
   let address = ServerAddress::parse(&server.url()).expect("address");
   let pin = server
@@ -171,6 +178,45 @@ fn orchester_connects_with_an_invite_code_after_the_check_code() {
   assert_eq!(entry.stored.account.expect("account").username, "ivan");
 }
 
+#[test]
+fn orchester_refuses_a_code_without_a_two_factor_sign_in() {
+  let mut server = TestServer::start();
+  server.create_user("alice", "Alice Moreau", true);
+  let kontur = server.create_named_project(("Kontur", "KTR"), "kontur", Some(KONTUR_REMOTE));
+  let code = server.project_code(&kontur);
+  // Its admin pins the tests' cloud root, so the server checks the two-factor identity a code needs.
+  server.cloud_audience();
+  server.serve_self_signed();
+  let mut window = window(None);
+  window.data.cloud.two_factor_off();
+  let services = window.launch.services().expect("services").clone();
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::connect()),
+    "orchester-connect-address",
+  );
+  window.set("orchester-connect-address", &server.url());
+  press(&mut window, "orchester-connect-continue");
+  press(&mut window, "orchester-connect-matches");
+  shows(&mut window, "orchester-connect-code");
+  window.set("orchester-connect-code", code.expose());
+  window.set("orchester-connect-username", "olena");
+  window.set("orchester-connect-name", "Olena Koval");
+  press(&mut window, "orchester-connect-join");
+  shows(&mut window, "orchester-connect-join-error");
+  assert!(
+    window
+      .text("orchester-connect-join-error")
+      .starts_with("Entering a code needs two-factor authentication on your Orchester Cloud account."),
+    "{}",
+    window.text("orchester-connect-join-error")
+  );
+  assert!(
+    services.servers.entries().expect("entries").is_empty(),
+    "the code was not sent"
+  );
+}
+
 /// Links the window's Kontur to Kontur on the one server it joined, and gives that server's entry.
 fn link_kontur(window: &support::Window) -> orchester_workspace::sharing::ServerEntry {
   let services = window.launch.services().expect("services").clone();
@@ -188,7 +234,12 @@ fn link_kontur(window: &support::Window) -> orchester_workspace::sharing::Server
 
 /// The window signed in to the stand-in `cloud`, at Settings › Orchester.
 fn signed_in(cloud: &AccountCloud) -> support::Window {
-  let mut window = window(None);
+  signed_in_with(cloud, None)
+}
+
+/// [`signed_in`] with Kontur's checkout's `origin` set to `origin`.
+fn signed_in_with(cloud: &AccountCloud, origin: Option<&str>) -> support::Window {
+  let mut window = window(origin);
   let services = window.launch.services().expect("services").clone();
   let cloud_address = ServerAddress::parse(&cloud.url()).expect("cloud address");
   block_on(&window, services.cloud.set_address(Some(cloud_address))).expect("a test cloud");
@@ -220,6 +271,7 @@ fn joined_through_recorder(window: &support::Window) -> (TestServer, Recorder) {
     code,
     username: Some("ivan".into()),
     display_name: Some("Ivan Zaida".into()),
+    proof: Some(server.code_proof("ivan")),
   };
   block_on(
     window,
@@ -238,7 +290,7 @@ fn orchester_links_by_address_warning_on_a_remote_mismatch() {
   let (_server, recorder) = joined_through_recorder(&window);
   go(
     &mut window,
-    Route::Project(support::project_id(), ProjectPage::Settings),
+    Route::Project(support::project_id(), ProjectPage::Settings(Default::default())),
     "settings-tab-sharing",
   );
   press(&mut window, "settings-tab-sharing");
@@ -284,6 +336,7 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
     PlainHttp::NotAllowed,
   )
   .expect("client");
+  let proof = server.code_proof("ivan");
   let joined = server
     .block_on(other.join_with_code(&CodeJoin {
       code: Credential::new(code),
@@ -291,6 +344,8 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
       username: None,
       display_name: None,
       kind: orchester_api::DeviceKind::App,
+      identity_token: Some(proof.identity_token),
+      key_set: proof.key_set,
     }))
     .expect("the second computer joins with the pairing code");
   assert_eq!(joined.user.username, "ivan");
@@ -317,4 +372,52 @@ fn orchester_pairs_a_second_computer_and_signing_out_names_the_projects() {
     recorder.lines()
   );
   assert!(recorder.lines().iter().any(|line| line == "POST /api/v1/auth/pairings"));
+}
+
+#[test]
+fn orchester_server_keeps_its_version_as_its_projects_are_read_again() {
+  let mut window = window(Some(KONTUR_REMOTE));
+  let (server, recorder) = joined_through_recorder(&window);
+  let services = window.launch.services().expect("services").clone();
+  let entry = services.servers.entries().expect("entries").remove(0);
+  go(
+    &mut window,
+    Route::Orchester(OrchesterView::server(entry.stored.id)),
+    "orchester-server-projects-list",
+  );
+  window.until("the server's version", version_shown);
+  let asked = version_reads(&recorder);
+  let notes = server.create_named_project(("Notes", "NOT"), "notes", None);
+  server.add_member(&notes, "ivan");
+
+  // Asking the server again now reads the projects again.
+  services.servers.retry_now(entry.stored.id);
+  let mut kept = true;
+  window.until("the projects read again", |window| {
+    kept &= version_shown(window);
+    window
+      .texts("orchester-server-projects-list")
+      .is_some_and(|texts| texts.iter().any(|text| text == "Notes"))
+  });
+  assert!(
+    kept,
+    "the version stays in the header while the projects are read again"
+  );
+  assert_eq!(version_reads(&recorder), asked, "the version is not asked again");
+}
+
+/// Whether the header says what the server runs, `Orchester server 0.4.0, API 3`.
+fn version_shown(window: &mut support::Window) -> bool {
+  window
+    .texts("orchester-server-header-facts")
+    .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Orchester server")))
+}
+
+/// How many times the app asked the server what it runs (`GET /server`).
+fn version_reads(recorder: &Recorder) -> usize {
+  recorder
+    .lines()
+    .iter()
+    .filter(|line| *line == "GET /api/v1/server")
+    .count()
 }

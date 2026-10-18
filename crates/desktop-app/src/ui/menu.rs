@@ -23,10 +23,13 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, inert, pressable},
+  pressable::{Focus, Press, inert},
   tooltip::Truncated,
 };
-use crate::theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+};
 
 /// A row's label line, 16 high (`Label` in `Menu item/detail` `j6ZUhL`).
 const LABEL_HEIGHT: f32 = 16.0;
@@ -77,7 +80,7 @@ pub fn separator(ctx: &Ctx) -> Element {
 }
 
 enum Choice {
-  Action(Arc<dyn Fn() + Send + Sync>),
+  Action(Press),
   /// It cannot be chosen now, for this reason.
   Unavailable(Arc<str>),
 }
@@ -100,7 +103,12 @@ pub struct MenuItem {
 impl MenuItem {
   /// A row saying `label` that runs `choose` when chosen.
   pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, choose: impl Fn() + Send + Sync + 'static) -> Self {
-    Self::with_choice(id.into(), label.into(), Choice::Action(Arc::new(choose)))
+    Self::with_choice(id.into(), label.into(), Choice::Action(Press::run(choose)))
+  }
+
+  /// A row saying `label` that opens a place with `open` by a browser's rules when chosen (`navigation::link`).
+  pub fn opens(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, open: Open) -> Self {
+    Self::with_choice(id.into(), label.into(), Choice::Action(Press::Open(open)))
   }
 
   /// A row that cannot be chosen now, for `reason`: faded, ending in a lock, the reason as its detail.
@@ -155,7 +163,7 @@ impl MenuItem {
 
   /// A choice within a form's field menu: reachable with Tab and activated with Enter or Space.
   pub fn in_form(mut self) -> Self {
-    self.focus = Focus::Form;
+    self.focus = Focus::Keyboard;
     self
   }
 
@@ -247,12 +255,19 @@ impl MenuItem {
     match self.choice {
       Choice::Action(choose) => {
         let open = open.clone();
-        self
-          .focus
-          .apply(pressable(move || {
+        let choose = match choose {
+          Press::Run(choose) => Press::run(move || {
             open.set(false);
             choose();
-          }))
+          }),
+          Press::Open(to) => Press::Open(Arc::new(move |at| {
+            open.set(false);
+            to(at);
+          })),
+        };
+        self
+          .focus
+          .apply(choose.button())
           .id(self.id.clone())
           .describe("a11y_name", self.label.clone())
           .width(Dimension::Pct(100.0))

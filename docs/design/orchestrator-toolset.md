@@ -1,7 +1,7 @@
 # The Orchestrator's toolset
 
-Status: decided by the person on 2026-10-15. This is the contract the parallel work streams share. Implementation
-notes and file ownership are at the end.
+Status: decided by the person on 2026-10-15; decision 5 and the waits changed by the person on 2026-10-17 (ORC-42).
+This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
 orchestrator/tools.rs`, `TOOLS`). Every call goes through the same tool an MCP client of the app calls, so it is
@@ -12,9 +12,10 @@ person can click.
 ## Decisions
 
 1. **Reading is open.** The Orchestrator reads everything in every project the app knows: tasks, runs, changes,
-   approvals, questions, plans, pipelines, agent profiles, instructions, skills, tools, secrets (names and use only),
-   connections, accounts, models, usage and pull requests. Cross-project reads are allowed ("what is running
-   everywhere"); changes stay in the chat's own project.
+   approvals, questions, plans, tasks' conversations, pipelines, agent profiles, instructions, skills, tools, secrets
+   (names and use only), connections, accounts, models, usage and pull requests. Cross-project reads are allowed
+   ("what is running everywhere"); changes stay in the chat's own project. A step that waits for a message always
+   shows what its agent wrote last (`get_run`, `list_questions`), so a wait is never unreadable.
 2. **Drafts are free.** It saves drafts of tasks, pipelines, agent profiles, instructions, skills and tools without
    asking. A draft reaches no agent's prompt.
 3. **Publishing needs the person, or the person's switch.** Publishing a pipeline, profile, instruction, skill or
@@ -24,9 +25,30 @@ person can click.
    behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat.
 4. **Starting runs: both.** By default a start is a proposal card the person starts (as today). When auto mode is on
    for the project, the chat starts the run directly, through the same scheduling checks; the start is kept in the
-   conversation as an action.
-5. **Never from the chat:** answering approvals or agents' questions, deciding plans, widening permissions, secret
-   values, deleting work (worktrees, drafts, tasks) and merging without the person's click.
+   conversation as an action. Its neighbours follow the same pattern behind their own switches: answering agents
+   and merging runs (decision 5); canceling a run is always a proposal.
+5. **Answering agents and merging: the person's click, or the person's switch** (changed 2026-10-17, ORC-42).
+   - The chat may answer an agent's question (`answer_question`) and send a run's agents a message (`send_message`).
+     Each is a proposal card the person applies by default; with the person-only switch *Let the Orchestrator answer
+     agents* (Settings › What automation may do) the chat sends it directly. Every answer is recorded as automation's
+     (`decided_by` automation) and the task's Conversation shows it as sent by the Orchestrator. A message that would
+     decide the plan a run waits on is refused: plan decisions stay the person's.
+   - The chat follows the agents of its project: when an agent asks a question, waits for a message or its plan waits
+     for a decision, the conversation gets an entry linking to its card. With *Let the Orchestrator answer agents* on,
+     the wait also starts one Orchestrator turn by itself: at most one per wait, never while another turn of the
+     conversation runs (it waits for that turn to end), and none for a wait the Orchestrator's own answer raised. In
+     that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the project's
+     docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is asked,
+     with options and its recommendation.
+   - The chat may merge a run (`merge_run`): a proposal card by default; with the person-only switch *Let the
+     Orchestrator merge runs* it merges at once, only a run the person asked it to merge. The merge keeps all of
+     `merge_run`'s rules: only a task's latest run that succeeded, only when the main checkout needs no local
+     integration, else refused (`needs_decision`, `merge_failed`); conflict choices and approving the merged result
+     stay the person's, on the Local integration page. The merge is kept in the conversation as an action.
+   - Both switches are off until a person turns them on; synthetic input cannot flip them (the same rule as *Let
+     automation change agent permissions* and *Let the Orchestrator publish drafts*).
+   - **Never from the chat:** answering approvals, deciding plans, widening permissions, secret values and deleting
+     work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
    the place in the app.
 
@@ -39,9 +61,9 @@ project.
 | Area | Read | Change (draft / free) | Proposed (person clicks, or switch) |
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
-| Tasks | `list_tasks`, `get_task` (existing) | `create_task`, `update_task` (existing) | — |
-| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing) | `run_task` (direct in auto mode), `cancel_run`, `merge_run` |
-| Waits | `list_approvals` (existing); `list_questions`, `get_plan` (new, read only) | — | — |
+| Tasks | `list_tasks`, `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing) | — |
+| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing) | `run_task` (direct in auto mode), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*) |
+| Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |
 | Agents | `list_profiles`, `get_profile` (existing) | `save_profile_draft` (existing) | `publish_profile` |
@@ -53,8 +75,10 @@ project.
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
 
-Approvals, questions, plans, project setup, connections' changes, MCP server changes, environment, worktree removal and
-`return_to_draft` stay out of the chat's tools.
+Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
+changes), widening what agents may do, secret values, project setup, connections' changes, MCP server changes,
+environment, worktree removal and `return_to_draft` stay out of the chat's tools. Answering agents' questions and
+sending a run's agents messages are the chat's since ORC-42, behind *Let the Orchestrator answer agents* (decision 5).
 
 ## Links
 

@@ -13,12 +13,13 @@ use crate::{
 };
 
 /// How a new device token came to be: the joining device's name and kind, how it joined, and the cloud signing key of
-/// the identity token it was issued for.
+/// the identity token it was issued for and whether that token's device signed in with two-factor authentication.
 pub(crate) struct Issued<'a> {
   pub device: &'a str,
   pub kind: DeviceKind,
   pub via: JoinedVia,
   pub kid: Option<&'a str>,
+  pub mfa: bool,
 }
 
 /// A new device token for `user`, recorded in the caller's transaction.
@@ -28,7 +29,13 @@ pub(crate) fn issue(
   issued: &Issued<'_>,
   now: i64,
 ) -> Result<(Credential, Session), ServerError> {
-  let Issued { device, kind, via, kid } = *issued;
+  let Issued {
+    device,
+    kind,
+    via,
+    kid,
+    mfa,
+  } = *issued;
   let token = new_token()?;
   let session = Session {
     id: SessionId::generate(),
@@ -48,6 +55,7 @@ pub(crate) fn issue(
       via,
       kid,
       kind,
+      mfa,
     },
     now,
   )?;

@@ -14,6 +14,7 @@ mod code;
 pub mod connect;
 mod ended;
 mod invites;
+pub mod landing;
 mod list;
 mod notice;
 mod parts;
@@ -21,6 +22,7 @@ mod person;
 mod server;
 mod server_parts;
 mod server_projects;
+mod two_factor;
 mod words;
 
 use std::sync::Arc;
@@ -84,6 +86,14 @@ impl Snapshot {
   }
 }
 
+/// The invites waiting and the account's two-factor authentication, as the cloud answered: what the All projects notice
+/// shows.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Waiting {
+  pub invites: Invites,
+  pub two_factor: Option<orchester_api::cloud::TwoFactorStatus>,
+}
+
 /// The invites waiting for the account, as the cloud answered.
 #[derive(Clone, Debug)]
 pub enum Invites {
@@ -99,7 +109,11 @@ impl PartialEq for Invites {
     match (self, other) {
       (Self::SignedOut, Self::SignedOut) => true,
       (Self::Listed(one), Self::Listed(two)) => {
-        one.len() == two.len() && one.iter().zip(two.iter()).all(|(one, two)| one.id == two.id)
+        one.len() == two.len()
+          && one
+            .iter()
+            .zip(two.iter())
+            .all(|(one, two)| one.id == two.id && one.needs_two_factor == two.needs_two_factor)
       }
       (Self::Failed(one), Self::Failed(two)) => one == two,
       _ => false,
@@ -153,6 +167,7 @@ impl Component for OrchesterTab {
       }
     };
     let invites = invites(ctx, revision, &services.cloud, snapshot.account.as_ref());
+    let two_factor = two_factor::read(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let accepted = kept(ctx, revision, &services.cloud, snapshot.account.as_ref());
     let details = match view.server.and_then(|id| snapshot.server(id)) {
       Some((entry, linked)) => ctx.mount_keyed::<server::ServerPanel>(
@@ -170,6 +185,7 @@ impl Component for OrchesterTab {
           address: snapshot.address.clone(),
           invites: invites.clone(),
           accepted,
+          two_factor,
           panel: view.panel,
         },
       ),

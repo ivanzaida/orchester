@@ -18,6 +18,8 @@ pub(crate) struct Authenticated {
   pub session: SessionId,
   pub last_used_at: i64,
   pub kind: DeviceKind,
+  /// Issued for a cloud identity token whose device signed in with two-factor authentication.
+  pub mfa: bool,
 }
 
 /// A token that is not revoked and has not expired at `?2` (an app's 90 days after its last use, an admin sign-in's
@@ -58,14 +60,14 @@ pub(crate) fn touch_session(
 }
 
 fn session_auth(connection: &Connection, session: SessionId, now: i64) -> Result<Authenticated, ServerError> {
-  let row: Option<(String, i64, String)> = connection
+  let row: Option<(String, i64, String, bool)> = connection
     .query_row(
-      &format!("SELECT user_id,last_used_at,kind FROM sessions WHERE id=?1 AND {LIVE}"),
+      &format!("SELECT user_id,last_used_at,kind,mfa FROM sessions WHERE id=?1 AND {LIVE}"),
       params![session.to_string(), now - DEVICE_IDLE_MS, now - ADMIN_WEB_MS],
-      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )
     .optional()?;
-  let (user_id, last_used_at, kind) = row.ok_or(ErrorCode::Unauthorized)?;
+  let (user_id, last_used_at, kind, mfa) = row.ok_or(ErrorCode::Unauthorized)?;
   let user = connection.query_row(
     &format!("SELECT {USER_COLUMNS} FROM users WHERE id=?1"),
     [user_id],
@@ -79,6 +81,7 @@ fn session_auth(connection: &Connection, session: SessionId, now: i64) -> Result
     session,
     last_used_at,
     kind: parse_kind(&kind)?,
+    mfa,
   })
 }
 
@@ -106,12 +109,13 @@ pub(crate) struct NewSession<'a> {
   /// The cloud signing key of the identity token it was issued for.
   pub kid: Option<&'a str>,
   pub kind: DeviceKind,
+  pub mfa: bool,
 }
 
 pub(crate) fn insert_session(connection: &Connection, session: &NewSession<'_>, now: i64) -> Result<(), ServerError> {
   connection.execute(
-    "INSERT INTO sessions(id,user_id,token_hash,device,created_at,last_used_at,via,kid,kind)
-      VALUES (?1,?2,?3,?4,?5,?5,?6,?7,?8)",
+    "INSERT INTO sessions(id,user_id,token_hash,device,created_at,last_used_at,via,kid,kind,mfa)
+      VALUES (?1,?2,?3,?4,?5,?5,?6,?7,?8,?9)",
     params![
       session.id.to_string(),
       session.user.to_string(),
@@ -120,7 +124,8 @@ pub(crate) fn insert_session(connection: &Connection, session: &NewSession<'_>, 
       now,
       via_name(session.via),
       session.kid,
-      kind_name(session.kind)
+      kind_name(session.kind),
+      session.mfa
     ],
   )?;
   Ok(())

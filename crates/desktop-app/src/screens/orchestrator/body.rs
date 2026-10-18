@@ -174,13 +174,14 @@ fn conversation(
   let env = Arc::new(env(view, project, (chat, connection), names));
   let can_ask = matches!(state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
   let stopping = view.stop.state().get().is_pending();
-  let count = all.len();
+  // The newest turn, which can be stopped or asked again: a wait that started none, kept after it, is no turn.
+  let newest = all.iter().rposition(|turn| turn.state.is_some());
   let rows = all
     .into_iter()
     .enumerate()
     .map(|(index, turn)| TurnRow {
       turn: Arc::new(turn),
-      last: index + 1 == count,
+      last: Some(index) == newest,
       can_ask,
       stopping,
       env: env.clone(),
@@ -337,7 +338,7 @@ fn missing(ctx: &mut Ctx, project: &ShownProject, name: &str) -> Element {
     ctx.t("orchestrator.newConversation"),
   )
   .icon(Icon::MessageSquarePlus)
-  .on_click(move || navigation.go(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::New))));
+  .opens(navigation.to(Route::Project(id, ProjectPage::Orchestrator(OrchestratorChat::New))));
   Column::new()
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(COLUMN_WIDTH))
@@ -369,7 +370,7 @@ fn not_ready(ctx: &mut Ctx, project: &ShownProject, readiness: &Readiness) -> El
     ctx.t("orchestrator.notReady.openSettings"),
   )
   .icon(Icon::Settings)
-  .on_click(move || navigation.go(Route::Project(id, ProjectPage::OrchestratorSettings)));
+  .opens(navigation.to(Route::Project(id, ProjectPage::OrchestratorSettings)));
   Notice::new(
     "orchestrator-not-ready",
     NoticeTone::Warning,

@@ -14,7 +14,7 @@ use crate::support::{
 pub(crate) async fn linked() -> (TestServer, Joined, TestCloud, String) {
   let server = TestServer::start(|_| {}).await;
   let admin = server.bootstrap().await;
-  let cloud = TestCloud::generate();
+  let cloud = server.cloud();
   let started: CloudLinkResponse = server
     .request(
       "PATCH",
@@ -331,7 +331,27 @@ async fn s1c_the_owner_re_pins_the_cloud_root_and_unlinks() {
 #[tokio::test]
 async fn s1c_a_code_account_links_its_cloud_identity_and_an_account_invite_names_an_existing_account() {
   let (server, admin, cloud, audience) = linked().await;
+  // The setup code shows no cloud identity: its account links one later, from a device of its own.
+  let identity = Identity {
+    audience: &audience,
+    subject: "0191c7c0-0000-7000-8000-00000000a440",
+    email: "alice@example.com",
+    name: "Alice",
+    invite: None,
+  };
+  let body = json!({"identity_token": cloud.token(&identity, server.seconds()), "device": "Alice's laptop"});
+  let linked = server
+    .request("POST", "/auth/cloud", Some(&admin.token), Some(body))
+    .await;
+  assert_eq!(linked.status, 200);
+  assert!(linked.json::<UserResponse>().user.cloud);
+  let again: Joined = cloud_join(&server, &cloud.token(&identity, server.seconds()), None)
+    .await
+    .json();
+  assert_eq!(again.user.id, admin.user.id);
+  // An invite code links no cloud identity: the account it makes links one from a device of its own.
   let carol = server.invited("carol", false).await;
+  assert!(!carol.user.cloud);
   let identity = Identity {
     audience: &audience,
     subject: "0191c7c0-0000-7000-8000-00000000c440",
@@ -344,7 +364,6 @@ async fn s1c_a_code_account_links_its_cloud_identity_and_an_account_invite_names
     .request("POST", "/auth/cloud", Some(&carol.token), Some(body))
     .await;
   assert_eq!(linked.status, 200);
-  assert!(linked.json::<UserResponse>().user.cloud);
   let again: Joined = cloud_join(&server, &cloud.token(&identity, server.seconds()), None)
     .await
     .json();

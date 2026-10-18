@@ -59,7 +59,7 @@ pub fn screen(ctx: &mut Ctx, project: ProjectId, unavailable: &Unavailable) -> E
       ctx.t("project.allProjects"),
     )
     .icon(Icon::Folders)
-    .on_click(move || navigation.go(Route::AllProjects)),
+    .opens(navigation.to(Route::AllProjects)),
   );
   Column::new()
     .width(Dimension::Pct(100.0))

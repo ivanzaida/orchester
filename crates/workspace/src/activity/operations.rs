@@ -254,6 +254,25 @@ pub fn run_merge(open: &OpenProject, task: TaskId, (key, number): (&str, u32), b
   .target(in_project(open, Place::Task(task)))
 }
 
+/// What a merge of run `number` of task `key` records beside its own event when the temporary
+/// worktree of its merge commit stayed at `path`: the project, the words and the task.
+pub fn run_merge_left(
+  open: &OpenProject,
+  task: TaskId,
+  (key, number): (&str, u32),
+  path: &str,
+) -> (std::sync::Arc<str>, Message, Target) {
+  let title = Message::new("statusBar.operations.runMerge.temporaryLeft")
+    .with("task", key.to_owned())
+    .with("run", number.to_string())
+    .with("path", path.to_owned());
+  (
+    open.project.name().as_str().into(),
+    title,
+    in_project(open, Place::Task(task)),
+  )
+}
+
 /// Removing the worktrees of run `number` of task `key` ("ORC-12", 3).
 pub fn run_cleanup(open: &OpenProject, task: TaskId, (key, number): (&str, u32)) -> OperationSpec {
   let message = |text| {

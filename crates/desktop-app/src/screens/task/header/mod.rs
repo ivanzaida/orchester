@@ -31,7 +31,7 @@ use super::{
   summary::runs::{Runs, removal::confirm_for},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
   services::Services,
   theme::ExtraSpacing,
@@ -97,6 +97,8 @@ impl Component for TaskHeader {
       .flatten()
       .map(|requested| requested.control);
     let refused = self.refusals.shown(&state, requested, &detail);
+    // A task kept Not shared starts no run: its header has Edit locked and Share task only.
+    let kept = detail.not_shared();
     let mut shown = controls(
       ctx,
       &Controls {
@@ -118,6 +120,9 @@ impl Component for TaskHeader {
       (&self.confirming, &self.remove),
       (latest_busy, props.task.online),
     ));
+    if kept {
+      shown.clear();
+    }
     let title_row = actions::title_row(ctx, &props, shown);
     let confirmation = check
       .as_ref()
@@ -184,23 +189,27 @@ impl TaskHeader {
 fn crumbs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let project = props.task.project.open.project.id();
-  let (overview, tasks) = (navigation.clone(), navigation);
   let name = props.task.project.open.project.name().as_str().to_owned();
-  breadcrumb(
-    ctx,
-    "task-crumbs",
-    CrumbSeparator::Slash,
-    vec![
-      Crumb::link(name, move || {
-        overview.go(Route::Project(project, ProjectPage::Overview(Default::default())));
-      }),
-      Crumb::link(ctx.t("task.crumbs.tasks"), move || {
-        tasks.go(Route::Project(project, ProjectPage::Tasks(TaskList::default())));
-      }),
-      Crumb::here(props.task.detail.task.key().to_string()).mono(),
-    ],
-  )
-  .into()
+  let mut crumbs = vec![
+    Crumb::to(
+      name,
+      navigation.to(Route::Project(project, ProjectPage::Overview(Default::default()))),
+    ),
+    Crumb::to(
+      ctx.t("task.crumbs.tasks"),
+      navigation.to(Route::Project(project, ProjectPage::Tasks(TaskList::default()))),
+    ),
+  ];
+  // A task kept Not shared is found behind the list's Not shared filter (`R4elt`).
+  if props.task.detail.not_shared() {
+    let kept = TaskList::default().with_not_shared(true);
+    crumbs.push(Crumb::to(
+      ctx.t("task.crumbs.notShared"),
+      navigation.to(Route::Project(project, ProjectPage::Tasks(kept))),
+    ));
+  }
+  crumbs.push(Crumb::here(props.task.detail.task.key().to_string()).mono());
+  breadcrumb(ctx, "task-crumbs", CrumbSeparator::Slash, crumbs).into()
 }
 
 /// The latest run's *Remove worktree* confirmation, while the header's button opened it.
@@ -226,20 +235,20 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     props.task.project.open.project.id(),
     props.task.detail.task.key().clone(),
   );
+  let kept = props.task.detail.not_shared();
   // Changes opens on the file it showed last.
-  let open = |tab: TaskTab| {
+  let open = |tab: TaskTab| -> Open {
     let (navigation, changes_reads, key) = (navigation.clone(), changes_reads.clone(), key.clone());
-    move || {
+    Arc::new(move |at| {
       let view = match tab {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
         TaskTab::Summary | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
       };
-      navigation.go(Route::Project(project, ProjectPage::Task(key.clone(), view)));
-    }
+      navigation.open(Route::Project(project, ProjectPage::task(key.clone(), view, kept)), at);
+    })
   };
-  let tab = |tab: TaskTab, label: Arc<str>| {
-    PageTab::new(format!("task-tab-{}", tab.name()), label, props.tab == tab, open(tab))
-  };
+  let tab =
+    |tab: TaskTab, label: Arc<str>| PageTab::to(format!("task-tab-{}", tab.name()), label, props.tab == tab, open(tab));
   let changes = ctx.t(TaskTab::Changes.title_key());
   let count = super::changes_count(ctx, &props.task);
   let changes = super::changes::tab_label(ctx, &changes, count);

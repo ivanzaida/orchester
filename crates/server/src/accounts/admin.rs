@@ -88,6 +88,19 @@ impl Server {
       .await
   }
 
+  /// `DELETE /admin/users/{id}/cloud`: ends the account's link to its Orchester Cloud identity, which then signs in
+  /// to nothing here until it links again. Its computers stay joined.
+  pub(crate) async fn unlink_user_cloud(&self, auth: Authenticated, id: UserId) -> Result<User, ServerError> {
+    self
+      .account_write(move |db, now| {
+        let current = db::checked(db, &auth, now, true)?;
+        let user = db::user_by_id(db, id)?.ok_or(ErrorCode::NotFound)?;
+        db::unlink_subject(db, id, Some(current.user.id), now)?;
+        Ok(User { cloud: false, ..user })
+      })
+      .await
+  }
+
   pub(crate) async fn revoke_user_sessions(&self, auth: Authenticated, id: UserId) -> Result<(), ServerError> {
     let now = self.now();
     self

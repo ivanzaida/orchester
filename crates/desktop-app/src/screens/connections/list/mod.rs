@@ -31,7 +31,7 @@ use super::{
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, press::OpenIn},
   project::ShownProject,
   routes::{ConnectionsTab, ConnectionsView, NewConnection, ProjectPage, Route, Screen},
   services::{
@@ -223,19 +223,23 @@ impl ConnectionsScreen {
       .into()
   }
 
-  /// Opens a connection's inspector in place of the shown one.
-  fn open(
-    &self,
-    ctx: &mut Ctx,
-    project: &ShownProject,
-    view: ConnectionsView,
-  ) -> Arc<dyn Fn(ConnectionId) + Send + Sync> {
+  /// What opens a connection's inspector, a place of its own, by a browser's rules (`navigation::link`); in the
+  /// active tab it drops the question asked about the one shown.
+  fn open(&self, ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> table::OpenConnection {
     let navigation = Navigation::of(ctx);
     let (id, asking) = (project.open.project.id(), self.asking.clone());
     Arc::new(move |connection| {
-      asking.set(Asking(None));
-      let view = ConnectionsView::new(view.tab()).with_selected(connection);
-      navigation.replace(Route::Project(id, ProjectPage::Connections(view)));
+      let route = Route::Project(
+        id,
+        ProjectPage::Connections(ConnectionsView::new(view.tab()).with_selected(connection)),
+      );
+      let (navigation, asking) = (navigation.clone(), asking.clone());
+      Arc::new(move |at: OpenIn| {
+        if at == OpenIn::ActiveTab {
+          asking.set(Asking(None));
+        }
+        navigation.open(route.clone(), at);
+      })
     })
   }
 
@@ -315,8 +319,8 @@ impl ConnectionsScreen {
     Actions {
       start,
       confirm: Arc::new(move |confirm| asking.set(Asking(confirm.map(|confirm| (inspected, confirm))))),
-      edit: Arc::new(move |id| edit.go(Route::Project(project_id, ProjectPage::EditConnection(id)))),
-      agents: Arc::new(move || navigation.go(Route::Project(project_id, ProjectPage::Agents))),
+      edit: Arc::new(move |id| edit.to(Route::Project(project_id, ProjectPage::EditConnection(id)))),
+      agents: navigation.to(Route::Project(project_id, ProjectPage::Agents)),
     }
   }
 }
@@ -358,10 +362,7 @@ fn ownership(ctx: &Ctx, project: &ShownProject) -> Row {
 fn no_connections(ctx: &mut Ctx, project: &ShownProject) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
-  let add = |kind: NewConnection| {
-    let navigation = navigation.clone();
-    move || navigation.go(Route::Project(id, ProjectPage::NewConnection(kind)))
-  };
+  let add = |kind: NewConnection| navigation.to(Route::Project(id, ProjectPage::NewConnection(kind)));
   let name = project.open.project.name().as_str();
   let empty = EmptyState::new(
     "connections-empty",
@@ -376,7 +377,7 @@ fn no_connections(ctx: &mut Ctx, project: &ShownProject) -> Element {
       ctx.t("connections.addAgent"),
     )
     .icon(Icon::Bot)
-    .on_click(add(NewConnection::AgentProvider)),
+    .opens(add(NewConnection::AgentProvider)),
   )
   .action(
     ActionButton::new(
@@ -394,7 +395,7 @@ fn no_connections(ctx: &mut Ctx, project: &ShownProject) -> Element {
       ctx.t("connections.mcp.add"),
     )
     .icon(Icon::Server)
-    .on_click(add(NewConnection::McpServer)),
+    .opens(add(NewConnection::McpServer)),
   );
   Column::new()
     .width(Dimension::Pct(100.0))

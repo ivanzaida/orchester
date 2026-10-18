@@ -138,10 +138,10 @@ fn status_recovery_stays_pinned_with_review_until_the_person_decides() {
     bar.asked(),
     [
       BarAction::ReviewInterrupted(project_id()),
-      BarAction::Go(Route::Project(
-        project_id(),
-        ProjectPage::Overview(OverviewTab::default())
-      )),
+      BarAction::Go(
+        Route::Project(project_id(), ProjectPage::Overview(OverviewTab::default())),
+        OpenIn::ActiveTab
+      ),
     ]
   );
   let mut one = Bar::of(facts(Some(recovering(1))));

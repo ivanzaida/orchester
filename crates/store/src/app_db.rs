@@ -68,6 +68,9 @@ CREATE TABLE ui_state (
   cloud_ended::MIGRATION,
   owners::MIGRATION,
   server_owners::MIGRATION,
+  cloud_ended::TWO_FACTOR_MIGRATION,
+  cloud_joins::NEEDS_CODE_MIGRATION,
+  settings::ORCHESTRATOR_ANSWERS_MERGES_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

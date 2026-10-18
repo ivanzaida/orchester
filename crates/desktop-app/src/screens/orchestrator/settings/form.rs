@@ -331,7 +331,7 @@ fn no_connection(ctx: &mut Ctx, project: &ShownProject) -> Element {
     ctx.t("orchestrator.settings.noConnection.open"),
   )
   .icon(Icon::Plug)
-  .on_click(move || navigation.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default()))));
+  .opens(navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default()))));
   Notice::new(
     "orchestrator-settings-no-connection",
     NoticeTone::Warning,

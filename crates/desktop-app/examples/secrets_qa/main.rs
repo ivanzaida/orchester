@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
       start: Start::Ready(Box::new(Ready {
         services,
         landing: Landing {
-          route: Route::Project(open.project.id(), ProjectPage::Secrets),
+          route: Route::Project(open.project.id(), ProjectPage::Secrets(Default::default())),
           project: Some((open.project.id(), ProjectState::Open(open))),
         },
       })),

@@ -52,15 +52,15 @@ pub(super) struct Head<'a> {
 pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
   let project = head.project.open.project.id();
   let navigation = Navigation::of(ctx);
-  let overview = navigation.clone();
   let crumbs = breadcrumb(
     ctx,
     "orchestrator-crumbs",
     CrumbSeparator::Slash,
     vec![
-      Crumb::link(head.project.open.project.name().as_str(), move || {
-        overview.go(Route::Project(project, ProjectPage::Overview(Default::default())));
-      }),
+      Crumb::to(
+        head.project.open.project.name().as_str(),
+        navigation.to(Route::Project(project, ProjectPage::Overview(Default::default()))),
+      ),
       Crumb::here(ctx.t("orchestrator.title")),
     ],
   );
@@ -71,7 +71,7 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
     Named::Chat(chat) => chat.title().into(),
   };
   let history = view.history.clone();
-  let start_new = new_conversation(ctx, head, navigation);
+  let start_new = new_conversation(ctx, head, &navigation);
   let title_row = Row::new()
     .id("orchestrator-title-row")
     .width(Dimension::Pct(100.0))
@@ -121,7 +121,7 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
 }
 
 /// *New conversation*: nothing to leave while the conversation shown is a new one.
-fn new_conversation(ctx: &Ctx, head: &Head<'_>, navigation: Navigation) -> ActionButton {
+fn new_conversation(ctx: &Ctx, head: &Head<'_>, navigation: &Navigation) -> ActionButton {
   let project = head.project.open.project.id();
   let button = ActionButton::new(
     "orchestrator-new",
@@ -130,12 +130,10 @@ fn new_conversation(ctx: &Ctx, head: &Head<'_>, navigation: Navigation) -> Actio
   )
   .icon(Icon::MessageSquarePlus);
   match head.chat {
-    Named::Opening(_) | Named::Chat(_) => button.on_click(move || {
-      navigation.go(Route::Project(
-        project,
-        ProjectPage::Orchestrator(OrchestratorChat::New),
-      ));
-    }),
+    Named::Opening(_) | Named::Chat(_) => button.opens(navigation.to(Route::Project(
+      project,
+      ProjectPage::Orchestrator(OrchestratorChat::New),
+    ))),
     Named::New => button.disabled(),
   }
 }
@@ -202,7 +200,7 @@ fn coordinator(ctx: &mut Ctx, head: &Head<'_>) -> Element {
       )
       .icon(Icon::Settings)
       .small()
-      .on_click(move || navigation.go(Route::Project(project, ProjectPage::OrchestratorSettings))),
+      .opens(navigation.to(Route::Project(project, ProjectPage::OrchestratorSettings))),
     )
     .child(Spacer::new().flex(1.0))
     .child(

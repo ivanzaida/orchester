@@ -195,6 +195,7 @@ pub async fn answered_invites_go_with_the_account_and_ownerless_servers_still_is
   let server = TeamServer::generate();
   link(&cloud, &owner, &server).await;
   let (accepted, declined) = two_invites(&cloud, &server, "dana@example.test").await;
+  cloud.enable_two_factor(&dana).await;
   let accept = json!({"audience": server.id(), "invite": accepted});
   let issued = cloud
     .request("POST", "/identity-tokens", Some(&dana), Some(accept))
@@ -230,6 +231,7 @@ pub async fn answered_invites_go_with_the_account_and_ownerless_servers_still_is
     200,
     "still registered"
   );
+  cloud.enable_two_factor(&erin).await;
   let accept = json!({"audience": server.id(), "invite": open});
   let issued = cloud
     .request("POST", "/identity-tokens", Some(&erin), Some(accept))

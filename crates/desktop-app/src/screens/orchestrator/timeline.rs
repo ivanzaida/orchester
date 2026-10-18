@@ -5,7 +5,9 @@
 //! cards, `action`), and how the
 //! turn ended: while it thinks, the working line with *Stop response* (`Thinking` `PR7nz`); stopped or cut short, an
 //! event line (`Event divider` `YKpmi`) and *Ask again*; failed, a danger notice with *Retry* (and *Open
-//! Connections* or *Open settings* when the connection is why), or for an earlier turn an event line.
+//! Connections* or *Open settings* when the connection is why), or for an earlier turn an event line. A wait of an
+//! agent of the project opens a row of its own with its card (`wait`, linking to the task's Conversation), and the
+//! answer and ending of the turn it started by itself, if any; such a turn ends without *Ask again* or *Retry*.
 
 use std::sync::Arc;
 
@@ -131,27 +133,16 @@ impl Component for TurnView {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let row = ctx.props::<TurnRow>().clone();
     let key = row.turn.key();
-    let delivery = match row.turn.at {
-      None => delivery_line(
-        "orchestrator-delivery",
-        (Icon::LoaderCircle, PaletteColor::TextMuted),
-        &ctx.t("orchestrator.delivery.sending"),
+    // A wait of an agent opens its row with its own card (`super::wait`); a person's turn with their message.
+    let opening = match &row.turn.wait {
+      Some(wait) => super::wait::card(
+        ctx,
+        &format!("orchestrator-wait-{key}"),
+        (wait, row.turn.at, row.turn.state.is_some()),
+        row.env.project,
       ),
-      Some(at) => delivery_line(
-        "orchestrator-delivery",
-        (Icon::CheckCheck, PaletteColor::Success),
-        &ctx.t_args(
-          "orchestrator.delivery.delivered",
-          [("time", display::clock(at).as_str())],
-        ),
-      ),
+      None => opening_message(ctx, &row, &key),
     };
-    let message = person_message(
-      ctx,
-      &format!("orchestrator-message-{key}"),
-      (&row.turn.text, row.turn.at),
-      Some(delivery),
-    );
     let answer = answer(ctx, &row);
     let end = if row.turn.message.is_some() {
       ending(ctx, &row)
@@ -161,15 +152,41 @@ impl Component for TurnView {
     super::body::turn_room(
       Column::new()
         .id(format!("orchestrator-turn-{key}"))
-        .describe("turn", turn_name(&row.turn.state))
+        .describe("turn", turn_name(row.turn.state.as_ref()))
         .width(Dimension::Pct(100.0))
         .padding_vertical(SpacingSize::Sm)
         .spacing(SpacingSize::Lg)
-        .child(message)
+        .child(opening)
         .with_children(answer)
         .with_children(end),
     )
   }
+}
+
+/// The person's message that opens `row`'s turn, keyed `key`, with where it stands.
+fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
+  let delivery = match row.turn.at {
+    None => delivery_line(
+      "orchestrator-delivery",
+      (Icon::LoaderCircle, PaletteColor::TextMuted),
+      &ctx.t("orchestrator.delivery.sending"),
+    ),
+    Some(at) => delivery_line(
+      "orchestrator-delivery",
+      (Icon::CheckCheck, PaletteColor::Success),
+      &ctx.t_args(
+        "orchestrator.delivery.delivered",
+        [("time", display::clock(at).as_str())],
+      ),
+    ),
+  };
+  person_message(
+    ctx,
+    &format!("orchestrator-message-{key}"),
+    (&row.turn.text, row.turn.at),
+    Some(delivery),
+  )
+  .into()
 }
 
 /// The Orchestrator's answer: its replies and actions, under its name, its model and when it began.
@@ -278,9 +295,13 @@ fn action_card(ctx: &mut Ctx, row: &TurnRow, id: &str, (action, at, seq): (&Chat
   }
 }
 
-/// How the turn ended, with what the person can do about the newest one.
+/// How the turn ended, with what the person can do about the newest one; nothing for a wait that started no turn.
+/// A turn a wait started has no words of the person's to send again, so it ends with its event line alone.
 fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
-  match &row.turn.state {
+  let Some(state) = &row.turn.state else {
+    return Vec::new();
+  };
+  match state {
     TurnState::Answered => Vec::new(),
     TurnState::Thinking if row.last => thinking(ctx, row),
     TurnState::Thinking => Vec::new(),
@@ -305,7 +326,7 @@ fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
         &ctx.t("orchestrator.interrupted"),
       ),
     ),
-    TurnState::Failed(failure) if row.last => vec![failure_notice(ctx, row, failure)],
+    TurnState::Failed(failure) if row.last && row.turn.wait.is_none() => vec![failure_notice(ctx, row, failure)],
     TurnState::Failed(failure) => vec![event(
       ctx,
       "orchestrator-failed",
@@ -357,9 +378,9 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
   ]
 }
 
-/// `event`, then, for the newest turn, *Ask again* and what it does.
+/// `event`, then, for the newest turn a person's message started, *Ask again* and what it does.
 fn again(ctx: &Ctx, row: &TurnRow, event: Element) -> Vec<Element> {
-  if !row.last {
+  if !row.last || row.turn.wait.is_some() {
     return vec![event];
   }
   let ask = row.env.ask_again.clone();
@@ -501,7 +522,7 @@ impl Fix {
     Some(
       ActionButton::new(id, ButtonKind::Primary, ctx.t(key))
         .icon(Icon::ArrowUpRight)
-        .on_click(move || navigation.go(route.clone())),
+        .opens(navigation.to(route)),
     )
   }
 }
@@ -534,12 +555,13 @@ fn earlier(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
   }
 }
 
-/// The name `describe` reports a turn by, for tests and QA.
-const fn turn_name(state: &TurnState) -> &'static str {
+/// The name `describe` reports a turn by, for tests and QA; `none` for a wait that started no turn.
+const fn turn_name(state: Option<&TurnState>) -> &'static str {
   match state {
-    TurnState::Thinking => "thinking",
-    TurnState::Answered => "answered",
-    TurnState::Stopped => "stopped",
-    TurnState::Failed(_) => "failed",
+    None => "none",
+    Some(TurnState::Thinking) => "thinking",
+    Some(TurnState::Answered) => "answered",
+    Some(TurnState::Stopped) => "stopped",
+    Some(TurnState::Failed(_)) => "failed",
   }
 }

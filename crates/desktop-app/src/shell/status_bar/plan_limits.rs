@@ -31,6 +31,7 @@ use crate::{
     icon::Icon,
     plan_window::{PlanWindow, plan_window, share, when},
     popover::{bar_popover, popover_panel},
+    pressable::Press,
   },
 };
 
@@ -98,10 +99,13 @@ impl Component for PlanLimitsItem {
       PaletteColor::TextMuted
     };
     let toggle = self.open.clone();
-    let mut item = pressed("status-plan-limits", move || toggle.update(|open| *open = !*open))
-      .ref_element(self.item.clone())
-      .describe("reached", reached.to_string())
-      .child(glyph(Icon::Gauge, color));
+    let mut item = pressed(
+      "status-plan-limits",
+      Press::run(move || toggle.update(|open| *open = !*open)),
+    )
+    .ref_element(self.item.clone())
+    .describe("reached", reached.to_string())
+    .child(glyph(Icon::Gauge, color));
     for (index, part) in parts(ctx, &props.limits, now).into_iter().enumerate() {
       let (words, color) = part;
       item = item.child(label(&words, color).id(format!("status-plan-limits-{index}")));

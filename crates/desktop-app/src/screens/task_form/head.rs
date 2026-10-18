@@ -63,19 +63,15 @@ pub fn head(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
 }
 
 fn crumbs(ctx: &mut Ctx, view: &View, nav: &Nav) -> Row {
-  let tasks = {
-    let nav = nav.clone();
-    Crumb::link(ctx.t("task_form.crumbs.tasks"), move || nav.tasks(None))
-  };
+  let tasks = Crumb::to(ctx.t("task_form.crumbs.tasks"), nav.to_tasks());
   let crumbs = match view.subject.task() {
     None => vec![tasks, Crumb::here(ctx.t("task_form.crumbs.newTask"))],
     Some(task) if view.subject.awaits_first_run() => vec![tasks, Crumb::here(task.key().to_string()).mono()],
     Some(task) => {
-      let nav = nav.clone();
-      let key = task.key().clone();
+      let key = task.key();
       vec![
         tasks,
-        Crumb::link(key.to_string(), move || nav.task(&key)).mono(),
+        Crumb::to(key.to_string(), nav.to_task(key)).mono(),
         Crumb::here(ctx.t("task_form.crumbs.edit")),
       ]
     }

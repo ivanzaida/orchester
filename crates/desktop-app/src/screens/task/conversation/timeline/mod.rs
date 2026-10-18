@@ -46,7 +46,7 @@ pub(super) use self::{
   working::{Wait, Working},
 };
 use crate::{
-  navigation::Navigation,
+  navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
 };
@@ -100,11 +100,10 @@ impl Timeline {
       .expect("the Conversation tab provides its timeline before its rows")
   }
 
-  /// Goes to `view` of the task, in the active tab.
-  fn open(&self, ctx: &mut Ctx, view: TaskView) -> impl Fn() + Send + Sync + 'static {
-    let navigation = Navigation::of(ctx);
-    let route = Route::Project(self.project, ProjectPage::Task(self.key.clone(), view));
-    move || navigation.go(route.clone())
+  /// What opens `view` of the task where a press asks (`navigation::link`).
+  fn open(&self, ctx: &mut Ctx, view: TaskView) -> Open {
+    let page = ProjectPage::task(self.key.clone(), view, self.detail.not_shared());
+    Navigation::of(ctx).to(Route::Project(self.project, page))
   }
 
   /// "03 Implement", the step `execution` executed, while the run's pipeline has it.

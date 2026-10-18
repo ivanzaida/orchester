@@ -18,6 +18,8 @@ mod ignore_transitions;
 mod metadata;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
+#[path = "local_integration/rebase.rs"]
+mod rebase;
 #[path = "local_integration/release_regressions.rs"]
 mod release_regressions;
 #[path = "local_integration/review_regressions.rs"]

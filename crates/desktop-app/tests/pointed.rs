@@ -20,6 +20,7 @@ use orchester_app::{
   navigation::{
     Navigation,
     pointed::{Pointed, PointedCard},
+    press::OpenIn,
     tabs::TabSet,
   },
   routes::{Route, routes},
@@ -101,7 +102,7 @@ fn pointed_card_takes_the_pointer_once_in_one_render() {
   let navigation = seen.navigation.lock().clone().expect("the root made its navigation");
   let route = navigation.route_now();
   let before = seen.renders.load(Ordering::SeqCst);
-  navigation.go_to_card(&route, card());
+  navigation.open_to_card(&route, OpenIn::ActiveTab, card());
   for _ in 0..3 {
     tree.pass_headless(&mut app);
   }
@@ -111,7 +112,7 @@ fn pointed_card_takes_the_pointer_once_in_one_render() {
     1,
     "taking it does not make the card render again"
   );
-  navigation.go_to_card(&route, card());
+  navigation.open_to_card(&route, OpenIn::ActiveTab, card());
   for _ in 0..3 {
     tree.pass_headless(&mut app);
   }

@@ -14,7 +14,7 @@ use crate::{screens::task::TaskContext, ui::detail_row::DetailValue};
 
 const MILLIS_PER_MINUTE: i64 = 60_000;
 
-pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
+pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView, section: Option<Element>) -> Element {
   let project = task.project.open.project.name().as_str().to_owned();
   let mut rows = vec![
     row(ctx, "summary.runDetails.project", &project, DetailValue::Text),
@@ -42,7 +42,12 @@ pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element 
     rows.push(row(ctx, "summary.runDetails.agents", &list, DetailValue::Text));
   }
   rows.extend(permissions(ctx, run));
-  panel("task-run-details", &ctx.t("summary.runDetails.title"), rows, None)
+  panel(
+    "task-run-details",
+    &ctx.t("summary.runDetails.title"),
+    rows,
+    (None, section),
+  )
 }
 
 /// "38 min · 16:14 – 16:52": from its first agent's start to its end.

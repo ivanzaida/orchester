@@ -64,6 +64,9 @@ pub(crate) struct NewCode {
   pub invite: Option<InviteId>,
   pub user: Option<UserId>,
   pub made_by: Option<UserId>,
+  /// Made by a device token with two-factor authentication (a pairing code): a browser that signs in to the admin
+  /// with it has it too.
+  pub mfa: bool,
 }
 
 /// An open code that matched a redemption.
@@ -72,6 +75,7 @@ pub(crate) struct OpenCode {
   pub kind: CodeKind,
   pub invite: Option<InviteId>,
   pub user: Option<UserId>,
+  pub mfa: bool,
 }
 
 /// Records a new code and returns it with its expiry. `409 too_many_codes` at the server's maximum of open codes,
@@ -100,7 +104,7 @@ pub(crate) fn create(
   let text = crockford(&random::<5>()?);
   let expires_at = now + code.kind.lifetime_ms();
   db.execute(
-    "INSERT INTO codes(hmac,kind,invite,user_id,made_by,created_at,expires_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+    "INSERT INTO codes(hmac,kind,invite,user_id,made_by,created_at,expires_at,mfa) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
     params![
       keys.code_tag(&text),
       code.kind.as_str(),
@@ -108,7 +112,8 @@ pub(crate) fn create(
       code.user.map(|id| id.to_string()),
       code.made_by.map(|id| id.to_string()),
       now,
-      expires_at
+      expires_at,
+      code.mfa
     ],
   )?;
   Ok((Credential::new(format!("{}-{}", &text[..4], &text[4..])), expires_at))
@@ -129,7 +134,7 @@ pub(crate) fn find(db: &Connection, keys: &ServerKeys, text: &str, now: i64) -> 
     return Ok(None);
   };
   let mut query =
-    db.prepare("SELECT rowid,hmac,kind,invite,user_id FROM codes WHERE used_at IS NULL AND expires_at>?1")?;
+    db.prepare("SELECT rowid,hmac,kind,invite,user_id,mfa FROM codes WHERE used_at IS NULL AND expires_at>?1")?;
   let rows = query
     .query_map([now], |row| {
       Ok((
@@ -137,12 +142,12 @@ pub(crate) fn find(db: &Connection, keys: &ServerKeys, text: &str, now: i64) -> 
         row.get::<_, Vec<u8>>(1)?,
         row.get::<_, String>(2)?,
         row.get::<_, Option<String>>(3)?,
-        row.get::<_, Option<String>>(4)?,
+        (row.get::<_, Option<String>>(4)?, row.get::<_, bool>(5)?),
       ))
     })?
     .collect::<Result<Vec<_>, _>>()?;
   let mut found = None;
-  for (row, tag, kind, invite, user) in rows {
+  for (row, tag, kind, invite, (user, mfa)) in rows {
     if keys.code_matches(&code, &tag) && found.is_none() {
       found = Some(OpenCode {
         row,
@@ -155,6 +160,7 @@ pub(crate) fn find(db: &Connection, keys: &ServerKeys, text: &str, now: i64) -> 
           .map(|id| id.parse())
           .transpose()
           .map_err(|_| ServerError::StoredData)?,
+        mfa,
       });
     }
   }

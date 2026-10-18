@@ -15,13 +15,13 @@ use orchester_core::project::TaskKey;
 use orchester_workspace::tasks::{approvals::ShownApproval, data::AutoApprovingRun};
 
 use super::{
-  facts::{BarAction, Dispatch, ProjectFacts, Stopping},
+  facts::{BarAction, Dispatch, ProjectFacts, Stopping, go},
   item::{action, cut, dropping, give_way, glyph, item, label},
 };
 use crate::{
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
-  ui::{icon::Icon, message::message_text},
+  ui::{icon::Icon, message::message_text, pressable::Press},
 };
 
 /// What the request asks keeps at least this much room before it drops out.
@@ -73,11 +73,10 @@ pub fn approvals(
   let key = oldest.task.as_deref().and_then(|key| key.parse::<TaskKey>().ok());
   if let Some(key) = key {
     let route = Route::Project(project.id, ProjectPage::Task(key, TaskView::Conversation));
-    let dispatch = dispatch.clone();
     items.push(action(
       "status-approvals-review",
       &ctx.t("shell.status.approvals.review"),
-      move || dispatch(BarAction::Go(route.clone())),
+      go(dispatch, route),
     ));
   }
   items
@@ -160,7 +159,7 @@ pub fn auto_approving(
   items.push(action(
     "status-auto-approving-stop",
     &ctx.t("shell.status.approvals.stop"),
-    move || dispatch(BarAction::StopAutoApproving(ids.clone())),
+    Press::run(move || dispatch(BarAction::StopAutoApproving(ids.clone()))),
   ));
   if let Stopping::Failed(reason) = stopping {
     let text = ctx.t_args(

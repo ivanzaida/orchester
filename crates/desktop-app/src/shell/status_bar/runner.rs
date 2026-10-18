@@ -26,7 +26,7 @@ use super::{
 use crate::{
   shell::clock::{Clock, clock},
   theme::ExtraSpacing,
-  ui::icon::Icon,
+  ui::{icon::Icon, pressable::Press},
 };
 
 /// The runner item and, while it cannot start on its own, its actions.
@@ -40,7 +40,7 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     .spacing(ExtraSpacing::Fine.role())
     .align_items(Alignment::Center)
     .child(dropping(&ctx.t(key), PaletteColor::TextMuted));
-  let mut row = pressed("status-runner", move || open(BarAction::OpenRunnerLog))
+  let mut row = pressed("status-runner", Press::run(move || open(BarAction::OpenRunnerLog)))
     .describe("state", state)
     .flex_shrink(1.0)
     .shrink_order(give_way::RUNNER_WORDS)
@@ -76,12 +76,12 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     items.push(action(
       "status-restart-runner",
       &ctx.t("shell.status.runner.restart"),
-      move || restart(BarAction::RestartRunner),
+      Press::run(move || restart(BarAction::RestartRunner)),
     ));
     items.push(action(
       "status-open-runner-log",
       &ctx.t("shell.status.runner.openLog"),
-      move || log(BarAction::OpenRunnerLog),
+      Press::run(move || log(BarAction::OpenRunnerLog)),
     ));
   }
   items

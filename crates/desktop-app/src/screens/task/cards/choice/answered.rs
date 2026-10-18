@@ -98,6 +98,7 @@ fn outcome<'a>(ctx: &Ctx, card: &'a ChoiceCard) -> Outcome<'a> {
   let time = display::clock(at);
   let key = match by {
     Answerer::Person => "cards.choice.byYou",
+    Answerer::Automation if card.asked.by_orchestrator => "cards.choice.byOrchestrator",
     Answerer::Automation => "cards.choice.byAutomation",
   };
   Outcome {

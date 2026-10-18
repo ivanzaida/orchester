@@ -220,12 +220,12 @@ async fn s1c_an_account_code_is_refused_once_its_account_became_an_admin() {
   .json();
   let code = created.code.as_ref().expect("code");
   set_admin(&server, &admin.token, bob.user.id, json!({"admin": true})).await;
-  let refused = server.redeem(code, None, "new laptop").await;
+  let refused = server.redeem_as(code, "bob", "new laptop").await;
   assert_eq!(refused.status, 403);
   assert_eq!(refused.json::<ApiError>().error, ErrorCode::Forbidden);
   // The code stays open: once Bob is no admin again it works.
   set_admin(&server, &admin.token, bob.user.id, json!({"admin": false})).await;
-  assert_eq!(server.redeem(code, None, "new laptop").await.status, 201);
+  assert_eq!(server.redeem_as(code, "bob", "new laptop").await.status, 201);
   server.finish().await;
 }
 

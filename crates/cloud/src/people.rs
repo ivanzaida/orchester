@@ -7,10 +7,10 @@
 
 use deadpool_postgres::GenericClient;
 use orchester_api::Credential;
-use ring::{hkdf, hmac};
+use ring::hmac;
 use uuid::Uuid;
 
-use crate::{error::CloudError, keys::key_encryption_key};
+use crate::{error::CloudError, keys::derived_key};
 
 /// Separates this key from the key-encryption key's other use, sealing the signing keys.
 const INFO: &[u8] = b"orchester-cloud people v1";
@@ -20,12 +20,7 @@ pub(crate) struct People(hmac::Key);
 
 impl People {
   pub fn new(key: &Credential) -> Result<Self, CloudError> {
-    let bytes = key_encryption_key(key)?;
-    let extracted = hkdf::Salt::new(hkdf::HKDF_SHA256, &[]).extract(&bytes);
-    let derived = extracted
-      .expand(&[INFO], hmac::HMAC_SHA256)
-      .map_err(|_| CloudError::Configuration("the people key cannot be derived"))?;
-    Ok(Self(hmac::Key::from(derived)))
+    derived_key(key, INFO).map(Self)
   }
 
   /// The person whose account has the normalized `email`: the same for every account with it.

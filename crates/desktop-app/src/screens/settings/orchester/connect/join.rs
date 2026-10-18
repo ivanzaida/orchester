@@ -131,11 +131,12 @@ impl Join {
                 code: Credential::new(request.code.trim().to_owned()),
                 username: filled(&request.username),
                 display_name: filled(&request.name),
+                proof: None,
               };
-              let server = servers
+              let server = cloud
                 .join_with_code(&request.address, request.trust, code)
                 .await
-                .map_err(|error| sharing_error(&error))?;
+                .map_err(|error| cloud_error(&error))?;
               joined(&servers, server).await
             }
           }
@@ -375,14 +376,15 @@ fn outcome_part(ctx: &mut Ctx, outcome: &Outcome, found: &Found) -> Element {
       username,
     } => {
       let id = *id;
-      // The join review the design opens next is N3's; until then it stays in place, unavailable with why.
+      // A code names no project: the server's entry lists the person's projects there, each with *Link a checkout…*,
+      // which leads to the join review.
       let review = ActionButton::new(
         "orchester-connect-join-review",
         ButtonKind::Primary,
         ctx.t("sharing.connect.joined.review"),
       )
       .icon(Icon::ArrowRight)
-      .unavailable(ctx.t("sharing.connect.joined.reviewLater"));
+      .opens(navigation.to(Route::Orchester(OrchesterView::server(id))));
       let entry = ActionButton::new(
         "orchester-connect-open-joined",
         ButtonKind::Secondary,

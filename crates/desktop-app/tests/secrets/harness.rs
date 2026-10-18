@@ -156,7 +156,7 @@ impl Secrets {
     self
       .window
       .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Secrets));
+      .go(Route::Project(project_id(), ProjectPage::Secrets(Default::default())));
     self.until("secrets list", |s| s.exists("secrets-body"));
   }
   pub fn seed(&self, name: &str, environment: Environment) -> Secret {

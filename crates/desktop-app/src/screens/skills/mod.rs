@@ -95,14 +95,19 @@ impl Component for SkillsScreen {
     if reloading {
       frame = frame.child(loading("skill-reloading", &ctx.t("skills.reading")));
     }
+    let panel = Panel::of(&ctx.props::<Props>().page);
     let props = PageProps {
       project,
       data,
       view: self.view.clone(),
       reloading,
+      filter: match panel {
+        Panel::Library(filter) => filter,
+        _ => crate::routes::SkillsFilter::default(),
+      },
     };
-    let content = match self.view.panel.get() {
-      Panel::Library => ctx.mount_keyed::<library::Library>("skills-library", props),
+    let content = match panel {
+      Panel::Library(_) => ctx.mount_keyed::<library::Library>("skills-library", props),
       Panel::Import => ctx.mount_keyed::<repository::Import>("skills-import", props),
       panel => {
         let entry = match panel {
@@ -198,10 +203,12 @@ pub struct PageProps {
   pub data: EditorData,
   pub view: View,
   pub reloading: bool,
+  /// The library's filter, as the route names it.
+  pub filter: crate::routes::SkillsFilter,
 }
 impl PartialEq for PageProps {
   fn eq(&self, o: &Self) -> bool {
-    self.project == o.project && self.data == o.data && self.reloading == o.reloading
+    self.project == o.project && self.data == o.data && self.reloading == o.reloading && self.filter == o.filter
   }
 }
 impl DevtoolsInspectable for PageProps {}

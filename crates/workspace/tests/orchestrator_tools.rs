@@ -1,6 +1,6 @@
 //! The Orchestrator chat's tools (`docs/design/orchestrator-toolset.md`): one list of names, of which the chat lists
 //! those the app has, so a name whose tool another change still builds is not listed and breaks nothing; what only a
-//! person decides is not among them; and the tools that wait for the person say so.
+//! person decides is not among them; and the tools that wait for the person, or the person's switch, say so.
 
 use orchester_core::orchestrator::change::Publishing;
 use orchester_workspace::{
@@ -40,19 +40,31 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
     "publish_pipeline",
     "merge_run",
     "save_tool_draft",
+    "get_conversation",
+    "answer_question",
+    "send_message",
   ] {
     assert!(shown.iter().any(|tool| tool == name), "{name} is listed");
   }
+  let read_only = |name: &str| {
+    listed()
+      .into_iter()
+      .find(|tool| tool.name == name)
+      .and_then(|tool| tool.annotations.and_then(|hints| hints.read_only_hint))
+  };
+  assert_eq!(
+    read_only("get_conversation"),
+    Some(true),
+    "reading a conversation changes nothing"
+  );
 }
 
 #[test]
 fn orchestrator_tools_leave_what_a_person_decides_out() {
   for name in [
     "decide_approval",
-    "answer_question",
     "decide_plan",
     "continue_run",
-    "send_message",
     "set_run_auto_mode",
     "set_auto_mode",
     "remove_worktree",
@@ -85,11 +97,27 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       .to_owned()
   };
   assert!(description("run_task").contains("auto mode"));
-  for name in ["cancel_run", "merge_run"] {
-    assert!(
-      description(name).contains("proposes the change to the person"),
-      "{name}"
-    );
+  assert!(description("cancel_run").contains("proposes the change to the person"));
+  let merge = description("merge_run");
+  for part in [
+    "proposes the merge to the person",
+    "Let the Orchestrator merge runs",
+    "only for a run the person asked you in this chat to merge",
+    "needs_decision",
+    "Local integration page",
+  ] {
+    assert!(merge.contains(part), "merge_run says {part}: {merge}");
+  }
+  for name in ["answer_question", "send_message"] {
+    let told = description(name);
+    for part in [
+      "proposes it to the person",
+      "Let the Orchestrator answer agents",
+      "recorded as automation's",
+      "plan_decision_person_only",
+    ] {
+      assert!(told.contains(part), "{name} says {part}: {told}");
+    }
   }
   for kind in Publishing::ALL {
     assert!(TOOLS.contains(&kind.tool()), "{} is named", kind.tool());

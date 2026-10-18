@@ -17,11 +17,12 @@ use lurq::{
 };
 
 use crate::{
+  navigation::link::Open,
   theme::{ExtraRadius, ExtraSpacing, IconSize, UsageSpacing, UsageText},
   ui::{
     card::{CardSurface, card_frame},
     icon::{Icon, glyph, icon},
-    pressable::{Focus, pressable},
+    pressable::{Focus, opening},
     tabs::{Segment, SegmentFace, segmented},
   },
 };
@@ -296,8 +297,8 @@ pub fn push_down() -> Element {
 }
 
 /// Words that open another place, in 12/500 `text_primary` (`Link · Show failed tasks` `ftbjr`).
-pub fn text_link(id: &str, label: &str, open: impl Fn() + Send + Sync + 'static) -> Element {
-  pressable(open)
+pub fn text_link(id: &str, label: &str, open: Open) -> Element {
+  opening(open)
     .id(id.to_owned())
     .describe("a11y_name", label.to_owned())
     .child(

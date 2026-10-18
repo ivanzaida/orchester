@@ -21,19 +21,19 @@ use orchester_workspace::tasks::{attention::NeedItem, needs_you::WaitingKind};
 
 use super::words;
 use crate::{
+  navigation::link::Open,
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, NeedsYouRadius, NeedsYouText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     icon_button::IconButton,
+    pressable::Press,
     unavailable::reason_line,
   },
 };
 
 /// A project's initial tile (`n4MhD`).
 const INITIAL_TILE: f32 = 20.0;
-
-type Press = Arc<dyn Fn() + Send + Sync>;
 
 /// A project's header: its initial, its name, whether the active tab shows it, and how many wait in it.
 pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: usize) -> Row {
@@ -151,7 +151,7 @@ pub(super) fn collapsed(ctx: &Ctx, id: &str, item: &NeedItem, action: Action) ->
   let place = place(ctx, id, item);
   let button = ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, words::action(ctx, item));
   let (button, reason) = match action {
-    Action::Press(glyph, press) => (button.icon(glyph).on_click(move || press()), None),
+    Action::Press(glyph, press) => (button.icon(glyph).press(press), None),
     Action::Unavailable(reason) => {
       let line: Element = reason_line(&format!("{id}-reason"), &reason).into();
       (button.unavailable(reason), Some(line))
@@ -185,7 +185,7 @@ pub(super) fn expanded(
   ctx: &mut Ctx,
   (id, element): (&str, ElementRef),
   item: &NeedItem,
-  collapse: Press,
+  collapse: Arc<dyn Fn() + Send + Sync>,
   card: Element,
 ) -> Element {
   let collapse = IconButton::new(
@@ -227,7 +227,7 @@ pub(super) fn expanded(
 }
 
 /// *Open conversation*, which opens an expanded item's card in its task's conversation.
-pub(super) fn open_conversation(ctx: &Ctx, id: &str, conversation: Press) -> Element {
+pub(super) fn open_conversation(ctx: &Ctx, id: &str, conversation: Open) -> Element {
   Row::new()
     .child(
       ActionButton::new(
@@ -236,7 +236,7 @@ pub(super) fn open_conversation(ctx: &Ctx, id: &str, conversation: Press) -> Ele
         ctx.t("needs_you.action.openConversation"),
       )
       .icon(Icon::ArrowUpRight)
-      .on_click(move || conversation()),
+      .opens(conversation),
     )
     .into()
 }

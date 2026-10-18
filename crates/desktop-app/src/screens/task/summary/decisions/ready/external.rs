@@ -8,7 +8,7 @@ use orchester_workspace::{background, tasks::local_integration::external_integra
 use super::TaskContext;
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskView},
+  routes::{Route, TaskView},
   ui::{
     button::{ActionButton, ButtonKind},
     notice::{Notice, NoticeTone},
@@ -39,10 +39,7 @@ pub(super) fn notice(ctx: &mut Ctx, task: &TaskContext) -> (Option<Element>, boo
   let Some(evidence) = state.data.and_then(|evidence| evidence.0) else {
     return (None, settled);
   };
-  let route = Route::Project(
-    task.project.open.project.id(),
-    ProjectPage::Task(task.key.clone(), TaskView::LocalIntegration),
-  );
+  let route = Route::Project(task.project.open.project.id(), task.page(TaskView::LocalIntegration));
   let navigation = Navigation::of(ctx);
   let notice = Notice::new(
     "task-external-integration",
@@ -62,7 +59,7 @@ pub(super) fn notice(ctx: &mut Ctx, task: &TaskContext) -> (Option<Element>, boo
       ButtonKind::Secondary,
       ctx.t("local_integration.title"),
     )
-    .on_click(move || navigation.go(route.clone())),
+    .opens(navigation.to(route)),
   );
   (Some(notice.into()), settled)
 }

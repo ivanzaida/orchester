@@ -3,8 +3,8 @@
 //! and team servers (the account's list and the registry's entry), the key set and identity tokens, all signed with
 //! `orchester-api`'s identity keys. It can end the device's token with a reason, stop answering, answer the check of a
 //! sign-in as something else would ([`CheckAnswer`]), and answer a sign-in slowly; [`UNCONFIRMED`] and [`PAUSED`] sign
-//! in to an unconfirmed email and a paused one, [`OTHER_EMAIL`] to a second account. The real cloud on
-//! PostgreSQL is in `crates/desktop-app/tests/orchester_cloud`.
+//! in to an unconfirmed email and a paused one, [`OTHER_EMAIL`] to a second account. Bohdan's two-factor
+//! authentication is in [`two_factor`]. The real cloud on PostgreSQL is in `crates/desktop-app/tests/orchester_cloud`.
 
 #![allow(
   dead_code,
@@ -20,10 +20,30 @@ use std::{
   time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use orchester_api::identity::{IdentityClaims, KeySetStatement, ListedKey, PrivateKey, RootKey, SigningKey};
+use orchester_api::{
+  cloud::TokenPurpose,
+  identity::{IdentityClaims, SigningKey},
+};
 use orchester_core::id::IdempotencyKey;
+
+#[path = "check_answer.rs"]
+mod check_answer;
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the tests' one cloud key, loaded by every support module that signs for it, whichever of them a test binary includes"
+)]
+#[path = "../server_support/test_cloud.rs"]
+mod test_cloud;
+#[path = "two_factor_cloud.rs"]
+mod two_factor;
+pub use check_answer::CheckAnswer;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
+#[allow(
+  unused_imports,
+  reason = "for the binaries that sign in with a code; the others leave them"
+)]
+pub use two_factor::{RECOVERY_CODES, SECRET};
 
 const DAY: i64 = 24 * 60 * 60;
 pub const ACCOUNT: &str = "0191c7c0-0000-7000-8000-000000000b0b";
@@ -40,50 +60,6 @@ pub const UNCONFIRMED: &str = "unconfirmed@example.com";
 pub const PAUSED: &str = "paused@example.com";
 pub const PAUSED_SECONDS: u64 = 900;
 
-/// How the check of a sign-in (`GET /me`) is answered instead of the account.
-#[derive(Clone, Copy, Debug)]
-pub enum CheckAnswer {
-  /// `503 busy` with `Retry-After` in seconds.
-  Busy(u64),
-  /// `429 rate_limited` with `Retry-After` in seconds.
-  Limited(u64),
-  /// A redirect elsewhere, as a network that needs a sign-in page first answers.
-  Redirect,
-  /// That sign-in page itself: a `401` that is not Orchester's.
-  SignInPage,
-}
-
-impl CheckAnswer {
-  fn reply(self) -> String {
-    let (status, headers, body) = match self {
-      Self::Busy(seconds) => (
-        "503 Service Unavailable",
-        format!("Content-Type: application/json\r\nRetry-After: {seconds}\r\n"),
-        error("busy").to_string(),
-      ),
-      Self::Limited(seconds) => (
-        "429 Too Many Requests",
-        format!("Content-Type: application/json\r\nRetry-After: {seconds}\r\n"),
-        error("rate_limited").to_string(),
-      ),
-      Self::Redirect => (
-        "302 Found",
-        "Location: http://portal.test/login\r\n".to_owned(),
-        String::new(),
-      ),
-      Self::SignInPage => (
-        "401 Unauthorized",
-        "Content-Type: text/html\r\n".to_owned(),
-        "<html><body>Sign in to use this network</body></html>".to_owned(),
-      ),
-    };
-    format!(
-      "HTTP/1.1 {status}\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-      body.len()
-    )
-  }
-}
-
 /// What the cloud holds: the team server it names, the invites waiting, and what was asked of it.
 #[derive(Default)]
 struct State {
@@ -95,6 +71,8 @@ struct State {
   /// The invites that the tokens issued so far accept, one entry per token.
   accepting: Vec<String>,
   signed_out: bool,
+  /// Bohdan's two-factor authentication.
+  factors: two_factor::Factors,
   /// The tokens that ended: the reason each one's `401` names, if any, and when (milliseconds).
   ended: HashMap<&'static str, (Option<String>, i64)>,
   /// Connections are closed without an answer, as when the cloud cannot be reached.
@@ -130,18 +108,10 @@ impl AccountCloud {
   /// [`Self::start`] on loopback port `port`, `0` for one the system picks: a QA build that names the stand-in as its
   /// own cloud (`ORCHESTER_CLOUD_URL`) finds it there.
   pub fn start_on(port: u16) -> Self {
-    let root = RootKey::new(&PrivateKey::generate().expect("root")).expect("root key");
-    let signing = Arc::new(SigningKey::new(&PrivateKey::generate().expect("key")).expect("signing key"));
-    let now = now();
-    let listed = ListedKey {
-      kid: signing.kid().to_owned(),
-      public_key: signing.public_key().encoded(),
-      not_before: now - DAY,
-      signs_until: now + 29 * DAY,
-      listed_until: now + 89 * DAY,
-    };
-    let statement = KeySetStatement::new("https://cloud.test".into(), vec![listed], now);
-    let key_set = root.sign_key_set(&statement, now).expect("key set");
+    // The tests' one cloud key (`server_support::test_cloud`), so a server that pinned it for codes takes these tokens.
+    let root = test_cloud::root();
+    let signing = Arc::new(test_cloud::signing());
+    let key_set = test_cloud::key_set(now());
     let listener = TcpListener::bind(("127.0.0.1", port)).expect("listen");
     let address = listener.local_addr().expect("address");
     let state = Arc::new(Mutex::new(State::default()));
@@ -195,6 +165,46 @@ impl AccountCloud {
   /// How many tokens accepting `invite` were issued.
   pub fn tokens_for(&self, invite: &str) -> usize {
     self.state.lock().accepting.iter().filter(|id| *id == invite).count()
+  }
+
+  /// From now on Bohdan has two-factor authentication off, as Olena does.
+  pub fn two_factor_off(&self) {
+    self.state.lock().factors.enabled = false;
+  }
+
+  /// From now on Bohdan has two-factor authentication on again, as when he turned it on in the browser.
+  pub fn two_factor_on(&self) {
+    self.state.lock().factors.enabled = true;
+  }
+
+  /// From now on Bohdan's password answers a challenge, which a code finishes.
+  pub fn require_codes(&self) {
+    self.state.lock().factors.codes_at_sign_in = true;
+  }
+
+  /// This computer signed in without a code, as before Bohdan turned two-factor authentication on.
+  pub fn session_without_two_factor(&self) {
+    self.state.lock().factors.this_session = false;
+  }
+
+  /// Every challenge given so far ends, as when its five minutes passed.
+  pub fn end_challenges(&self) {
+    self.state.lock().factors.end_challenges();
+  }
+
+  /// Code checks answer `429` while `limited`.
+  pub fn limit_codes(&self, limited: bool) {
+    self.state.lock().factors.limited = limited;
+  }
+
+  /// The first `count` of Bohdan's recovery codes were used before.
+  pub fn use_recovery_codes(&self, count: usize) {
+    self.state.lock().factors.use_recovery(count);
+  }
+
+  /// The code Bohdan's authenticator app shows that the stand-in takes next.
+  pub fn next_code(&self) -> String {
+    self.state.lock().factors.next_code(now())
   }
 
   pub fn signed_out(&self) -> bool {
@@ -299,7 +309,7 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>, key_set: &str, signing: &S
     Some((reason, at)) => ended_token(reason, at),
     None => route(&path, (holder, &body), state, (key_set, signing)),
   };
-  if path == "POST /api/v1/auth/sessions" {
+  if path.starts_with("POST /api/v1/auth/sessions") {
     thread::sleep(state.lock().sign_in_delay);
     // A new sign-in is a new token: the ended one is forgotten.
     let token = answer.as_ref().and_then(|answer| answer["token"].as_str());
@@ -333,25 +343,35 @@ fn route(
   let not_found = ("404 Not Found", Some(error("not_found")));
   match path {
     "GET /api/v1/keys" => ("200 OK", Some(json!({"key_set": key_set}))),
-    "POST /api/v1/auth/sessions" => sign_in(body),
+    "POST /api/v1/auth/sessions" => sign_in(body, state),
+    "POST /api/v1/auth/sessions/two-factor" => finish_sign_in(body, state),
     _ if holder.is_none() => unauthorized,
     "GET /api/v1/me" => {
-      state.lock().checks += 1;
+      let mut state = state.lock();
+      state.checks += 1;
       let account = holder.map_or(Value::Null, Account::json);
-      ("200 OK", Some(json!({ "account": account })))
+      let two_factor = state.factors.status(holder.is_some_and(Account::is_bohdan));
+      ("200 OK", Some(json!({ "account": account, "two_factor": two_factor })))
     }
-    "POST /api/v1/identity-tokens" => issue(body, state, signing).unwrap_or(not_found),
+    "POST /api/v1/identity-tokens" => holder
+      .and_then(|holder| issue(body, (holder, state), signing))
+      .unwrap_or(not_found),
     "DELETE /api/v1/auth/sessions/current" => {
       state.lock().signed_out = true;
       ("204 No Content", None)
     }
     "GET /api/v1/invites" => {
+      let state = state.lock();
+      let needs = !state.factors.session(holder.is_some_and(Account::is_bohdan));
       let open: Vec<Value> = state
-        .lock()
         .invites
         .iter()
         .filter(|invite| invite.get("answer").is_none())
-        .cloned()
+        .map(|invite| {
+          let mut listed = invite.clone();
+          listed["needs_two_factor"] = json!(needs);
+          listed
+        })
         .collect();
       ("200 OK", Some(json!({"invites": open})))
     }
@@ -375,21 +395,28 @@ fn route(
   }
 }
 
-/// `POST /api/v1/identity-tokens`: a join token; with `invite`, one that accepts that invite from the audience, open
-/// or accepted before, which is then accepted and listed no more (`docs/cloud-api.md`). `None` for a declined one.
-fn issue(body: &str, state: &Mutex<State>, signing: &SigningKey) -> Option<Answer> {
+/// `POST /api/v1/identity-tokens`: a token about `holder` for its purpose; with
+/// `invite`, one that accepts that invite from the audience, open or accepted before, which is then accepted and
+/// listed no more (`docs/cloud-api.md`). `None` for a declined one.
+fn issue(body: &str, (holder, state): (&Account, &Mutex<State>), signing: &SigningKey) -> Option<Answer> {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
   let audience = request["audience"].as_str().unwrap_or_default().to_owned();
   let invite = request["invite"].as_str();
+  let purpose = serde_json::from_value(request["purpose"].clone()).ok()?;
+  let mfa = state.lock().factors.session(holder.is_bohdan());
   if let Some(id) = invite {
     let mut state = state.lock();
+    if let Some(refusal) = state.factors.refusal(holder.is_bohdan()) {
+      // The invite stays open (`docs/cloud-api.md`, "What a two-factor session may do").
+      return Some(("403 Forbidden", Some(error(refusal))));
+    }
     let found = state.invites.iter_mut().find(|answered| {
       answered["id"] == id && answered["server"]["id"] == audience.as_str() && answered["answer"] != "declined"
     })?;
     found["answer"] = json!("accepted");
     state.accepting.push(id.to_owned());
   }
-  let token = identity_token(signing, &audience, invite);
+  let token = identity_token(signing, (holder, &audience, mfa), (invite, purpose));
   Some((
     "201 Created",
     Some(json!({"identity_token": token, "expires_at": now() + 300})),
@@ -426,6 +453,16 @@ impl Account {
   fn json(&self) -> Value {
     json!({"id": self.id, "email": self.email, "display_name": self.display_name, "created_at": 1})
   }
+
+  /// Whether this is Bohdan, the account with two-factor authentication.
+  fn is_bohdan(&self) -> bool {
+    self.email == EMAIL
+  }
+
+  /// The answer of a sign-in of this account from `device`, as a password or a code finished it.
+  fn signed_in(&self, device: &Value) -> Value {
+    json!({"token": self.token, "device": device, "account": self.json()})
+  }
 }
 
 const ACCOUNTS: [Account; 2] = [
@@ -443,7 +480,7 @@ const ACCOUNTS: [Account; 2] = [
   },
 ];
 
-fn sign_in(body: &str) -> Answer {
+fn sign_in(body: &str, state: &Mutex<State>) -> Answer {
   let request: Value = serde_json::from_str(body).unwrap_or(Value::Null);
   if request["email"] == UNCONFIRMED {
     return ("403 Forbidden", Some(error("email_unconfirmed")));
@@ -457,10 +494,25 @@ fn sign_in(body: &str) -> Answer {
   };
   let device = json!({"id": "0191c7c0-0000-7000-8000-00000000d0d0", "name": request["device"]["name"],
     "platform": request["device"]["platform"], "created_at": 1, "last_used_at": 1, "current": true});
-  (
-    "201 Created",
-    Some(json!({"token": account.token, "device": device, "account": account.json()})),
-  )
+  if account.is_bohdan()
+    && let Some(challenge) = state.lock().factors.challenge(&device, now() * 1000)
+  {
+    return ("202 Accepted", Some(challenge));
+  }
+  ("201 Created", Some(account.signed_in(&device)))
+}
+
+/// `POST /api/v1/auth/sessions/two-factor`: Bohdan's sign-in finished with a code.
+fn finish_sign_in(body: &str, state: &Mutex<State>) -> Answer {
+  let finished = state.lock().factors.finish(body, now() * 1000);
+  match finished {
+    Ok((device, left)) => {
+      let mut answer = ACCOUNTS[0].signed_in(&device);
+      answer["recovery_codes_left"] = json!(left);
+      ("201 Created", Some(answer))
+    }
+    Err((status, code)) => (status, Some(error(code))),
+  }
 }
 
 /// `POST /api/v1/invites/{id}/decline`; `None` for any other path or an invite not open.
@@ -476,20 +528,25 @@ fn decline(path: &str, state: &Mutex<State>) -> Option<Answer> {
   Some(("204 No Content", None))
 }
 
-fn identity_token(signing: &SigningKey, audience: &str, invite: Option<&str>) -> String {
+fn identity_token(
+  signing: &SigningKey,
+  (holder, audience, mfa): (&Account, &str, bool),
+  (invite, purpose): (Option<&str>, Option<TokenPurpose>),
+) -> String {
   let iat = now();
   let claims = IdentityClaims {
     iss: "https://cloud.test".into(),
     aud: audience.into(),
-    sub: ACCOUNT.parse().expect("a cloud account id"),
-    email: EMAIL.into(),
-    name: "Bohdan Koval".into(),
+    sub: holder.id.parse().expect("a cloud account id"),
+    email: holder.email.into(),
+    name: holder.display_name.into(),
     device: orchester_api::cloud::DeviceInfo {
       name: "Bohdan's laptop".into(),
       platform: orchester_api::cloud::CloudPlatform::Windows,
     },
     invite: invite.map(str::to_owned),
-    purpose: None,
+    purpose,
+    mfa,
     jti: IdempotencyKey::generate().to_string(),
     iat,
     exp: iat + 300,

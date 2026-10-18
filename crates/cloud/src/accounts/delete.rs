@@ -5,6 +5,7 @@ use orchester_api::cloud::{AccountDeletion, CloudErrorCode};
 use super::{
   Authenticated, Cloud,
   links::lock_account,
+  require_session_when_on,
   rows::{ACTIVE, ENDED_KEPT_MS, account, active_since},
 };
 use crate::{
@@ -17,13 +18,15 @@ impl Cloud {
   /// email. The servers it linked stay registered with no owner (their members' joins and invites too) until an admin
   /// of the server links it again, and keep the person who linked them as `last_owner` (`crate::people`), so their
   /// caps stay that person's. Failed passwords count against the account as a password change's do. The audit
-  /// keeps the account's id, as for every other action.
+  /// keeps the account's id, as for every other action. With two-factor authentication on, only a two-factor session
+  /// deletes it.
   pub(crate) async fn delete_account(
     &self,
     auth: Authenticated,
     input: AccountDeletion,
     address: IpAddr,
   ) -> Result<(), CloudError> {
+    require_session_when_on(&self.inner.db.client().await?, auth.device).await?;
     let attempt = self.inner.limits.sign_in.password(auth.account, self.now())?;
     let row = account(&self.inner.db.client().await?, auth.account).await?;
     let (verified, attempt) = self

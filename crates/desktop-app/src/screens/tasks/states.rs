@@ -50,7 +50,7 @@ pub(super) fn empty_project(ctx: &mut Ctx, project: ProjectId) -> Element {
     ctx.t("tasks.empty.title"),
     ctx.t("tasks.empty.detail"),
   )
-  .action(new_task(ctx, "tasks-empty-new-task", project, navigation))
+  .action(new_task(ctx, "tasks-empty-new-task", project, &navigation))
   .into()
 }
 

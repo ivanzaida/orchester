@@ -5,7 +5,7 @@ use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
 use orchester_workspace::background;
 
 use crate::{
-  routes::{ProjectPage, Route, TaskView},
+  routes::{Route, TaskView},
   services::Services,
 };
 
@@ -21,7 +21,7 @@ impl DevtoolsInspectable for Request {}
 pub(crate) fn allowed(ctx: &mut Ctx, root: Option<PathBuf>, values: Vec<String>, revision: u64) -> bool {
   let active = matches!(
     Route::parse(&ctx.route_path()),
-    Ok(Route::Project(_, ProjectPage::Task(_, TaskView::LocalIntegration)))
+    Ok(Route::Project(_, page)) if matches!(page.task_view(), Some((_, TaskView::LocalIntegration)))
   );
   let vault = ctx.use_context::<Services>().map(|services| services.vault);
   let request = Request {

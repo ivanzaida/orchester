@@ -6,8 +6,6 @@
 //! 13 `text_muted` icon, its label in 12 and a 12 `arrow-up-right`, 8 apart, 10 at its sides, 28 high,
 //! `surface_input` in a `border` stroke, radius 6).
 
-use std::sync::Arc;
-
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Spacer, Text},
@@ -17,9 +15,12 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  pressable::pressable,
+  pressable::opening,
 };
-use crate::theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize};
+use crate::{
+  navigation::link::Open,
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize},
+};
 
 /// The column of what a property is (`Label` `X7na6R`).
 const LABEL_WIDTH: f32 = 120.0;
@@ -157,16 +158,16 @@ pub fn note(id: &str, glyph: Icon, text: &str) -> Row {
 }
 
 /// A link to what uses the inspected item, which `open` opens; without one it only names it.
-pub fn link(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Send + Sync>>) -> Element {
+pub fn link(id: &str, glyph: Icon, label: &str, open: Option<Open>) -> Element {
   link_frame(id, glyph, label, open, false)
 }
 
 /// Secrets Used-by link (Q91kML), 36 high on the raised surface.
-pub fn used_by_link(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Send + Sync>>) -> Element {
+pub fn used_by_link(id: &str, glyph: Icon, label: &str, open: Option<Open>) -> Element {
   link_frame(id, glyph, label, open, true)
 }
 
-fn link_frame(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Send + Sync>>, used_by: bool) -> Element {
+fn link_frame(id: &str, glyph: Icon, label: &str, open: Option<Open>, used_by: bool) -> Element {
   let content = |row: Row| {
     row
       .width(Dimension::Pct(100.0))
@@ -205,7 +206,7 @@ fn link_frame(id: &str, glyph: Icon, label: &str, open: Option<Arc<dyn Fn() + Se
   match open {
     Some(open) => {
       let row = content(Row::new()).child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted));
-      pressable(move || open())
+      opening(open)
         .id(id.to_owned())
         .width(Dimension::Pct(100.0))
         .child(row)

@@ -236,9 +236,9 @@ fn review_button(ctx: &mut Ctx, task: &TaskContext, number: Option<NonZeroU64>) 
   let navigation = crate::navigation::Navigation::of(ctx);
   let route = crate::routes::Route::Project(
     task.project.open.project.id(),
-    crate::routes::ProjectPage::PullRequest(number),
+    crate::routes::ProjectPage::PullRequest(number, None),
   );
-  (review.on_click(move || navigation.go(route.clone())), None)
+  (review.opens(navigation.to(route)), None)
 }
 
 /// *Merge into main*: under way while git merges, waiting while the run's worktree is removed, its pull request
@@ -270,7 +270,7 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   let navigation = crate::navigation::Navigation::of(ctx);
   let route = crate::routes::Route::Project(
     task.project.open.project.id(),
-    crate::routes::ProjectPage::Task(task.key.clone(), crate::routes::TaskView::LocalIntegration),
+    task.page(crate::routes::TaskView::LocalIntegration),
   );
-  (button.on_click(move || navigation.go(route.clone())), None)
+  (button.opens(navigation.to(route)), None)
 }

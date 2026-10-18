@@ -21,6 +21,9 @@ mod registry;
 mod root_key;
 mod sessions;
 mod support;
+mod two_factor;
+mod two_factor_guards;
+mod two_factor_sign_in;
 
 use std::{future::Future, pin::Pin, process::ExitCode, sync::Arc};
 
@@ -96,6 +99,20 @@ const TESTS: &[(&str, Test)] = tests![
   root_key::a_corrupt_root_is_stored_data,
   root_key::a_key_set_dated_in_the_future_is_ignored,
   root_key::keys_verify_with_the_root_a_linked_server_pins,
+  two_factor::turning_it_on_takes_the_password_and_a_code_and_upgrades_that_session,
+  two_factor::a_code_works_once_within_its_window,
+  two_factor::recovery_codes_work_once_and_are_replaced_with_a_code,
+  two_factor::turning_it_off_takes_the_password_and_a_code,
+  two_factor_sign_in::the_password_step_answers_a_challenge_that_one_code_finishes,
+  two_factor_sign_in::code_tries_are_limited_per_challenge_and_per_account,
+  two_factor_sign_in::a_password_change_ends_a_challenge,
+  two_factor_sign_in::invites_need_a_two_factor_session_and_tokens_say_so,
+  two_factor_sign_in::an_operator_turns_it_off_with_the_documented_statement,
+  two_factor_sign_in::tokens_for_codes_name_their_use,
+  two_factor_guards::wrong_codes_are_capped_a_day_and_the_tenth_is_mailed,
+  two_factor_guards::a_device_without_two_factor_counts_its_own_wrong_codes,
+  two_factor_guards::a_code_is_spent_once_by_requests_that_race,
+  two_factor_guards::a_password_alone_changes_nothing_sensitive_while_it_is_on,
 ];
 
 /// Tests that run at once: each holds a few connections, some many more, and PostgreSQL allows 100 by default (CI's

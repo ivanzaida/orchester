@@ -56,13 +56,13 @@ pub(crate) fn manages(db: &Connection, user: &User) -> Result<bool, ServerError>
 }
 
 /// A browser's admin sign-in for `user`, refused with `403 nothing_to_manage` before anything is used up when the
-/// account has nothing to manage.
+/// account has nothing to manage. `cloud`: the identity token it signs in with, whose key the session keeps; `None`
+/// for a code. `mfa`: the token's two-factor claim, or a pairing code's made by a token with it.
 pub(crate) fn admin_session(
   db: &Connection,
   user: User,
   device: &str,
-  via: JoinedVia,
-  kid: Option<&str>,
+  (cloud, mfa): (Option<&Claims>, bool),
   now: i64,
 ) -> Result<Joined, ServerError> {
   if !manages(db, &user)? {
@@ -71,8 +71,13 @@ pub(crate) fn admin_session(
   let issued = Issued {
     device,
     kind: DeviceKind::AdminWeb,
-    via,
-    kid,
+    via: if cloud.is_some() {
+      JoinedVia::Cloud
+    } else {
+      JoinedVia::Code
+    },
+    kid: cloud.map(|claims| claims.kid.as_str()),
+    mfa,
   };
   let (token, session) = devices::issue(db, &user, &issued, now)?;
   Ok(Joined {
@@ -101,7 +106,7 @@ pub(crate) fn with_cloud(
   if approvals::enabled(db)? {
     return Err(ErrorCode::ApprovalRequired.into());
   }
-  let joined = admin_session(db, user, &input.device, JoinedVia::Cloud, Some(&claims.kid), now)?;
+  let joined = admin_session(db, user, &input.device, (Some(claims), claims.mfa), now)?;
   cloud_link::consume(db, claims)?;
   db::audit(
     db,

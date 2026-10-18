@@ -1,5 +1,4 @@
 //! Library and Add tool menu (`vBImC`, `aaHkr`, `mxgkm`).
-use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -117,7 +116,7 @@ impl Component for Library {
           .action(
             ActionButton::new("tools-create-command", ButtonKind::Primary, ctx.t("tools.addCommand"))
               .icon(Icon::Terminal)
-              .on_click(move || nav.go(Route::Project(project, ProjectPage::NewTool))),
+              .opens(nav.to(Route::Project(project, ProjectPage::NewTool))),
           ),
         )
         .child(reason_line("tools-other-kinds", &ctx.t("tools.otherKinds")))
@@ -178,9 +177,11 @@ impl Library {
     // Add menu `Tc6qI`: 392 wide.
     const MENU_WIDTH: f32 = 392.0;
     let nav = Navigation::of(ctx);
-    let command = MenuItem::new("tools-add-command", ctx.t("tools.command"), move || {
-      nav.go(Route::Project(project, ProjectPage::NewTool))
-    })
+    let command = MenuItem::opens(
+      "tools-add-command",
+      ctx.t("tools.command"),
+      nav.to(Route::Project(project, ProjectPage::NewTool)),
+    )
     .icon(Icon::Terminal)
     .detail(ctx.t("tools.newDetail"))
     .render(ctx, &self.menu);
@@ -338,12 +339,10 @@ impl Component for LibraryRow {
           )
           .into(),
       ],
-      on_open: Arc::new(move || {
-        nav.go(Route::Project(
-          p.project,
-          ProjectPage::Tool(p.entry.id, ToolTab::Configuration),
-        ))
-      }),
+      on_open: nav.to(Route::Project(
+        p.project,
+        ProjectPage::Tool(p.entry.id, ToolTab::Configuration),
+      )),
     }
   }
 }

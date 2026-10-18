@@ -6,7 +6,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
@@ -20,10 +20,11 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
-  screens::task::{PageState, RemovalPlace},
-  theme::ExtraSpacing,
+  screens::task::{PageState, RemovalPlace, sharing},
+  theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
+    chip::{BadgeTone, badge},
     icon::Icon,
     tooltip::{Tooltip, Truncated},
   },
@@ -35,6 +36,7 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> 
   let mut actions: Vec<Element> = edit_button(ctx, props)
     .into_iter()
     .chain(remove_button(ctx, props))
+    .chain(share_button(ctx, props))
     .map(Element::from)
     .collect();
   for control in controls {
@@ -63,12 +65,41 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> 
     TypographyStyle::Heading,
   )
   .render(ctx);
+  // After the title: *Not shared* for a task kept here, *was KON-12* for one that went up with another key.
+  let after = if props.task.detail.not_shared() {
+    Some(Element::from(badge(
+      "task-not-shared-badge",
+      BadgeTone::Neutral,
+      &ctx.t("task.notShared.badge"),
+    )))
+  } else {
+    sharing::former_key(&props.task).map(|former| {
+      Text::new(&ctx.t_args("task.formerKey", [("key", former)]))
+        .id("task-former-key")
+        .variant(ExtraTypography::MonoKey.role())
+        .color(PaletteColor::TextMuted)
+        .nowrap()
+        .into()
+    })
+  };
+  let title = Row::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(SpacingSize::Md)
+    .align_items(Alignment::Center)
+    .child(
+      Column::new()
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .child(title),
+    )
+    .with_children(after);
   Row::new()
     .id("task-title-row")
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(title))
+    .child(title)
     .child(
       Column::new()
         .spacing(ExtraSpacing::Snug.role())
@@ -85,8 +116,16 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> 
     .into()
 }
 
-/// Edit, while the task can be edited.
+/// Edit, while the task can be edited; locked, with why, while it is kept *Not shared* (`R4elt`).
 fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
+  if props.task.detail.not_shared() {
+    let key = props.task.detail.task.key().to_string();
+    return Some(
+      ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
+        .icon(Icon::Pencil)
+        .unavailable(ctx.t_args("task.notShared.locked", [("task", key)])),
+    );
+  }
   if !props.task.detail.editable() {
     return None;
   }
@@ -98,8 +137,22 @@ fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   Some(
     ActionButton::new("task-edit", ButtonKind::Ghost, ctx.t("task.edit"))
       .icon(Icon::Pencil)
-      .on_click(move || navigation.go(route.clone())),
+      .opens(navigation.to(route)),
   )
+}
+
+/// *Share task* of a task kept *Not shared*, which asks in place over the Summary (`TfVtK`); pressed while it asks.
+fn share_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
+  if !props.task.detail.not_shared() {
+    return None;
+  }
+  let share = PageState::of(ctx).share;
+  let button =
+    ActionButton::new("task-share", ButtonKind::Primary, ctx.t("task.notShared.share")).icon(Icon::CloudUpload);
+  if share.get() {
+    return Some(button.disabled());
+  }
+  Some(button.on_click(move || share.set(true)))
 }
 
 /// *Remove worktree* of the latest run, once it has no live work and still has worktrees: it opens the

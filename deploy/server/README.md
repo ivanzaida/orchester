@@ -18,7 +18,7 @@ and ports 80 and 443 reachable from the internet:
 1. **Copy the two files** into a new folder (`mkdir orchester-server && cd orchester-server`): `compose.yaml` as it
    is, and `.env.example` as `.env`. They are in this folder at the release's tag (`server-v<version>`), attached to
    its GitHub Release (`.env.example` as `env.example`), and inline on the Docker Hub page.
-2. **Fill in `.env`.** Set `ORCHESTER_VERSION` to the release (`0.1.0`), `ORCHESTER_HOST` to the DNS name, and
+2. **Fill in `.env`.** Set `ORCHESTER_VERSION` to the release (`0.1.1`), `ORCHESTER_HOST` to the DNS name, and
    `ORCHESTER_ADMIN_SECRET` to the output of `openssl rand -base64 32`. Every other value has a working default; the
    file explains each. Then `chmod 600 .env`.
 3. **Start it:** `docker compose up -d`. Caddy gets the certificate for `ORCHESTER_HOST`. `docker compose ps` shows
@@ -29,7 +29,9 @@ and ports 80 and 443 reachable from the internet:
    server has an admin. `docker compose exec server orchester-server setup-code` makes a new one while it has none.
 
 Then create a project in the admin and invite people from its *Invites*: with a code they enter in Orchester, or by
-email once the server is linked to Orchester Cloud. Their Orchester joins the server at `https://<ORCHESTER_HOST>`.
+email once the server is linked to Orchester Cloud. Invites, codes too, are made only from an admin signed in with
+two-factor authentication at Orchester Cloud, and only a person signed in with it accepts one or enters a code; the
+admin says where to turn it on. Their Orchester joins the server at `https://<ORCHESTER_HOST>`.
 
 The commands here are for `compose.yaml`; with another file, add `-f compose.private.yaml` or `-f compose.traefik.yaml`
 to each `docker compose`.
@@ -53,11 +55,20 @@ by default; `compose.traefik.yaml` makes its network internal, so that holds the
 `compose.traefik.yaml` give that network the subnet `172.29.0.0/24`; if another network on the host has it, set
 `ORCHESTER_SUBNET_PREFIX`.
 
+Behind Caddy or Traefik the server signs the proxy's certificate into the key proof an app checks before it enters a
+code. With `ORCHESTER_SERVER_PROXY_CERTIFICATE=auto` (the default) the server reads that certificate itself at
+`https://<ORCHESTER_HOST>`, checked by the image's certificate authorities, so the proxy's renewals need nothing; a
+fingerprint there instead must be set again after each renewal. `compose.yaml` maps `ORCHESTER_HOST` to Caddy for the
+server (`extra_hosts`), so it reads on the stack's network. Until Caddy has its certificate, right after the first
+start, the server's log may say once that it cannot read it; it reads again when an app asks. How it works and why it
+is safe: [docs/server-hosting.md](../../docs/server-hosting.md), "The server admin".
+
 ## Orchester Cloud (optional)
 
 With `ORCHESTER_ADMIN_CLOUD_URL` set (the default, `https://orchester-cloud.lurq.dev`), the admin offers *Link to
 Orchester Cloud* at the end of the setup and in its *Settings*. Linking ties the server to its owner's Orchester Cloud
-account: people then join with their cloud account, and invites go out by email. The browser carries everything
+account: people then join with their cloud account, and invites go out by email (sent from an admin sign-in through
+the cloud with two-factor authentication, accepted by a person with it). The browser carries everything
 between the admin and the cloud; the server itself never connects to the cloud and verifies cloud identities offline.
 The owner controls the link on the host at any time:
 
@@ -79,15 +90,15 @@ Use `compose.private.yaml`; Caddy's public certificate needs the internet.
 1. On a computer with the internet, fetch the images and the files, and save the images to one archive:
 
    ```sh
-   docker pull ivanzaida/orchester-server:0.1.0
-   docker pull ivanzaida/orchester-server-admin:0.1.0
-   docker save -o orchester-server-0.1.0.tar ivanzaida/orchester-server:0.1.0 ivanzaida/orchester-server-admin:0.1.0
+   docker pull ivanzaida/orchester-server:0.1.1
+   docker pull ivanzaida/orchester-server-admin:0.1.1
+   docker save -o orchester-server-0.1.1.tar ivanzaida/orchester-server:0.1.1 ivanzaida/orchester-server-admin:0.1.1
    ```
 
    For an arm64 host, add `--platform linux/arm64` to both `docker pull`s.
-2. Carry `orchester-server-0.1.0.tar`, `compose.private.yaml` and `.env.example` to the host, and run
-   `docker load -i orchester-server-0.1.0.tar` there.
-3. In `.env` (from `.env.example`): `ORCHESTER_VERSION=0.1.0`, `ORCHESTER_ADMIN_SECRET`, `ORCHESTER_ADMIN_CLOUD_URL=`
+2. Carry `orchester-server-0.1.1.tar`, `compose.private.yaml` and `.env.example` to the host, and run
+   `docker load -i orchester-server-0.1.1.tar` there.
+3. In `.env` (from `.env.example`): `ORCHESTER_VERSION=0.1.1`, `ORCHESTER_ADMIN_SECRET`, `ORCHESTER_ADMIN_CLOUD_URL=`
    (empty), and `ORCHESTER_SERVER_TLS_NAMES` with the names and addresses people reach the host by. The names are read
    only when the server makes its certificate, on its first start.
 4. `docker compose -f compose.private.yaml up -d`, then `docker compose -f compose.private.yaml logs server` for the
@@ -97,6 +108,11 @@ Use `compose.private.yaml`; Caddy's public certificate needs the internet.
 
 Nothing is fetched at run time. People's Orchester pins the server's certificate when they join with a code; they
 compare its check code once.
+
+Codes and invites need two-factor authentication the server can check: pin Orchester Cloud's root once,
+`docker compose -f compose.private.yaml exec server orchester-server cloud pin <root public key>`, without linking.
+People's Orchester then reaches the cloud once per code; the server never does. Without a pinned root the server takes
+only its setup code ([docs/server-hosting.md](../../docs/server-hosting.md), "Air-gapped").
 
 ## Upgrades
 
@@ -169,7 +185,11 @@ redirects plain HTTP to HTTPS.
    setup code.
 
 Only the server joins Traefik's network. Its own network is internal, so the admin has no route out: invites by email
-are carried to Orchester Cloud by the inviter's browser instead of the admin. The admin's paths carry no codes or
+are carried to Orchester Cloud by the inviter's browser instead of the admin. The server reads Traefik's certificate
+(`auto`) at `https://<ORCHESTER_HOST>` through Traefik's network, which has a route out: the host must reach its own
+public name (hairpin NAT). If it cannot, and Traefik's HTTPS entry point listens on 443 in its container, give the
+server `extra_hosts: ["<ORCHESTER_HOST>:<TRAEFIK_ADDRESS>"]`, or set the fingerprint instead. The server's log says
+when it cannot read it, and apps then enter no codes. The admin's paths carry no codes or
 tokens, so Traefik's access log needs nothing special for this host.
 
 ## Portainer
@@ -187,6 +207,14 @@ workspace's (`Cargo.toml`): it builds both images for amd64 and arm64, pushes th
 `<major>.<minor>` and `latest` unless it is a pre-release such as `-rc.1`), and creates the GitHub Release with the
 digests and these files. It needs the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (an access token with Read &
 Write) and the variable `DOCKERHUB_NAMESPACE`.
+
+Each image builds once per platform, in its own job on a runner of that architecture (`ubuntu-latest` for amd64,
+GitHub's `ubuntu-24.04-arm` for arm64), so nothing is emulated and the Dockerfiles stay plain native builds. Each job
+pushes its image by digest only; a *Manifest* job then puts both platforms under the tags and checks that both are
+there. The build cache is kept per image and platform, but GitHub lets a tag's run read only its own cache and
+master's, so a release reuses the cache only when its run is re-run. *Run workflow* with *dry_run*, on any branch,
+builds both images for both platforms, checks each image's platform and that its executable (`orchester-server`,
+`node`) is built for it, and pushes and releases nothing; use it to test a change to the Dockerfiles or the workflow.
 
 **The Docker Hub page** is the self-hosters' whole guide. `DOCKERHUB.md` is its text; each line
 `<!-- inline: <file> -->` becomes that file of this folder, byte for byte, in a code block, so the page cannot drift

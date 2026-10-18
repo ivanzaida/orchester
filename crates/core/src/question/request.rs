@@ -151,6 +151,8 @@ pub struct AskedQuestions {
   /// The person's message the answers reached a step-end question's agent in; the card shows them, so
   /// the message is not shown again.
   pub message: Option<MessageId>,
+  /// The project's Orchestrator chat gave its answers (recorded as automation's): the card names it.
+  pub by_orchestrator: bool,
 }
 
 impl AskedQuestions {

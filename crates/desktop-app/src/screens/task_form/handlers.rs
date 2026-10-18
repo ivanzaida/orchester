@@ -179,7 +179,7 @@ impl TaskForm {
       };
       if new && base.get_untracked().is_none_or(|base| base.task.is_none()) {
         Self::forget_kept(&kept, &written);
-        nav.tasks(Some(task.key().clone()));
+        nav.tasks(task.key().clone());
         return;
       }
       let stored = Base::of(&task, &separator);

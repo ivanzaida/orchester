@@ -9,7 +9,7 @@ use uuid::Uuid;
 use super::CLOCK_SKEW_MS;
 use crate::{
   Cloud,
-  accounts::Authenticated,
+  accounts::{Authenticated, require_two_factor_session, two_factor_session},
   clock::seconds,
   db::{audit, time},
   error::CloudError,
@@ -30,24 +30,24 @@ impl Cloud {
     Ok(row.try_get(0)?)
   }
 
-  /// `POST /identity-tokens`: a token to join a team server, or with purpose `admin` to sign in to the admin of a
-  /// server linked here. A token for linking comes only with `POST /servers`.
+  /// `POST /identity-tokens`: a token to join a team server, with purpose `admin` to sign in to the admin of a server
+  /// linked here, or with purpose `code` to show with a code entered in the app. A token for linking comes only with
+  /// `POST /servers`.
   pub(crate) async fn issue_identity_token(
     &self,
     auth: Authenticated,
     request: IdentityTokenRequest,
   ) -> Result<IdentityTokenIssued, CloudError> {
     let audience = Uuid::parse_str(request.audience.trim()).map_err(|_| CloudErrorCode::Invalid)?;
+    let used = TokenUse::requested(&request)?;
     let client = self.client().await?;
     if let Some(invite) = request.invite {
-      if request.purpose.is_some() {
-        return Err(CloudErrorCode::Invalid.into());
-      }
+      // Before the invite is looked at, so a refusal leaves it open (docs/cloud-api.md, "Two-factor authentication").
+      require_two_factor_session(&client, auth.device).await?;
       crate::invites::accept_for(&client, auth, (invite, audience), self.now()).await?;
     }
     let linked = crate::servers::linked(&client, audience).await?.is_some();
     match request.purpose {
-      Some(TokenPurpose::Link) => return Err(CloudErrorCode::Invalid.into()),
       Some(TokenPurpose::Admin) if !linked => return Err(CloudErrorCode::NotFound.into()),
       // A server not linked here may still be one an app joins with a token (row 42); linked, the account is
       // listed among the server's people on the account's next computer.
@@ -55,23 +55,21 @@ impl Cloud {
       _ => {}
     }
     drop(client);
-    self
-      .issue_for(auth, audience.to_string(), (request.purpose, request.invite))
-      .await
+    self.issue_for(auth, audience.to_string(), used).await
   }
 
-  /// A five-minute token for one team server, about the device's account, for `purpose` and accepting `invite`, signed
-  /// with the newest key the published key set lets sign now.
+  /// A five-minute token for one team server, about the device's account, for the use `used` names, signed with the
+  /// newest key the published key set lets sign now.
   pub(crate) async fn issue_for(
     &self,
     auth: Authenticated,
     audience: String,
-    (purpose, invite): (Option<TokenPurpose>, Option<InviteId>),
+    used: TokenUse,
   ) -> Result<IdentityTokenIssued, CloudError> {
     self.inner.limits.identity_token(auth.device, self.now())?;
     let now = self.now();
     let client = self.inner.db.client().await?;
-    let subject = self.subject(&client, auth, audience, (purpose, invite)).await?;
+    let subject = self.subject(&client, auth, audience, used).await?;
     let key = self.signing_key(&client, now).await?;
     let claims = IdentityClaims::new(subject, seconds(now))?;
     let token = key.sign_token(&claims)?;
@@ -95,7 +93,7 @@ impl Cloud {
     client: &impl GenericClient,
     auth: Authenticated,
     audience: String,
-    (purpose, invite): (Option<TokenPurpose>, Option<InviteId>),
+    used: TokenUse,
   ) -> Result<TokenSubject, CloudError> {
     let row = client
       .query_opt(
@@ -115,8 +113,9 @@ impl Cloud {
         name: row.try_get(3)?,
         platform: CloudPlatform::parse(row.try_get(4)?).ok_or(CloudError::StoredData)?,
       },
-      invite: invite.map(|invite| invite.to_string()),
-      purpose,
+      invite: used.invite.map(|invite| invite.to_string()),
+      purpose: used.purpose,
+      mfa: two_factor_session(client, auth.device).await?,
     })
   }
 
@@ -150,5 +149,35 @@ impl Cloud {
       return Err(CloudError::StoredData);
     }
     Ok(key)
+  }
+}
+
+/// What one identity token is for: its purpose and the invite it accepts.
+pub(crate) struct TokenUse {
+  purpose: Option<TokenPurpose>,
+  invite: Option<InviteId>,
+}
+
+impl TokenUse {
+  /// Linking the team server to the account of the admin who set it up (`POST /servers`).
+  pub(crate) fn link() -> Self {
+    Self {
+      purpose: Some(TokenPurpose::Link),
+      invite: None,
+    }
+  }
+
+  /// The use a request asks for: an invite only to join, and never a link token, which only `POST /servers` gives. A
+  /// code's token needs no more: its audience is the id of the server's key, which the app had the server prove it
+  /// holds before asking.
+  fn requested(request: &IdentityTokenRequest) -> Result<Self, CloudError> {
+    let invite_allowed = request.invite.is_none() || request.purpose.is_none();
+    if request.purpose == Some(TokenPurpose::Link) || !invite_allowed {
+      return Err(CloudErrorCode::Invalid.into());
+    }
+    Ok(Self {
+      purpose: request.purpose,
+      invite: request.invite,
+    })
   }
 }

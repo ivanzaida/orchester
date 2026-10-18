@@ -84,7 +84,7 @@ async fn s1a_online_backup_cli_captures_wal_and_restores_without_overwriting_fil
     .await
     .expect("account code");
   assert_eq!(
-    restored.join(&code, None, "restored laptop").await.user.username,
+    restored.join_as(&code, "alice", "restored laptop").await.user.username,
     "alice"
   );
   restored.finish().await;

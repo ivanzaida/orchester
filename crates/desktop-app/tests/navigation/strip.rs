@@ -31,7 +31,7 @@ pub fn window_with(width: u32, count: usize) -> (Window, Navigation) {
     ProjectPage::Overview(OverviewTab::Running),
     ProjectPage::Tasks(TaskList::default()),
     ProjectPage::Pipelines,
-    ProjectPage::Secrets,
+    ProjectPage::Secrets(Default::default()),
   ];
   let projects = [
     PROJECT,
@@ -101,7 +101,7 @@ fn a_few_tabs_show_without_the_tab_list() {
   let navigation = window.navigation();
   for _ in 0..3 {
     navigation.open_tab();
-    navigation.go(super::project(ProjectPage::Secrets));
+    navigation.go(super::project(ProjectPage::Secrets(Default::default())));
   }
   settle(&mut window);
   assert!(!shown(&mut window, "tab-list-button"), "no button while every tab fits");
@@ -162,7 +162,7 @@ fn inactive_tabs_stay_120_wide_and_the_active_one_keeps_its_label() {
     .find(|id| *id != format!("tab-{kontur}"))
     .expect("another tab shows");
   super::press(&mut window, &other, lurq::app::events::MouseButton::Left);
-  navigation.go(super::project(ProjectPage::Instructions));
+  navigation.go(super::project(ProjectPage::Instructions(Default::default())));
   navigation.select(kontur);
   let active = active_id(&navigation);
   window.until("Kontur's name", |window| window.text(&active).contains("Kontur"));

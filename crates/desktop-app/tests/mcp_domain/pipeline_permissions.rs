@@ -56,11 +56,10 @@ impl Fixture {
     let runner = folder.path().join("no-runner/orchester-runner");
     let mut window = Served::start_with(folder, &seeded.app_database, runner, true);
     window.until("navigation attached", |s| s.link.navigation().is_ok());
-    window
-      .link
-      .navigation()
-      .expect("navigation")
-      .go(Route::Project(seeded.project, ProjectPage::Pipeline(id)));
+    window.link.navigation().expect("navigation").go(Route::Project(
+      seeded.project,
+      ProjectPage::Pipeline(id, Default::default()),
+    ));
     window.until("pipeline editor", |s| s.shows("pipeline-add-step"));
     assert!(
       !window

@@ -17,7 +17,7 @@ use crate::{
 
 /// The columns [`StoredQuestions::read`] reads, in its order.
 const COLUMNS: &str = "id, run_id, step_execution_id, invocation_id, agent, questions, turn, asked_at, state, answers, \
-                       answered_by, ended_at, message_id";
+                       answered_by, ended_at, message_id, by_orchestrator";
 
 impl ProjectDb {
   /// Records request `request`, waiting for its answer. A repeated id in the run is refused.
@@ -129,6 +129,17 @@ impl ProjectDb {
     )?;
     Ok(())
   }
+
+  /// The Orchestrator chat answered request `id` of `run`, as automation, and the runner recorded it: its card names
+  /// the chat. Only an answer automation gave is marked; whether it was marked.
+  pub fn mark_answered_by_orchestrator(&mut self, run: RunId, id: &str) -> Result<bool, StoreError> {
+    let changed = self.connection.execute(
+      "UPDATE questions SET by_orchestrator = 1 \
+       WHERE run_id = ?1 AND id = ?2 AND state = 'answered' AND answered_by = 'automation'",
+      params![run.to_string(), id],
+    )?;
+    Ok(changed == 1)
+  }
 }
 
 /// Who answered or decided, as `questions.answered_by` and `plans.decided_by` keep it.
@@ -163,6 +174,7 @@ struct StoredQuestions {
   answered_by: Option<String>,
   ended_at: Option<i64>,
   message: Option<String>,
+  by_orchestrator: bool,
 }
 
 impl StoredQuestions {
@@ -181,6 +193,7 @@ impl StoredQuestions {
       answered_by: row.get(10)?,
       ended_at: row.get(11)?,
       message: row.get(12)?,
+      by_orchestrator: row.get(13)?,
     })
   }
 
@@ -225,6 +238,7 @@ impl StoredQuestions {
       request,
       state,
       message,
+      by_orchestrator: self.by_orchestrator,
     })
   }
 }

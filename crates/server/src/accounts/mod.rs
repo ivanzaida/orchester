@@ -15,6 +15,7 @@ use crate::{
   config::{Config, TlsMode},
   db::Database,
   error::ServerError,
+  presented::Presented,
   rate_limit::JoinLimits,
   server_keys::ServerKeys,
   tls::Tls,
@@ -32,6 +33,8 @@ pub(crate) struct State {
   pub keys: ServerKeys,
   /// The server's own TLS; `None` when it serves plain HTTP behind a proxy.
   pub tls: Option<Tls>,
+  /// The certificate key proofs name: `tls`'s, or the proxy's.
+  pub presented: Presented,
   pub limits: JoinLimits,
   pub sharing_limits: crate::sharing::limits::SharingLimits,
   pub event_prune_at: AtomicI64,
@@ -51,6 +54,7 @@ impl Server {
     })
     .await
     .map_err(|_| ServerError::Worker)??;
+    let presented = Presented::new(&config, tls.as_ref().map(|tls| tls.pin), clock.clone())?;
     Ok(Self {
       inner: Arc::new(State {
         config,
@@ -58,6 +62,7 @@ impl Server {
         db: Arc::new(db),
         keys,
         tls,
+        presented,
         limits: JoinLimits::default(),
         sharing_limits: crate::sharing::limits::SharingLimits::default(),
         event_prune_at: AtomicI64::new(i64::MIN),

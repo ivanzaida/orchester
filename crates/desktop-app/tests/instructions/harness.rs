@@ -45,10 +45,10 @@ impl Instructions {
     entry.id
   }
   pub fn go(&mut self) {
-    self
-      .window
-      .navigation()
-      .go(Route::Project(project_id(), ProjectPage::Instructions));
+    self.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::Instructions(Default::default()),
+    ));
     self.until("instructions read", |s| s.exists("instructions-tabs"));
   }
   pub fn until(&mut self, what: &str, mut predicate: impl FnMut(&mut Self) -> bool) {

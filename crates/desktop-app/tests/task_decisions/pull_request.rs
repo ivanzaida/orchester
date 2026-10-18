@@ -325,7 +325,7 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
     page.window.navigation().route_now(),
     Route::Project(
       page.project,
-      ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number"))
+      ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number"), None)
     )
   );
 }

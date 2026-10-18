@@ -5,7 +5,10 @@
 //! the agents connected, whether agents may control the window, and *Open Automation settings*. It names where the
 //! token is kept, never the token.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -26,6 +29,7 @@ use super::{
 };
 use crate::{
   mcp::{McpKind, McpStatus, ServerState, WindowControlSource, address, endpoint},
+  navigation::press::OpenIn,
   routes::Route,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
@@ -33,6 +37,7 @@ use crate::{
     command_row::CommandRow,
     icon::Icon,
     popover::{bar_popover, popover_panel},
+    pressable::Press,
   },
 };
 
@@ -89,7 +94,7 @@ impl Component for McpItem {
     let (words, color) = words(ctx, &props.status);
     let toggle = self.open.clone();
     let open = self.open.get();
-    let mut item = pressed("status-mcp", move || toggle.update(|open| *open = !*open))
+    let mut item = pressed("status-mcp", Press::run(move || toggle.update(|open| *open = !*open)))
       .ref_element(self.item.clone())
       .describe("state", state_name(&props.status.server))
       .child(glyph(Icon::RadioTower, color.clone()))
@@ -180,10 +185,13 @@ fn panel(ctx: &mut Ctx, props: &McpItemProps, open: &Signal<bool>) -> Element {
     ctx.t("shell.mcp.openSettings"),
   )
   .icon(Icon::Settings)
-  .on_click(move || {
-    close.set(false);
-    dispatch(BarAction::Go(Route::Settings));
-  });
+  .opens(Arc::new(move |at| {
+    // A page opened in a background tab does not take the popover's place.
+    if at != OpenIn::BackgroundTab {
+      close.set(false);
+    }
+    dispatch(BarAction::Go(Route::Settings, at));
+  }));
   let listening = status.listening_port().is_some();
   popover_panel("status-mcp-popover", POPOVER_WIDTH)
     .child(heading)

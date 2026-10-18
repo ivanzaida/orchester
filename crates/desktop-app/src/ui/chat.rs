@@ -3,12 +3,13 @@
 //! from who wrote it (12/600) with what it was and when (11 `text_muted`) and under them, 3 apart, what it wrote.
 //! A person's (`Your message` `mr4lC`): at the right, *You* and the time, the message as written in a bubble that
 //! hugs it up to 80 % of the chat (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and, under it,
-//! where it stands. Where a link in an Orchestrator's reply leads is [`links`]'; which of its lists are labelled links,
-//! [`labelled`]'s.
+//! where it stands. Where a link in an Orchestrator's reply leads is [`links`]'; which places an agent names as
+//! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s.
 
 pub mod labelled;
 pub mod links;
 pub mod presentation;
+pub mod references;
 
 use std::sync::Arc;
 
@@ -21,7 +22,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::time::Timestamp;
+use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::display;
 
 use super::{
@@ -104,10 +105,12 @@ pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Ve
     .into()
 }
 
-/// What a message says, its Markdown rendered; `id` names it.
-pub fn text(ctx: &mut Ctx, id: &str, text: &Arc<str>) -> Element {
+/// What an agent's message in a chat of `project` says, its Markdown rendered with the places it names as text
+/// linked ([`references`]); `id` names it.
+pub fn text(ctx: &mut Ctx, id: &str, (text, project): (&Arc<str>, ProjectId)) -> Element {
   let links = links(ctx);
-  MarkdownView::new(id, text.clone(), links).render(ctx)
+  let shown = references::shown(ctx, text, project);
+  MarkdownView::new(id, shown, links).render(ctx)
 }
 
 /// *You*, the time when it is known, the bubble with `body` as written, and `delivery` under it; `id` names the
@@ -118,11 +121,23 @@ pub fn person_message(
   (body, at): (&Arc<str>, Option<Timestamp>),
   delivery: Option<Element>,
 ) -> Column {
+  let you = ctx.t("conversation.you");
+  person_side_message(id, (&you, body, at), delivery)
+}
+
+/// A message on the person's side as [`person_message`] shows it, written by `author` (the project's Orchestrator
+/// for one it sent the agents of a task) instead of *You*.
+pub fn person_side_message(
+  id: &str,
+  (author, body, at): (&str, &Arc<str>, Option<Timestamp>),
+  delivery: Option<Element>,
+) -> Column {
   let head = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(
-      Text::new(&ctx.t("conversation.you"))
+      Text::new(author)
+        .id(format!("{id}-author"))
         .variant(TypographyStyle::FieldLabel)
         .nowrap(),
     )

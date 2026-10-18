@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use orchester_api::client::ServerAddress;
 use orchester_app::{
+  navigation::press::OpenIn,
   routes::{OrchesterView, Route},
   shell::status_bar::{BarAction, BarFacts, ServerFacts, ServerState},
 };
@@ -99,6 +100,9 @@ fn status_bar_server_item_names_the_projects_server_or_counts_two() {
   bar.press("status-server");
   assert_eq!(
     bar.asked(),
-    vec![BarAction::Go(Route::Orchester(OrchesterView::server(kontur.stored.id)))]
+    vec![BarAction::Go(
+      Route::Orchester(OrchesterView::server(kontur.stored.id)),
+      OpenIn::ActiveTab
+    )]
   );
 }

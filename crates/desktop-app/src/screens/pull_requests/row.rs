@@ -30,7 +30,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
-    pressable::pressable,
+    pressable::opening,
     table::{ColumnWidth, TableRow},
     tooltip::Truncated,
   },
@@ -77,7 +77,7 @@ impl Component for PullRequestRow {
     let number = pull_request.number();
     let navigation = Navigation::of(ctx);
     let page = NonZeroU64::new(number).expect("a pull request's constructor refuses number 0");
-    let opened = Route::Project(props.project, ProjectPage::PullRequest(page));
+    let opened = Route::Project(props.project, ProjectPage::PullRequest(page, None));
     let url: Arc<str> = Arc::from(pull_request.url());
     let open = props.open.clone();
     let github = ActionButton::new(
@@ -93,7 +93,7 @@ impl Component for PullRequestRow {
       .cell(STATE, state_cell(ctx, pull_request))
       .cell(CHECKS, checks_cell(ctx, pull_request))
       .cell(OPEN, github)
-      .on_open(move || navigation.go(opened.clone()))
+      .opens(navigation.to(opened))
   }
 }
 
@@ -154,7 +154,7 @@ fn meta(ctx: &mut Ctx, props: &RowProps) -> Row {
         props.project,
         ProjectPage::Task(task.key.clone(), TaskView::of(TaskTab::Summary)),
       );
-      pressable(move || navigation.go(to.clone()))
+      opening(navigation.to(to))
         .id(format!("pull-request-task-{number}"))
         .spacing(SpacingSize::Xs)
         .describe("a11y_name", task.key.to_string())

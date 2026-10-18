@@ -7,6 +7,9 @@ use super::{
 
 const SEARCH: &str = "q";
 const HIGHLIGHT: &str = "highlight";
+/// Shows the tasks kept *Not shared* when the project joined, in place of the list's (`A7PKfL`).
+const SHOW: &str = "show";
+const NOT_SHARED: &str = "not-shared";
 
 /// A tab of the Tasks list (`Workflow tabs` `F3K93b` in `t3oAOi`): every task, the ones that need the
 /// person, or one workflow status. All is the one it opens on.
@@ -59,6 +62,8 @@ pub struct TaskList {
   /// Never empty: an empty search is no search.
   search: Option<String>,
   highlight: Option<TaskKey>,
+  /// The *Not shared* filter is on.
+  not_shared: bool,
 }
 
 impl TaskList {
@@ -68,7 +73,20 @@ impl TaskList {
       tab,
       search: None,
       highlight: None,
+      not_shared: false,
     }
+  }
+
+  /// The list with the *Not shared* filter on or off, its tab and search kept.
+  #[must_use]
+  pub const fn with_not_shared(mut self, on: bool) -> Self {
+    self.not_shared = on;
+    self
+  }
+
+  /// Whether the *Not shared* filter is on.
+  pub const fn not_shared(&self) -> bool {
+    self.not_shared
   }
 
   /// The list searched for `text` as typed; an empty text searches for nothing.
@@ -106,6 +124,7 @@ impl TaskList {
         (TAB, tab),
         (SEARCH, self.search.as_deref()),
         (HIGHLIGHT, highlight.as_deref()),
+        (SHOW, self.not_shared.then_some(NOT_SHARED)),
       ],
     )
   }
@@ -120,6 +139,16 @@ impl TaskList {
         param: HIGHLIGHT.to_owned(),
         value: key,
       })?);
+    }
+    match params.take(SHOW)?.as_deref() {
+      None => {}
+      Some(NOT_SHARED) => list.not_shared = true,
+      Some(value) => {
+        return Err(RouteError::InvalidParam {
+          param: SHOW.to_owned(),
+          value: value.to_owned(),
+        });
+      }
     }
     Ok(list)
   }

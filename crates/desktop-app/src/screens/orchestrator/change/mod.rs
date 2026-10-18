@@ -1,11 +1,12 @@
-//! The card of a publication, cancel or merge the Orchestrator's agent proposed or the chat did itself, and of a run
-//! it started without asking because auto mode is on (`Orchestrator · publish proposal` `b55NqO` and its states
-//! `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its head with the state at
-//! its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits, the diff of the text it
-//! publishes; what it did or would do; its notes; and its actions. While it waits, only a person applies it: lurq's
-//! synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays open to automation. The
-//! facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
+//! The card of a publication, cancel, merge, answer or message the Orchestrator's agent proposed or the chat did
+//! itself, and of a run it started without asking because auto mode is on (`Orchestrator · publish proposal` `b55NqO`
+//! and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its head with
+//! the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits, the diff
+//! of the text it publishes; what it did or would do; its notes; and its actions. While it waits, only a person
+//! applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays open to
+//! automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
 
+mod answer;
 mod facts;
 mod widens;
 mod words;
@@ -36,6 +37,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   orchestrator::{facts as read, proposal::Decision, tools::ChatScope},
+  workspace::OrchestratorConsent,
 };
 
 use self::words::{Accept, Phase, View, Words};
@@ -276,10 +278,9 @@ impl ChangeCard {
         .into_iter()
         .enumerate()
         .map(|(index, (glyph, label, route))| {
-          let navigation = navigation.clone();
           ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
             .icon(glyph)
-            .on_click(move || navigation.go(route.clone()))
+            .opens(navigation.to(route))
         }),
     )
   }
@@ -384,7 +385,7 @@ fn read_facts(ctx: &mut Ctx, props: &ChangeProps) -> lurq::app::ctx::FutureState
           };
           let workspace = &services.workspace;
           let publishes = workspace
-            .orchestrator_publishes_drafts()
+            .orchestrator_allows(OrchestratorConsent::PublishDrafts)
             .map_err(|error| messages::store_error(&error))?;
           let widens = workspace
             .automation_changes_permissions()

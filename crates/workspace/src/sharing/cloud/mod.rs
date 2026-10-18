@@ -14,6 +14,8 @@ mod error;
 mod gate;
 mod invites;
 mod seen;
+mod signing_in;
+mod two_factor;
 
 use std::sync::{
   Arc,
@@ -21,9 +23,8 @@ use std::sync::{
 };
 
 use orchester_api::{
-  Credential,
   client::{CloudClient, ServerAddress},
-  cloud::{CloudErrorCode, CloudSignIn},
+  cloud::CloudErrorCode,
 };
 use orchester_core::{
   id::CloudAccountId,
@@ -41,8 +42,10 @@ pub use self::{
   gate::{CHECK_EVERY, RETRY_AFTER_CAP, RETRY_CAP, RETRY_EVERY, Reach, SignIn, keep_checking, retry_wait},
   invites::ServerJoin,
   seen::keep_activity_to_the_account,
+  signing_in::{CHALLENGE_LIFE, Challenge, CodeKind, CodeSignedIn, SignInStep},
+  two_factor::FEW_RECOVERY_CODES,
 };
-use super::{Servers, device};
+use super::Servers;
 use crate::{background, secrets::Vault, workspace::Workspace};
 
 /// Where Orchester Cloud runs for this build: `ORCHESTER_CLOUD_URL` at build time, or the public cloud
@@ -69,6 +72,9 @@ pub enum WebPage {
   Forgot,
   /// *Open Orchester Cloud*, e.g. to ask for a new confirmation link: `/signin`.
   SignIn,
+  /// *Turn on two-factor authentication*, and making new recovery codes: the account page's Security section,
+  /// `/account#security`.
+  Security,
 }
 
 impl WebPage {
@@ -77,6 +83,7 @@ impl WebPage {
       Self::SignUp => "/signup",
       Self::Forgot => "/forgot",
       Self::SignIn => "/signin",
+      Self::Security => "/account#security",
     }
   }
 }
@@ -101,6 +108,8 @@ struct Inner {
   /// Held while a sign-in writes its token and account, and while an end removes them, so a token removed late never
   /// takes a newer sign-in's with it.
   keychain: Mutex<()>,
+  /// The recovery codes left after this session's sign-in, when a recovery code finished it ([`two_factor`]).
+  recovery_codes_left: Mutex<Option<u32>>,
 }
 
 /// This computer's stored sign-in: the account, its token as the keychain gave it, and the sign-in's generation.
@@ -138,6 +147,7 @@ impl Cloud {
         reach: watch::channel(Reach::Unknown).0,
         generation: AtomicU64::new(0),
         keychain: Mutex::new(()),
+        recovery_codes_left: Mutex::new(None),
       }),
     }
   }
@@ -176,74 +186,14 @@ impl Cloud {
     Ok(self.inner.workspace.db.lock().cloud_account()?)
   }
 
-  /// Signs this computer in to the cloud with the person's `email` and `password`, in place of any account signed in
-  /// before. `invalid_credentials`, `email_unconfirmed` and `rate_limited` come back as the cloud's refusal.
-  pub async fn sign_in(&self, email: String, password: Credential) -> Result<StoredCloudAccount, CloudError> {
-    let cloud = background::run({
-      let cloud = self.clone();
-      move || cloud.address()
-    })
-    .await??;
-    let client = CloudClient::new(cloud.address.clone())?;
-    let device = device::cloud_device();
-    let signed_in = client
-      .sign_in(&CloudSignIn {
-        email,
-        password,
-        device: device.clone(),
-      })
-      .await?;
-    // The cloud issues `orcc_` and 64 hex characters; a blank answer is not a token.
-    let token = SecretValue::new(signed_in.token.expose().to_owned()).map_err(|_| CloudError::SignedOut)?;
-    if self.account_now().await?.is_some() {
-      self.end_session().await;
-    }
-    let account = StoredCloudAccount {
-      account: signed_in.account.id,
-      email: signed_in.account.email,
-      display_name: signed_in.account.display_name,
-      device_name: device.name,
-      signed_in_at: Timestamp::now(),
-      cloud_address: cloud.address.as_str().to_owned(),
-    };
-    let (cloud, kept) = (self.clone(), account.clone());
-    background::run(move || -> Result<(), CloudError> {
-      let inner = &cloud.inner;
-      let links = claiming::Links::read(&inner.workspace)?;
-      let _keychain = inner.keychain.lock();
-      let key = device_key(&inner.workspace)?;
-      inner.vault.get().store(&key, &token)?;
-      let removed = {
-        let mut db = inner.workspace.db.lock();
-        inner.generation.fetch_add(1, Ordering::SeqCst);
-        db.set_cloud_account(Some(&kept))?;
-        db.set_cloud_sign_in_ended(None)?;
-        // The projects added while no account was signed in, and those from before projects had owners, are its; the
-        // team servers nobody owns go to the account whose projects link to them ([`claiming`]).
-        db.claim_unowned_projects(&kept.account)?;
-        claiming::claim_servers(&mut db, &kept.account, &links)?
-      };
-      claiming::forget_tokens(&inner.vault, &removed);
-      Ok(())
-    })
-    .await??;
-    self.inner.reach.send_replace(Reach::Reached);
-    self.inner.sign_in.send_replace(SignIn::SignedIn {
-      account: account.account,
-      email: account.email.clone(),
-    });
-    self.changed();
-    // The server lists show this account's servers from now on.
-    self.servers().changed();
-    Ok(account)
-  }
-
   /// Signs this computer out of the cloud: the cloud ends its token if it can be reached, and the token leaves the
   /// keychain and the account the database either way. The account's team servers and their tokens stay, hidden, for
   /// when it signs in again.
   pub async fn sign_out(&self) -> Result<(), CloudError> {
     self.end_session().await;
-    let forgotten = self.forget(CloudSignInEnd::SignedOut, Timestamp::now(), None).await;
+    let forgotten = self
+      .forget((CloudSignInEnd::SignedOut, None), Timestamp::now(), None)
+      .await;
     self.changed();
     forgotten.map(drop)
   }
@@ -296,9 +246,16 @@ impl Cloud {
   /// keychain answer. The account leaves the database first, then its token the keychain; a token the keychain keeps
   /// (it refused) does no harm without an account, and the next sign-in replaces it. With `generation`, only the
   /// sign-in of that generation ends: a refusal that arrives after a newer sign-in or end changes nothing (`false`).
-  async fn forget(&self, reason: CloudSignInEnd, at: Timestamp, generation: Option<u64>) -> Result<bool, CloudError> {
+  /// `invite` names what the invite that asked for a sign-in with a code was to ([`CloudSignInEnd::TwoFactor`]).
+  async fn forget(
+    &self,
+    (reason, invite): (CloudSignInEnd, Option<String>),
+    at: Timestamp,
+    generation: Option<u64>,
+  ) -> Result<bool, CloudError> {
     let cloud = self.clone();
-    let forgot = background::run(move || cloud.forget_stored(reason, at, generation))
+    let ending = (reason, invite.clone());
+    let forgot = background::run(move || cloud.forget_stored(ending, at, generation))
       .await
       .map_err(CloudError::from)
       .and_then(|forgot| forgot);
@@ -306,8 +263,9 @@ impl Cloud {
       Ok(Forgot::Stale) => return Ok(false),
       Ok(Forgot::Ended(ended)) => ended.clone(),
       // The database did not take the end: the gate shows all the same, with what this session knows.
-      Err(_) => self.ended_now(reason, at),
+      Err(_) => self.ended_now((reason, invite), at),
     };
+    self.recovery_codes_used(None);
     self.inner.reach.send_replace(Reach::Unknown);
     self.inner.sign_in.send_replace(SignIn::SignedOut {
       ended,
@@ -321,7 +279,7 @@ impl Cloud {
   /// [`Self::forget`]'s blocking part: the database's account, then the keychain's token. Blocking.
   fn forget_stored(
     &self,
-    reason: CloudSignInEnd,
+    ending: (CloudSignInEnd, Option<String>),
     at: Timestamp,
     generation: Option<u64>,
   ) -> Result<Forgot, CloudError> {
@@ -333,7 +291,7 @@ impl Cloud {
         return Ok(Forgot::Stale);
       }
       inner.generation.fetch_add(1, Ordering::SeqCst);
-      forget_account(&mut db, reason, at)
+      forget_account(&mut db, ending, at)
     };
     match device_key(&inner.workspace).map(|key| inner.vault.get().delete(&key)) {
       Ok(Ok(()) | Err(VaultError::NotFound)) => {}
@@ -344,12 +302,13 @@ impl Cloud {
   }
 
   /// Why the sign-in of now ended, as this session knows it, for when the database cannot say.
-  fn ended_now(&self, reason: CloudSignInEnd, at: Timestamp) -> Option<EndedCloudSignIn> {
+  fn ended_now(&self, (reason, invite): (CloudSignInEnd, Option<String>), at: Timestamp) -> Option<EndedCloudSignIn> {
     match self.sign_in_state() {
       SignIn::SignedIn { email, .. } => Some(EndedCloudSignIn {
         email,
         reason,
         ended_at: at,
+        invite,
       }),
       SignIn::SignedOut { ended, .. } => ended,
     }
@@ -402,7 +361,7 @@ impl Cloud {
           tracing::warn!(%error, "the keychain does not give this computer's cloud token; it is signed out");
         }
         if self
-          .forget(CloudSignInEnd::Other, Timestamp::now(), Some(kept.generation))
+          .forget((CloudSignInEnd::Other, None), Timestamp::now(), Some(kept.generation))
           .await?
         {
           self.changed();
@@ -432,7 +391,7 @@ impl Cloud {
       Err(error) if error.cloud_code() == Some(CloudErrorCode::Unauthorized) => {
         let (reason, at) = error.ended().map_or((None, None), |(reason, at)| (Some(reason), at));
         let at = at.map_or_else(Timestamp::now, Timestamp::from_unix_millis);
-        if self.forget(gate::end_of(reason), at, Some(generation)).await? {
+        if self.forget((gate::end_of(reason), None), at, Some(generation)).await? {
           self.changed();
         }
         Err(CloudError::SignedOut)
@@ -473,20 +432,24 @@ fn stored_sign_in(workspace: &Workspace) -> SignIn {
 /// here ended.
 fn forget_account(
   db: &mut orchester_store::AppDb,
-  reason: CloudSignInEnd,
+  (reason, invite): (CloudSignInEnd, Option<String>),
   at: Timestamp,
 ) -> Result<Option<EndedCloudSignIn>, CloudError> {
   let ended = db.cloud_account()?.map(|account| EndedCloudSignIn {
     email: account.email,
     reason,
     ended_at: at,
+    invite,
   });
   db.set_cloud_account(None)?;
   if ended.is_some() {
     db.set_cloud_sign_in_ended(ended.as_ref())?;
   }
-  // The invites accepted here belong to the account that accepted them.
-  db.forget_accepted_invites()?;
+  // The invites accepted here belong to the account that accepted them. Signed out to sign in again with a code, the
+  // same person comes back for them; another account forgets them as it signs in ([`signing_in`]).
+  if reason != CloudSignInEnd::TwoFactor {
+    db.forget_accepted_invites()?;
+  }
   Ok(match ended {
     Some(ended) => Some(ended),
     None => db.cloud_sign_in_ended()?,

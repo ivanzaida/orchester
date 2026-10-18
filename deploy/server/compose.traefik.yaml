@@ -24,6 +24,9 @@ services:
       ORCHESTER_SERVER_ADMIN_URL: http://${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4:3100
       # The admin calls the API on the server's address on `backend` only; the port is never published.
       ORCHESTER_SERVER_ADMIN_API_LISTEN: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.3:8741
+      # Traefik's certificate, for the key proofs apps check before entering a code: `auto` reads it and its renewals at
+      # https://ORCHESTER_HOST, out through Traefik's network (the host must reach its own name); or set its SHA-256.
+      ORCHESTER_SERVER_PROXY_CERTIFICATE: ${ORCHESTER_SERVER_PROXY_CERTIFICATE:-auto}
     volumes:
       - server_data:/data
     # GET /api/v1/server on the private listener, with bash alone (the image has no HTTP client).

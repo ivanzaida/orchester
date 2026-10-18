@@ -180,6 +180,24 @@ fn files_binary_and_missing_files_are_explained() {
 }
 
 #[test]
+fn files_keeps_its_tree_read_as_the_first_file_is_selected() {
+  let mut files = Files::new();
+  files.open(None, Version::Checkout);
+  assert!(files.exists("files-no-file"));
+  files.window.press("files-tree:src");
+  assert!(files.exists("files-tree:src/ui"), "src is open");
+  files.window.press("files-tree:README.md");
+  let mut read_again = files.exists("files-tree-loading");
+  files.window.until("README.md", |w| {
+    read_again |= w.tree.get_element_by_id("files-tree-loading").is_some();
+    w.tree.get_element_by_id("files-code").is_some()
+  });
+  assert_eq!(files.window.text("files-title"), "README.md");
+  assert!(!read_again, "the tree read once is kept as a file is selected");
+  assert!(files.exists("files-tree:src/ui"), "the folders opened stay open");
+}
+
+#[test]
 fn files_go_to_file_finds_a_file_by_its_name() {
   let mut files = Files::new();
   files.open(None, Version::Checkout);

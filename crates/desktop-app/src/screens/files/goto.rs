@@ -22,13 +22,14 @@ use orchester_workspace::files::{FileList, NameMatches};
 
 use super::{Page, keys, version};
 use crate::{
+  navigation::{link::Open, press::OpenIn},
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, FilesText, IconSize},
   ui::{
     command_trigger::CommandTrigger,
     field::FieldInput,
     icon::{file_icon, icon},
     kbd::key_cap,
-    pressable::pressable,
+    pressable::opening,
   },
 };
 
@@ -123,13 +124,13 @@ fn search_panel(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Elem
     .map(|list| list.search(&state.query.get(), SHOWN))
     .unwrap_or_default();
   let current = state.at.get().min(found.paths.len().saturating_sub(1));
-  let open = |ctx: &mut Ctx, path: &Arc<str>| {
+  let open = |ctx: &mut Ctx, path: &Arc<str>| -> Open {
     let go = page.open_file(ctx, path);
     let open = state.open.clone();
-    move || {
+    Arc::new(move |at| {
       open.set(false);
-      go();
-    }
+      go(at);
+    })
   };
   let query = state.query.get();
   let rows: Vec<Element> = found
@@ -177,11 +178,11 @@ fn search_panel(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Elem
 }
 
 /// ↑ and ↓ move among `count` files, Enter opens the current one.
-fn move_keys<F: Fn() + Send + Sync + 'static>(
+fn move_keys(
   state: &GotoState,
   count: usize,
-  chosen: Option<F>,
-) -> impl Fn(KeyboardEvent) + Send + Sync + 'static + use<F> {
+  chosen: Option<Open>,
+) -> impl Fn(KeyboardEvent) + Send + Sync + 'static + use<> {
   let at = state.at.clone();
   move |event: KeyboardEvent| match event.key.as_str() {
     "ArrowDown" if count > 0 => {
@@ -194,7 +195,7 @@ fn move_keys<F: Fn() + Send + Sync + 'static>(
     }
     "Enter" => {
       if let Some(chosen) = &chosen {
-        chosen();
+        chosen(OpenIn::ActiveTab);
       }
       event.prevent_default();
     }
@@ -204,14 +205,14 @@ fn move_keys<F: Fn() + Send + Sync + 'static>(
 
 /// A file the search found: its icon, its name with the part that answers `query` in 600, and its folder; the
 /// current one with the *Enter* cap.
-fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: impl Fn() + Send + Sync + 'static) -> Element {
+fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: Open) -> Element {
   let (folder, name) = path.rsplit_once('/').unwrap_or(("", path));
   let glyph_color = if current {
     PaletteColor::TextPrimary
   } else {
     PaletteColor::TextMuted
   };
-  let row = pressable(choose)
+  let row = opening(choose)
     .id(format!("files-go-to:{path}"))
     .describe("path", path.to_owned())
     .describe("state", if current { "current" } else { "enabled" })

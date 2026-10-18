@@ -11,7 +11,6 @@ use orchester_workspace::skills::{data::SkillEntry, editor::publish_reason};
 
 use super::{
   super::{
-    state::Panel,
     words,
     work::{self, Change},
   },
@@ -37,7 +36,7 @@ impl Editor {
       "skill-crumb",
       CrumbSeparator::Chevron,
       vec![
-        Crumb::link(ctx.t("skills.title"), move || back.set(Panel::Library)),
+        Crumb::to(ctx.t("skills.title"), back.to(back.library())),
         Crumb::here(title).mono(),
       ],
     );

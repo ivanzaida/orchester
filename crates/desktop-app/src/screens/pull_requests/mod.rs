@@ -70,9 +70,9 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: PullRequestTab) -> Ele
   )
 }
 
-/// Pull request `number`'s own page.
-pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64) -> Element {
-  detail::screen(ctx, project, number.get())
+/// Pull request `number`'s own page, showing the diff of `file` (the first when `None`).
+pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, file: Option<&str>) -> Element {
+  detail::screen(ctx, project, number, file)
 }
 
 #[derive(Clone, PartialEq)]
@@ -254,9 +254,7 @@ impl PullRequestsScreen {
     NoticeActions {
       check_again: run(&actions.sync),
       use_account: run(&actions.account),
-      open_connections: Arc::new(move || {
-        navigation.go(Route::Project(id, ProjectPage::Connections(ConnectionsView::default())));
-      }),
+      open_connections: navigation.to(Route::Project(id, ProjectPage::Connections(ConnectionsView::default()))),
     }
   }
 }

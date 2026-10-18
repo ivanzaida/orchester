@@ -80,6 +80,11 @@
         "local": "Your projects and tasks stay on this computer, and runs that are going keep going. Team servers keep this computer's own sign-in, so nothing needs joining again.",
         "confirm": "Sign out and lock",
         "stay": "Stay signed in"
+      },
+      "twoFactor": {
+        "on": "Two-factor: on",
+        "off": "Two-factor: off",
+        "turnOn": "Turn on…"
       }
     },
     "invites": {
@@ -138,9 +143,23 @@
         "unanswered": "{{server}} hasn't approved this computer yet, and Orchester stopped asking on its own so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Try again once it's approved.",
         "tooMany": "Orchester asked {{server}} for this invite {{count}} times and stops here, so that it doesn't use up this computer's sign-ins. Nothing was uploaded. Ask an admin of {{server}} for a new invite.",
         "tryAgain": "Try again",
-        "later": "Later"
+        "later": "Later",
+        "signedInWithCode": "You signed in with your code. Try again to finish joining {{server}}; nothing was uploaded."
       },
-      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected."
+      "ended": "This invite has ended: it expired or was revoked. Ask for a new one; nothing was connected.",
+      "twoFactor": {
+        "off": "Accepting needs two-factor authentication on your account.",
+        "session": "Accepting needs a sign-in with your code. This computer signed in before you turned on two-factor.",
+        "turnOn": "Turn on two-factor authentication",
+        "turnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
+        "signInAgain": "Sign in again",
+        "notNow": "Not now",
+        "refusedTitle": "Sign in again to accept",
+        "refusedBody": "This computer signed in before you turned on two-factor. Accepting needs a sign-in with your code.",
+        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here.",
+        "openFailed": "{{page}} couldn't be opened: Orchester opens only https pages in the browser.",
+        "keptTurnOnNote": "This opens your account's security page in the browser. After you turn it on, sign in again here with your code, then try again."
+      }
     },
     "signIn": {
       "wrong": "Wrong email or password."
@@ -195,13 +214,12 @@
         "member": "Member",
         "notHere": "not on this computer",
         "open": "Open",
-        "explanation": "Each project is linked to one checkout on this computer. A project of yours without a checkout here: clone it yourself, add the folder in All projects, then link it in its Project settings › Sharing.",
+        "explanation": "Each project is linked to one checkout on this computer. For a project of yours without a checkout here, Link a checkout… picks one, or shows the git clone to run first.",
         "signedOut": "Join again to read your projects there; the ones linked here are listed below.",
         "offline": "{{server}} can't be reached, so your projects there can't be read now. The ones linked on this computer are listed below.",
         "offlineNoneHere": "{{server}} can't be reached, so your projects there can't be read now. None of them is linked on this computer.",
         "signedOutNoneHere": "Join again to read your projects there. None of them is linked on this computer.",
-        "link": "Link a checkout…",
-        "linkLater": "Linking from here isn't in this version of the app yet: clone the project yourself, add the folder in All projects, then link it in its Project settings › Sharing."
+        "link": "Link a checkout…"
       },
       "computers": {
         "title": "Your other computers",
@@ -292,7 +310,19 @@
         "owner": "As an owner",
         "member": "As a member",
         "server": "To the server"
+      },
+      "twoFactor": {
+        "turnOnNote": "Turn on two-factor authentication opens your account's security page in the browser. After you turn it on, sign in again here with your code, then accept.",
+        "signInNote": "Orchester locks until you're signed in again; runs keep going. The invite waits here and in Settings › Orchester."
       }
+    },
+    "recovery": {
+      "left": {
+        "one": "1 recovery code left",
+        "other": "{{count}} recovery codes left"
+      },
+      "body": "You signed in with a recovery code. Make new ones on your account's security page before they run out: they're how you sign in if you lose your phone.",
+      "open": "Open security page"
     }
   }
 }

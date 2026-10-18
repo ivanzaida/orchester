@@ -13,11 +13,17 @@ mod reset;
 mod rows;
 mod sign_in;
 mod sign_up;
+mod two_factor;
 
 use std::{sync::Arc, time::Duration};
 
 use orchester_api::identity::PublicKey;
 pub(crate) use rows::Authenticated;
+pub(crate) use sign_in::SignInAnswer;
+use two_factor::{RecoveryKey, require_session_when_on};
+pub(crate) use two_factor::{
+  require_session as require_two_factor_session, session as two_factor_session, sweep as sweep_two_factor,
+};
 
 use crate::{
   clock::Clock,
@@ -49,6 +55,7 @@ pub(crate) struct State {
   /// The public half of the cloud's root key, which team servers pin.
   pub root: PublicKey,
   pub people: People,
+  pub recovery: RecoveryKey,
 }
 
 impl Cloud {
@@ -59,6 +66,7 @@ impl Cloud {
     config.validate()?;
     let sealing = KeySealing::new(&config.key_encryption_key)?;
     let people = People::new(&config.key_encryption_key)?;
+    let recovery = RecoveryKey::new(&config.key_encryption_key)?;
     let db = Database::open(&config.database_url, clock.now_ms()).await?;
     let root = open_root(&db, &sealing, clock.now_ms()).await?;
     // Both are public: the fingerprint team servers show, and the key their admins pin again after a new root.
@@ -76,6 +84,7 @@ impl Cloud {
         sealing,
         root,
         people,
+        recovery,
       }),
     };
     cloud.keep_keys().await?;

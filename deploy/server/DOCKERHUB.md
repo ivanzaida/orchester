@@ -37,6 +37,9 @@ network and forwards every path outside `/api` to the admin. The admin and the s
 8741, which believes the admin's forwarded headers) are never published. The network has the subnet
 `172.29.0.0/24`; if another network on the host has it, set `ORCHESTER_SUBNET_PREFIX`.
 
+With `ORCHESTER_SERVER_PROXY_CERTIFICATE=auto` (the default) the server reads Caddy's certificate, for the key proofs
+apps check before entering a code, and follows its renewals. Before Caddy has it, the log may say so once.
+
 ### compose.yaml
 
 <!-- inline: compose.yaml -->
@@ -81,7 +84,8 @@ HTTP to HTTPS. Add `-f compose.traefik.yaml` to every `docker compose` command.
 
 Only the server joins Traefik's network. The stack's own network is internal, so no other container reaches the
 admin or the private API listener; the admin then has no route out, and invites by email reach Orchester Cloud
-through the inviter's browser.
+through the inviter's browser. For `auto` the server must reach `https://<ORCHESTER_HOST>` (hairpin NAT); if it
+cannot, add `extra_hosts: ["<ORCHESTER_HOST>:<TRAEFIK_ADDRESS>"]` to `server` (Traefik on 443) or set the SHA-256.
 
 <!-- inline: compose.traefik.yaml -->
 

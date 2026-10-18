@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 
 import styles from "./account.module.css";
 
-export const SECTIONS = ["get-started", "invites", "servers", "devices", "account"] as const;
+export const SECTIONS = ["get-started", "invites", "servers", "devices", "security", "account"] as const;
 export type SectionId = (typeof SECTIONS)[number];
 
 function subscribe(changed: () => void): () => void {
@@ -35,6 +35,7 @@ export function AccountNav({ invites }: { invites: number }) {
     invites: invites > 0 ? t("account.nav.invitesCount", { count: invites }) : t("account.nav.invites"),
     servers: t("account.nav.servers"),
     devices: t("account.nav.devices"),
+    security: t("account.nav.security"),
     account: t("account.nav.account"),
   };
   return (
