@@ -198,6 +198,7 @@ impl McpEditor {
     let (listed, stored) = (props.listed.clone(), props.stored.clone());
     let question = WidenProps {
       card: false,
+      affirming: false,
       automation: crate::mcp::input_gate::Guarded::PermissionWidening,
       id: "connection-confirm-save".into(),
       title: ctx.t("connections.mcp.dialog.widenTitle"),

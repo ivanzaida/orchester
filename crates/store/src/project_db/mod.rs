@@ -30,6 +30,7 @@ mod organization;
 mod organized_drafts;
 mod plan_limits;
 mod plans;
+mod project_rules;
 mod pull_request_attempts;
 mod pull_request_diffs;
 mod pull_requests;

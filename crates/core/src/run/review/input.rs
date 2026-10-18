@@ -63,6 +63,8 @@ pub struct ReviewInput {
   messages: Vec<String>,
   /// How many parts of the command Orchester could not read to the end.
   unread: usize,
+  /// The names of the project's variables that change what a build runs, never their values.
+  build_variables: Vec<String>,
 }
 
 impl ReviewInput {
@@ -116,6 +118,7 @@ impl ReviewInput {
       task,
       messages,
       unread: 0,
+      build_variables: Vec::new(),
     })
   }
 
@@ -124,6 +127,19 @@ impl ReviewInput {
   pub const fn with_unread(mut self, parts: usize) -> Self {
     self.unread = parts;
     self
+  }
+
+  /// The input, telling the reviewer the `names` of the project's variables that change what a build runs
+  /// ([`crate::permission::category::build_variables`]); never their values.
+  #[must_use]
+  pub fn with_build_variables(mut self, names: Vec<String>) -> Self {
+    self.build_variables = names;
+    self
+  }
+
+  /// The names of the project's variables that change what a build runs.
+  pub fn build_variables(&self) -> &[String] {
+    &self.build_variables
   }
 
   /// How many parts of the command Orchester could not read to the end.

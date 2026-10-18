@@ -17,12 +17,12 @@ mod setup;
 use std::time::Duration;
 
 use orchester_core::{
-  permission::AgentPermissions,
+  permission::{AgentPermissions, category::build_variables},
   run::{
     ApprovalSubject, DecidedBy, PendingToolApproval,
     review::{Review, ReviewFailure, ReviewHold, ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask},
   },
-  store::{ActivityStore, RunStore, TaskStore},
+  store::{ActivityStore, RunStore, SettingsStore, TaskStore},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -33,7 +33,7 @@ pub(in crate::execution::step) use self::setup::ReviewerKeys;
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},
-  setup::{PushPlace, ReviewJob, hold_now},
+  setup::{PushPlace, ReviewJob, hold_now, ignored_build_output},
 };
 use super::{super::answer::Settled, Watch, Worker};
 
@@ -99,7 +99,8 @@ impl Worker {
       origin: watch.db.run_origin(approval.run)?,
     };
     // A hard rule asks the person at once; anything else waits, without asking, for the reviewer.
-    if let Some(hold) = hold_now((&subject, permissions.as_ref(), escalation), &push, &input) {
+    let ignored = ignored_build_output(self.scope.worktree(), &subject, permissions.as_ref());
+    if let Some(hold) = hold_now((&subject, permissions.as_ref(), escalation), (&push, &ignored), &input) {
       watch
         .db
         .record_review(approval.run, &approval.id, &Review::Held { hold })?;
@@ -113,6 +114,7 @@ impl Worker {
       subject,
       permissions,
       push,
+      ignored,
       escalation,
       input,
       runtime: Handle::current(),
@@ -230,7 +232,8 @@ impl Worker {
       note: approval.command.then(|| approval.scope.clone()).flatten(),
       working_folder: approval.target.clone(),
     };
-    Ok(ReviewInput::new(request, step, task, &messages))
+    let variables = build_variables(&watch.db.project_environment()?);
+    Ok(ReviewInput::new(request, step, task, &messages).map(|input| input.with_build_variables(variables)))
   }
 
   /// The name of the step that asks, from the run's pipeline; the agent's when it is not found.

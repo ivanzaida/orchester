@@ -10,6 +10,7 @@ mod approval;
 mod checks;
 mod claude_approval;
 mod cli_version;
+mod command_scope;
 mod end;
 mod mcp;
 mod memory;
@@ -27,19 +28,17 @@ mod stderr;
 mod tool_files;
 pub(super) mod worker;
 
-use std::path::{Path, PathBuf};
-
 use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
-  permission::{LaunchPermissions, category::CommandScope},
+  permission::LaunchPermissions,
   resource::ModelId,
   revision::Revision,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, ConversationStore, RunStore},
+  store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -49,6 +48,7 @@ use tokio::sync::mpsc;
 pub(super) use self::qa_app::QaApps;
 pub use self::qa_app::QaSlots;
 use self::{
+  command_scope::command_scope,
   end::Taken,
   start::Driven,
   worker::{Stop, Worker},
@@ -389,7 +389,12 @@ impl RunTask {
     // A CLI's agent waits in its turn for an answer; a native agent's question ends its step instead.
     let asks_in_turn = !matches!(driver, worker::Driver::Native(_));
     let worker = Worker {
-      scope: command_scope(&self.root, workspace.path(), &permissions),
+      scope: command_scope(
+        &self.root,
+        workspace.path(),
+        &permissions,
+        &self.db.project_environment()?,
+      ),
       profile: self.profile_of(execution),
       checks: self.checks_of(execution),
       root: self.root.clone(),
@@ -569,22 +574,4 @@ impl RunTask {
     self.board.release(execution);
     self.fail(execution, failure)
   }
-}
-
-/// Where the commands of an agent working in `worktree` with `launch` permissions run and may write:
-/// the worktree and the extra writable folders it was given, as written (relative to the repository
-/// `root`), for the host's user.
-fn command_scope(root: &Path, worktree: &Path, launch: &LaunchPermissions) -> CommandScope {
-  let writable: Vec<PathBuf> = launch
-    .permissions()
-    .granted_folders()
-    .map(|folders| {
-      folders
-        .entries()
-        .iter()
-        .map(|folder| folder.lexical_path(root))
-        .collect()
-    })
-    .unwrap_or_default();
-  CommandScope::on_host(worktree, &writable)
 }

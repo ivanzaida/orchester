@@ -18,6 +18,7 @@
 
 mod awk_program;
 mod broad;
+mod build_output;
 mod files;
 mod gh;
 mod git;
@@ -50,6 +51,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub use self::{
+  build_output::{BuildOutput, build_variables},
   part::{CommandPart, SimilarCommand},
   paths::CommandScope,
   reason::CommandReason,
@@ -301,6 +303,9 @@ fn classify_part(
   }
   for word in &judged.inside {
     placing.inside(&mut part, word);
+  }
+  if let Some(words) = &judged.build_words {
+    build_output::place(&mut part, words, placing);
   }
   let mut part = redirected(part, raw, placing);
   if program == "cd" {

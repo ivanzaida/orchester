@@ -398,6 +398,7 @@ fn turn_on(ctx: &mut Ctx, server: &McpServer, actions: &Actions) -> Element {
   );
   let props = WidenProps {
     card: false,
+    affirming: false,
     automation: crate::mcp::input_gate::Guarded::PermissionWidening,
     id: "connection-confirm-turn-on".into(),
     title: ctx.t_args("connections.mcp.confirmOn.title", [("name", server.name().as_str())]),

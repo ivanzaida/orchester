@@ -146,7 +146,7 @@ fn rules(permissions: Option<&AgentPermissions>) -> HoldRules<'_> {
       head: Some("orc/kon-1"),
       origin_kept: true,
     },
-    escalation: false,
+    ..HoldRules::default()
   }
 }
 

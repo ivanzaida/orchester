@@ -29,6 +29,7 @@ mod organization;
 mod permitted_decisions;
 mod plan_decided_by;
 mod plan_limits;
+mod project_approval_rules;
 mod pull_request_syncs;
 mod questions;
 mod queue_holds;
@@ -564,6 +565,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   run_rebases::MIGRATION,
   creation_snapshots::MIGRATION,
   api_providers::MIGRATION,
+  project_approval_rules::MIGRATION,
 ];
 
 /// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema
