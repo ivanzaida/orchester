@@ -99,3 +99,50 @@ fn project_settings_github_check_reads_origin_and_says_when_no_github_remote_exi
   assert_eq!(page.value("settings-github-repository"), "Not linked");
   assert!(!page.exists("settings-use-account"));
 }
+
+#[test]
+fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
+  use orchester_core::{
+    run::{ApprovalSubject, ProjectScope, ToolReach},
+    time::Timestamp,
+  };
+  let mut page = Settings::new(false);
+  assert_eq!(
+    page.text("settings-auto-rules"),
+    "None. A start_qa_app request offers Approve for every run of this project."
+  );
+  let rule = {
+    let mut db = page.db();
+    let run = super::run_fixture::auto_run(&mut db);
+    let scope = ProjectScope::of(&ApprovalSubject::McpTool {
+      server: "Orchester".to_owned(),
+      tool: "start_qa_app".to_owned(),
+      reach: ToolReach::Script {
+        blob: "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345".to_owned(),
+      },
+    })
+    .expect("a project rule");
+    db.add_project_approval_rule(&scope, (run, "invocation:qa"), Timestamp::now())
+      .expect("rule")
+  };
+  // General reads the settings again when it opens.
+  page.tab("environment", "settings-environment-variables");
+  page.tab("general", "settings-auto");
+  let id = format!("settings-auto-rule-{}", rule.id.get());
+  page.until("the rule listed", |p| p.exists(&id));
+  assert_eq!(
+    page.text(&format!("{id}-words")),
+    "Orchester start_qa_app while tools/qa-app.ps1 is 3f2a1b9 · answered 0 times"
+  );
+  page.click(&format!("{id}-revoke"));
+  page.until("the rule revoked", |p| {
+    p.db()
+      .project_approval_rules()
+      .expect("rules")
+      .iter()
+      .all(|rule| !rule.is_active())
+  });
+  page.until("the list read again", |p| !p.exists(&id));
+  page.saved();
+  assert!(page.exists("settings-auto-rules-none"));
+}

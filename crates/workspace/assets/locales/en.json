@@ -454,17 +454,19 @@
       "failure": {
         "wrongBranch": "Your checkout is on {{current}}, not {{branch}}. Switch it to {{branch}}, then merge again. Nothing was changed.",
         "detached": "Your checkout has a detached HEAD. Switch it to {{branch}}, then merge again. Nothing was changed.",
-        "uncommitted": "Your checkout has uncommitted changes the merge would overwrite: {{files}}. Commit, stash or move them yourself, then merge again. Nothing was changed.",
+        "uncommitted": "Your checkout has uncommitted changes the merge would overwrite: {{files}}. Commit or set them aside in Local integration, or yourself, then merge again. Nothing was changed.",
         "inProgress": "A merge, cherry-pick or revert is in progress in your checkout. Finish or abort it, then merge again. Nothing was changed.",
         "baseMoved": "{{branch}} got a new commit while the run was being merged. The merge was dropped and nothing was changed; merge again.",
         "leftChanged": "Git stopped part way through the merge, and Orchester couldn’t put back {{files}}: they hold the run’s version now. Restore them yourself with git restore. Everything else is as it was. {{detail}}",
-        "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Merge the run’s branch yourself to resolve the conflicts.",
+        "conflict": "The run’s changes conflict with your branch in {{files}}. The merge was undone, so your checkout is as it was. Resolve the conflicts in Local integration, or merge the run’s branch yourself.",
         "branchMissing": "The run’s branch {{branch}} no longer exists, so there is nothing to merge.",
         "branchMoved": "The run’s branch {{branch}} is no longer at {{revision}}, the commit you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
         "refused": "Git didn’t merge, and the merge was undone: {{detail}}",
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
         "alreadyMerged": "This run was merged already.",
+        "heldLocally": "This run’s local integration still holds work in your checkout. Finish it, cancel it or remove its kept originals in Local integration, then merge again. Nothing was merged.",
+        "heldByOther": "The local integration of {{task}} holds work in your checkout. Finish it, cancel it or remove its kept originals in its Local integration, then merge again. Nothing was merged.",
         "anotherMerge": "Another merge is under way in this project. Merge this run once it is done.",
         "notRecorded": "Git merged the run into {{branch}}, but Orchester couldn’t record the merge. Merge again to record it.",
         "git": "Git failed: {{detail}}",
@@ -789,6 +791,20 @@
         "bearerGone": "The bearer token's secret is archived or gone. Choose another one, or none.",
         "nameIsId": "A name cannot look like a server's id. Use small letters, digits, - and _, starting with a letter."
       }
+    },
+    "provider": {
+      "noModels": "Enter at least one model the provider serves.",
+      "modelInvalid": "“{{model}}” is not a model id: use no spaces, at most 200 characters.",
+      "baseUrl": {
+        "blank": "Enter the API’s base URL.",
+        "scheme": "The base URL starts with https://, or with http:// for localhost, 127.0.0.1 or [::1].",
+        "host": "The base URL needs a valid host, and a port that is a number.",
+        "credentials": "Keep user names and passwords out of the URL; the key belongs in a secret.",
+        "query": "Leave the query (?…) and the fragment (#…) out of the base URL.",
+        "whitespace": "Remove the spaces and line breaks.",
+        "backslash": "Use / instead of \\ in the base URL.",
+        "tooLong": "The base URL is longer than 2048 characters."
+      }
     }
   },
   "settings": {
@@ -934,7 +950,10 @@
     },
     "olderSchema": "The data was written by an earlier version of Orchester and was not updated yet.",
     "draftChanged": "The draft changed since it was read. Read it again before saving or publishing.",
-    "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first."
+    "alreadyListed": "{{name}} in the list already uses this folder. Remove it from All projects first.",
+    "apiProviderWithAccount": "A connection that runs on an API provider uses its key, not an account of its CLI. Switch it back to the CLI’s own sign-in first.",
+    "effortOneWord": "A reasoning effort is one word, such as high.",
+    "effortClaudeLevel": "Claude Code takes the effort levels low, medium, high, xhigh and max only."
   },
   "number": {
     "bytes": "{{count}} bytes",
@@ -1196,7 +1215,10 @@
       "mcpVariable": "A variable is empty or holds a line break: {{value}}",
       "mcpExemptTool": "A tool name is empty or holds a line break: {{value}}",
       "mcpFieldNotApplicable": "{{field}} is not a field of this server's transport: a program has args, working_directory and environment, a remote server bearer_secret.",
-      "accountChoice": "Choosing the account a connection runs on: it decides whose sign-in, and which organisation's provider, gets the project's work."
+      "accountChoice": "Choosing the account a connection runs on: it decides whose sign-in, and which organisation's provider, gets the project's work.",
+      "secretNotFound": "This project has no secret {{secret}} that is not archived.",
+      "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
+      "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets)."
     },
     "githubConnectionName": "GitHub · {{host}}",
     "projectTools": {
@@ -1245,7 +1267,8 @@
       "mcpEndpoint": "Agents would reach the server at {{endpoint}}.",
       "mcpBearer": "The server would be sent another secret as its bearer token.",
       "mcpExemptTools": "{{tools}} would run without asking, where a person is asked now.",
-      "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it."
+      "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it.",
+      "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}."
     }
   },
   "statusBar": {
@@ -1593,7 +1616,8 @@
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
       "cliOnly": "The Orchestrator runs on Claude Code connections.",
-      "codexHeldBack": "Not for the Orchestrator yet: Codex's sandbox can't be shown to keep the agent's reads in the project folder, away from your sign-in and other projects' tokens."
+      "codexHeldBack": "Not for the Orchestrator yet: Codex's sandbox can't be shown to keep the agent's reads in the project folder, away from your sign-in and other projects' tokens.",
+      "apiProvider": "The Orchestrator runs on a CLI’s own sign-in. This connection runs on an API provider; choose another one."
     },
     "send": {
       "blank": "Write a message first.",

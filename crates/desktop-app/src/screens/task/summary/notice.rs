@@ -12,6 +12,7 @@ use orchester_core::{
   task::TaskStatus,
   tokens::compact_tokens,
 };
+use orchester_store::CachedRunStatus;
 use orchester_workspace::{
   display,
   runner::state::RunnerState,
@@ -27,6 +28,7 @@ use crate::ui::{
   icon::Icon,
   message::message_text,
   notice::{Notice, NoticeTone},
+  status::Status,
 };
 
 /// What the notice says, before its action.
@@ -83,8 +85,11 @@ pub fn said(ctx: &Ctx, detail: &TaskDetail, runner: Option<&RunnerState>, approv
   }
 }
 
-/// A draft, or a queued task whose run did not start.
+/// A shared task whose run is on its holder's computer, a draft, or a queued task whose run did not start.
 fn without_run(ctx: &Ctx, detail: &TaskDetail) -> Said {
+  if let Some(reported) = detail.shared.as_ref().and_then(|info| info.run.as_ref()) {
+    return elsewhere(ctx, reported);
+  }
   if detail.task.status() == TaskStatus::Draft {
     // Guidance only while something is missing; a draft with every detail is ready to run.
     let text = if detail.task.details().missing().is_empty() {
@@ -96,6 +101,29 @@ fn without_run(ctx: &Ctx, detail: &TaskDetail) -> Said {
   }
   let text = (ctx.t("summary.notice.queuedTitle"), ctx.t("summary.notice.queuedBody"));
   Said::new(NoticeTone::Info, Icon::Clock, text)
+}
+
+/// The run a shared task's holder reported: where it stands and on whose computer, which keeps its steps.
+fn elsewhere(ctx: &Ctx, reported: &CachedRunStatus) -> Said {
+  let status = Status::of_run(reported.phase);
+  let word = ctx.t(status.key());
+  let words = match &reported.step {
+    Some(step) => ctx.t_args("ui.status.withDetail", [("status", &*word), ("detail", step.as_str())]),
+    None => word,
+  };
+  let title = ctx.t_args(
+    "summary.notice.elsewhereTitle",
+    [
+      ("run", reported.number.get().to_string()),
+      ("status", words.to_string()),
+      ("holder", reported.holder.name.clone()),
+    ],
+  );
+  Said::new(
+    NoticeTone::Info,
+    status.icon(),
+    (title, ctx.t("summary.notice.elsewhereBody")),
+  )
 }
 
 /// The words of a step: its name and its agent, "the agent" for a step without one.

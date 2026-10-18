@@ -189,6 +189,7 @@ impl SecretForm {
       WidenProps {
         id: "secret-confirm-replacement".into(),
         card: false,
+        affirming: false,
         automation: crate::mcp::input_gate::Guarded::WideningQuestion,
         title: ctx.t("secrets.rotation.question"),
         reasons: Arc::from([ctx.t("secrets.rotation.reason")]),

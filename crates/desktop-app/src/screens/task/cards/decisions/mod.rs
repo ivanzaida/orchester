@@ -159,7 +159,10 @@ impl Decisions {
     if self.send.state().get_untracked().is_pending() {
       return;
     }
-    let wider = matches!(given, Given::ApproveSimilar | Given::ApproveEverything);
+    let wider = matches!(
+      given,
+      Given::ApproveSimilar | Given::ApproveProject | Given::ApproveEverything
+    );
     let kind = match given {
       Given::Answers => DecisionKind::Question,
       Given::ApprovePlan => DecisionKind::Plan,

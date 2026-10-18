@@ -71,6 +71,8 @@ mod fake_codex_work;
 mod fake_mcp;
 #[path = "fake_permission_prompt.rs"]
 mod fake_permission_prompt;
+#[path = "fake_provider.rs"]
+mod fake_provider;
 
 /// Set for the helper process, which only waits.
 const HELPER: &str = "ORCHESTER_FAKE_CODEX_HELPER";
@@ -121,6 +123,8 @@ fn report_start(args: &[String]) {
   if let Some(folder) = std::env::var_os("CODEX_HOME") {
     eprintln!("account folder: {}", folder.to_string_lossy());
   }
+  let table = args.iter().find(|arg| arg.starts_with("model_providers."));
+  fake_provider::report(table.cloned(), "ORCHESTER_PROVIDER_API_KEY");
   eprintln!(
     "path: {}",
     std::env::var_os("PATH").unwrap_or_default().to_string_lossy()
@@ -209,6 +213,10 @@ impl Session {
     match message["method"].as_str() {
       Some("initialize") => emit(&json!({"id": 1, "result": {}})),
       Some("initialized") => {}
+      // On a model provider of its own Codex needs no sign-in, as with an API key and no login.
+      Some("account/read") if fake_provider::codex_provider(&self.args) != "openai" => {
+        emit(&json!({"id": 2, "result": {"account": null, "requiresOpenaiAuth": false}}));
+      }
       Some("account/read") => emit(&json!({"id": 2, "result": {"account": {"type": "chatgpt"}}})),
       Some(method @ ("thread/start" | "thread/resume")) => self.thread(method, params),
       Some("config/read") => {
@@ -292,6 +300,7 @@ impl Session {
     emit(&json!({"id": 3, "result": {
       "thread": {"id": self.thread, "environments": [{"environmentId": "local", "cwd": cwd, "runtimeWorkspaceRoots": roots}]},
       "approvalPolicy": params["approvalPolicy"], "approvalsReviewer": "user", "model": params["model"],
+      "modelProvider": fake_provider::reported(&self.args, params["modelProvider"].as_str()),
       "sandbox": sandbox
     }}));
     self.roots = configured;
@@ -324,9 +333,12 @@ impl Session {
   /// The configuration's layers: the user's (with `user-global`), the arguments' and, for a worktree
   /// with a `.codex` folder, the project's, disabled while the worktree is untrusted.
   fn layers(&self, cwd: &std::path::Path) -> Vec<Value> {
+    let mut user = json!({"mcp_servers": {"user-global": {"command": "user-tool"}}});
+    if fake_provider::clashes(&self.args) {
+      user["model_providers"] = json!({"orchester": {"http_headers": {"X-Mine": "1"}}});
+    }
     let mut layers = vec![
-      json!({"name": {"type": "user", "file": "fake-codex-home/config.toml"},
-        "config": {"mcp_servers": {"user-global": {"command": "user-tool"}}}}),
+      json!({"name": {"type": "user", "file": "fake-codex-home/config.toml"}, "config": user}),
       json!({"name": {"type": "sessionFlags"}, "config": {}}),
     ];
     let folder = cwd.join(".codex");

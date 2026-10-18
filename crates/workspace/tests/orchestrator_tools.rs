@@ -76,6 +76,7 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
     "update_project_limits",
     "add_cli_connection",
     "set_connection_account",
+    "set_api_provider",
     "add_mcp_server",
     "update_mcp_server",
     "remove_mcp_server",

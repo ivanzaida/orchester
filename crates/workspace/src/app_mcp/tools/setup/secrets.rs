@@ -81,7 +81,7 @@ fn secret_json(secret: &Secret, (secrets, agents): (&ProjectSecrets, &ProjectAge
   let connections: Vec<Value> = agents
     .connections
     .iter()
-    .filter(|connection| connection.api().is_some_and(|api| api.key() == secret.id()))
+    .filter(|connection| connection.key() == Some(secret.id()))
     .map(|connection| {
       let id = connection.id();
       used(

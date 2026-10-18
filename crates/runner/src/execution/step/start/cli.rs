@@ -14,8 +14,8 @@ use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, ConnectionAccount,
     invocation::{
-      ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError,
-      Platform, on_account,
+      CODEX_PROVIDER_ID, ClaudeInvocation, ClaudeMcp, ClaudeSession, CodexAgentFiles, CodexInvocation, CodexMcp,
+      InvocationError, OnProvider, Platform, on_account,
     },
     stream::RunnerProblem,
   },
@@ -52,6 +52,8 @@ pub(super) struct Cli<'a> {
   pub(super) executable: &'a Path,
   /// Whose sign-in it runs on: the account's folder variable is set over the environment's and the project's.
   pub(super) account: &'a ConnectionAccount,
+  /// The API provider it runs on instead, with its key: its variables and overrides are set last.
+  pub(super) provider: Option<&'a OnProvider<'a>>,
   pub(super) model: &'a ModelId,
   pub(super) effort: Option<&'a str>,
   pub(super) enforced: &'a EnforcedPermissions,
@@ -177,7 +179,10 @@ impl RunTask {
     let command = invocation
       .command(std::env::vars_os(), cli.environment)
       .and_then(|command| on_account(command, cli.account, AgentProvider::CodexCli))
+      .map(|command| on_provider(command, cli.provider, AgentProvider::CodexCli))
       .map_err(|error| problem(error.to_string()))?;
+    let mut secrets = mcp.secrets().to_vec();
+    secrets.extend(cli.provider.map(|on| on.key_variable(AgentProvider::CodexCli)));
     let schema = (cli.resume.is_none()).then(|| {
       serde_json::from_str(orchester_core::run::STEP_RESULT_SCHEMA)
         .expect("the static step result schema is valid JSON")
@@ -199,7 +204,8 @@ impl RunTask {
         expected_servers,
         exemptions: mcp.exemptions().clone(),
         output_schema: schema,
-        secrets: mcp.secrets().to_vec(),
+        secrets,
+        model_provider: cli.provider.map(|_| CODEX_PROVIDER_ID.to_owned()),
       },
     ))
   }
@@ -232,7 +238,16 @@ impl RunTask {
     }
     .command(prompt, std::env::vars_os(), cli.environment)
     .and_then(|command| on_account(command, cli.account, AgentProvider::ClaudeCodeCli))
+    .map(|command| on_provider(command, cli.provider, AgentProvider::ClaudeCodeCli))
     .map_err(|error: InvocationError| problem(error.to_string()))?;
     Ok((command, servers.map(|servers| servers.file)))
+  }
+}
+
+/// `command`, the CLI's of `cli`, on `provider` if it runs on one.
+fn on_provider(command: Command, provider: Option<&OnProvider<'_>>, cli: AgentProvider) -> Command {
+  match provider {
+    Some(on) => on.apply(command, cli),
+    None => command,
   }
 }

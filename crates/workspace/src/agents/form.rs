@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::{
-    AgentConnection, AgentProvider, ModelSupport, REASONING_EFFORT, invocation::Platform, mcp::McpServerSelection,
+    AgentConnection, AgentProvider, ModelSupport, ProviderEffortError, REASONING_EFFORT, invocation::Platform,
+    mcp::McpServerSelection, provider_effort,
   },
   name::{Name, NameError},
   permission::AgentPermissions,
@@ -101,6 +102,8 @@ pub struct ProfileErrors {
   pub instructions: Option<Message>,
   pub connection: Option<Message>,
   pub model: Option<Message>,
+  /// A reasoning effort typed for a connection on an API provider that its CLI does not take.
+  pub effort: Option<Message>,
 }
 
 impl ProfileForm<'_> {
@@ -109,9 +112,13 @@ impl ProfileForm<'_> {
     let instructions = PromptText::new(self.instructions).map_err(|error| prompt_error(&error));
     let connection = self.connection.ok_or(Message::new("errors.connectionRequired"));
     let model = self.model_id();
-    match (role, instructions, connection, model) {
-      (Ok(role), Ok(instructions), Ok(connection), Ok(model)) => {
-        let settings = self.settings(connection, &model);
+    let effort = self.provider_effort();
+    match (role, instructions, connection, model, effort) {
+      (Ok(role), Ok(instructions), Ok(connection), Ok(model), Ok(effort)) => {
+        let settings = match effort {
+          Some(effort) => effort_settings(Some(&effort)),
+          None => self.settings(connection, &model),
+        };
         Ok(
           AgentProfile::new(
             role,
@@ -125,11 +132,12 @@ impl ProfileForm<'_> {
           .with_mcp_servers(self.mcp_servers.clone()),
         )
       }
-      (role, instructions, connection, model) => Err(Box::new(ProfileErrors {
+      (role, instructions, connection, model, effort) => Err(Box::new(ProfileErrors {
         role: role.err(),
         instructions: instructions.err(),
         connection: connection.err(),
         model: model.err(),
+        effort: effort.err(),
       })),
     }
   }
@@ -146,16 +154,43 @@ impl ProfileForm<'_> {
   /// The effort, if the model offers the chosen one. Settings the model does not offer are
   /// dropped rather than saved for the CLI to reject later.
   fn settings(&self, connection: &AgentConnection, model: &ModelId) -> ProviderSettings {
+    if connection.api_provider().is_some() {
+      return effort_settings(None);
+    }
     let effort = self.effort.filter(|effort| {
       effort_options(connection, model)
         .iter()
         .any(|offered| offered == effort)
     });
-    let settings = effort
-      .map(|effort| BTreeMap::from([(REASONING_EFFORT.to_owned(), effort.to_owned())]))
-      .unwrap_or_default();
-    ProviderSettings::new(settings).expect("the reasoning effort setting name is valid")
+    effort_settings(effort)
   }
+
+  /// The effort typed for a connection on an API provider, whose models Orchester does not know, as its CLI takes it
+  /// (`provider_effort`); `Ok(None)` for another connection or none typed (the provider's default).
+  fn provider_effort(&self) -> Result<Option<String>, Message> {
+    let Some(connection) = self.connection.filter(|connection| connection.api_provider().is_some()) else {
+      return Ok(None);
+    };
+    let Some(effort) = self.effort.map(str::trim).filter(|effort| !effort.is_empty()) else {
+      return Ok(None);
+    };
+    provider_effort(connection.provider(), effort)
+      .map(Some)
+      .map_err(|error| {
+        Message::new(match error {
+          ProviderEffortError::NotOneWord => "errors.effortOneWord",
+          ProviderEffortError::NotClaudeLevel => "errors.effortClaudeLevel",
+        })
+      })
+  }
+}
+
+/// The provider settings holding `effort`, if any.
+fn effort_settings(effort: Option<&str>) -> ProviderSettings {
+  let settings = effort
+    .map(|effort| BTreeMap::from([(REASONING_EFFORT.to_owned(), effort.to_owned())]))
+    .unwrap_or_default();
+  ProviderSettings::new(settings).expect("the reasoning effort setting name is valid")
 }
 
 /// The effort a stored profile runs with, if any.

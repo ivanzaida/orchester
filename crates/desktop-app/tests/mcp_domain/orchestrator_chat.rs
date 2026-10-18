@@ -2,7 +2,8 @@
 //! message shows what its agent wrote (`get_run`, `list_questions`), a task's conversation reads as its tab shows it
 //! (`get_conversation`); the chat's `merge_run` and `send_message` are proposals until the person's switch lets the
 //! chat do them, then done at once and kept as its actions, a message named the Orchestrator's in the task's
-//! conversation; a message that would decide a plan is refused; and an opened project's waits are kept in the
+//! conversation; a message that would decide a plan is refused; an action names its task by its key, however the
+//! call named the task or its run, and so deals with the run's next wait; and an opened project's waits are kept in the
 //! Orchestrator's conversation, each with its card, starting no turn while no runner attaches.
 
 use std::{path::PathBuf, thread, time::Duration};
@@ -16,6 +17,7 @@ use orchester_core::{
   name::Name,
   orchestrator::{
     ActionOutcome, Chat, ChatAction, EntryKind, OrchestratorSettings, TurnState, WaitKind, change::Change,
+    wait::dealt_with,
   },
   resource::ModelId,
   run::Run,
@@ -248,6 +250,62 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   assert_eq!(last.body().as_str(), "Keep the HubSpot owner.");
   assert!(last.by_orchestrator(), "the task's conversation names the Orchestrator");
   assert_eq!(actions(&db, &scope)[2].outcome, ActionOutcome::Done);
+}
+
+#[test]
+fn chat_action_names_its_task_by_its_key_however_the_call_named_it() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let (task, _run) = task_run(&db, ASKING);
+  let key = task.key().to_string();
+  let scope = chat(&served, &mut db);
+  for named in [task.id().to_string(), key.to_lowercase()] {
+    let update = json!({ "project": "Kontur", "key": named, "title": ASKING });
+    // Done or refused, the action is kept with the task it names.
+    let _told = chat_call(&mut served, &scope, "update_task", update);
+  }
+  let named: Vec<Option<String>> = actions(&db, &scope).into_iter().map(|action| action.task).collect();
+  assert_eq!(named, [Some(key.clone()), Some(key)]);
+}
+
+#[test]
+fn chat_action_naming_a_run_by_its_number_deals_with_its_next_wait() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let (task, run) = task_run(&db, ASKING);
+  let dealt = chat(&served, &mut db);
+  // A message without its text is refused before anything is sent; the action still names the run's task.
+  let named = json!({ "project": "Kontur", "run": format!("#{}", run.number().get()) });
+  let refused = chat_call(&mut served, &dealt, "send_message", named);
+  assert!(refused.is_err(), "a message needs its text: {refused:?}");
+  let kept: Vec<Option<String>> = actions(&db, &dealt).into_iter().map(|action| action.task).collect();
+  assert_eq!(kept, [Some(task.key().to_string())], "the run's task, by its key");
+  let newer = chat(&served, &mut db);
+  // The run's wait the window kept when it opened the project, as its next one is.
+  let mut entries = Vec::new();
+  for listing in db.chats().expect("History") {
+    let id = listing.chat.id();
+    entries.extend(
+      db.chat_entries(id)
+        .expect("entries")
+        .into_iter()
+        .map(|entry| (id, entry)),
+    );
+  }
+  let next = entries
+    .iter()
+    .find_map(|(_, entry)| match &entry.kind {
+      EntryKind::Wait { wait, .. } if wait.run == run.id() => Some(wait.clone()),
+      _ => None,
+    })
+    .expect("the run's wait");
+  let about = entries.iter().map(|(chat, entry)| (*chat, entry));
+  assert_eq!(
+    dealt_with(about, &next),
+    Some(dealt.chat),
+    "the conversation that named the run, though {} is newer",
+    newer.chat
+  );
 }
 
 #[test]

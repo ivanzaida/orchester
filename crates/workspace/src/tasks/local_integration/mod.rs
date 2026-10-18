@@ -4,6 +4,7 @@ mod abort;
 mod authority;
 mod cancel;
 mod checks;
+mod direct;
 mod drafts;
 mod external;
 mod legacy;
@@ -25,9 +26,10 @@ mod view;
 use std::path::Path;
 
 pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
+pub use direct::CheckoutHolder;
+pub(crate) use direct::{checkout_holder, managed_checkout, settle_review};
 pub use external::{EvidenceInputs, external_integration};
 pub use legacy::LegacyPolicy;
-pub(crate) use legacy::managed_checkout;
 pub use metadata::metadata_allowed;
 use orchester_core::{
   id::RunId,

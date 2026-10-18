@@ -1,9 +1,9 @@
 //! The Orchestrator chat follows its project's agents (ORC-42, `orchestrator::waits`): each wait (a question with
-//! suggested answers, a step waiting for a message, a plan waiting for a decision) is kept once in the conversation,
-//! linking to its card, in a conversation it opens when the project has none; with *Let the Orchestrator answer
-//! agents* on, a wait starts one Orchestrator turn by itself, never while another turn of the conversation thinks
-//! (it waits for that one), never for a wait the Orchestrator's own answer raised, and only while the Orchestrator has
-//! what it runs on.
+//! suggested answers, a step waiting for a message, a plan waiting for a decision) is kept once, linking to its card,
+//! in the conversation that last dealt with its task, else in the latest one, or in a conversation it opens when the
+//! project has none; with *Let the Orchestrator answer agents* on, a wait starts one Orchestrator turn by itself in
+//! its conversation, never while another turn of that conversation thinks (it waits for that one), never for a wait
+//! the Orchestrator's own answer raised, and only while the Orchestrator has what it runs on.
 
 mod support;
 
@@ -98,9 +98,15 @@ fn follow(fixture: &Fixture, answers: bool) -> Followed {
 /// The waits of the project's latest conversation, with their turns.
 fn waits(fixture: &Fixture) -> Vec<(AgentWait, Option<WaitTurn>)> {
   let db = ProjectDb::open(fixture.repo.path()).expect("database");
-  let Some(chat) = db.latest_chat().expect("read") else {
-    return Vec::new();
-  };
+  match db.latest_chat().expect("read") {
+    Some(chat) => waits_in(fixture, chat),
+    None => Vec::new(),
+  }
+}
+
+/// The waits of conversation `chat`, with their turns.
+fn waits_in(fixture: &Fixture, chat: ChatId) -> Vec<(AgentWait, Option<WaitTurn>)> {
+  let db = ProjectDb::open(fixture.repo.path()).expect("database");
   db.chat_entries(chat)
     .expect("entries")
     .into_iter()
@@ -279,9 +285,11 @@ fn orchestrator_waits_raised_by_its_own_answer_in_an_older_conversation_start_no
   ask(&mut fixture, &mut run);
   let followed = follow(&fixture, true);
   assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
-  assert_ne!(older.id(), newer.id());
-  assert_eq!(fixture.db.latest_chat().expect("read"), Some(newer.id()));
-  let (wait, turn) = &waits(&fixture)[0];
+  assert!(
+    waits_in(&fixture, newer.id()).is_empty(),
+    "the newer conversation never dealt with ORC-1"
+  );
+  let (wait, turn) = &waits_in(&fixture, older.id())[0];
   assert!(wait.own && !wait.automatic && turn.is_none(), "{wait:?}");
 }
 
@@ -387,5 +395,114 @@ fn orchestrator_waits_name_questions_with_suggested_answers_and_plans() {
         Some("Designer".to_owned())
       ),
     ]
+  );
+}
+
+/// A conversation, started at `at(start)`, whose answered turn updated task `task` (its key).
+fn acted_on(fixture: &mut Fixture, task: &str, start: i64) -> Chat {
+  let chat = Chat::named(ChatId::generate(), "Tighten the brief", at(start));
+  let person = ChatMessageId::generate();
+  let text = MessageBody::new("Tighten the brief").expect("text");
+  fixture
+    .db
+    .keep_chat_message(&chat, (person, &text), at(start))
+    .expect("kept");
+  let updated = ChatAction::new("update_task", Some(task.to_owned()), ActionOutcome::Done);
+  fixture
+    .db
+    .add_chat_action(chat.id(), &updated, at(start + 1))
+    .expect("kept");
+  fixture
+    .db
+    .end_chat_turn(person, &TurnState::Answered, at(start + 2))
+    .expect("ended");
+  chat
+}
+
+/// A conversation the person talks in at `at(start)`, about nothing the agents do; its turn thinks unless `ended`.
+fn talking(fixture: &mut Fixture, start: i64, ended: bool) -> Chat {
+  let chat = Chat::named(ChatId::generate(), "Anything else?", at(start));
+  let person = ChatMessageId::generate();
+  let text = MessageBody::new("Anything else?").expect("text");
+  fixture
+    .db
+    .keep_chat_message(&chat, (person, &text), at(start))
+    .expect("kept");
+  if ended {
+    fixture
+      .db
+      .end_chat_turn(person, &TurnState::Answered, at(start + 1))
+      .expect("ended");
+  }
+  chat
+}
+
+/// The tasks waits of `chat` are about, as people read their keys.
+fn tasks_in(fixture: &Fixture, chat: &Chat) -> Vec<String> {
+  waits_in(fixture, chat.id())
+    .into_iter()
+    .map(|(wait, _)| wait.task)
+    .collect()
+}
+
+#[test]
+fn orchestrator_waits_go_to_the_conversation_that_last_dealt_with_their_task() {
+  let mut fixture = Fixture::new();
+  let mut login = working(&mut fixture);
+  let dealt = acted_on(&mut fixture, "ORC-1", 10);
+  let latest = talking(&mut fixture, 20, true);
+  let zoom = fixture.task("Plan zoom", at(41));
+  let mut zoom = fixture.started_run(zoom, at(51));
+  ask(&mut fixture, &mut login);
+  ask(&mut fixture, &mut zoom);
+  assert!(follow(&fixture, false).kept);
+  assert_eq!(
+    tasks_in(&fixture, &dealt),
+    ["ORC-1"],
+    "the conversation that updated ORC-1, though another is newer"
+  );
+  assert_eq!(
+    tasks_in(&fixture, &latest),
+    ["ORC-2"],
+    "no conversation dealt with ORC-2: the latest keeps it"
+  );
+  assert_eq!(fixture.db.chats().expect("History").len(), 2, "no conversation opened");
+}
+
+#[test]
+fn orchestrator_waits_start_their_turn_in_their_conversation_while_another_thinks() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture);
+  let dealt = acted_on(&mut fixture, "ORC-1", 10);
+  let thinking = talking(&mut fixture, 20, false);
+  ask(&mut fixture, &mut run);
+  let turn = follow(&fixture, true).turn.expect("the wait starts a turn by itself");
+  assert_eq!(turn.chat, dealt.id(), "in the conversation that dealt with ORC-1");
+  assert_ne!(turn.chat, thinking.id());
+  let (wait, started) = &waits_in(&fixture, dealt.id())[0];
+  assert!(wait.automatic, "{wait:?}");
+  assert_eq!(started.as_ref().map(|started| started.message), Some(turn.message));
+}
+
+#[test]
+fn orchestrator_waits_raised_by_its_own_answer_start_no_turn_in_the_conversation_that_dealt_with_them_since() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture);
+  let answering = answered_by_chat(&mut fixture, &run);
+  // After the chat's answer, another conversation updates the task, without answering its agents.
+  let since = acted_on(&mut fixture, "ORC-1", 40);
+  ask(&mut fixture, &mut run);
+  let followed = follow(&fixture, true);
+  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert!(
+    waits_in(&fixture, answering.id()).is_empty(),
+    "the newer conversation dealt with ORC-1 last"
+  );
+  let (wait, turn) = &waits_in(&fixture, since.id())[0];
+  assert!(
+    wait.own && !wait.automatic && turn.is_none(),
+    "the answer in the other conversation raised it: {wait:?}"
   );
 }

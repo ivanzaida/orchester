@@ -6,6 +6,7 @@
 
 mod accounts;
 mod accounts_window;
+mod api_providers;
 mod automation_permissions;
 mod cloud_accounts;
 mod connections_window;

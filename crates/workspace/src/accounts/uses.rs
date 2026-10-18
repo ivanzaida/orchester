@@ -58,11 +58,13 @@ impl AccountUses {
   }
 }
 
-/// Whether `connection` runs on `account`.
+/// Whether `connection` runs on `account`; one on an API provider runs on its key, not on an account.
 pub fn runs_on(connection: &Connection, account: &AgentAccount) -> bool {
   match connection.kind() {
     ConnectionKind::Agent(provider) => {
-      *provider == account.cli().provider() && connection.account().id(*provider) == Some(account.id())
+      *provider == account.cli().provider()
+        && connection.api_provider().is_none()
+        && connection.account().id(*provider) == Some(account.id())
     }
     ConnectionKind::GitHub { .. } => false,
   }
