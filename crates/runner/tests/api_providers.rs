@@ -39,6 +39,11 @@ fn key_secret() -> Secret {
 /// A project whose Builder runs `provider`'s CLI on the API provider at `url`; the key is in the keychain when
 /// `in_keychain`, else only the secret's record is in the project.
 fn on_provider(provider: AgentProvider, url: &str, in_keychain: bool) -> TestProject {
+  on_provider_with(provider, url, in_keychain, "Append one line.")
+}
+
+/// [`on_provider`] for a task with `brief`.
+fn on_provider_with(provider: AgentProvider, url: &str, in_keychain: bool, brief: &'static str) -> TestProject {
   let secret = key_secret();
   let key = secret.id();
   let secrets = if in_keychain {
@@ -50,7 +55,7 @@ fn on_provider(provider: AgentProvider, url: &str, in_keychain: bool) -> TestPro
     provider,
     model: Some(MODEL),
     secrets,
-    ..Setup::new("Append one line.")
+    ..Setup::new(brief)
   });
   let mut db = ProjectDb::open(project.repo.path()).expect("open");
   if !in_keychain {
@@ -188,4 +193,85 @@ async fn api_providers_codex_refuses_a_users_provider_of_the_same_id() {
   let activity = activity_text(&db, run);
   assert!(activity.contains("model provider named `orchester`"), "{activity}");
   assert!(threads(&db, run).is_empty(), "no thread starts");
+}
+
+/// Runs a Claude Code task on DeepSeek until it stops at the fake's plan limit, puts its connection on the provider at
+/// `then` (with a new key secret when `new_key`), resumes it and answers the arguments of the invocation that resumed.
+async fn resumed_after(then: &str, new_key: bool) -> String {
+  let project = on_provider_with(
+    AgentProvider::ClaudeCodeCli,
+    "https://api.deepseek.com/anthropic",
+    true,
+    "Hit the plan limit",
+  );
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  let at_limit = |run: &orchester_core::run::Run| {
+    matches!(
+      run.status(),
+      RunStatus::Paused(orchester_core::run::PauseReason::LimitReached(_))
+    )
+  };
+  wait_for(root, &mut events, id, at_limit).await;
+  let mut db = ProjectDb::open(root).expect("open");
+  let mut connection = AgentConnection::try_from(db.connections().expect("connections").remove(0)).expect("CLI");
+  let current = connection.api_provider().expect("on the provider").clone();
+  let key = if new_key {
+    let secret = Secret::new(
+      SecretId::generate(),
+      NewSecret {
+        name: SecretName::new("OTHER_DEEPSEEK_KEY").expect("valid name"),
+        kind: SecretKind::ApiKey,
+        environment: Environment::Development,
+      },
+      Timestamp::now(),
+    );
+    db.create_secret(&secret).expect("another key secret");
+    let value = orchester_core::secret::SecretValue::new(KEY.to_owned()).expect("not blank");
+    orchester_core::secret::SecretVault::store(project.vault.as_ref(), &secret.vault_key(project.project), &value)
+      .expect("its value");
+    secret.id()
+  } else {
+    current.key()
+  };
+  let api = ApiProvider::new(
+    BaseUrl::new(then).expect("valid"),
+    key,
+    vec![ModelId::new(MODEL).expect("valid")],
+  )
+  .expect("a model");
+  connection.set_api_provider(Some(api)).expect("on Default");
+  db.save_connection(&connection.into_connection()).expect("saved");
+  drop(db);
+  for _ in 0..50 {
+    match scheduler.resume_run(id).await {
+      Ok(()) => break,
+      Err(_) => tokio::time::sleep(std::time::Duration::from_millis(100)).await,
+    }
+  }
+  let db = ProjectDb::open(root).expect("open");
+  for _ in 0..200 {
+    if reported(&db, id, "argv: ").len() >= 2 {
+      break;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+  }
+  reported(&db, id, "argv: ").pop().expect("a second invocation")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_providers_a_session_continues_only_on_the_provider_and_key_it_was_made_on() {
+  let same = resumed_after("https://api.deepseek.com/anthropic", false).await;
+  assert!(
+    same.contains("--resume"),
+    "the same provider continues the session: {same}"
+  );
+  let host = resumed_after("https://gateway.example.com", false).await;
+  assert!(!host.contains("--resume"), "another host starts a new session: {host}");
+  let key = resumed_after("https://api.deepseek.com/anthropic", true).await;
+  assert!(!key.contains("--resume"), "another key starts a new session: {key}");
 }

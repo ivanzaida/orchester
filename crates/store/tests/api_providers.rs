@@ -159,3 +159,45 @@ fn api_providers_a_database_from_before_them_runs_every_connection_on_its_sign_i
       .is_some()
   );
 }
+
+#[test]
+fn api_providers_an_invocation_keeps_the_provider_it_started_on() {
+  use orchester_core::store::ActivityStore;
+  let (repo, mut db, run, execution) = support::started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &support::model(), at(5_000))
+    .expect("an invocation");
+  assert_eq!(db.invocation_provider(invocation.id).expect("read"), None);
+  let url = BaseUrl::new("https://api.deepseek.com/anthropic").expect("valid");
+  let key = SecretId::generate();
+  db.save_invocation_provider(invocation.id, &url, key).expect("recorded");
+  assert_eq!(
+    db.invocation_provider(invocation.id).expect("read"),
+    Some((url.clone(), key))
+  );
+  assert!(
+    db.save_invocation_provider(invocation.id, &url, SecretId::generate())
+      .is_err(),
+    "recorded once"
+  );
+  drop(db);
+  let raw = Sqlite::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
+  assert!(
+    raw
+      .execute("UPDATE invocation_providers SET key_secret_id = 'other'", [])
+      .is_err(),
+    "an invocation keeps the provider it started on"
+  );
+  raw
+    .execute("DROP TRIGGER invocation_providers_immutable", [])
+    .expect("the trigger");
+  raw
+    .execute("UPDATE invocation_providers SET base_url = 'ftp://elsewhere'", [])
+    .expect("damage");
+  drop(raw);
+  let db = ProjectDb::open(repo.path()).expect("reopen");
+  assert!(
+    db.invocation_provider(invocation.id).is_err(),
+    "a damaged row is reported"
+  );
+}

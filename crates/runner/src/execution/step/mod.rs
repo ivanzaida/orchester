@@ -326,8 +326,6 @@ impl RunTask {
     })
   }
 
-  /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
-  /// of `left_out`.
   /// Records what `invocation` reaches its model through and on: a native agent's engine, a CLI's account, or the API
   /// provider a CLI runs on.
   fn record_reached(
@@ -347,6 +345,8 @@ impl RunTask {
     Ok(())
   }
 
+  /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
+  /// of `left_out`.
   fn record_left_out(&mut self, invocation: &Invocation, left_out: Vec<AgentEvent>) -> Result<(), ExecutionError> {
     if left_out.is_empty() {
       return Ok(());
