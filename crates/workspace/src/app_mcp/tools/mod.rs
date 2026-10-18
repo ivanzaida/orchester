@@ -45,6 +45,7 @@ pub(crate) use self::{
   messages::{plan_person_only, refusal as outgoing_refusal},
   pipeline_copy::duplicate_pipeline_draft,
   questions::{check_answer, waiting_request},
+  tasks::find_task,
 };
 pub use self::{
   run_task::{Proposal, propose_run, run_proposed},

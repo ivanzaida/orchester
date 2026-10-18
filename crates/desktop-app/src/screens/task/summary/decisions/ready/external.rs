@@ -19,43 +19,47 @@ use crate::{
 struct Evidence(Option<ContainedResult>);
 impl DevtoolsInspectable for Evidence {}
 
-pub(super) fn notice(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
-  let run = task.detail.run.as_ref()?.id();
+/// The notice of current external Git evidence, if any, and whether reading it has settled: reads that run git in
+/// the checkout wait for it ([`super::pull_request::read`]).
+pub(super) fn notice(ctx: &mut Ctx, task: &TaskContext) -> (Option<Element>, bool) {
+  let Some(run) = task.detail.run.as_ref().map(|run| run.id()) else {
+    return (None, true);
+  };
   let root = task.project.open.repo_root.clone();
   let revision = task.project.feed.revision.get();
-  let evidence = ctx
+  let state = ctx
     .future((root, run, revision), |(root, run, _)| async move {
       background::run(move || external_integration(&root, run).map(Evidence).map_err(|_| ()))
         .await
         .map_err(|_| ())?
     })
     .state()
-    .get()
-    .data?
-    .0?;
+    .get();
+  let settled = !state.is_pending() && (state.data.is_some() || state.error.is_some());
+  let Some(evidence) = state.data.and_then(|evidence| evidence.0) else {
+    return (None, settled);
+  };
   let route = Route::Project(task.project.open.project.id(), task.page(TaskView::LocalIntegration));
   let navigation = Navigation::of(ctx);
-  Some(
-    Notice::new(
-      "task-external-integration",
-      NoticeTone::Warning,
-      ctx.t("local_integration.externalTitle"),
-    )
-    .body(ctx.t_args(
-      crate::screens::task::local_integration::words::evidence_body(evidence.kind),
-      [
-        ("source", evidence.source.as_str()),
-        ("target", evidence.target.as_str()),
-      ],
-    ))
-    .action(
-      ActionButton::new(
-        "task-inspect-external-integration",
-        ButtonKind::Secondary,
-        ctx.t("local_integration.title"),
-      )
-      .opens(navigation.to(route)),
-    )
-    .into(),
+  let notice = Notice::new(
+    "task-external-integration",
+    NoticeTone::Warning,
+    ctx.t("local_integration.externalTitle"),
   )
+  .body(ctx.t_args(
+    crate::screens::task::local_integration::words::evidence_body(evidence.kind),
+    [
+      ("source", evidence.source.as_str()),
+      ("target", evidence.target.as_str()),
+    ],
+  ))
+  .action(
+    ActionButton::new(
+      "task-inspect-external-integration",
+      ButtonKind::Secondary,
+      ctx.t("local_integration.title"),
+    )
+    .opens(navigation.to(route)),
+  );
+  (Some(notice.into()), settled)
 }

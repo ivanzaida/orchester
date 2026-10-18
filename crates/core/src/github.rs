@@ -7,9 +7,10 @@ use crate::{
   command::{Command, CommandOutput, CommandRunner},
   connection::{GitHubCheck, GitHubConnection, GitHubHost, check_github},
   pull_request::{
-    Fields, ListedStates, PullRequest, PullRequestHead, gh_check_rollups_command, gh_compare_diff_command,
-    gh_pr_list_command, gh_pr_view_command, gh_rate_limit_command, parse_gh_check_rollups, parse_gh_compare_diff,
-    parse_gh_pr_list, parse_gh_pr_view, parse_gh_rate_limit,
+    CreateFailure, Fields, ListedStates, NewPullRequest, OpenedPullRequest, PullRequest, PullRequestHead,
+    gh_check_rollups_command, gh_compare_diff_command, gh_pr_create_command, gh_pr_list_command, gh_pr_view_command,
+    gh_rate_limit_command, parse_gh_check_rollups, parse_gh_compare_diff, parse_gh_pr_create, parse_gh_pr_list,
+    parse_gh_pr_view, parse_gh_rate_limit,
   },
   repository::{GitHubRepo, RepositoryError, RepositoryView, gh_repo_view_command, parse_gh_repo_view, unrecognized},
   revision::Revision,
@@ -41,6 +42,9 @@ pub trait GitHub {
 
   /// The unified diff of `repo` from the merge base of `base` and `head` to `head`.
   fn compare_diff(&self, repo: &GitHubRepo, base: &Revision, head: &Revision) -> Result<String, RepositoryError>;
+
+  /// Opens `new` on `repo`, whose head branch is on GitHub already.
+  fn create_pull_request(&self, repo: &GitHubRepo, new: &NewPullRequest) -> Result<OpenedPullRequest, CreateFailure>;
 }
 
 /// GitHub through the `gh` program of a GitHub connection, run with `runner`.
@@ -119,6 +123,13 @@ impl<R: CommandRunner> GitHub for GhCli<R> {
   fn compare_diff(&self, repo: &GitHubRepo, base: &Revision, head: &Revision) -> Result<String, RepositoryError> {
     let output = self.run_for(repo, &gh_compare_diff_command(&self.executable, repo, base, head))?;
     parse_gh_compare_diff(repo, &output)
+  }
+
+  fn create_pull_request(&self, repo: &GitHubRepo, new: &NewPullRequest) -> Result<OpenedPullRequest, CreateFailure> {
+    let output = self
+      .run_for(repo, &gh_pr_create_command(&self.executable, repo, new))
+      .map_err(CreateFailure::Repository)?;
+    parse_gh_pr_create(repo, &output)
   }
 }
 

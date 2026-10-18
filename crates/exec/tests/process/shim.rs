@@ -12,9 +12,10 @@ use std::{
 use orchester_core::{
   command::{Command, CommandError, CommandRunner},
   connection::GitHubHost,
-  pull_request::gh_check_rollups_command,
+  pull_request::{NewPullRequest, gh_check_rollups_command, gh_pr_create_command},
   repository::GitHubRepo,
   revision::Revision,
+  run::BranchName,
 };
 use orchester_exec::launch::{self, Via, native_shim_program, node_shim_script, passes_through_cmd};
 
@@ -247,6 +248,35 @@ fn process_shim_gets_the_graphql_query_on_standard_input() {
   let body = lines.collect::<String>();
   assert!(body.contains("repository(owner:$owner,name:$name)"), "{body}");
   assert!(body.contains("\"owner\":\"ivanzaida\""), "{body}");
+}
+
+/// A pull request's title (`KEY · Title`), body and branches would be refused as arguments of a `gh.cmd`: they
+/// are the request body on standard input.
+#[test]
+fn process_shim_gets_a_new_pull_request_on_standard_input() {
+  let folder = tempfile::tempdir().expect("temporary directory");
+  let gh = folder.path().join("gh.cmd");
+  fs::write(&gh, ECHO_SCRIPT).expect("script");
+  let repo = GitHubRepo::new(GitHubHost::github_com(), "ivanzaida", "kontur").expect("a repository");
+  let branch = |name: &str| BranchName::new(name).expect("a branch");
+  let new = NewPullRequest {
+    base: branch("main"),
+    head: branch("orchester/kon-12-run-1"),
+    title: "KON-12 · Add retry".to_owned(),
+    body: "Retry the webhook sender.\n\n## Acceptance criteria\n\n1. 100% of \"failed\" deliveries retry".to_owned(),
+    draft: true,
+  };
+  let command = gh_pr_create_command(&gh, &repo, &new);
+  let output = RUNNER.run(&command).expect("the arguments pass through cmd.exe");
+  assert!(output.success(), "{}", output.stderr);
+  let mut lines = output.stdout.lines();
+  assert_eq!(
+    lines.next().map(str::trim_end),
+    Some("ARGS api --method POST --hostname github.com repos/ivanzaida/kontur/pulls --input -")
+  );
+  let body = lines.collect::<String>();
+  assert!(body.contains("\"head\":\"orchester/kon-12-run-1\""), "{body}");
+  assert!(body.contains("\"draft\":true"), "{body}");
 }
 
 /// Claude Code's `--json-schema` value: JSON on one line, full of quotes and braces.

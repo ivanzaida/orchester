@@ -2,9 +2,8 @@
 //! names as people read it, how it went, and for a hold of new starts what it held.
 
 use orchester_core::{
-  id::RunId,
   orchestrator::{ActionOutcome, ChatAction},
-  store::{RunStore, TaskStore},
+  store::TaskStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -13,7 +12,7 @@ use serde_json::Value;
 
 use super::tools::ChatScope;
 use crate::{
-  app_mcp::{ToolError, Translate},
+  app_mcp::{ToolError, Translate, find_run, find_task},
   tasks::hold,
 };
 
@@ -97,12 +96,16 @@ pub(super) async fn keep(
   }
 }
 
-/// The key of the task `named` names, as people read it; `None` when it cannot be found.
+/// The key of the task `named` names, as people read it, also when the call named the task in another case or by its
+/// id, or named its run by its id or number; `None` when the run it names cannot be found.
 fn task_key(db: &ProjectDb, named: Named) -> Option<String> {
   match named {
-    Named::Task(key) => Some(key),
-    Named::Run(run) => {
-      let run = db.run(run.parse::<RunId>().ok()?).ok()??;
+    // A name no task answers to, or tasks that cannot be read, keep the name as the call gave it: the card still
+    // shows what the agent named.
+    Named::Task(named) => Some(find_task(db, &named).map_or(named, |task| task.key().to_string())),
+    // A run, or its task, that cannot be found or read names no task: the action is kept without one.
+    Named::Run(named) => {
+      let run = find_run(db, &named).ok()?;
       Some(db.task(run.task()).ok()??.key().to_string())
     }
   }
