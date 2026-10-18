@@ -150,10 +150,15 @@ fn seed_every_scenario_builds_a_repository_and_registers_kontur() {
       .expect("app database")
       .every_project()
       .expect("projects");
-    let [project] = projects.as_slice() else {
-      panic!("one project registered for {}: {projects:?}", scenario.name());
+    // `conversation` registers Atlas too, opened before Kontur, for its links into another project.
+    let names: Vec<&str> = projects.iter().map(|project| project.name.as_str()).collect();
+    let expected: &[&str] = match scenario.name() {
+      "conversation" => &["Kontur", "Atlas"],
+      _ => &["Kontur"],
     };
-    assert_eq!((project.id, project.name.as_str()), (seed.seeded.project, "Kontur"));
+    assert_eq!(names, expected, "{}", scenario.name());
+    let project = &projects[0];
+    assert_eq!(project.id, seed.seeded.project);
     assert_eq!(project.repo_root, seed.seeded.repo);
   }
 }
@@ -377,6 +382,11 @@ fn seed_conversation_records_a_long_transcript_with_a_mid_turn_message() {
     activity.last().map(|entry| &entry.event),
     Some(AgentEvent::CommandStarted { .. })
   ));
+  let links = activity.iter().any(|entry| {
+    matches!(&entry.event, AgentEvent::Message { text } if text.contains("- Task: [KON-12")
+      && text.contains("/tasks/ATL-9/summary") && text.contains("file:///"))
+  });
+  assert!(links, "a message with a labelled link list and a link into Atlas");
   let messages = db.messages(run.task()).expect("messages");
   assert!(
     messages
