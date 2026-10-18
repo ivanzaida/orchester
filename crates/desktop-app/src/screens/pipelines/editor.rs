@@ -443,6 +443,7 @@ impl Editor {
       WidenProps {
         id: "pipeline-save-question".into(),
         card: false,
+        affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("pipelines.saveWeaker"),
         reasons: words,
@@ -504,6 +505,7 @@ impl Editor {
           WidenProps {
             id: "pipeline-publish-question".into(),
             card: false,
+            affirming: false,
             automation: crate::mcp::input_gate::Guarded::PermissionWidening,
             title: ctx.t("pipelines.publishWeaker"),
             reasons: words,

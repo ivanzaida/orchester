@@ -321,17 +321,19 @@ pub(in super::super) struct CodexTools {
 impl RunTask {
   /// The Orchester tools of step execution `execution` with `permissions`, the MCP servers of `setup` and `skills`,
   /// for invocation `invocation` working in `folders` with the project's `environment`; and Claude Code's permission
-  /// prompt, whose relay serves them to a Claude Code agent.
+  /// prompt, whose relay serves them to a Claude Code agent. The tools' answers leave out the MCP servers' secrets and
+  /// `provider_key`, the key of the API provider the agent runs on.
   pub(super) fn step_tools(
     &self,
     (permissions, setup, skills): (&AgentPermissions, &McpSetup, StepSkills),
     (execution, invocation, folders): (StepExecutionId, InvocationId, ToolFolders<'_>),
-    environment: &CommandEnvironment,
+    (environment, provider_key): (&CommandEnvironment, Option<SecretVariable>),
   ) -> Result<(Arc<ToolHost>, Option<ClaudeApprovals>), RunnerProblem> {
     let worktree = folders.worktree;
     let host = self.tool_host((permissions, skills), (execution, folders), environment)?;
     let qa = self.step_qa(execution, invocation, worktree)?;
-    let tools = Arc::new(host.with_secrets(setup.secrets()).with_qa(qa));
+    let secrets = setup.secrets().into_iter().chain(provider_key).collect();
+    let tools = Arc::new(host.with_secrets(secrets).with_qa(qa));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
     Ok((tools, approvals))
   }

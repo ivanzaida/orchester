@@ -4,15 +4,11 @@ use std::{
   sync::Arc,
 };
 
-use orchester_core::{
-  id::RunId,
-  integration::local::{ContainedResult, LocalIntegrationStore},
-  store::RunStore,
-};
+use orchester_core::{id::RunId, integration::local::ContainedResult, store::RunStore};
 use orchester_exec::local_git::LocalGit;
 use orchester_store::ProjectDb;
 
-use super::{IntegrationError, view::Redaction};
+use super::{IntegrationError, direct::managed_checkout, view::Redaction};
 use crate::{messages::Message, secrets::Vault};
 
 #[derive(Clone)]
@@ -76,14 +72,4 @@ impl LegacyPolicy {
       _ => Vec::new(),
     }
   }
-}
-/// Historical finished records do not reserve the shared checkout forever.
-pub(crate) fn managed_checkout(db: &ProjectDb, run: RunId) -> Result<bool, orchester_store::StoreError> {
-  Ok(
-    db.local_operation(run)?.is_some()
-      || db
-        .local_operations()?
-        .iter()
-        .any(|operation| operation.reserves_checkout()),
-  )
 }

@@ -32,7 +32,8 @@ The user answered the proposal's questions on 2026-10-01:
 5. **A Chat Completions client comes later**, after P3, for self-hosted servers (§3.2, §9).
 6. **The runner may talk to MCP servers itself** for native connections, in P4. The design rule in
    `docs/design/orchester-workspace.md` (MCP servers) says so (§4.9).
-7. **No custom base URL or key for CLI connections** for now (§7).
+7. ~~**No custom base URL or key for CLI connections** for now (§7).~~ **Lifted by the person on 2026-10-18:** API
+   providers on the CLI connections go first (`docs/design/api-providers.md`); the native agent plan stays as it is.
 8. **No cost estimates.** At most later, as information in the Usage dashboard, never in limits (§10).
 9. **No `task_budget`** for now; revisit after P1 (§3.1).
 10. **One acknowledgement per project** is enough for presets with a data-location notice, such as DeepSeek (§7).
@@ -886,9 +887,10 @@ The desktop never reads the key.
 7. Run summary note for network stays on and unconfined listed commands. The existing Claude pattern can be reused.
 8. Approval modal content for a `run_command` with `shell: true` (shows the full shell string and the shell).
 
-**CLI connections get no custom base URL or key** for now (decision 7). Orchester keeps storing no credentials for
-CLIs and passing none to them (`invocation/mod.rs` withholds `ANTHROPIC_*`). Pointing Claude Code at DeepSeek's
-`/anthropic`, or Codex at a custom model provider, is not offered.
+**CLI connections on API providers.** Decision 7 (no custom base URL or key for CLI connections) was lifted by the
+person on 2026-10-18: a Codex or Claude Code connection can run on an API provider with a key in a project secret,
+designed in `docs/design/api-providers.md`. Without a provider Orchester still passes no credentials to the CLIs
+(`invocation/mod.rs` withholds `ANTHROPIC_*`).
 
 ## 8. Testing strategy
 

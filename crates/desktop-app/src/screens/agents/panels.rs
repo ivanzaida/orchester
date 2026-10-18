@@ -85,7 +85,10 @@ pub fn draft(ctx: &Ctx, props: &Props, fields: &Fields) -> Element {
     content = content.child(
       Text::new(&ctx.t_args("agents.changes", [("version", version.to_string())])).variant(TypographyStyle::Caption),
     );
-    for (key, detail) in changes(ctx, fields, &entry.profile) {
+    let on_provider = fields
+      .connection(&props.listed)
+      .is_some_and(|c| c.api_provider().is_some());
+    for (key, detail) in changes(ctx, fields, (&entry.profile, on_provider)) {
       content = content.child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -116,7 +119,7 @@ pub fn draft(ctx: &Ctx, props: &Props, fields: &Fields) -> Element {
 fn changes(
   ctx: &Ctx,
   fields: &Fields,
-  base: &orchester_core::resource::AgentProfile,
+  (base, on_provider): (&orchester_core::resource::AgentProfile, bool),
 ) -> Vec<(&'static str, std::sync::Arc<str>)> {
   let changed = ctx.t("agents.changed");
   let mut rows = Vec::new();
@@ -153,16 +156,14 @@ fn changes(
     ),
   ] {
     if from != to {
-      let from = if from.is_empty() {
-        ctx.t("agents.defaultEffort")
+      // An empty effort is the CLI's default, or on an API provider the provider's (`NNYyh`).
+      let empty = if on_provider {
+        ctx.t("agents.providerDefaultChange")
       } else {
-        from.into()
-      };
-      let to = if to.is_empty() {
         ctx.t("agents.defaultEffort")
-      } else {
-        to.into()
       };
+      let from = if from.is_empty() { empty.clone() } else { from.into() };
+      let to = if to.is_empty() { empty } else { to.into() };
       rows.push((key, ctx.t_args("agents.changedValue", [("from", from), ("to", to)])));
     }
   }

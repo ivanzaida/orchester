@@ -9,7 +9,10 @@
 //! program or set a variable, which [`plain_read`] refuses. Every path they name is still placed, so a
 //! credential location asks.
 
-use super::{files, gh, git, install::InstallSource, interpreters, network, packages, powershell, processes, scripts};
+use super::{
+  build_output::BuildWords, files, gh, git, install::InstallSource, interpreters, network, packages, powershell,
+  processes, scripts,
+};
 use crate::permission::known_safe;
 
 /// What a command is by its words.
@@ -77,6 +80,8 @@ pub(super) struct Judged {
   pub(super) repository: Option<String>,
   /// It loads settings or code from the folder it runs in ([`FOLDER_CODE`]).
   pub(super) folder_code: bool,
+  /// A Cargo build that writes only build output, with the words that tell where ([`super::build_output`]).
+  pub(super) build_words: Option<BuildWords>,
 }
 
 impl Judged {
@@ -103,6 +108,7 @@ impl Judged {
       no_paths: false,
       repository: None,
       folder_code: false,
+      build_words: None,
     }
   }
 

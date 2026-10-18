@@ -21,11 +21,12 @@ use orchester_core::{
   code_index::CodeIndexUse,
   command::{Command, SecretVariable},
   connection::{
-    AgentConnection, REASONING_EFFORT,
+    AgentConnection, BaseUrl, REASONING_EFFORT,
+    invocation::OnProvider,
     mcp::InvocationExemptions,
     stream::{AgentEvent, ClaudeStream, RunnerProblem},
   },
-  id::{AgentAccountId, InvocationId, StepExecutionId},
+  id::{AgentAccountId, InvocationId, SecretId, StepExecutionId},
   memory::{InjectedMemory, RecalledMemory},
   orchester_tools::OrchesterTool,
   permission::LaunchPermissions,
@@ -39,6 +40,7 @@ use self::cli::Cli;
 use super::{
   super::{
     codebase_index::{AgentIndex, IndexTold, with_tools_on_path},
+    connection_check,
     run::RunTask,
   },
   Continuation,
@@ -83,6 +85,9 @@ pub(super) struct AgentStart {
   pub(super) permissions: LaunchPermissions,
   /// What a native agent reaches its model through; `None` for a CLI.
   pub(super) engine: Option<InvocationEngine>,
+  /// The API provider an agent CLI runs on, by its base URL and key secret, recorded with the invocation so a later
+  /// one knows whether its session was made there; `None` on the CLI's own sign-in or for a native agent.
+  pub(super) provider: Option<(BaseUrl, SecretId)>,
 }
 
 /// What starts: an agent CLI's process, or a native agent's loop.
@@ -182,6 +187,20 @@ impl<'a> StepAgent<'a> {
 }
 
 impl RunTask {
+  /// The API provider `connection` runs `model` on with its key read from the keychain now, if it runs on one; a
+  /// key secret that is archived, gone or not given by the keychain keeps the agent from starting.
+  fn on_provider<'a>(
+    &self,
+    connection: &'a AgentConnection,
+    model: &'a ModelId,
+  ) -> Result<Option<OnProvider<'a>>, RunnerProblem> {
+    let Some(provider) = connection.api_provider() else {
+      return Ok(None);
+    };
+    let key = connection_check::api_key(&self.db, self.vault.as_ref(), provider.key()).map_err(problem)?;
+    Ok(Some(OnProvider { provider, model, key }))
+  }
+
   /// The internal code index skill, placed among `placed` when the agent gets the index.
   fn place_code_map_for(
     &self,
@@ -264,10 +283,12 @@ impl RunTask {
     let McpServers { setup, left_out } = self.mcp_servers(body, provider, (invocation, worktree, &environment))?;
     let offered = self.offered_skills(&placed, (provider, worktree))?;
     let folders = ToolFolders::new(worktree, &writable, (index.folder.as_deref(), placed.folder.as_deref()));
+    let on_provider = self.on_provider(connection, model)?;
+    let provider_key = on_provider.as_ref().map(|on| on.key_variable(provider));
     let (tools, claude_approvals) = self.step_tools(
       (enforced.permissions(), &setup, offered),
       (execution, invocation, folders),
-      &environment,
+      (&environment, provider_key.clone()),
     )?;
     placed.read_with = skill_tool(&tools, &setup, claude_approvals.is_some());
     let parts = PromptParts {
@@ -283,12 +304,14 @@ impl RunTask {
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
     let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
-    let secrets = setup.claude_secrets();
+    let mut secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let checks = tools.checks().to_vec();
+    secrets.extend(provider_key);
     let cli = Cli {
       executable,
       account: connection.account(),
+      provider: on_provider.as_ref(),
       model,
       effort: reasoning_effort(body),
       enforced: &enforced,
@@ -306,28 +329,41 @@ impl RunTask {
     let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {
-      launch: Launch::Cli(Box::new(CliLaunch {
-        command: match &index.tools {
-          Some(tools) => with_tools_on_path(started.command, tools),
-          None => started.command,
-        },
-        mcp_file: started.mcp_file,
-        app_server: started.app_server,
-        claude_approvals,
-        tool_relay: started.tool_relay,
-        claude_exemptions,
-      })),
+      launch: cli_launch(started, index.tools.as_deref(), (claude_approvals, claude_exemptions)),
       prompt: sources,
       left_out,
       code_index: index.used,
       secrets,
       agent: body.role().as_str().to_owned(),
-      account: connection.account().id(provider),
+      account: connection.plan_account(),
       memory: recalled.injected(),
       permissions: enforced.launch(),
       engine: None,
+      provider: on_provider
+        .as_ref()
+        .map(|on| (on.provider.base_url().clone(), on.provider.key())),
     })
   }
+}
+
+/// What starts for the CLI command `started`: with the code index's tools first on its `PATH` where it gets them, and
+/// Claude Code's permission prompt and the MCP tools that run without asking.
+fn cli_launch(
+  started: cli::CliCommand,
+  tools: Option<&Path>,
+  (claude_approvals, claude_exemptions): (Option<ClaudeApprovals>, InvocationExemptions),
+) -> Launch {
+  Launch::Cli(Box::new(CliLaunch {
+    command: match tools {
+      Some(tools) => with_tools_on_path(started.command, tools),
+      None => started.command,
+    },
+    mcp_file: started.mcp_file,
+    app_server: started.app_server,
+    claude_approvals,
+    tool_relay: started.tool_relay,
+    claude_exemptions,
+  }))
 }
 
 /// `prompt` with the paragraph that points the agent at its Orchester tools, for a new session that gets them:

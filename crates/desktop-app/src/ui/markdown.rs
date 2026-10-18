@@ -22,7 +22,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::ChatLinkLooks,
+  theme::{ChatLinkLooks, blank_line_between_blocks},
   ui::chat::presentation::{LinkWords, presentation},
 };
 
@@ -30,12 +30,22 @@ use crate::{
 /// on the focused link (`MarkdownProps::on_link_activate`), says with which button and keys.
 pub type LinkHandler = Arc<dyn Fn(&str, &MouseEvent) + Send + Sync>;
 
+/// How far apart the text's blocks (paragraphs, lists, code) sit.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BlockGap {
+  /// The theme's Markdown spacing.
+  Theme,
+  /// One empty line of the body text.
+  BlankLine,
+}
+
 #[derive(Clone)]
 pub struct MarkdownView {
   id: Arc<str>,
   text: Arc<str>,
   typography: TypographyStyle,
   color: PaletteColor,
+  block_gap: BlockGap,
   on_link: LinkHandler,
 }
 
@@ -45,6 +55,7 @@ impl PartialEq for MarkdownView {
       && self.text == other.text
       && self.typography == other.typography
       && self.color == other.color
+      && self.block_gap == other.block_gap
       && Arc::ptr_eq(&self.on_link, &other.on_link)
   }
 }
@@ -59,6 +70,7 @@ impl MarkdownView {
       text: text.into(),
       typography: TypographyStyle::Body,
       color: PaletteColor::TextPrimary,
+      block_gap: BlockGap::Theme,
       on_link,
     }
   }
@@ -67,6 +79,13 @@ impl MarkdownView {
   pub fn style(mut self, typography: TypographyStyle, color: PaletteColor) -> Self {
     self.typography = typography;
     self.color = color;
+    self
+  }
+
+  /// An empty line of the body between paragraphs, where the design draws the text that way (a task's
+  /// description in Details, `bU9bE` in `ZSiHd`) rather than with the theme's tighter Markdown spacing.
+  pub fn blank_line_between_blocks(mut self) -> Self {
+    self.block_gap = BlockGap::BlankLine;
     self
   }
 
@@ -96,9 +115,13 @@ impl Component for MarkdownHost {
       .resolve(&theme.typography(), &theme.palette())
     };
     let looks = ChatLinkLooks::of(ctx.theme(), &style);
+    let spacing = match view.block_gap {
+      BlockGap::Theme => None,
+      BlockGap::BlankLine => Some(blank_line_between_blocks(&ctx.theme().markdown(), &style)),
+    };
     let i18n = ctx.i18n().clone();
     let on_link = view.on_link;
-    let props = MarkdownProps::styled(view.text, style)
+    let mut props = MarkdownProps::styled(view.text, style)
       .width(Dimension::Pct(100.0))
       .selectable(true)
       .on_link_activate(move |link: &MarkdownLink, event: &MouseEvent| on_link(link.destination(), event))
@@ -109,6 +132,9 @@ impl Component for MarkdownHost {
         };
         presentation(link.destination(), link.text(), &looks, &words)
       });
+    if let Some(markdown) = spacing {
+      props = props.theme(markdown);
+    }
     Markdown::mount(ctx, props).id(view.id.to_string())
   }
 }

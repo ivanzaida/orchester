@@ -18,7 +18,7 @@ use lurq::{
 use orchester_core::{
   id::{ConnectionId, ProjectId},
   limits::ProjectLimits,
-  run::review::AutoModeSettings,
+  run::{ProjectRuleId, review::AutoModeSettings},
 };
 use orchester_workspace::{
   background, code_index,
@@ -57,6 +57,8 @@ pub enum Change {
     confirmed: bool,
   },
   UseAccount(ConnectionId),
+  /// Revokes a rule of the project's (*Approve for every run of this project*).
+  Revoke(ProjectRuleId),
 }
 /// The settings as the save read them after writing, and the project's change counts right after the save
 /// recorded its change.
@@ -76,7 +78,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
       background::run(move || {
         let outside = match &change {
           Change::Limits { .. } => Outside::Limits,
-          Change::Auto { .. } => Outside::AutoMode,
+          Change::Auto { .. } | Change::Revoke(_) => Outside::AutoMode,
           Change::Index(_) => Outside::CodeIndex,
           Change::Files(_) => Outside::ProjectSettings,
           Change::UseAccount(_) => Outside::Connections,
@@ -101,6 +103,9 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
             project_settings::save_auto_mode_in(&root, &base, &asked, confirmed)?
           }
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
+          Change::Revoke(rule) => {
+            project_settings::revoke_project_rule_in(&root, rule).map_err(|e| messages::store_error(&e))?
+          }
         }
         // Right after the write, whether or not the tab is still there to take the save: every screen that
         // shows the change reads it again.

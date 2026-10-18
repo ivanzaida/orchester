@@ -17,7 +17,7 @@ use orchester_core::{
     reviewer::{ClaudeReviewer, CodexReviewer},
   },
   id::{AgentAccountId, SecretId},
-  permission::AgentPermissions,
+  permission::{AgentPermissions, RepositoryAccess, category::CommandPart},
   resource::ModelId,
   run::{
     ApprovalSubject,
@@ -93,12 +93,51 @@ impl PushPlace {
   }
 }
 
+/// The target directories of `subject`'s Cargo builds in `worktree` that its repository ignores and tracks no file in
+/// (`HoldRules::build_output`), asked of git only in a step that reads the repository only, where it matters.
+pub(super) fn ignored_build_output(
+  worktree: &Path,
+  subject: &ApprovalSubject,
+  permissions: Option<&AgentPermissions>,
+) -> Vec<PathBuf> {
+  let ApprovalSubject::Command(command) = subject else {
+    return Vec::new();
+  };
+  if permissions.is_none_or(|permissions| permissions.repository() != RepositoryAccess::ReadOnly) {
+    return Vec::new();
+  }
+  let git = Git::new(worktree);
+  let mut ignored: Vec<PathBuf> = Vec::new();
+  for output in command.parts().iter().filter_map(CommandPart::build_output) {
+    let Some(relative) = output.in_worktree() else {
+      continue;
+    };
+    if ignored.iter().any(|folder| folder == output.folder()) {
+      continue;
+    }
+    // Git's own spelling of the folder: forward slashes, a trailing one for a folder.
+    let folder = format!("{}/", relative.to_string_lossy().replace('\\', "/"));
+    let asked = git
+      .answer(&["check-ignore", "-q", "--", &folder])
+      .and_then(|ignores| Ok(ignores && git.stdout(&["ls-files", "--", &folder])?.is_empty()));
+    match asked {
+      Ok(true) => ignored.push(output.folder().to_path_buf()),
+      Ok(false) => {}
+      // A build whose folder git cannot tell about holds, as one it does not ignore.
+      Err(error) => tracing::warn!(%error, "cannot ask git whether a build's target directory is ignored"),
+    }
+  }
+  ignored
+}
+
 /// What a review of one request needs besides the reviewer.
 pub(super) struct ReviewJob {
   pub(super) subject: ApprovalSubject,
   pub(super) permissions: Option<AgentPermissions>,
   /// What tells where a push of the run would go.
   pub(super) push: PushPlace,
+  /// The build output folders the worktree's repository ignores ([`ignored_build_output`]).
+  pub(super) ignored: Vec<PathBuf>,
   /// Codex asks to run the command outside its sandbox.
   pub(super) escalation: bool,
   pub(super) input: Result<ReviewInput, ReviewHold>,
@@ -111,7 +150,7 @@ pub(super) struct ReviewJob {
 /// whole); checked before the review starts, so a held request asks the person at once.
 pub(super) fn hold_now(
   (subject, permissions, escalation): (&ApprovalSubject, Option<&AgentPermissions>, bool),
-  push: &PushPlace,
+  (push, ignored): (&PushPlace, &[PathBuf]),
   input: &Result<ReviewInput, ReviewHold>,
 ) -> Option<ReviewHold> {
   let (head, origin_kept) = push.read();
@@ -123,6 +162,7 @@ pub(super) fn hold_now(
       origin_kept,
     },
     escalation,
+    build_output: ignored,
   };
   review_hold(subject, &rules).or_else(|| input.as_ref().err().copied())
 }
@@ -155,6 +195,7 @@ impl ReviewerSetup {
       subject,
       permissions,
       push,
+      ignored,
       escalation,
       input,
       runtime,
@@ -170,6 +211,7 @@ impl ReviewerSetup {
         origin_kept,
       },
       escalation,
+      build_output: &ignored,
     };
     let rules = (&subject, &hold_rules);
     match self {

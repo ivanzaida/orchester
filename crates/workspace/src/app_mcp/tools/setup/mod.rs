@@ -5,6 +5,7 @@
 //! secret's value.
 
 mod accounts;
+mod api_providers;
 mod connections;
 mod instructions;
 mod mcp_servers;
@@ -76,7 +77,8 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "list_connections",
     description: "A project's connections: agent connections (id, name, provider codex_cli, claude_code_cli, \
-                  anthropic_api or openai_api, program, status from the last check, CLI version, number of models), \
+                  anthropic_api or openai_api, program, status from the last check, CLI version, number of models, \
+                  the API provider a CLI runs on: base_url, host, key_secret's name and models), \
                   GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
                   agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
                   with url and bearer_secret; the values of the url's query left out), environment (each \
@@ -96,8 +98,25 @@ const SPECS: &[Spec] = &[
                   person_only, before it runs, unless a person turned on Let automation change agent permissions. \
                   The CLI is checked first with read-only commands (its version, whether it is \
                   signed in, its models); it is saved only when it answers as the expected CLI, and the check \
-                  comes back either way. A CLI that is not signed in is saved and reads sign_in_required.",
+                  comes back either way. A CLI that is not signed in is saved and reads sign_in_required. With \
+                  `api_provider` the CLI runs on that model API with an API key instead of its own sign-in: claude \
+                  needs an Anthropic Messages API, codex an OpenAI Responses API; the key is an existing project \
+                  secret named by id or name (no tool takes a secret's value) and the models typed are the ones \
+                  profiles on it choose from. A provider is refused as person_only unless a person turned on Let \
+                  automation change agent permissions: the agents would send the project's prompts, code and \
+                  command output to that host.",
     schema: schema_for_type::<connections::AddCliConnection>,
+    read_only: false,
+  },
+  Spec {
+    name: "set_api_provider",
+    description: "Runs a Codex or Claude Code connection on an API provider (`api_provider`: base_url, key_secret, \
+                  models, as add_cli_connection takes it), or back on its CLI's own sign-in (null). Running on a \
+                  host or key the connection does not run on now is refused as person_only unless a person turned \
+                  on Let automation change agent permissions; going back to the sign-in, or changing only the \
+                  models, is not. A connection on a provider runs on its CLI's Default account and reads no plan \
+                  limits. Returns the connection as list_connections lists it.",
+    schema: schema_for_type::<api_providers::SetApiProvider>,
     read_only: false,
   },
   Spec {
@@ -397,6 +416,7 @@ async fn dispatch(
     "add_cli_connection" => connections::add_cli_connection(services, parse(arguments)?).await,
     "check_connection" => connections::check_connection(services, parse(arguments)?).await,
     "list_models" => connections::list_models(services, parse(arguments)?).await,
+    "set_api_provider" => api_providers::set_api_provider(services, parse(arguments)?).await,
     "list_accounts" => accounts::list_accounts(services, parse(arguments)?).await,
     "set_connection_account" => accounts::set_connection_account(services, parse(arguments)?).await,
     "add_mcp_server" => mcp_servers::add_mcp_server(services, parse(arguments)?).await,

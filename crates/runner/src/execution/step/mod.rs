@@ -10,6 +10,7 @@ mod approval;
 mod checks;
 mod claude_approval;
 mod cli_version;
+mod command_scope;
 mod end;
 mod mcp;
 mod memory;
@@ -27,19 +28,17 @@ mod stderr;
 mod tool_files;
 pub(super) mod worker;
 
-use std::path::{Path, PathBuf};
-
 use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
-  permission::{LaunchPermissions, category::CommandScope},
+  permission::LaunchPermissions,
   resource::ModelId,
   revision::Revision,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
-  store::{ActivityStore, ConversationStore, RunStore},
+  store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
 };
@@ -49,6 +48,7 @@ use tokio::sync::mpsc;
 pub(super) use self::qa_app::QaApps;
 pub use self::qa_app::QaSlots;
 use self::{
+  command_scope::command_scope,
   end::Taken,
   start::Driven,
   worker::{Stop, Worker},
@@ -284,12 +284,7 @@ impl RunTask {
     };
     self.db.save_invocation_permissions(invocation.id, &start.permissions)?;
     invocation.permissions = Some(start.permissions.clone());
-    if let Some(engine) = &start.engine {
-      self.db.save_invocation_engine(invocation.id, engine)?;
-    }
-    if let Some(account) = start.account {
-      self.db.save_invocation_account(invocation.id, account)?;
-    }
+    self.record_reached(invocation.id, &start)?;
     self.db.save_invocation_prompt(invocation.id, &start.prompt)?;
     self.db.save_invocation_code_index(invocation.id, &start.code_index)?;
     self.db.save_edit_progress(invocation.id, &EditProgress::default())?;
@@ -329,6 +324,25 @@ impl RunTask {
       tracing::warn!(?problem, "the step's checks could not be read for its approvals");
       Vec::new()
     })
+  }
+
+  /// Records what `invocation` reaches its model through and on: a native agent's engine, a CLI's account, or the API
+  /// provider a CLI runs on.
+  fn record_reached(
+    &mut self,
+    invocation: orchester_core::id::InvocationId,
+    start: &start::AgentStart,
+  ) -> Result<(), ExecutionError> {
+    if let Some(engine) = &start.engine {
+      self.db.save_invocation_engine(invocation, engine)?;
+    }
+    if let Some(account) = start.account {
+      self.db.save_invocation_account(invocation, account)?;
+    }
+    if let Some((base_url, key)) = &start.provider {
+      self.db.save_invocation_provider(invocation, base_url, *key)?;
+    }
+    Ok(())
   }
 
   /// Records what the agent of `invocation` works without: the MCP servers and the codebase index
@@ -375,7 +389,12 @@ impl RunTask {
     // A CLI's agent waits in its turn for an answer; a native agent's question ends its step instead.
     let asks_in_turn = !matches!(driver, worker::Driver::Native(_));
     let worker = Worker {
-      scope: command_scope(&self.root, workspace.path(), &permissions),
+      scope: command_scope(
+        &self.root,
+        workspace.path(),
+        &permissions,
+        &self.db.project_environment()?,
+      ),
       profile: self.profile_of(execution),
       checks: self.checks_of(execution),
       root: self.root.clone(),
@@ -555,22 +574,4 @@ impl RunTask {
     self.board.release(execution);
     self.fail(execution, failure)
   }
-}
-
-/// Where the commands of an agent working in `worktree` with `launch` permissions run and may write:
-/// the worktree and the extra writable folders it was given, as written (relative to the repository
-/// `root`), for the host's user.
-fn command_scope(root: &Path, worktree: &Path, launch: &LaunchPermissions) -> CommandScope {
-  let writable: Vec<PathBuf> = launch
-    .permissions()
-    .granted_folders()
-    .map(|folders| {
-      folders
-        .entries()
-        .iter()
-        .map(|folder| folder.lexical_path(root))
-        .collect()
-    })
-    .unwrap_or_default();
-  CommandScope::on_host(worktree, &writable)
 }

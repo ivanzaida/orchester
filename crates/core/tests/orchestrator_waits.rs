@@ -1,14 +1,16 @@
 //! The Orchestrator chat and the waits of its project's agents (ORC-42): a wait the Orchestrator's own answer raised
-//! starts no turn by itself, so the chat and an agent never answer each other in a loop; what a turn a wait started
-//! tells the agent; and the system prompt's rules for answering agents and merging runs.
+//! starts no turn by itself, so the chat and an agent never answer each other in a loop; a wait goes to the
+//! conversation that last dealt with its task; what a turn a wait started tells the agent; and the system prompt's
+//! rules for answering agents and merging runs.
 
 use orchester_core::{
-  id::{ChatMessageId, ProjectId, RunId},
+  conversation::MessageBody,
+  id::{ChatId, ChatMessageId, ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, WaitKind,
+    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TurnState, WaitKind,
     change::{Change, ProposedChange},
     instructions::{system_prompt, wait_prompt},
-    wait::raised_by_own,
+    wait::{dealt_with, raised_by_own},
   },
   time::Timestamp,
 };
@@ -98,6 +100,68 @@ fn orchestrator_wait_after_a_newer_wait_of_the_run_is_not_its_own() {
     !raised_by_own(&entries, run),
     "the agent asked again after the chat's answer; the next wait follows that one, not the answer"
   );
+}
+
+/// An action of tool `tool` on task `task`, done.
+fn acted(tool: &str, task: &str) -> EntryKind {
+  EntryKind::Action(ChatAction::new(tool, Some(task.to_owned()), ActionOutcome::Done))
+}
+
+fn person(text: &str) -> EntryKind {
+  EntryKind::Person {
+    message: ChatMessageId::generate(),
+    text: MessageBody::new(text).expect("text"),
+    turn: TurnState::Answered,
+    ended: None,
+  }
+}
+
+#[test]
+fn orchestrator_wait_goes_to_the_conversation_that_last_dealt_with_its_task() {
+  let (run, a, b) = (RunId::generate(), ChatId::generate(), ChatId::generate());
+  let waiting = wait(run, WaitKind::Question);
+  let entries = [
+    (a, entry(1, acted("update_task", "kon-12"))),
+    (b, entry(2, person("How is KON-12?"))),
+    (b, entry(3, acted("create_task", "KON-13"))),
+  ];
+  let about =
+    |entries: &[(ChatId, ChatEntry)]| dealt_with(entries.iter().map(|(chat, entry)| (*chat, entry)), &waiting);
+  assert_eq!(
+    about(&entries),
+    Some(a),
+    "the newer conversation only talked about the task and acted on another"
+  );
+  assert_eq!(about(&entries[1..]), None, "no conversation dealt with it");
+  let answered = [
+    (a, entry(1, acted("update_task", "KON-12"))),
+    (b, entry(2, answered(run, true, ActionOutcome::Dismissed))),
+  ];
+  assert_eq!(
+    about(&answered),
+    Some(b),
+    "a dismissed message to its run deals with it too"
+  );
+  let started = ChatAction {
+    started: Some(run),
+    ..ChatAction::new("run_task", None, ActionOutcome::Done)
+  };
+  let kept = [
+    (b, entry(1, acted("update_task", "KON-12"))),
+    (a, entry(2, EntryKind::Action(started))),
+    (
+      b,
+      entry(
+        3,
+        EntryKind::Wait {
+          wait: wait(RunId::generate(), WaitKind::Plan),
+          turn: None,
+        },
+      ),
+    ),
+  ];
+  assert_eq!(about(&kept), Some(b), "a wait of an earlier run of the task kept there");
+  assert_eq!(about(&kept[..2]), Some(a), "the conversation that started the run");
 }
 
 #[test]
