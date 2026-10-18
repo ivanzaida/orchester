@@ -301,6 +301,7 @@ pub(super) fn revision_value(revision: i64) -> Result<TaskRevision, StoreError> 
     .ok_or_else(|| corrupt("task revision", revision))
 }
 
+/// Stores the new task `task`, and keeps what it asks for as its creation version.
 pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &str) -> Result<(), StoreError> {
   let details = task.details();
   let (budget_tokens, max_duration_ms) = limit_columns(details.limits)?;
@@ -322,7 +323,8 @@ pub(super) fn insert_task(transaction: &Transaction<'_>, task: &Task, batch: &st
       tokens_column("task revision", task.revision().get())?,
     ],
   )?;
-  write_criteria(transaction, task.id(), &details.acceptance_criteria)
+  write_criteria(transaction, task.id(), &details.acceptance_criteria)?;
+  super::task_snapshots::record_creation(transaction, task)
 }
 
 pub(super) fn write_criteria(
@@ -435,7 +437,7 @@ impl TaskRow {
 }
 
 /// A task's limits from its budget and time limit columns, each `NULL` for no limit.
-fn task_limits(budget: Option<i64>, duration: Option<i64>) -> Result<TaskLimits, StoreError> {
+pub(super) fn task_limits(budget: Option<i64>, duration: Option<i64>) -> Result<TaskLimits, StoreError> {
   TaskLimits::new(
     optional_budget_value("task budget", budget)?,
     optional_duration_value("task time limit", duration)?,

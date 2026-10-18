@@ -4,11 +4,13 @@
 //! the run waits for a decision (its plan, a raised limit, how it goes on after its retries, its merge),
 //! the Summary is that decision's ([`decisions`]): those designs draw the run's stages in place of its
 //! steps, leave the brief out, pin a decision bar or put the decision above *This run*. A task whose
-//! latest run cannot be read shows why, that the run's actions are unavailable, and its runs. The
-//! organization history comes later (agreed deviation D4).
+//! latest run cannot be read shows why, that the run's actions are unavailable, and its runs. Before the
+//! task's first run it says there are no runs yet (`empty`, `Xxrdy`). The organization history comes
+//! later (agreed deviation D4).
 
 mod brief;
 mod decisions;
+mod empty;
 mod live;
 mod notice;
 mod run_account;
@@ -70,6 +72,15 @@ impl Component for TaskSummary {
       return decision;
     }
     let detail = &props.task.detail;
+    let linked = sharing::linked(ctx, &props.task);
+    let next = sharing::next_key(ctx, &props.task);
+    let section = sharing::section(ctx, &props.task, (linked.as_ref(), next.as_ref()));
+    // A Not shared task runs only once it is shared, so it keeps its read-only Summary (`R4elt`).
+    if detail.before_first_run() && !detail.not_shared() {
+      // What the shared project says of the task stays beside it.
+      let panel = section.map(|section| this_task(ctx, &props.task, Some(section)));
+      return layout(empty::empty(ctx, &props.task), panel);
+    }
     let state = PageState::of(ctx);
     let removal = state.removal.get();
     let runs = runs::section(
@@ -98,25 +109,16 @@ impl Component for TaskSummary {
         .collect();
       return layout(column(parts, scroll), None);
     }
-    let linked = sharing::linked(ctx, &props.task);
-    let next = sharing::next_key(ctx, &props.task);
     let parts = if detail.not_shared() {
       self.kept_parts(ctx, &props, (linked.as_ref(), next.as_ref()), runs)
     } else {
       self.parts(ctx, &props, runs)
     };
     let root = props.task.project.open.repo_root.clone();
-    let section = sharing::section(ctx, &props.task, (linked.as_ref(), next.as_ref()));
     let panel = match &detail.run {
       Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run, section),
       Some(run) => this_run::this_run(ctx, run, (&root, props.task.lost()), (None, section)),
-      None => {
-        let pipelines = match props.task.project.feed.tasks.get() {
-          crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
-          _ => Vec::new(),
-        };
-        this_run::this_task(ctx, detail, &pipelines, section)
-      }
+      None => this_task(ctx, &props.task, section),
     };
     layout(column(parts, scroll), Some(panel))
   }
@@ -238,6 +240,15 @@ fn column(parts: Vec<Element>, scroll: ScrollState) -> Element {
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
     .into()
+}
+
+/// *This task* beside a task without a run, with the shared project's `section` on top.
+fn this_task(ctx: &mut Ctx, task: &TaskContext, section: Option<Element>) -> Element {
+  let pipelines = match task.project.feed.tasks.get() {
+    crate::project::TasksState::Ready(tasks) => tasks.pipelines.to_vec(),
+    _ => Vec::new(),
+  };
+  this_run::this_task(ctx, &task.detail, &pipelines, section)
 }
 
 fn layout(column: Element, panel: Option<Element>) -> Element {
