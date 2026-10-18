@@ -9,8 +9,12 @@ use orchester_core::{
   connection::{AgentConnection, Connection},
   limits::ProjectLimits,
   resource::ModelId,
-  run::review::{AutoModeSettings, ReviewerChoice, default_review_model, resolve_reviewer, reviewer_kind},
+  run::{
+    ProjectRule, ProjectRuleId,
+    review::{AutoModeSettings, ReviewerChoice, default_review_model, resolve_reviewer, reviewer_kind},
+  },
   store::{ConnectionStore, SettingsStore},
+  time::Timestamp,
   tokens::{TokenBudget, grouped},
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -32,6 +36,8 @@ pub struct Settings {
   pub auto_mode: AutoModeSettings,
   pub auto_runs: bool,
   pub connections: Vec<Connection>,
+  /// The project's active approval rules, oldest first (*Approve for every run of this project*).
+  pub approval_rules: Vec<ProjectRule>,
 }
 
 pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
@@ -43,7 +49,20 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
     auto_mode: db.auto_mode_settings()?,
     auto_runs: db.has_auto_mode_runs()?,
     connections: db.connections()?,
+    approval_rules: db
+      .project_approval_rules()?
+      .into_iter()
+      .filter(ProjectRule::is_active)
+      .collect(),
   })
+}
+
+/// Revokes the project's approval rule `rule`: the requests it answered ask again from the next one on. A rule
+/// revoked already stays as it is.
+pub fn revoke_project_rule_in(root: &Path, rule: ProjectRuleId) -> Result<(), StoreError> {
+  ProjectDb::open(root)?
+    .revoke_project_approval_rule(rule, Timestamp::now())
+    .map(|_| ())
 }
 
 /// Fields of the new page; all three limits may be absent.
@@ -228,6 +247,9 @@ fn pick<T: Copy + PartialEq>(before: T, entered: T, stored: T) -> T {
 /// Options and read-back of the reviewer form, resolved by the domain rather than the component.
 pub struct ReviewOptions {
   pub connections: Vec<(String, String)>,
+  /// Agent CLI connections on an API provider, by id and name: listed, unavailable, since the reviewer starts its CLI
+  /// on its own sign-in (`docs/design/api-providers.md`).
+  pub on_providers: Vec<(String, String)>,
   pub default_connection: Option<String>,
   pub models: Vec<String>,
   pub efforts: Vec<String>,
@@ -272,6 +294,12 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
       .connections
       .iter()
       .filter(|c| reviewer_kind(c).is_some())
+      .map(|c| (c.id().to_string(), c.name().as_str().to_owned()))
+      .collect(),
+    on_providers: settings
+      .connections
+      .iter()
+      .filter(|c| c.api_provider().is_some())
       .map(|c| (c.id().to_string(), c.name().as_str().to_owned()))
       .collect(),
     models,

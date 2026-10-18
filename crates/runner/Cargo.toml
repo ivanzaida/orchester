@@ -41,6 +41,10 @@ name = "accounts"
 required-features = ["test-agent"]
 
 [[test]]
+name = "api_providers"
+required-features = ["test-agent"]
+
+[[test]]
 name = "tools"
 required-features = ["test-agent"]
 

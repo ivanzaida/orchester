@@ -10,6 +10,7 @@
 mod always;
 mod auto;
 mod permitted;
+mod project;
 mod rule;
 mod subject;
 
@@ -22,6 +23,7 @@ pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
   permitted::permitted,
+  project::{ProjectRule, ProjectRuleId, ProjectScope, answering_in_project},
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
   subject::{ApprovalSubject, ToolReach},
 };
@@ -36,6 +38,9 @@ pub enum ApprovalAnswer {
   Once,
   /// This request, and later ones of the run that are alike ([`RuleScope::similar`]).
   Similar,
+  /// This request, and later ones alike in every run of the project ([`ProjectScope`]): only Orchester's
+  /// `start_qa_app`, while the QA script is unchanged.
+  SimilarProject,
   /// This request, and for good: a command's `prefix` goes into its profile's Allowed commands as a
   /// new profile version, an MCP tool into its server's Tools that run without asking.
   Always { prefix: Option<CommandPrefix> },
@@ -54,7 +59,7 @@ impl ApprovalAnswer {
   pub const fn decided_by(&self) -> DecidedBy {
     match self {
       Self::Once => DecidedBy::Person,
-      Self::Similar => DecidedBy::PersonSimilar,
+      Self::Similar | Self::SimilarProject => DecidedBy::PersonSimilar,
       Self::Always { .. } => DecidedBy::PersonAlways,
       Self::ApproveRun => DecidedBy::PersonRun,
       Self::Deny => DecidedBy::PersonDeny,
@@ -73,7 +78,7 @@ impl ApprovalAnswer {
         AutoVerdict::Approve(_) => Ok(DecidedBy::Automation),
         AutoVerdict::Ask(ask) => Err(AutomationAnswerError::PersonOnly(ask)),
       },
-      (Answerer::Automation, Self::Similar | Self::Always { .. } | Self::ApproveRun) => {
+      (Answerer::Automation, Self::Similar | Self::SimilarProject | Self::Always { .. } | Self::ApproveRun) => {
         Err(AutomationAnswerError::Wider)
       }
     }

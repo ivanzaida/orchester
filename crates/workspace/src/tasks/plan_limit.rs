@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform, plan_limits::LimitReading},
+  connection::{AgentConnection, plan_limits::LimitReading},
   id::{AgentAccountId, ConnectionId, RunId},
   run::{PauseReason, RunLimit, RunStatus},
   store::{ActivityStore, ConnectionStore, RunStore},
@@ -50,22 +50,12 @@ impl PlanStop {
       return Ok(None);
     };
     let provider = connection.provider();
-    let account = db
-      .execution_account(execution)?
-      .or_else(|| connection.account().id(provider));
+    let account = db.execution_account(execution)?.or_else(|| connection.plan_account());
     let others = db
       .connections()?
       .into_iter()
       .filter_map(|other| AgentConnection::try_from(other).ok())
-      .filter(|other| {
-        other.provider() == provider
-          && other.account().id(provider) != account
-          && other.status().is_usable()
-          && other
-            .account()
-            .start_problem(provider, Platform::current(), Path::is_dir)
-            .is_none()
-      })
+      .filter(|other| other.continues_plan_limited(provider, account))
       .collect();
     let started = db
       .invocations(run.id())?
@@ -73,7 +63,7 @@ impl PlanStop {
       .any(|invocation| invocation.execution == execution);
     Ok(Some(Self {
       started,
-      reading: db.plan_stop_reading(run.id(), execution, connection.account().id(provider))?,
+      reading: db.plan_stop_reading(run.id(), execution, connection.plan_account())?,
       connection,
       account,
       others,

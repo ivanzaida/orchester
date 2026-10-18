@@ -164,7 +164,7 @@ fn stop_of(db: &ProjectDb, run: &Run) -> Result<Option<Stop>, orchester_store::S
   let step_account = match run.execution(execution) {
     Some(stopped) => db
       .step_agent_connection(run, stopped.step())?
-      .and_then(|connection| connection.account().id(connection.provider())),
+      .and_then(|connection| connection.plan_account()),
     None => None,
   };
   let reset = db

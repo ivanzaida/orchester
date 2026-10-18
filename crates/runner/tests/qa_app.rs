@@ -10,12 +10,21 @@
 
 mod support;
 
-use std::fs;
+use std::{fs, path::Path};
 
-use orchester_core::{connection::stream::RunnerProblem, id::IdempotencyKey, run::RunStatus};
+use orchester_core::{
+  connection::stream::RunnerProblem,
+  id::{IdempotencyKey, RunId, TaskId},
+  run::{Answerer, ApprovalAnswer, DecidedBy, RunStatus},
+  time::Timestamp,
+};
+use orchester_ipc::{Event, Rejection};
+use orchester_runner::execution::Scheduler;
+use orchester_store::ProjectDb;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use self::support::{
-  is_running,
+  git, is_running, pending_approval,
   qa::{approve, calls, gone, noted, qa_project, reported_pid, started_pid, verify_step},
   queue_another_task, scheduler, wait_for,
 };
@@ -172,7 +181,7 @@ async fn qa_app_a_script_changed_after_its_approval_does_not_run() {
     .start_run(IdempotencyKey::generate(), project.task)
     .await
     .expect("run");
-  let request = support::pending_approval(root, &mut events, id).await;
+  let request = pending_approval(root, &mut events, id).await;
   let target = request.target.clone().unwrap_or_default();
   assert!(
     target.starts_with("tools/qa-app.ps1 ") && target.contains(" · scenario tasks"),
@@ -191,12 +200,7 @@ async fn qa_app_a_script_changed_after_its_approval_does_not_run() {
   );
   fs::write(&script, text).expect("change the script");
   scheduler
-    .decide_tool_approval(
-      id,
-      request.id,
-      orchester_core::run::ApprovalAnswer::Once,
-      orchester_core::run::Answerer::Person,
-    )
+    .decide_tool_approval(id, request.id, ApprovalAnswer::Once, Answerer::Person)
     .await
     .expect("approved");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
@@ -208,4 +212,104 @@ async fn qa_app_a_script_changed_after_its_approval_does_not_run() {
       .any(|call| call.starts_with("start_qa_app error") && call.contains("not the script this start's approval named")),
     "{answered:?}"
   );
+}
+
+/// Runs `task` to its end, answering its `start_qa_app` request, if it asks, with `answer` by `by` first; whether it
+/// asked.
+async fn run_answering(
+  (scheduler, events): (&Scheduler, &mut UnboundedReceiver<Event>),
+  root: &Path,
+  task: TaskId,
+  answer: Option<ApprovalAnswer>,
+) -> RunId {
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), task)
+    .await
+    .expect("run");
+  if let Some(answer) = answer {
+    let request = pending_approval(root, events, id).await;
+    assert_eq!(request.action, "start_qa_app");
+    scheduler
+      .decide_tool_approval(id, request.id, answer, Answerer::Person)
+      .await
+      .expect("approved");
+  }
+  let run = wait_for(root, events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert!(
+    calls(root, id).iter().any(|call| call.starts_with("start_qa_app ok")),
+    "{:?}",
+    calls(root, id)
+  );
+  id
+}
+
+/// How `run`'s requests were answered, oldest first.
+fn answered_by(root: &Path, run: RunId) -> Vec<Option<DecidedBy>> {
+  ProjectDb::open(root)
+    .expect("open")
+    .decided_tool_approvals(run)
+    .expect("decided")
+    .into_iter()
+    .map(|decided| decided.decided_by)
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn qa_app_a_project_rule_approves_it_in_every_run_while_the_script_is_unchanged() {
+  let project = qa_project(verify_step("Start the QA app."));
+  let root = project.repo.path();
+  let tasks: Vec<_> = (0..3).map(|_| queue_another_task(root)).collect();
+  let (scheduler, mut events) = scheduler(root);
+
+  // Automation never makes a rule of the project.
+  let first = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("first run");
+  let request = pending_approval(root, &mut events, first).await;
+  let refused = scheduler
+    .decide_tool_approval(
+      first,
+      request.id.clone(),
+      ApprovalAnswer::SimilarProject,
+      Answerer::Automation,
+    )
+    .await;
+  assert_eq!(refused, Err(Rejection::AutomationWider));
+  let db = || ProjectDb::open(root).expect("open");
+  assert!(db().project_approval_rules().expect("rules").is_empty());
+  scheduler
+    .decide_tool_approval(first, request.id, ApprovalAnswer::SimilarProject, Answerer::Person)
+    .await
+    .expect("approved for every run");
+  wait_for(root, &mut events, first, |run| run.status().is_terminal()).await;
+  let rules = db().project_approval_rules().expect("rules");
+  assert_eq!(rules.len(), 1);
+  assert_eq!(rules[0].made_in, first);
+
+  // Another run's start is approved by the rule, without asking.
+  let second = run_answering((&scheduler, &mut events), root, tasks[0], None).await;
+  assert_eq!(answered_by(root, second), vec![Some(DecidedBy::SimilarRule)]);
+  assert_eq!(db().project_approval_rules().expect("rules")[0].answered, 1);
+
+  // A changed script asks again.
+  let script = root.join("tools").join("qa-app.ps1");
+  let original = fs::read_to_string(&script).expect("script");
+  fs::write(&script, format!("{original}# changed\n")).expect("change the script");
+  git(root, &["commit", "--quiet", "-am", "QA script changed"]);
+  let third = run_answering((&scheduler, &mut events), root, tasks[1], Some(ApprovalAnswer::Once)).await;
+  assert_eq!(answered_by(root, third), vec![Some(DecidedBy::Person)]);
+
+  // The approved script again, with the rule revoked: it asks again.
+  fs::write(&script, original).expect("restore the script");
+  git(root, &["commit", "--quiet", "-am", "QA script restored"]);
+  let rule = db().project_approval_rules().expect("rules")[0].id;
+  assert!(
+    db()
+      .revoke_project_approval_rule(rule, Timestamp::now())
+      .expect("revoked")
+  );
+  let fourth = run_answering((&scheduler, &mut events), root, tasks[2], Some(ApprovalAnswer::Once)).await;
+  assert_eq!(answered_by(root, fourth), vec![Some(DecidedBy::Person)]);
 }

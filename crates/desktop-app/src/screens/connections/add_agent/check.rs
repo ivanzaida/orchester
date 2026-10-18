@@ -163,10 +163,16 @@ pub(super) fn program_row(
   )
 }
 
-/// The check row, and the sign-in command under it while the CLI is not signed in.
-pub(super) fn check_row(ctx: &mut Ctx, provider: AgentProvider, state: &Checked, recheck: &Signal<u64>) -> Element {
+/// The check row, and the sign-in command under it while the CLI is not signed in. On an API provider (`on_provider`)
+/// the CLI's own sign-in is not used, so a CLI found reads Found whatever its sign-in (`virfc`).
+pub(super) fn check_row(
+  ctx: &mut Ctx,
+  (provider, on_provider): (AgentProvider, bool),
+  state: &Checked,
+  recheck: &Signal<u64>,
+) -> Element {
   let cli = ctx.t(provider_key(provider));
-  let (glyph, tone, word, detail) = shown(ctx, &cli, state);
+  let (glyph, tone, word, detail) = shown_on(ctx, &cli, state, on_provider);
   let busy = matches!(state, Checked::Detecting | Checked::Checking);
   let again =
     ActionButton::new("connection-recheck", ButtonKind::Ghost, ctx.t("connections.recheck")).icon(Icon::RefreshCw);
@@ -224,7 +230,7 @@ pub(super) fn check_row(ctx: &mut Ctx, provider: AgentProvider, state: &Checked,
         ..
       },
       ..
-    }) => sign_in_command(provider).map(|command| {
+    }) if !on_provider => sign_in_command(provider).map(|command| {
       CodeBox::new(
         "connection-sign-in-command",
         ctx.t("connections.dialog.runToSignIn"),
@@ -247,6 +253,25 @@ pub(super) fn check_row(ctx: &mut Ctx, provider: AgentProvider, state: &Checked,
 }
 
 /// The check row's icon, its color, word and sentence.
+/// What the check row shows: on an API provider a CLI found reads Found whatever its own sign-in (`virfc`).
+fn shown_on(ctx: &Ctx, cli: &str, state: &Checked, on_provider: bool) -> (Icon, PaletteColor, Arc<str>, Arc<str>) {
+  match state {
+    Checked::Done(ConnectionCheck {
+      result: CheckResult::Available { version, .. },
+      ..
+    }) if on_provider => (
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      ctx.t("connections.apiProvider.found"),
+      ctx.t_args(
+        "connections.apiProvider.checkFound",
+        [("program", cli), ("version", version.as_str())],
+      ),
+    ),
+    _ => shown(ctx, cli, state),
+  }
+}
+
 fn shown(ctx: &Ctx, cli: &str, state: &Checked) -> (Icon, PaletteColor, Arc<str>, Arc<str>) {
   let line = |key: &str, version: &str| ctx.t_args(key, [("program", cli), ("version", version)]);
   match state {

@@ -117,9 +117,15 @@ impl Component for Editor {
     if self.tried.get()
       && let Err(errors) = &checked
     {
-      for error in [&errors.role, &errors.instructions, &errors.connection, &errors.model]
-        .into_iter()
-        .flatten()
+      for error in [
+        &errors.role,
+        &errors.instructions,
+        &errors.connection,
+        &errors.model,
+        &errors.effort,
+      ]
+      .into_iter()
+      .flatten()
       {
         page = page.child(field_error("agent-validation-error", &message_text(ctx, error)));
       }

@@ -121,6 +121,9 @@ impl Component for ApprovalView {
 /// How the request was answered: as recorded, or as the runner just took the person's answer or said it no
 /// longer waits; `None` while it waits.
 fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
+  if let (Some(_), Some(at), true) = (card.decided, card.decided_at, card.for_project) {
+    return Some(Decided::Project { at });
+  }
   if let Some(decision) = card.decided {
     return Some(Decided::Recorded {
       decision,
@@ -136,6 +139,10 @@ fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
       } else {
         ToolApprovalDecision::Approved
       };
+      // The record names a rule of the project as any rule a person made; the card says which it was.
+      if (*given, *by) == (Given::ApproveProject, Answerer::Person) {
+        return Some(Decided::Project { at: *at });
+      }
       // Automation gives only Approve once and Deny ([`Decisions::answer`]).
       let by = match by {
         Answerer::Person => approval_answer(*given).decided_by(),

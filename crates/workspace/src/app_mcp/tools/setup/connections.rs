@@ -1,7 +1,8 @@
 //! `list_connections`, `add_cli_connection`, `check_connection` and `list_models`: a project's
 //! connections as Connections lists them, a Codex or Claude CLI added as Add connection adds it (checked
 //! first, saved only when it answers as the expected CLI), checked again, and the models the profile
-//! editor offers for one. No secret, nor its value, is listed.
+//! editor offers for one. A CLI added on an API provider names its key secret ([`super::api_providers`]); no secret's
+//! value is listed.
 
 use std::path::PathBuf;
 
@@ -23,6 +24,7 @@ use super::{
     across::{InProjects, across},
     wire,
   },
+  api_providers::{ApiProviderInput, provider_from, provider_json, widens},
   widening,
 };
 use crate::{
@@ -31,6 +33,7 @@ use crate::{
     services::{Services, blocking},
   },
   connections::{
+    api_provider::save_on_provider_in,
     data::{ConnectionDraft, ProjectConnections, SaveError, recheck_in, save_in},
     probe,
   },
@@ -68,6 +71,8 @@ pub struct AddCliConnection {
   pub name: String,
   /// The CLI's absolute path; left out, the newest copy on the search path.
   pub program: Option<String>,
+  /// Runs the CLI on this model API with an API key instead of its own sign-in.
+  pub api_provider: Option<ApiProviderInput>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -148,15 +153,26 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
     }
     // A program of automation's own choosing would run as the project's agent: a person's decision,
     // made before anything runs it. A copy found on the search path is saved as the search path names it,
-    // never as the client named it: a link the client chose could be pointed elsewhere later.
+    // never as the client named it: a link the client chose could be pointed elsewhere later. So is an API
+    // provider, which would get the project's prompts and code.
+    let mut reasons = Vec::new();
     let program = match probe::found_copy(&found, &program) {
       Some(copy) => copy.to_path_buf(),
       None => {
-        let reason = Message::new("appMcp.widens.program").with("program", program.display().to_string());
-        widening::allowed(&services, vec![reason])?;
+        reasons.push(Message::new("appMcp.widens.program").with("program", program.display().to_string()));
         program
       }
     };
+    let api = match &args.api_provider {
+      Some(input) => {
+        let db = ProjectDb::open(&open.repo_root)?;
+        let provider = provider_from(&db, input)?;
+        reasons.extend(widens(&db, name.as_str(), None, &provider)?);
+        Some(provider)
+      }
+      None => None,
+    };
+    widening::allowed(&services, reasons)?;
     let check = probe::check(provider, &program).expect("an agent CLI is checked by running it");
     let draft = ConnectionDraft {
       id: None,
@@ -165,7 +181,10 @@ pub async fn add_cli_connection(services: &Services, args: AddCliConnection) -> 
       executable: program,
       check: check.clone(),
     };
-    let id = save_in(&open.repo_root, draft).map_err(|error| save_error(&error, &check))?;
+    let id = match api {
+      None => save_in(&open.repo_root, draft).map_err(|error| save_error(&error, &check))?,
+      Some(api) => save_on_provider_in(&open.repo_root, draft, api).map_err(|error| save_error(&error, &check))?,
+    };
     services.changes.record(open.project.id(), Outside::Connections);
     let listed = ProjectConnections::load_in(&open.repo_root)?;
     let connection = listed
@@ -213,7 +232,11 @@ pub async fn list_models(services: &Services, args: InConnection) -> Result<Valu
     Ok(json!({
       "connection": connection.name().as_str(),
       "checked": connection.last_check().is_some(),
-      "source": connection.catalog().map(|catalog| catalog.source()),
+      // An API provider's models are typed by a person, not listed by the CLI.
+      "source": match connection.api_provider() {
+        Some(_) => json!("api_provider"),
+        None => json!(connection.catalog().map(|catalog| catalog.source())),
+      },
       "models": models,
       "link": Link::Connection(open.project.id(), connection.id()).path(),
     }))
@@ -246,7 +269,7 @@ pub(super) fn agent_by_id(connections: &[AgentConnection], id: ConnectionId) -> 
 }
 
 /// An agent connection of `project` as Connections lists it, with its link: its inspector.
-fn agent_json(connection: &AgentConnection, secrets: &[Secret], project: ProjectId) -> Value {
+pub(super) fn agent_json(connection: &AgentConnection, secrets: &[Secret], project: ProjectId) -> Value {
   let check = connection.last_check();
   let version = check.and_then(|check| match &check.result {
     CheckResult::Available { version, .. } => Some(version.clone()),
@@ -261,7 +284,8 @@ fn agent_json(connection: &AgentConnection, secrets: &[Secret], project: Project
     "version": version,
     "checked_at": check.map(|check| wire::time(check.at)),
     "models": connection.models().len(),
-    "account": connection.account().id(connection.provider()).map(|account| account.to_string()),
+    "account": connection.plan_account().map(|account| account.to_string()),
+    "api_provider": connection.api_provider().map(|provider| provider_json(provider, secrets)),
     "link": Link::Connection(project, connection.id()).path(),
   })
 }

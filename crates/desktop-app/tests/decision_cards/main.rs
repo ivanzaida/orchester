@@ -13,6 +13,7 @@ mod answering;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod project;
 #[path = "../support/mod.rs"]
 mod support;
 mod theme;

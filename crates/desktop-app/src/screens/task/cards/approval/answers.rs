@@ -1,13 +1,17 @@
 //! A waiting request's answers, as the Needs-you panel answers it in place (`Answers` `LZ4NI` and `Wider`
 //! `WNoFY` in `YDJsC`): *Deny with a message* at the left, then *Deny* and the primary *Approve once*; under
 //! *Or answer more widely* a tile each for *Approve similar in this run*, *Approve everything in this run* and
-//! *Always allow…*, saying what it covers before it is chosen. An answer the request does not offer stays in
+//! *Always allow…*, saying what it covers before it is chosen; for Orchester's `start_qa_app` also *Approve for every
+//! run of this project* (the person's decision of 2026-10-18), which keeps a rule of the project while the QA script
+//! is unchanged. An answer the request does not offer stays in
 //! place, faded, with a lock and why. *Always allow…* and *Deny with a message* are not built (D6).
 //!
 //! A wider answer lets the run's agents do more, so it is a person's (`docs/stable-build.md`): its tile asks in
 //! place under the tiles, as a Connections page asks what a save widens (`In-place confirmation` `RWODj`), and
-//! only that question's confirm sends it. While the question shows, window input from MCP clients is refused
-//! unless the person let automation answer approvals.
+//! only that question's confirm sends it. That confirm refuses an MCP client's press unless the person let
+//! automation answer approvals, and the card refuses a wider answer from one even then; the rest of the window,
+//! *Keep asking* included, takes a client's input, so a client can take the question back. The tile being confirmed
+//! stays marked (`$hover` fill, `$border_focus` stroke) while the question shows.
 
 use std::sync::Arc;
 
@@ -23,7 +27,7 @@ use lurq::{
 };
 use orchester_core::{
   id::RunId,
-  run::{ApprovalAnswer, PendingToolApproval},
+  run::{ApprovalAnswer, PendingToolApproval, ProjectScope},
 };
 use orchester_ipc::Command;
 use orchester_workspace::{
@@ -54,6 +58,7 @@ use crate::{
 pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
   match given {
     Given::ApproveSimilar => ApprovalAnswer::Similar,
+    Given::ApproveProject => ApprovalAnswer::SimilarProject,
     Given::ApproveEverything => ApprovalAnswer::ApproveRun,
     Given::Deny => ApprovalAnswer::Deny,
     Given::ApproveOnce | Given::Answers | Given::ApprovePlan => ApprovalAnswer::Once,
@@ -185,30 +190,7 @@ pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
 fn wider(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
   let id = answering.id;
   let run = answering.run.to_string();
-  let similar = match answering.shown.map(|shown| &shown.choices.similar) {
-    Some(Ok(SimilarShown::Command { words, category })) => Ok(ctx.t_args(
-      "cards.approval.similarCommand",
-      [
-        ("words", &**words),
-        ("category", &*ctx.t(words::subject_key(*category, false))),
-        ("run", run.as_str()),
-      ],
-    )),
-    Some(Ok(SimilarShown::Tool { server, tool })) => Ok(ctx.t_args(
-      "cards.approval.similarTool",
-      [("server", &**server), ("tool", &**tool), ("run", run.as_str())],
-    )),
-    Some(Ok(SimilarShown::Folder { folder })) => Ok(ctx.t_args(
-      "cards.approval.similarFolder",
-      [("folder", words::platform_path(folder).as_str()), ("run", run.as_str())],
-    )),
-    Some(Ok(SimilarShown::Check { name })) => Ok(ctx.t_args(
-      "cards.approval.similarCheck",
-      [("check", &**name), ("run", run.as_str())],
-    )),
-    Some(Err(unavailable)) => Err(ctx.t(words::similar_unavailable(*unavailable))),
-    None => Err(ctx.t("cards.approval.unread")),
-  };
+  let similar = similar_covers(ctx, answering, &run);
   let everything = match answering.shown {
     Some(shown) if shown.auto_approving && shown.choices.auto_asks => {
       Err(ctx.t_args("cards.approval.everythingOn", [("run", run.as_str())]))
@@ -224,8 +206,10 @@ fn wider(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
   } else {
     "cards.approval.alwaysTool"
   });
+  let project = project_covers(ctx, answering.request);
   let asked = match answering.asking.get() {
     Some(Given::ApproveSimilar) => similar.clone().ok().map(|covers| (Given::ApproveSimilar, covers)),
+    Some(Given::ApproveProject) => project.clone().map(|covers| (Given::ApproveProject, covers)),
     Some(Given::ApproveEverything) => everything.clone().ok().map(|covers| (Given::ApproveEverything, covers)),
     _ => None,
   };
@@ -241,6 +225,14 @@ fn wider(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
       (Given::ApproveSimilar, Icon::ShieldCheck, "cards.approval.similar"),
       similar,
     ))
+    .with_children(project.map(|covers| {
+      tile(
+        ctx,
+        answering,
+        (Given::ApproveProject, Icon::ShieldCheck, "cards.approval.project"),
+        Ok(covers),
+      )
+    }))
     .child(tile(
       ctx,
       answering,
@@ -256,6 +248,33 @@ fn wider(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
     .into()
 }
 
+/// What *Approve similar in this run* covers, or why it is not offered.
+fn similar_covers(ctx: &Ctx, answering: &Answering<'_>, run: &str) -> Result<Arc<str>, Arc<str>> {
+  match answering.shown.map(|shown| &shown.choices.similar) {
+    Some(Ok(SimilarShown::Command { words, category })) => Ok(ctx.t_args(
+      "cards.approval.similarCommand",
+      [
+        ("words", &**words),
+        ("category", &*ctx.t(words::subject_key(*category, false))),
+        ("run", run),
+      ],
+    )),
+    Some(Ok(SimilarShown::Tool { server, tool })) => Ok(ctx.t_args(
+      "cards.approval.similarTool",
+      [("server", &**server), ("tool", &**tool), ("run", run)],
+    )),
+    Some(Ok(SimilarShown::Folder { folder })) => Ok(ctx.t_args(
+      "cards.approval.similarFolder",
+      [("folder", words::platform_path(folder).as_str()), ("run", run)],
+    )),
+    Some(Ok(SimilarShown::Check { name })) => {
+      Ok(ctx.t_args("cards.approval.similarCheck", [("check", &**name), ("run", run)]))
+    }
+    Some(Err(unavailable)) => Err(ctx.t(words::similar_unavailable(*unavailable))),
+    None => Err(ctx.t("cards.approval.unread")),
+  }
+}
+
 /// A tile that gives `given` and says what it covers, or, faded with a lock, why it is not offered.
 fn tile(
   ctx: &Ctx,
@@ -263,15 +282,7 @@ fn tile(
   (given, glyph, title): (Given, Icon, &str),
   covers: Result<Arc<str>, Arc<str>>,
 ) -> Element {
-  let id = format!(
-    "{}-{}",
-    answering.id,
-    if given == Given::ApproveSimilar {
-      "similar"
-    } else {
-      "everything"
-    }
-  );
+  let id = format!("{}-{}", answering.id, wider_name(given));
   let covers = match covers {
     Ok(covers) => covers,
     Err(reason) => return locked(&id, &ctx.t(title), &reason),
@@ -285,8 +296,17 @@ fn tile(
   }
   let asking = answering.asking.clone();
   let asked = asking.get() == Some(given);
+  let frame = tile_frame(&id, glyph, (&ctx.t(title), &covers));
+  // The tile being confirmed stays marked once the pointer leaves it: the hover fill in a `border_focus` stroke.
+  let frame = if asked {
+    frame
+      .background(ExtraColor::Hover.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+  } else {
+    frame
+  };
   Focus::Keyboard
-    .apply(tile_frame(&id, glyph, (&ctx.t(title), &covers)))
+    .apply(frame)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)
     .describe("state", if asked { "asking" } else { "enabled" })
@@ -298,19 +318,16 @@ fn tile(
 /// it covers, confirm, and *Keep asking*, which takes the question back.
 fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers: Arc<str>) -> Option<Element> {
   let open = answering.hold(given).ok()?;
-  let (name, title, confirm) = match given {
-    Given::ApproveSimilar => (
-      "similar",
-      "cards.approval.confirm.similarTitle",
-      "cards.approval.confirm.similar",
-    ),
+  let (title, confirm) = match given {
+    Given::ApproveSimilar => ("cards.approval.confirm.similarTitle", "cards.approval.confirm.similar"),
+    Given::ApproveProject => ("cards.approval.confirm.projectTitle", "cards.approval.confirm.project"),
     Given::ApproveEverything => (
-      "everything",
       "cards.approval.confirm.everythingTitle",
       "cards.approval.confirm.everything",
     ),
     Given::ApproveOnce | Given::Deny | Given::Answers | Given::ApprovePlan => return None,
   };
+  let name = wider_name(given);
   let run = answering.run.to_string();
   let press = answering.press(given, open);
   let (sent, kept) = (answering.asking.clone(), answering.asking.clone());
@@ -319,8 +336,12 @@ fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers:
     WidenProps {
       id: format!("{}-widen", answering.id).into(),
       card: true,
+      affirming: given == Given::ApproveProject,
       automation: Guarded::ApprovalWidening,
-      title: ctx.t_args(title, [("run", run.as_str())]),
+      title: ctx.t_args(
+        title,
+        [("run", run.as_str()), ("tool", answering.request.action.as_str())],
+      ),
       reasons: vec![covers].into(),
       confirm: ctx.t(confirm),
       keep: ctx.t("cards.approval.confirm.keep"),
@@ -330,6 +351,28 @@ fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers:
       }),
       on_keep: Arc::new(move || kept.set(None)),
     },
+  ))
+}
+
+/// The element name of a wider answer's tile and question.
+const fn wider_name(given: Given) -> &'static str {
+  match given {
+    Given::ApproveProject => "project",
+    Given::ApproveEverything => "everything",
+    _ => "similar",
+  }
+}
+
+/// What *Approve for every run of this project* covers, for a request it is offered ([`ProjectScope`]).
+fn project_covers(ctx: &Ctx, request: &PendingToolApproval) -> Option<Arc<str>> {
+  let scope = ProjectScope::of_request(request)?;
+  Some(ctx.t_args(
+    "cards.approval.projectCovers",
+    [
+      ("server", scope.server()),
+      ("tool", scope.tool()),
+      ("script", scope.short_script()),
+    ],
   ))
 }
 

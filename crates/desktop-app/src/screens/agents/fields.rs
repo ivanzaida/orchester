@@ -164,6 +164,13 @@ impl Fields {
     );
     let connection = self.connection_select(ctx, listed);
     let (model, effort) = self.selects(ctx, listed);
+    // A connection on an API provider offers the models typed for it and no effort (`NNYyh`).
+    let on_provider = self.connection(listed).is_some_and(|c| c.api_provider().is_some());
+    let (model_hint, effort_hint) = if on_provider {
+      ("agents.modelHintApiProvider", "agents.effortHintApiProvider")
+    } else {
+      ("agents.modelHint", "agents.effortHint")
+    };
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl)
@@ -198,14 +205,14 @@ impl Fields {
             false,
           ),
           form_section::side_row(
-            label(ctx, "agent-model", "agents.model", "agents.modelHint"),
+            label(ctx, "agent-model", "agents.model", model_hint),
             model,
             Place::Within,
             false,
           ),
           self.model_notice(ctx, listed),
           form_section::side_row(
-            label(ctx, "agent-effort", "agents.effort", "agents.effortHint"),
+            label(ctx, "agent-effort", "agents.effort", effort_hint),
             effort,
             Place::Last,
             false,
@@ -400,6 +407,24 @@ impl Fields {
       icon::Icon,
     };
     let connection = self.connection(listed);
+    // The models of an API provider are not known to Orchester: any effort its CLI takes may be typed (`NNYyh`).
+    if let Some(cli) = connection.filter(|c| c.api_provider().is_some()).map(|c| c.provider()) {
+      let mut field = FieldInput::new("agent-effort", ctx.t("agents.effort"), self.effort.clone())
+        .placeholder(ctx.t("agents.providerDefaultEffort"))
+        .mono()
+        .width(Dimension::Px(CONTROL_WIDTH));
+      let typed = self.effort.get();
+      if !typed.trim().is_empty()
+        && let Err(error) = orchester_core::connection::provider_effort(cli, &typed)
+      {
+        let key = match error {
+          orchester_core::connection::ProviderEffortError::NotOneWord => "agents.effortOneWord",
+          orchester_core::connection::ProviderEffortError::NotClaudeLevel => "agents.effortClaudeLevel",
+        };
+        field = field.error(ctx.t(key));
+      }
+      return field.render(ctx);
+    }
     let mut efforts = vec![Choice {
       value: String::new(),
       label: ctx.t("agents.defaultEffort"),
@@ -455,6 +480,10 @@ fn connection_detail(
   readings: &orchester_core::connection::plan_limits::PlanReadings,
 ) -> (String, bool) {
   use crate::services::accounts::{DetailPlace, account_name, identity_detail, short_state};
+  if let Some(provider) = connection.api_provider() {
+    let text = ctx.t_args("agents.connectionApiProvider", [("host", provider.base_url().host())]);
+    return (text.to_string(), false);
+  }
   let (Some(cli), Some(account)) = (
     orchester_core::account::AccountCli::of(connection.provider()),
     accounts.of_connection(connection.account(), connection.provider()),
