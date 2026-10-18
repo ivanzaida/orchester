@@ -23,7 +23,7 @@ pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
   permitted::permitted,
-  project::{ProjectRule, ProjectRuleId, answering_in_project},
+  project::{ProjectRule, ProjectRuleId, ProjectScope, answering_in_project},
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
   subject::{ApprovalSubject, ToolReach},
 };
@@ -38,7 +38,7 @@ pub enum ApprovalAnswer {
   Once,
   /// This request, and later ones of the run that are alike ([`RuleScope::similar`]).
   Similar,
-  /// This request, and later ones alike in every run of the project ([`RuleScope::project`]): only Orchester's
+  /// This request, and later ones alike in every run of the project ([`ProjectScope`]): only Orchester's
   /// `start_qa_app`, while the QA script is unchanged.
   SimilarProject,
   /// This request, and for good: a command's `prefix` goes into its profile's Allowed commands as a

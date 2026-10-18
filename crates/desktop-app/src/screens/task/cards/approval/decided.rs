@@ -31,7 +31,7 @@ pub(super) enum Decided {
     by: Option<DecidedBy>,
     at: Option<Timestamp>,
   },
-  /// The person approved it for every run of the project, as the runner took it at `at`.
+  /// The person approved it for every run of the project at `at`, as recorded or as the runner just took it.
   Project { at: Timestamp },
   /// Someone answered it before the person's answer reached the runner.
   AnsweredAlready,

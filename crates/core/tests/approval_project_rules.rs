@@ -8,7 +8,7 @@ use orchester_core::{
   orchester_tools::{QaApproval, SERVER},
   run::{
     Answerer, ApprovalAnswer, ApprovalSubject, AutomationAnswerError, DecidedBy, PendingToolApproval, ProjectRule,
-    ProjectRuleId, RuleScope, ToolReach, answering_in_project,
+    ProjectRuleId, ProjectScope, RuleScope, ToolReach, answering_in_project,
   },
   time::Timestamp,
 };
@@ -24,7 +24,7 @@ fn qa_call(blob: &str) -> ApprovalSubject {
 fn rule(id: i64, subject: &ApprovalSubject, revoked: bool) -> ProjectRule {
   ProjectRule {
     id: ProjectRuleId::new(id),
-    scope: RuleScope::project(subject).expect("a project rule"),
+    scope: ProjectScope::of(subject).expect("a project rule"),
     made_in: RunId::generate(),
     created_at: Timestamp::from_unix_millis(1),
     revoked_at: revoked.then(|| Timestamp::from_unix_millis(2)),
@@ -34,16 +34,20 @@ fn rule(id: i64, subject: &ApprovalSubject, revoked: bool) -> ProjectRule {
 
 #[test]
 fn project_rules_are_offered_only_for_the_qa_app_naming_its_script() {
+  let scope = ProjectScope::of(&qa_call("3f2a1b9c0d4e")).expect("a project rule");
+  assert_eq!((scope.server(), scope.tool()), (SERVER, "start_qa_app"));
+  assert_eq!((scope.script(), scope.short_script()), ("3f2a1b9c0d4e", "3f2a1b9"));
   assert_eq!(
-    RuleScope::project(&qa_call("3f2a1b9c")),
-    Some(RuleScope::SimilarMcpTool {
+    scope.rule_scope(),
+    RuleScope::SimilarMcpTool {
       server: SERVER.to_owned(),
       tool: "start_qa_app".to_owned(),
       folder: None,
-      check: Some("3f2a1b9c".to_owned()),
-    })
+      check: Some("3f2a1b9c0d4e".to_owned()),
+    }
   );
-  assert_eq!(RuleScope::project(&qa_call("")), None, "a call that names no script");
+  assert_eq!(ProjectScope::stored(scope.rule_scope()), Some(scope));
+  assert_eq!(ProjectScope::of(&qa_call("")), None, "a call that names no script");
   for (server, tool) in [(SERVER, "run_check"), ("pencil", "start_qa_app"), (SERVER, "get_run")] {
     let subject = ApprovalSubject::McpTool {
       server: server.to_owned(),
@@ -52,7 +56,7 @@ fn project_rules_are_offered_only_for_the_qa_app_naming_its_script() {
         blob: "3f2a1b9c".to_owned(),
       },
     };
-    assert_eq!(RuleScope::project(&subject), None, "{server} {tool}");
+    assert_eq!(ProjectScope::of(&subject), None, "{server} {tool}");
   }
 }
 
@@ -79,11 +83,11 @@ fn project_rules_are_read_from_the_request_alone() {
   }
   .target();
   assert_eq!(
-    RuleScope::project_of(&request(false, &target)).and_then(|scope| scope.script().map(str::to_owned)),
+    ProjectScope::of_request(&request(false, &target)).map(|scope| scope.script().to_owned()),
     Some("3f2a1b9c".to_owned())
   );
-  assert_eq!(RuleScope::project_of(&request(false, "a folder")), None);
-  assert_eq!(RuleScope::project_of(&request(true, &target)), None);
+  assert_eq!(ProjectScope::of_request(&request(false, "a folder")), None);
+  assert_eq!(ProjectScope::of_request(&request(true, &target)), None);
 }
 
 #[test]

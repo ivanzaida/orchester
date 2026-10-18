@@ -7,7 +7,11 @@ use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::{InvocationId, RunId, StepExecutionId},
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, category::CommandScope},
+  permission::{
+    AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess,
+    category::{CommandCategory, CommandScope},
+  },
+  resource::{CommandEnvironment, VariableName},
   run::{
     ApprovalSubject, PendingToolApproval,
     review::{HoldRules, PushFacts, ReviewHold, review_hold},
@@ -111,7 +115,10 @@ fn builds_that_write_only_ignored_output_go_to_the_reviewer() {
     "cargo check -p orchester-core",
     "cargo build --release",
     "cargo clippy --all-targets -- -D warnings",
-    "cargo t -p orchester-core",
+    "cargo test -p orchester-core -- --nocapture --test-threads=4 waits_ --skip slow -q",
+    "cargo test -- --exact --test-threads 1 --format pretty --color never --show-output",
+    "cargo bench -- --list --include-ignored",
+    "cargo clippy --all-targets -- -D warnings -Wclippy::pedantic --allow dead_code",
     "cargo doc --no-deps",
     "cargo +nightly test",
     "cargo test --target-dir target/alt",
@@ -248,4 +255,129 @@ fn builds_keep_the_other_hard_rules_and_writing_steps_unchanged() {
     let subject = fixture.command(command, &scope);
     assert_eq!(review_hold(&subject, &rules(&writing, &[])), None, "{command}");
   }
+}
+
+#[test]
+fn builds_hold_when_what_follows_their_double_dash_may_write() {
+  let fixture = Fixture::new();
+  let scope = fixture.scope();
+  for command in [
+    "cargo test -- --logfile src/main.rs",
+    "cargo test -- --logfile=notes.txt",
+    "cargo bench -- --save-baseline main",
+    "cargo test -- --report-time",
+    "cargo clippy -- --emit=metadata=out.rmeta",
+    "cargo clippy -- -o out.rmeta",
+    "cargo clippy -- warnings",
+    "cargo clippy -- -D",
+    "cargo build -- extra",
+    "cargo check -- --emit=metadata",
+  ] {
+    assert_eq!(
+      held(&fixture, &scope, command),
+      Some(ReviewHold::ReadOnlyStep),
+      "{command}"
+    );
+  }
+}
+
+#[test]
+fn builds_point_their_outputs_only_inside_the_worktree() {
+  let fixture = Fixture::new();
+  let scope = fixture.scope();
+  let outside = fixture.root.path().join("elsewhere.rmeta");
+  for command in [
+    format!("cargo clippy -- --emit=metadata={}", outside.display()),
+    format!("cargo clippy -- --emit metadata={}", outside.display()),
+    format!("cargo clippy -- -o {}", outside.display()),
+  ] {
+    let ApprovalSubject::Command(classified) = fixture.command(&command, &scope) else {
+      panic!("a command")
+    };
+    assert_eq!(classified.category(), CommandCategory::Unknown, "{command}");
+    assert_eq!(
+      held(&fixture, &scope, &command),
+      Some(ReviewHold::Unreadable),
+      "{command}"
+    );
+  }
+}
+
+#[test]
+fn builds_count_only_under_cargos_own_names() {
+  let fixture = Fixture::new();
+  let scope = fixture.scope();
+  for command in ["cargo t", "cargo b --release", "cargo c -p kontur"] {
+    assert_eq!(
+      held(&fixture, &scope, command),
+      Some(ReviewHold::ReadOnlyStep),
+      "{command}"
+    );
+  }
+  assert_eq!(held(&fixture, &scope, "cargo clippy"), None);
+  // `clippy` is no built-in subcommand: an alias of a configuration may stand in its place.
+  let config = fixture.worktree.join(".cargo");
+  std::fs::create_dir_all(&config).expect("config folder");
+  std::fs::write(config.join("config.toml"), "[alias]\nclippy = \"run --bin tool\"\n").expect("alias");
+  assert_eq!(held(&fixture, &scope, "cargo clippy"), Some(ReviewHold::ReadOnlyStep));
+  assert_eq!(
+    held(&fixture, &scope, "cargo test"),
+    None,
+    "built-in subcommands cannot be aliased"
+  );
+  std::fs::write(config.join("config.toml"), "include = \"more.toml\"\n").expect("include");
+  assert_eq!(
+    held(&fixture, &scope, "cargo test"),
+    Some(ReviewHold::ReadOnlyStep),
+    "an include may move the target"
+  );
+  std::fs::write(
+    config.join("config.toml"),
+    r#"[build]
+"target\u002Ddir" = "../x"
+"#,
+  )
+  .expect("escaped");
+  assert_eq!(
+    held(&fixture, &scope, "cargo test"),
+    Some(ReviewHold::ReadOnlyStep),
+    "an escaped key"
+  );
+}
+
+#[test]
+fn builds_take_the_target_directory_from_the_project_environment_as_cargo_does() {
+  let fixture = Fixture::new();
+  let environment = |pairs: &[(&str, &str)]| {
+    CommandEnvironment::new(
+      pairs
+        .iter()
+        .map(|(name, value)| (VariableName::new(name).expect("name"), (*value).to_owned()))
+        .collect(),
+    )
+    .expect("environment")
+  };
+  let outside = fixture.root.path().join("cache").display().to_string();
+  // `CARGO_TARGET_DIR` wins over `CARGO_BUILD_TARGET_DIR`.
+  let both = fixture.scope().with_project_environment(&environment(&[
+    ("CARGO_TARGET_DIR", "inside-target"),
+    ("CARGO_BUILD_TARGET_DIR", outside.as_str()),
+  ]));
+  assert_eq!(held(&fixture, &both, "cargo test"), None);
+  let build_only = fixture
+    .scope()
+    .with_project_environment(&environment(&[("CARGO_BUILD_TARGET_DIR", outside.as_str())]));
+  assert_eq!(
+    held(&fixture, &build_only, "cargo test"),
+    Some(ReviewHold::ReadOnlyStep)
+  );
+  // The project's Cargo home is read for its configuration too.
+  let home = fixture.root.path().join("cargo-home");
+  std::fs::create_dir_all(&home).expect("home");
+  std::fs::write(home.join("config.toml"), "[build]\ntarget-dir = \"/elsewhere\"\n").expect("config");
+  let with_home = fixture
+    .scope()
+    .with_project_environment(&environment(&[("CARGO_HOME", &home.display().to_string())]));
+  assert_eq!(held(&fixture, &with_home, "cargo test"), Some(ReviewHold::ReadOnlyStep));
+  assert_eq!(held(&fixture, &fixture.scope(), "cargo test"), None);
 }

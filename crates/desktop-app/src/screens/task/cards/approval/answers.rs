@@ -25,11 +25,11 @@ use lurq::{
 };
 use orchester_core::{
   id::RunId,
-  run::{ApprovalAnswer, PendingToolApproval},
+  run::{ApprovalAnswer, PendingToolApproval, ProjectScope},
 };
 use orchester_ipc::Command;
 use orchester_workspace::{
-  tasks::approvals::{ShownApproval, SimilarShown, project_script},
+  tasks::approvals::{ShownApproval, SimilarShown},
   workspace::OpenProject,
 };
 
@@ -351,22 +351,18 @@ const fn wider_name(given: Given) -> &'static str {
   }
 }
 
-/// What *Approve for every run of this project* covers, for a request it is offered ([`project_script`]).
+/// What *Approve for every run of this project* covers, for a request it is offered ([`ProjectScope`]).
 fn project_covers(ctx: &Ctx, request: &PendingToolApproval) -> Option<Arc<str>> {
-  let script = project_script(request)?;
-  let short: String = script.chars().take(SCRIPT_CHARS).collect();
+  let scope = ProjectScope::of_request(request)?;
   Some(ctx.t_args(
     "cards.approval.projectCovers",
     [
-      ("server", request.server.as_str()),
-      ("tool", request.action.as_str()),
-      ("script", short.as_str()),
+      ("server", scope.server()),
+      ("tool", scope.tool()),
+      ("script", scope.short_script()),
     ],
   ))
 }
-
-/// How much of the QA script's git blob a tile names, as git abbreviates one.
-const SCRIPT_CHARS: usize = 7;
 
 /// A tile for an answer that is not offered: faded, a lock for its glyph, and why.
 fn locked(id: &str, title: &str, reason: &str) -> Element {

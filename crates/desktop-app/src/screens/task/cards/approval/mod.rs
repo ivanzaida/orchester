@@ -121,6 +121,9 @@ impl Component for ApprovalView {
 /// How the request was answered: as recorded, or as the runner just took the person's answer or said it no
 /// longer waits; `None` while it waits.
 fn decided(card: &ApprovalCard, outcome: Option<&Outcome>) -> Option<Decided> {
+  if let (Some(_), Some(at), true) = (card.decided, card.decided_at, card.for_project) {
+    return Some(Decided::Project { at });
+  }
   if let Some(decision) = card.decided {
     return Some(Decided::Recorded {
       decision,

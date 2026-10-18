@@ -17,9 +17,9 @@ use orchester_core::{
   resource::ApprovalMode,
   run::{
     Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
-    PendingToolApproval, ProjectRuleId, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, allowing_tool,
-    answering, answering_in_project, auto_approves, auto_verdict, codex_denial, denial_message, permitted,
-    review::Review,
+    PendingToolApproval, ProjectRuleId, ProjectScope, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach,
+    allowing_tool, answering, answering_in_project, auto_approves, auto_verdict, codex_denial, denial_message,
+    permitted, review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -185,7 +185,7 @@ impl Worker {
         watch.db.add_approval_rule(approval.run, &scope, now)?;
       }
       ApprovalAnswer::SimilarProject => {
-        let Some(scope) = RuleScope::project(&subject) else {
+        let Some(scope) = ProjectScope::of(&subject) else {
           return Ok(Err(unavailable("Approve for every run of this project")));
         };
         watch.db.add_project_approval_rule(&scope, approval.run, now)?;

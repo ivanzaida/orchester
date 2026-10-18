@@ -8,7 +8,10 @@ use orchester_core::{
     category::{ClassifiedCommand, CommandScope},
   },
   resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, Slug, VersionNumber},
-  run::{DecidedBy, PendingToolApproval, RuleScope, ToolApprovalDecision, review::Review},
+  run::{
+    ApprovalSubject, DecidedBy, PendingToolApproval, ProjectScope, RuleScope, ToolApprovalDecision, ToolReach,
+    review::Review,
+  },
   store::{ActivityStore, ConversationStore, ResourceStore, RunStore},
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
@@ -60,13 +63,13 @@ fn approval_rules_are_kept_revoked_and_counted() {
 }
 
 /// The rule *Approve for every run of this project* keeps for `start_qa_app` at the QA script's `blob`.
-fn qa_rule(blob: &str) -> RuleScope {
-  RuleScope::SimilarMcpTool {
+fn qa_rule(blob: &str) -> ProjectScope {
+  ProjectScope::of(&ApprovalSubject::McpTool {
     server: "Orchester".to_owned(),
     tool: "start_qa_app".to_owned(),
-    folder: None,
-    check: Some(blob.to_owned()),
-  }
+    reach: ToolReach::Script { blob: blob.to_owned() },
+  })
+  .expect("a project rule")
 }
 
 #[test]
@@ -90,8 +93,8 @@ fn approval_rules_of_the_project_outlive_their_run_and_are_revoked() {
   let rules = db.project_approval_rules().expect("rules");
   assert_eq!(rules.len(), 2);
   assert_eq!(
-    (rules[0].made_in, rules[0].answered, rules[0].script()),
-    (run.id(), 1, Some("3f2a1b9c"))
+    (rules[0].made_in, rules[0].answered, rules[0].scope.script()),
+    (run.id(), 1, "3f2a1b9c")
   );
   assert!(db.revoke_project_approval_rule(rule.id, at(13)).expect("revoked"));
   assert!(!db.revoke_project_approval_rule(rule.id, at(14)).expect("once"));
@@ -106,6 +109,29 @@ fn approval_rules_of_the_project_outlive_their_run_and_are_revoked() {
       .execute("UPDATE project_approval_rules SET scope = '{}'", [])
       .is_err()
   );
+  assert!(
+    connection
+      .execute("UPDATE project_approval_rules SET revoked_at = NULL", [])
+      .is_err(),
+    "a revoked rule stays revoked"
+  );
+}
+
+#[test]
+fn approval_rules_of_the_project_are_added_once_under_the_write_lock() {
+  let (repo, mut db, run, _) = started_run();
+  let other = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("raw");
+  other.execute_batch("BEGIN IMMEDIATE").expect("another writer holds the lock");
+  db.set_busy_handler_for_test(|_| false).expect("no wait for the lock");
+  assert!(
+    db.add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(10)).is_err(),
+    "the check and the insert wait for the write lock together"
+  );
+  other.execute_batch("ROLLBACK").expect("released");
+  let rule = db
+    .add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(11))
+    .expect("rule");
+  assert_eq!(db.project_approval_rules().expect("rules"), vec![rule]);
 }
 
 #[test]
@@ -335,4 +361,51 @@ fn approval_rules_stop_auto_approving_chooses_and_writes_under_one_write_lock() 
   let failed = db.stop_auto_approving(&|_| Err(StoreError::RunNotFound(run.id())));
   assert!(failed.is_err());
   assert_eq!(db.run_auto_approve(run.id()).expect("read"), Some(true));
+}
+
+#[test]
+fn approval_rules_of_the_project_mark_the_answer_that_made_them() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let target = orchester_core::orchester_tools::QaApproval {
+    script: "3f2a1b9c".to_owned(),
+    scenario: "tasks".to_owned(),
+    changed: Vec::new(),
+  }
+  .target();
+  let request = |id: &str, at_millis: i64| PendingToolApproval {
+    id: format!("{}:{id}", invocation.id),
+    run: run.id(),
+    execution,
+    invocation: invocation.id,
+    agent: "Verifier".to_owned(),
+    command: false,
+    scope: None,
+    server: "Orchester".to_owned(),
+    action: "start_qa_app".to_owned(),
+    target: Some(target.clone()),
+    requested_at: at(at_millis),
+    native: None,
+  };
+  for (id, when) in [("qa-1", 11), ("qa-2", 12)] {
+    db.request_tool_approval(&request(id, when)).expect("request");
+    db.claim_tool_approval(run.id(), &request(id, when).id, DecidedBy::PersonSimilar, at(when + 1))
+      .expect("claimed");
+  }
+  let marked = |db: &ProjectDb| -> Vec<bool> {
+    db.decided_tool_approvals(run.id())
+      .expect("decided")
+      .iter()
+      .map(|decided| decided.for_project)
+      .collect()
+  };
+  assert_eq!(marked(&db), [false, false], "no rule of the project yet");
+  db.add_project_approval_rule(&qa_rule("3f2a1b9c"), run.id(), at(20))
+    .expect("rule");
+  assert_eq!(marked(&db), [true, true]);
+  db.add_project_approval_rule(&qa_rule("77aa00"), run.id(), at(21))
+    .expect("another script's rule");
+  assert_eq!(marked(&db), [true, true]);
 }

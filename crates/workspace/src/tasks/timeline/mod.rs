@@ -117,6 +117,8 @@ pub struct ApprovalCard {
   pub decided_at: Option<Timestamp>,
   /// What auto mode did with it, once it is answered; while it waits, the shown request says.
   pub review: Option<orchester_core::run::review::Review>,
+  /// The person approved it for every run of the project ([`orchester_core::run::DecidedToolApproval::for_project`]).
+  pub for_project: bool,
 }
 
 /// How a step execution ended, as its result card says.
@@ -402,7 +404,7 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .pending
     .iter()
     .filter(|request| request.execution == execution)
-    .map(|request| (request.clone(), None, None, None, None));
+    .map(|request| (request.clone(), None, None, None, (None, false)));
   let decided = sources
     .decided
     .iter()
@@ -414,24 +416,27 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
         Some(decided.decision),
         decided.decided_by,
         Some(decided.decided_at),
-        decided.review.clone(),
+        (decided.review.clone(), decided.for_project),
       )
     });
   pending
     .chain(decided)
-    .map(|(request, decided, decided_by, decided_at, review)| Item {
-      key: approval_key(&request.id),
-      execution: Some(execution),
-      at: request.requested_at,
-      kind: ItemKind::Approval(ApprovalCard {
-        step: step.clone(),
-        request,
-        decided,
-        decided_by,
-        decided_at,
-        review,
-      }),
-    })
+    .map(
+      |(request, decided, decided_by, decided_at, (review, for_project))| Item {
+        key: approval_key(&request.id),
+        execution: Some(execution),
+        at: request.requested_at,
+        kind: ItemKind::Approval(ApprovalCard {
+          step: step.clone(),
+          request,
+          decided,
+          decided_by,
+          decided_at,
+          review,
+          for_project,
+        }),
+      },
+    )
     .collect()
 }
 

@@ -16,7 +16,10 @@
 use orchester_core::{
   orchester_tools::{self, OrchesterTool, QaApproval},
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
-  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, RuleScope, Run, ToolApprovalDecision, WaitReason},
+  run::{
+    Answerer, ApprovalSubject, DecidedBy, Invocation, PendingToolApproval, ProjectScope, Run, ToolApprovalDecision,
+    ToolReach, WaitReason,
+  },
   store::{ActivityStore, RunStore},
   task::Task,
   time::Timestamp,
@@ -386,12 +389,14 @@ fn qa_start(kontur: &mut Kontur, (run, invocation): (&Run, &Invocation), at: Tim
     native: None,
   };
   kontur.db.request_tool_approval(&request)?;
-  let earlier = RuleScope::SimilarMcpTool {
+  let earlier = ProjectScope::of(&ApprovalSubject::McpTool {
     server: orchester_tools::SERVER.to_owned(),
     tool: OrchesterTool::StartQaApp.as_str().to_owned(),
-    folder: None,
-    check: Some(EARLIER_QA_SCRIPT.to_owned()),
-  };
+    reach: ToolReach::Script {
+      blob: EARLIER_QA_SCRIPT.to_owned(),
+    },
+  })
+  .ok_or_else(|| invalid("a start_qa_app rule"))?;
   let made = Timestamp::from_unix_millis(at.unix_millis() - 60_000);
   let rule = kontur.db.add_project_approval_rule(&earlier, run.id(), made)?;
   for _ in 0..3 {

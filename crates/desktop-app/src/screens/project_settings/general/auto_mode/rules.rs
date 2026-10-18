@@ -7,7 +7,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::run::{ProjectRule, RuleScope};
+use orchester_core::run::ProjectRule;
 use orchester_workspace::project_settings::Settings;
 
 use super::Props;
@@ -22,9 +22,6 @@ use crate::{
     icon::Icon,
   },
 };
-
-/// How much of the QA script's git blob a rule names, as git abbreviates one.
-const SCRIPT_CHARS: usize = 7;
 
 pub fn row(ctx: &Ctx, props: &Props, settings: &Settings, save: &Save) -> Element {
   let busy = save.state().get().is_pending();
@@ -53,11 +50,6 @@ pub fn row(ctx: &Ctx, props: &Props, settings: &Settings, save: &Save) -> Elemen
 /// One rule: what it approves, and its *Revoke*.
 fn entry(ctx: &Ctx, props: &Props, rule: &ProjectRule, (save, busy): (&Save, bool)) -> Element {
   let id = format!("settings-auto-rule-{}", rule.id.get());
-  let (server, tool) = match &rule.scope {
-    RuleScope::SimilarMcpTool { server, tool, .. } => (server.as_str(), tool.as_str()),
-    RuleScope::SimilarCommand { .. } | RuleScope::AlwaysCommand { .. } => ("", ""),
-  };
-  let script: String = rule.script().unwrap_or_default().chars().take(SCRIPT_CHARS).collect();
   let answered = rule.answered.to_string();
   // lurq's i18n has no plural rules: one answer has words of its own.
   let key = if rule.answered == 1 {
@@ -68,9 +60,9 @@ fn entry(ctx: &Ctx, props: &Props, rule: &ProjectRule, (save, busy): (&Save, boo
   let words = ctx.t_args(
     key,
     [
-      ("server", server),
-      ("tool", tool),
-      ("script", script.as_str()),
+      ("server", rule.scope.server()),
+      ("tool", rule.scope.tool()),
+      ("script", rule.scope.short_script()),
       ("answered", answered.as_str()),
     ],
   );

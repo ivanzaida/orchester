@@ -182,6 +182,12 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
   } else if manager.builds.contains(&sub) {
     let mut judged = Judged::of(Kind::Worktree).inside_all(rest);
     if program == "cargo" {
+      // `--emit=metadata=<path>`: the path a value names after its own `=` must lie inside too.
+      judged.inside.extend(
+        rest
+          .iter()
+          .filter_map(|arg| arg.rsplit_once('=').map(|(_, path)| path.to_owned())),
+      );
       judged.build_words = BuildWords::of(sub, rest);
     }
     if sub == "clean" { judged } else { judged.prefix_stays() }

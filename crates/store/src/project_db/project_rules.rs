@@ -4,7 +4,7 @@
 
 use orchester_core::{
   id::RunId,
-  run::{ProjectRule, ProjectRuleId, RuleScope},
+  run::{ProjectRule, ProjectRuleId, ProjectScope, RuleScope},
   time::Timestamp,
 };
 use rusqlite::params;
@@ -12,7 +12,7 @@ use rusqlite::params;
 use super::ProjectDb;
 use crate::{
   StoreError,
-  rows::{decode_json, encode_json, parse},
+  rows::{corrupt, decode_json, encode_json, parse},
 };
 
 const SCOPE: &str = "project approval rule scope";
@@ -42,7 +42,8 @@ impl ProjectDb {
       .map(|(id, scope, made_in, created_at, revoked_at, answered)| {
         Ok(ProjectRule {
           id: ProjectRuleId::new(id),
-          scope: decode_json::<RuleScope>(SCOPE, SCOPE_SCHEMA, &scope)?,
+          scope: ProjectScope::stored(decode_json::<RuleScope>(SCOPE, SCOPE_SCHEMA, &scope)?)
+            .ok_or_else(|| corrupt(SCOPE, "not a rule of start_qa_app kept to a script"))?,
           made_in: parse("run id", &made_in)?,
           created_at: Timestamp::from_unix_millis(created_at),
           revoked_at: revoked_at.map(Timestamp::from_unix_millis),
@@ -53,36 +54,44 @@ impl ProjectDb {
   }
 
   /// Adds a rule of `scope`, made by answering a request of run `made_in`. The same scope while one is active adds
-  /// nothing and returns that one.
+  /// nothing and returns that one; the check and the insert share one write transaction, so two answers at once
+  /// never keep two.
   pub fn add_project_approval_rule(
     &mut self,
-    scope: &RuleScope,
+    scope: &ProjectScope,
     made_in: RunId,
     at: Timestamp,
   ) -> Result<ProjectRule, StoreError> {
-    if let Some(active) = self
-      .project_approval_rules()?
-      .into_iter()
-      .find(|rule| rule.is_active() && rule.scope == *scope)
-    {
-      return Ok(active);
-    }
-    self.connection.execute(
-      "INSERT INTO project_approval_rules (scope, made_in, created_at) VALUES (?1, ?2, ?3)",
-      params![
-        encode_json(SCOPE, SCOPE_SCHEMA, scope)?,
-        made_in.to_string(),
-        at.unix_millis()
-      ],
-    )?;
-    Ok(ProjectRule {
-      id: ProjectRuleId::new(self.connection.last_insert_rowid()),
-      scope: scope.clone(),
-      made_in,
-      created_at: at,
-      revoked_at: None,
-      answered: 0,
-    })
+    self.with_write_transaction(
+      |db| {
+        if let Some(active) = db
+          .project_approval_rules()?
+          .into_iter()
+          .find(|rule| rule.is_active() && rule.scope == *scope)
+        {
+          return Ok(active);
+        }
+        db.connection.execute(
+          "INSERT INTO project_approval_rules (scope, made_in, created_at) VALUES (?1, ?2, ?3)",
+          params![
+            encode_json(SCOPE, SCOPE_SCHEMA, &scope.rule_scope())?,
+            made_in.to_string(),
+            at.unix_millis()
+          ],
+        )?;
+        Ok(ProjectRule {
+          id: ProjectRuleId::new(db.connection.last_insert_rowid()),
+          scope: scope.clone(),
+          made_in,
+          created_at: at,
+          revoked_at: None,
+          answered: 0,
+        })
+      },
+      |error| error,
+      // Nothing was committed: the transaction rolls back, and no rule was added.
+      |_, error| error,
+    )
   }
 
   /// Revokes rule `rule`; `false` when it was revoked already or is not stored.

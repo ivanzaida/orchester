@@ -9,8 +9,12 @@
 //! person's decision of 2026-10-18) is no write: its target directory ([`CommandPart::build_output`]) lies in a
 //! writable folder outside the worktree, or in the worktree where its repository ignores it and tracks nothing in it
 //! ([`HoldRules::build_output`]). Such a build goes to the reviewer; every other hard rule still applies to it, and
-//! `cargo fmt`, `fix`, `add`, `install` or `publish`, a build pointed at a manifest or target directory elsewhere, and
-//! a target directory the repository does not ignore still hold.
+//! `cargo fmt`, `fix`, `add`, `install` or `publish`, an alias, what after `--` may write, a build pointed at a
+//! manifest or target directory elsewhere, and a target directory the repository does not ignore still hold. The
+//! person accepted (2026-10-18) that such a build runs the worktree's own code, whatever an earlier step wrote, under
+//! the reviewer's approval alone: build scripts, procedural macros, the tests, and the repository's
+//! `.cargo/config.toml` (`runner`, `rustc-wrapper`, `rustflags`) and `rust-toolchain.toml`; and that a project rule
+//! for `start_qa_app` lets agents run code they wrote outside every sandbox, pinned only by the script's blob.
 //!
 //! A part Orchester cannot read to the end (an unknown program or form, a script whose content it does
 //! not read) goes to the reviewer, which is told so ([`unread_parts`]), except in a step whose network is

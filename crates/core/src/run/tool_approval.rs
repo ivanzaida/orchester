@@ -141,6 +141,9 @@ pub struct DecidedToolApproval {
   pub decided_at: Timestamp,
   /// What auto mode did with the request before it was answered.
   pub review: Option<super::review::Review>,
+  /// A person's similar answer that made a rule of the project (*Approve for every run of this project*): a rule of
+  /// the request's script was made in its run. Who answered names it as any similar answer.
+  pub for_project: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

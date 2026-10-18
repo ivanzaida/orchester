@@ -455,7 +455,9 @@ network is off or that only reads.
 In a read-only step a Cargo build, check, test, clippy, doc or bench that writes only its build output (a
 target directory in a writable folder outside the worktree, or one in the worktree that git ignores and
 tracks nothing in) is no write and goes to the reviewer (2026-10-18); `cargo fmt`, `fix`, `add`, `install`,
-`publish`, `--manifest-path` and a target directory elsewhere still ask. *Approve for every run of this
+`publish`, aliases (`b`, `c`, `t`), what after `--` may write (`--logfile`, `--emit`, `-o`), `--manifest-path` and a
+target directory elsewhere still ask. The person accepted (2026-10-18) that such a build runs the worktree's
+build scripts, macros, tests and repository Cargo settings under the reviewer's approval alone. *Approve for every run of this
 project* on a `start_qa_app` card keeps a rule of the project, by the QA script's git blob, which answers the
 tool in every run until the script changes or the rule is revoked in Project settings › Auto mode; only a
 person makes it.

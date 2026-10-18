@@ -102,7 +102,10 @@ fn project_settings_github_check_reads_origin_and_says_when_no_github_remote_exi
 
 #[test]
 fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
-  use orchester_core::{run::RuleScope, time::Timestamp};
+  use orchester_core::{
+    run::{ApprovalSubject, ProjectScope, ToolReach},
+    time::Timestamp,
+  };
   let mut page = Settings::new(false);
   assert_eq!(
     page.text("settings-auto-rules"),
@@ -111,12 +114,14 @@ fn project_settings_auto_mode_lists_the_projects_rules_and_revokes_one() {
   let rule = {
     let mut db = page.db();
     let run = super::run_fixture::auto_run(&mut db);
-    let scope = RuleScope::SimilarMcpTool {
+    let scope = ProjectScope::of(&ApprovalSubject::McpTool {
       server: "Orchester".to_owned(),
       tool: "start_qa_app".to_owned(),
-      folder: None,
-      check: Some("3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345".to_owned()),
-    };
+      reach: ToolReach::Script {
+        blob: "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345".to_owned(),
+      },
+    })
+    .expect("a project rule");
     db.add_project_approval_rule(&scope, run, Timestamp::now())
       .expect("rule")
   };

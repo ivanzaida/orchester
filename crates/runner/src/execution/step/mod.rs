@@ -10,6 +10,7 @@ mod approval;
 mod checks;
 mod claude_approval;
 mod cli_version;
+mod command_scope;
 mod end;
 mod mcp;
 mod memory;
@@ -27,16 +28,14 @@ mod stderr;
 mod tool_files;
 pub(super) mod worker;
 
-use std::path::{Path, PathBuf};
-
 use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   conversation::{Arrival, Message, latest_question},
   id::StepExecutionId,
   memory::MemoryStore,
-  permission::{LaunchPermissions, category::CommandScope},
-  resource::{CommandEnvironment, ModelId},
+  permission::LaunchPermissions,
+  resource::ModelId,
   revision::Revision,
   run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
@@ -49,6 +48,7 @@ use tokio::sync::mpsc;
 pub(super) use self::qa_app::QaApps;
 pub use self::qa_app::QaSlots;
 use self::{
+  command_scope::command_scope,
   end::Taken,
   start::Driven,
   worker::{Stop, Worker},
@@ -559,35 +559,5 @@ impl RunTask {
     self.db.save_invocation(invocation)?;
     self.board.release(execution);
     self.fail(execution, failure)
-  }
-}
-
-/// Where the commands of an agent working in `worktree` with `launch` permissions run and may write:
-/// the worktree and the extra writable folders it was given, as written (relative to the repository
-/// `root`), for the host's user, with Cargo's target directory the project's `environment` names.
-fn command_scope(
-  root: &Path,
-  worktree: &Path,
-  launch: &LaunchPermissions,
-  environment: &CommandEnvironment,
-) -> CommandScope {
-  let writable: Vec<PathBuf> = launch
-    .permissions()
-    .granted_folders()
-    .map(|folders| {
-      folders
-        .entries()
-        .iter()
-        .map(|folder| folder.lexical_path(root))
-        .collect()
-    })
-    .unwrap_or_default();
-  let scope = CommandScope::on_host(worktree, &writable);
-  match ["CARGO_TARGET_DIR", "CARGO_BUILD_TARGET_DIR"]
-    .into_iter()
-    .find_map(|name| environment.get(name))
-  {
-    Some(folder) => scope.with_cargo_target_dir(Path::new(folder)),
-    None => scope,
   }
 }
