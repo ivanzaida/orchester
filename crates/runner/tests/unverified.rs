@@ -347,3 +347,46 @@ async fn unverified_accept_is_refused_when_the_steps_own_worktree_is_gone_but_it
     &RunStatus::WaitingForPerson(Stuck::Unverified(key("verify")))
   );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unverified_stale_wait_decisions_cannot_decide_a_later_wait() {
+  for by in [Answerer::Person, Answerer::Automation] {
+    let mut started = Started::new(verify_after("Change README.md.", "Report unverified.")).await;
+    let shown = started.until(waits).await;
+    started
+      .scheduler
+      .decide_stuck_as(started.id, StuckDecision::Retry, by, shown.last_sequence())
+      .await
+      .expect("another client retries the displayed wait");
+    let later = started.until(|run| waits(run) && run.attempts().len() == 2).await;
+    assert_ne!(shown.last_sequence(), later.last_sequence());
+    let invocations = started.invocations();
+    for decision in [
+      StuckDecision::Retry,
+      StuckDecision::Stop,
+      StuckDecision::Accept { by },
+      StuckDecision::ReturnTo {
+        step: key("implement"),
+        note: ReviewNote::new("Cover the missing state.").expect("note"),
+      },
+    ] {
+      assert_eq!(
+        started
+          .scheduler
+          .decide_stuck_as(started.id, decision, by, shown.last_sequence())
+          .await,
+        Err(orchester_ipc::Rejection::RunNotWaiting),
+        "an old view must not decide the new wait"
+      );
+      assert_eq!(started.db().run(started.id).expect("run").expect("run"), later);
+      assert_eq!(started.invocations(), invocations);
+    }
+    started
+      .scheduler
+      .decide_stuck_as(started.id, StuckDecision::Accept { by }, by, later.last_sequence())
+      .await
+      .expect("the freshly displayed wait can be accepted");
+    let run = started.until(|run| run.status().is_terminal()).await;
+    assert_eq!(run.status(), &RunStatus::Succeeded);
+  }
+}

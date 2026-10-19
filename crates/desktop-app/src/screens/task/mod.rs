@@ -7,9 +7,9 @@
 //! request, so the header and the Summary share it.
 //!
 //! The task is read off the UI thread (`read`) and again whenever the runner changes one of the
-//! project's runs, tasks are saved, or the person tries again after a failed reading; a failed reading
-//! again keeps the task as last read on the page and says why. What the task's ended runs left in the
-//! repository is read beside it, for *Remove worktree* and Run again.
+//! project's runs, tasks are saved, or the person tries again after a failed reading. A failed reread shows
+//! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
+//! left in the repository is read beside it, for *Remove worktree* and Run again.
 
 pub(crate) mod cards;
 pub(crate) mod changes;
@@ -328,6 +328,10 @@ impl Component for TaskFrame {
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
     };
+    // Retained future data is no longer safe to act on after a failed reread, including during its retry.
+    if let Some(reason) = &stale {
+      return read_failed(ctx, reason, Some(self.retries.clone()));
+    }
     // Set only when it changes: the frame then renders again, following the transcript's lines or not.
     let live = read::runs(&detail);
     if self.live.get_untracked() != live {

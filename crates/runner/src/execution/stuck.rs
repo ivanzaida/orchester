@@ -6,7 +6,7 @@
 
 use orchester_core::{
   id::RunId,
-  run::{Run, RunStatus, StuckDecision},
+  run::{Answerer, EventSequence, Run, RunStatus, StuckDecision},
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
@@ -18,6 +18,31 @@ impl Scheduler {
   /// Carries out `decision` on `run`, which waits for a person. A run its task executes does not
   /// wait for one: a second decision while the first one's attempt runs is refused as such.
   pub async fn decide_stuck(&self, run: RunId, decision: StuckDecision) -> Result<(), Rejection> {
+    let by = match &decision {
+      StuckDecision::Accept { by } => *by,
+      _ => orchester_core::run::Answerer::Person,
+    };
+    self.decide_stuck_seen(run, decision, by, None).await
+  }
+
+  /// The current window and MCP tools supply who decided and the state they read at input delivery.
+  pub async fn decide_stuck_as(
+    &self,
+    run: RunId,
+    decision: StuckDecision,
+    by: Answerer,
+    expected: EventSequence,
+  ) -> Result<(), Rejection> {
+    self.decide_stuck_seen(run, decision, by, Some(expected)).await
+  }
+
+  async fn decide_stuck_seen(
+    &self,
+    run: RunId,
+    decision: StuckDecision,
+    by: Answerer,
+    expected: Option<EventSequence>,
+  ) -> Result<(), Rejection> {
     let executing = |rejection| match rejection {
       Rejection::RunNotPaused => Rejection::RunNotWaiting,
       other => other,
@@ -25,12 +50,12 @@ impl Scheduler {
     if decision != StuckDecision::Stop {
       return self
         .continue_settled(run, |db, root| {
-          let mut stored = waiting(db, run)?;
+          let mut stored = waiting(db, run, expected)?;
           if matches!(decision, StuckDecision::Accept { .. }) {
             acceptable(root, &stored)?;
           }
           let events = stored
-            .decide_stuck(&decision, Timestamp::now())
+            .decide_stuck_as(&decision, by, Timestamp::now())
             .map_err(idle::rejection)?;
           idle::store_continuation(db, root, stored, &events)
         })
@@ -40,9 +65,9 @@ impl Scheduler {
     self.settled(run).await.map_err(executing)?;
     let _one_at_a_time = self.inner.continuing.lock().await;
     let mut db = self.open()?;
-    let mut stored = waiting(&db, run)?;
+    let mut stored = waiting(&db, run, expected)?;
     let events = stored
-      .decide_stuck(&decision, Timestamp::now())
+      .decide_stuck_as(&decision, by, Timestamp::now())
       .map_err(idle::rejection)?;
     idle::store(&mut db, &stored, &events)?;
     self.inner.notifier.send(Event::RunChanged {
@@ -71,10 +96,12 @@ fn acceptable(root: &std::path::Path, run: &Run) -> Result<(), Rejection> {
   }
 }
 
-/// The stored run, if it waits for a person.
-fn waiting(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
+/// The stored run, if the wait the caller read still waits for a decision.
+fn waiting(db: &ProjectDb, run: RunId, expected: Option<EventSequence>) -> Result<Run, Rejection> {
   let stored = idle::load(db, run)?;
-  if matches!(stored.status(), RunStatus::WaitingForPerson(_)) {
+  if matches!(stored.status(), RunStatus::WaitingForPerson(_))
+    && expected.is_none_or(|seen| seen == stored.last_sequence())
+  {
     Ok(stored)
   } else {
     Err(Rejection::RunNotWaiting)

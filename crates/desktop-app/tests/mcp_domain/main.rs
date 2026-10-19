@@ -25,6 +25,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod orchestrator_chat;
+mod person_decisions;
 mod pipeline_permissions;
 mod pull_requests;
 mod reads;
@@ -134,10 +135,8 @@ impl Served {
       (config, settings),
       &link.input_gate(),
     );
-    let file = server.discovery_path().expect("the server listens");
-    let file: Value = serde_json::from_str(&std::fs::read_to_string(file).expect("discovery file"))
-      .expect("the discovery file is JSON");
-    let token = file["token"].as_str().expect("the file holds the token").to_owned();
+    // These tests run in the server's process: use its handle, without reopening an ACL-protected discovery file.
+    let token = server.token().expect("the server has a token").expose().to_owned();
     let port = server.port().expect("the server listens").get();
     let mcp = McpLink::new(&server);
     tree.mount_root::<Root>(

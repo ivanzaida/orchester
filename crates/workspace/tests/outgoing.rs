@@ -168,3 +168,30 @@ fn outgoing_before_a_run_the_message_is_for_the_first_agent_of_the_pipeline() {
   assert_eq!(prepared.mode, ComposerMode::NotStarted);
   assert_eq!(prepared.conversation.first_agent.as_deref(), Some("Builder"));
 }
+
+#[test]
+fn outgoing_messages_that_reach_a_waiting_step_require_question_consent() {
+  use orchester_core::{id::ResourceId, run::WaitReason};
+  use orchester_workspace::decisions::DecisionKind;
+
+  let mut fixture = Fixture::new();
+  let task = fixture.task("Add login", at(10));
+  let mut run = fixture.started_run(task, at(20));
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let events = run.wait_step(execution, WaitReason::Message, at(21)).expect("waits");
+  fixture.record(&run, &events);
+  let mut prepared = prepare_in(fixture.repo.path(), (task, Some(run.id())), (false, None)).expect("prepared");
+  assert!(matches!(
+    Action::of(&prepared.mode, Way::Primary, prepared.recipient),
+    Some(Action::Deliver(_))
+  ));
+  assert_eq!(prepared.decision_kind(Way::Primary), Some(DecisionKind::Question));
+  prepared.recipient = Recipient::Agent(ResourceId::generate());
+  assert_eq!(
+    prepared.decision_kind(Way::Primary),
+    None,
+    "a message for another agent cannot answer"
+  );
+  prepared.recipient = Recipient::Orchestrator;
+  assert_eq!(prepared.decision_kind(Way::Primary), Some(DecisionKind::Question));
+}

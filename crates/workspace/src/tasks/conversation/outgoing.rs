@@ -82,6 +82,16 @@ pub enum Action {
 }
 
 impl Action {
+  /// An answer or continuation that takes a decision on the person's behalf.
+  pub const fn decision_kind(self) -> Option<crate::decisions::DecisionKind> {
+    use crate::decisions::DecisionKind;
+    match self {
+      Self::Answer(_) => Some(DecisionKind::Question),
+      Self::PlanChanges(_) => Some(DecisionKind::Plan),
+      Self::Continue => Some(DecisionKind::Stuck),
+      _ => None,
+    }
+  }
   /// What sending `way` to `to` does in `mode`; `None` where it sends nothing.
   pub fn of(mode: &ComposerMode, way: Way, to: Recipient) -> Option<Self> {
     let then = match way {
@@ -175,6 +185,31 @@ pub fn after_turn_run(detail: &TaskDetail, reads: bool, message: MessageId) -> O
   (run == latest && reads).then_some(run)
 }
 
+/// Whether a message queued now for `recipient` answers a free-text question an agent of the latest run waits
+/// on: the runner resumes that agent's step with it. A question with suggested answers holds its step.
+pub fn answers_question(detail: &TaskDetail, recipient: Recipient) -> bool {
+  let Some(view) = &detail.run else { return false };
+  view.run.awaiting_answer().into_iter().any(|id| {
+    if view
+      .waiting_questions
+      .iter()
+      .any(|asked| asked.request.execution() == id)
+    {
+      return false;
+    }
+    let profile = view
+      .run
+      .execution(id)
+      .and_then(|execution| view.run.snapshot().step(execution.step()))
+      .and_then(|step| match step.executor() {
+        orchester_core::run::StepExecutor::Agent { profile, .. } => Some(profile.resource),
+        orchester_core::run::StepExecutor::Tool { .. } => None,
+      });
+    profile
+      .is_some_and(|profile| matches!(recipient, Recipient::Orchestrator) || recipient == Recipient::Agent(profile))
+  })
+}
+
 /// The task as read when its message is sent, and what its latest run's state offers.
 pub struct Prepared {
   pub detail: TaskDetail,
@@ -187,6 +222,14 @@ impl Prepared {
   /// The task's latest run.
   pub fn run(&self) -> Option<RunId> {
     self.detail.run.as_ref().map(RunView::id)
+  }
+
+  /// The decision sending actually takes, even after leaving the question's context line.
+  pub fn decision_kind(&self, way: Way) -> Option<crate::decisions::DecisionKind> {
+    let action = Action::of(&self.mode, way, self.recipient)?;
+    action
+      .decision_kind()
+      .or_else(|| answers_question(&self.detail, self.recipient).then_some(crate::decisions::DecisionKind::Question))
   }
 
   /// Refuses sending `way` unless it does what the person pressed, `expected`.
@@ -230,7 +273,7 @@ pub fn store_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, false))
+  store_as(root, prepared, (key, way), (text, false, Answerer::Person))
 }
 
 /// [`store_in`] for the project's Orchestrator chat, which wrote `text` on the person's side: the conversation names
@@ -241,14 +284,25 @@ pub fn store_by_orchestrator_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, true))
+  store_as(root, prepared, (key, way), (text, true, Answerer::Automation))
+}
+
+/// Stores a window or MCP client's message with the decider captured before yielding.
+pub fn store_answer_in(
+  root: &Path,
+  prepared: &Prepared,
+  key_way: (IdempotencyKey, Way),
+  text: &str,
+  by: Answerer,
+) -> Result<(Then, Message), OutgoingError> {
+  store_as(root, prepared, key_way, (text, false, by))
 }
 
 fn store_as(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  (text, by_orchestrator): (&str, bool),
+  (text, by_orchestrator, by): (&str, bool, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
   let then = match way {
     Way::Primary => prepared.mode.then(),
@@ -274,7 +328,7 @@ fn store_as(
     key,
     (task, run, recovery_after),
     (prepared.recipient, timing),
-    (text, by_orchestrator),
+    (text, by_orchestrator, by),
   )
   .map_err(OutgoingError::Send)?;
   Ok((then, stored))

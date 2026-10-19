@@ -1147,7 +1147,7 @@
   "appMcp": {
     "errors": {
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
-      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar.",
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",

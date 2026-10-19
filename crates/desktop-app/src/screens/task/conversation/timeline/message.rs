@@ -80,6 +80,9 @@ pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element 
   let message = if entry.by_orchestrator {
     let author = ctx.t("conversation.byOrchestrator");
     person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
+  } else if entry.by_automation {
+    let author = ctx.t("conversation.byAutomation");
+    person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
   } else {
     bubble(ctx, &id, (&entry.body, Some(entry.at)), Some(delivery))
   };
@@ -91,7 +94,17 @@ pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element 
 }
 
 /// A note the person returned the work with, as their message, without a delivery line.
-pub(super) fn person_note(ctx: &mut Ctx, id: &str, note: &Arc<str>, at: Option<Timestamp>) -> Element {
+pub(super) fn person_note(
+  ctx: &mut Ctx,
+  id: &str,
+  note: &Arc<str>,
+  at: Option<Timestamp>,
+  by: Option<orchester_core::run::Answerer>,
+) -> Element {
+  if by == Some(orchester_core::run::Answerer::Automation) {
+    let author = ctx.t("conversation.byAutomation");
+    return person_side_message(id, (&author, note, at), None).into();
+  }
   bubble(ctx, id, (note, at), None).into()
 }
 

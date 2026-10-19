@@ -117,6 +117,10 @@ impl Run {
       }
       RunEventKind::Reopened => self.expect_status(kind, self.status == RunStatus::Succeeded),
       // A run that never started has no worktree to resume in.
+      RunEventKind::RecoveryDecided { .. } => self.expect_status(
+        kind,
+        matches!(self.status, RunStatus::Failed(_) | RunStatus::WaitingForPerson(_)),
+      ),
       RunEventKind::RecoveryRequested => self.expect_status(
         kind,
         matches!(&self.status, RunStatus::Failed(failure) if !matches!(failure, RunFailure::WorktreeNotCreated(_))),
@@ -132,7 +136,9 @@ impl Run {
         self.expect_status(kind, self.status == RunStatus::Running)?;
         self.expect_settled()
       }
-      RunEventKind::RetryAllowed => self.expect_status(kind, matches!(self.status, RunStatus::WaitingForPerson(_))),
+      RunEventKind::RetryAllowed | RunEventKind::StuckDecided { .. } => {
+        self.expect_status(kind, matches!(self.status, RunStatus::WaitingForPerson(_)))
+      }
       RunEventKind::Cancelled => {
         self.expect_status(kind, !self.status.is_terminal())?;
         self.expect_settled()
@@ -355,6 +361,7 @@ impl Run {
   fn apply(&mut self, kind: &RunEventKind, at: Timestamp) {
     match kind {
       RunEventKind::Created(_) => unreachable!("Run::check rejects a second creation event"),
+      RunEventKind::StuckDecided { .. } | RunEventKind::RecoveryDecided { .. } => {}
       RunEventKind::BranchChosen { branch } => Arc::make_mut(&mut self.created).branch = branch.clone(),
       RunEventKind::Started
       | RunEventKind::Resumed
