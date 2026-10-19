@@ -17,7 +17,7 @@ use orchester_core::{
   time::Timestamp,
 };
 
-pub use self::send::{SendError, send_after_turn_in, send_in};
+pub use self::send::{SendError, send_after_turn_as, send_after_turn_in, send_in};
 use super::detail::{RunView, TaskDetail};
 
 pub mod composer;
@@ -166,6 +166,8 @@ pub struct Entry {
   /// A message on the person's side that the project's Orchestrator chat wrote and sent: its heading names the
   /// Orchestrator.
   pub by_orchestrator: bool,
+  /// Automation wrote this answer or continuation on the person's side.
+  pub by_automation: bool,
 }
 
 /// An agent at work on the run: its profile, its role, the execution it works on and whether its
@@ -439,6 +441,7 @@ fn entry(
     execution,
     sent_now,
     by_orchestrator: message.by_orchestrator(),
+    by_automation: message.answerer() == Some(orchester_core::run::Answerer::Automation),
   }
 }
 

@@ -47,12 +47,18 @@ impl Run {
   /// the person, who lets it go on with their message. Completed upstream steps remain passed;
   /// selected, dependent and unfinished steps execute again.
   pub fn recover(&mut self, step: &StepKey, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+    self.recover_as(step, super::Answerer::Person, now)
+  }
+
+  /// Continues with the identity of the message that explicitly requested recovery.
+  pub fn recover_as(&mut self, step: &StepKey, by: super::Answerer, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
     let requested = if matches!(self.status(), RunStatus::WaitingForPerson(_)) {
       RunEventKind::RetryAllowed
     } else {
       RunEventKind::RecoveryRequested
     };
     self.transition(now, |transition| {
+      transition.record(RunEventKind::RecoveryDecided { step: step.clone(), by })?;
       transition.record(requested)?;
       transition.record(RunEventKind::AttemptStarted {
         attempt: AttemptId::generate(),

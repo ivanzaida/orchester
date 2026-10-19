@@ -18,23 +18,25 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, MessageId, RunId, TaskId},
   project::TaskKey,
-  run::Answerer,
+  run::{Answerer, PlanVersion},
   sharing::TaskRevision,
 };
 use orchester_workspace::{
   background,
+  decisions::DecisionKind,
   messages::{self, Message},
   tasks::conversation::{
     composer::ComposerMode,
     follow::{RunnerOf, Sent, Stored, follow_seen, tell},
-    outgoing::{Action, Context, Way, plan_changes, prepare_in, store_in},
-    send_after_turn_in,
+    outgoing::{Action, Context, Prepared, Way, plan_changes, prepare_in, store_answer_in},
+    send_after_turn_as,
   },
   workspace::OpenProject,
 };
 
 use super::kept;
 use crate::{
+  mcp::input_gate::InputGate,
   navigation::Navigation,
   project::{ProjectFeed, ShownProject},
   routes::{ProjectPage, Route, TaskView},
@@ -55,6 +57,8 @@ pub(super) struct Request {
   pub(super) expected: Action,
   pub(super) key: IdempotencyKey,
   pub(super) text: String,
+  /// Captured before the event handler yields; None refuses a synthetic decision without consent.
+  pub(super) by: Option<Answerer>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Request {}
@@ -84,6 +88,8 @@ pub(super) struct AfterTurn {
   pub(super) task: TaskId,
   pub(super) run: RunId,
   pub(super) message: MessageId,
+  /// Who pressed, captured before the event handler yields: an MCP client's press is automation's.
+  pub(super) by: Answerer,
 }
 
 impl lurq::app::component::DevtoolsInspectable for AfterTurn {}
@@ -124,6 +130,7 @@ pub struct ComposerState {
   feed: ProjectFeed,
   pub(super) send: SendAction,
   pub(super) after_turn: AfterTurnAction,
+  pub(super) gate: Option<InputGate>,
 }
 
 impl ComposerState {
@@ -142,6 +149,7 @@ impl ComposerState {
       feed: project.feed.clone(),
       send,
       after_turn,
+      gate: ctx.use_context(),
     };
     let navigation = Navigation::of(ctx);
     let summary = Route::Project(
@@ -280,30 +288,30 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
 /// Reads the task again, stores the message as its latest run's state offers now, and lets what follows
 /// it follow; or tells the runner the plan's changes.
 async fn send(services: Services, request: Request) -> Result<Outcome, Message> {
+  let by = request
+    .by
+    .ok_or_else(|| Message::new("appMcp.errors.automationNotAllowed"))?;
   let (root, task, written_for) = (request.project.repo_root.clone(), request.task, request.written_for);
   let reading = request.reading;
   let (way, expected) = (request.way, request.expected);
+  let workspace = services.workspace.clone();
   let prepared = background::run(move || {
-    let prepared = prepare_in(&root, (task, written_for), reading)?;
+    let prepared = prepare_in(&root, (task, written_for), reading).map_err(|error| error.message())?;
     // What the person pressed, or nothing: the run may have moved on since they saw it.
-    prepared.check(way, expected)?;
+    prepared.check(way, expected).map_err(|error| error.message())?;
+    if let Some(kind) = prepared.decision_kind(way).filter(|_| by == Answerer::Automation) {
+      let allowed = kind
+        .read_consent(&workspace)
+        .map_err(|error| messages::store_error(&error))?;
+      if !allowed {
+        return Err(Message::new("appMcp.errors.automationNotAllowed"));
+      }
+    }
     Ok(prepared)
   })
-  .await?
-  .map_err(|error: orchester_workspace::tasks::conversation::outgoing::OutgoingError| error.message())?;
+  .await??;
   if let ComposerMode::PlanChanges { version, .. } = prepared.mode {
-    let command =
-      plan_changes(&prepared, &request.text, (Answerer::Person, Some(version))).map_err(|error| error.message())?;
-    services
-      .runners
-      .control_run_in(&request.project, command)
-      .await
-      .map_err(|error| {
-        tracing::warn!(%error, "the runner did not take the plan's changes");
-        orchester_workspace::tasks::run::control_message(&error)
-      })?;
-    kept::stored(request.task, request.key, &request.text);
-    return Ok(Outcome::PlanChanges { text: request.text });
+    return send_plan_changes(&services, request, &prepared, (by, version)).await;
   }
   let mode = super::mode_name(&prepared.mode);
   let (root, text, key, way) = (
@@ -313,7 +321,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     request.way,
   );
   let (prepared, (then, stored)) = background::run(move || {
-    let stored = store_in(&root, &prepared, (key, way), &text);
+    let stored = store_answer_in(&root, &prepared, (key, way), &text, by);
     (prepared, stored)
   })
   .await
@@ -363,6 +371,25 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
   })
 }
 
+async fn send_plan_changes(
+  services: &Services,
+  request: Request,
+  prepared: &Prepared,
+  (by, version): (Answerer, PlanVersion),
+) -> Result<Outcome, Message> {
+  let command = plan_changes(prepared, &request.text, (by, Some(version))).map_err(|error| error.message())?;
+  services
+    .runners
+    .control_run_in(&request.project, command)
+    .await
+    .map_err(|error| {
+      tracing::warn!(%error, "the runner did not take the plan's changes");
+      orchester_workspace::tasks::run::control_message(&error)
+    })?;
+  kept::stored(request.task, request.key, &request.text);
+  Ok(Outcome::PlanChanges { text: request.text })
+}
+
 fn after_turn_action(ctx: &mut Ctx) -> AfterTurnAction {
   let services = Services::of(ctx);
   ctx.future_action(move |request: AfterTurn| {
@@ -384,14 +411,17 @@ fn after_turn_action(ctx: &mut Ctx) -> AfterTurnAction {
   })
 }
 
-/// Queues the message again for when its agent's turn ends, then tells the runner of its own run.
+/// Queues the message again for when its agent's turn ends, then tells the runner of its own run. Sent again
+/// by automation while its agent waits on a question, it is that question's answer, under the same consent.
 async fn send_after_turn(services: Services, request: AfterTurn) -> Result<(MessageId, Sent), Refused> {
   let refused = |reason: Message| Refused {
     message: request.message,
     reason,
   };
   let (root, task, message) = (request.project.repo_root.clone(), request.task, request.message);
-  background::run(move || send_after_turn_in(&root, task, message))
+  let workspace = services.workspace.clone();
+  let allowed = move |kind: DecisionKind| kind.read_consent(&workspace);
+  background::run(move || send_after_turn_as(&root, (task, message), (request.by, allowed)))
     .await
     .map_err(refused)?
     .map_err(|error| {

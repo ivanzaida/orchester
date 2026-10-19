@@ -292,7 +292,9 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
   let labelled = |ctx: &Ctx, name: &Arc<str>| labelled(ctx, timeline, name);
   let (glyph, text) = match &mark.kind {
     MarkKind::Returned { to, failed, .. } => {
-      let key = if mark.by_person {
+      let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
+        "conversation.mark.returnedByAutomation"
+      } else if mark.by_person {
         "conversation.mark.returnedByYou"
       } else {
         "conversation.mark.returned"
@@ -306,7 +308,9 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       (Icon::CornerDownLeft, ctx.t_args(key, args))
     }
     MarkKind::Restarted { step } => {
-      let key = if mark.by_person {
+      let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
+        "conversation.mark.restartedByAutomation"
+      } else if mark.by_person {
         "conversation.mark.restartedByYou"
       } else {
         "conversation.mark.restarted"
@@ -326,7 +330,14 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       ];
       (
         Icon::CornerDownLeft,
-        ctx.t_args("conversation.mark.returnedWithNote", args),
+        ctx.t_args(
+          if mark.by == Some(orchester_core::run::Answerer::Automation) {
+            "conversation.mark.returnedWithNoteByAutomation"
+          } else {
+            "conversation.mark.returnedWithNote"
+          },
+          args,
+        ),
       )
     }
   };
@@ -343,6 +354,7 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       &format!("conversation-mark-note-{}", mark.attempt),
       note,
       mark.at,
+      mark.by,
     ))
     .into()
 }

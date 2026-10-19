@@ -2,7 +2,10 @@
 //! merged as the task Summary's *Merge into main* merges it, through the same job: one merge or
 //! removal at a time per task, the status bar's operation, the merge record and the screens told.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use orchester_core::{
   diff::{Diff, FileChange},
@@ -12,6 +15,7 @@ use orchester_core::{
   run::{Run, RunStatus},
   store::{MergeStore, RunStore, TaskStore},
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 use tokio::sync::watch;
@@ -30,6 +34,7 @@ use crate::{
   messages::Message,
   tasks::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunStage, checkpointed_in, not_checkpointed_in},
+    delivery::{self, Delivery},
     detail::run_store_error,
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
     local_integration::{LegacyPolicy, LocalIntent, LocalOrigin, managed_checkout},
@@ -194,7 +199,7 @@ fn start(
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
   let run = find_run(&db, &args.run)?;
-  ready(&db, &run)?;
+  ready(&db, &run, (&open.repo_root, &services.programs))?;
   let jobs = services.jobs.of(open.project.id());
   if managed_checkout(&db, run.id())? || jobs.state().local_decision_pending() {
     LocalOrigin::AuthenticatedDomain
@@ -260,8 +265,9 @@ fn start(
   Ok((updates, run.id(), open.repo_root))
 }
 
-/// Refused unless the run is its task's latest, succeeded, and was not merged yet.
-fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
+/// Refused unless the run is its task's latest, succeeded, and was not merged yet: by Orchester, or outside it as git
+/// in the checkout at `root` proves it, as the task's Summary tells it.
+fn ready(db: &ProjectDb, run: &Run, (root, programs): (&Path, &Programs)) -> Result<(), ToolError> {
   if !matches!(run.status(), RunStatus::Succeeded) {
     return Err(refused("run_not_ready", "appMcp.errors.runNotReady"));
   }
@@ -280,6 +286,12 @@ fn ready(db: &ProjectDb, run: &Run) -> Result<(), ToolError> {
   }
   if db.run_merge(run.id())?.is_some() {
     return Err(refused("already_merged", "appMcp.errors.alreadyMerged"));
+  }
+  if let Delivery::MergedOutside(into) = delivery::of_run(programs, root, run) {
+    return Err(ToolError::refused(
+      "already_merged",
+      vec![Message::new("appMcp.errors.mergedOutside").with("branch", into.to_string())],
+    ));
   }
   Ok(())
 }

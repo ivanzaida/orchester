@@ -114,6 +114,8 @@ pub enum Stands {
   Ready { since: Option<Timestamp> },
   /// It was merged at `at`, into a commit people read by its first characters.
   Merged { at: Timestamp, revision: String },
+  /// Its work was merged into the branch `into` without Orchester, as git proves (its base branch holds its commits).
+  MergedOutside { into: String },
   /// It failed.
   Failed,
 }

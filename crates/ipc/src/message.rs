@@ -14,8 +14,8 @@ use orchester_core::{
   question::{AnswerError, GivenAnswer},
   resource::StepKey,
   run::{
-    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion,
-    PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
+    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, EventSequence, InterruptCause, PermissionsApply, PlanDecision,
+    PlanVersion, PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
   },
   tokens::TokenBudget,
 };
@@ -161,6 +161,14 @@ pub enum Command {
   /// attempt, answered with [`Reply::Accepted`] once it runs again; a stop fails it, answered once
   /// that is recorded. [`Rejection::RunNotWaiting`] when the run does not wait for a person.
   DecideStuckRun { run: RunId, decision: StuckDecision },
+  /// Attributed decision from the current window or domain MCP tools. The legacy command above is the person's.
+  DecideStuckRunAs {
+    run: RunId,
+    /// The event sequence displayed when this wait was read. A later state refuses the decision (protocol 28).
+    expected: EventSequence,
+    decision: StuckDecision,
+    by: Answerer,
+  },
   /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
   /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
   /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and

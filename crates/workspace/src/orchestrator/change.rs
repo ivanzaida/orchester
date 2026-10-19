@@ -18,7 +18,7 @@ use orchester_core::{
   orchestrator::change::{Change, ProposedChange, Publishing},
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
   revision::Revision,
-  run::Run,
+  run::{Answerer, Run},
   store::{ResourceStore, TaskStore},
   time::Timestamp,
 };
@@ -97,6 +97,7 @@ pub(super) async fn apply(
   scope: &ChatScope,
   change: &ProposedChange,
   shown: &[Message],
+  by: Answerer,
 ) -> Result<Value, ToolError> {
   let root = scope.root.clone();
   let project = scope.project.to_string();
@@ -146,7 +147,7 @@ pub(super) async fn apply(
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
     Change::Answer { .. } | Change::Message { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
-      answer_for_orchestrator(services, translate, tool, arguments).await
+      answer_for_orchestrator(services, translate, tool, arguments, by).await
     }
   }
 }

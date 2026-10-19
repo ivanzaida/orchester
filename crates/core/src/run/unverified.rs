@@ -128,6 +128,10 @@ impl Run {
       .map(StepExecution::id)
       .ok_or_else(|| RunError::NotAcceptable(step.clone()))?;
     self.transition(now, |transition| {
+      transition.record(RunEventKind::StuckDecided {
+        decision: super::StuckDecision::Accept { by },
+        by,
+      })?;
       transition.record(RunEventKind::RetryAllowed)?;
       transition.record(RunEventKind::StepAccepted { execution, by })?;
       let attempt = RunEventKind::AttemptStarted {

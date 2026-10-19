@@ -8,12 +8,12 @@
 //! runner did not take the composer says under its box; why the message was not queued again is said here.
 
 use lurq::{
-  app::{component::Component, ctx::Ctx, theme::SpacingSize},
+  app::{component::Component, ctx::Ctx, events::is_synthetic_input, theme::SpacingSize},
   components::{Column, Row},
   layout::Alignment,
   node::Element,
 };
-use orchester_core::id::MessageId;
+use orchester_core::{id::MessageId, run::Answerer};
 use orchester_workspace::tasks::conversation::{Entry, EntryState, PanelState, outgoing::after_turn_run};
 
 use super::{Composing, state::AfterTurn};
@@ -105,14 +105,27 @@ fn buttons(ctx: &Ctx, props: &UndeliveredProps, composing: &Composing, pending: 
     if pending {
       return button.loading();
     }
-    let request = AfterTurn {
-      project: composing.project.open.clone(),
-      task: composing.detail.task.id(),
-      run,
-      message: props.message,
-    };
+    let (project, task, message) = (
+      composing.project.open.clone(),
+      composing.detail.task.id(),
+      props.message,
+    );
     let action = composing.state.after_turn.clone();
-    button.on_click(move || action.run(request.clone()))
+    button.on_click(move || {
+      // Who pressed is read while the press is delivered; whether the resend answers a question, on a fresh read.
+      let by = if is_synthetic_input() {
+        Answerer::Automation
+      } else {
+        Answerer::Person
+      };
+      action.run(AfterTurn {
+        project: project.clone(),
+        task,
+        run,
+        message,
+        by,
+      });
+    })
   });
   let edit = composing.writable.then(|| {
     let (state, message, text) = (composing.state.clone(), props.message, props.text.clone());

@@ -87,7 +87,7 @@ pub enum Choice {
   ReturnTo { step: String, note: String },
   /// For a run whose step could not check everything (unverified), or was not run again on an unchanged
   /// revision: accept the step as it is; the steps after it run. It passes the step in a person's place: refused
-  /// as person_only unless a person turned on Let automation answer approvals, and recorded as automation's.
+  /// as automation_not_allowed unless a person turned on Let automation answer approvals, and recorded as automation's.
   Accept,
 }
 
@@ -101,12 +101,11 @@ enum Request {
 pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run, request) = blocking(move || {
-    // Accepting passes a step in a person's place, as approving does: only while a person lets automation answer.
-    if matches!(args.choice, Choice::Accept) && !reading.workspace.automation_answers_approvals()? {
-      return Err(ToolError::refused(
-        "person_only",
-        vec![Message::new("appMcp.errors.acceptPersonOnly")],
-      ));
+    if matches!(
+      args.choice,
+      Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept
+    ) {
+      crate::decisions::DecisionKind::Stuck.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
     let (run, request) = request(&project.repo_root, &args)?;
@@ -179,9 +178,11 @@ fn request(root: &Path, args: &ContinueRun) -> Result<(Named, Request), ToolErro
   };
   let request = match (view.run.status(), &args.choice) {
     (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => at_limit(view, (*limit, choice), &number)?,
-    (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRun {
+    (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRunAs {
       run: run.id(),
+      expected: view.run.last_sequence(),
       decision: decision(view, choice, &number)?,
+      by: Answerer::Automation,
     }),
     _ => {
       return Err(refused(

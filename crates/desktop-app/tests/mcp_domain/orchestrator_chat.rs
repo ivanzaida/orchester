@@ -233,6 +233,13 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   ));
 
   allow(&served, OrchestratorConsent::AnswerAgents);
+  let refused = chat_call(&mut served, &scope, "send_message", answer.clone()).expect_err("decision consent required");
+  assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("decision consent");
   let sent = chat_call(&mut served, &scope, "send_message", answer).expect("sent at once");
   assert_eq!(
     sent["action"], "answer",
@@ -242,7 +249,7 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   let last = messages.last().expect("the answer");
   assert_eq!(last.body().as_str(), "Keep the HubSpot owner.");
   assert!(last.by_orchestrator(), "the task's conversation names the Orchestrator");
-  assert_eq!(actions(&db, &scope)[1].outcome, ActionOutcome::Done);
+  assert_eq!(actions(&db, &scope)[2].outcome, ActionOutcome::Done);
 }
 
 #[test]
@@ -357,6 +364,14 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   ));
 
   allow(&served, OrchestratorConsent::AnswerAgents);
+  let refused =
+    chat_call(&mut served, &scope, "answer_question", answer.clone()).expect_err("global consent is required too");
+  assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("decision consent");
   // Sent at once, to the runner: this session has none, so it is refused there, never proposed.
   let refused = chat_call(&mut served, &scope, "answer_question", answer).expect_err("no runner answers here");
   assert!(
@@ -364,7 +379,7 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     "{refused:?}"
   );
   assert!(matches!(
-    &actions(&db, &scope)[2],
+    &actions(&db, &scope)[3],
     ChatAction { outcome: ActionOutcome::Refused { code, .. }, change: Some(_), .. } if code == "runner_unavailable"
   ));
 }

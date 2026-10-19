@@ -322,26 +322,11 @@ async fn answer(
         handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
-    Command::DecidePlan {
-      run,
-      execution,
-      version,
-      ref decision,
-      by,
-    } => return answer_plan(&later, handle, (run, execution, version), (decision.clone(), by)),
-    Command::DecideStuckRun { run, ref decision } => return answer_stuck(&later, handle, run, decision.clone()),
-    Command::DecideToolApproval {
-      run,
-      ref approval,
-      ref answer,
-      by,
-    } => return answer_tool_approval(&later, handle, run, approval, (answer.clone(), by)),
-    Command::AnswerQuestion {
-      run,
-      ref request,
-      ref answers,
-      by,
-    } => return answer_question(&later, handle, run, (request, answers, by)),
+    ref decision @ (Command::DecidePlan { .. }
+    | Command::DecideStuckRun { .. }
+    | Command::DecideStuckRunAs { .. }
+    | Command::DecideToolApproval { .. }
+    | Command::AnswerQuestion { .. }) => return answer_decision(&later, handle, decision),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
@@ -350,6 +335,39 @@ async fn answer(
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
   };
   Answer::Reply(Event::Reply { id, reply })
+}
+
+/// Routes the decision commands without holding up the runner's other requests.
+fn answer_decision(later: &Later<'_>, handle: Scheduler, command: &Command) -> Answer {
+  match *command {
+    Command::DecidePlan {
+      run,
+      execution,
+      version,
+      ref decision,
+      by,
+    } => answer_plan(later, handle, (run, execution, version), (decision.clone(), by)),
+    Command::DecideStuckRun { run, ref decision } => answer_stuck(later, handle, run, (decision.clone(), None)),
+    Command::DecideStuckRunAs {
+      run,
+      expected,
+      ref decision,
+      by,
+    } => answer_stuck(later, handle, run, (decision.clone(), Some((by, expected)))),
+    Command::DecideToolApproval {
+      run,
+      ref approval,
+      ref answer,
+      by,
+    } => answer_tool_approval(later, handle, run, approval, (answer.clone(), by)),
+    Command::AnswerQuestion {
+      run,
+      ref request,
+      ref answers,
+      by,
+    } => answer_question(later, handle, run, (request, answers, by)),
+    _ => unreachable!("answer routes only the five decision commands here"),
+  }
 }
 
 /// The reply to [`Command::AnswerInChat`].
@@ -474,8 +492,18 @@ fn answer_plan(
   })
 }
 
-fn answer_stuck(later: &Later<'_>, scheduler: Scheduler, run: RunId, decision: StuckDecision) -> Answer {
-  later.answer(run, async move { scheduler.decide_stuck(run, decision).await })
+fn answer_stuck(
+  later: &Later<'_>,
+  scheduler: Scheduler,
+  run: RunId,
+  (decision, seen): (StuckDecision, Option<(Answerer, orchester_core::run::EventSequence)>),
+) -> Answer {
+  later.answer(run, async move {
+    match seen {
+      Some((by, expected)) => scheduler.decide_stuck_as(run, decision, by, expected).await,
+      None => scheduler.decide_stuck(run, decision).await,
+    }
+  })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

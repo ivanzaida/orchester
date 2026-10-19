@@ -10,14 +10,15 @@ use orchester_core::{
 use orchester_exec::local_git::{LocalGit, LocalGitError};
 use orchester_store::ProjectDb;
 
-use super::IntegrationError;
+use super::{IntegrationError, LocalIntegration};
 
-/// Positive ancestry evidence can block duplicate integration without inventing a merge event.
+/// Positive ancestry evidence can block duplicate integration without inventing a merge event. A record of the run's
+/// that holds nothing reads as complete once the evidence proves the whole work merged (`direct::settle_outside`).
 pub fn external_integration(root: &Path, run: RunId) -> Result<Option<ContainedResult>, IntegrationError> {
   let scratch =
     orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run.to_string()])?;
   let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
-  let db = ProjectDb::open(root)?;
+  let mut db = ProjectDb::open(root)?;
   let main = LocalGit::new(root, &scratch)?;
   super::ensure_project_git(&main)?;
   let checkout = main.snapshot()?;
@@ -25,10 +26,33 @@ pub fn external_integration(root: &Path, run: RunId) -> Result<Option<ContainedR
     .run(run)
     .map_err(|_| IntegrationError::Run)?
     .ok_or(IntegrationError::Run)?;
-  let operation = db.local_operation(run.id())?;
+  let mut operation = db.local_operation(run.id())?;
   let evidence = contained_result(&db, &main, &checkout, &run, operation.as_ref())?;
   main.ensure(&checkout)?;
+  if let (Some(evidence), Some(saved)) = (&evidence, operation.as_mut()) {
+    super::direct::settle_outside(root, &mut db, saved, evidence);
+  }
   Ok(evidence)
+}
+
+impl LocalIntegration {
+  /// Records the merge Git proves was made without Orchester, the run's whole work in the checkout's branch, as this
+  /// record's completed merge, on the person's decision (`LocalOperation::record_merged_outside`): preserved
+  /// originals are then put back onto it, and a record that holds nothing else completes. Nothing is merged. Partial
+  /// or equivalent evidence is refused: it stays for the person to reconcile.
+  pub fn record_merged_outside(&mut self) -> Result<(), IntegrationError> {
+    let actual = self.main.verified_snapshot()?;
+    if actual.operation.is_some() {
+      return Err(LocalError::ForeignOperation.into());
+    }
+    let evidence = contained_result(&self.db, &self.main, &actual, &self.run, Some(&self.operation))?
+      .filter(|evidence| {
+        evidence.kind == ResultEvidenceKind::CompleteAncestry && evidence.target.as_str() == actual.head
+      })
+      .ok_or(LocalError::Reconcile)?;
+    self.operation.record_merged_outside(&evidence)?;
+    self.save()
+  }
 }
 
 /// Everything external evidence depends on besides Git ancestry, which never changes for the same commits: while
