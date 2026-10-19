@@ -24,6 +24,7 @@ mod kontur;
 mod live;
 mod mcp_servers;
 mod merge;
+mod merged_outside;
 mod orchestrator_chat;
 mod person_decisions;
 mod pipeline_permissions;

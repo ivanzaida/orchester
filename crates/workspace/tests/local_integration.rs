@@ -18,6 +18,8 @@ mod hooks;
 mod ignore_transitions;
 #[path = "local_integration/merged_in.rs"]
 mod merged_in;
+#[path = "local_integration/merged_outside.rs"]
+mod merged_outside;
 #[path = "local_integration/metadata.rs"]
 mod metadata;
 #[path = "local_integration/privacy.rs"]

@@ -86,6 +86,18 @@ fn read_one<T>(
 }
 
 impl<T> Across<T> {
+  /// Lets `each` finish each project's reading, with its project, e.g. with what git tells there.
+  pub(super) fn each_mut(&mut self, mut each: impl FnMut(&OpenProject, &mut T)) {
+    for (project, found) in &mut self.read {
+      each(project, found);
+    }
+  }
+
+  /// Each project's reading, with its project, in the order the items are made.
+  pub(super) fn found(&self) -> impl Iterator<Item = (&OpenProject, &T)> {
+    self.read.iter().map(|(project, found)| (project, found))
+  }
+
   /// The items `items` makes of each project's reading, each naming its project.
   pub(super) fn items(&self, mut items: impl FnMut(&OpenProject, &T) -> Vec<Value>) -> Vec<Value> {
     self

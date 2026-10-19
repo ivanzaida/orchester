@@ -1,16 +1,22 @@
 //! Where local integration and the direct merge (*Merge into main*, `merge_run`) meet: which local integration holds
-//! the shared checkout, so the direct merge waits for it, and the run's own review once the direct merge recorded
-//! the run's merge beside it.
+//! the shared checkout, so the direct merge waits for it, and the run's own review once the run's merge was recorded
+//! beside it, or git proves its work merged without Orchester.
+
+use std::path::Path;
 
 use orchester_core::{
   id::RunId,
   integration::{
     RunMerge,
-    local::{LocalError, LocalIntegrationStore, LocalProcessStore},
+    local::{
+      ContainedResult, LocalError, LocalIntegrationStore, LocalOperation, LocalPhase, LocalProcessStore,
+      ResultEvidenceKind,
+    },
   },
   project::TaskKey,
   store::{RunStore, TaskStore},
 };
+use orchester_exec::local_git::IntegrationLease;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::IntegrationError;
@@ -89,4 +95,53 @@ fn settle(db: &mut ProjectDb, merge: &RunMerge) -> Result<(), IntegrationError> 
     return Err(LocalError::Stale.into());
   }
   Ok(())
+}
+
+/// Completes `operation`, the run's own local integration as `db` holds it, where it holds nothing of the checkout
+/// and `evidence` proves the run's whole work merged without Orchester (`LocalOperation::settle_merged_outside`):
+/// its tab and the project's other runs then read it as done instead of paused at a review. Only while no local
+/// integration works in the project at `root` and no Git process of this one is unfinished; otherwise, and when the
+/// store refuses or another window changed the record, a later reading settles it, so this costs a log line at most.
+pub(super) fn settle_outside(
+  root: &Path,
+  db: &mut ProjectDb,
+  operation: &mut LocalOperation,
+  evidence: &ContainedResult,
+) {
+  if evidence.kind != ResultEvidenceKind::CompleteAncestry
+    || operation.phase() == LocalPhase::Complete
+    || operation.merged().is_some()
+    || operation.reserves_checkout()
+  {
+    return;
+  }
+  // Another local integration works in the checkout now; its session holds what it read of the records.
+  let Ok(_lease) = IntegrationLease::acquire(root) else {
+    return;
+  };
+  match settled_outside(db, operation, evidence) {
+    Ok(Some(settled)) => *operation = settled,
+    Ok(None) => {}
+    Err(error) => {
+      tracing::warn!(%error, "the run's work is merged, but its local integration record could not be completed")
+    }
+  }
+}
+
+fn settled_outside(
+  db: &mut ProjectDb,
+  operation: &LocalOperation,
+  evidence: &ContainedResult,
+) -> Result<Option<LocalOperation>, IntegrationError> {
+  if db
+    .local_process(operation.run())?
+    .is_some_and(|process| !process.finished)
+  {
+    return Ok(None);
+  }
+  let mut settled = operation.clone();
+  let version = settled.version();
+  settled.settle_merged_outside(evidence)?;
+  settled.advance_version();
+  Ok(db.save_local_operation(&settled, Some(version))?.then_some(settled))
 }
