@@ -10,7 +10,7 @@ use orchester_core::{
   integration::{MergeKind, RunMerge},
   resource::StepKey,
   revision::Revision,
-  run::{AttemptReason, BranchName, ReviewNote, Run, RunStatus},
+  run::{Answerer, AttemptReason, BranchName, ReviewNote, Run, RunStatus},
   store::{MergeStore, RunStore},
   time::Timestamp,
 };
@@ -32,13 +32,15 @@ fn implement() -> StepKey {
   StepKey::new("implement").expect("a step key")
 }
 
-/// The return of `run` to Implement with the note, to resolve no merge's conflicts.
-fn returned(run: RunId) -> WorkReturn {
+/// A person's return of `run`, as stored now, to Implement with the note, to resolve no merge's conflicts.
+fn returned(root: &Path, run: RunId) -> WorkReturn {
   WorkReturn {
     run,
     step: implement(),
     note: note(),
     conflicts: None,
+    by: Answerer::Person,
+    expected: read(root, run).last_sequence(),
   }
 }
 
@@ -58,7 +60,7 @@ async fn returned_a_succeeded_run_works_again_from_the_step_with_the_note() {
   let succeeded = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   wait_for_idle(&scheduler).await;
   assert_eq!(succeeded.status(), &RunStatus::Succeeded);
-  scheduler.return_ended(returned(id)).await.expect("returned");
+  scheduler.return_ended(returned(root, id)).await.expect("returned");
   let done = wait_for(root, &mut events, id, |run| {
     run.status() == &RunStatus::Succeeded && run.attempts().len() == 2
   })
@@ -98,7 +100,7 @@ async fn returned_refuses_a_merged_run_a_gone_worktree_and_a_merge_in_it() {
   let kept = root.join(".orchester/kept-worktree");
   fs::rename(&worktree, &kept).expect("the worktree moved away");
   assert_eq!(
-    scheduler.return_ended(returned(id)).await,
+    scheduler.return_ended(returned(root, id)).await,
     Err(Rejection::WorktreeRemoved)
   );
   fs::rename(&kept, &worktree).expect("the worktree back");
@@ -118,7 +120,7 @@ async fn returned_refuses_a_merged_run_a_gone_worktree_and_a_merge_in_it() {
   let merge_head = worktree.join(git(&["rev-parse", "--git-dir"])).join("MERGE_HEAD");
   fs::write(&merge_head, format!("{}\n", git(&["rev-parse", "HEAD"]))).expect("a merge in progress");
   assert_eq!(
-    scheduler.return_ended(returned(id)).await,
+    scheduler.return_ended(returned(root, id)).await,
     Err(Rejection::WorktreeInMerge)
   );
   fs::remove_file(&merge_head).expect("the merge gone");
@@ -133,6 +135,9 @@ async fn returned_refuses_a_merged_run_a_gone_worktree_and_a_merge_in_it() {
       merged_at: Timestamp::now(),
     })
     .expect("merged");
-  assert_eq!(scheduler.return_ended(returned(id)).await, Err(Rejection::RunMerged));
+  assert_eq!(
+    scheduler.return_ended(returned(root, id)).await,
+    Err(Rejection::RunMerged)
+  );
   assert_eq!(read(root, id), ended);
 }

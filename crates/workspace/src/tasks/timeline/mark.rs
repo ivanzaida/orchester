@@ -40,6 +40,7 @@ pub struct Mark {
   pub attempt: u32,
   pub at: Option<Timestamp>,
   pub by_person: bool,
+  pub by: Option<orchester_core::run::Answerer>,
   pub kind: MarkKind,
 }
 
@@ -96,6 +97,7 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
     attempt: attempt.number().get(),
     at: start.map(|start| start.at),
     by_person: start.is_some_and(|start| start.by_person),
+    by: start.and_then(|start| start.by),
     kind,
   })
 }

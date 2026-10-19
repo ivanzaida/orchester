@@ -8,7 +8,7 @@ mod support;
 use orchester_core::{
   integration::{MergeKind, RunMerge},
   revision::Revision,
-  run::{AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus},
+  run::{Answerer, AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus},
   store::{MergeStore, RunStore},
 };
 use orchester_store::{ProjectDb, ResolutionStart, RunStoreError, StoreError};
@@ -51,7 +51,7 @@ fn returned_after_end_is_stored_with_its_note_and_conflicts() {
   let (repo, mut db, mut run) = succeeded();
   let step = run.ended_return_targets().remove(0);
   let events = run
-    .return_ended(&step, (&note(), Some(&conflicts())), at(20))
+    .return_ended(&step, (&note(), Some(&conflicts())), Answerer::Person, at(20))
     .expect("returned");
   db.append_events(&run, &events).expect("append");
   let reopened = ProjectDb::open(repo.path()).expect("open");
@@ -74,7 +74,7 @@ fn returned_after_end_is_refused_for_a_merged_run() {
   let before = db.run(run.id()).expect("read").expect("run");
   let step = run.ended_return_targets().remove(0);
   let events = run
-    .return_ended(&step, (&note(), None), at(20))
+    .return_ended(&step, (&note(), None), Answerer::Person, at(20))
     .expect("the run allows it");
   assert!(matches!(
     db.append_events(&run, &events),
@@ -94,7 +94,7 @@ fn returned_after_end_a_resolution_holds_the_run_back_and_its_merge() {
   let step = run.ended_return_targets().remove(0);
   let mut returned = run.clone();
   let events = returned
-    .return_ended(&step, (&note(), None), at(21))
+    .return_ended(&step, (&note(), None), Answerer::Person, at(21))
     .expect("the run allows it");
   assert!(matches!(
     db.append_events(&returned, &events),
@@ -106,7 +106,9 @@ fn returned_after_end_a_resolution_holds_the_run_back_and_its_merge() {
   ));
   db.end_resolution(run.id()).expect("end");
   assert_eq!(db.resolution(run.id()).expect("read"), None);
-  let events = run.return_ended(&step, (&note(), None), at(22)).expect("returned");
+  let events = run
+    .return_ended(&step, (&note(), None), Answerer::Person, at(22))
+    .expect("returned");
   db.append_events(&run, &events)
     .expect("the run continues once the merge in its worktree ended");
   // A run that works again neither begins a resolution nor is merged.

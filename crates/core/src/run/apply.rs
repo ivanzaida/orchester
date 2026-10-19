@@ -115,10 +115,12 @@ impl Run {
           Err(RunError::StepsNotPassed)
         }
       }
-      // A succeeded run reopens for a follow-up or a return; a failed one only for a return.
-      RunEventKind::Reopened => self.expect_status(
+      // A succeeded run reopens for a follow-up or a return; a failed one only for a return, which the attempt that
+      // follows checks.
+      RunEventKind::Reopened | RunEventKind::ReturnDecided { .. } => self.expect_status(kind, self.can_return_ended()),
+      RunEventKind::RecoveryDecided { .. } => self.expect_status(
         kind,
-        self.status == RunStatus::Succeeded || (self.can_return_ended() && matches!(self.status, RunStatus::Failed(_))),
+        matches!(self.status, RunStatus::Failed(_) | RunStatus::WaitingForPerson(_)),
       ),
       // A run that never started has no worktree to resume in.
       RunEventKind::RecoveryRequested => self.expect_status(
@@ -136,7 +138,9 @@ impl Run {
         self.expect_status(kind, self.status == RunStatus::Running)?;
         self.expect_settled()
       }
-      RunEventKind::RetryAllowed => self.expect_status(kind, matches!(self.status, RunStatus::WaitingForPerson(_))),
+      RunEventKind::RetryAllowed | RunEventKind::StuckDecided { .. } => {
+        self.expect_status(kind, matches!(self.status, RunStatus::WaitingForPerson(_)))
+      }
       RunEventKind::Cancelled => {
         self.expect_status(kind, !self.status.is_terminal())?;
         self.expect_settled()
@@ -372,6 +376,8 @@ impl Run {
   fn apply(&mut self, kind: &RunEventKind, at: Timestamp) {
     match kind {
       RunEventKind::Created(_) => unreachable!("Run::check rejects a second creation event"),
+      RunEventKind::StuckDecided { .. } | RunEventKind::RecoveryDecided { .. } | RunEventKind::ReturnDecided { .. } => {
+      }
       RunEventKind::BranchChosen { branch } => Arc::make_mut(&mut self.created).branch = branch.clone(),
       RunEventKind::Started
       | RunEventKind::Resumed

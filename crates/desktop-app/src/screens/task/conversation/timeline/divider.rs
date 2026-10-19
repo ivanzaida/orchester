@@ -287,12 +287,35 @@ fn list(ctx: &Ctx, labels: &[Arc<str>]) -> String {
 /// A return or restart: what returned the work, to which step, in which attempt; a person's note is their
 /// message under it.
 pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
+  let (glyph, text) = mark_line(ctx, timeline, mark);
+  let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
+  let MarkKind::ReturnedWithNote { note, .. } = &mark.kind else {
+    return line;
+  };
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .child(line)
+    .child(person_note(
+      ctx,
+      &format!("conversation-mark-note-{}", mark.attempt),
+      note,
+      mark.at,
+      mark.by,
+    ))
+    .into()
+}
+
+/// The glyph and the words of `mark`'s line.
+fn mark_line(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> (Icon, Arc<str>) {
   let time = mark.at.map(display::clock).unwrap_or_default();
   let attempt = mark.attempt.to_string();
   let labelled = |ctx: &Ctx, name: &Arc<str>| labelled(ctx, timeline, name);
-  let (glyph, text) = match &mark.kind {
+  match &mark.kind {
     MarkKind::Returned { to, failed, .. } => {
-      let key = if mark.by_person {
+      let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
+        "conversation.mark.returnedByAutomation"
+      } else if mark.by_person {
         "conversation.mark.returnedByYou"
       } else {
         "conversation.mark.returned"
@@ -306,7 +329,9 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       (Icon::CornerDownLeft, ctx.t_args(key, args))
     }
     MarkKind::Restarted { step } => {
-      let key = if mark.by_person {
+      let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
+        "conversation.mark.restartedByAutomation"
+      } else if mark.by_person {
         "conversation.mark.restartedByYou"
       } else {
         "conversation.mark.restarted"
@@ -326,7 +351,14 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       ];
       (
         Icon::CornerDownLeft,
-        ctx.t_args("conversation.mark.returnedWithNote", args),
+        ctx.t_args(
+          if mark.by == Some(orchester_core::run::Answerer::Automation) {
+            "conversation.mark.returnedWithNoteByAutomation"
+          } else {
+            "conversation.mark.returnedWithNote"
+          },
+          args,
+        ),
       )
     }
     MarkKind::ReturnedToResolve { to, branch } => {
@@ -338,25 +370,17 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       ];
       (
         Icon::CornerDownLeft,
-        ctx.t_args("conversation.mark.returnedToResolve", args),
+        ctx.t_args(
+          if mark.by == Some(orchester_core::run::Answerer::Automation) {
+            "conversation.mark.returnedToResolveByAutomation"
+          } else {
+            "conversation.mark.returnedToResolve"
+          },
+          args,
+        ),
       )
     }
-  };
-  let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
-  let MarkKind::ReturnedWithNote { note, .. } = &mark.kind else {
-    return line;
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(line)
-    .child(person_note(
-      ctx,
-      &format!("conversation-mark-note-{}", mark.attempt),
-      note,
-      mark.at,
-    ))
-    .into()
+  }
 }
 
 /// "03 Implement" for the step named `name` of the run, or the name alone once its pipeline has no such

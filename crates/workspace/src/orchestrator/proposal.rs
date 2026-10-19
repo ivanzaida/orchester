@@ -91,7 +91,14 @@ pub async fn decide(
       ActionOutcome::Done,
     ),
     (_, ActionOutcome::Waits, Some(proposed)) => (
-      change::apply((services, translate), scope, &proposed, &widens).await,
+      change::apply(
+        (services, translate),
+        scope,
+        &proposed,
+        &widens,
+        orchester_core::run::Answerer::Person,
+      )
+      .await,
       ActionOutcome::Applied,
     ),
     _ => (

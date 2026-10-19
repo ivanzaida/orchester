@@ -8,6 +8,7 @@
 //! know.
 
 use super::{
+  answer::Answerer,
   attempt::StepExecution,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
@@ -58,11 +59,13 @@ impl Run {
   }
 
   /// Reopens the ended run in a new attempt from agent step `step` (one of [`Run::ended_return_targets`]), whose
-  /// prompt carries `note` as the person's instruction, and the `conflicts` of a merge it resolves, as data.
+  /// prompt carries `note` as the instruction of `by` (a person, or automation acting for one), and the `conflicts`
+  /// of a merge it resolves, as data.
   pub fn return_ended(
     &mut self,
     step: &StepKey,
     (note, conflicts): (&ReviewNote, Option<&MergeConflicts>),
+    by: Answerer,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
     if !self.can_return_ended() {
@@ -75,6 +78,7 @@ impl Run {
       return Err(RunError::NotAReturnTarget(step.clone()));
     }
     self.transition(now, |transition| {
+      transition.record(RunEventKind::ReturnDecided { step: step.clone(), by })?;
       transition.record(RunEventKind::Reopened)?;
       let executions = transition.run.retry_executions(step);
       transition.record(RunEventKind::AttemptStarted {

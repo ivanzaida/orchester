@@ -29,7 +29,7 @@ use lurq::mcp::{
   },
 };
 use orchester_core::run::Answerer;
-use orchester_workspace::{app_mcp, sharing::cloud::Cloud};
+use orchester_workspace::{app_mcp, decisions::DecisionKind, sharing::cloud::Cloud};
 use parking_lot::Mutex;
 
 use super::clients::SessionMark;
@@ -111,6 +111,8 @@ pub enum Guarded {
   /// approvals opt-in. Only its handler refuses ([`input_may_decide`]); it is never protected, so the rest of the
   /// window, its close button included, takes a client's input while it shows.
   StepAccept,
+  /// An answer on the person's behalf, under the same per-kind policy as the domain MCP tools.
+  Decision(DecisionKind),
 }
 
 /// Whether the input being delivered may take a decision classified as `policy`: a person's (OS input) always; lurq's
@@ -231,7 +233,8 @@ impl InputGate {
     match what {
       Guarded::PermissionWidening => workspace.automation_permission_consent(),
       Guarded::ApprovalWidening => workspace.automation_permission_consent() && workspace.automation_approval_consent(),
-      Guarded::StepAccept => workspace.automation_approval_consent(),
+      Guarded::StepAccept => DecisionKind::Stuck.consent(workspace),
+      Guarded::Decision(kind) => kind.consent(workspace),
       Guarded::PermissionsSetting
       | Guarded::WideningQuestion
       | Guarded::LocalIntegrationQuestion
@@ -251,7 +254,7 @@ impl InputGate {
       Guarded::ApprovalWidening => &mut controls.approvals,
       Guarded::McpServer => &mut controls.server,
       // Only their handlers refuse: they lock no window input, whoever marks them.
-      Guarded::StepAccept | Guarded::CheckCode | Guarded::Sharing => return,
+      Guarded::StepAccept | Guarded::Decision(_) | Guarded::CheckCode | Guarded::Sharing => return,
     };
     if add {
       *count += 1;

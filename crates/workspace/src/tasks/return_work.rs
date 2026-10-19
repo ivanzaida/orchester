@@ -9,7 +9,7 @@
 use orchester_core::{
   permission::RepositoryAccess,
   resource::StepKey,
-  run::{AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus, StuckDecision},
+  run::{Answerer, AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus, StuckDecision},
 };
 use orchester_ipc::{Command, WorkReturn};
 
@@ -112,8 +112,14 @@ pub fn implementing_step(view: &RunView) -> Option<StepKey> {
     .or_else(|| writing.last().map(|view| view.key.clone()))
 }
 
-/// The command that returns `view`'s work to `step` with `note`, to resolve `conflicts` when that is what it is for.
-pub fn command(view: &RunView, step: StepKey, (note, conflicts): (ReviewNote, Option<MergeConflicts>)) -> Command {
+/// The command that returns `view`'s work to `step` with `note`, to resolve `conflicts` when that is what it is for,
+/// as `by` decides it on the run as `view` read it.
+pub fn command(
+  view: &RunView,
+  step: StepKey,
+  (note, conflicts): (ReviewNote, Option<MergeConflicts>),
+  by: Answerer,
+) -> Command {
   match view.run.status() {
     RunStatus::WaitingForPerson(_) => Command::DecideStuckRun {
       run: view.id(),
@@ -124,6 +130,8 @@ pub fn command(view: &RunView, step: StepKey, (note, conflicts): (ReviewNote, Op
       step,
       note,
       conflicts,
+      by,
+      expected: view.run.last_sequence(),
     }),
   }
 }

@@ -7,7 +7,6 @@
 use orchester_core::{
   id::ProjectId,
   question::{AnswerError, AskedQuestions, GivenAnswer, Question, QuestionTurn},
-  run::Answerer,
   store::{RunStore, TaskStore},
 };
 use orchester_store::ProjectDb;
@@ -195,6 +194,9 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
     text,
   } = args;
   let (project, asked) = blocking(move || {
+    if by != SentBy::Person {
+      crate::decisions::DecisionKind::Question.require(&reading.workspace)?;
+    }
     let project = reading.project(&project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let run = find_run(&db, &run)?;
@@ -211,7 +213,7 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
   };
   services
     .runners
-    .control_run_in(&project, answering.command(Answerer::Automation))
+    .control_run_in(&project, answering.command(by.answerer()))
     .await
     .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
   if by == SentBy::Orchestrator {

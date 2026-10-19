@@ -8,8 +8,8 @@ use std::num::{NonZeroU32, NonZeroU64};
 use orchester_core::{
   id::{AttemptId, StepExecutionId},
   run::{
-    AttemptReason, AttemptStatus, BranchName, EventSequence, MergeConflicts, PlannedExecution, ReviewNote, Run,
-    RunError, RunEvent, RunEventKind, RunStatus, StepFailure, StepStatus, attempt_starts,
+    Answerer, AttemptReason, AttemptStatus, BranchName, EventSequence, MergeConflicts, PlannedExecution, ReviewNote,
+    Run, RunError, RunEvent, RunEventKind, RunStatus, StepFailure, StepStatus, attempt_starts,
   },
 };
 
@@ -54,7 +54,14 @@ fn return_ended_reopens_a_succeeded_run_from_the_step_with_the_note() {
     logged.run.ended_return_targets(),
     ["research", "plan", "implement", "checks", "review", "pr"].map(key)
   );
-  logged.apply(|run| run.return_ended(&key("implement"), (&note(), Some(&conflicts())), at(50)));
+  logged.apply(|run| {
+    run.return_ended(
+      &key("implement"),
+      (&note(), Some(&conflicts())),
+      Answerer::Person,
+      at(50),
+    )
+  });
   assert_eq!(logged.run.status(), &RunStatus::Running);
   assert_eq!(logged.run.attempts().len(), ended + 1);
   assert_eq!(logged.run.attempts()[ended - 1].status(), AttemptStatus::Succeeded);
@@ -91,7 +98,7 @@ fn return_ended_reopens_a_succeeded_run_from_the_step_with_the_note() {
 #[test]
 fn return_ended_reopens_a_failed_run() {
   let mut logged = failed();
-  logged.apply(|run| run.return_ended(&key("plan"), (&note(), None), at(40)));
+  logged.apply(|run| run.return_ended(&key("plan"), (&note(), None), Answerer::Person, at(40)));
   assert_eq!(logged.run.status(), &RunStatus::Running);
   assert_eq!(
     logged.run.latest_execution(&key("plan")).map(|step| step.status()),
@@ -107,7 +114,9 @@ fn return_ended_refuses_a_run_that_has_not_ended_and_a_step_that_never_ran() {
   let before = running.run.clone();
   assert!(running.run.ended_return_targets().is_empty());
   assert!(matches!(
-    running.run.return_ended(&key("plan"), (&note(), None), at(40)),
+    running
+      .run
+      .return_ended(&key("plan"), (&note(), None), Answerer::Person, at(40)),
     Err(RunError::InvalidRunTransition { .. })
   ));
   assert_eq!(running.run, before);
@@ -115,7 +124,9 @@ fn return_ended_refuses_a_run_that_has_not_ended_and_a_step_that_never_ran() {
   let mut failed = failed();
   let before = failed.run.clone();
   assert_eq!(
-    failed.run.return_ended(&key("review"), (&note(), None), at(40)),
+    failed
+      .run
+      .return_ended(&key("review"), (&note(), None), Answerer::Person, at(40)),
     Err(RunError::NotAReturnTarget(key("review")))
   );
   assert_eq!(failed.run, before);
@@ -129,7 +140,7 @@ fn return_ended_a_cancelled_run_is_not_returned() {
   assert!(
     logged
       .run
-      .return_ended(&key("research"), (&note(), None), at(30))
+      .return_ended(&key("research"), (&note(), None), Answerer::Person, at(30))
       .is_err()
   );
 }

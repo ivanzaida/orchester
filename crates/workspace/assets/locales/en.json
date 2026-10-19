@@ -579,6 +579,7 @@
       "notEnded": "The run has not ended: only a run that succeeded or failed can be returned to a step.",
       "merged": "The run’s work was merged, so it is not returned to a step any more.",
       "worktreeInMerge": "A merge waits in the run’s worktree for you to resolve it. Continue or abort it first.",
+      "changedMeanwhile": "The run changed since this page read it, so nothing was decided. Look at it again, then decide.",
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details.",
@@ -1166,7 +1167,7 @@
   "appMcp": {
     "errors": {
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
-      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar.",
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",

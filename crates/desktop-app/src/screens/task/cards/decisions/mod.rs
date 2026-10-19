@@ -15,7 +15,7 @@ use std::{
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::{id::RunId, question::Question, run::Answerer};
 use orchester_ipc::Command;
-use orchester_workspace::{tasks::question::Draft, workspace::OpenProject};
+use orchester_workspace::{decisions::DecisionKind, tasks::question::Draft, workspace::OpenProject};
 use parking_lot::Mutex;
 
 pub(super) use self::answers::{Given, Outcome, Refused, Stage, refusal};
@@ -163,7 +163,12 @@ impl Decisions {
       given,
       Given::ApproveSimilar | Given::ApproveProject | Given::ApproveEverything
     );
-    let by = input_gate::answerer(self.gate.as_ref(), Guarded::ApprovalWidening);
+    let kind = match given {
+      Given::Answers => DecisionKind::Question,
+      Given::ApprovePlan => DecisionKind::Plan,
+      _ => DecisionKind::Approval,
+    };
+    let by = input_gate::answerer(self.gate.as_ref(), Guarded::Decision(kind));
     let (by, stage) = match by {
       Some(Answerer::Automation) if wider => (Answerer::Automation, Stage::Refused(Refused::WiderPersonOnly)),
       Some(by) => (by, Stage::Sending),

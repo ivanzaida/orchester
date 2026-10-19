@@ -188,6 +188,8 @@ fn agent_author(agent: &str) -> Value {
 fn sender(message: &MessageEntry) -> Value {
   let on_person_side = if message.by_orchestrator {
     "orchestrator"
+  } else if message.by_automation {
+    "automation"
   } else {
     "person"
   };

@@ -91,16 +91,16 @@ fn automation_policy_failed_stored_read_cannot_reuse_a_prior_grant() {
 }
 
 #[test]
-fn automation_policy_an_answer_is_the_persons_or_automations_only_under_both_grants() {
+fn automation_policy_an_answer_uses_the_shared_per_kind_grant() {
   use lurq::app::events::with_synthetic_input;
   use orchester_app::mcp::input_gate::answerer;
   use orchester_core::run::Answerer;
 
-  let dir = tempfile::tempdir().expect("private policy directory");
+  let dir = private_directory();
   let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
   let gate = InputGate::default();
   gate.bind_permissions(workspace.clone());
-  let policy = Guarded::ApprovalWidening;
+  let policy = Guarded::Decision(orchester_workspace::decisions::DecisionKind::Approval);
   assert_eq!(
     answerer(Some(&gate), policy),
     Some(Answerer::Person),
@@ -116,8 +116,8 @@ fn automation_policy_an_answer_is_the_persons_or_automations_only_under_both_gra
     .expect("the approvals opt-in");
   assert_eq!(
     with_synthetic_input(|| answerer(Some(&gate), policy)),
-    None,
-    "the approvals opt-in alone is not the approval consent"
+    Some(Answerer::Automation),
+    "the approvals opt-in is sufficient for a decision, without permission setup consent"
   );
   workspace
     .set_automation_changes_permissions(true)

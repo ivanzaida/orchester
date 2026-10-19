@@ -24,6 +24,8 @@ impl Scheduler {
       step,
       note,
       conflicts,
+      by,
+      expected,
     } = returned;
     let executing = |rejection| match rejection {
       Rejection::RunNotPaused => Rejection::RunNotEnded,
@@ -32,10 +34,13 @@ impl Scheduler {
     self
       .continue_settled(run, |db, root| {
         let mut stored = returnable(db, run)?;
+        if stored.last_sequence() != expected {
+          return Err(Rejection::RunChangedMeanwhile);
+        }
         let worktree = prepare::existing_worktree(root, run)?;
         in_merge(&worktree)?;
         let events = stored
-          .return_ended(&step, (&note, conflicts.as_ref()), Timestamp::now())
+          .return_ended(&step, (&note, conflicts.as_ref()), by, Timestamp::now())
           .map_err(idle::rejection)?;
         idle::store_continuation(db, root, stored, &events)
       })

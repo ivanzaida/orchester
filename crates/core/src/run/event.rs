@@ -188,6 +188,21 @@ pub enum RunEventKind {
   },
   /// A person let a run that waited for them go on; the attempt they chose follows.
   RetryAllowed,
+  /// Who chose how a waiting run proceeds, including retries, returns, acceptance and stopping.
+  StuckDecided {
+    decision: super::StuckDecision,
+    by: Answerer,
+  },
+  /// Who returned the work of the ended run to `step`; its reopening and the attempt from `step` follow.
+  ReturnDecided {
+    step: StepKey,
+    by: Answerer,
+  },
+  /// A message explicitly continued a failed or waiting run from this step.
+  RecoveryDecided {
+    step: StepKey,
+    by: Answerer,
+  },
   Cancelled,
   /// Opens attempt `number` with fresh executions for `executions`; steps that passed in an
   /// earlier attempt and are not listed keep that result.
@@ -213,6 +228,8 @@ pub enum RunEventKind {
     execution: StepExecutionId,
     version: PlanVersion,
     decision: PlanDecision,
+    #[serde(default)]
+    by: Answerer,
   },
   StepPassed {
     execution: StepExecutionId,
@@ -302,6 +319,9 @@ impl RunEventKind {
       Self::Failed { .. } => "failed",
       Self::WaitingForPerson { .. } => "waiting_for_person",
       Self::RetryAllowed => "retry_allowed",
+      Self::StuckDecided { .. } => "stuck_decided",
+      Self::RecoveryDecided { .. } => "recovery_decided",
+      Self::ReturnDecided { .. } => "return_decided",
       Self::Cancelled => "cancelled",
       Self::AttemptStarted { .. } => "attempt_started",
       Self::StepStarted { .. } => "step_started",

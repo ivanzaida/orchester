@@ -16,7 +16,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{resource::StepKey, run::MergeConflicts};
+use orchester_core::{
+  resource::StepKey,
+  run::{Answerer, MergeConflicts},
+};
 use orchester_workspace::tasks::{
   detail::RunView,
   integration_jobs::{EditorOpened, JobState, ResolveArgs, ResolveStep},
@@ -225,7 +228,16 @@ impl Offer<'_> {
       base: base.clone(),
       files: self.conflicts.to_vec(),
     };
-    let command = return_work::command(self.run, step, (return_work::conflict_note(base), Some(conflicts)));
+    let note = return_work::conflict_note(base);
+    let (person, automation) = (
+      return_work::command(
+        self.run,
+        step.clone(),
+        (note.clone(), Some(conflicts.clone())),
+        Answerer::Person,
+      ),
+      return_work::command(self.run, step, (note, Some(conflicts)), Answerer::Automation),
+    );
     let (action, asked) = (self.action.clone(), self.asked.clone());
     button.on_click(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
@@ -233,6 +245,8 @@ impl Offer<'_> {
         return;
       }
       asked.set(Some(Asking));
+      // An MCP client's press is automation's, as a return it asks for with `continue_run` is.
+      let command = if is_synthetic_input() { &automation } else { &person };
       action.run((Asking, command.clone()));
     })
   }

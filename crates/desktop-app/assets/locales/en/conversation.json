@@ -207,7 +207,11 @@
       "returned": "{{failed}} returned the work to {{step}} · attempt {{attempt}} · {{time}}",
       "returnedByYou": "{{failed}} failed; you returned the work to {{step}} · attempt {{attempt}} · {{time}}",
       "returnedWithNote": "You returned the work to {{step}} · attempt {{attempt}} · {{time}}",
-      "returnedToResolve": "You returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}"
+      "returnedByAutomation": "{{failed}} failed; automation returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "restartedByAutomation": "Automation restarted {{step}} · it stopped without a result · attempt {{attempt}} · {{time}}",
+      "returnedWithNoteByAutomation": "Automation returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "returnedToResolve": "You returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}",
+      "returnedToResolveByAutomation": "Automation returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}"
     },
     "mcp": {
       "disabled": "The server is turned off in Connections.",
@@ -394,6 +398,7 @@
     "workingStartedUnnamed": "The agent is starting",
     "workingUnnamed": "The agent is working · last event {{elapsed}} ago",
     "you": "You",
-    "byOrchestrator": "Orchestrator"
+    "byOrchestrator": "Orchestrator",
+    "byAutomation": "Automation"
   }
 }
