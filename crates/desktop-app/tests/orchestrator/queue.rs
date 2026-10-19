@@ -57,6 +57,10 @@ fn orchestrator_holds_new_starts_and_tasks_releases_them() {
   });
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
   assert!(held(&screen), "still held");
+  assert!(
+    screen.text("orchestrator-conversation").contains("Open queue"),
+    "the refused card opens the queue"
+  );
 }
 
 #[test]

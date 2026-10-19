@@ -169,12 +169,26 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
 
 #[test]
 fn orchestrator_tools_say_which_releases_are_refused_before_they_are_proposed() {
-  let release = listed()
-    .into_iter()
-    .find(|tool| tool.name == "release_queue")
-    .and_then(|tool| tool.description.map(|told| told.into_owned()))
-    .expect("release_queue is listed with a description");
-  for part in ["refused before it is proposed", "nothing_held", "person_only"] {
+  let description = |name: &str| {
+    listed()
+      .into_iter()
+      .find(|tool| tool.name == name)
+      .and_then(|tool| tool.description.map(|told| told.into_owned()))
+      .unwrap_or_else(|| panic!("{name} is listed with a description"))
+  };
+  let pause = description("pause_run");
+  assert!(
+    !pause.contains("release"),
+    "pause_run says nothing of releases: {pause}"
+  );
+  let release = description("release_queue");
+  for part in [
+    "refused before it is proposed",
+    "not_in_group",
+    "nothing_held",
+    "person_only",
+    "already_held",
+  ] {
     assert!(release.contains(part), "release_queue says {part}: {release}");
   }
 }

@@ -297,7 +297,7 @@ impl ChangeCard {
 }
 
 /// The places a card opens: the draft or what was published, *What automation may do* after the chat published
-/// itself, the run's changes while a merge waits, the task otherwise.
+/// itself, the run's changes while a merge waits, the task otherwise, and the queue for a refused release.
 fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Route)> {
   let project = props.project.0;
   let task = view.action.task.as_deref();
@@ -326,6 +326,14 @@ fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Ro
       .into_iter()
       .collect(),
     Some(Change::Cancel { .. }) if view.phase().waits() => Vec::new(),
+    Some(Change::Release { .. }) if matches!(view.phase(), Phase::Refused(_)) => {
+      let queue = (
+        Icon::ArrowUpRight,
+        ctx.t("orchestrator.action.openQueue"),
+        super::action::queue_route(project),
+      );
+      task_open(TaskTab::Summary).into_iter().chain([queue]).collect()
+    }
     _ => task_open(TaskTab::Summary).into_iter().collect(),
   }
 }

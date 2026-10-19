@@ -159,7 +159,8 @@
       "confirmed": "Confirmed · {{time}}",
       "refusedState": "Refused · {{time}}",
       "checked": "Checked like the same action in the app, with your permissions in {{project}}.",
-      "openTask": "Open {{task}}"
+      "openTask": "Open {{task}}",
+      "openQueue": "Open queue"
     },
     "newSession": {
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",

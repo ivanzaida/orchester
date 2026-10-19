@@ -160,7 +160,7 @@ fn chat_release_applied_once_nothing_or_a_person_holds_is_refused() {
     apply_refused(&mut served, &db, &scope),
     (
       "nothing_held".to_owned(),
-      "orchestrator.proposal.releaseNothing".to_owned()
+      "orchestrator.proposal.releaseNothing.project".to_owned()
     ),
     "no release shown that did not happen"
   );
@@ -199,7 +199,7 @@ fn chat_hold_or_release_that_changes_nothing_is_refused() {
     newest_refusal(&db, &scope),
     (
       "nothing_held".to_owned(),
-      "orchestrator.tools.releaseNothing".to_owned()
+      "orchestrator.tools.releaseNothing.project".to_owned()
     ),
     "no release shown that did not happen"
   );
@@ -209,7 +209,10 @@ fn chat_hold_or_release_that_changes_nothing_is_refused() {
   assert_eq!(refusal(&again), "already_held");
   assert_eq!(
     newest_refusal(&db, &scope),
-    ("already_held".to_owned(), "orchestrator.tools.holdAlready".to_owned()),
+    (
+      "already_held".to_owned(),
+      "orchestrator.tools.holdAlready.project".to_owned()
+    ),
     "no hold shown that did not happen"
   );
   chat_call(&mut served, &scope, "release_queue", project()).expect("released");
@@ -266,6 +269,16 @@ fn chat_release_of_a_group_is_proposed_only_for_what_automation_held() {
   let release = || json!({ "project": "Kontur", "task": task });
   let nothing = chat_call(&mut served, &scope, "release_queue", release()).expect_err("nothing held");
   assert_eq!(refusal(&nothing), "nothing_held");
+  assert_eq!(newest_refusal(&db, &scope).1, "orchestrator.tools.releaseNothing.group");
+  // With the whole project held, the refusal points to the project's hold.
+  hold(&mut db, HoldActor::Automation);
+  chat_call(&mut served, &scope, "release_queue", release()).expect_err("the group is not held");
+  assert_eq!(
+    newest_refusal(&db, &scope).1,
+    "orchestrator.tools.releaseNothing.projectHeld"
+  );
+  db.set_queue_hold((HoldScope::Project, HoldActor::Automation), false, Timestamp::now())
+    .expect("project released");
   hold_group(&mut db, group, HoldActor::Automation);
   let told = chat_call(&mut served, &scope, "release_queue", release()).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
