@@ -438,7 +438,8 @@
         "key": "Choose the secret holding the API key, or New secret….",
         "secretName": "Name the new key secret.",
         "secretValue": "Enter the key.",
-        "models": "Enter at least one model the provider serves."
+        "models": "Enter at least one model the provider serves.",
+        "unavailable": "Save unavailable: {{reason}}"
       },
       "personOnly": "Only a person saves a connection on an API provider here: input from an MCP client is taken only while you let automation change agent permissions.",
       "model": "Model id",
@@ -454,7 +455,12 @@
       "detailKeyMissing": "The key’s secret is archived or gone, so runs on this connection don’t start. Choose another secret in Edit connection, or restore it in Secrets.",
       "offProvider": "Saving takes {{name}} off the API provider",
       "offProviderDetail": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in. {{secret}} stays in Secrets.",
-      "offProviderDetailNoSecret": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in."
+      "offProviderDetailNoSecret": "Its base URL and models are removed; agents start {{cli}} on the Default account’s sign-in.",
+      "environments": {
+        "development": "Development",
+        "staging": "Staging",
+        "production": "Production"
+      }
     }
   }
 }

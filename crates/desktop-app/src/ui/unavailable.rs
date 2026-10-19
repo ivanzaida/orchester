@@ -32,6 +32,24 @@ pub fn reason_line(id: &str, reason: &str) -> Row {
     )
 }
 
+/// The lock and `reason` as wide as their words, for a parent that places them at its end (an action bar's reason
+/// under its buttons, `UW2bO`); the words wrap at the parent's width. Ids as [`reason_line`]'s.
+pub fn reason_at_end(id: &str, reason: &str) -> Row {
+  Row::new()
+    .id(id.to_owned())
+    .max_width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Start)
+    .describe("role", "unavailable-reason")
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(
+      Text::new(reason)
+        .id(format!("{id}-text"))
+        .variant(ExtraTypography::Note.role())
+        .min_width(Dimension::Px(0.0)),
+    )
+}
+
 /// `actions` with `reason` under them, both at their end; the reason's element id is `id`.
 pub fn with_reason(actions: impl Into<Element>, id: &str, reason: &str) -> Column {
   Column::new()

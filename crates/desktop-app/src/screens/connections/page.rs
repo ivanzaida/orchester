@@ -23,7 +23,7 @@ use crate::{
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
-    unavailable::reason_line,
+    unavailable::reason_at_end,
   },
 };
 
@@ -134,7 +134,7 @@ pub(super) fn action_bar(actions: Vec<Element>, reason: Option<&str>) -> Element
         .align_items(Alignment::Center)
         .with_children(actions),
     )
-    .with_children(reason.map(|reason| reason_line("connection-form-reason", reason)));
+    .with_children(reason.map(|reason| reason_at_end("connection-form-reason", reason)));
   Row::new()
     .id("connection-form-bar")
     .width(Dimension::Pct(100.0))
