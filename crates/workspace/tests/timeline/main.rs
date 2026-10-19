@@ -358,6 +358,7 @@ fn sent_now(execution: StepExecutionId, at: Timestamp) -> Item {
       execution: Some(execution),
       sent_now: true,
       by_orchestrator: false,
+      by_automation: false,
     }),
   }
 }
@@ -479,6 +480,7 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
     attempt: 2,
     at: Some(at(2)),
     by_person: false,
+    by: None,
     kind: MarkKind::Restarted {
       step: "Implement".into(),
     },
@@ -528,6 +530,7 @@ fn timeline_search_finds_a_question_with_its_step() {
         execution: Some(execution),
         sent_now: false,
         by_orchestrator: false,
+        by_automation: false,
       },
       step: Some("Implement".into()),
     },

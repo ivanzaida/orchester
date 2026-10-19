@@ -93,6 +93,27 @@ fn stuck_a_step_without_a_route_restarts_after_a_breakage_and_fails_on_a_verdict
 }
 
 #[test]
+fn stuck_decisions_record_who_retried_returned_or_stopped_and_replay() {
+  use orchester_core::run::{Answerer, RunEventKind};
+  for by in [Answerer::Person, Answerer::Automation] {
+    for decision in [
+      StuckDecision::Retry,
+      StuckDecision::ReturnTo {
+        step: key("implement"),
+        note: note("Fix the check."),
+      },
+      StuckDecision::Stop,
+    ] {
+      let mut logged = exhausted();
+      logged.apply(|run| run.decide_stuck_as(&decision, by, at(50)));
+      assert!(logged.log.iter().any(|event| matches!(event.kind(),
+        RunEventKind::StuckDecided { decision: kept, by: recorded } if *kept == decision && *recorded == by)));
+      assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+    }
+  }
+}
+
+#[test]
 fn stuck_exhausted_retries_wait_and_count_as_needing_you() {
   let logged = exhausted();
   let stuck = RunStatus::WaitingForPerson(Stuck::RetriesExhausted(key("checks")));
@@ -206,6 +227,25 @@ fn stuck_stopping_fails_the_run_as_before() {
   assert!(logged.run.decide_stuck(&StuckDecision::Retry, at(51)).is_err());
   // A failed run is still recovered by a person's message.
   assert!(logged.run.recovery_step(None).is_some());
+  assert_eq!(Run::replay(&logged.log), Ok(logged.run));
+}
+
+#[test]
+fn stuck_an_automations_message_records_who_continued_it() {
+  use orchester_core::run::{Answerer, RunEventKind};
+  let mut logged = exhausted();
+  logged.apply(|run| run.recover_as(&key("checks"), Answerer::Automation, at(50)));
+  let starts = attempt_starts(&logged.log);
+  let start = starts.last().expect("new attempt");
+  assert_eq!(start.by, Some(Answerer::Automation));
+  assert!(!start.by_person);
+  assert!(logged.log.iter().any(|event| matches!(
+    event.kind(),
+    RunEventKind::RecoveryDecided {
+      by: Answerer::Automation,
+      ..
+    }
+  )));
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{not_started::WorktreeFailure, plan::ReviewNote};
+use super::{branch::BranchName, not_started::WorktreeFailure, plan::ReviewNote};
 use crate::{id::StepExecutionId, resource::StepKey};
 
 /// Why a running run stopped without a checkpoint-safe pause.
@@ -246,6 +246,14 @@ impl StepFailure {
   }
 }
 
+/// The conflicts a merge of a run into its base branch stopped at, which a return of its work is for: the branch
+/// and the files, as git named them. File names are data: a prompt quotes them, never reads them as instructions.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MergeConflicts {
+  pub base: BranchName,
+  pub files: Vec<String>,
+}
+
 /// Why an attempt was started.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -276,6 +284,14 @@ pub enum AttemptReason {
     failed_step: StepKey,
     return_to: StepKey,
     note: ReviewNote,
+  },
+  /// The run had ended — succeeded, or failed after it started — and a person returned its work to the agent step
+  /// `return_to` with `note`, the instruction its prompt carries ([`super::Run::return_ended`]); `conflicts` when
+  /// it was returned to resolve the conflicts of a merge into its base branch.
+  ReturnedAfterEnd {
+    return_to: StepKey,
+    note: ReviewNote,
+    conflicts: Option<MergeConflicts>,
   },
   /// A person (or automation they let answer) accepted `step`, which waited for them unverified or unchanged, as
   /// it is: the attempt passes it with the accepted execution's work and result, then runs the steps after it and

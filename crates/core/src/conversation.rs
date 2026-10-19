@@ -221,6 +221,7 @@ pub struct Message {
   /// A message on the person's side that the project's Orchestrator chat wrote and sent
   /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's.
   by_orchestrator: bool,
+  by_automation: bool,
 }
 
 impl Message {
@@ -245,6 +246,7 @@ impl Message {
       recovery_after: None,
       timing: Timing::AfterTurn,
       by_orchestrator: false,
+      by_automation: false,
     }
   }
 
@@ -271,6 +273,7 @@ impl Message {
       recovery_after: None,
       timing: Timing::AfterTurn,
       by_orchestrator: false,
+      by_automation: false,
     }
   }
 
@@ -300,6 +303,7 @@ impl Message {
       recovery_after: None,
       timing: Timing::AfterTurn,
       by_orchestrator: false,
+      by_automation: false,
     })
   }
 
@@ -342,6 +346,24 @@ impl Message {
     self.by_orchestrator
   }
 
+  /// Who wrote a message on the person's side, including an answer or a continuation.
+  pub const fn answerer(&self) -> Option<crate::run::Answerer> {
+    match self.sender {
+      Sender::Person { .. } if self.by_automation => Some(crate::run::Answerer::Automation),
+      Sender::Person { .. } => Some(crate::run::Answerer::Person),
+      Sender::Agent { .. } => None,
+    }
+  }
+
+  /// Marks a message on the person's side as automation's; agent messages cannot be relabeled.
+  pub fn sent_by_automation(mut self) -> Result<Self, MessageError> {
+    if !matches!(self.sender, Sender::Person { .. }) {
+      return Err(MessageError::NotFromAPerson);
+    }
+    self.by_automation = true;
+    Ok(self)
+  }
+
   /// A person's message sent as `timing` says.
   pub fn sent(mut self, timing: Timing) -> Result<Self, MessageError> {
     if !matches!(self.sender, Sender::Person { .. }) {
@@ -357,6 +379,7 @@ impl Message {
       return Err(MessageError::NotFromAPerson);
     }
     self.by_orchestrator = true;
+    self.by_automation = true;
     Ok(self)
   }
 

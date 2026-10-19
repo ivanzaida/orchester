@@ -1,5 +1,6 @@
 mod abort;
 mod drafts;
+mod outside;
 mod preservation;
 mod privacy;
 mod reservation;
@@ -82,6 +83,8 @@ pub struct LocalOperation {
   hook_change: Option<super::HookChange>,
   #[serde(default)]
   accepted_edits: Vec<super::LocalPath>,
+  #[serde(default)]
+  merged_outside: Option<String>,
 }
 
 impl LocalOperation {
@@ -113,6 +116,7 @@ impl LocalOperation {
       editor_drafts: Vec::new(),
       hook_change: None,
       accepted_edits: Vec::new(),
+      merged_outside: None,
     })
   }
 

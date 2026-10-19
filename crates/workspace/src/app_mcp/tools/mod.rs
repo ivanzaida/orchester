@@ -74,6 +74,17 @@ impl Translate {
 pub enum SentBy {
   Client,
   Orchestrator,
+  /// A native, person-only acceptance of a proposed answer.
+  Person,
+}
+
+impl SentBy {
+  const fn answerer(self) -> orchester_core::run::Answerer {
+    match self {
+      Self::Person => orchester_core::run::Answerer::Person,
+      Self::Client | Self::Orchestrator => orchester_core::run::Answerer::Automation,
+    }
+  }
 }
 
 /// One tool as clients list it.
@@ -129,14 +140,17 @@ const SPECS: &[Spec] = &[
                   message with what each one's agent wrote last (awaiting.messages: the question it ended its step with, \
                   or its newest message), and the plan waiting for a decision (version, step, its whole text and an \
                   excerpt) among it; and its decided plans, each with its decision, note, when and decided_by (person, \
-                  or automation through this server). The run's link is its task's page; the waiting approvals, \
+                  or automation through this server). merge says whether its work was merged, as its task's Summary \
+                  tells it: merged by orchester (with the recorded merge) or outside (git proves its base branch \
+                  holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
+                  The run's link is its task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
   Spec {
     name: "list_runs",
-    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
+    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase; merged also when git proves its work merged outside Orchester), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
     schema: schema_for_type::<run_list::ListRuns>,
     read_only: true,
   },
@@ -226,7 +240,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "continue_run",
-    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry or return_to (a step that used up its retries or broke again). Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
+    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged). Retry, return and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
     schema: schema_for_type::<continue_run::ContinueRun>,
     read_only: false,
   },
@@ -244,13 +258,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "decide_plan",
-    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) with the version it is for, as get_run shows it waiting with its whole text, or request_changes with a note (the step's agent resumes with it and proposes a revised plan; a version is optional). The decision is recorded as automation's, and the plan card says so. Approving is refused unless a person turned on Let automation answer approvals in the app; requesting changes is not. Refusals name why: automation_not_allowed, run_not_found, no_plan_waiting, run_paused, plan_already_decided, plan_version_changed, version_required, invalid_version, blank_note, note_not_taken, and the runner's run_not_running, shutting_down, runner_unavailable or runner_reply_lost.",
+    description: "Decides the plan a gated step of a run waits with, as the plan card on its task page does: approve (Approve plan & continue: the step passes and the steps after it start; takes no note) with the version it is for, as get_run shows it waiting with its whole text, or request_changes with a note (the step's agent resumes with it and proposes a revised plan; a version is optional). The decision is recorded as automation's, and the plan card says so. Both decisions are refused unless a person turned on Let automation answer approvals in the app. Refusals name why: automation_not_allowed, run_not_found, no_plan_waiting, run_paused, plan_already_decided, plan_version_changed, version_required, invalid_version, blank_note, note_not_taken, and the runner's run_not_running, shutting_down, runner_unavailable or runner_reply_lost.",
     schema: schema_for_type::<plans::DecidePlan>,
     read_only: false,
   },
   Spec {
     name: "answer_question",
-    description: "Answers an agent's waiting question with suggested answers, as its card in the task conversation does: the labels of the options picked (one, or several where the question allows it) and/or an answer in your own words. Refused for a label the question does not suggest, more than one answer to a single-choice question, or an empty answer.",
+    description: "Answers an agent's waiting question with suggested answers, as its card in the task conversation does: the labels of the options picked (one, or several where the question allows it) and/or an answer in your own words. Refused unless a person turned on Let automation answer approvals. The answer is recorded as automation's. Also refused for a label the question does not suggest, more than one answer to a single-choice question, or an empty answer.",
     schema: schema_for_type::<questions::AnswerQuestion>,
     read_only: false,
   },
@@ -386,11 +400,16 @@ pub async fn answer_for_orchestrator(
   translate: &Translate,
   name: &str,
   arguments: JsonObject,
+  by: orchester_core::run::Answerer,
 ) -> Result<Value, ToolError> {
   let arguments = Value::Object(arguments);
+  let by = match by {
+    orchester_core::run::Answerer::Person => SentBy::Person,
+    orchester_core::run::Answerer::Automation => SentBy::Orchestrator,
+  };
   match name {
-    "answer_question" => questions::answer_question(services, parse(arguments)?, SentBy::Orchestrator).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Orchestrator)).await,
+    "answer_question" => questions::answer_question(services, parse(arguments)?, by).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, by)).await,
     other => Err(ToolError::InvalidArguments(format!("{other} answers no agent"))),
   }
 }

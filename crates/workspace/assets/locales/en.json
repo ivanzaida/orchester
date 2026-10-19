@@ -362,6 +362,18 @@
     },
     "notShared": {
       "readiness": "Read-only · open it to share"
+    },
+    "resolve": {
+      "notEnded": "The run has not ended, so its worktree is not merged into while its agents may work there.",
+      "uncommitted": "The run’s worktree has uncommitted changes: {{files}}. They are the agent’s, and a merge would mix them in. Nothing was merged.",
+      "notOnBranch": "The run’s worktree is not on the run’s branch, so merging there would not change the run’s work. Nothing was merged.",
+      "inMerge": "A merge is in progress in the run’s worktree already: continue or abort it.",
+      "notInMerge": "No merge is in progress in the run’s worktree any more.",
+      "markersLeft": "Conflict markers are still in {{files}}. Resolve them, save the files, then continue.",
+      "undecided": "Keep one side of {{files}}: git could not merge them by content. Then continue.",
+      "notUnmerged": "{{file}} does not wait for a side to be kept any more.",
+      "branchMoved": "The run’s branch is not at its last checkpoint: it has commits Orchester did not record. Nothing was merged.",
+      "notTheBase": "The merge in the run’s worktree is not a merge of the run’s base branch. Abort it, then resolve again."
     }
   },
   "runs": {
@@ -384,7 +396,10 @@
       "worktreeNotCreated": "Failed before it started · no worktree",
       "atWork": "{{step}} · {{agent}} at work",
       "stepAtWork": "{{step}} at work",
+      "atWorkResolving": "{{step}} · {{agent}} at work · returned at {{time}} to resolve the conflicts with {{branch}}",
+      "stepAtWorkResolving": "{{step}} at work · returned at {{time}} to resolve the conflicts with {{branch}}",
       "notMerged": "Every step passed · not merged",
+      "mergedOutside": "Merged into {{branch}} without Orchester",
       "interruptedAt": "Interrupted at {{step}}",
       "interruptedAtCantContinue": "Interrupted at {{step}} · can’t continue",
       "interrupted": "Interrupted",
@@ -465,6 +480,7 @@
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
         "alreadyMerged": "This run was merged already.",
+        "notMergeable": "The run works again, or a merge waits in its worktree for you to resolve it, so its merge was not recorded.",
         "heldLocally": "This run’s local integration still holds work in your checkout. Finish it, cancel it or remove its kept originals in Local integration, then merge again. Nothing was merged.",
         "heldByOther": "The local integration of {{task}} holds work in your checkout. Finish it, cancel it or remove its kept originals in its Local integration, then merge again. Nothing was merged.",
         "anotherMerge": "Another merge is under way in this project. Merge this run once it is done.",
@@ -560,6 +576,10 @@
       "notPaused": "The run is not paused.",
       "ended": "The run has already ended.",
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
+      "notEnded": "The run has not ended: only a run that succeeded or failed can be returned to a step.",
+      "merged": "The run’s work was merged, so it is not returned to a step any more.",
+      "worktreeInMerge": "A merge waits in the run’s worktree for you to resolve it. Continue or abort it first.",
+      "changedMeanwhile": "The run changed since this page read it, so nothing was decided. Look at it again, then decide.",
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details.",
@@ -1147,7 +1167,7 @@
   "appMcp": {
     "errors": {
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
-      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on from the MCP item of Orchester’s status bar.",
+      "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
@@ -1205,6 +1225,7 @@
       "runNotReady": "Only a run that is ready for review can be merged.",
       "noBaseBranch": "The run did not start from a branch, so there is no branch to merge it into.",
       "alreadyMerged": "The run was merged already.",
+      "mergedOutside": "The run’s work is in {{branch}} already: it was merged without Orchester.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
       "acceptPersonOnly": "Accepting a step that could not check everything passes it in a person’s place, which a person decides on the task page, or lets automation decide by turning on Let automation answer approvals.",

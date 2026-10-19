@@ -21,6 +21,7 @@ use super::{
   notes, resolver, words,
 };
 use crate::ui::{
+  card::CardSurface,
   notice::{Notice, NoticeTone},
   state::loading,
 };
@@ -35,13 +36,20 @@ pub(super) fn column(
 ) -> Column {
   let phase = view.operation.as_ref().map_or(LocalPhase::Review, |op| op.phase());
   let mode = page.mode.get();
+  let outside = view.operation.as_ref().is_some_and(|op| op.merged_outside().is_some());
+  // Work found integrated outside Orchester: its card stands for what the page is about (`itt7z`, `pdT4W`, `UWLNj`).
+  let phase_note = view
+    .external
+    .is_none()
+    .then(|| notes::phase(ctx, (phase, outside), &mode, narrow));
   let mut column = Column::new()
     .id("local-evidence")
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Lg)
-    .child(notes::phase(ctx, phase, &mode, narrow))
+    .with_children(phase_note)
     .with_children(external_notice(ctx, task, view))
+    .with_children(restore_next(ctx, view))
     .with_children(hook_notice(ctx, view, phase));
   if let Some(problem) = page.work.state().get().error {
     column = column.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
@@ -60,7 +68,30 @@ pub(super) fn column(
   if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) || page.editor_dirty.get() {
     return column.child(resolver::mount(ctx, page, task, view, busy, narrow));
   }
+  if view.external.is_some() {
+    return column;
+  }
   column.with_children(content(ctx, page, view, (busy, narrow)))
+}
+
+/// Beside work found whole in the branch, where the record can take that merge and keeps preserved originals: that
+/// restoring them comes next (`Restore step · next` in `pdT4W`).
+fn restore_next(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
+  let operation = view.operation.as_ref()?;
+  // A cancellation put its originals back already: removing the kept ones follows, not a restoration.
+  let retained =
+    operation.phase() != LocalPhase::Canceled && operation.preservation().is_some_and(|saved| saved.retained);
+  (view.external.as_ref().is_some_and(words::merged_outside) && operation.can_record_merged_outside() && retained).then(
+    || {
+      notes::panel(
+        "local-restore-next",
+        CardSurface::Outline,
+        &ctx.t("local_integration.restoreNext"),
+        &ctx.t("local_integration.restoreBody"),
+      )
+      .into()
+    },
+  )
 }
 
 fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, (busy, narrow): (bool, bool)) -> Vec<Element> {

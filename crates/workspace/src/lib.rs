@@ -16,6 +16,7 @@ pub mod clock;
 pub mod close;
 pub mod code_index;
 pub mod connections;
+pub mod decisions;
 pub mod display;
 pub mod drafts;
 pub mod environment;

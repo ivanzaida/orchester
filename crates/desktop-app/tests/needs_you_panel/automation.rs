@@ -13,7 +13,7 @@ use super::{
 };
 
 const PERSON_ONLY: &str = "Only a person answers this here: input from an MCP client answers only while you let \
-                           automation answer approvals and change agent permissions.";
+                           automation answer approvals.";
 const WIDER: &str = "Only a person gives a wider answer: automation approves a request once or denies it.";
 
 fn refusal(window: &mut Window, card: &str) -> Option<String> {

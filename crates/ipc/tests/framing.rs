@@ -122,6 +122,12 @@ fn requests(run: RunId, task: TaskId) -> Vec<Request> {
 fn decision_commands(run: RunId) -> Vec<Command> {
   let note = ReviewNote::new("Keep email sign-in.\n\"Quoted\" — é").expect("a note");
   vec![
+    Command::DecideStuckRunAs {
+      run,
+      expected: orchester_core::run::EventSequence::FIRST,
+      decision: orchester_core::run::StuckDecision::Retry,
+      by: orchester_core::run::Answerer::Automation,
+    },
     Command::AnswerQuestion {
       run,
       request: "invocation:7".to_owned(),

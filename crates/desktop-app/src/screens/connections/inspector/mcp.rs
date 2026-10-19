@@ -20,7 +20,7 @@ use lurq::{
 use orchester_core::connection::mcp::{HttpServer, McpEnvValue, McpServer, McpTransport, StdioServer};
 use orchester_workspace::{connections::mcp::enabling, display};
 
-use super::{Actions, Confirm, Inspecting, Parts, footer, header};
+use super::{Actions, Confirm, Inspecting, Parts, footer, footer_action, header};
 use crate::{
   screens::connections::{
     widen::{WidenConfirm, WidenProps},
@@ -350,17 +350,33 @@ fn plain_footer(
   let tools_reason = ctx.t("connections.mcp.toolsNote");
   let id = server.id();
   let busy = inspecting.running.is_some();
-  let test = ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test"))
-    .icon(Icon::PlugZap)
-    .unavailable(tools_reason);
-  let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")).icon(Icon::Pencil);
+  let button = |id: &str, kind: ButtonKind, key: &str, glyph: Icon| {
+    footer_action(inspecting, ActionButton::new(id.to_owned(), kind, ctx.t(key)), glyph)
+  };
+  let test = button(
+    "connection-test",
+    ButtonKind::Secondary,
+    "connections.test",
+    Icon::PlugZap,
+  )
+  .unavailable(tools_reason);
+  let edit = button(
+    "connection-edit",
+    ButtonKind::Secondary,
+    "connections.edit",
+    Icon::Pencil,
+  );
   let edit = if busy {
     edit.disabled()
   } else {
     edit.opens((actions.edit)(id))
   };
-  let remove =
-    ActionButton::new("connection-remove", ButtonKind::Ghost, ctx.t("connections.mcp.remove")).icon(Icon::Trash2);
+  let remove = button(
+    "connection-remove",
+    ButtonKind::Ghost,
+    "connections.mcp.remove",
+    Icon::Trash2,
+  );
   let in_use = (!users.is_empty()).then(|| ctx.t_args("connections.mcp.removeInUse", [("profiles", users.join(", "))]));
   let remove = match (&in_use, inspecting.running) {
     (Some(reason), _) => remove.unavailable(reason.clone()),

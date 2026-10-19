@@ -6,6 +6,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
+  layout::Alignment,
   node::Element,
 };
 use orchester_core::{
@@ -16,7 +17,7 @@ use orchester_core::{
 use super::{
   Actions, Inspecting, Parts,
   agent::{models, properties},
-  check_button, footer,
+  check_button, footer, footer_action,
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
@@ -47,10 +48,17 @@ pub(super) fn parts(
   } else {
     ButtonKind::Secondary
   };
-  let edit = ActionButton::new("connection-edit", kind, ctx.t("connections.edit"))
-    .icon(Icon::Pencil)
-    .opens(edit(id));
-  let test = check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions);
+  let edit = footer_action(
+    inspecting,
+    ActionButton::new("connection-edit", kind, ctx.t("connections.edit")),
+    Icon::Pencil,
+  )
+  .opens(edit(id));
+  let test = footer_action(
+    inspecting,
+    check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions),
+    Icon::PlugZap,
+  );
   let buttons = if missing {
     vec![edit.into(), test.into()]
   } else {
@@ -101,12 +109,16 @@ fn runs_on(ctx: &Ctx, cli: AgentProvider, provider: &ApiProvider, key: Option<&S
       &ctx.t(interface),
       PropertyValue::Plain,
     ))
-    .child(property(
-      "connection-provider-base-url",
-      &ctx.t("connections.apiProvider.url"),
-      provider.base_url().as_str(),
-      PropertyValue::Mono,
-    ))
+    // A base URL that wraps keeps its label across from it, the row as compact as the others (`y2qhJ`).
+    .child(
+      property(
+        "connection-provider-base-url",
+        &ctx.t("connections.apiProvider.url"),
+        provider.base_url().as_str(),
+        PropertyValue::Mono,
+      )
+      .align_items(Alignment::Center),
+    )
     .child(property(
       "connection-provider-key",
       &ctx.t("connections.apiProvider.key"),

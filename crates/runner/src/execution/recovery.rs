@@ -45,16 +45,23 @@ pub(super) fn recover(db: &mut ProjectDb, root: &Path, mut run: Run) -> Result<O
         .recovery_after()
         .is_some_and(|sequence| sequence >= ended.sequence() && sequence <= run.last_sequence())
     })
-    .filter_map(|message| message.queued_for(run.id()))
-    .find_map(|recipient| {
-      run.recovery_step(match recipient {
-        Recipient::Orchestrator => None,
-        Recipient::Agent(profile) => Some(profile),
-      })
+    .filter_map(|message| message.queued_for(run.id()).map(|recipient| (recipient, message)))
+    .find_map(|(recipient, message)| {
+      run
+        .recovery_step(match recipient {
+          Recipient::Orchestrator => None,
+          Recipient::Agent(profile) => Some(profile),
+        })
+        .map(|step| {
+          (
+            step,
+            message.answerer().expect("queued messages are on the person's side"),
+          )
+        })
     });
-  let Some(step) = step else { return Ok(None) };
+  let Some((step, by)) = step else { return Ok(None) };
   prepare::existing_worktree(root, run.id())?;
-  let events = run.recover(&step, Timestamp::now()).map_err(idle::rejection)?;
+  let events = run.recover_as(&step, by, Timestamp::now()).map_err(idle::rejection)?;
   // Validate the pinned task and worktree before changing durable run state.
   let prepared = Prepared::continuing(db, root, run)?;
   idle::store(db, &prepared.run, &events)?;

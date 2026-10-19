@@ -223,26 +223,42 @@ the agent logged: {agent}"
     self.window.pass();
   }
 
-  /// The labels of the select `id`'s options.
+  /// The labels of the select `id`'s options; of a choice field's (`ui::choice_field`), its menu's rows, which it
+  /// opens and closes again to read them.
   pub fn options(&mut self, id: &str) -> Vec<String> {
-    let select = self
+    if let Some(select) = self
       .window
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.as_select())
-      .unwrap_or_else(|| panic!("{id} is a select"));
-    select.labels().iter().map(ToString::to_string).collect()
+    {
+      return select.labels().iter().map(ToString::to_string).collect();
+    }
+    let opened = !self.is_open(id);
+    if opened {
+      self.click(id);
+    }
+    let labels = (0..)
+      .map(|index| format!("{id}-option-{index}"))
+      .map_while(|option| self.window.texts(&option).and_then(|texts| texts.first().cloned()))
+      .collect();
+    if opened && self.is_open(id) {
+      self.click(id);
+    }
+    labels
   }
 
-  /// Whether the select `id`'s menu is open.
+  /// Whether the select `id`'s menu is open; a choice field's while its menu is shown.
   pub fn is_open(&mut self, id: &str) -> bool {
-    self
+    if let Some(select) = self
       .window
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.as_select())
-      .unwrap_or_else(|| panic!("{id} is a select"))
-      .is_open()
+    {
+      return select.is_open();
+    }
+    self.exists(&format!("{id}-menu"))
   }
 
   /// Presses the pointer on the middle of `id`, as a person would: whatever takes presses there gets it.

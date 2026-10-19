@@ -6,10 +6,7 @@
 //! an ended task again with it, or kept until a person raises the limit the run stopped at. A run no
 //! agent reads any more, and that does not run again, refuses it.
 
-use orchester_core::{
-  id::{IdempotencyKey, RunId},
-  run::Answerer,
-};
+use orchester_core::id::{IdempotencyKey, RunId};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -29,7 +26,7 @@ use crate::{
       SendError,
       composer::ComposerMode,
       follow::{RunnerOf, Sent, Stored, follow},
-      outgoing::{OutgoingError, Way, plan_changes, prepare_in, store_by_orchestrator_in, store_in},
+      outgoing::{OutgoingError, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
     },
     outside::Outside,
     run::control_message,
@@ -84,6 +81,12 @@ pub async fn send_message(
     let named = find_run(&orchester_store::ProjectDb::open(&project.repo_root)?, &run)?;
     // Automation reads the run as stored: the runner it asks starts if the project has none.
     let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None)).map_err(refusal)?;
+    if let Some(kind) = prepared.decision_kind(Way::Primary) {
+      // The Orchestrator's plan path below retains its stricter refusal.
+      if by != SentBy::Person && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
+        kind.require(&reading.workspace)?;
+      }
+    }
     Ok((project, prepared))
   })
   .await?;
@@ -92,7 +95,11 @@ pub async fn send_message(
     if by == SentBy::Orchestrator {
       return Err(plan_person_only());
     }
-    let command = plan_changes(&prepared, &args.text, (Answerer::Automation, None)).map_err(refusal)?;
+    let workspace = services.workspace.clone();
+    if by != SentBy::Person {
+      blocking(move || crate::decisions::DecisionKind::Plan.require(&workspace)).await?;
+    }
+    let command = plan_changes(&prepared, &args.text, (by.answerer(), None)).map_err(refusal)?;
     services
       .runners
       .control_run_in(&project, command)
@@ -108,11 +115,11 @@ pub async fn send_message(
   };
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then) = blocking(move || {
-    let store = match by {
-      SentBy::Client => store_in,
-      SentBy::Orchestrator => store_by_orchestrator_in,
+    let stored = match by {
+      SentBy::Client | SentBy::Person => store_answer_in(&root, &prepared, (key, way), &text, by.answerer()),
+      SentBy::Orchestrator => store_by_orchestrator_in(&root, &prepared, (key, way), &text),
     };
-    let (then, _) = store(&root, &prepared, (key, way), &text).map_err(refusal)?;
+    let (then, _) = stored.map_err(refusal)?;
     Ok((prepared, then))
   })
   .await?;
@@ -144,6 +151,7 @@ pub fn refusal(error: OutgoingError) -> ToolError {
     OutgoingError::NotLatestRun(_) => ToolError::refused("not_latest_run", vec![reason]),
     OutgoingError::Closed(_) => ToolError::refused("no_agent_reads", vec![reason]),
     OutgoingError::Send(SendError::Blank) => ToolError::refused("blank_message", vec![reason]),
+    OutgoingError::Send(SendError::NotAllowed) => ToolError::refused("automation_not_allowed", vec![reason]),
     OutgoingError::Changed
     | OutgoingError::NoSecondWay
     | OutgoingError::NoPlan

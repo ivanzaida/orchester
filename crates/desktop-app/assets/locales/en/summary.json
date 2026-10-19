@@ -16,6 +16,8 @@
       "runningTitle": "{{step}} is running · attempt {{attempt}}",
       "runningTogetherTitle": "{{steps}} are running",
       "runningBody": "{{agent}} works in the run's own worktree on {{branch}}; your checkout is not touched.",
+      "returnedResolvingTitle": "Returned to {{step}} to resolve the conflicts with {{branch}}",
+      "returnedResolvingBody": "{{agent}} merges {{branch}} into the run's branch in its worktree and resolves {{files}}. The steps after {{step}} run again; nothing reaches {{branch}} until you merge.",
       "pausingTitle": "Pausing at the next checkpoint",
       "pausingBody": "{{agent}} finishes what it is doing at {{step}}; the run then pauses with its work saved on {{branch}}.",
       "askingTitle": "{{agent}} asks you",

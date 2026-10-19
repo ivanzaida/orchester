@@ -313,7 +313,14 @@ async fn switched(
     return propose_change(translate, scope, name, arguments).await;
   }
   let (change, task) = change::subject(scope, name, arguments).await?;
-  let result = change::apply((services, translate), scope, &change, &[]).await;
+  let result = change::apply(
+    (services, translate),
+    scope,
+    &change,
+    &[],
+    orchester_core::run::Answerer::Automation,
+  )
+  .await;
   Ok(Acted {
     result,
     kept: Kept {

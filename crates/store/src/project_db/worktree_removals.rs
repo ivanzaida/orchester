@@ -39,6 +39,8 @@ impl WorktreeStore for ProjectDb {
         "INSERT INTO run_worktree_removals (run_id, removed_at) VALUES (?1, ?2)",
         params![run.to_string(), at.unix_millis()],
       )?;
+      // A merge waiting in the worktree for the person goes with it: the person removes it.
+      transaction.execute("DELETE FROM run_resolutions WHERE run_id = ?1", [run.to_string()])?;
       RemovalStart::Recorded
     };
     transaction.commit()?;
