@@ -110,9 +110,9 @@ fn chat_message_card_kept_before_what_it_does_was_known_is_refused() {
 
 #[test]
 fn chat_run_again_card_keeps_and_shows_the_run_it_started() {
-  let (runner, codex) = super::live::programs();
-  let (folder, seeded) = Served::seed("task-states", Some(codex));
-  let mut served = Served::start_with(folder, &seeded.app_database, runner, false);
+  let programs = super::runner_programs::programs();
+  let (folder, seeded) = Served::seed("task-states", Some(programs.fake_codex.clone()));
+  let mut served = Served::start_with(folder, &seeded.app_database, programs.runner.clone(), false);
   // The seed used today's budget: lifted, so the task runs again.
   served.ok(
     "update_project_limits",

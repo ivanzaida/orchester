@@ -1674,7 +1674,9 @@
         "interrupted": "Run #{{run}} was interrupted since this was proposed: continuing it is yours, on the task's Summary. Nothing was changed."
       },
       "pauseEnded": "Run #{{run}} ended since this was proposed: there is nothing to pause. Nothing was changed.",
-      "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again."
+      "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again.",
+      "releaseNothing": "New starts are not held there any more: there is nothing to release. Nothing was changed.",
+      "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started."
@@ -1693,7 +1695,9 @@
       "resumeWaits": "Run #{{run}} stays paused: resuming it waits for the person, who applies or dismisses it in the conversation. Tell them why you would resume it.",
       "releaseWaits": "New starts stay held: releasing them waits for the person, who applies or dismisses it in the conversation. Tell them why you would release them.",
       "continueWaits": "Run #{{run}} still waits: how it goes on waits for the person, who applies or dismisses it in the conversation. Tell them what you would choose and why.",
-      "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to."
+      "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to.",
+      "releaseNothing": "New starts are not held there: there is nothing to release.",
+      "releasePersonHeld": "A person held these new starts: only a person releases them, in Tasks. Tell them why you would release them."
     }
   }
 }

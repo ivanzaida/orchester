@@ -155,7 +155,7 @@ pub(super) async fn apply(
     Change::Resume { run, .. } => {
       blocking(move || {
         let run = find_run(&ProjectDb::open(&root)?, &run.to_string())?;
-        control::resumable(&run, control::ResumeRefusal::Applied)
+        control::resumable(&run, control::ToldTo::Applied)
       })
       .await?;
       let (tool, arguments) = tool_arguments(scope, change);
@@ -167,8 +167,10 @@ pub(super) async fn apply(
       let (tool, arguments) = tool_arguments(scope, change);
       app_tool((services, translate), tool, arguments).await
     }
-    // The tool checks the held starts again where it releases them.
-    Change::Release { .. } => {
+    // New starts let go on since, or held by a person, leave nothing for the chat's release to do.
+    Change::Release { task } => {
+      blocking(move || control::releasable(&ProjectDb::open(&root)?, task.as_deref(), control::ToldTo::Applied))
+        .await?;
       let (tool, arguments) = tool_arguments(scope, change);
       app_tool((services, translate), tool, arguments).await
     }

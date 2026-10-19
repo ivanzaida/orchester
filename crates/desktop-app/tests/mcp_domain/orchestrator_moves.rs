@@ -10,6 +10,7 @@ use orchester_core::{
   resource::{Draft, Pipeline, PromptText},
   run::InterruptCause,
   store::{RunStore, TaskStore},
+  task_group::{HoldActor, HoldScope},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -122,6 +123,10 @@ fn chat_turn_on_its_own_proposes_pausing_resuming_releasing_and_publishing() {
       Ok(Draft::new(body, Some(latest.number()), Timestamp::now()))
     })
     .expect("a draft to publish");
+  // New starts automation held, so there is something to release.
+  drafts
+    .set_queue_hold((HoldScope::Project, HoldActor::Automation), true, Timestamp::now())
+    .expect("held");
   for (tool, arguments) in [
     (
       "pause_run",

@@ -9,6 +9,7 @@ use orchester_core::{
   id::ProjectId,
   orchestrator::change::{Change, ProposedChange},
   run::{PauseReason, Run, RunLimit, RunStatus},
+  task_group::HoldScope,
 };
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
@@ -18,6 +19,7 @@ use super::run_subject;
 use crate::{
   app_mcp::{ToolError, find_run, find_task},
   messages::Message,
+  tasks::hold,
 };
 
 /// The tools whose calls this module proposes.
@@ -39,6 +41,7 @@ pub(super) fn control_change(
       Some(named) => Some(find_task(&db, &named)?.key().to_string()),
       None => None,
     };
+    releasable(&db, task.as_deref(), ToldTo::Agent)?;
     let change = Change::Release { task: task.clone() };
     return Ok((
       ProposedChange {
@@ -55,24 +58,24 @@ pub(super) fn control_change(
   let change = if name == PAUSE_RUN {
     Change::Pause { run: id, number }
   } else {
-    resumable(&run, ResumeRefusal::Agent)?;
+    resumable(&run, ToldTo::Agent)?;
     Change::Resume { run: id, number }
   };
   Ok((ProposedChange { subject, change }, task))
 }
 
-/// Who a refused resume is told to.
+/// Who a refused resume or release is told to.
 #[derive(Clone, Copy)]
-pub(in crate::orchestrator) enum ResumeRefusal {
+pub(in crate::orchestrator) enum ToldTo {
   /// The chat's agent, whose call is refused.
   Agent,
-  /// The person, whose Apply of a proposed resume is refused: the run stopped since, as its words name.
+  /// The person, whose Apply of the proposal is refused: what it would change changed since, as its words name.
   Applied,
 }
 
 /// Refused unless `run` is one the chat resumes: a pause stopped it. One stopped at a limit or interrupted is the
 /// person's (`person_only`), told as `to` reads it.
-pub(in crate::orchestrator) fn resumable(run: &Run, to: ResumeRefusal) -> Result<(), ToolError> {
+pub(in crate::orchestrator) fn resumable(run: &Run, to: ToldTo) -> Result<(), ToolError> {
   let since = match run.status() {
     RunStatus::Paused(PauseReason::LimitReached(limit)) => match limit {
       RunLimit::Tokens => "orchestrator.proposal.resumeStopped.tokens",
@@ -83,16 +86,56 @@ pub(in crate::orchestrator) fn resumable(run: &Run, to: ResumeRefusal) -> Result
       RunLimit::PlanLimit { .. } => "orchestrator.proposal.resumeStopped.plan",
     },
     RunStatus::Interrupted(_) => "orchestrator.proposal.resumeStopped.interrupted",
-    _ => return Ok(()),
+    RunStatus::Pending
+    | RunStatus::Running
+    | RunStatus::Paused(PauseReason::Requested)
+    | RunStatus::WaitingForPerson(_)
+    | RunStatus::Succeeded
+    | RunStatus::Failed(_)
+    | RunStatus::Cancelled => return Ok(()),
   };
   let key = match to {
-    ResumeRefusal::Agent => "orchestrator.tools.resumePersonOnly",
-    ResumeRefusal::Applied => since,
+    ToldTo::Agent => "orchestrator.tools.resumePersonOnly",
+    ToldTo::Applied => since,
   };
   Err(ToolError::refused(
     "person_only",
     vec![Message::new(key).with("run", run.number().get().to_string())],
   ))
+}
+
+/// Refused unless automation holds new starts where a release of the chat's lets them go on: in the whole project, or
+/// in the reviewed group of task `task` (its key). Nothing held there has nothing to release, and a person's hold is
+/// released by a person only, in Tasks; either is told as `to` reads it. Blocks on SQLite.
+pub(in crate::orchestrator) fn releasable(db: &ProjectDb, task: Option<&str>, to: ToldTo) -> Result<(), ToolError> {
+  let holds = db.queue_holds()?;
+  let scope = match task {
+    None => Some(HoldScope::Project),
+    Some(key) => hold::group_of(db, find_task(db, key)?.id())?.map(HoldScope::Group),
+  };
+  let held = match scope {
+    Some(HoldScope::Project) => holds.project,
+    Some(HoldScope::Group(group)) => holds.groups.contains(&group),
+    None => false,
+  };
+  let (code, agent, applied) = match scope {
+    _ if !held => (
+      "not_held",
+      "orchestrator.tools.releaseNothing",
+      "orchestrator.proposal.releaseNothing",
+    ),
+    Some(held) if holds.by_person.contains(&held) => (
+      "person_only",
+      "orchestrator.tools.releasePersonHeld",
+      "orchestrator.proposal.releasePersonHeld",
+    ),
+    _ => return Ok(()),
+  };
+  let key = match to {
+    ToldTo::Agent => agent,
+    ToldTo::Applied => applied,
+  };
+  Err(ToolError::refused(code, vec![Message::new(key)]))
 }
 
 /// Refused when `run` ended since a pause of it was proposed: there is nothing to pause.

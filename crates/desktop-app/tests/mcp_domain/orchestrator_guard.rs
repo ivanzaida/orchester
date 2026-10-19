@@ -7,10 +7,15 @@ use orchester_core::{
   orchestrator::ActionOutcome,
   run::{InterruptCause, RunLimit, review::AutoModeSettings},
   store::{MergeStore, RunStore, TaskStore},
+  task_group::{HoldActor, HoldScope},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope, workspace::OrchestratorConsent};
+use orchester_workspace::{
+  app_mcp::ToolError,
+  orchestrator::{proposal::Decision, tools::ChatScope},
+  workspace::OrchestratorConsent,
+};
 use serde_json::json;
 
 use super::{
@@ -98,4 +103,71 @@ fn chat_resumes_no_run_stopped_at_a_limit_or_interrupted() {
       .all(|action| matches!(&action.outcome, ActionOutcome::Refused { code, .. } if code == "person_only")),
     "each refusal is kept"
   );
+}
+
+/// Holds the project's new starts as `actor`, as Tasks or the chat holds them.
+fn hold(db: &mut ProjectDb, actor: HoldActor) {
+  db.set_queue_hold((HoldScope::Project, actor), true, Timestamp::now())
+    .expect("held");
+}
+
+/// Takes the person's Apply on the newest action of `scope`'s conversation; the code and the reason it was refused
+/// with (the tests' words are the keys).
+fn apply_refused(served: &mut Served, db: &ProjectDb, scope: &ChatScope) -> (String, String) {
+  let seq = db.chat_entries(scope.chat).expect("entries").last().expect("it").seq;
+  super::orchestrator_continue::decide(served, scope, seq, Decision::Accept { widens: Vec::new() }).expect("decided");
+  match actions(db, scope).pop().expect("kept").outcome {
+    ActionOutcome::Refused { code, reason } => (code, reason),
+    other => panic!("refused, not {other:?}"),
+  }
+}
+
+#[test]
+fn chat_release_is_proposed_only_for_what_automation_held() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let scope = ChatScope {
+    on_its_own: true,
+    ..chat(&served, &mut db)
+  };
+  let release = || json!({ "project": "Kontur" });
+  let nothing = chat_call(&mut served, &scope, "release_queue", release()).expect_err("nothing held");
+  assert_eq!(refusal(&nothing), "not_held");
+  hold(&mut db, HoldActor::Person);
+  let person = chat_call(&mut served, &scope, "release_queue", release()).expect_err("a person's hold");
+  assert_eq!(refusal(&person), "person_only");
+  assert!(db.queue_holds().expect("holds").project, "the person's hold stays");
+}
+
+#[test]
+fn chat_release_applied_once_nothing_or_a_person_holds_is_refused() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let scope = ChatScope {
+    on_its_own: true,
+    ..chat(&served, &mut db)
+  };
+  let release = || json!({ "project": "Kontur" });
+  hold(&mut db, HoldActor::Automation);
+  chat_call(&mut served, &scope, "release_queue", release()).expect("proposed");
+  // New starts went on in Tasks before the person applied it.
+  db.set_queue_hold((HoldScope::Project, HoldActor::Person), false, Timestamp::now())
+    .expect("released");
+  assert_eq!(
+    apply_refused(&mut served, &db, &scope),
+    ("not_held".to_owned(), "orchestrator.proposal.releaseNothing".to_owned()),
+    "no release shown that did not happen"
+  );
+  hold(&mut db, HoldActor::Automation);
+  chat_call(&mut served, &scope, "release_queue", release()).expect("proposed");
+  // A person held them in Tasks since: theirs to release.
+  hold(&mut db, HoldActor::Person);
+  assert_eq!(
+    apply_refused(&mut served, &db, &scope),
+    (
+      "person_only".to_owned(),
+      "orchestrator.proposal.releasePersonHeld".to_owned()
+    )
+  );
+  assert!(db.queue_holds().expect("holds").project, "the person's hold stays");
 }

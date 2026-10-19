@@ -344,7 +344,9 @@
           "acceptRunAgain": "Run again with this message"
         },
         "doneAgain": "Ran {{task}} again · run #{{run}}",
-        "effectRanAgain": "Started run #{{run}} at {{time}}; its first agent reads: {{text}}"
+        "effectRanAgain": "Started run #{{run}} at {{time}}; its first agent reads: {{text}}",
+        "doneAgainUnread": "Ran {{task}} again",
+        "effectRanAgainUnread": "Started the task's next run at {{time}}; its first agent reads: {{text}}"
       },
       "publish": {
         "waits": "Publish {{name}} v{{version}}?",

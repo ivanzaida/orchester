@@ -12,7 +12,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -131,9 +131,10 @@ pub(super) fn card(
       Text::new(&title)
         .id(format!("{id}-title"))
         .variant(ConversationText::ResultTitle.role())
-        .flex_shrink(1.0),
+        // The title takes the free room, so its box is never narrower than its words.
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
-    .child(Spacer::new().flex(1.0))
     .child(
       Row::new()
         .id(format!("{id}-state"))

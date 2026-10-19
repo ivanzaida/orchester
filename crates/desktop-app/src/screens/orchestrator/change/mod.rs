@@ -129,8 +129,9 @@ impl Component for ChangeCard {
     let shown = match (&loaded.error, read.map(|read| read.facts.as_ref())) {
       (None, Some(Some(read::Facts::Publication(publication)))) => Some(publication.widens.clone()),
       (None, Some(Some(read::Facts::Run(_)))) => Some(Vec::new()),
-      // A change with nothing to read (a release of new starts, a run or draft no longer there) widens nothing; the
-      // tool it goes through refuses it when there is nothing to do.
+      // A change with nothing to read (a release of new starts, a run or draft no longer there) widens nothing. Apply
+      // checks it again first (`orchestrator::change::apply`: nothing held to release, a run that went on, a draft
+      // saved again or gone) and refuses it with the card's own words.
       (None, Some(None)) => Some(Vec::new()),
       _ => None,
     };

@@ -3,7 +3,9 @@
 //! applied, dismissed and refused because its run ended; a resume waiting, applied and refused on a run stopped at
 //! its token budget; a release of new starts waiting and applied; and a message refused because its run changed since
 //! it was proposed. Each card reads its run's facts from the seed as it stands; a refusal keeps the words the apply
-//! path gives it, in the window's language. One turn holds every card, in this order (`-0` to `-9` of its action ids),
+//! path gives it, in the window's language; then messages that would move a run, waiting for the person: a follow-up, a
+//! continuation, a resume, one that waits for a raised limit and one that runs the task again. One turn holds every
+//! card, in this order (`-0` to `-14` of its action ids),
 //! so a verifier scrolls to each; the waits and run ends that follow land in another conversation ([`elsewhere`]).
 
 use std::error::Error;
@@ -13,10 +15,10 @@ use orchester_core::{
   id::ChatId,
   orchestrator::{
     ActionOutcome, ChatAction, TurnState,
-    change::{Change, ProposedChange},
+    change::{Change, MessageThen, ProposedChange},
   },
   run::{PauseReason, Run, RunLimit, RunStatus},
-  store::{RunStore, TaskStore},
+  store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -60,13 +62,13 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
   let message = |run: &(Run, String)| Change::Message {
     run: run.0.id(),
     number: run.0.number().get(),
-    text: "Also cover the 429 response: wait the Retry-After seconds before the next attempt.".to_owned(),
+    text: TEXT.to_owned(),
     now: false,
     then: None,
     sent_as: Some("send_after_turn".to_owned()),
   };
   // In the order the board draws them; one turn holds them all, so each is on screen with the conversation's row.
-  let cards = vec![
+  let mut cards = vec![
     action(("pause_run", going), pause(going), ActionOutcome::Waits),
     settled(action(("pause_run", going), pause(going), ActionOutcome::Applied)),
     settled(action(("pause_run", going), pause(going), ActionOutcome::Dismissed)),
@@ -90,6 +92,7 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
       refused("orchestrator.proposal.messageChanged", "changed_since_proposed", going),
     )),
   ];
+  cards.extend(moving_cards(&db, &runs, [going, limited, ended])?);
   let turns = vec![Turn {
     text: "Look after the runs while I'm away.",
     at: ago(40),
@@ -99,6 +102,40 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
   let chat = keep(&mut db, ChatId::generate(), connection, turns)?;
   elsewhere(&mut db)?;
   Ok(chat)
+}
+
+/// The words of every message card.
+const TEXT: &str = "Also cover the 429 response: wait the Retry-After seconds before the next attempt.";
+
+/// Messages that would move a run none of whose agents waits or works, waiting for the person: a follow-up, a
+/// continuation, a resume, one that waits for a raised limit and one that runs the task again; `[going, limited,
+/// ended]` are the runs the other cards picked.
+fn moving_cards(
+  db: &ProjectDb,
+  runs: &[(Run, String)],
+  [going, limited, ended]: [&(Run, String); 3],
+) -> Result<Vec<ChatAction>, Box<dyn Error>> {
+  let moving = |run: &(Run, String), then: MessageThen, sent_as: &str| {
+    let change = Change::Message {
+      run: run.0.id(),
+      number: run.0.number().get(),
+      text: TEXT.to_owned(),
+      now: false,
+      then: Some(then),
+      sent_as: Some(sent_as.to_owned()),
+    };
+    action(("send_message", run), change, ActionOutcome::Waits)
+  };
+  let ready = pick_ready(db, runs)?;
+  let stuck = pick(runs, |run| matches!(run.status(), RunStatus::WaitingForPerson(_)))?;
+  Ok(vec![
+    moving(ready, MessageThen::FollowUp, "follow_up"),
+    moving(stuck, MessageThen::Continue, "continue"),
+    // The seed has no paused run: the card reads its run as it stands.
+    moving(going, MessageThen::Resume, "resume"),
+    moving(limited, MessageThen::RaiseLimit, "raise_limit"),
+    moving(ended, MessageThen::RunAgain, "run_again"),
+  ])
 }
 
 /// A conversation, newer than the state's, that dealt with every task of the seed, so that the waits and run ends the
@@ -135,6 +172,16 @@ fn latest_runs(db: &ProjectDb) -> Result<Vec<(Run, String)>, Box<dyn Error>> {
     }
   }
   Ok(runs)
+}
+
+/// The first of `runs` that succeeded and was not merged: ready for review.
+fn pick_ready<'a>(db: &ProjectDb, runs: &'a [(Run, String)]) -> Result<&'a (Run, String), Box<dyn Error>> {
+  for found in runs {
+    if *found.0.status() == RunStatus::Succeeded && db.run_merge(found.0.id())?.is_none() {
+      return Ok(found);
+    }
+  }
+  Err("the tasks scenario has a run ready for review".into())
 }
 
 /// The first of `runs` that `wanted`.
