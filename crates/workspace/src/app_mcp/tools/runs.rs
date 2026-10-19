@@ -3,16 +3,19 @@
 //! last checkpoint, as the page's Continue does in Resume's place; Resume and Continue take a shared task's claim
 //! first.
 
+use std::path::Path;
+
 use orchester_core::{
   id::RunId,
   run::{
     Plan, Run, RunStatus,
     review::{ReviewRecord, reviews_usage},
   },
-  store::{RunStore, TaskStore},
+  store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
   tokens::TokenBudget,
 };
+use orchester_exec::programs::Programs;
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -29,6 +32,7 @@ use crate::{
   sharing::project::WorkClaim,
   tasks::{
     approvals::pending,
+    delivery::{self, Delivery},
     detail::{RunView, StepView, run_store_error, run_view},
     plan::PlanReview,
     run::control_message,
@@ -75,6 +79,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
     let auto_mode = db.run_auto_mode(run.id())?;
     let worktree = worktree_state(&db, &root, run.id())?;
+    let merge = merge_state(&db, (&root, &services.programs), &run)?;
     let view = run_view(&db, run)?;
     let plan = PlanReview::of(&view).map(|review| {
       let mut plan = plans::waiting(&review, true);
@@ -114,6 +119,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       "plans": decided,
       "auto_mode": auto_mode,
       "worktree": worktree,
+      "merge": merge,
       "awaiting": {
         "plan_decisions": run.awaiting_plan().len(),
         "plan": plan,
@@ -128,6 +134,29 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
     }))
   })
   .await
+}
+
+/// Whether `run`'s work was merged, as its task's Summary tells it: by Orchester, with the merge it recorded, or
+/// outside Orchester as git in the checkout at `root` proves it (its base branch holds the run's commits); `null`
+/// for a run that has not succeeded.
+fn merge_state(db: &ProjectDb, (root, programs): (&Path, &Programs), run: &Run) -> Result<Value, ToolError> {
+  if let Some(merge) = db.run_merge(run.id())? {
+    return Ok(json!({
+      "state": "merged",
+      "by": "orchester",
+      "into": merge.into.to_string(),
+      "revision": merge.revision.to_string(),
+      "merged_at": wire::time(merge.merged_at),
+    }));
+  }
+  if run.status() != &RunStatus::Succeeded {
+    return Ok(Value::Null);
+  }
+  Ok(match delivery::of_run(programs, root, run) {
+    Delivery::MergedOutside(into) => json!({ "state": "merged", "by": "outside", "into": &*into }),
+    Delivery::NothingToMerge => json!({ "state": "nothing_to_merge" }),
+    Delivery::Waiting => json!({ "state": "not_merged" }),
+  })
 }
 
 /// The part of a run's tokens auto mode's reviewer spent: how many reviews asked it, how many of them

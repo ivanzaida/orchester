@@ -16,6 +16,8 @@ mod git_untouched;
 mod hooks;
 #[path = "local_integration/ignore_transitions.rs"]
 mod ignore_transitions;
+#[path = "local_integration/merged_outside.rs"]
+mod merged_outside;
 #[path = "local_integration/metadata.rs"]
 mod metadata;
 #[path = "local_integration/privacy.rs"]

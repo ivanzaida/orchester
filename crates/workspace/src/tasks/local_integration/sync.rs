@@ -186,8 +186,10 @@ impl LocalIntegration {
     Ok(())
   }
 
+  /// Records Orchester's merge of the run at `head`, once. A merge made without Orchester and recorded as the
+  /// local integration's own (`LocalOperation::record_merged_outside`) stays outside: no merge event is invented.
   pub(super) fn record_run_merge(&mut self, head: &str) -> Result<(), IntegrationError> {
-    if self.db.run_merge(self.run.id())?.is_some() {
+    if self.db.run_merge(self.run.id())?.is_some() || self.operation.merged_outside().is_some() {
       return Ok(());
     }
     self.db.save_run_merge(&RunMerge {

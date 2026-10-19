@@ -17,6 +17,7 @@ impl std::fmt::Debug for LocalOperation {
       .field("version", &self.version)
       .field("phase", &self.phase)
       .field("merged", &self.merged)
+      .field("merged_outside", &self.merged_outside)
       .field("checkout_and_recovery", &"<private>")
       .finish()
   }

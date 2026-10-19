@@ -140,14 +140,17 @@ const SPECS: &[Spec] = &[
                   message with what each one's agent wrote last (awaiting.messages: the question it ended its step with, \
                   or its newest message), and the plan waiting for a decision (version, step, its whole text and an \
                   excerpt) among it; and its decided plans, each with its decision, note, when and decided_by (person, \
-                  or automation through this server). The run's link is its task's page; the waiting approvals, \
+                  or automation through this server). merge says whether its work was merged, as its task's Summary \
+                  tells it: merged by orchester (with the recorded merge) or outside (git proves its base branch \
+                  holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
+                  The run's link is its task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
   Spec {
     name: "list_runs",
-    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
+    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase; merged also when git proves its work merged outside Orchester), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
     schema: schema_for_type::<run_list::ListRuns>,
     read_only: true,
   },
