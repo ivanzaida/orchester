@@ -396,6 +396,7 @@ fn stands(ctx: &Ctx, view: &View, run: &RunFacts) -> Option<Arc<str>> {
     Stands::Ready { since: Some(since) } => ctx.t_args("orchestrator.change.facts.ready", [("time", clock(*since))]),
     Stands::Ready { since: None } => ctx.t("orchestrator.change.facts.readyNow"),
     Stands::Merged { at, .. } => ctx.t_args("orchestrator.change.facts.merged", [("time", clock(*at))]),
+    Stands::MergedOutside { into } => ctx.t_args("orchestrator.change.facts.mergedOutside", [("into", into.as_str())]),
     Stands::Failed => ctx.t("orchestrator.change.facts.failed"),
   })
 }

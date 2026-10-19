@@ -12,7 +12,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::TaskId,
+  id::{RunId, TaskId},
   integration::{Branches, Delivered, GitError, RunWork},
   run::{BranchName, Run, TaskPhase},
 };
@@ -21,8 +21,10 @@ use parking_lot::Mutex;
 
 use super::{
   changes::GIT,
+  history::RunRecord,
   list::{Latest, Phases},
 };
+use crate::messages::Message;
 
 /// What became of a succeeded run's work that Orchester did not merge.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -39,6 +41,37 @@ pub enum Delivery {
 /// What became of `run`'s work, a succeeded run that Orchester did not merge, in the checkout at `repo_root`.
 pub fn of_run(programs: &Programs, repo_root: &Path, run: &Run) -> Delivery {
   deliveries(programs, repo_root, &[RunWork::of(run)]).remove(0)
+}
+
+/// Settles each of `records`, runs as *Runs of this task* lists them, that passed every step and that Orchester did
+/// not merge, as git in the checkout at `repo_root` tells them, the way the Summary reads the latest: one whose work
+/// its base branch holds reads as merged into it, all of them in one reading of the branches. Gives what became of
+/// each of them, by run.
+pub fn settle_records<'a>(
+  programs: &Programs,
+  repo_root: &Path,
+  records: impl IntoIterator<Item = &'a mut RunRecord>,
+) -> Vec<(RunId, Delivery)> {
+  let (unmerged, works): (Vec<&mut RunRecord>, Vec<RunWork>) = records
+    .into_iter()
+    .filter(|record| record.phase == Some(TaskPhase::Succeeded))
+    .filter_map(|record| {
+      let work = RunWork::of(record.run.as_deref()?);
+      Some((record, work))
+    })
+    .unzip();
+  // One reading of the branches for all of them: one `git for-each-ref`, and one more for each base branch.
+  unmerged
+    .into_iter()
+    .zip(deliveries(programs, repo_root, &works))
+    .map(|(record, delivery)| {
+      if let Delivery::MergedOutside(into) = &delivery {
+        record.phase = Some(TaskPhase::Merged);
+        record.detail = Message::new("runs.history.mergedOutside").with("branch", into.to_string());
+      }
+      (record.id, delivery)
+    })
+    .collect()
 }
 
 /// The latest runs a reading of the tasks found succeeded and not merged in Orchester, by task.

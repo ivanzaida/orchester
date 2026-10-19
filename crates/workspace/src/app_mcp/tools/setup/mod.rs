@@ -361,7 +361,8 @@ const SPECS: &[Spec] = &[
                   when the main checkout needs no local integration: nothing local in the way and no local \
                   integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
                   the checkout, conflict choices and approving the exact merged result are a person's, in the \
-                  app's Local integration page.",
+                  app's Local integration page. A run merged already, by Orchester or outside it as git proves \
+                  (its base branch holds the run's commits), is refused with already_merged.",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: false,
   },

@@ -24,6 +24,43 @@ Local integration asks a person for a decision in the project, or works in the c
 and says so. A press that comes from an MCP client through the window goes through `merge_run`'s policy, which
 refuses and redacts what that tool would.
 
+**Merged outside Orchester (2026-10-18).** A run whose whole work Git finds in the checkout's branch (complete
+ancestry: a merge by hand, or a pull request pulled back) is merged, in every run view: the Summary and its *Runs of
+this task*, the task list, Needs you, the Orchestrator chat's cards and the domain tools (`list_runs`, `get_run`'s
+`merge`, `get_task`). `merge_run` answers `already_merged` for it instead of asking for a person. No Orchester merge
+event is invented for it. Only proven containment of the whole branch counts: part of it, equivalent patches or an
+equal tree still wait for the person. Its local integration record then settles as follows, never a dead end:
+
+- A record that holds nothing (a review, also one paused or stopped since, or a cancellation whose kept originals
+  were removed) completes by itself when the tab or the Summary reads the evidence, and stops reserving the
+  checkout; its recovery record says the merge was made without Orchester and at which commit. Nothing changes while
+  another local integration works or a Git process of this one has not finished; a later reading settles it.
+- A record that holds the person's work keeps its card beside *Merged*. Where it stopped between steps (a review, a
+  prepared or checked checkout, or a cancellation, also one paused or stopped for reconciliation since), with no
+  resolution, unsaved editor decisions or task abort in flight and any preserved originals verified, *Record
+  this merge and finish* records the merge Git proves as the record's own, as a merge Orchester recorded would be:
+  preserved originals are put back next (*Restore*) and removed as usual, and a record with nothing else to finish
+  completes. The merge stays one made without Orchester: reconciling it later never writes an Orchester merge record.
+  Restoring needs the checkout still at that commit; a pull in between makes *Restore* refuse as stale.
+- Mid-step records and partial or equivalent evidence offer what works with the checkout as it is: a task merge in
+  conflict is aborted, a cancellation keeps its own actions, a record still at the commit it reviewed (and, with
+  originals preserved, the commit they were taken from) is cancelled, and one whose checkout moved since is
+  reconciled first, which reviews the moved checkout so a record without preserved originals can then be cancelled.
+  Preserved originals taken from another commit are never written over a moved checkout: they wait for the person
+  (complete evidence lets them record the merge and restore onto it).
+
+Nothing is merged, synced or resolved again in any of these.
+
+The page shows these states as drawn in `zMOBO`: `itt7z` (21, the record held nothing: the *Merged* card once, on the
+evidence side, and the recovery record's Merge row "Without Orchester · <commit>"; no step card), `pdT4W` (22,
+preserved originals: *Merged*, then *Restore preserved local changes · next*; the step card with *Record this merge and
+finish*) and `UWLNj` (23, partial evidence: the reconciliation warning; the step card with *Reconcile actual Git
+state*). The review's file list and phase note give way to the evidence card in these states. A record completed this
+way says the merge was made without Orchester instead of claiming a recorded merge and restoration. On the Summary
+(`fvCVT`, board 9) the run reads merged, its row "Merged into main without Orchester"; an Orchestrator merge proposal
+for such a run (`RWBN8`) reads "Run #N of KEY is in main already", no longer waits for the person and offers only
+*Open changes*.
+
 ## Reviewed native states
 
 | Node | State | Logical size |

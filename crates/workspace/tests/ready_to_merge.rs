@@ -1,23 +1,42 @@
 //! When work that passed every step stops waiting to be merged without a merge in Orchester: its task is
 //! Done or Canceled, a person merged its branch into the branch it started from with git, or the run
-//! committed nothing, so there is nothing to merge; the task list's rows and the task's page read it alike,
-//! against a real repository.
+//! committed nothing, so there is nothing to merge; the task list's rows, the task's page with its runs and the
+//! Orchestrator chat's cards read it alike, against a real repository.
 
 mod support;
 
-use std::{fs, path::Path, process};
+use std::{
+  fs,
+  path::Path,
+  process,
+  sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+  },
+  time::Duration,
+};
 
 use orchester_core::{
+  command::{Command, CommandError, CommandOutput, CommandRunner},
+  orchestrator::{
+    ActionOutcome, ChatAction,
+    change::{Change, ProposedChange},
+  },
   run::{Run, TaskPhase},
+  store::TaskStore,
   task::organization::{ChangeActor, TaskOrganization, WorkflowStatus},
 };
-use orchester_exec::programs::Programs;
-use orchester_workspace::tasks::{
-  data::ProjectTasks,
-  delivery::Delivery,
-  detail::TaskDetail,
-  list::{self, TaskTab},
-  needs_you::WaitingKind,
+use orchester_exec::{ProcessRunner, programs::Programs};
+use orchester_workspace::{
+  orchestrator::facts::{Facts, Stands, load_in},
+  tasks::{
+    data::ProjectTasks,
+    delivery::{Delivery, settle_records},
+    detail::TaskDetail,
+    history::runs_of,
+    list::{self, TaskTab},
+    needs_you::WaitingKind,
+  },
 };
 use support::{Fixture, at};
 
@@ -141,6 +160,31 @@ fn ready_to_merge_counts_work_merged_with_git_as_merged() {
     (TaskPhase::Merged, Delivery::MergedOutside("main".into())),
     "its page says what its row says"
   );
+  let listed = &page.history[0];
+  assert_eq!(listed.phase, Some(TaskPhase::Merged), "*Runs of this task* says so too");
+  assert_eq!(listed.detail.key, "runs.history.mergedOutside");
+  let card = ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: "Write docs".to_owned(),
+      change: Change::Merge {
+        run: merged.id(),
+        number: merged.number().get(),
+        checkpoint: None,
+        into: None,
+      },
+    })),
+    ..ChatAction::new("merge_run", None, ActionOutcome::Waits)
+  };
+  let Some(Facts::Run(facts)) = load_in(fixture.repo.path(), &programs, &card).expect("the card's facts") else {
+    panic!("a merge proposal's card reads its run");
+  };
+  assert_eq!(
+    facts.stands,
+    Stands::MergedOutside {
+      into: "main".to_owned()
+    },
+    "the Orchestrator's card does not call it ready to merge"
+  );
 }
 
 #[test]
@@ -176,5 +220,65 @@ fn ready_to_merge_a_run_that_committed_nothing_is_neither_ready_nor_merged() {
     (page.phase(), page.delivery),
     (TaskPhase::Succeeded, Delivery::NothingToMerge),
     "its page says what its row says"
+  );
+}
+
+/// Runs every command with git as `Programs::processes` does, counting them.
+struct Counted {
+  git: ProcessRunner,
+  runs: AtomicUsize,
+}
+
+impl CommandRunner for Counted {
+  fn run(&self, command: &Command) -> Result<CommandOutput, CommandError> {
+    self.runs.fetch_add(1, Ordering::Relaxed);
+    self.git.run(command)
+  }
+}
+
+#[test]
+fn ready_to_merge_runs_of_many_tasks_are_settled_in_one_reading_of_the_branches() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let mut records = Vec::new();
+  for (title, file) in [
+    ("Write docs", "docs.md"),
+    ("Add sign-out", "sign_out.rs"),
+    ("Fix zoom", "zoom.rs"),
+  ] {
+    let task = fixture.task(title, at(10));
+    let mut run = fixture.started_run_from(task, (&base, "main"), at(20));
+    fixture.succeed(&mut run, at(30));
+    work_on_branch(&fixture, &run, file);
+    let task = fixture.db.task(task).expect("read").expect("the task");
+    records.extend(runs_of(&fixture.db, &task).expect("its runs"));
+  }
+  git(
+    fixture.repo.path(),
+    &[
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "-m",
+      "by hand",
+      records[0].run.as_ref().expect("run").branch().as_str(),
+    ],
+  );
+  let counted = Arc::new(Counted {
+    git: ProcessRunner::new(Duration::from_secs(30)),
+    runs: AtomicUsize::new(0),
+  });
+  let settled = settle_records(
+    &Programs::with_runner(counted.clone()),
+    fixture.repo.path(),
+    records.iter_mut(),
+  );
+  assert_eq!(settled.len(), 3);
+  assert_eq!(records[0].phase, Some(TaskPhase::Merged));
+  assert_eq!(records[1].phase, Some(TaskPhase::Succeeded));
+  assert_eq!(
+    counted.runs.load(Ordering::Relaxed),
+    3,
+    "one branch listing and one of what main holds for all tasks, and one ancestry check of the merged run"
   );
 }
