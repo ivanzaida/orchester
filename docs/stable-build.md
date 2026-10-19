@@ -425,16 +425,41 @@ agents you would let run code that way. For example, a *Check* step that runs `t
 when the check fails, with *Let automation change agent permissions* on:
 
 ```text
-save_tool_draft     {"project": "Orchester", "name": "Check", "description": "Runs tools/check.ps1.",
+save_tool_draft     {"project": "Orchester", "name": "Check",
+                     "description": "Runs tools/check.ps1 with the tests of the changed crates.",
                      "program": "powershell",
-                     "arguments": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/check.ps1"],
-                     "timeout_secs": 3600}
+                     "arguments": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/check.ps1",
+                                   "-Tests", "changed"],
+                     "timeout_secs": 10800}
 publish_tool        {"project": "Orchester", "tool": "Check"}
 save_pipeline_draft {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
                      {"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
                       "on_failure": {"return_to": "implement", "retries": 2}}]}
 publish_pipeline    {"project": "Orchester", "pipeline": "Orchester change"}
 ```
+
+`-Tests changed` makes the check run tests as well (`tools/check-tests.ps1`): every test binary of the crates the
+branch changed since it left `master` (committed or not), and of the workspace crates that depend on them, one
+`cargo test -p <crate> --test <binary>` after the other. orchester-app counts as depending on orchester-runner and
+orchester-cloud too, as its tests start their programs, so a change in the runner, the agent or the cloud runs the
+orchester-app tests as well. A file outside the crates counts for the crates whose sources include it
+(`include_str!`), for example `docs/cloud-hosting.md` for orchester-cloud. Without `-Tests` `tools/check.ps1` runs
+no test, so the check agents run by hand stays fast; when clippy fails the tests are skipped, as they would not
+build. A failing test listed in `tools/check-tests-known-failures.txt` (each with its reason) is reported and does
+not fail the step; any other failing test fails it, as do a binary that fails without naming a test, one that runs
+longer than 30 minutes (`-TestTimeoutSeconds`; it is ended with the processes it started), one that runs no test
+without being listed there with `(none)`, and tests that do not build. The step's output names each new failure
+with what the test printed; the full output of every binary is in the worktree's `.tmp/check-tests/<run>/`.
+
+The base is the merge base with `master` (or `origin/master`, whichever is newer); `-Base <revision>` names another.
+A tool step cannot pass its run's base, so a run based on another branch tests the crates changed since `master`:
+more than needed, never fewer. Measured on the person's Windows machine with `CARGO_BUILD_JOBS=4` (2026-10-19): a
+change in `crates/desktop-app` alone adds about 40 minutes (5 to build when *Implement* built its tests already, 12
+from cold, then 36 to run its 67 test binaries), one in `crates/runner` about 50 (its own 10 and orchester-app's),
+and one in `crates/core`, which every crate depends on, about 2 hours; hence the timeout of 3 hours. The tests build
+with line tables only, as full debug information gave each orchester-app test binary a PDB of about 900 MB; even so
+the orchester-app tests take about 35 GB of the worktree's `target/`. On macOS the program is `pwsh` with the same
+arguments.
 
 Today only this switch is protected from window input. Person-only actions in editors still to come (a
 profile's or a pipeline's Publish, approvals) must likewise refuse synthetic input from MCP clients; lurq
