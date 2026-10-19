@@ -142,9 +142,11 @@ fn headless_timer_refresh_observes_completed_owned_abort_without_feed_notificati
   session.abort_task().expect("actual owned abort");
   assert_eq!(session.operation().phase(), LocalPhase::Paused);
   drop(session);
+  // The step's notice says the read phase; the recovery record says Paused only while the page's own abort reads
+  // fresh evidence, and this abort was not the page's.
   page.until("timer refresh observes completed owned abort", |window| {
     window
-      .texts("local-recovery")
+      .texts("local-phase")
       .is_some_and(|words| words.join(" ").contains("Paused"))
   });
   page.until("retained projection settles between timer ticks", |window| {
