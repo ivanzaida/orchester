@@ -64,7 +64,7 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   .expect("the scenario seeds");
   let (key, run) = latest(&seeded, "ready for review, conflicts with main");
   // The real runner, which records the return and starts the step's attempt.
-  let (runner, _) = super::live::programs();
+  let runner = super::runner_programs::programs().runner.clone();
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",

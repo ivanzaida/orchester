@@ -1,7 +1,7 @@
 //! The Conversation composer's *Run again with this message* runs the task as the person read it: a task edited
 //! after the page read it is refused by the runner, and the message stays queued with why. On the QA seed's
-//! `live` scenario with the real runner and `orchester-fake-codex`, both built by
-//! `cargo build -p orchester-runner --features test-agent --bins`. Needs `git`.
+//! `live` scenario with the real runner and `orchester-fake-codex`, which the test builds itself
+//! (`support::runner_programs`). Needs `git`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
@@ -9,7 +9,6 @@ mod kontur;
 mod support;
 
 use std::{
-  path::{Path, PathBuf},
   thread,
   time::{Duration, Instant},
 };
@@ -24,26 +23,9 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use support::{Data, Window};
+use support::{Data, Window, runner_programs::programs};
 
 const TITLE: &str = "Typed errors per module";
-
-/// The runner and the fake Codex beside the test's own programs.
-fn programs() -> (PathBuf, PathBuf) {
-  let folder = std::env::current_exe()
-    .expect("the test's path")
-    .parent()
-    .and_then(Path::parent)
-    .expect("the target folder")
-    .to_path_buf();
-  let program = |name: &str| folder.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-  let (runner, codex) = (program("orchester-runner"), program("orchester-fake-codex"));
-  assert!(
-    runner.is_file() && codex.is_file(),
-    "build the runner and its fakes first: cargo build -p orchester-runner --features test-agent --bins"
-  );
-  (runner, codex)
-}
 
 /// As the window's `until`, for work a real runner and agent do: up to a minute.
 fn wait(window: &mut Window, what: &str, mut done: impl FnMut(&mut Window) -> bool) {
@@ -97,7 +79,8 @@ fn write(window: &mut Window, words: &str) {
 
 #[test]
 fn composer_run_again_of_a_task_changed_since_the_page_read_it_keeps_the_message() {
-  let (runner, codex) = programs();
+  let programs = programs();
+  let (runner, codex) = (programs.runner.clone(), programs.fake_codex.clone());
   let data = Data::new();
   let repo = data.dir.path().join("repo-live");
   let seeded = kontur::seed(&kontur::SeedRequest {

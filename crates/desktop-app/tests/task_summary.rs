@@ -10,7 +10,7 @@ mod kontur;
 mod support;
 
 use std::{
-  path::{Path, PathBuf},
+  path::PathBuf,
   thread,
   time::{Duration, Instant},
 };
@@ -31,7 +31,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use support::{Data, Window};
+use support::{Data, Window, runner_programs::programs};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
@@ -47,22 +47,11 @@ impl Page {
     Self::with(scenario, None)
   }
 
-  /// The `live` scenario, its Codex connection running `orchester-fake-codex`, with the runner beside the
-  /// test's own programs: both are built by `cargo build -p orchester-runner --features test-agent --bins`.
+  /// The `live` scenario, its Codex connection running `orchester-fake-codex`, with the real runner: the test
+  /// builds both itself (`support::runner_programs`).
   fn live() -> Self {
-    let programs = std::env::current_exe()
-      .expect("the test's path")
-      .parent()
-      .and_then(Path::parent)
-      .expect("the target folder")
-      .to_path_buf();
-    let program = |name: &str| programs.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-    let (runner, codex) = (program("orchester-runner"), program("orchester-fake-codex"));
-    assert!(
-      runner.is_file() && codex.is_file(),
-      "build the runner and its fakes first: cargo build -p orchester-runner --features test-agent --bins"
-    );
-    Self::with("live", Some((runner, codex)))
+    let programs = programs();
+    Self::with("live", Some((programs.runner.clone(), programs.fake_codex.clone())))
   }
 
   /// `scenario` seeded, the window started with `programs` (the runner and the fake Codex) when given, or
