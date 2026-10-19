@@ -304,11 +304,10 @@ impl Workspace {
   /// Whether automation may answer waiting tool requests through Orchester's MCP server (*Let
   /// automation answer approvals*); off until a person turns it on.
   pub fn automation_answers_approvals(&self) -> Result<bool, StoreError> {
-    self.approval_consent.lock().begin();
     let db = self.db.lock();
     let result = db.automation_answers_approvals();
-    self.approval_consent.lock().finish(matches!(&result, Ok(true)));
-    result
+    let allowed = self.approval_consent.lock().read(matches!(&result, Ok(true)));
+    result.map(|_| allowed)
   }
 
   pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
@@ -317,23 +316,21 @@ impl Workspace {
       if !allowed {
         consent.revision += 1;
       }
-      consent.begin();
+      consent.begin_save();
     }
     let mut db = self.db.lock();
     let result = db.set_automation_answers_approvals(allowed);
-    self.approval_consent.lock().finish(allowed && result.is_ok());
+    self.approval_consent.lock().finish_save(allowed && result.is_ok());
     result
   }
 
   /// Whether automation may widen what agents may do through Orchester's MCP server (*Let automation
   /// change agent permissions*); off until a person turns it on in the window, and no tool changes it.
   pub fn automation_changes_permissions(&self) -> Result<bool, StoreError> {
-    self.permission_consent.lock().begin();
     let db = self.db.lock();
     let result = db.automation_changes_permissions();
-    let mut consent = self.permission_consent.lock();
-    consent.finish(matches!(&result, Ok(true)));
-    result.map(|_| consent.allowed)
+    let allowed = self.permission_consent.lock().read(matches!(&result, Ok(true)));
+    result.map(|_| allowed)
   }
 
   pub fn set_automation_changes_permissions(&self, allowed: bool) -> Result<(), StoreError> {
@@ -342,7 +339,7 @@ impl Workspace {
       if !allowed {
         consent.revoke();
       }
-      consent.begin();
+      consent.begin_save();
       consent.revision
     };
     let mut db = self.db.lock();
@@ -351,11 +348,12 @@ impl Workspace {
     if result.is_ok() && consent.revision == revision {
       consent.revoked = !allowed;
     }
-    consent.finish(allowed && result.is_ok());
+    consent.finish_save(allowed && result.is_ok());
     result
   }
 
-  /// The last verified consent, without SQLite work on the UI thread; unknown/error/pending is false.
+  /// The last verified consent, without SQLite work on the UI thread; unknown, a failed read or a save in
+  /// flight is false.
   pub fn automation_permission_consent(&self) -> bool {
     self.permission_consent.lock().allowed
   }
@@ -378,7 +376,7 @@ impl Workspace {
     self.permission_consent.lock().revoke();
   }
 
-  /// A failed or uncompleted authority read never retains an earlier grant.
+  /// A failed or abandoned background read never retains an earlier grant.
   pub fn invalidate_automation_consent(&self) {
     self.permission_consent.lock().allowed = false;
     self.approval_consent.lock().allowed = false;
@@ -449,31 +447,39 @@ fn owner(db: &AppDb) -> Result<Option<CloudAccountId>, StoreError> {
   Ok(db.cloud_account()?.map(|account| account.account))
 }
 
-/// Published under the database lock; any pending read/write keeps an earlier value from authorizing the window.
+/// A person's switch as last verified, for checks that cannot wait for the database.
+///
+/// Reads and saves publish here while they still hold the database lock, so they publish in the order of their
+/// database work and the last to publish saw the newest stored value: overlapping reads need nothing from each other.
+/// Only the person overrides what a read found: `revoked` holds from their click, and a save in flight keeps the
+/// published value off until it is stored.
 #[derive(Default)]
 struct Consent {
   allowed: bool,
   /// A human revocation survives canceled/failed dispatch and every old stored read.
   revoked: bool,
   revision: u64,
-  pending: usize,
+  saving: usize,
 }
 impl Consent {
-  fn refresh(&mut self, allowed: bool) {
-    self.allowed = self.pending == 0 && !self.revoked && allowed;
+  /// Publishes what a read found stored (`false` when it failed) and returns what the read reports.
+  fn read(&mut self, stored: bool) -> bool {
+    let allowed = stored && !self.revoked;
+    self.allowed = allowed && self.saving == 0;
+    allowed
   }
   fn revoke(&mut self) {
     self.revision += 1;
     self.revoked = true;
     self.allowed = false;
   }
-  fn begin(&mut self) {
-    self.pending += 1;
+  fn begin_save(&mut self) {
+    self.saving += 1;
     self.allowed = false;
   }
-  fn finish(&mut self, allowed: bool) {
-    self.pending -= 1;
-    self.refresh(allowed);
+  fn finish_save(&mut self, saved: bool) {
+    self.saving -= 1;
+    self.allowed = self.saving == 0 && !self.revoked && saved;
   }
 }
 
