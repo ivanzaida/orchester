@@ -17,7 +17,7 @@ use super::{
   menu::{MenuItem, menu, menu_panel, separator},
   pressable::{Focus, pressable},
 };
-use crate::theme::{ControlHeight, ExtraSpacing, IconSize};
+use crate::theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize};
 
 const MENU_MAX_HEIGHT: f32 = 280.0;
 
@@ -32,6 +32,8 @@ pub struct Choice {
   pub warning: bool,
   /// What the field shows while the choice is chosen; its label when `None`.
   pub trigger: Option<Arc<str>>,
+  /// Why the choice cannot be made now: the row is faded, ends in a lock and wraps this as its detail.
+  pub unavailable: Option<Arc<str>>,
 }
 
 #[derive(Clone)]
@@ -44,6 +46,10 @@ pub struct ChoiceField {
   pub width: f32,
   /// The field shows the chosen choice's icon before its words.
   pub icon_in_field: bool,
+  /// What the field says while no choice is chosen; its name when `None`. With no choices at all it does not open.
+  pub placeholder: Option<Arc<str>>,
+  /// The choices with a value are identifiers (model ids), in Geist Mono in the field and the menu.
+  pub mono: bool,
 }
 impl PartialEq for ChoiceField {
   fn eq(&self, other: &Self) -> bool {
@@ -54,6 +60,8 @@ impl PartialEq for ChoiceField {
       && self.choices == other.choices
       && self.width == other.width
       && self.icon_in_field == other.icon_in_field
+      && self.placeholder == other.placeholder
+      && self.mono == other.mono
   }
 }
 impl DevtoolsInspectable for ChoiceField {}
@@ -85,15 +93,20 @@ impl Component for Picker {
       if choice.separator {
         rows = rows.child(separator(ctx));
       }
-      let (value, selected) = (props.value.clone(), choice.value.clone());
-      let mut item = MenuItem::new(
-        format!("{}-option-{index}", props.id),
-        choice.label.clone(),
-        move || value.set(selected.clone()),
-      )
-      .icon(choice.icon)
-      .chosen(choice.value == chosen)
-      .in_form();
+      let id = format!("{}-option-{index}", props.id);
+      let item = match &choice.unavailable {
+        Some(reason) => MenuItem::unavailable(id, choice.label.clone(), reason.clone()),
+        None => {
+          let (value, selected) = (props.value.clone(), choice.value.clone());
+          MenuItem::new(id, choice.label.clone(), move || value.set(selected.clone()))
+        }
+      };
+      let item = if props.mono && !choice.value.is_empty() {
+        item.mono()
+      } else {
+        item
+      };
+      let mut item = item.icon(choice.icon).chosen(choice.value == chosen).in_form();
       if let Some(detail) = &choice.detail {
         item = item.detail(detail.clone());
       }
@@ -117,15 +130,20 @@ impl Picker {
   /// The field: the chosen choice's words (and icon), and the chevron.
   fn trigger(&self, props: &ChoiceField, chosen: &str) -> lurq::components::Button {
     let current = props.choices.iter().find(|choice| choice.value == chosen);
-    let label = current.map_or(props.name.clone(), |choice| {
-      choice.trigger.clone().unwrap_or_else(|| choice.label.clone())
-    });
+    let label = current.map_or_else(
+      || props.placeholder.clone().unwrap_or_else(|| props.name.clone()),
+      |choice| choice.trigger.clone().unwrap_or_else(|| choice.label.clone()),
+    );
     let leading = current
       .filter(|_| props.icon_in_field)
       .map(|choice| icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary));
-    let open = props.open.clone();
+    let (open, empty) = (props.open.clone(), props.choices.is_empty());
     Focus::Keyboard
-      .apply(pressable(move || open.update(|open| *open = !*open)))
+      .apply(pressable(move || {
+        if !empty {
+          open.update(|open| *open = !*open);
+        }
+      }))
       .id(props.id.clone())
       .ref_element(self.anchor.clone())
       .describe("a11y_name", props.name.clone())
@@ -148,7 +166,13 @@ impl Picker {
       .with_children(leading)
       .child(
         Text::new(&label)
-          .variant(TypographyStyle::Description)
+          .variant(
+            if props.mono && current.is_some_and(|choice| !choice.value.is_empty()) {
+              ExtraTypography::PropertyMono.role()
+            } else {
+              TypographyStyle::Description
+            },
+          )
           .color(PaletteColor::TextPrimary)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))

@@ -217,7 +217,12 @@ impl Fields {
             Place::Last,
             false,
           ),
-          words::note(&ctx.t("agents.assignmentNote")).into(),
+          crate::ui::inspector::note(
+            "agent-assignment-note",
+            crate::ui::icon::Icon::Pin,
+            &ctx.t("agents.assignmentNote"),
+          )
+          .into(),
           Column::new()
             .with_children(
               self
@@ -328,6 +333,7 @@ impl Fields {
           separator: false,
           warning,
           trigger: None,
+          unavailable: None,
         }
       })
       .collect();
@@ -339,6 +345,8 @@ impl Fields {
       choices,
       width: CONTROL_WIDTH,
       icon_in_field: false,
+      placeholder: None,
+      mono: false,
     }
     .render(ctx)
   }
@@ -362,6 +370,7 @@ impl Fields {
       separator: false,
       warning: false,
       trigger: None,
+      unavailable: None,
     };
     let mut models: Vec<_> = connection
       .into_iter()
@@ -380,6 +389,7 @@ impl Fields {
       separator: true,
       warning: false,
       trigger: None,
+      unavailable: None,
     });
     let model = ChoiceField {
       id: "agent-model".into(),
@@ -389,6 +399,8 @@ impl Fields {
       open: self.model_open.clone(),
       width: CONTROL_WIDTH,
       icon_in_field: false,
+      placeholder: None,
+      mono: true,
     }
     .render(ctx);
     let mut model = Column::new()
@@ -433,6 +445,7 @@ impl Fields {
       separator: false,
       warning: false,
       trigger: None,
+      unavailable: None,
     }];
     if let Some(c) = connection
       && let Ok(id) = orchester_core::resource::ModelId::new(&self.model_value())
@@ -452,6 +465,7 @@ impl Fields {
           separator: false,
           warning: false,
           trigger: None,
+          unavailable: None,
         }
       }));
     }
@@ -463,6 +477,8 @@ impl Fields {
       open: self.effort_open.clone(),
       width: CONTROL_WIDTH,
       icon_in_field: false,
+      placeholder: None,
+      mono: false,
     }
     .render(ctx)
   }

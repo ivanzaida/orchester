@@ -52,6 +52,15 @@ pub(super) enum KeyChoice {
 
 impl DevtoolsInspectable for KeyChoice {}
 
+/// Why the model ids typed as `draft` could not be added; shown only while the field still holds them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ModelProblem {
+  draft: String,
+  message: Message,
+}
+
+impl DevtoolsInspectable for ModelProblem {}
+
 /// The model ids added, in order.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct Models(Vec<String>);
@@ -69,7 +78,7 @@ pub(super) struct ProviderForm {
   models: Signal<Models>,
   /// The model id being typed, and why the last one could not be added.
   model: Signal<String>,
-  model_error: Signal<Option<Message>>,
+  model_error: Signal<Option<ModelProblem>>,
   /// Whether the fields were filled from the stored connection yet (Edit connection).
   seeded: Signal<bool>,
   /// Whether automation's input tried to save the connection on a provider where only a person may.
@@ -171,8 +180,14 @@ impl ProviderForm {
     (self.on() && self.refused.get()).then(|| ctx.t("connections.apiProvider.personOnly"))
   }
 
-  /// The first reason the provider cannot be saved, in field order; `None` on the sign-in or once it can.
+  /// The first reason the provider cannot be saved, in field order, as the action bar says it (*Save unavailable: …*,
+  /// `UW2bO`); `None` on the sign-in or once it can.
   pub(super) fn reason(&self, ctx: &Ctx, listed: &ProjectConnections) -> Option<Arc<str>> {
+    let reason = self.first_problem(ctx, listed)?;
+    Some(ctx.t_args("connections.apiProvider.reasons.unavailable", [("reason", &*reason)]))
+  }
+
+  fn first_problem(&self, ctx: &Ctx, listed: &ProjectConnections) -> Option<Arc<str>> {
     if !self.on() {
       return None;
     }
@@ -196,8 +211,9 @@ impl ProviderForm {
   }
 
   /// Adds the model ids typed (several may be separated by commas or spaces), or says why one cannot be added.
-  fn add_typed_models(models: &Signal<Models>, typed: &Signal<String>, error: &Signal<Option<Message>>) {
-    match orchester_workspace::connections::api_provider::model_ids(&typed.get()) {
+  fn add_typed_models(models: &Signal<Models>, typed: &Signal<String>, error: &Signal<Option<ModelProblem>>) {
+    let draft = typed.get();
+    match orchester_workspace::connections::api_provider::model_ids(&draft) {
       Ok(added) => {
         models.update(|models| {
           for model in added {
@@ -209,7 +225,7 @@ impl ProviderForm {
         typed.set(String::new());
         error.set(None);
       }
-      Err(problem) => error.set(Some(problem)),
+      Err(message) => error.set(Some(ModelProblem { draft, message })),
     }
   }
 

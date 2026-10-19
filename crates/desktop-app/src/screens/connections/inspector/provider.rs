@@ -6,6 +6,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
+  layout::Alignment,
   node::Element,
 };
 use orchester_core::{
@@ -101,12 +102,16 @@ fn runs_on(ctx: &Ctx, cli: AgentProvider, provider: &ApiProvider, key: Option<&S
       &ctx.t(interface),
       PropertyValue::Plain,
     ))
-    .child(property(
-      "connection-provider-base-url",
-      &ctx.t("connections.apiProvider.url"),
-      provider.base_url().as_str(),
-      PropertyValue::Mono,
-    ))
+    // A base URL that wraps keeps its label across from it, the row as compact as the others (`y2qhJ`).
+    .child(
+      property(
+        "connection-provider-base-url",
+        &ctx.t("connections.apiProvider.url"),
+        provider.base_url().as_str(),
+        PropertyValue::Mono,
+      )
+      .align_items(Alignment::Center),
+    )
     .child(property(
       "connection-provider-key",
       &ctx.t("connections.apiProvider.key"),
