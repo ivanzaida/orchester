@@ -3,6 +3,9 @@
 #
 #   <package> <test binary> <test name as libtest prints it> # why it fails
 #
+# A binary that runs no test (all ignored, or none built on this platform) fails the check unless it is listed with
+# the test name (none) and the reason.
+#
 # Remove a line in the change that fixes its test; the check says when a listed test passed. Found on master
 # 04c7f8f3 (2026-10-19, Windows) by `tools/check.ps1 -Tests all`; each was run again alone with its name filter.
 # The orchester-desktop crate is frozen and not listed: its tests run only when a branch changes it.
@@ -39,3 +42,19 @@ orchester-app lifecycle lifecycle_quit_now_while_agents_save_ends_them_and_the_n
 orchester-app orchestrator links::orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as_they_are # flaky: timed out waiting for the answer
 orchester-cloud limits limits_hashing_waits_for_a_slot_only_so_long # flaky: a 1 ms wait for a hashing slot depends on timing
 orchester-workspace runner_process runner_process_forget_if_idle_answers_every_asker_of_one_question # flaky: one asker got Busy, the other Unknown
+
+# Run no test on purpose: (none).
+orchester-cloud cloud (none) # runs only with ORCHESTER_CLOUD_TEST_DATABASE_URL (a PostgreSQL), see docs/cloud-hosting.md
+orchester-app orchester_cloud (none) # its tests are ignored: they need ORCHESTER_CLOUD_TEST_DATABASE_URL
+orchester-exec trash (none) # its one test is ignored: it moves a folder into the person's real Recycle Bin
+orchester-exec local_untracked_mode (none) # Unix only
+orchester-runner supervisor_unix (none) # Unix only
+orchester-app system_icon (none) # Windows only
+orchester-exec launcher_program (none) # Windows only
+orchester-exec local_git_ownership (none) # Windows only
+orchester-exec local_process_containment (none) # Windows only
+orchester-runner qa_app (none) # Windows only
+orchester-runner qa_app_links (none) # Windows only
+orchester-runner qa_app_stop (none) # Windows only
+orchester-runner supervisor (none) # Windows only
+orchester-vault credential_manager (none) # Windows only
