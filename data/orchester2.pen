@@ -512826,7 +512826,7 @@
       "y": 2000,
       "name": "Orchestrator",
       "width": 1512,
-      "height": 23974,
+      "height": 24193,
       "layout": "none",
       "children": [
         {
@@ -548832,6 +548832,252 @@
                                     },
                                     "KFpHe": {
                                       "content": "Open KON-17"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E7S4F",
+              "name": "Row 10",
+              "width": "fill_container",
+              "gap": 48,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ZvQqc",
+                  "name": "Cell · Message that moves a run · applied · ran again · proposed copy",
+                  "width": 664,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "fO32X",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "content": "Message that moves a run · applied · ran again · proposed copy",
+                      "lineHeight": 1.2,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XZWbe",
+                      "name": "Surface",
+                      "clip": true,
+                      "width": "fill_container",
+                      "fill": "$surface_panel",
+                      "cornerRadius": 10,
+                      "stroke": "$border_panel",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "layout": "vertical",
+                      "gap": 14,
+                      "padding": [
+                        18,
+                        24
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "q3mdz2",
+                          "name": "Proposal · message · run again · applied",
+                          "width": "fill_container",
+                          "fill": "$surface_raised",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "padding": [
+                            12,
+                            14
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "jC4jp",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "VK6OU",
+                                  "name": "Icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "message-square-text",
+                                  "library": "lucide",
+                                  "fill": "$text_secondary"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "CIo57",
+                                  "name": "Title",
+                                  "fill": "$text_primary",
+                                  "content": "Ran KON-10 again · run #15",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "kqUTA",
+                                  "name": "Spacer",
+                                  "width": "fill_container",
+                                  "height": 1
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "P8lvP",
+                                  "name": "State",
+                                  "gap": 5,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "ivsFT",
+                                      "name": "State icon",
+                                      "width": 12,
+                                      "height": 12,
+                                      "icon": "circle-check",
+                                      "library": "lucide",
+                                      "fill": "$success"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "xVjhg",
+                                      "name": "State label",
+                                      "fill": "$text_secondary",
+                                      "content": "Sent by you · 19:12",
+                                      "lineHeight": 1.2,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "CQwps",
+                              "name": "Facts",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "vb7vb",
+                                  "name": "Fact · Run",
+                                  "width": "fill_container",
+                                  "gap": 12,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Q2g0Q",
+                                      "name": "Key",
+                                      "fill": "$text_muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 72,
+                                      "content": "Run",
+                                      "lineHeight": 1.3,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "m0fBZF",
+                                      "name": "Link · Run #15 · Feature delivery",
+                                      "stroke": "$text_muted",
+                                      "strokeWidth": {
+                                        "bottom": 1
+                                      },
+                                      "strokeAlignment": "inner",
+                                      "padding": [
+                                        0,
+                                        0,
+                                        1,
+                                        0
+                                      ],
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "He6VP",
+                                          "name": "Label",
+                                          "fill": "$accent_text",
+                                          "content": "Run #15 · Feature delivery",
+                                          "lineHeight": 1.3,
+                                          "fontFamily": "$font_sans",
+                                          "fontSize": 12.5,
+                                          "fontWeight": "500"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "lv4Vb",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "content": "at 02 Plan · 19.5k tokens",
+                                      "lineHeight": 1.3,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "cwQap",
+                              "name": "Effect",
+                              "fill": "$text_primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Started run #15 at 19:12; its first agent reads: Start from main: the flaky test was fixed in #418.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 13,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "nu43z",
+                              "name": "Actions",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "id": "LlUdj",
+                                  "type": "ref",
+                                  "ref": "cnlv1",
+                                  "name": "Button · Open KON-10",
+                                  "descendants": {
+                                    "bG3Iy": {
+                                      "icon": "arrow-up-right"
+                                    },
+                                    "KFpHe": {
+                                      "content": "Open KON-10"
                                     }
                                   }
                                 }
