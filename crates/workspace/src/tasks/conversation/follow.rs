@@ -23,11 +23,12 @@ use crate::{
   workspace::OpenProject,
 };
 
-/// A stored message: the runner took it, it stays queued because the runner could not be told or
-/// refused to go on, or it waits for the person to raise the run's limit.
+/// A stored message: the runner took it, it ran the task again with this run, it stays queued because the runner
+/// could not be told or refused to go on, or it waits for the person to raise the run's limit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Sent {
   Taken,
+  Started(RunId),
   Queued(Message),
   AwaitsLimit,
 }
@@ -60,11 +61,16 @@ impl RunnerOf<'_> {
     }
   }
 
-  async fn continue_run(self, runners: &Runners, run: RunId) -> Result<(), RunRequestError> {
-    match self {
+  async fn go_on_with(self, runners: &Runners, command: Command) -> Result<Sent, RunRequestError> {
+    self.control(runners, command).await.map(|()| Sent::Taken)
+  }
+
+  async fn continue_run(self, runners: &Runners, run: RunId) -> Result<Sent, RunRequestError> {
+    let continued = match self {
       Self::Displayed => runners.continue_run(run).await,
       Self::Project(project) => runners.continue_run_in(project, run).await,
-    }
+    };
+    continued.map(|()| Sent::Taken)
   }
 
   async fn run_again(
@@ -72,7 +78,7 @@ impl RunnerOf<'_> {
     runners: &Runners,
     stored: &Stored<'_>,
     revision: Option<TaskRevision>,
-  ) -> Result<(), RunRequestError> {
+  ) -> Result<Sent, RunRequestError> {
     let started = match self {
       Self::Displayed => {
         runners
@@ -85,7 +91,7 @@ impl RunnerOf<'_> {
           .await
       }
     };
-    started.map(|_| ())
+    started.map(Sent::Started)
   }
 }
 
@@ -107,7 +113,7 @@ pub async fn follow_seen(
     Then::Deliver => tell((runners, servers, runner), (stored.root, stored.task, stored.run)).await,
     Then::RaiseLimit => Sent::AwaitsLimit,
     Then::Resume => {
-      let resume = || runner.control(runners, Command::ResumeRun { run: stored.run });
+      let resume = || runner.go_on_with(runners, Command::ResumeRun { run: stored.run });
       go_on(claimed, resume, control_message).await
     }
     Then::ContinueInterrupted => go_on(claimed, || runner.continue_run(runners, stored.run), control_message).await,
@@ -157,14 +163,14 @@ async fn go_on<F>(
   refused: impl FnOnce(&RunRequestError) -> Message,
 ) -> Sent
 where
-  F: Future<Output = Result<(), RunRequestError>>,
+  F: Future<Output = Result<Sent, RunRequestError>>,
 {
   let claim = match servers.claim_for_work(root, task).await {
     Ok(claim) => claim,
     Err(refusal) => return Sent::Queued(refusal.message()),
   };
   match request().await {
-    Ok(()) => Sent::Taken,
+    Ok(sent) => sent,
     Err(error) => {
       tracing::warn!(%error, "the run did not go on with the message");
       claim.release(servers).await;

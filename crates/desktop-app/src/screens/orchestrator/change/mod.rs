@@ -204,7 +204,8 @@ impl ChangeCard {
       )),
       _ => {}
     }
-    if self.refused.get() {
+    // Automation's refused click is told while the card waits; once it was decided, the note is gone.
+    if self.refused.get() && view.phase() == Phase::Waits {
       after.push(card::note(
         id,
         "person-only",

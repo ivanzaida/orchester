@@ -78,7 +78,7 @@ fn stands(db: &ProjectDb, (root, programs): (&Path, &Programs), run: &Run) -> Re
         },
       },
     },
-    RunStatus::Cancelled => Stands::Cancelled { step: step(), tokens },
+    RunStatus::Cancelled => Stands::Cancelled,
     RunStatus::Failed(_) => Stands::Failed,
     RunStatus::WaitingForPerson(_) => Stands::Decision { tokens },
     _ => Stands::Going { step: step(), tokens },

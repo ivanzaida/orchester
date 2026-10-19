@@ -46,7 +46,7 @@ pub fn recover_in(root: &Path, before: Timestamp, translate: &Translate) -> Resu
     };
     let at = Timestamp::now();
     if db
-      .finish_chat_action((chat, seq), outcome, at)
+      .finish_chat_action((chat, seq), (outcome, None), at)
       .map_err(|error| messages::store_error(&error))?
       .is_some()
     {

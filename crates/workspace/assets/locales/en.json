@@ -1166,6 +1166,8 @@
   },
   "appMcp": {
     "errors": {
+      "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
+      "messageChangedRun": "The run changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",

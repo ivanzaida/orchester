@@ -17,10 +17,12 @@
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
 
+mod applied;
 mod changes;
 mod continuation;
 mod data;
 mod links;
+mod proposals;
 mod refused;
 #[path = "../../tests/support/signed_in.rs"]
 mod signed_in;
@@ -87,10 +89,15 @@ enum State {
   /// That retry after the person's *Allow retry*: the runner retries the step, and the run's end lands in the
   /// conversation.
   ContinueApplied,
+  /// `ExRt1`: proposals of turns a wait or a run's end started by itself, in each state ([`proposals`]).
+  Proposals,
+  /// `ExRt1` `gOzsF`: messages that move a run, proposed and applied, among them one that ran a task again
+  /// ([`applied`]).
+  MessagesApplied,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 16] = [
+  const ALL: [(&'static str, Self); 18] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -107,6 +114,8 @@ impl State {
     ("links", Self::Links),
     ("continue", Self::Continue),
     ("continue-applied", Self::ContinueApplied),
+    ("proposals", Self::Proposals),
+    ("messages-applied", Self::MessagesApplied),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -188,9 +197,31 @@ fn route(prepared: &data::Prepared, state: State, chat: Option<ChatId>) -> Route
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
     State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
-    State::Continue | State::ContinueApplied => ProjectPage::Orchestrator(OrchestratorChat::Latest),
+    State::Continue | State::ContinueApplied | State::Proposals | State::MessagesApplied => {
+      ProjectPage::Orchestrator(OrchestratorChat::Latest)
+    }
   };
   Route::Project(prepared.project, page)
+}
+
+/// The conversation `state` seeds once the session started, with its `services`, in the words of `i18n`: through
+/// the chat's tools and the window's Apply, or as the chat keeps its actions; `None` for a state that seeds none.
+fn seeded_chat(
+  state: State,
+  (runtime, services, i18n): (&Runtime, &orchester_app::services::Services, &lurq::app::i18n::I18n),
+  prepared: &data::Prepared,
+) -> Result<Option<ChatId>, Box<dyn Error>> {
+  Ok(Some(match state {
+    State::Continue | State::ContinueApplied => continuation::conversation(
+      runtime,
+      (services, i18n.clone()),
+      prepared,
+      state == State::ContinueApplied,
+    )?,
+    State::Proposals => proposals::conversation(prepared, i18n)?,
+    State::MessagesApplied => applied::conversation(runtime, (services, i18n.clone()), prepared)?,
+    _ => return Ok(None),
+  }))
 }
 
 /// The window on the seeded data at `state`, its project's runner `runner`; returns once it closed.
@@ -204,14 +235,9 @@ fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch:
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, Mode::Dark);
   i18n::install(&app)?;
-  let chat = match (state, launch.services()) {
-    (State::Continue | State::ContinueApplied, Some(services)) => Some(continuation::conversation(
-      &runtime,
-      (services, app.i18n().clone()),
-      prepared,
-      state == State::ContinueApplied,
-    )?),
-    _ => None,
+  let chat = match launch.services() {
+    Some(services) => seeded_chat(state, (&runtime, services, app.i18n()), prepared)?,
+    None => None,
   };
   let start = match launch.start() {
     Start::Ready(mut ready) => {

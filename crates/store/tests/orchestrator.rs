@@ -276,7 +276,7 @@ fn a_proposal_is_claimed_by_one_decision_and_settled_by_it_alone() {
     "a dismissal does not overwrite a proposal under way"
   );
   assert!(
-    db.finish_chat_action((chat, seq), ActionOutcome::Applied, at(40))
+    db.finish_chat_action((chat, seq), (ActionOutcome::Applied, None), at(40))
       .expect("finish")
       .is_some()
   );
@@ -290,7 +290,7 @@ fn a_proposal_is_claimed_by_one_decision_and_settled_by_it_alone() {
     });
   assert_eq!(outcome, Some((ActionOutcome::Applied, Some(at(40)))));
   assert!(
-    db.finish_chat_action((chat, seq), ActionOutcome::Dismissed, at(50))
+    db.finish_chat_action((chat, seq), (ActionOutcome::Dismissed, None), at(50))
       .expect("finish again")
       .is_none()
   );

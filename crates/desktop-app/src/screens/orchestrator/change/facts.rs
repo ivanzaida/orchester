@@ -369,7 +369,8 @@ fn stands(ctx: &Ctx, view: &View, run: &RunFacts) -> Option<Arc<str>> {
     )
   };
   let clock = |at: Timestamp| display::clock(at);
-  if view.action.started.is_some() {
+  // A run the chat started itself in auto mode reads as started then; one a message ran again stands as it stands.
+  if view.action.started.is_some() && view.action.change.is_none() {
     let started = clock(view.at);
     return Some(match &run.stands {
       Stands::Going { step: Some(at), .. } => ctx.t_args(
@@ -392,14 +393,7 @@ fn stands(ctx: &Ctx, view: &View, run: &RunFacts) -> Option<Arc<str>> {
       "orchestrator.change.facts.goingTokens",
       [("tokens", compact_tokens(*tokens))],
     ),
-    Stands::Cancelled { step: Some(at), tokens } => ctx.t_args(
-      "orchestrator.change.facts.cancelled",
-      [("step", &*step(at)), ("tokens", &compact_tokens(*tokens))],
-    ),
-    Stands::Cancelled { step: None, tokens } => ctx.t_args(
-      "orchestrator.change.facts.cancelledTokens",
-      [("tokens", compact_tokens(*tokens))],
-    ),
+    Stands::Cancelled => ctx.t("orchestrator.change.facts.canceled"),
     Stands::Ready { since: Some(since) } => ctx.t_args("orchestrator.change.facts.ready", [("time", clock(*since))]),
     Stands::Ready { since: None } => ctx.t("orchestrator.change.facts.readyNow"),
     Stands::Merged { at, .. } => ctx.t_args("orchestrator.change.facts.merged", [("time", clock(*at))]),

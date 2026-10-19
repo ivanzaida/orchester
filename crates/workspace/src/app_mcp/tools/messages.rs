@@ -26,7 +26,7 @@ use crate::{
       SendError,
       composer::ComposerMode,
       follow::{RunnerOf, Sent, Stored, follow},
-      outgoing::{OutgoingError, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
+      outgoing::{OutgoingError, Prepared, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
     },
     outside::Outside,
     run::control_message,
@@ -91,6 +91,9 @@ pub async fn send_message(
   })
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
+  let way = way_of(&prepared.mode, args.timing);
+  // Checked first: a run that now waits on a plan would take the message as its plan's changes.
+  as_checked(&prepared, way, expected)?;
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
     if by == SentBy::Orchestrator {
       return Err(plan_person_only());
@@ -108,22 +111,6 @@ pub async fn send_message(
     return reply(&project, run, ("request_plan_changes", Sent::Taken), translate).await;
   }
   let key = IdempotencyKey::generate();
-  let way = way_of(&prepared.mode, args.timing);
-  // The Orchestrator's message goes only as it was checked or proposed: one whose run moved on since is refused.
-  if let Some(expected) = expected
-    && action(&prepared.mode, way) != expected
-  {
-    let number = prepared
-      .detail
-      .run
-      .as_ref()
-      .map(|view| view.run.number().get().to_string())
-      .unwrap_or_default();
-    return Err(ToolError::refused(
-      "changed_since_proposed",
-      vec![Message::new("orchestrator.proposal.messageChanged").with("run", number)],
-    ));
-  }
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then) = blocking(move || {
     let stored = match by {
@@ -172,6 +159,23 @@ pub fn refusal(error: OutgoingError) -> ToolError {
   }
 }
 
+/// Refused unless the message does what it was checked or proposed as (`expected`, the Orchestrator's): one whose run
+/// moved on since would do something else (`changed_since_proposed`). None of the chat's messages is checked as a
+/// plan's changes, so a run that waits on a plan refuses every one.
+fn as_checked(prepared: &Prepared, way: Way, expected: Option<&str>) -> Result<(), ToolError> {
+  let Some(expected) = expected else {
+    return Ok(());
+  };
+  if action(&prepared.mode, way) == expected {
+    return Ok(());
+  }
+  let reason = match prepared.detail.run.as_ref() {
+    Some(view) => Message::new("appMcp.errors.messageChanged").with("run", view.run.number().get().to_string()),
+    None => Message::new("appMcp.errors.messageChangedRun"),
+  };
+  Err(ToolError::refused("changed_since_proposed", vec![reason]))
+}
+
 /// How a message sent with `timing` in `mode` goes: as the composer's first way, or after the turn of an agent that
 /// takes messages mid-turn.
 fn way_of(mode: &ComposerMode, timing: Option<SendTiming>) -> Way {
@@ -214,8 +218,12 @@ async fn reply(
   (action, sent): (&str, Sent),
   translate: &Translate,
 ) -> Result<Value, ToolError> {
+  let started = match &sent {
+    Sent::Started(started) => Some(*started),
+    Sent::Taken | Sent::Queued(_) | Sent::AwaitsLimit => None,
+  };
   let (outcome, reasons) = match sent {
-    Sent::Taken => ("taken", Vec::new()),
+    Sent::Taken | Sent::Started(_) => ("taken", Vec::new()),
     Sent::Queued(reason) => ("queued", vec![translate.text(&reason)]),
     Sent::AwaitsLimit => (
       "awaits_limit",
@@ -226,5 +234,9 @@ async fn reply(
   result["action"] = json!(action);
   result["outcome"] = json!(outcome);
   result["reasons"] = json!(reasons);
+  if let Some(started) = started {
+    // The run the message ran the task again with.
+    result["started_run"] = json!({ "id": started.to_string() });
+  }
   Ok(result)
 }

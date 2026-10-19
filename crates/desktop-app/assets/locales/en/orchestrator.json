@@ -439,8 +439,6 @@
         "stepLabel": "{{number}} {{step}}",
         "going": "at {{step}} · {{tokens}} tokens",
         "goingTokens": "{{tokens}} tokens",
-        "cancelled": "cancelled at {{step}} · {{tokens}} tokens",
-        "cancelledTokens": "cancelled · {{tokens}} tokens",
         "ready": "ready for review since {{time}}",
         "readyNow": "ready for review",
         "merged": "merged {{time}}",
@@ -468,7 +466,8 @@
           "brokeAgain": "broke again",
           "unverified": "waits unverified",
           "unchanged": "waits unchanged"
-        }
+        },
+        "canceled": "canceled"
       },
       "widens": {
         "repository": "repository: write",

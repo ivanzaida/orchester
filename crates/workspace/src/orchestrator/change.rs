@@ -20,7 +20,7 @@ use orchester_core::{
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
   revision::Revision,
   run::{Answerer, Run},
-  store::{ResourceStore, RunStore, TaskStore},
+  store::{ResourceStore, TaskStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -39,7 +39,6 @@ use crate::{
   },
   display,
   messages::Message,
-  tasks::detail::run_store_error,
 };
 
 /// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers, sends or
@@ -174,31 +173,14 @@ pub(super) async fn apply(
       app_tool((services, translate), tool, arguments).await
     }
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
-    // A message goes only as what it was checked or proposed as.
-    Change::Answer { .. } | Change::Message { .. } => {
+    Change::Message {
+      number, ref sent_as, ..
+    } => send_as_checked((services, translate), scope, change, (number, sent_as.as_deref(), by)).await,
+    Change::Answer { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
-      let expected = match &change.change {
-        Change::Message { sent_as, .. } => sent_as.as_deref(),
-        _ => None,
-      };
-      answer_for_orchestrator(services, translate, tool, arguments, (by, expected)).await
+      answer_for_orchestrator(services, translate, tool, arguments, (by, None)).await
     }
   }
-}
-
-/// The run that a message to run `old` that ran its task again started: the task's latest run, once it is another.
-/// Blocks on SQLite.
-pub(super) fn started_again(db: &ProjectDb, old: RunId) -> Result<Option<RunId>, StoreError> {
-  let Some(run) = db.run(old).map_err(run_store_error)? else {
-    return Ok(None);
-  };
-  let latest = db
-    .runs_of_task(run.task())
-    .map_err(run_store_error)?
-    .pop()
-    .and_then(Result::ok)
-    .map(|latest| latest.id());
-  Ok(latest.filter(|latest| *latest != old))
 }
 
 /// The tool that carries out `change` in `scope`, and its arguments: the chat's project and what the change acts on,
@@ -303,6 +285,40 @@ fn unchanged_draft(
     _ => Message::new("orchestrator.proposal.draftChanged").with("name", subject),
   };
   Err(ToolError::refused("changed_since_proposed", vec![reason]))
+}
+
+/// Sends the message `change` (to run `#number`) only as what it was checked or proposed as (`sent_as`); one kept
+/// before that was known is refused, for a fresh proposal. A card the person applied (`by`) names the change in its own
+/// words; the chat's agent reads the tool's.
+async fn send_as_checked(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  change: &ProposedChange,
+  (number, sent_as, by): (u32, Option<&str>, Answerer),
+) -> Result<Value, ToolError> {
+  let Some(expected) = sent_as else {
+    return Err(message_changed(number));
+  };
+  let (tool, arguments) = tool_arguments(scope, change);
+  answer_for_orchestrator(services, translate, tool, arguments, (by, Some(expected)))
+    .await
+    .map_err(|error| match error {
+      ToolError::Refused { code, .. } if code == CHANGED_SINCE_PROPOSED && by == Answerer::Person => {
+        message_changed(number)
+      }
+      other => other,
+    })
+}
+
+/// The code of a refusal of what changed since it was checked or proposed.
+const CHANGED_SINCE_PROPOSED: &str = "changed_since_proposed";
+
+/// A message to run `#number` that would no longer do what its card says.
+fn message_changed(number: u32) -> ToolError {
+  ToolError::refused(
+    CHANGED_SINCE_PROPOSED,
+    vec![Message::new("orchestrator.proposal.messageChanged").with("run", number.to_string())],
+  )
 }
 
 /// A merge of run `#number`, which has no checkpoint: nothing of its work is committed.

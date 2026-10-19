@@ -110,8 +110,8 @@ pub enum Stands {
   Going { step: Option<(usize, String)>, tokens: u64 },
   /// It waits for a person's decision on how it goes on, with its tokens.
   Decision { tokens: u64 },
-  /// It was cancelled: the step it stopped at, and its tokens.
-  Cancelled { step: Option<(usize, String)>, tokens: u64 },
+  /// It was canceled.
+  Cancelled,
   /// It succeeded, and when; not merged.
   Ready { since: Option<Timestamp> },
   /// It was merged at `at`, into a commit people read by its first characters.
@@ -127,6 +127,10 @@ pub enum Stands {
 pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<Option<Facts>, Message> {
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let facts = match (&action.change, action.started) {
+    // A message that ran the task again shows the run it started, as it stands now.
+    (Some(change), Some(started)) if change.change.runs_again() => {
+      run::read(root, &db, programs, started).map(|found| found.map(Facts::Run))
+    }
     (Some(change), _) => match &change.change {
       Change::Publish {
         of,

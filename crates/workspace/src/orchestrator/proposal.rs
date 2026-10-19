@@ -7,7 +7,7 @@
 //! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
 //! reaches [`decide`].
 
-use orchester_core::{orchestrator::ActionOutcome, time::Timestamp};
+use orchester_core::{id::RunId, orchestrator::ActionOutcome, time::Timestamp};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -84,12 +84,6 @@ pub async fn decide(
     return Err(taken());
   };
   runners.chat_changed(&scope.root);
-  // A message that ran the task again keeps the run it started, which the chat's own doing then names.
-  let again = action
-    .change
-    .as_ref()
-    .filter(|change| change.change.runs_again())
-    .and_then(|change| change.change.run());
   // A start reads as done as before; a change as the person's, apart from what the chat did itself.
   let (carried, applied) = match (action.task, action.outcome, action.change) {
     (Some(task), ActionOutcome::Proposed(start), _) => (
@@ -112,23 +106,28 @@ pub async fn decide(
       ActionOutcome::Applied,
     ),
   };
-  let (outcome, again) = match carried {
-    Ok(_) => (applied, again),
+  // A message that ran the task again keeps the run it started, which the chat's own doing then names.
+  let (outcome, started) = match carried {
+    Ok(told) => (applied, started_run(&told)),
     Err(error) => (refusal(&error, translate), None),
   };
   let root = scope.root.clone();
   background::run(move || {
-    let mut db = ProjectDb::open(&root)?;
-    db.finish_chat_action((chat, seq), outcome, Timestamp::now())?;
-    match again.map(|old| change::started_again(&db, old)).transpose()?.flatten() {
-      Some(started) => db.keep_chat_action_start((chat, seq), started).map(drop),
-      None => Ok(()),
-    }
+    ProjectDb::open(&root)?.finish_chat_action((chat, seq), (outcome, started), Timestamp::now())
   })
   .await?
   .map_err(|error| store_error(&error))?;
   runners.chat_changed(&scope.root);
   Ok(())
+}
+
+/// The run `send_message` told it ran the task again with (`started_run`); `None` for any other result.
+fn started_run(told: &Value) -> Option<RunId> {
+  told
+    .pointer("/started_run/id")
+    .and_then(Value::as_str)
+    // Written by send_message from a run's id: one that does not read back is no run, and keeps no start.
+    .and_then(|id| id.parse().ok())
 }
 
 /// The proposal no longer waits: another decision took it, or it was settled.
