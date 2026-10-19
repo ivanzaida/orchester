@@ -1,9 +1,9 @@
 //! What the Orchestrator's agent is told on every turn: its system prompt (`--system-prompt-file`), which a resumed
-//! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent started by
-//! itself ([`wait_prompt`]).
+//! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, or the end
+//! of a task's run, started by itself ([`wait_prompt`]).
 
-use super::wait::{AgentWait, WaitKind};
-use crate::id::ProjectId;
+use super::wait::{AgentWait, RunEnd, WaitKind};
+use crate::{id::ProjectId, run::RunLimit};
 
 /// The name the Orchestrator's agent knows Orchester's domain tools by (`mcp__orchester__<tool>`).
 pub const SERVER: &str = "orchester";
@@ -16,8 +16,9 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      \n\
      What you do: discuss ideas, break work into tasks, create task drafts, propose runs of tasks, pause and \
      resume runs, hold and release new starts, save drafts of pipelines, agent profiles, instructions, skills and \
-     tools, propose publishing them, canceling runs and merging them, read what the agents of a task wrote \
-     (get_conversation), answer agents that wait for an answer, and answer questions about how the work stands.\n\
+     tools, propose publishing them, canceling runs, merging them and how a stopped run continues, read what the \
+     agents of a task wrote (get_conversation), answer agents that wait for an answer, and answer questions about how \
+     the work stands.\n\
      \n\
      How you work:\n\
      - The current folder is the project's repository. You may read and search it; you cannot change files or run \
@@ -53,6 +54,10 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      Orchestrator merge runs: then merge_run merges at once. Each answer says which happened.\n\
      - hold_queue holds new starts (the whole project, or with a task its reviewed group) and release_queue lets \
      them go on; running runs go on either way.\n\
+     - continue_run proposes how a run that waits for a decision goes on: allow_retry (one more retry of its \
+     stopped step) or return_to (an earlier agent step, with a note for its agent). The person applies or dismisses \
+     it. Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them \
+     to do it on the task's Summary.\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
@@ -87,6 +92,7 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
     WaitKind::Question => "asks a question with suggested answers",
     WaitKind::Message => "waits for a message: the answer to what it wrote",
     WaitKind::Plan => "proposed a plan that waits for a decision",
+    WaitKind::Ended(end) => return end_prompt(wait, end),
   };
   format!(
     "[Orchester] {who} {waits} in run #{number} of {task} ({title}); its card: {link}.\n\
@@ -100,4 +106,58 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
     title = wait.title,
     link = wait.link,
   )
+}
+
+/// The prompt of the Orchestrator turn the end of `wait`'s run (`end`) started by itself: how it ended and what to do.
+/// A run that succeeded is told to the person, and merged only when the person asked for its merge in the
+/// conversation; any other end is read and explained, with the choices the person has.
+fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
+  let at = wait
+    .step
+    .as_deref()
+    .map(|step| format!(" at the step {step}"))
+    .unwrap_or_default();
+  let what = match end {
+    RunEnd::Succeeded => "succeeded: its work is ready to merge".to_owned(),
+    RunEnd::Failed => format!("failed{at}"),
+    RunEnd::Stopped => format!("stopped{at} and waits for a decision on how it goes on"),
+    RunEnd::Limit { limit } => format!("stopped at {}{at}", limit_words(limit)),
+    RunEnd::Interrupted => "was interrupted and goes on only when a person continues it".to_owned(),
+  };
+  let todo = match end {
+    RunEnd::Succeeded => {
+      "Tell the person it is ready to merge, with the link. Merge it only if the person asked you earlier in this \
+       conversation to merge this task's run: then call merge_run for it, which merges at once only while the person \
+       lets the Orchestrator merge runs and proposes the merge otherwise. Never merge a run nobody asked you to \
+       merge, and start, cancel or continue nothing."
+    }
+    RunEnd::Failed | RunEnd::Stopped | RunEnd::Limit { .. } | RunEnd::Interrupted => {
+      "Read the run first (get_run, get_conversation). Tell the person what happened and the choices they have, with \
+       the link. When the run waits for a decision on how it goes on and continue_run offers a fitting choice \
+       (allow_retry, or return_to with a note for an earlier agent step), you may propose it: the person applies \
+       it. Raising limits or budgets, resuming and accepting a step are the person's: say where they do it. Start, \
+       resume, cancel or merge nothing."
+    }
+  };
+  format!(
+    "[Orchester] Run #{number} of {task} ({title}) {what}; its summary: {link}.\n\
+     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator answer agents is on. \
+     {todo}",
+    number = wait.number,
+    task = wait.task,
+    title = wait.title,
+    link = wait.link,
+  )
+}
+
+/// The limit a run stopped at, as the prompt names it.
+const fn limit_words(limit: RunLimit) -> &'static str {
+  match limit {
+    RunLimit::Tokens => "its token budget",
+    RunLimit::Time => "its time limit",
+    RunLimit::DailyBudget => "the project's daily token budget",
+    RunLimit::GroupBudget => "its task group's budget",
+    RunLimit::StepBudget { .. } => "a step's token budget",
+    RunLimit::PlanLimit { .. } => "an account's plan limit",
+  }
 }

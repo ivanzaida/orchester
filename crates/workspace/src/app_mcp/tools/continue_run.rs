@@ -7,8 +7,11 @@
 //! unchanged revision, also has its step accepted as it is. Every value is the caller's: nothing raises a limit by
 //! itself. While unfinished blocking tasks hold the task, nothing continues, as on the page.
 
+use std::path::Path;
+
 use orchester_core::{
   id::{RunId, TaskId},
+  resource::StepKey,
   run::{Answerer, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
@@ -34,7 +37,6 @@ use crate::{
     raise::{self, Raise},
     run::control_message,
   },
-  workspace::OpenProject,
 };
 
 /// How whole tokens are grouped in the panel's text; the tool gives plain numbers.
@@ -107,7 +109,7 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
       ));
     }
     let project = reading.project(&args.project)?;
-    let (run, request) = request(&project, &args)?;
+    let (run, request) = request(&project.repo_root, &args)?;
     Ok((project, run, request))
   })
   .await?;
@@ -136,14 +138,29 @@ struct Named {
   task: TaskId,
 }
 
-/// The run `args` names and what continuing it asks of the runner; a refusal when its task page
-/// would not offer the choice now.
-fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request), ToolError> {
-  let db = ProjectDb::open(&project.repo_root)?;
+/// Checks continuing the run `args` names in the project at `root` as the tool checks it, and changes nothing: the
+/// run, and the step a return goes back to; a refusal when its task page would not offer the choice now. Blocks on
+/// SQLite.
+pub(crate) fn offered(root: &Path, args: &ContinueRun) -> Result<(RunId, Option<StepKey>), ToolError> {
+  let (named, request) = request(root, args)?;
+  let target = match request {
+    Request::Command(Command::DecideStuckRun {
+      decision: StuckDecision::ReturnTo { step, .. },
+      ..
+    }) => Some(step),
+    Request::Command(_) | Request::Resume => None,
+  };
+  Ok((named.id, target))
+}
+
+/// The run `args` names in the project at `root` and what continuing it asks of the runner; a refusal when its task
+/// page would not offer the choice now.
+fn request(root: &Path, args: &ContinueRun) -> Result<(Named, Request), ToolError> {
+  let db = ProjectDb::open(root)?;
   let run = find_run(&db, &args.run)?;
   drop(db);
   let number = run.number().get().to_string();
-  let detail = TaskDetail::load_in(&project.repo_root, run.task())?;
+  let detail = TaskDetail::load_in(root, run.task())?;
   // Only a task's latest run can be stopped at a limit; its page offers the choices.
   let view = detail
     .run

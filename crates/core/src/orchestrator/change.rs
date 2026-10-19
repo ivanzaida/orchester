@@ -1,8 +1,8 @@
 //! A change the Orchestrator's agent proposed that only a person carries out, unless the person's switch lets the chat
 //! carry it out itself (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
-//! run, merging one, answering an agent's question or sending a run's agents a message. It holds what the person
-//! reads before *Apply* and what *Apply* would change; a draft saved again, a version published meanwhile or a run
-//! with newer work needs a fresh proposal.
+//! run, merging one, answering an agent's question, sending a run's agents a message or continuing a run that waits
+//! for a person's decision. It holds what the person reads before *Apply* and what *Apply* would change; a draft saved
+//! again, a version published meanwhile or a run with newer work needs a fresh proposal.
 
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +61,27 @@ pub enum Change {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     now: bool,
   },
+  /// Continue run `run`, `#number`, which stopped in its attempt `attempt` and waits for a person's decision, at the
+  /// step named `step` when it is known, with `choice`, as `continue_run` continues it.
+  Continue {
+    run: RunId,
+    number: u32,
+    attempt: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    step: Option<String>,
+    choice: ContinueChoice,
+  },
+}
+
+/// How a run that waits for a person's decision goes on, of what the chat may propose: raising limits or budgets,
+/// resuming after the daily budget and accepting a step stay the person's.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ContinueChoice {
+  /// One more retry of the stopped step (or, for a step that waits unverified or unchanged, that step again).
+  AllowRetry,
+  /// Back to the earlier agent step `step` (its key), named `name`, with `note` for its agent.
+  ReturnTo { step: String, name: String, note: String },
 }
 
 impl Change {
@@ -68,15 +89,18 @@ impl Change {
   pub const fn run(&self) -> Option<RunId> {
     match self {
       Self::Publish { .. } => None,
-      Self::Cancel { run, .. } | Self::Merge { run, .. } | Self::Answer { run, .. } | Self::Message { run, .. } => {
-        Some(*run)
-      }
+      Self::Cancel { run, .. }
+      | Self::Merge { run, .. }
+      | Self::Answer { run, .. }
+      | Self::Message { run, .. }
+      | Self::Continue { run, .. } => Some(*run),
     }
   }
 
-  /// Whether it answers a run's agents: an answer to a question, or a message.
-  pub const fn answers_agents(&self) -> bool {
-    matches!(self, Self::Answer { .. } | Self::Message { .. })
+  /// Whether it carries a run's agents on: an answer to a question, a message, or a decision on how a stopped run
+  /// continues. What the run does next follows from it.
+  pub const fn carries_run_on(&self) -> bool {
+    matches!(self, Self::Answer { .. } | Self::Message { .. } | Self::Continue { .. })
   }
 }
 

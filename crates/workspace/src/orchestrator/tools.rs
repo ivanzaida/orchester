@@ -4,10 +4,10 @@
 //! approvals and plan decisions stay with people and runs start through the scheduling checks. It reads every
 //! project; a change that names another project is refused before it reaches the tool, and a change is given the
 //! chat's project by its id, never by a name. Publishing a draft, canceling, merging a run, answering an agent's
-//! question and sending a run's agents a message wait for the person ([`super::change`]) unless the person's switch
-//! lets the chat do it itself (publishing, merging, answering; never canceling), and so does starting a run unless
-//! auto mode is on for the project ([`super::proposal`]). What the agent changed, or tried to, is kept in its
-//! conversation as an action.
+//! question, sending a run's agents a message and deciding how a stopped run goes on wait for the person
+//! ([`super::change`]) unless the person's switch lets the chat do it itself (publishing, merging, answering; never
+//! canceling or continuing), and so does starting a run unless auto mode is on for the project ([`super::proposal`]).
+//! What the agent changed, or tried to, is kept in its conversation as an action.
 
 use std::path::PathBuf;
 
@@ -37,10 +37,10 @@ use crate::{
 /// The tools of the chat, by name: reading every project's work, setup and tasks' conversations, task drafts and
 /// drafts of what agents run on, pausing and resuming a run, holding and releasing new starts, and what waits for the
 /// person or the person's switch: starting a run, publishing a draft, canceling and merging a run, answering an
-/// agent's question and sending a run's agents a message. Approvals, plan decisions, project setup, connections,
-/// MCP servers, the environment and what removes work are not among them. A name whose tool the app does not have
-/// (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 52] = [
+/// agent's question, sending a run's agents a message and continuing a run that waits for a person's decision.
+/// Approvals, plan decisions, project setup, connections, MCP servers, the environment and what removes work are not
+/// among them. A name whose tool the app does not have (yet) is not listed ([`listed`]).
+pub const TOOLS: [&str; 53] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -56,6 +56,7 @@ pub const TOOLS: [&str; 52] = [
   "resume_run",
   "cancel_run",
   "merge_run",
+  "continue_run",
   "answer_question",
   "send_message",
   "list_approvals",
@@ -101,6 +102,8 @@ pub(super) const RUN_TASK: &str = "run_task";
 pub(super) const CANCEL_RUN: &str = "cancel_run";
 /// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
 pub(super) const MERGE_RUN: &str = "merge_run";
+/// The tool whose calls always wait for the person, and only for a retry or a return to an earlier step.
+pub(super) const CONTINUE_RUN: &str = "continue_run";
 /// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
 pub(super) const ANSWER_QUESTION: &str = "answer_question";
 pub(super) const SEND_MESSAGE: &str = "send_message";
@@ -131,6 +134,7 @@ fn in_chat(tool: &Tool) -> Option<String> {
     DUPLICATE_PIPELINE => DUPLICATE_AS_DRAFT,
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
+    CONTINUE_RUN => PROPOSE_CONTINUE,
     ANSWER_QUESTION | SEND_MESSAGE => PROPOSE_ANSWER,
     _ if Publishing::of_tool(name).is_some() => PROPOSE_PUBLISH,
     _ => return None,
@@ -160,6 +164,13 @@ const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the mer
   rules below: only a task's latest run that succeeded, and only when the main checkout needs no local integration; \
   a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to the person on \
   the Local integration page.";
+
+/// What the agent reads first of `continue_run`.
+const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
+  retries, broke again, or waits unverified or unchanged: it checks the choice as below and proposes it to the \
+  person, who applies or dismisses it in the conversation; no switch lets you continue a run yourself. \
+  raise_limits, raise_step_budget, resume and accept are the person's and refused here (person_only). Give return_to \
+  a note that tells the agent what to do differently.";
 
 /// What the agent reads first of `answer_question` and `send_message`.
 const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \
@@ -273,7 +284,7 @@ async fn act(
 ) -> Acted {
   let acted = match name {
     RUN_TASK => start((services, translate), scope, arguments).await,
-    CANCEL_RUN => propose_change(translate, scope, name, arguments).await,
+    CANCEL_RUN | CONTINUE_RUN => propose_change(translate, scope, name, arguments).await,
     MERGE_RUN => {
       switched(
         (services, translate),
@@ -362,7 +373,7 @@ async fn start(
   })
 }
 
-/// A cancel, merge or publication the person applies.
+/// A cancel, merge, publication, answer, message or continuation the person applies.
 async fn propose_change(
   translate: &Translate,
   scope: &ChatScope,

@@ -69,18 +69,30 @@ fn answered(run: RunId, message: bool, outcome: ActionOutcome) -> EntryKind {
 #[test]
 fn orchestrator_wait_raised_by_its_own_answer_is_known() {
   let run = RunId::generate();
-  assert!(!raised_by_own(&[], run), "nothing answered yet");
+  assert!(
+    !raised_by_own(&[], &wait(run, WaitKind::Message)),
+    "nothing answered yet"
+  );
   let sent = [entry(1, answered(run, true, ActionOutcome::Done))];
   assert!(
-    raised_by_own(&sent, run),
+    raised_by_own(&sent, &wait(run, WaitKind::Message)),
     "the chat sent the run's agents a message itself"
   );
   let applied = [entry(1, answered(run, false, ActionOutcome::Applied))];
-  assert!(raised_by_own(&applied, run), "the person applied the chat's answer");
+  assert!(
+    raised_by_own(&applied, &wait(run, WaitKind::Message)),
+    "the person applied the chat's answer"
+  );
   let proposed = [entry(1, answered(run, false, ActionOutcome::Waits))];
-  assert!(!raised_by_own(&proposed, run), "a proposal sent nothing");
+  assert!(
+    !raised_by_own(&proposed, &wait(run, WaitKind::Message)),
+    "a proposal sent nothing"
+  );
   let other = RunId::generate();
-  assert!(!raised_by_own(&sent, other), "another run's answer raises nothing here");
+  assert!(
+    !raised_by_own(&sent, &wait(other, WaitKind::Message)),
+    "another run's answer raises nothing here"
+  );
 }
 
 #[test]
@@ -97,7 +109,7 @@ fn orchestrator_wait_after_a_newer_wait_of_the_run_is_not_its_own() {
     ),
   ];
   assert!(
-    !raised_by_own(&entries, run),
+    !raised_by_own(&entries, &wait(run, WaitKind::Message)),
     "the agent asked again after the chat's answer; the next wait follows that one, not the answer"
   );
 }

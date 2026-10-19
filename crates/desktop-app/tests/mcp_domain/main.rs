@@ -25,6 +25,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod orchestrator_chat;
+mod orchestrator_continue;
 mod pipeline_permissions;
 mod pull_requests;
 mod reads;

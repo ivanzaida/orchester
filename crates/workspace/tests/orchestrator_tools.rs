@@ -64,7 +64,6 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
   for name in [
     "decide_approval",
     "decide_plan",
-    "continue_run",
     "set_run_auto_mode",
     "set_auto_mode",
     "remove_worktree",
@@ -108,6 +107,16 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
     "Local integration page",
   ] {
     assert!(merge.contains(part), "merge_run says {part}: {merge}");
+  }
+  let continued = description("continue_run");
+  for part in [
+    "only allow_retry and return_to",
+    "proposes it to the person",
+    "no switch lets you continue a run yourself",
+    "raise_limits, raise_step_budget, resume and accept are the person's",
+    "person_only",
+  ] {
+    assert!(continued.contains(part), "continue_run says {part}: {continued}");
   }
   for name in ["answer_question", "send_message"] {
     let told = description(name);

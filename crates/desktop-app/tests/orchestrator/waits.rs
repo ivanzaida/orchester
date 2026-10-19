@@ -1,11 +1,12 @@
 //! An agent of the project waits for a message, and the Orchestrator follows it (ORC-42): the wait is kept in the
 //! conversation and, with *Let the Orchestrator answer agents* on, starts one Orchestrator turn by itself, which the
-//! runner answers to its end, however the conversation and the runs change meanwhile.
+//! runner answers to its end, however the conversation and the runs change meanwhile. The end of a run the chat
+//! started shows in its conversation as a card that opens the task's Summary.
 
-use orchester_app::routes::OrchestratorChat;
+use orchester_app::routes::{OrchestratorChat, ProjectPage, Route, TaskView};
 use orchester_core::{
   id::ChatMessageId,
-  orchestrator::{EntryKind, TurnState, WaitKind},
+  orchestrator::{EntryKind, RunEnd, TurnState, WaitKind},
   run::{StepStatus, WaitReason},
   store::{RunStore, TaskStore},
 };
@@ -99,4 +100,47 @@ fn orchestrator_wait_turn_is_answered_to_its_end() {
     .filter(|(kind, _)| *kind == WaitKind::Message)
     .count();
   assert_eq!(messages, 1, "the wait is kept once and starts one turn");
+}
+
+/// The ends of runs kept in the project's latest conversation, each by its entry.
+fn ends(db: &ProjectDb) -> Vec<(i64, RunEnd)> {
+  let Some(chat) = db.latest_chat().expect("read") else {
+    return Vec::new();
+  };
+  db.chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .filter_map(|entry| match entry.kind {
+      EntryKind::Wait { wait, .. } => wait.kind.run_end().map(|end| (entry.seq, end)),
+      _ => None,
+    })
+    .collect()
+}
+
+#[test]
+fn orchestrator_run_end_lands_in_the_conversation_that_started_the_run() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.auto_mode(true);
+  let delivery = screen.delivery();
+  let key = screen.draft_on(delivery, "Read the readme");
+  screen.go(OrchestratorChat::New);
+  screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
+  screen.until("the run's end", |screen| !ends(&screen.db()).is_empty());
+  let (seq, end) = ends(&screen.db())[0];
+  assert_eq!(end, RunEnd::Succeeded);
+  let card = format!("orchestrator-wait-wait-{seq}");
+  screen.until("its card", |screen| screen.exists(&card));
+  let shown = screen.text(&card);
+  for part in [
+    format!("of {key} is ready to merge"),
+    "It waits for you on the task's Summary".to_owned(),
+  ] {
+    assert!(shown.contains(&part), "{part} in {shown}");
+  }
+  screen.click(&format!("{card}-open"));
+  assert!(
+    matches!(screen.route(), Route::Project(_, ProjectPage::Task(task, TaskView::Summary)) if task.to_string() == key),
+    "{:?}",
+    screen.route()
+  );
 }

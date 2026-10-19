@@ -14,6 +14,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
+pub(super) use self::load::sequence_value;
 use self::{
   columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
   load::{load_checkpoint, load_events, load_runs},

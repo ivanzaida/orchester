@@ -1,9 +1,11 @@
 //! The Orchestrator chat follows the project's agents (ORC-42, `docs/design/orchestrator-toolset.md`, decision 5):
 //! each time an agent of a task's latest run asks a question with suggested answers, its step waits for a message,
-//! or its plan waits for a decision, a conversation keeps one entry for that wait, linking to its card: the one that
+//! or its plan waits for a decision, and each time a task's latest run ends or stops ([`super::run_ends`]), a
+//! conversation keeps one entry for that wait, linking to its card (a run's end: its task's Summary): the one that
 //! last dealt with the wait's task or run ([`orchester_core::orchestrator::wait::dealt_with`]), else the project's
 //! latest conversation, or a new one while the project has none. With *Let the Orchestrator answer agents* on, a wait
-//! the Orchestrator's own answer did not raise also starts one Orchestrator turn by itself in its conversation
+//! the Orchestrator's own answer, message or decision on how the run continues did not raise also starts one
+//! Orchestrator turn by itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. The app attaches the runner when
@@ -27,7 +29,7 @@ use orchester_core::{
 };
 use orchester_store::{KeptWait, ProjectDb, StoreError};
 
-use super::settings::OrchestratorSetup;
+use super::{run_ends::current_ends, settings::OrchestratorSetup};
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
@@ -70,7 +72,8 @@ fn follow(
   attached: bool,
 ) -> Result<Followed, StoreError> {
   let mut db = ProjectDb::open(root)?;
-  let now = current_waits(&db, project)?;
+  let mut now = current_waits(&db, project)?;
+  now.extend(current_ends(&db, project)?);
   let kept = db.kept_wait_keys()?;
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new(&mut db, &new, answers)?;
@@ -113,7 +116,7 @@ fn keep_new(db: &mut ProjectDb, new: &[&(String, AgentWait)], answers: bool) -> 
   };
   let mut kept_any = false;
   for (key, wait) in new {
-    let own = raised_by_own(&entries, wait.run);
+    let own = raised_by_own(&entries, wait);
     let kept = AgentWait {
       own,
       automatic: answers && !own,

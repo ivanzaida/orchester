@@ -1,12 +1,13 @@
-//! The card of a publication, cancel, merge, answer or message the Orchestrator's agent proposed or the chat did
-//! itself, and of a run it started without asking because auto mode is on (`Orchestrator · publish proposal` `b55NqO`
-//! and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its head with
-//! the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits, the diff
-//! of the text it publishes; what it did or would do; its notes; and its actions. While it waits, only a person
-//! applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays open to
-//! automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
+//! The card of a publication, cancel, merge, answer, message or continuation the Orchestrator's agent proposed or the
+//! chat did itself, and of a run it started without asking because auto mode is on (`Orchestrator · publish proposal`
+//! `b55NqO` and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its
+//! head with the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits,
+//! the diff of the text it publishes; what it did or would do; its notes; and its actions. While it waits, only a
+//! person applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays
+//! open to automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
 
 mod answer;
+mod continuation;
 mod facts;
 mod widens;
 mod words;

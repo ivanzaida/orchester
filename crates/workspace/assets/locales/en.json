@@ -1641,7 +1641,8 @@
       "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
       "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
-      "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
+      "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
+      "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again."
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started."
@@ -1654,7 +1655,9 @@
       "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge.",
       "answerWaits": "Nothing is answered yet: your answer to the question in run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would answer and why.",
       "messageWaits": "Nothing is sent yet: your message to the agents of run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would send and why.",
-      "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card."
+      "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card.",
+      "continueWaits": "Run #{{run}} still waits: how it goes on waits for the person, who applies or dismisses it in the conversation. Tell them what you would choose and why.",
+      "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to."
     }
   }
 }

@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ProjectId,
-  orchestrator::change::{Change, Publishing},
+  orchestrator::change::{Change, ContinueChoice, Publishing},
   project::TaskKey,
   time::Timestamp,
   tokens::compact_tokens,
@@ -310,7 +310,35 @@ fn run_rows(ctx: &Ctx, view: &View, run: &RunFacts, project: ProjectId) -> Vec<(
       }
     }
     Some(Change::Merge { .. }) => rows.extend(merge_rows(ctx, run, project)),
+    Some(Change::Continue { step, choice, .. }) => rows.extend(continue_rows(ctx, step.as_deref(), choice)),
     _ => {}
+  }
+  rows
+}
+
+/// The step a run stopped at, how it goes on, and a return's note for its agent.
+fn continue_rows(ctx: &Ctx, step: Option<&str>, choice: &ContinueChoice) -> Vec<(Arc<str>, Vec<Part>)> {
+  let mut rows: Vec<(Arc<str>, Vec<Part>)> = step
+    .map(|step| {
+      (
+        ctx.t("orchestrator.change.facts.stopped"),
+        vec![Part::Value(step.into())],
+      )
+    })
+    .into_iter()
+    .collect();
+  let chosen = match choice {
+    ContinueChoice::AllowRetry => ctx.t("orchestrator.change.facts.choiceRetry"),
+    ContinueChoice::ReturnTo { name, .. } => {
+      ctx.t_args("orchestrator.change.facts.choiceReturn", [("step", name.as_str())])
+    }
+  };
+  rows.push((ctx.t("orchestrator.change.facts.choice"), vec![Part::Value(chosen)]));
+  if let ContinueChoice::ReturnTo { note, .. } = choice {
+    rows.push((
+      ctx.t("orchestrator.change.facts.note"),
+      vec![Part::Value(note.as_str().into())],
+    ));
   }
   rows
 }

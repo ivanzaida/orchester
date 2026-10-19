@@ -140,6 +140,6 @@ pub(super) fn words(change: &Change, arguments: &mut JsonObject) {
       let timing = if *now { "now" } else { "after_turn" };
       arguments.insert("timing".to_owned(), json!(timing));
     }
-    Change::Publish { .. } | Change::Cancel { .. } | Change::Merge { .. } => {}
+    Change::Publish { .. } | Change::Cancel { .. } | Change::Merge { .. } | Change::Continue { .. } => {}
   }
 }

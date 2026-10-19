@@ -19,7 +19,7 @@ pub use self::{
     TurnFailure, TurnState, WaitTurn,
   },
   settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},
-  wait::{AgentWait, WaitKind},
+  wait::{AgentWait, RunEnd, WaitKind},
 };
 
 /// The agentic turns one answer may take at most (`--max-turns`): reading, searching and calling tools, each a

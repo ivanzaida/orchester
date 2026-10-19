@@ -1,14 +1,17 @@
 //! An agent of the chat's project waits for a person (`docs/design/orchestrator-toolset.md`, "Decisions" 5): it asked
-//! a question with suggested answers, its step waits for a message, or its plan waits for a decision. The
-//! Orchestrator's conversation keeps one entry per wait, linking to its card, in the conversation that last dealt
-//! with its task ([`dealt_with`]); with *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator
-//! turn by itself, unless the Orchestrator's own answer raised it, so the chat and an agent never answer each other in
-//! a loop.
+//! a question with suggested answers, its step waits for a message, or its plan waits for a decision; or a task's
+//! latest run ended or stopped ([`RunEnd`]). The Orchestrator's conversation keeps one entry per wait, linking to its
+//! card, in the conversation that last dealt with its task ([`dealt_with`]); with *Let the Orchestrator answer
+//! agents* on, the wait also starts one Orchestrator turn by itself, unless the Orchestrator's own answer, message or
+//! decision raised it, so the chat and an agent never answer each other in a loop.
 
 use serde::{Deserialize, Serialize};
 
 use super::chat::{ChatEntry, EntryKind};
-use crate::id::{ChatId, RunId};
+use crate::{
+  id::{ChatId, RunId},
+  run::RunLimit,
+};
 
 /// What an agent waits for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +23,37 @@ pub enum WaitKind {
   Message,
   /// A decision on its plan.
   Plan,
+  /// Its task's latest run ended or stopped so: the person decides what comes next.
+  Ended(RunEnd),
+}
+
+impl WaitKind {
+  /// How the run ended or stopped, for a run's end; `None` for an agent's wait.
+  pub const fn run_end(self) -> Option<RunEnd> {
+    match self {
+      Self::Ended(end) => Some(end),
+      Self::Question | Self::Message | Self::Plan => None,
+    }
+  }
+}
+
+/// How a task's latest run ended or stopped, as the chat follows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "end", rename_all = "snake_case")]
+pub enum RunEnd {
+  /// It succeeded: its work is ready to merge.
+  Succeeded,
+  Failed,
+  /// A step used up its retries, broke again, or waits unverified or unchanged: the run waits for a person's
+  /// decision on how it goes on.
+  Stopped,
+  /// It stopped at `limit`: its token budget, time limit, the daily or group budget, a step's budget or an account's
+  /// plan limit.
+  Limit {
+    limit: RunLimit,
+  },
+  /// It stopped without settling, and goes on only when a person continues it.
+  Interrupted,
 }
 
 /// One wait, as the conversation keeps it.
@@ -37,9 +71,9 @@ pub struct AgentWait {
   /// The waiting agent's role, when it is known.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub agent: Option<String>,
-  /// The app link of its card: the task's Conversation.
+  /// The app link of its card: the task's Conversation; for a run's end, the task's Summary.
   pub link: String,
-  /// The Orchestrator's own answer or message to the run raised it.
+  /// The Orchestrator's own answer, message or decision on how the run continues raised it ([`raised_by_own`]).
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub own: bool,
   /// It starts an Orchestrator turn by itself: *Let the Orchestrator answer agents* was on when it was kept, and the
@@ -48,20 +82,30 @@ pub struct AgentWait {
   pub automatic: bool,
 }
 
-/// Whether a wait of `run` now was raised by the Orchestrator's own answer: in `entries`, those of every conversation
-/// in the order they were kept (the person may have started another since), the newest entry about `run` is an
-/// answer or message the chat gave its agents (applied, or sent itself), not a wait. An agent the Orchestrator
-/// answered that asks again is answered by a person, or by an Orchestrator turn the person starts.
-pub fn raised_by_own(entries: &[ChatEntry], run: RunId) -> bool {
+/// The tool whose action resumes a run the chat names by its task: what follows from it is the chat's own doing.
+const RESUME_RUN: &str = "resume_run";
+
+/// Whether `wait` now was raised by the Orchestrator's own action: in `entries`, those of every conversation in the
+/// order they were kept (the person may have started another since), the newest entry about its run is an answer, a
+/// message or a decision on how the run continues that the chat gave (applied, or done itself), or a resume of its
+/// task's run the chat did, not a wait. An agent the Orchestrator answered that asks again, or a run it continued or
+/// resumed that stops again, is answered by a person, or by an Orchestrator turn the person starts.
+pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
+  let run = wait.run;
   for entry in entries.iter().rev() {
     match &entry.kind {
-      EntryKind::Wait { wait, .. } if wait.run == run => return false,
+      EntryKind::Wait { wait: kept, .. } if kept.run == run => return false,
       EntryKind::Action(action) => {
-        let answered = action
+        let carried = action
           .change
           .as_ref()
-          .is_some_and(|change| change.change.answers_agents() && change.change.run() == Some(run));
-        if answered && action.outcome.answered() {
+          .is_some_and(|change| change.change.carries_run_on() && change.change.run() == Some(run));
+        let resumed = action.tool == RESUME_RUN
+          && action
+            .task
+            .as_deref()
+            .is_some_and(|task| task.eq_ignore_ascii_case(&wait.task));
+        if (carried || resumed) && action.outcome.answered() {
           return true;
         }
       }

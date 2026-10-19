@@ -18,6 +18,7 @@
 mod kontur;
 
 mod changes;
+mod continuation;
 mod data;
 mod links;
 mod refused;
@@ -43,6 +44,7 @@ use orchester_app::{
   theme::{self, Mode},
   ui::loader,
 };
+use orchester_core::id::ChatId;
 use tokio::runtime::Runtime;
 
 /// Where the window opens.
@@ -79,10 +81,16 @@ enum State {
   SettingsNoConnection,
   /// `w262B`, `agv8r`: replies with links in Kontur and in Atlas, to the web, and to addresses shown as text.
   Links,
+  /// One more retry of the seed's run that waits for a decision, proposed by the chat and waiting for the person
+  /// ([`continuation`]; no Pencil frame yet).
+  Continue,
+  /// That retry after the person's *Allow retry*: the runner retries the step, and the run's end lands in the
+  /// conversation.
+  ContinueApplied,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 14] = [
+  const ALL: [(&'static str, Self); 16] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -97,6 +105,8 @@ impl State {
     ("settings", Self::Settings),
     ("settings-no-connection", Self::SettingsNoConnection),
     ("links", Self::Links),
+    ("continue", Self::Continue),
+    ("continue-applied", Self::ContinueApplied),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -156,8 +166,14 @@ fn qa_folder() -> Result<PathBuf, &'static str> {
     .ok_or("the crate is two folders into the checkout")
 }
 
-/// The route `state` opens on.
-fn route(prepared: &data::Prepared, state: State) -> Route {
+/// The route `state` opens on; `chat` the conversation a state seeded once the session started.
+fn route(prepared: &data::Prepared, state: State, chat: Option<ChatId>) -> Route {
+  if let Some(chat) = chat {
+    return Route::Project(
+      prepared.project,
+      ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)),
+    );
+  }
   let chats = &prepared.conversations;
   let page = match state {
     State::New | State::NotReady | State::NoRunner => ProjectPage::Orchestrator(OrchestratorChat::New),
@@ -172,6 +188,7 @@ fn route(prepared: &data::Prepared, state: State) -> Route {
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
     State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
+    State::Continue | State::ContinueApplied => ProjectPage::Orchestrator(OrchestratorChat::Latest),
   };
   Route::Project(prepared.project, page)
 }
@@ -182,18 +199,27 @@ fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch:
   // Past the sign-in gate, as a person who signed in; the stand-in cloud answers while the window is open.
   let cloud = signed_in::account_cloud::AccountCloud::start();
   let launch = signed_in::launch(&prepared.database, runner, runtime.handle(), &cloud);
-  let start = match launch.start() {
-    Start::Ready(mut ready) => {
-      ready.landing.route = route(prepared, state);
-      Start::Ready(ready)
-    }
-    problem @ Start::Problem(_) => problem,
-  };
   let appearance = Appearance::new(ThemeSetting::Dark, Arc::new(OnceLock::new()), None);
   let mut app = App::new();
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, Mode::Dark);
   i18n::install(&app)?;
+  let chat = match (state, launch.services()) {
+    (State::Continue | State::ContinueApplied, Some(services)) => Some(continuation::conversation(
+      &runtime,
+      (services, app.i18n().clone()),
+      prepared,
+      state == State::ContinueApplied,
+    )?),
+    _ => None,
+  };
+  let start = match launch.start() {
+    Start::Ready(mut ready) => {
+      ready.landing.route = route(prepared, state, chat);
+      Start::Ready(ready)
+    }
+    problem @ Start::Problem(_) => problem,
+  };
   if let (State::ProposalRefused, Some(services)) = (state, launch.services()) {
     refused::start(
       &runtime,

@@ -1,4 +1,4 @@
-//! What a card of the Orchestrator chat shows of what an action publishes, cancels, merges or started
+//! What a card of the Orchestrator chat shows of what an action publishes, cancels, merges, continues or started
 //! (`Orchestrator · publish proposal` `b55NqO`, its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`):
 //! the draft and its versions, where it applies, the runs under way that keep the version before, what it widens,
 //! what its kind changes and its text's diff; or the run, where it stands, its branch and what it changed. They are
@@ -133,7 +133,8 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
       Change::Cancel { run, .. }
       | Change::Merge { run, .. }
       | Change::Answer { run, .. }
-      | Change::Message { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
+      | Change::Message { run, .. }
+      | Change::Continue { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
     },
     (None, Some(run)) => run::read(root, &db, programs, run).map(|found| found.map(Facts::Run)),
     (None, None) => Ok(None),

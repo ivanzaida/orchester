@@ -265,7 +265,7 @@ fn load_executions(connection: &Connection, attempt: &str) -> Result<Vec<StepExe
     .collect()
 }
 
-fn sequence_value(sequence: i64) -> Result<EventSequence, StoreError> {
+pub(in crate::project_db) fn sequence_value(sequence: i64) -> Result<EventSequence, StoreError> {
   u64::try_from(sequence)
     .ok()
     .and_then(NonZeroU64::new)

@@ -1,6 +1,7 @@
 # The Orchestrator's toolset
 
-Status: decided by the person on 2026-10-15; decision 5 and the waits changed by the person on 2026-10-17 (ORC-42).
+Status: decided by the person on 2026-10-15; decision 5 and the waits changed by the person on 2026-10-17 (ORC-42);
+continuing a stopped run and the ends of runs added to decision 5 on 2026-10-19 (proposed, conservative; see there).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -52,6 +53,33 @@ person can click.
      stay the person's, on the Local integration page. The merge is kept in the conversation as an action.
    - Both switches are off until a person turns them on; synthetic input cannot flip them (the same rule as *Let
      automation change agent permissions* and *Let the Orchestrator publish drafts*).
+   - The chat may propose how a run that waits for a person's decision goes on (`continue_run`): only `allow_retry`
+     (one more retry of the step that used up its retries or broke again, or the step that waits unverified or
+     unchanged run again) and `return_to` (an earlier agent step, with a note for its agent). It is always a proposal
+     card the person applies or dismisses, showing the run, the step it stopped at, the choice and the note; applying
+     calls `continue_run` exactly as an MCP client does, and is refused when the run went on since it was proposed (a
+     newer attempt). No switch lets the chat continue a run itself: none of the person's switches was given for it
+     (*answer agents* is about what agents asked, *merge runs* about merging), and a retry spends more of the budget
+     and overrides the retries the pipeline allows, which the pipeline left to a person. `raise_limits`,
+     `raise_step_budget`, `resume` and `accept` stay the person's and are refused (`person_only`). The chat passes the
+     choice through, so where `continue_run` offers `return_to` for a run that ended, the chat may propose it too.
+   - The chat follows the ends of its project's runs as it follows the agents' waits: when a task's latest run
+     succeeds (ready to merge), fails, stops for a decision (a step used up its retries, broke again, or waits
+     unverified or unchanged), stops at a limit (its token budget or time limit, the daily or group budget, a step's
+     budget, an account's plan limit) or is interrupted, the conversation chosen as for a wait gets one entry for it,
+     linking to the task's Summary. Each end is kept once, by the run and the event that put it there: a run that stops
+     again after it went on is a new end. Not followed: a pause the person asked for, a cancel, an interruption the
+     runner continues by itself when it comes back, and ends from before the project followed them (a project starts
+     following when its database gains them, so its history does not flood the chat).
+   - With *Let the Orchestrator answer agents* on, an end starts one Orchestrator turn by itself, under the same rules
+     as a wait's (at most one per end, never while another turn of its conversation thinks, only while the run still
+     stands so). For a run that succeeded the turn tells the person it is ready to merge, and merges it only when the
+     person asked earlier in that conversation for that run's merge, through `merge_run` and its rules (at once only
+     with *Let the Orchestrator merge runs*, else proposed). For any other end the turn reads the run and tells the
+     person what happened and the choices they have; it may propose `continue_run`, and starts, resumes, cancels and
+     merges nothing. No turn starts for an end the chat's own doing led to: its answer, message or continuation of
+     the run (applied or done itself), or a resume of the task's run it did, is the newest entry about the run; so
+     the chat never takes up its own doing in a loop, and one turn follows each end at most.
    - **Never from the chat:** answering approvals, deciding plans, widening permissions, secret values and deleting
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
@@ -67,7 +95,7 @@ project.
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
 | Tasks | `list_tasks`, `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing) | — |
-| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing) | `run_task` (direct in auto mode), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*) |
+| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing) | `run_task` (direct in auto mode), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*), `continue_run` (`allow_retry` and `return_to` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |
@@ -81,7 +109,8 @@ project.
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
-changes), widening what agents may do, secret values, project setup, connections' changes, MCP server changes,
+changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
+widening what agents may do, secret values, project setup, connections' changes, MCP server changes,
 environment, worktree removal and `return_to_draft` stay out of the chat's tools. Answering agents' questions and
 sending a run's agents messages are the chat's since ORC-42, behind *Let the Orchestrator answer agents* (decision 5).
 

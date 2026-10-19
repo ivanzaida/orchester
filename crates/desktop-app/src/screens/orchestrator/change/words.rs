@@ -149,6 +149,7 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
       super::answer::answer(ctx, view, (*number, &answer.join(&separator)))
     }
     Some(Change::Message { number, text, .. }) => super::answer::message(ctx, view, (*number, text)),
+    Some(Change::Continue { number, choice, .. }) => super::continuation::continuation(ctx, view, (*number, choice)),
     None => start(ctx, view),
   }
 }
