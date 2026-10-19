@@ -107,6 +107,13 @@ fn orchestrator_links_only_with_the_links_its_tools_returned() {
     "it links a web page only with a returned `url`: {prompt}"
   );
   assert!(
+    prompt.contains(
+      "A link is always the Markdown form [words](orchester:<link>): never put a link, a route or a key you link \
+       in backticks or a code block, and never show a route bare."
+    ),
+    "it never writes a link as code or a route bare: {prompt}"
+  );
+  assert!(
     prompt.contains("`- Label: [words](orchester:<link>) — detail`"),
     "it writes how several things stand as labelled links: {prompt}"
   );
