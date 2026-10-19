@@ -166,11 +166,7 @@ impl Fields {
     let (model, effort) = self.selects(ctx, listed);
     // A connection on an API provider offers the models typed for it and no effort (`NNYyh`).
     let on_provider = self.connection(listed).is_some_and(|c| c.api_provider().is_some());
-    let (model_hint, effort_hint) = if on_provider {
-      ("agents.modelHintApiProvider", "agents.effortHintApiProvider")
-    } else {
-      ("agents.modelHint", "agents.effortHint")
-    };
+    let (model_hint, effort_hint) = hints(on_provider);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl)
@@ -483,6 +479,16 @@ impl Fields {
     .render(ctx)
   }
 }
+/// What the model and effort rows say under their names: on an API provider its typed models and an effort of any
+/// value (`NNYyh`).
+const fn hints(on_provider: bool) -> (&'static str, &'static str) {
+  if on_provider {
+    ("agents.modelHintApiProvider", "agents.effortHintApiProvider")
+  } else {
+    ("agents.modelHint", "agents.effortHint")
+  }
+}
+
 pub fn label(ctx: &Ctx, id: &str, title: &str, hint: &str) -> Label {
   Label::new(id, ctx.t(title)).description(ctx.t(hint))
 }
