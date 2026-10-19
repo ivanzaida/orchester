@@ -17,7 +17,10 @@ use orchester_workspace::{
   orchestrator::facts::{Facts, Publication, RunFacts, Stands},
 };
 
-use super::super::{card::State, proposal::waits};
+use super::{
+  super::{card::State, proposal::waits},
+  control::{Control, control},
+};
 use crate::{
   routes::Screen,
   ui::{button::ButtonKind, icon::Icon},
@@ -148,7 +151,11 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
         .collect::<Vec<_>>();
       super::answer::answer(ctx, view, (*number, &answer.join(&separator)))
     }
-    Some(Change::Message { number, text, .. }) => super::answer::message(ctx, view, (*number, text)),
+    Some(Change::Message { number, text, then, .. }) => super::answer::message(ctx, view, (*number, text, *then)),
+    Some(Change::Pause { number, .. }) => control(ctx, view, (Control::Pause, Some(*number), None)),
+    Some(Change::Resume { number, .. }) => control(ctx, view, (Control::Resume, Some(*number), None)),
+    Some(Change::Release { task }) => control(ctx, view, (Control::Release, None, task.as_deref())),
+    Some(Change::Continue { number, choice, .. }) => super::continuation::continuation(ctx, view, (*number, choice)),
     None => start(ctx, view),
   }
 }

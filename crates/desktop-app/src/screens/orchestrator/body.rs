@@ -280,6 +280,7 @@ fn env(
     name: open.project.name().as_str().to_owned(),
     root: open.repo_root.clone(),
     chat,
+    on_its_own: false,
   });
   TurnEnv {
     project: open.project.id(),

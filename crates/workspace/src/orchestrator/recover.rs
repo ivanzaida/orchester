@@ -46,7 +46,7 @@ pub fn recover_in(root: &Path, before: Timestamp, translate: &Translate) -> Resu
     };
     let at = Timestamp::now();
     if db
-      .finish_chat_action((chat, seq), outcome, at)
+      .finish_chat_action((chat, seq), (outcome, None), at)
       .map_err(|error| messages::store_error(&error))?
       .is_some()
     {
@@ -89,6 +89,8 @@ fn carried_out(db: &ProjectDb, action: &ChatAction) -> Result<Option<ActionOutco
   let applied = match (&action.outcome, action.change.as_ref().map(|change| &change.change)) {
     (_, Some(Change::Merge { run, .. })) => db.run_merge(*run)?.is_some(),
     (_, Some(Change::Cancel { run, .. })) => cancelled(db, *run)?,
+    // A run that went on to a newer attempt than the one it stopped in was continued.
+    (_, Some(Change::Continue { run, attempt, .. })) => went_on(db, *run, *attempt)?,
     (
       _,
       Some(Change::Publish {
@@ -109,6 +111,16 @@ fn cancelled(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
     db.run(run)
       .map_err(run_store_error)?
       .is_some_and(|run| *run.status() == RunStatus::Cancelled),
+  )
+}
+
+/// Whether run `run` is in a newer attempt than `attempt`.
+fn went_on(db: &ProjectDb, run: RunId, attempt: u32) -> Result<bool, StoreError> {
+  Ok(
+    db.run(run)
+      .map_err(run_store_error)?
+      .and_then(|run| run.current_attempt().map(|current| current.number().get()))
+      .is_some_and(|current| current > attempt),
   )
 }
 

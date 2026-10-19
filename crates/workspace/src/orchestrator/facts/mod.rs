@@ -1,4 +1,4 @@
-//! What a card of the Orchestrator chat shows of what an action publishes, cancels, merges or started
+//! What a card of the Orchestrator chat shows of what an action publishes, cancels, merges, continues or started
 //! (`Orchestrator · publish proposal` `b55NqO`, its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`):
 //! the draft and its versions, where it applies, the runs under way that keep the version before, what it widens,
 //! what its kind changes and its text's diff; or the run, where it stands, its branch and what it changed. They are
@@ -108,8 +108,10 @@ pub struct RunFacts {
 pub enum Stands {
   /// It works or waits: the step it is on (its place and name), and its tokens.
   Going { step: Option<(usize, String)>, tokens: u64 },
-  /// It was cancelled: the step it stopped at, and its tokens.
-  Cancelled { step: Option<(usize, String)>, tokens: u64 },
+  /// It waits for a person's decision on how it goes on, with its tokens.
+  Decision { tokens: u64 },
+  /// It was canceled.
+  Cancelled,
   /// It succeeded, and when; not merged.
   Ready { since: Option<Timestamp> },
   /// It was merged at `at`, into a commit people read by its first characters.
@@ -125,6 +127,10 @@ pub enum Stands {
 pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<Option<Facts>, Message> {
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let facts = match (&action.change, action.started) {
+    // A message that ran the task again shows the run it started, as it stands now.
+    (Some(change), Some(started)) if change.change.runs_again() => {
+      run::read(root, &db, programs, started).map(|found| found.map(Facts::Run))
+    }
     (Some(change), _) => match &change.change {
       Change::Publish {
         of,
@@ -135,7 +141,11 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
       Change::Cancel { run, .. }
       | Change::Merge { run, .. }
       | Change::Answer { run, .. }
-      | Change::Message { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
+      | Change::Message { run, .. }
+      | Change::Continue { run, .. }
+      | Change::Pause { run, .. }
+      | Change::Resume { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
+      Change::Release { .. } => Ok(None),
     },
     (None, Some(run)) => run::read(root, &db, programs, run).map(|found| found.map(Facts::Run)),
     (None, None) => Ok(None),

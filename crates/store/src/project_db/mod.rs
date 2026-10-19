@@ -45,6 +45,7 @@ mod resources;
 mod reviewer_usage;
 mod revision_diffs;
 mod run_connections;
+mod run_ends;
 mod runs;
 mod schema;
 mod secrets;
@@ -84,6 +85,7 @@ pub use self::{
   read_only::ReadOnlyProjectDb,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
+  run_ends::EndedRun,
   runs::RunBranch,
   shared_members::SharedMember,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},

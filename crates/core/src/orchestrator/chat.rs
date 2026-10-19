@@ -197,9 +197,12 @@ pub struct ChatAction {
   /// chat itself: its card reads its facts from it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub change: Option<Box<ProposedChange>>,
-  /// The run a start the chat took itself started.
+  /// The run a start the chat took itself started, or that its message that ran the task again started.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub started: Option<RunId>,
+  /// The run a resume the chat did itself resumed.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub resumed: Option<RunId>,
   /// The chat acted without asking because auto mode is on for the project.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub auto_mode: bool,
@@ -228,6 +231,7 @@ impl ChatAction {
       held: None,
       change: None,
       started: None,
+      resumed: None,
       auto_mode: false,
       settled: None,
       claimed: None,

@@ -4,7 +4,11 @@
 //! attached first, its tools served (`mcp::chat`) and the runner asked to answer it. Mounted with the project's feed,
 //! so it follows the project while its tabs are inactive and whether or not the Orchestrator's screen is open.
 
-use std::path::PathBuf;
+use std::{
+  collections::{HashMap, HashSet},
+  path::PathBuf,
+  sync::LazyLock,
+};
 
 use lurq::app::{
   ctx::{Ctx, StreamEmitter},
@@ -16,7 +20,7 @@ use orchester_workspace::{
   orchestrator::{
     send::{self, SendError},
     tools::ChatScope,
-    waits::{self, Followed, WaitTurn},
+    waits::{self, Followed, MergeChecks, SucceededAt, WaitTurn},
   },
   runner::Runners,
   workspace::{OpenProject, OrchestratorConsent},
@@ -26,6 +30,11 @@ use crate::services::Services;
 
 /// One follower keeps waits at a time, so two that overlap never both open a conversation for the same new wait.
 static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// The runs of each project, by its folder, that git found merged outside Orchester or with nothing to merge, each by
+/// the event it succeeded with: a run that succeeded so stays so until it works again, and git is not asked about it
+/// again.
+static QUIET: LazyLock<parking_lot::Mutex<HashMap<PathBuf, HashSet<SucceededAt>>>> = LazyLock::new(Default::default);
 
 /// Follows `open`'s waits again whenever its run `states` or its conversations change. Renders nothing.
 pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
@@ -63,11 +72,12 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
       .await?
       .map_err(|error| messages::store_error(&error))?
   };
-  let mut followed = keep(open, (answers, false)).await?;
+  let checks = check_merges(services, open).await?;
+  let mut followed = keep(services, open, &checks, (answers, false)).await?;
   if followed.pending {
     match services.runners.chat_runner(open).await {
       Ok(()) => {
-        let started = keep(open, (answers, true)).await?;
+        let started = keep(services, open, &checks, (answers, true)).await?;
         followed.kept |= started.kept;
         followed.turn = started.turn;
       }
@@ -83,12 +93,37 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
   Ok(())
 }
 
-/// Follows `open`'s waits once, with *Let the Orchestrator answer agents* on when `answers`, and starting a turn only
-/// when the runner is `attached`.
-async fn keep(open: &OpenProject, (answers, attached): (bool, bool)) -> Result<Followed, Message> {
-  let (root, project) = (open.repo_root.clone(), open.project.id());
+/// What git tells of `open`'s runs that succeeded, asked before the follower's lock and remembered for the runs it
+/// found merged outside Orchester or with nothing to merge.
+async fn check_merges(services: &Services, open: &OpenProject) -> Result<MergeChecks, Message> {
+  let (root, programs) = (open.repo_root.clone(), services.programs.clone());
+  let quiet = QUIET.lock().get(&root).cloned().unwrap_or_default();
+  let mut checks = {
+    let quiet = quiet.clone();
+    background::run(move || waits::check_merges_in((&root, &programs), &quiet)).await??
+  };
+  QUIET
+    .lock()
+    .entry(open.repo_root.clone())
+    .or_default()
+    .extend(checks.quiet.iter().copied());
+  checks.quiet.extend(quiet);
+  Ok(checks)
+}
+
+/// Follows `open`'s waits and run ends once, with what git told of its runs that succeeded (`checks`; `services`'
+/// programs ask it for a run they do not tell), with *Let the Orchestrator answer agents* on when `answers`, and
+/// starting a turn only when the runner is `attached`.
+async fn keep(
+  services: &Services,
+  open: &OpenProject,
+  checks: &MergeChecks,
+  (answers, attached): (bool, bool),
+) -> Result<Followed, Message> {
+  let (root, project, programs) = (open.repo_root.clone(), open.project.id(), services.programs.clone());
+  let checks = checks.clone();
   let _keeping = KEEPING.lock().await;
-  background::run(move || waits::follow_in(&root, project, (answers, attached))).await?
+  background::run(move || waits::follow_in((&root, project, &programs), &checks, (answers, attached))).await?
 }
 
 /// Serves the tools of `turn` and asks `open`'s runner to answer it; a turn neither takes ends failed.
@@ -98,6 +133,7 @@ async fn answer(services: &Services, i18n: I18n, open: &OpenProject, turn: WaitT
     name: open.project.name().as_str().to_owned(),
     root: open.repo_root.clone(),
     chat: turn.chat,
+    on_its_own: true,
   };
   let tools = match services.chat_tools.serve_turn(services, i18n, (scope, turn.message)) {
     Ok(tools) => tools,

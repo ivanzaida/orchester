@@ -1166,6 +1166,7 @@
   },
   "appMcp": {
     "errors": {
+      "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
@@ -1661,7 +1662,21 @@
       "interrupted": "The app closed while this was being carried out, and it did not happen. Nothing more is done: ask the Orchestrator to propose it again.",
       "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
-      "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again."
+      "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
+      "messageChanged": "Run #{{run}} changed since this was proposed: sending would no longer do what this card says. Nothing was sent; ask the Orchestrator to propose it again.",
+      "resumeStopped": {
+        "tokens": "Run #{{run}} stopped at its token budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "time": "Run #{{run}} stopped at its time limit since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "daily": "Run #{{run}} stopped at the daily budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "group": "Run #{{run}} stopped at its group's budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "step": "Run #{{run}} stopped at a step's budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "plan": "Run #{{run}} stopped at an account's plan limit since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "interrupted": "Run #{{run}} was interrupted since this was proposed: continuing it is yours, on the task's Summary. Nothing was changed."
+      },
+      "pauseEnded": "Run #{{run}} ended since this was proposed: there is nothing to pause. Nothing was changed.",
+      "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again.",
+      "releaseNothing": "New starts are not held there any more: there is nothing to release. Nothing was changed.",
+      "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started."
@@ -1674,7 +1689,15 @@
       "mergeWaits": "Nothing is merged yet: merging run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them it is ready to merge.",
       "answerWaits": "Nothing is answered yet: your answer to the question in run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would answer and why.",
       "messageWaits": "Nothing is sent yet: your message to the agents of run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would send and why.",
-      "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card."
+      "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card.",
+      "resumePersonOnly": "Run #{{run}} stopped at a limit or was interrupted: resuming or continuing it is the person's, on the task's Summary. Tell them what stopped it and what you recommend.",
+      "pauseWaits": "Run #{{run}} goes on: pausing it waits for the person, who applies or dismisses it in the conversation. Tell them why you would pause it.",
+      "resumeWaits": "Run #{{run}} stays paused: resuming it waits for the person, who applies or dismisses it in the conversation. Tell them why you would resume it.",
+      "releaseWaits": "New starts stay held: releasing them waits for the person, who applies or dismisses it in the conversation. Tell them why you would release them.",
+      "continueWaits": "Run #{{run}} still waits: how it goes on waits for the person, who applies or dismisses it in the conversation. Tell them what you would choose and why.",
+      "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to.",
+      "releaseNothing": "New starts are not held there: there is nothing to release.",
+      "releasePersonHeld": "A person held these new starts: only a person releases them, in Tasks. Tell them why you would release them."
     }
   }
 }

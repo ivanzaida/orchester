@@ -42,7 +42,8 @@ use serde_json::Value;
 pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
 pub(crate) use self::{
-  messages::{plan_person_only, refusal as outgoing_refusal},
+  continue_run::{Choice as ContinueChoice, ContinueRun, offered as continue_offered},
+  messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
   pipeline_copy::duplicate_pipeline_draft,
   questions::{check_answer, waiting_request},
   tasks::find_task,
@@ -356,7 +357,7 @@ async fn dispatch(
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "return_to_draft" => return_to_draft::return_to_draft(services, parse(arguments)?).await,
     "continue_run" => continue_run::continue_run(services, parse(arguments)?).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Client)).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Client, None)).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "get_usage" => usage::get_usage(services, parse(arguments)?).await,
@@ -400,7 +401,7 @@ pub async fn answer_for_orchestrator(
   translate: &Translate,
   name: &str,
   arguments: JsonObject,
-  by: orchester_core::run::Answerer,
+  (by, expected): (orchester_core::run::Answerer, Option<&str>),
 ) -> Result<Value, ToolError> {
   let arguments = Value::Object(arguments);
   let by = match by {
@@ -409,9 +410,19 @@ pub async fn answer_for_orchestrator(
   };
   match name {
     "answer_question" => questions::answer_question(services, parse(arguments)?, by).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, (translate, by)).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, by, expected)).await,
     other => Err(ToolError::InvalidArguments(format!("{other} answers no agent"))),
   }
+}
+
+/// `continue_run` with `arguments` for the Orchestrator chat, decided by `by`: a person who applied the chat's
+/// proposal decides as themselves ([`continue_run::continue_as`]).
+pub(crate) async fn continue_for_orchestrator(
+  services: &Services,
+  arguments: JsonObject,
+  by: orchester_core::run::Answerer,
+) -> Result<Value, ToolError> {
+  continue_run::continue_as(services, parse(Value::Object(arguments))?, by).await
 }
 
 /// The arguments as tool `T` takes them; a mismatch is the call's error.

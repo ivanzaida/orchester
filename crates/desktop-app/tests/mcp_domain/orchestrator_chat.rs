@@ -42,7 +42,7 @@ const READY: &str = "Show the signed-in account";
 const PLANNING: &str = "Plan the GitHub app permissions";
 
 /// The seeded task titled `title` and its latest run.
-fn task_run(db: &ProjectDb, title: &str) -> (Task, Run) {
+pub(super) fn task_run(db: &ProjectDb, title: &str) -> (Task, Run) {
   let task = db
     .tasks()
     .expect("tasks")
@@ -73,6 +73,7 @@ pub(super) fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
     name: "Kontur".to_owned(),
     root: open.repo_root.clone(),
     chat: chat.id(),
+    on_its_own: false,
   }
 }
 
@@ -108,7 +109,7 @@ pub(super) fn chat_call(
 }
 
 /// The actions of `scope`'s conversation, in order.
-fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
+pub(super) fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
   db.chat_entries(scope.chat)
     .expect("entries")
     .into_iter()
@@ -281,7 +282,17 @@ fn chat_action_naming_a_run_by_its_number_deals_with_its_next_wait() {
   let kept: Vec<Option<String>> = actions(&db, &dealt).into_iter().map(|action| action.task).collect();
   assert_eq!(kept, [Some(task.key().to_string())], "the run's task, by its key");
   let newer = chat(&served, &mut db);
-  // The run's wait the window kept when it opened the project, as its next one is.
+  // The run's wait the window keeps once it followed the opened project, as its next one is: waited for, as the
+  // window follows on its own time.
+  let kept_wait = |db: &ProjectDb| {
+    db.chats().expect("History").iter().any(|listing| {
+      db.chat_entries(listing.chat.id())
+        .expect("entries")
+        .iter()
+        .any(|entry| matches!(&entry.kind, EntryKind::Wait { wait, .. } if wait.run == run.id()))
+    })
+  };
+  served.until("the run's wait kept", |_| kept_wait(&db));
   let mut entries = Vec::new();
   for listing in db.chats().expect("History") {
     let id = listing.chat.id();

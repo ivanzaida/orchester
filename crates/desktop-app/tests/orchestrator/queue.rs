@@ -70,6 +70,69 @@ fn orchestrator_releases_a_hold_it_set_itself() {
   screen.until("the release", |screen| !held(screen));
 }
 
+#[test]
+fn orchestrator_release_proposed_in_a_turn_on_its_own_is_applied_by_the_person() {
+  use orchester_core::{
+    orchestrator::{
+      ChatAction,
+      change::{Change, ProposedChange},
+    },
+    time::Timestamp,
+  };
+
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  screen.send(r#"Call hold_queue {"project":"Kontur"}"#);
+  screen.until("the hold", |screen| held(screen));
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  // A turn a run's end started by itself proposed letting new starts go on, as the chat keeps it.
+  let chat = screen.db().chats().expect("chats").remove(0).chat.id();
+  let release = ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: String::new(),
+      change: Change::Release { task: None },
+    })),
+    ..ChatAction::new("release_queue", None, ActionOutcome::Waits)
+  };
+  screen
+    .db()
+    .add_chat_action(chat, &release, Timestamp::now())
+    .expect("kept");
+  // The conversation is told it changed, as the chat's tools tell it.
+  let root = screen.root.clone();
+  screen
+    .window
+    .launch
+    .services()
+    .expect("the session started")
+    .runners
+    .chat_changed(&root);
+  // The card is the turn's last part, after the hold and the agent's reply.
+  let parts = screen
+    .db()
+    .chat_entries(chat)
+    .expect("entries")
+    .into_iter()
+    .rev()
+    .take_while(|entry| !matches!(entry.kind, EntryKind::Person { .. }))
+    .count();
+  let turn = super::proposal::proposal_card(&screen);
+  let card = format!("{}-{}", turn.trim_end_matches("-0"), parts - 1);
+  screen.until("the release card", |screen| screen.exists(&format!("{card}-start")));
+  // A change with nothing to read takes the person's click once the card read it: nothing widens. Pressed until it
+  // takes it (disabled while the card reads).
+  let start = format!("{card}-start");
+  screen.until("the release", |screen| {
+    if screen.exists(&start) {
+      screen.click(&start);
+    }
+    !held(screen)
+  });
+  screen.until("the card applied", |screen| {
+    super::proposal::outcomes(screen).pop() == Some(ActionOutcome::Applied)
+  });
+}
+
 /// Queues a reviewed group of `keys`' drafts on `delivery` while the project is held, so nothing of it starts; holds
 /// the group as `actor` and lets the project go on. The group's key.
 fn held_group(

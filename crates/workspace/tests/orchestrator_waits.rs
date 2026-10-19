@@ -7,6 +7,8 @@
 
 mod support;
 
+use std::collections::HashSet;
+
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
@@ -24,8 +26,9 @@ use orchester_core::{
   store::{ActivityStore, ConnectionStore, ConversationStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::waits::{Followed, follow_in};
+use orchester_workspace::orchestrator::waits::{Followed, MergeChecks, check_merges_in, follow_in};
 use support::{Fixture, at};
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
@@ -92,7 +95,9 @@ fn project(fixture: &Fixture) -> ProjectId {
 
 /// Follows the waits with the project's runner attached.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
-  follow_in(fixture.repo.path(), project(fixture), (answers, true)).expect("followed")
+  let (root, programs) = (fixture.repo.path(), Programs::processes());
+  let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
+  follow_in((root, project(fixture), &programs), &checks, (answers, true)).expect("followed")
 }
 
 /// The waits of the project's latest conversation, with their turns.
@@ -238,6 +243,8 @@ fn answered_by_chat(fixture: &mut Fixture, run: &Run) -> Chat {
         number: 1,
         text: "Use the email.".to_owned(),
         now: false,
+        then: None,
+        sent_as: None,
       },
     })),
     ..ChatAction::new("send_message", Some("ORC-1".to_owned()), ActionOutcome::Done)
@@ -299,7 +306,12 @@ fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
   ready(&mut fixture);
   let mut run = working(&mut fixture);
   ask(&mut fixture, &mut run);
-  let detached = follow_in(fixture.repo.path(), project(&fixture), (true, false)).expect("followed");
+  let detached = follow_in(
+    (fixture.repo.path(), project(&fixture), &Programs::processes()),
+    &MergeChecks::default(),
+    (true, false),
+  )
+  .expect("followed");
   assert_eq!(
     detached,
     Followed {

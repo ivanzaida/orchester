@@ -1,9 +1,11 @@
 //! The Orchestrator chat follows the project's agents (ORC-42, `docs/design/orchestrator-toolset.md`, decision 5):
 //! each time an agent of a task's latest run asks a question with suggested answers, its step waits for a message,
-//! or its plan waits for a decision, a conversation keeps one entry for that wait, linking to its card: the one that
+//! or its plan waits for a decision, and each time a task's latest run ends or stops ([`super::run_ends`]), a
+//! conversation keeps one entry for that wait, linking to its card (a run's end: its task's Summary): the one that
 //! last dealt with the wait's task or run ([`orchester_core::orchestrator::wait::dealt_with`]), else the project's
 //! latest conversation, or a new one while the project has none. With *Let the Orchestrator answer agents* on, a wait
-//! the Orchestrator's own answer did not raise also starts one Orchestrator turn by itself in its conversation
+//! the Orchestrator's own answer, message or decision on how the run continues did not raise also starts one
+//! Orchestrator turn by itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. The app attaches the runner when
@@ -25,9 +27,14 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{KeptWait, ProjectDb, StoreError};
 
-use super::settings::OrchestratorSetup;
+pub use super::run_ends::{MergeChecks, SucceededAt};
+use super::{
+  run_ends::{Reading, current_ends, merge_checks},
+  settings::OrchestratorSetup,
+};
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
@@ -57,21 +64,62 @@ pub struct Followed {
 /// it is off, nor while the Orchestrator has nothing published to run on (the runner could not take the turn).
 /// `attached`: whether the project's runner has attached. A runner that attaches ends the turns still thinking as
 /// interrupted, so a turn starts only once it is there: without it the turn stays `pending`, for the app to attach the
-/// runner and follow again. Blocks on SQLite.
-pub fn follow_in(root: &Path, project: ProjectId, (answers, attached): (bool, bool)) -> Result<Followed, Message> {
+/// runner and follow again. `checks` tell the runs that succeeded which are merged outside Orchester or have nothing
+/// to merge ([`check_merges_in`]); `programs` run git for one they do not tell. Blocks on SQLite, and on git only for
+/// such a run.
+pub fn follow_in(
+  (root, project, programs): (&Path, ProjectId, &Programs),
+  checks: &MergeChecks,
+  (answers, attached): (bool, bool),
+) -> Result<Followed, Message> {
   let ready = answers && OrchestratorSetup::load_in(root)?.readiness().is_ready();
-  follow(root, project, (answers, ready), attached).map_err(|error| messages::store_error(&error))
+  let reading = Reading {
+    project,
+    root,
+    programs,
+    checks,
+  };
+  follow(&reading, (answers, ready), attached).map_err(|error| messages::store_error(&error))
 }
 
-fn follow(
-  root: &Path,
-  project: ProjectId,
-  (answers, ready): (bool, bool),
-  attached: bool,
-) -> Result<Followed, StoreError> {
-  let mut db = ProjectDb::open(root)?;
-  let now = current_waits(&db, project)?;
-  let kept = db.kept_wait_keys()?;
+/// What git tells, in one reading of the branches, of the runs of the project at `root` that succeeded and that
+/// Orchester did not merge, and that the conversations do not settle yet, but those known `quiet` (merged outside
+/// Orchester, or with nothing to merge): for [`follow_in`], asked before it, outside the follower's lock. Blocks on
+/// SQLite and git.
+pub fn check_merges_in(
+  (root, programs): (&Path, &Programs),
+  quiet: &HashSet<SucceededAt>,
+) -> Result<MergeChecks, Message> {
+  let checked = || {
+    let db = ProjectDb::open(root)?;
+    let (kept, pending) = settled(&db)?;
+    merge_checks(
+      &db,
+      (root, programs),
+      (|key: &str| kept.contains(key) && !pending.contains(key), quiet),
+    )
+  };
+  checked().map_err(|error| messages::store_error(&error))
+}
+
+/// The keys of the waits kept, and of those kept that start a turn still to come: a kept end that starts none needs no
+/// look again.
+fn settled(db: &ProjectDb) -> Result<(HashSet<String>, HashSet<String>), StoreError> {
+  let pending = db
+    .automatic_waits_without_turn()?
+    .into_iter()
+    .map(|kept| kept.key)
+    .collect();
+  Ok((db.kept_wait_keys()?, pending))
+}
+
+fn follow(reading: &Reading, (answers, ready): (bool, bool), attached: bool) -> Result<Followed, StoreError> {
+  let mut db = ProjectDb::open(reading.root)?;
+  let (kept, pending) = settled(&db)?;
+  let mut now = current_waits(&db, reading.project)?;
+  now.extend(current_ends(&db, reading, |key| {
+    kept.contains(key) && !pending.contains(key)
+  })?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new(&mut db, &new, answers)?;
   let followed = Followed {
@@ -113,7 +161,7 @@ fn keep_new(db: &mut ProjectDb, new: &[&(String, AgentWait)], answers: bool) -> 
   };
   let mut kept_any = false;
   for (key, wait) in new {
-    let own = raised_by_own(&entries, wait.run);
+    let own = raised_by_own(&entries, wait);
     let kept = AgentWait {
       own,
       automatic: answers && !own,
@@ -260,6 +308,8 @@ impl Waiting<'_> {
         .map(str::to_owned)
         .or_else(|| step.and_then(|step| step.agent.as_deref().map(str::to_owned))),
       link: Link::Task(self.project, self.task.key().clone(), TaskPage::Conversation).path(),
+      place: None,
+      others: 0,
       own: false,
       automatic: false,
     }

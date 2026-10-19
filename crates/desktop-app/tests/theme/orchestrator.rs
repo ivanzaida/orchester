@@ -11,6 +11,8 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorText::Eyebrow, 11.0, 1.3, FontWeight::Normal, "Geist Mono"),
     (OrchestratorText::Suggestion, 12.0, 1.4, FontWeight::Normal, "Geist"),
     (OrchestratorText::ContextLink, 11.0, 1.4, FontWeight::Medium, "Geist"),
+    // A proposal, wait or run end card's title (`gQKlW`, `J9n4q4`, `ExRt1`).
+    (OrchestratorText::CardTitle, 12.5, 1.5, FontWeight::SemiBold, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
