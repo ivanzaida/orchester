@@ -75,7 +75,8 @@ pub(super) async fn subject(
     }
     (None, control::PAUSE_RUN | control::RESUME_RUN | control::RELEASE_QUEUE) => {
       let (name, arguments) = (name.to_owned(), arguments.clone());
-      blocking(move || control::control_change(&root, &name, &arguments)).await?
+      let project = scope.name.clone();
+      blocking(move || control::control_change((&root, &project), &name, &arguments)).await?
     }
     (None, _) => {
       let (named, cancel) = (text("run")?, name == CANCEL_RUN);
@@ -167,13 +168,7 @@ pub(super) async fn apply(
       let (tool, arguments) = tool_arguments(scope, change);
       app_tool((services, translate), tool, arguments).await
     }
-    // New starts let go on since, or held by a person, leave nothing for the chat's release to do.
-    Change::Release { task } => {
-      blocking(move || control::releasable(&ProjectDb::open(&root)?, task.as_deref(), control::ToldTo::Applied))
-        .await?;
-      let (tool, arguments) = tool_arguments(scope, change);
-      app_tool((services, translate), tool, arguments).await
-    }
+    Change::Release { ref task } => release((services, translate), scope, change, task.as_deref()).await,
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
     Change::Message {
       number, ref sent_as, ..
@@ -183,6 +178,30 @@ pub(super) async fn apply(
       answer_for_orchestrator(services, translate, tool, arguments, (by, None)).await
     }
   }
+}
+
+/// Applies the release `change` of new starts in `scope`, in the group of task `task` (its key) or the whole project.
+/// New starts let go on since, or held by a person, leave nothing for the chat's release to do; so do new starts let go
+/// on between this check and the release, which the tool answers as unchanged.
+async fn release(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  change: &ProposedChange,
+  task: Option<&str>,
+) -> Result<Value, ToolError> {
+  let (root, project, named) = (scope.root.clone(), scope.name.clone(), task.map(str::to_owned));
+  blocking(move || {
+    let place = control::Place {
+      project: &project,
+      task: named.as_deref(),
+    };
+    control::releasable(&ProjectDb::open(&root)?, place, control::ToldTo::Applied)
+  })
+  .await?;
+  let (tool, arguments) = tool_arguments(scope, change);
+  let told = app_tool((services, translate), tool, arguments).await?;
+  let applied = control::QueueCall::Release(control::ToldTo::Applied);
+  control::queue_changed(told, applied, (scope, task)).await
 }
 
 /// The tool that carries out `change` in `scope`, and its arguments: the chat's project and what the change acts on,

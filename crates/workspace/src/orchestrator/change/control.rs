@@ -15,9 +15,9 @@ use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::Value;
 
-use super::run_subject;
+use super::{super::tools::ChatScope, run_subject};
 use crate::{
-  app_mcp::{ToolError, find_run, find_task},
+  app_mcp::{ToolError, blocking, find_run, find_task, not_in_group},
   messages::Message,
   tasks::hold,
 };
@@ -27,10 +27,10 @@ pub(in crate::orchestrator) const PAUSE_RUN: &str = "pause_run";
 pub(in crate::orchestrator) const RESUME_RUN: &str = "resume_run";
 pub(in crate::orchestrator) const RELEASE_QUEUE: &str = "release_queue";
 
-/// What `name` with `arguments` changes in the project at `root`, and the key of the task it names; refused as the
-/// chat's call of it would be. Blocks on SQLite.
+/// What `name` with `arguments` changes in the project at `root` (named `project`), and the key of the task it names;
+/// refused as the chat's call of it would be. Blocks on SQLite.
 pub(super) fn control_change(
-  root: &Path,
+  (root, project): (&Path, &str),
   name: &str,
   arguments: &JsonObject,
 ) -> Result<(ProposedChange, Option<String>), ToolError> {
@@ -41,7 +41,11 @@ pub(super) fn control_change(
       Some(named) => Some(find_task(&db, &named)?.key().to_string()),
       None => None,
     };
-    releasable(&db, task.as_deref(), ToldTo::Agent)?;
+    let place = Place {
+      project,
+      task: task.as_deref(),
+    };
+    releasable(&db, place, ToldTo::Agent)?;
     let change = Change::Release { task: task.clone() };
     return Ok((
       ProposedChange {
@@ -104,38 +108,109 @@ pub(in crate::orchestrator) fn resumable(run: &Run, to: ToldTo) -> Result<(), To
   ))
 }
 
-/// Refused unless automation holds new starts where a release of the chat's lets them go on: in the whole project, or
-/// in the reviewed group of task `task` (its key). Nothing held there has nothing to release, and a person's hold is
-/// released by a person only, in Tasks; either is told as `to` reads it. Blocks on SQLite.
-pub(in crate::orchestrator) fn releasable(db: &ProjectDb, task: Option<&str>, to: ToldTo) -> Result<(), ToolError> {
+/// Where new starts are held or let go on, as a refusal names it: in project `project` (its name), or in the reviewed
+/// group of task `task` (its key).
+#[derive(Clone, Copy)]
+pub(in crate::orchestrator) struct Place<'a> {
+  pub(in crate::orchestrator) project: &'a str,
+  pub(in crate::orchestrator) task: Option<&'a str>,
+}
+
+/// Refused unless automation holds new starts where a release of the chat's lets them go on, at `place`: in the whole
+/// project, or in the reviewed group of its task. A task in no group has no group to release (`not_in_group`), nothing
+/// held there has nothing to release (`nothing_held`), and a person's hold is released by a person only, in Tasks
+/// (`person_only`); the last two are told as `to` reads them. Blocks on SQLite.
+pub(in crate::orchestrator) fn releasable(db: &ProjectDb, place: Place<'_>, to: ToldTo) -> Result<(), ToolError> {
   let holds = db.queue_holds()?;
-  let scope = match task {
-    None => Some(HoldScope::Project),
-    Some(key) => hold::group_of(db, find_task(db, key)?.id())?.map(HoldScope::Group),
+  let scope = match place.task {
+    None => HoldScope::Project,
+    Some(named) => {
+      let task = find_task(db, named)?;
+      let key = task.key().to_string();
+      HoldScope::Group(hold::group_of(db, task.id())?.ok_or_else(|| not_in_group(&key))?)
+    }
   };
   let held = match scope {
-    Some(HoldScope::Project) => holds.project,
-    Some(HoldScope::Group(group)) => holds.groups.contains(&group),
-    None => false,
+    HoldScope::Project => holds.project,
+    HoldScope::Group(group) => holds.groups.contains(&group),
   };
-  let (code, agent, applied) = match scope {
-    _ if !held => (
-      "not_held",
-      "orchestrator.tools.releaseNothing",
-      "orchestrator.proposal.releaseNothing",
-    ),
-    Some(held) if holds.by_person.contains(&held) => (
-      "person_only",
-      "orchestrator.tools.releasePersonHeld",
-      "orchestrator.proposal.releasePersonHeld",
-    ),
-    _ => return Ok(()),
-  };
+  if !held {
+    return Err(nothing_held(place, holds.project, to));
+  }
+  if !holds.by_person.contains(&scope) {
+    return Ok(());
+  }
   let key = match to {
-    ToldTo::Agent => agent,
-    ToldTo::Applied => applied,
+    ToldTo::Agent => "orchestrator.tools.releasePersonHeld",
+    ToldTo::Applied => "orchestrator.proposal.releasePersonHeld",
   };
-  Err(ToolError::refused(code, vec![Message::new(key)]))
+  Err(ToolError::refused("person_only", vec![Message::new(key)]))
+}
+
+/// A release at `place` where no new starts are held, told as `to` reads it. A group's release while the whole project
+/// is held (`project_held`) points to the project's hold.
+fn nothing_held(place: Place<'_>, project_held: bool, to: ToldTo) -> ToolError {
+  let key = match (to, place.task, project_held) {
+    (ToldTo::Agent, None, _) => "orchestrator.tools.releaseNothing.project",
+    (ToldTo::Agent, Some(_), false) => "orchestrator.tools.releaseNothing.group",
+    (ToldTo::Agent, Some(_), true) => "orchestrator.tools.releaseNothing.projectHeld",
+    (ToldTo::Applied, None, _) => "orchestrator.proposal.releaseNothing.project",
+    (ToldTo::Applied, Some(_), false) => "orchestrator.proposal.releaseNothing.group",
+    (ToldTo::Applied, Some(_), true) => "orchestrator.proposal.releaseNothing.projectHeld",
+  };
+  let message = Message::new(key)
+    .with("project", place.project.to_owned())
+    .with("task", place.task.unwrap_or_default().to_owned());
+  ToolError::refused("nothing_held", vec![message])
+}
+
+/// A hold at `place` where new starts are held already.
+fn already_held(place: Place<'_>) -> ToolError {
+  let message = match place.task {
+    None => Message::new("orchestrator.tools.holdAlready.project").with("project", place.project.to_owned()),
+    Some(task) => Message::new("orchestrator.tools.holdAlready.group").with("task", task.to_owned()),
+  };
+  ToolError::refused("already_held", vec![message])
+}
+
+/// A hold or a release of new starts the chat carries out.
+#[derive(Clone, Copy)]
+pub(in crate::orchestrator) enum QueueCall {
+  /// `hold_queue`, only ever the agent's own call: its refusal is told to the agent.
+  Hold,
+  /// `release_queue`, the agent's own call or a proposal the person applied: its refusal is told as that reads it.
+  Release(ToldTo),
+}
+
+/// What `call` answered (`told`) in `scope`, for the group of the task `task` names (the whole project when `None`),
+/// refused when it changed nothing: new starts held already (`already_held`), or none held to release (`nothing_held`,
+/// also when they were let go on between [`releasable`] and the release). Its card then says it was not done instead
+/// of showing a hold or a release that did not happen.
+pub(in crate::orchestrator) async fn queue_changed(
+  told: Value,
+  call: QueueCall,
+  (scope, task): (&ChatScope, Option<&str>),
+) -> Result<Value, ToolError> {
+  if told.get("changed").and_then(Value::as_bool) != Some(false) {
+    return Ok(told);
+  }
+  let (root, project, task) = (scope.root.clone(), scope.name.clone(), task.map(str::to_owned));
+  blocking(move || -> Result<Value, ToolError> {
+    let db = ProjectDb::open(&root)?;
+    let key = match task {
+      Some(named) => Some(find_task(&db, &named)?.key().to_string()),
+      None => None,
+    };
+    let place = Place {
+      project: &project,
+      task: key.as_deref(),
+    };
+    Err(match call {
+      QueueCall::Hold => already_held(place),
+      QueueCall::Release(to) => nothing_held(place, db.queue_holds()?.project, to),
+    })
+  })
+  .await
 }
 
 /// Refused when `run` ended since a pause of it was proposed: there is nothing to pause.

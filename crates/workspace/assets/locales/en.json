@@ -1675,7 +1675,11 @@
       },
       "pauseEnded": "Run #{{run}} ended since this was proposed: there is nothing to pause. Nothing was changed.",
       "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again.",
-      "releaseNothing": "New starts are not held there any more: there is nothing to release. Nothing was changed.",
+      "releaseNothing": {
+        "project": "New starts in {{project}} are not held any more: there is nothing to release. Nothing was changed.",
+        "group": "New starts of {{task}}'s group are not held any more: there is nothing to release. Nothing was changed.",
+        "projectHeld": "New starts of {{task}}'s group are not held any more; new starts of the whole of {{project}} are held, release those instead. Nothing was changed."
+      },
       "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
     "start": {
@@ -1696,8 +1700,16 @@
       "releaseWaits": "New starts stay held: releasing them waits for the person, who applies or dismisses it in the conversation. Tell them why you would release them.",
       "continueWaits": "Run #{{run}} still waits: how it goes on waits for the person, who applies or dismisses it in the conversation. Tell them what you would choose and why.",
       "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to.",
-      "releaseNothing": "New starts are not held there: there is nothing to release.",
-      "releasePersonHeld": "A person held these new starts: only a person releases them, in Tasks. Tell them why you would release them."
+      "releaseNothing": {
+        "project": "New starts in {{project}} are not held: there is nothing to release. Nothing was changed.",
+        "group": "New starts of {{task}}'s group are not held: there is nothing to release. Nothing was changed.",
+        "projectHeld": "New starts of {{task}}'s group are not held on their own; new starts of the whole of {{project}} are held, release those instead. Nothing was changed."
+      },
+      "releasePersonHeld": "A person held these new starts: only a person releases them, in Tasks. Tell them why you would release them. Nothing was changed.",
+      "holdAlready": {
+        "project": "New starts in {{project}} are held already: there is nothing to hold. Nothing was changed.",
+        "group": "New starts of {{task}}'s group are held already: there is nothing to hold. Nothing was changed."
+      }
     }
   }
 }

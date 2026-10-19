@@ -26,7 +26,7 @@ use super::{
   blocked,
   change::{
     self,
-    control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
+    control::{self, PAUSE_RUN, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
   duplicate, guard,
   keep::{self, HOLD_QUEUE, Named},
@@ -140,7 +140,8 @@ fn in_chat(tool: &Tool) -> Option<String> {
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
     RESUME_RUN => RESUME_PAUSED,
-    PAUSE_RUN | RELEASE_QUEUE => PROPOSE_ON_ITS_OWN,
+    PAUSE_RUN => PROPOSE_ON_ITS_OWN,
+    RELEASE_QUEUE => return Some(format!("{PROPOSE_ON_ITS_OWN} {RELEASE_REFUSED} {own}")),
     CONTINUE_RUN => PROPOSE_CONTINUE,
     ANSWER_QUESTION | SEND_MESSAGE => PROPOSE_ANSWER,
     _ if Publishing::of_tool(name).is_some() => PROPOSE_PUBLISH,
@@ -184,6 +185,12 @@ const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped,
 const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its message begins with [Orchester]) it \
   only proposes this to the person, who applies or dismisses it in the conversation; otherwise it is done as \
   follows.";
+
+/// What the agent reads of `release_queue` after [`PROPOSE_ON_ITS_OWN`]: which holds and releases are refused.
+const RELEASE_REFUSED: &str = "In a turn Orchester started by itself a release is refused before it is proposed when \
+  its task is in no reviewed group (not_in_group), nothing is held there (nothing_held) or only a person's hold is \
+  (person_only). In any turn a release where nothing is held is refused (nothing_held), and so is hold_queue where \
+  new starts are held already (already_held): nothing was changed.";
 
 /// What the agent reads first of `continue_run`.
 const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
@@ -332,6 +339,20 @@ async fn act(
       .await
     }
     _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
+    // A hold or a release that changed nothing is refused, so its card shows no change that did not happen.
+    HOLD_QUEUE | RELEASE_QUEUE => {
+      let call = if name == HOLD_QUEUE {
+        QueueCall::Hold
+      } else {
+        QueueCall::Release(ToldTo::Agent)
+      };
+      let task = arguments.get("task").and_then(Value::as_str);
+      let told = match app_tool((services, translate), name, arguments.clone()).await {
+        Ok(told) => control::queue_changed(told, call, (scope, task)).await,
+        refused => refused,
+      };
+      Ok(Acted::done(told))
+    }
     _ => Ok(Acted::done(
       app_tool((services, translate), name, arguments.clone()).await,
     )),

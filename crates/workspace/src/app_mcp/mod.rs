@@ -20,7 +20,7 @@ pub(crate) use self::{
   services::{PersonDecision, blocking},
   tools::{
     ContinueChoice, ContinueRun, SendTiming, answer_for_orchestrator, check_answer, continue_for_orchestrator,
-    continue_offered, duplicate_pipeline_draft, find_task, outgoing_refusal, plan_person_only, sent_as,
+    continue_offered, duplicate_pipeline_draft, find_task, not_in_group, outgoing_refusal, plan_person_only, sent_as,
     waiting_request,
   },
 };

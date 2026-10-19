@@ -102,7 +102,12 @@ person can click.
    - In a turn a wait or an end started by itself nobody asked for anything, so `merge_run`, `run_task`,
      `pause_run`, `resume_run` (of a run a pause stopped), `release_queue` and every publication only propose,
      whatever *Let the Orchestrator merge runs*, *publish drafts* and auto mode say; the person applies the card. This
-     holds by the tools (the turn's tools know the turn started by itself), not by the prompt. Answering an agent's
+     holds by the tools (the turn's tools know the turn started by itself), not by the prompt. A release there is
+     refused before it is proposed when nothing is held (`nothing_held`), only a person's hold is (`person_only`) or
+     its task is in no reviewed group (`not_in_group`); applied, it is refused the same way when that changed since,
+     also when the hold went between the check and the release. In any turn, a `hold_queue` of what is held already
+     (`already_held`) or a `release_queue` of what is not held (`nothing_held`) is refused, so its card shows no change
+     that did not happen. Answering an agent's
      question and a message to an agent that waits or works stay direct under *answer agents*. Not covered:
      `create_task` and `update_task` still save a task's details directly in such a turn, budgets and time limits of
      its future runs among them; they reach no run until a start, which is proposed.
