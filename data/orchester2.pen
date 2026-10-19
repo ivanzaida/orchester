@@ -304737,12 +304737,12 @@
                               "content": "Claude · DeepSeek"
                             },
                             "h5h4bb": {
-                              "icon": "circle-alert",
-                              "fill": "$danger"
+                              "icon": "key-round",
+                              "fill": "$warning"
                             },
                             "vsqff": {
                               "content": "Key missing",
-                              "fill": "$danger"
+                              "fill": "$warning"
                             }
                           }
                         },
@@ -305767,12 +305767,12 @@
                               "content": "1 agent"
                             },
                             "FGVUM": {
-                              "icon": "circle-alert",
-                              "fill": "$danger"
+                              "icon": "key-round",
+                              "fill": "$warning"
                             },
                             "zfKgO": {
                               "content": "Key missing",
-                              "fill": "$danger"
+                              "fill": "$warning"
                             }
                           }
                         },
