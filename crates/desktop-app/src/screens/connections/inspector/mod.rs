@@ -144,7 +144,12 @@ fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<
         .id("connection-inspector-title")
         .variant(ConnectionsText::InspectorTitle.role()),
     )
-    .child(status_line(ctx, "connection-inspector-status", status, IconSize::Sm));
+    .child(status_line(
+      ctx,
+      "connection-inspector-status",
+      status,
+      (IconSize::Sm, TypographyStyle::Label),
+    ));
   Row::new()
     .id("connection-inspector-header")
     .width(Dimension::Pct(100.0))
@@ -158,8 +163,8 @@ fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<
     .into()
 }
 
-/// A status as an icon of `size` and its word, 5 apart (`Status line` `YUNCc`).
-pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, size: IconSize) -> Row {
+/// A status as an icon of `size` and its word in `text`, 5 apart (`Status line` `YUNCc`).
+pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, (size, text): (IconSize, TypographyStyle)) -> Row {
   let word = ctx.t(status.key);
   Row::new()
     .id(id.to_owned())
@@ -167,12 +172,7 @@ pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, size: IconSize) ->
     .align_items(Alignment::Center)
     .describe("status", word.clone())
     .child(icon(status.icon, size, status.tone.color()))
-    .child(
-      Text::new(&word)
-        .variant(TypographyStyle::Label)
-        .color(status.tone.word_color())
-        .nowrap(),
-    )
+    .child(Text::new(&word).variant(text).color(status.tone.word_color()).nowrap())
 }
 
 /// The status a connection shows: checking while its check runs.
