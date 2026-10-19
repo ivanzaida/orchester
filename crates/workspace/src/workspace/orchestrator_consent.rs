@@ -61,13 +61,10 @@ impl Consents {
 impl Workspace {
   /// Whether the person lets the Orchestrator chat do what `consent` names itself.
   pub fn orchestrator_allows(&self, consent: OrchestratorConsent) -> Result<bool, StoreError> {
-    let cell = self.orchestrator.of(consent);
-    cell.lock().begin();
     let db = self.db.lock();
     let result = consent.read(&db);
-    let mut held = cell.lock();
-    held.finish(matches!(&result, Ok(true)));
-    result.map(|_| held.allowed)
+    let allowed = self.orchestrator.of(consent).lock().read(matches!(&result, Ok(true)));
+    result.map(|_| allowed)
   }
 
   /// Saves the person's choice for `consent`. Only the window's switch, which takes a person's input alone, calls it.
@@ -78,7 +75,7 @@ impl Workspace {
       if !allowed {
         held.revoke();
       }
-      held.begin();
+      held.begin_save();
       held.revision
     };
     let mut db = self.db.lock();
@@ -87,7 +84,7 @@ impl Workspace {
     if result.is_ok() && held.revision == revision {
       held.revoked = !allowed;
     }
-    held.finish(allowed && result.is_ok());
+    held.finish_save(allowed && result.is_ok());
     result
   }
 

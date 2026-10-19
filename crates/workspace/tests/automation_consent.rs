@@ -1,5 +1,6 @@
 //! UI permission snapshots reflect actual serialized storage, and fail closed before I/O completes.
 use std::{
+  sync::{Arc, Barrier},
   thread,
   time::{Duration, Instant},
 };
@@ -206,5 +207,48 @@ fn orchestrator_consents_are_off_from_a_persons_revocation_before_it_is_saved() 
       .set_orchestrator_allows(consent, true)
       .expect("turned on again");
     assert!(workspace.orchestrator_allows(consent).expect("read"));
+  }
+}
+
+#[test]
+fn orchestrator_consent_reads_that_overlap_each_report_the_stored_grant() {
+  let dir = tempfile::tempdir().expect("private consent directory");
+  let path = dir.path().join("app.db");
+  let workspace = Workspace::new(AppDb::open(&path).expect("private database"));
+  let consent = OrchestratorConsent::AnswerAgents;
+  workspace.set_orchestrator_allows(consent, true).expect("human opt-in");
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("a grant whose next save shows when it starts");
+  let blocker = rusqlite::Connection::open(path).expect("same private database");
+  blocker
+    .execute_batch("BEGIN IMMEDIATE")
+    .expect("real SQLite write reservation");
+  // An unrelated save holds the workspace's database lock while SQLite keeps it waiting, so both reads below start
+  // before either of them can read.
+  let holder = workspace.clone();
+  let held = thread::spawn(move || holder.set_automation_changes_permissions(true));
+  let deadline = Instant::now() + Duration::from_secs(3);
+  while workspace.automation_permission_consent() {
+    assert!(Instant::now() < deadline, "the holding save must start");
+    thread::yield_now();
+  }
+  let started = Arc::new(Barrier::new(3));
+  let reads = [(); 2].map(|()| {
+    let (reader, started) = (workspace.clone(), Arc::clone(&started));
+    thread::spawn(move || {
+      started.wait();
+      reader.orchestrator_allows(consent)
+    })
+  });
+  started.wait();
+  assert!(!held.is_finished(), "the save actually waits in SQLite");
+  blocker.execute_batch("COMMIT").expect("release reservation");
+  held.join().expect("holder joins").expect("the save finishes");
+  for read in reads {
+    assert!(
+      read.join().expect("reader joins").expect("the setting reads"),
+      "a read that overlaps another still reports the person's stored grant"
+    );
   }
 }
