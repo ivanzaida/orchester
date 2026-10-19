@@ -8,6 +8,7 @@ mod local;
 mod merge;
 mod pull_request;
 mod remove;
+mod resolve;
 use std::{collections::HashMap, sync::Arc};
 
 pub use local::LocalDecision;
@@ -19,12 +20,14 @@ use orchester_core::{
 use parking_lot::Mutex;
 pub use pull_request::{PullRequestArgs, PullRequestJob};
 pub use remove::{RemoveArgs, Remover};
+pub use resolve::{EditorOpened, ResolveArgs, ResolveJob, ResolveStep};
 use tokio::sync::watch;
 
 use crate::{activity::OperationSpec, messages::Message, workspace::OpenProject};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum JobState {
+  #[default]
   Idle,
   Running,
   Succeeded,
@@ -39,6 +42,8 @@ enum Active {
   Local,
   Remove,
   PullRequest,
+  /// Merging the base branch into the run's worktree to resolve conflicts by hand, or finishing or aborting it.
+  Resolve,
 }
 
 /// What git does for a run while the window closes: closing waits for it, or the person quits with it
@@ -71,6 +76,8 @@ pub struct RunJobState {
   pub continues_locally: bool,
   /// Creating a pull request from the run's branch.
   pub pull_request: PullRequestJob,
+  /// Resolving the conflicts of the last merge by hand in the run's worktree.
+  pub resolve: ResolveJob,
 }
 
 impl Default for RunJobState {
@@ -85,6 +92,7 @@ impl Default for RunJobState {
       merged: None,
       continues_locally: false,
       pull_request: PullRequestJob::Idle,
+      resolve: ResolveJob::default(),
     }
   }
 }
@@ -107,6 +115,11 @@ impl RunJobState {
   /// The run's branch is pushed and a pull request opened from it now.
   pub fn creating_pull_request(&self) -> bool {
     self.active == Active::PullRequest
+  }
+
+  /// Git merges into the run's worktree, or finishes or aborts that merge, to resolve conflicts by hand.
+  pub fn resolving(&self) -> bool {
+    self.active == Active::Resolve
   }
 }
 

@@ -4,7 +4,8 @@
 //! rebase recorded here moves the base external evidence reads the run's commits from, only when
 //! git proves it ([`RebaseEvidence`]). Of the run's own commits below the new base, only the
 //! checkpointed ones the target has by ancestry keep the base where it was; one the target has as a
-//! pick, or one never checkpointed, is not told apart from the target's own.
+//! pick, or one never checkpointed, is not told apart from the target's own. A merge of a newer commit of the
+//! target into the run's branch, to resolve a conflict, moves the base the same way, proven the same way.
 
 use crate::{id::RunId, revision::Revision, time::Timestamp};
 

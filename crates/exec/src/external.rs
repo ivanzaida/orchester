@@ -1,5 +1,6 @@
 //! Handing files and web addresses to the platform: Explorer on Windows, `open` on macOS. Other
-//! platforms have no launcher yet and get an explicit error.
+//! platforms have no launcher yet and get an explicit error. An editor the person has is started directly
+//! ([`start_editor`]).
 
 use std::{
   ffi::{OsStr, OsString},
@@ -18,6 +19,33 @@ pub fn open_path(path: &Path) -> io::Result<()> {
 /// names. Windows names no default text editor: there it is an error, and callers open text with [`open_path`].
 pub fn open_text(path: &Path) -> io::Result<()> {
   launcher::launch_text(path.as_os_str())
+}
+
+/// Starts the editor `program` with `args` (a folder and files to open) and returns once it has started: the editor
+/// runs on its own, and a thread only waits to collect its exit. A console window of a script launcher (VS Code's
+/// `code.cmd` on Windows) is not shown; arguments `cmd.exe` would read again are refused there by the standard
+/// library.
+pub fn start_editor(program: &Path, args: &[&Path]) -> io::Result<()> {
+  let mut process = std::process::Command::new(program);
+  process
+    .args(args)
+    .stdin(std::process::Stdio::null())
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::null());
+  crate::console::hide_window(&mut process);
+  let mut child = process.spawn()?;
+  let waiting = std::thread::Builder::new()
+    .name("editor-exit".to_owned())
+    .spawn(move || {
+      if let Err(error) = child.wait() {
+        tracing::warn!(%error, "cannot collect the editor's exit");
+      }
+    });
+  // The editor started either way; only its exit goes uncollected.
+  if let Err(error) = waiting {
+    tracing::warn!(%error, "cannot wait for the editor's exit");
+  }
+  Ok(())
 }
 
 /// Opens `url` in the default browser. Only `https` addresses are handed on, so the launcher is

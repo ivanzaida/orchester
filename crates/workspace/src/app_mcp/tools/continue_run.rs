@@ -4,14 +4,18 @@
 //! budget with a new budget for that step, one stopped by the project's daily budget resumes, and one
 //! whose step used up its retries or broke again gets one more retry or returns to an earlier agent
 //! step with a note (02.B); one whose step could not check everything, or was not run again on an
-//! unchanged revision, also has its step accepted as it is. Every value is the caller's: nothing raises a limit by
-//! itself. While unfinished blocking tasks hold the task, nothing continues, as on the page.
+//! unchanged revision, also has its step accepted as it is. A run that ended, succeeded or failed, has its work
+//! returned to one of its agent steps with a note (the project task ORC-44 · Return a finished run to an earlier step;
+//! [`return_work`]). Every value is the caller's: nothing raises a limit by itself. While unfinished blocking tasks
+//! hold the task, nothing continues, as on the page.
 
 use orchester_core::{
   id::{RunId, TaskId},
+  resource::StepKey,
   run::{Answerer, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -32,6 +36,7 @@ use crate::{
   tasks::{
     detail::{RunView, TaskDetail},
     raise::{self, Raise},
+    resolve, return_work,
     run::control_message,
   },
   workspace::OpenProject,
@@ -81,7 +86,10 @@ pub enum Choice {
   /// step waits unverified or unchanged: run that step again.
   AllowRetry,
   /// For a run whose step used up its retries, broke again, or waits unverified or unchanged: return to
-  /// an earlier agent step (its key or name) with a note for its agent.
+  /// an earlier agent step (its key or name) with a note for its agent. For a run that ended, succeeded or failed:
+  /// return its work to any agent step it executed, which runs again with the note, then the steps after it.
+  /// Refused as run_merged once its work was merged, worktree_removed once its worktree is gone, worktree_in_merge
+  /// while a merge waits in its worktree for a person, and run_not_ended while it works.
   ReturnTo { step: String, note: String },
   /// For a run whose step could not check everything (unverified), or was not run again on an unchanged
   /// revision: accept the step as it is; the steps after it run. It passes the step in a person's place: refused
@@ -106,7 +114,7 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
       crate::decisions::DecisionKind::Stuck.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
-    let (run, request) = request(&project, &args)?;
+    let (run, request) = request(&project, &args, &reading.programs)?;
     Ok((project, run, request))
   })
   .await?;
@@ -137,7 +145,7 @@ struct Named {
 
 /// The run `args` names and what continuing it asks of the runner; a refusal when its task page
 /// would not offer the choice now.
-fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request), ToolError> {
+fn request(project: &OpenProject, args: &ContinueRun, programs: &Programs) -> Result<(Named, Request), ToolError> {
   let db = ProjectDb::open(&project.repo_root)?;
   let run = find_run(&db, &args.run)?;
   drop(db);
@@ -167,6 +175,19 @@ fn request(project: &OpenProject, args: &ContinueRun) -> Result<(Named, Request)
       decision: decision(view, choice, &number)?,
       by: Answerer::Automation,
     }),
+    (_, Choice::ReturnTo { step, note }) if view.run.can_return_ended() => {
+      let worktree = resolve::read(programs, &project.repo_root, (view.id(), false))
+        .map_err(|message| ToolError::refused("worktree_unreadable", vec![message]))?;
+      if let Some(refusal) = return_work::refusal(&detail, view, &worktree) {
+        return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
+      }
+      let (step, note) = return_target(view, (step, note), &number)?;
+      Request::Command(return_work::command(view, step, (note, None), Answerer::Automation))
+    }
+    (_, Choice::ReturnTo { .. }) => {
+      let refusal = return_work::ReturnRefusal::NotEnded;
+      return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
+    }
     _ => {
       return Err(refused(
         "not_stopped_at_limit",
@@ -233,24 +254,28 @@ fn decision(view: &RunView, choice: &Choice, number: &str) -> Result<StuckDecisi
       })
     }
     Choice::ReturnTo { step, note } => {
-      let lowered = step.to_lowercase();
-      let target = view
-        .run
-        .return_targets()
-        .into_iter()
-        .find(|key| {
-          key.as_str() == step
-            || view
-              .steps
-              .iter()
-              .any(|shown| shown.key == *key && shown.name.to_lowercase() == lowered)
-        })
-        .ok_or_else(|| refused("step_not_offered", "appMcp.errors.returnStepNotOffered", number))?;
-      let note = ReviewNote::new(note).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
-      Ok(StuckDecision::ReturnTo { step: target, note })
+      let (step, note) = return_target(view, (step, note), number)?;
+      Ok(StuckDecision::ReturnTo { step, note })
     }
     _ => Err(refused("choice_not_offered", "appMcp.errors.choiceNotOffered", number)),
   }
+}
+
+/// The step `step` names, by its key or name, among those `view`'s work may go back to, and the note for its agent.
+fn return_target(view: &RunView, (step, note): (&str, &str), number: &str) -> Result<(StepKey, ReviewNote), ToolError> {
+  let lowered = step.to_lowercase();
+  let target = return_work::targets(view)
+    .into_iter()
+    .find(|key| {
+      key.as_str() == step
+        || view
+          .steps
+          .iter()
+          .any(|shown| shown.key == *key && shown.name.to_lowercase() == lowered)
+    })
+    .ok_or_else(|| refused("step_not_offered", "appMcp.errors.returnStepNotOffered", number))?;
+  let note = ReviewNote::new(note).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
+  Ok((target, note))
 }
 
 fn refused(code: &str, key: &'static str, run: &str) -> ToolError {

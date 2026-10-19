@@ -34,8 +34,8 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 3. Agent profiles: **Implement** (Codex, workspace write, network per the capability table) and **Review** (a different
    profile, read-only), so the reviewer is never the author.
 4. Pipeline *Orchester change*:
-   Implement → command `powershell -File tools/check.ps1` → command with the task's filtered `cargo test` lines →
-   Review → Ready for review.
+   Implement → command `powershell -File tools/check.ps1 -Tests changed` (the check and the tests of the changed
+   crates, `docs/stable-build.md`) → Review → Ready for review.
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
 5. Environment: nothing for builds. Cargo builds into each worktree's own git-ignored `target/`, which goes away
@@ -59,6 +59,21 @@ it is*, *Run … again*, the return with a note and *Stop* (the `decisions` seed
 **Open:** design verification of the waits-unverified Summary (no Pencil frame of its own yet: it reuses `DVuXu`'s
 parts); the deprecated desktop shows the state but offers no *Accept*; the runner's macOS side is not cross-checked
 (its C dependencies need a macOS toolchain); the QA slot count is fixed at one.
+
+### D3 · Resolve a merge's conflicts, and return a finished run to a step · branch `claude/conflict-actions` (implemented 2026-10-19, waiting for review and design verification)
+
+*Not merged into main* after a conflict offers, beside *Local integration*, *Resolve in editor* and *Ask an agent to
+resolve* (Pencil `fvCVT`). *Resolve in editor* merges the base branch into the run's own worktree, recorded as the
+run's resolution so the run neither continues nor merges meanwhile, and opens it in the editor `ORCHESTER_EDITOR`
+names, else VS Code's `code`, else the folder; the index decides what is resolved, a binary or deleted-on-one-side file
+waits for the person to keep a side, *Continue* commits the merge (git then proves the merged-in base for the merge into
+main), *Abort* puts the worktree back. *Ask an agent to resolve* returns the run to a writing step with a note and the
+conflicting files as data. The core of the project task *ORC-44 · Return a finished run to an earlier step*: a
+succeeded or failed run is reopened from an executed agent step with a note (`continue_run` `return_to` takes ended
+runs too); refused for a merged run, a gone worktree, a merge in the worktree and a run at work.
+**Open:** returning a failed run from the task page (only `continue_run` does today); a follow-up turn whose step
+reports failed does not route the run back yet; the design-verification of boards 1–9 of `fvCVT`, and a frame for
+files that wait for a side to be kept.
 
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 

@@ -176,13 +176,17 @@ fn parse_interrupt_cause(value: &str) -> Result<InterruptCause, StoreError> {
   }
 }
 
-/// `reason`, `failed_step`, `return_to` and `note` of an attempt row.
+/// `reason`, `failed_step`, `return_to`, `note` and `conflicts` of an attempt row.
 pub(super) struct AttemptReasonColumns<'a> {
   pub(super) reason: &'a str,
   pub(super) failed_step: Option<&'a str>,
   pub(super) return_to: Option<&'a str>,
   pub(super) note: Option<&'a str>,
+  pub(super) conflicts: Option<&'a str>,
 }
+
+/// The schema of an attempt's `conflicts`.
+pub(super) const CONFLICTS_SCHEMA: u32 = 1;
 
 pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonColumns<'_> {
   let (text, failed_step, return_to, note) = match reason {
@@ -194,6 +198,12 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonCol
     AttemptReason::Recovery { step } => ("recovery", None, Some(step.as_str()), None),
     AttemptReason::Restart { step } => ("restart", None, Some(step.as_str()), None),
     AttemptReason::Accepted { step } => ("accepted", None, Some(step.as_str()), None),
+    AttemptReason::ReturnedAfterEnd { return_to, note, .. } => (
+      "returned_after_end",
+      None,
+      Some(return_to.as_str()),
+      Some(note.as_str()),
+    ),
     AttemptReason::Returned {
       failed_step,
       return_to,
@@ -210,6 +220,18 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonCol
     failed_step,
     return_to,
     note,
+    conflicts: None,
+  }
+}
+
+/// An attempt's `conflicts` column: what a return after the run ended resolves, as JSON.
+pub(super) fn attempt_conflicts_column(reason: &AttemptReason) -> Result<Option<String>, StoreError> {
+  match reason {
+    AttemptReason::ReturnedAfterEnd {
+      conflicts: Some(conflicts),
+      ..
+    } => crate::rows::encode_json("attempt conflicts", CONFLICTS_SCHEMA, conflicts).map(Some),
+    _ => Ok(None),
   }
 }
 
@@ -230,6 +252,15 @@ pub(super) fn parse_attempt_reason(columns: &AttemptReasonColumns<'_>) -> Result
       return_to: step_key(return_to)?,
       note: ReviewNote::new(note).map_err(|error| corrupt("attempt note", error))?,
     }),
+    ("returned_after_end", None, Some(return_to), Some(note)) => Ok(AttemptReason::ReturnedAfterEnd {
+      return_to: step_key(return_to)?,
+      note: ReviewNote::new(note).map_err(|error| corrupt("attempt note", error))?,
+      conflicts: columns
+        .conflicts
+        .map(|text| crate::rows::decode_json("attempt conflicts", CONFLICTS_SCHEMA, text))
+        .transpose()?,
+    }),
+    _ if columns.conflicts.is_some() => Err(corrupt("attempt conflicts", reason)),
     _ => Err(corrupt("attempt reason", reason)),
   }
 }

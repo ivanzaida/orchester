@@ -47,11 +47,11 @@ use crate::{
 };
 
 /// A conflicting file's row (`Q2ISvw`).
-const FILE_ROW_HEIGHT: f32 = 30.0;
+pub(super) const FILE_ROW_HEIGHT: f32 = 30.0;
 
 /// The Ready card of a run that is not merged.
 pub fn ready(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> Element {
-  let (actions, reasons) = actions(ctx, task, run, pull);
+  let (actions, reasons) = actions(ctx, task, run, (pull, false));
   let text = Column::new()
     .flex(1.0)
     .spacing(ExtraSpacing::Fine.role())
@@ -143,14 +143,15 @@ fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
 }
 
 /// Why the last merge did not stand: *Not merged into main* with why and the files that conflicted, or
-/// that git merged the run (`made`) but the merge could not be recorded; then the actions to merge again,
-/// which records a merge git made.
+/// that git merged the run (`made`) but the merge could not be recorded; on a conflict how to `resolve` it
+/// ([`super::resolve`]); then the actions to merge again, which records a merge git made.
 pub fn not_merged(
   ctx: &mut Ctx,
   task: &TaskContext,
   run: &RunView,
   (problem, made): (&Message, Option<&RunMerge>),
   (conflicts, pull): (&[String], &PullRequestRead),
+  resolve: Option<Element>,
 ) -> Vec<Element> {
   let title = match (made, run.run.base_branch()) {
     (Some(made), _) => ctx.t_args("decisions.ready.notRecordedTitle", [("branch", made.into.as_str())]),
@@ -166,16 +167,28 @@ pub fn not_merged(
     notice
   };
   let files = (!conflicts.is_empty()).then(|| conflicting(ctx, conflicts));
-  let (actions, reasons) = actions(ctx, task, run, pull);
-  let actions = Column::new()
+  std::iter::once(notice.into())
+    .chain(files)
+    .chain(resolve)
+    .chain(std::iter::once(merge_actions(ctx, task, run, (pull, false))))
+    .collect()
+}
+
+/// The actions to merge again with why those that cannot be used now are unavailable; *Merge into main* waits
+/// while a merge waits `in_worktree` for the person to resolve it.
+pub fn merge_actions(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (pull, in_worktree): (&PullRequestRead, bool),
+) -> Element {
+  let (actions, reasons) = actions(ctx, task, run, (pull, in_worktree));
+  Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .child(actions)
-    .with_children(reasons);
-  std::iter::once(notice.into())
-    .chain(files)
-    .chain(std::iter::once(actions.into()))
-    .collect()
+    .with_children(reasons)
+    .into()
 }
 
 /// Opens the task's Local integration, which carries on where the merge stopped.
@@ -219,8 +232,13 @@ fn conflicting(ctx: &mut Ctx, files: &[String]) -> Element {
 
 /// *Merge into main*, *Create pull request* with *Open as draft*, *Ask agent* and *Review PR* (`XKJdW`); what
 /// came of creating a pull request; and why the actions that cannot be used now are unavailable.
-fn actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &PullRequestRead) -> (Element, Vec<Element>) {
-  let (merge, merge_reason) = merge_button(ctx, task, run);
+fn actions(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (pull, in_worktree): (&PullRequestRead, bool),
+) -> (Element, Vec<Element>) {
+  let (merge, merge_reason) = merge_button(ctx, task, run, in_worktree);
   let pull = pull_request::parts(ctx, task, run, pull);
   let ask_reason = ctx.t("decisions.ready.askUnavailable");
   let ask = ActionButton::new("task-ask-agent", ButtonKind::Secondary, ctx.t("decisions.ready.ask"))
@@ -269,10 +287,15 @@ fn review_button(ctx: &mut Ctx, task: &TaskContext, number: Option<NonZeroU64>) 
 /// person's press tells them the outcome in full; an MCP client's press through the window goes through `merge_run`'s
 /// policy (`RunJobs::start_synthetic_merge`), which refuses and redacts what the tool would. Under way while git
 /// merges, waiting while the run's worktree is removed, its pull request is created, Local integration works in the
-/// checkout, another run of the project merges or a decision of Local integration waits, and unavailable with why
-/// when the run did not record the
+/// checkout, another run of the project merges or a decision of Local integration waits, a merge waits in the run's
+/// worktree for the person to resolve it, and unavailable with why when the run did not record the
 /// branch it started from.
-fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButton, Option<Arc<str>>) {
+fn merge_button(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  in_worktree: bool,
+) -> (ActionButton, Option<Arc<str>>) {
   let Some(branch) = run.run.base_branch() else {
     let reason = ctx.t("decisions.ready.mergeNoBranch");
     let button = ActionButton::new("task-merge", ButtonKind::Primary, ctx.t("decisions.ready.mergeUnknown"))
@@ -294,6 +317,9 @@ fn merge_button(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> (ActionButt
   }
   if job.removing() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeWaits")));
+  }
+  if job.resolving() || in_worktree {
+    return (button.disabled(), Some(ctx.t("decisions.ready.mergeResolving")));
   }
   if job.busy() {
     return (button.disabled(), Some(ctx.t("decisions.ready.mergeLocalWork")));

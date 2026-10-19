@@ -4,7 +4,7 @@ use orchester_core::{
   id::RunId,
   integration::{MergeKind, RunMerge},
   revision::Revision,
-  run::BranchName,
+  run::{BranchName, RunStatus},
   store::MergeStore,
   time::Timestamp,
 };
@@ -18,6 +18,14 @@ impl MergeStore for ProjectDb {
 
   fn save_run_merge(&mut self, merge: &RunMerge) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
+    // A run merges as it succeeded: not once it was reopened and works again (a follow-up, a return of its work), nor
+    // while a merge waits in its worktree for a person.
+    let status = super::runs::stored_status(&transaction, merge.run)?.ok_or(StoreError::RunNotFound(merge.run))?;
+    // A run that never succeeded may still be found merged outside Orchester; one reopened since is not merged.
+    let reopened = status != RunStatus::Succeeded && succeeded_once(&transaction, merge.run)?;
+    if reopened || super::resolutions::resolution(&transaction, merge.run)?.is_some() {
+      return Err(StoreError::NotMergeable(merge.run));
+    }
     let inserted = transaction.execute(
       "INSERT INTO run_merges (run_id, into_branch, revision, kind, merged_at) VALUES (?1, ?2, ?3, ?4, ?5) \
        ON CONFLICT (run_id) DO NOTHING",
@@ -84,4 +92,22 @@ fn parse_kind(text: &str) -> Result<MergeKind, StoreError> {
     "already_merged" => Ok(MergeKind::AlreadyMerged),
     other => Err(corrupt("merge kind", other)),
   }
+}
+
+/// Whether `run`'s work was merged.
+pub(super) fn merged(connection: &rusqlite::Connection, run: RunId) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM run_merges WHERE run_id = ?1)",
+    [run.to_string()],
+    |row| row.get(0),
+  )?)
+}
+
+/// Whether an attempt of `run` succeeded: the run ended so once, whatever it does now.
+fn succeeded_once(connection: &rusqlite::Connection, run: RunId) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM attempts WHERE run_id = ?1 AND status = 'succeeded')",
+    [run.to_string()],
+    |row| row.get(0),
+  )?)
 }
