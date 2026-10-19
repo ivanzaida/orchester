@@ -79,23 +79,14 @@ struct Props {
 
 impl DevtoolsInspectable for Props {}
 
-/// The message a draft was last sent as, and whose draft it was.
-#[derive(Clone)]
-struct Drafted {
-  from: Conversation,
-  outgoing: Outgoing,
-}
-
-impl DevtoolsInspectable for Drafted {}
-
 /// What the screen keeps while it is shown.
 #[derive(Clone)]
 struct View {
   draft: Signal<String>,
   /// Whose draft `draft` holds; `None` until the screen knows which conversation it shows.
   of: Signal<Option<Conversation>>,
-  /// The message the draft was last sent as, so sending it again keeps it once.
-  outgoing: Signal<Option<Drafted>>,
+  /// The draft's message this screen sends, shown in the conversation until it is kept.
+  outgoing: Signal<Option<Outgoing>>,
   history: Signal<bool>,
   search: Signal<String>,
   /// Set to put the focus in the message field.
@@ -146,11 +137,10 @@ impl Component for OrchestratorScreen {
       let Some(sent) = state.data else {
         return;
       };
+      let route = navigation.route_now();
+      let on = |chat| route == Route::Project(project, ProjectPage::Orchestrator(chat));
       // A new conversation is kept now: the route names it, so History and a reload find it.
-      let new = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::New));
-      let started = navigation.route_now() == new;
-      done.sent(project, sent, started);
-      if started {
+      if done.sent(project, sent, on(OrchestratorChat::New) || on(OrchestratorChat::Latest)) {
         navigation.replace(Route::Project(
           project,
           ProjectPage::Orchestrator(OrchestratorChat::Chat(sent.chat)),
@@ -236,28 +226,41 @@ impl View {
     }
   }
 
+  /// Words typed before the screen knew which conversation it shows become that one's draft when it has none.
   fn load_draft(&self, project: ProjectId, of: Conversation) {
+    let typed = self.of.get_untracked().is_none().then(|| self.draft.get_untracked());
     self.of.set(Some(of));
-    let kept = draft::draft(project, of);
+    let mut kept = draft::draft(project, of);
+    if let Some(typed) = typed.filter(|typed| !typed.is_empty())
+      && kept.is_empty()
+    {
+      draft::set(project, of, &typed);
+      kept = typed;
+    }
     if self.draft.get_untracked() != kept {
       self.draft.set(kept);
     }
   }
 
-  /// `sent` was kept. Its draft empties while it still is the message sent: what the person wrote since stays, and
-  /// goes with the conversation a new one's first message `started`.
-  fn sent(&self, project: ProjectId, sent: Sent, started: bool) {
-    let drafted = self
+  /// `sent` was kept. The draft it was sent from empties while it still holds the words sent: what the person wrote
+  /// since stays, and goes with the conversation when it was a new one's first message and the route still says a
+  /// new or the latest conversation (`fresh`). Whether it started a conversation so.
+  fn sent(&self, project: ProjectId, sent: Sent, fresh: bool) -> bool {
+    if self
       .outgoing
       .get_untracked()
-      .filter(|drafted| sent.from_draft && drafted.outgoing.message == sent.message);
-    let Some(Drafted { from, outgoing }) = drafted else {
-      return;
-    };
-    if draft::sent(project, from, &outgoing.text) {
+      .is_some_and(|outgoing| outgoing.message == sent.message)
+    {
       self.outgoing.set(None);
     }
-    let of = if started && from == Conversation::New {
+    if !sent.from_draft {
+      return false;
+    }
+    let Some(from) = draft::sent(project, (sent.chat, sent.message)) else {
+      return false;
+    };
+    let started = fresh && from == Conversation::New;
+    let of = if started {
       draft::started(project, sent.chat);
       Conversation::Chat(sent.chat)
     } else {
@@ -266,6 +269,7 @@ impl View {
     if self.of.get_untracked() == Some(from) {
       self.load_draft(project, of);
     }
+    started
   }
 
   /// Sends the draft, as the message it was last sent as when its words did not change since, to conversation
@@ -278,18 +282,9 @@ impl View {
       if text.trim().is_empty() || view.send.state().get_untracked().is_pending() {
         return;
       }
-      let outgoing = match view.outgoing.get_untracked() {
-        Some(kept) if kept.from == from && kept.outgoing.text == text => kept.outgoing,
-        _ => Outgoing {
-          chat: chat.unwrap_or_else(ChatId::generate),
-          message: ChatMessageId::generate(),
-          text,
-        },
-      };
-      view.outgoing.set(Some(Drafted {
-        from,
-        outgoing: outgoing.clone(),
-      }));
+      let to = chat.unwrap_or_else(ChatId::generate);
+      let outgoing = draft::sending(project.project.id(), from, (to, text));
+      view.outgoing.set(Some(outgoing.clone()));
       view.send.run(Sending {
         project: project.clone(),
         outgoing,

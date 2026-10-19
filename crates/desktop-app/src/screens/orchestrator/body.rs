@@ -83,7 +83,7 @@ pub(super) fn main(
     .is_pending()
     .then(|| view.outgoing.get())
     .flatten()
-    .map(|drafted| drafted.outgoing.text);
+    .map(|outgoing| outgoing.text);
   match &reads.shown {
     Shown::New if pending.is_none() => {
       let boxed = ComposerBox {
@@ -161,7 +161,7 @@ fn conversation(
   (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 2]),
 ) -> Element {
   let mut all = shown.map(|shown| turns(&shown.entries)).unwrap_or_default();
-  let kept = view.outgoing.get().map(|drafted| drafted.outgoing.message);
+  let kept = view.outgoing.get().map(|outgoing| outgoing.message);
   if let Some(text) = pending
     && !all.iter().any(|turn| turn.message.is_some() && turn.message == kept)
   {

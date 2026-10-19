@@ -1,9 +1,12 @@
 //! The composer's drafts for as long as the app runs: one through another screen and back, each conversation's own
 //! and a new one's, and what sending leaves of them: a message sent and kept empties its draft and no other, a failed
-//! send keeps it.
+//! send keeps it, and one whose send the person left before it ended is kept once when sent again.
+
+use std::time::{Duration, Instant};
 
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route, TaskList};
-use orchester_core::time::Timestamp;
+use orchester_core::{orchestrator::EntryKind, time::Timestamp};
+use rusqlite::Connection;
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -117,4 +120,57 @@ fn orchestrator_a_failed_send_keeps_the_draft_through_another_screen() {
   assert_eq!(screen.text("orchestrator-input"), "What is running?");
   leave(&mut screen);
   open(&mut screen, OrchestratorChat::New, "What is running?");
+}
+
+#[test]
+fn orchestrator_a_send_left_unfinished_is_kept_once_when_sent_again() {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  // The runner is up, so the next send goes straight on to keep its message.
+  screen.go(OrchestratorChat::New);
+  screen.send("What is running?");
+  until_answered(&mut screen, "What is running?");
+  screen.go(OrchestratorChat::New);
+  // The store waits for another writer while the person leaves the Orchestrator.
+  let holder = Connection::open(screen.root.join(".orchester").join("orchester.db")).expect("the database opens");
+  holder.execute_batch("BEGIN EXCLUSIVE").expect("the database is held");
+  screen.send("Plan the webhook work");
+  let started = Instant::now();
+  screen.until("the send to wait for the store", |_| {
+    started.elapsed() > Duration::from_millis(500)
+  });
+  leave(&mut screen);
+  holder.execute_batch("ROLLBACK").expect("the database is let go");
+  open(&mut screen, OrchestratorChat::New, "Plan the webhook work");
+  screen.click("orchestrator-input");
+  screen
+    .window
+    .tree
+    .get_element_by_id_mut("orchestrator-input")
+    .expect("the message field")
+    .focus();
+  screen.key(("Enter", "Enter"), true);
+  until_answered(&mut screen, "Plan the webhook work");
+  assert_eq!(screen.text("orchestrator-input"), PLACEHOLDER, "the draft is done with");
+  assert_eq!(messages(&screen, "Plan the webhook work"), 1, "kept once");
+}
+
+/// Waits until the conversation shows the answer to `text` and the turn ended.
+fn until_answered(screen: &mut Orchestrator, text: &str) {
+  screen.until("the answer", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains(&format!("Noted: {text}"))
+      && !screen.exists("orchestrator-thinking")
+  });
+}
+
+/// How many of the person's messages in all conversations say `text`.
+fn messages(screen: &Orchestrator, text: &str) -> usize {
+  let db = screen.db();
+  let chats = db.chats().expect("chats");
+  chats
+    .iter()
+    .flat_map(|listing| db.chat_entries(listing.chat.id()).expect("entries"))
+    .filter(|entry| matches!(&entry.kind, EntryKind::Person { text: said, .. } if said.as_str() == text))
+    .count()
 }
