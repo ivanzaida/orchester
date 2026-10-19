@@ -44,7 +44,7 @@ use self::{
 use super::{
   super::run_details::run_details, TaskContext, action::decision_action, arranged, runs_section, stages::stages,
 };
-use crate::services::Services;
+use crate::{mcp::input_gate::InputGate, services::Services};
 
 /// How often a merge waiting in the run's worktree is read again while the person resolves it.
 const LOOK: Duration = Duration::from_secs(2);
@@ -61,6 +61,9 @@ pub struct ReadyForReview {
   step: Signal<StepChoice>,
   /// The return under way.
   asked: Signal<Option<Asking>>,
+  /// Window input asked an agent to resolve without a person's leave.
+  person_only: Signal<bool>,
+  gate: Option<InputGate>,
 }
 
 impl Component for ReadyForReview {
@@ -76,6 +79,8 @@ impl Component for ReadyForReview {
       looking,
       step: ctx.signal(StepChoice(None)),
       asked: ctx.signal(None),
+      person_only: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -129,6 +134,8 @@ impl Component for ReadyForReview {
             step: &self.step,
             asked: &self.asked,
             action: &action,
+            person_only: &self.person_only,
+            gate: self.gate.as_ref(),
           }
           .render(ctx)
         });

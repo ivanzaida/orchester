@@ -89,7 +89,18 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
     ["Implement · Builder"],
     "only the step that may write is offered"
   );
-  // An MCP client may press it, as it may return a run with `continue_run`.
+  // Returning a run decides for the person: an MCP client's press is refused until a person lets automation answer,
+  // as `continue_run` is, and then recorded as automation's.
+  served
+    .click_by_client("task-resolve-ask-agent")
+    .expect("the press reaches the button");
+  served.until("the refusal", |served| served.shows("task-resolve-person-only"));
+  assert_eq!(
+    stored(&seeded, run.id()).attempts().len(),
+    run.attempts().len(),
+    "nothing was returned"
+  );
+  let_automation_answer(&served);
   served
     .click_by_client("task-resolve-ask-agent")
     .expect("the press reaches the button");
@@ -155,6 +166,23 @@ fn domain_window_input_merges_into_the_worktree_but_starts_no_editor_a_person_di
   );
 }
 
+/// A person turns on *Let automation answer approvals*.
+fn let_automation_answer(served: &Served) {
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("a person lets automation answer");
+}
+
+fn stored(seeded: &Seeded, run: orchester_core::id::RunId) -> Run {
+  ProjectDb::open(&seeded.repo)
+    .expect("the database opens")
+    .run(run)
+    .expect("read")
+    .expect("the run")
+}
+
 /// The run as stored once `done` holds for it, the window drawn meanwhile.
 fn wait_for(served: &mut Served, seeded: &Seeded, run: orchester_core::id::RunId, done: impl Fn(&Run) -> bool) -> Run {
   for _ in 0..600 {
@@ -178,6 +206,12 @@ fn domain_continue_run_returns_only_an_ended_run_that_was_not_merged_and_has_its
   let (_, merged) = latest(&seeded, "merged");
   assert_eq!(
     served.refused("continue_run", &return_to(&merged, "implement"))["code"],
+    "automation_not_allowed",
+    "returning a run decides for the person"
+  );
+  let_automation_answer(&served);
+  assert_eq!(
+    served.refused("continue_run", &return_to(&merged, "implement"))["code"],
     "run_merged"
   );
   let (_, running) = latest(&seeded, "running");
@@ -187,6 +221,7 @@ fn domain_continue_run_returns_only_an_ended_run_that_was_not_merged_and_has_its
   );
 
   let (mut served, seeded) = Served::seeded("decisions");
+  let_automation_answer(&served);
   let (_, ready) = latest(&seeded, "ready for review, merges cleanly");
   assert_eq!(
     served.refused("continue_run", &return_to(&ready, "deploy"))["code"],

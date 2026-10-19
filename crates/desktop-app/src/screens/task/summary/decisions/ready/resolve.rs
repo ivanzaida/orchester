@@ -20,11 +20,15 @@ use orchester_core::{
   resource::StepKey,
   run::{Answerer, MergeConflicts},
 };
-use orchester_workspace::tasks::{
-  detail::RunView,
-  integration_jobs::{EditorOpened, JobState, ResolveArgs, ResolveStep},
-  resolve::{Editor, Worktree},
-  return_work,
+use orchester_workspace::{
+  decisions::DecisionKind,
+  messages::Message,
+  tasks::{
+    detail::RunView,
+    integration_jobs::{EditorOpened, JobState, ResolveArgs, ResolveStep},
+    resolve::{Editor, Worktree},
+    return_work,
+  },
 };
 
 use super::super::{
@@ -33,6 +37,7 @@ use super::super::{
   action::{DecisionAction, state},
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, answerer},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -70,6 +75,9 @@ pub struct Offer<'a> {
   pub step: &'a Signal<StepChoice>,
   pub asked: &'a Signal<Option<Asking>>,
   pub action: &'a DecisionAction<Asking>,
+  /// Window input pressed *Ask an agent to resolve* while a person does not let automation decide for them.
+  pub person_only: &'a Signal<bool>,
+  pub gate: Option<&'a InputGate>,
 }
 
 impl Offer<'_> {
@@ -111,6 +119,12 @@ impl Offer<'_> {
       )
       .with_children(agent_reason.map(|reason| reason_line("task-resolve-agent-reason", &reason)))
       .with_children(failure)
+      .with_children(self.person_only.get().then(|| {
+        field_error(
+          "task-resolve-person-only",
+          &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
+        )
+      }))
       .with_children(refused.map(|refused| field_error("task-resolve-refused", &message_text(ctx, &refused))))
       .into()
   }
@@ -239,14 +253,26 @@ impl Offer<'_> {
       return_work::command(self.run, step, (note, Some(conflicts)), Answerer::Automation),
     );
     let (action, asked) = (self.action.clone(), self.asked.clone());
+    let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
     button.on_click(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
       if action.state().get_untracked().is_pending() {
         return;
       }
+      // Returning a run decides for the person, as `continue_run` does: an MCP client's press only while a person
+      // lets automation answer, and it is recorded as automation's.
+      let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
+        tracing::warn!("synthetic input asked an agent to resolve without consent; not taken");
+        person_only.set(true);
+        return;
+      };
+      person_only.set(false);
       asked.set(Some(Asking));
-      // An MCP client's press is automation's, as a return it asks for with `continue_run` is.
-      let command = if is_synthetic_input() { &automation } else { &person };
+      let command = if by == Answerer::Automation {
+        &automation
+      } else {
+        &person
+      };
       action.run((Asking, command.clone()));
     })
   }
