@@ -19,4 +19,5 @@ mod harness;
 mod layout;
 mod list;
 mod mcp;
+mod qa_scenarios;
 mod reads;

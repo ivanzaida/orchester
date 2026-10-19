@@ -88,11 +88,11 @@ pub fn read_after(
   let scratch =
     orchester_exec::local_git::prepare_scratch(root, &[".orchester", "local-integration", &run.to_string()])?;
   let _store_owner = orchester_exec::local_git::owned::StoreOwnership::acquire(root)?;
-  let db = ProjectDb::open(root)?;
+  let mut db = ProjectDb::open(root)?;
   let main = LocalGit::new(root, &scratch)?;
   super::ensure_project_git(&main)?;
   let checkout = main.snapshot()?;
-  let operation = db.local_operation(run)?;
+  let mut operation = db.local_operation(run)?;
   use orchester_core::store::RunStore;
   let saved_run = db
     .run(run)
@@ -103,6 +103,9 @@ pub fn read_after(
     Some(previous) if previous.evidence_inputs == evidence_inputs => previous.external.clone(),
     _ => super::external::evidence(&main, &evidence_inputs)?,
   };
+  if let (Some(evidence), Some(saved)) = (&external, operation.as_mut()) {
+    super::direct::settle_outside(root, &mut db, saved, evidence);
+  }
   let redact = Redaction::load(&db, vault)?;
   redact.ensure_metadata(&checkout)?;
   redact.ensure_metadata(&operation)?;

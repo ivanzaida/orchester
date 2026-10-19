@@ -227,6 +227,9 @@ fn connections_api_provider_rows_name_the_cli_its_version_and_the_providers_host
   assert!(gateway.contains("Not checked"), "{gateway}");
   let old = row(&mut seeded, "Claude · Old gateway");
   assert!(old.contains("Key missing"), "{old}");
+  for line in [&deepseek, &gateway, &old] {
+    assert!(!line.contains("account"), "a key runs it, on no account: {line}");
+  }
 }
 
 /// Edit connection's *Runs on* filled for DeepSeek's Anthropic API with SENTRY_TOKEN as the key, each field's reason
@@ -239,7 +242,7 @@ fn fill_deepseek(seeded: &mut Seeded) {
       .text("connection-form-reason")
       .contains("secret holding the API key")
   );
-  choose(seeded, "connection-provider-key", "SENTRY_TOKEN (development)");
+  choose(seeded, "connection-provider-key", "SENTRY_TOKEN (Development)");
   assert!(seeded.text("connection-form-reason").contains("at least one model"));
   seeded.set("connection-provider-model", "deep seek");
   seeded.click("connection-provider-add-model");
@@ -248,8 +251,63 @@ fn fill_deepseek(seeded: &mut Seeded) {
       .text("connection-provider-model-error")
       .contains("is not a model id")
   );
+  // Only the current problem shows: clearing the draft, or typing another, takes the old one away (`UW2bO`).
+  seeded.set("connection-provider-model", "");
+  assert!(!seeded.exists("connection-provider-model-error"));
+  seeded.set("connection-provider-model", "deep seek");
+  seeded.click("connection-provider-add-model");
+  assert!(seeded.exists("connection-provider-model-error"));
+  seeded.set("connection-provider-model", "deep");
+  assert!(!seeded.exists("connection-provider-model-error"));
   seeded.set("connection-provider-model", "deepseek-flash, deepseek-v4-pro");
   seeded.click("connection-provider-add-model");
   assert!(!seeded.exists("connection-provider-model-error"));
   assert!(seeded.exists("connection-provider-model-1"), "each id is a chip");
+}
+
+/// The row of `menu`'s options whose first words are `label`, with all its words.
+fn menu_row(seeded: &mut Seeded, menu: &str, label: &str) -> (String, String) {
+  for index in 0.. {
+    let option = format!("{menu}-option-{index}");
+    let Some(texts) = seeded.window.texts(&option) else {
+      break;
+    };
+    if texts.first().map(String::as_str) == Some(label) {
+      return (option, texts.join(" "));
+    }
+  }
+  panic!("{menu} lists {label}")
+}
+
+#[test]
+fn connections_api_provider_is_listed_unavailable_with_its_whole_reason_for_the_orchestrator_and_the_reviewer() {
+  let mut seeded = Seeded::new("api-providers");
+  seeded.go(ProjectPage::OrchestratorSettings);
+  seeded.until("the Orchestrator's settings", |seeded| {
+    seeded.exists("orchestrator-connection")
+  });
+  seeded.click("orchestrator-connection");
+  let (option, words) = menu_row(&mut seeded, "orchestrator-connection", "Claude · DeepSeek");
+  assert!(seeded.exists(&format!("{option}-icon")), "the agent glyph leads it");
+  assert!(
+    words.ends_with("This connection runs on an API provider; choose another one."),
+    "the whole reason, not cut: {words}"
+  );
+
+  seeded.go(ProjectPage::Settings(Default::default()));
+  seeded.until("the reviewer", |seeded| seeded.exists("settings-reviewer-connection"));
+  seeded.click("settings-reviewer-connection");
+  let (option, words) = menu_row(&mut seeded, "settings-reviewer-connection", "Codex · DeepSeek");
+  assert!(seeded.exists(&format!("{option}-icon")), "the agent glyph leads it");
+  assert!(
+    words.contains("Auto mode’s reviewer runs on a CLI’s own sign-in") && words.ends_with("choose another one."),
+    "the whole reason: {words}"
+  );
+  let before = seeded.db().auto_mode_settings().expect("settings");
+  seeded.click(&option);
+  assert_eq!(
+    seeded.db().auto_mode_settings().expect("settings"),
+    before,
+    "an unavailable connection is not chosen"
+  );
 }

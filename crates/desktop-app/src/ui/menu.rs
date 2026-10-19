@@ -96,6 +96,8 @@ pub struct MenuItem {
   chosen: bool,
   /// An unavailable row ends in a lock.
   lock: bool,
+  /// The label is an identifier, in Geist Mono.
+  mono: bool,
   focus: Focus,
   choice: Choice,
 }
@@ -126,6 +128,7 @@ impl MenuItem {
       warning: false,
       chosen: false,
       lock: true,
+      mono: false,
       focus: Focus::Pointer,
       choice,
     }
@@ -162,6 +165,13 @@ impl MenuItem {
   }
 
   /// A choice within a form's field menu: reachable with Tab and activated with Enter or Space.
+  /// The label is an identifier, such as a model id, in Geist Mono.
+  #[must_use]
+  pub const fn mono(mut self) -> Self {
+    self.mono = true;
+    self
+  }
+
   pub fn in_form(mut self) -> Self {
     self.focus = Focus::Keyboard;
     self
@@ -175,13 +185,14 @@ impl MenuItem {
 
   /// The label, cut to the row's room with its whole words in a tooltip, and the detail under it.
   fn text(&self, ctx: &mut Ctx, detail: Option<&str>) -> Column {
-    let label = Truncated::new(
-      format!("{}-label", self.id),
-      self.label.clone(),
-      TypographyStyle::Description,
-    )
-    .color(PaletteColor::TextPrimary)
-    .render(ctx);
+    let style = if self.mono {
+      ExtraTypography::PropertyMono.role()
+    } else {
+      TypographyStyle::Description
+    };
+    let label = Truncated::new(format!("{}-label", self.id), self.label.clone(), style)
+      .color(PaletteColor::TextPrimary)
+      .render(ctx);
     Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))

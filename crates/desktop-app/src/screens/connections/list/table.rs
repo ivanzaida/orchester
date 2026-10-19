@@ -126,7 +126,10 @@ fn shape(ctx: &Ctx, (listed, accounts): (&ProjectConnections, &Accounts), entry:
     Entry::Agent(connection) => Shape {
       glyph: agent_glyph(connection.provider()),
       name: connection.name().as_str().to_owned(),
-      line: match super::super::account::named(ctx, accounts, connection.account(), connection.provider()) {
+      // A connection on an API provider runs on its key, on no account (`y2qhJ`, `tnEKp`).
+      line: match super::super::account::named(ctx, accounts, connection.account(), connection.provider())
+        .filter(|_| connection.api_provider().is_none())
+      {
         Some(account) => ctx
           .t_args(
             "connections.row.withAccount",

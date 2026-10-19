@@ -32,6 +32,7 @@ use crate::{
   theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    choice_field::{Choice, ChoiceField},
     field::{FieldInput, SelectField, field_error},
     form_section::{Label, Place, section, side_row},
     icon::{Icon, icon},
@@ -110,32 +111,34 @@ fn limits(ctx: &Ctx, project: &str) -> Row {
 }
 
 fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Choices) -> Element {
+  // A connection it cannot run on is listed faded, with a lock and its whole reason (`kGBHZ`), as the profile's menu
+  // lists connections.
   let options = connections
     .iter()
-    .map(|choice| {
-      let option = SelectOption::new(choice.id.to_string(), choice.name.clone());
-      match &choice.unavailable {
-        Some(reason) => option.detail(message_text(ctx, reason)).disabled(true),
-        None => option,
-      }
+    .map(|choice| Choice {
+      value: choice.id.to_string(),
+      label: choice.name.clone(),
+      icon: Icon::Bot,
+      detail: None,
+      separator: false,
+      warning: false,
+      trigger: None,
+      unavailable: choice.unavailable.as_ref().map(|reason| message_text(ctx, reason)),
     })
     .collect();
   let label = ctx.t("orchestrator.settings.connection.label");
-  // At full contrast even when none is usable: its menu says why each one is not (`jmyWu`). With no connection at
-  // all it has nothing to list and does not open.
-  let mut select = SelectField::new(
-    "orchestrator-connection",
-    label.clone(),
-    choices.connection.clone(),
-    options,
-  )
-  .placeholder(ctx.t("orchestrator.settings.connection.none"))
-  .width(Dimension::Px(SELECT_WIDTH));
-  if connections.is_empty() {
-    select = select.locked();
-  }
-  // lurq's menu draws an option's detail on one line, cut to the menu's width; with none usable, each connection's
-  // whole reason is under the select too, wrapped.
+  let select = ChoiceField {
+    id: "orchestrator-connection".into(),
+    name: label.clone(),
+    value: choices.connection.clone(),
+    open: choices.connection_open.clone(),
+    choices: options,
+    width: SELECT_WIDTH,
+    icon_in_field: false,
+    placeholder: Some(ctx.t("orchestrator.settings.connection.none")),
+    mono: false,
+  };
+  // With none usable, each connection's whole reason is under the select too, wrapped (`kGBHZ`).
   let usable = connections.iter().any(|choice| choice.unavailable.is_none());
   let reasons = connections
     .iter()
