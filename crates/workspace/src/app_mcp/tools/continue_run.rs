@@ -99,16 +99,23 @@ enum Request {
 }
 
 pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Value, ToolError> {
+  continue_as(services, args, Answerer::Automation).await
+}
+
+/// `continue_run` decided by `by`: automation's decision on a waiting run needs the person's consent, while a
+/// person's (the Orchestrator chat's proposal a person applied) is recorded as theirs and needs none.
+pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run, request) = blocking(move || {
-    if matches!(
+    let decides = matches!(
       args.choice,
       Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept
-    ) {
+    );
+    if decides && by == Answerer::Automation {
       crate::decisions::DecisionKind::Stuck.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
-    let (run, request) = request(&project.repo_root, &args)?;
+    let (run, request) = request(&project.repo_root, &args, by)?;
     Ok((project, run, request))
   })
   .await?;
@@ -141,9 +148,10 @@ struct Named {
 /// run, and the step a return goes back to; a refusal when its task page would not offer the choice now. Blocks on
 /// SQLite.
 pub(crate) fn offered(root: &Path, args: &ContinueRun) -> Result<(RunId, Option<StepKey>), ToolError> {
-  let (named, request) = request(root, args)?;
+  // Who would decide does not change what is offered.
+  let (named, request) = request(root, args, Answerer::Person)?;
   let target = match request {
-    Request::Command(Command::DecideStuckRun {
+    Request::Command(Command::DecideStuckRunAs {
       decision: StuckDecision::ReturnTo { step, .. },
       ..
     }) => Some(step),
@@ -152,9 +160,9 @@ pub(crate) fn offered(root: &Path, args: &ContinueRun) -> Result<(RunId, Option<
   Ok((named.id, target))
 }
 
-/// The run `args` names in the project at `root` and what continuing it asks of the runner; a refusal when its task
-/// page would not offer the choice now.
-fn request(root: &Path, args: &ContinueRun) -> Result<(Named, Request), ToolError> {
+/// The run `args` names in the project at `root` and what continuing it asks of the runner, decided by `by`; a
+/// refusal when its task page would not offer the choice now.
+fn request(root: &Path, args: &ContinueRun, by: Answerer) -> Result<(Named, Request), ToolError> {
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &args.run)?;
   drop(db);
@@ -181,8 +189,8 @@ fn request(root: &Path, args: &ContinueRun) -> Result<(Named, Request), ToolErro
     (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRunAs {
       run: run.id(),
       expected: view.run.last_sequence(),
-      decision: decision(view, choice, &number)?,
-      by: Answerer::Automation,
+      decision: decision(view, (choice, by), &number)?,
+      by,
     }),
     _ => {
       return Err(refused(
@@ -241,13 +249,11 @@ fn at_limit(view: &RunView, (limit, choice): (RunLimit, &Choice), number: &str) 
 }
 
 /// The decision a run waiting after its step used up its retries or broke again takes with `choice`.
-fn decision(view: &RunView, choice: &Choice, number: &str) -> Result<StuckDecision, ToolError> {
+fn decision(view: &RunView, (choice, by): (&Choice, Answerer), number: &str) -> Result<StuckDecision, ToolError> {
   match choice {
     Choice::AllowRetry => Ok(StuckDecision::Retry),
     Choice::Accept if matches!(view.run.status(), RunStatus::WaitingForPerson(stuck) if stuck.can_accept()) => {
-      Ok(StuckDecision::Accept {
-        by: Answerer::Automation,
-      })
+      Ok(StuckDecision::Accept { by })
     }
     Choice::ReturnTo { step, note } => {
       let lowered = step.to_lowercase();

@@ -415,6 +415,16 @@ pub async fn answer_for_orchestrator(
   }
 }
 
+/// `continue_run` with `arguments` for the Orchestrator chat, decided by `by`: a person who applied the chat's
+/// proposal decides as themselves ([`continue_run::continue_as`]).
+pub(crate) async fn continue_for_orchestrator(
+  services: &Services,
+  arguments: JsonObject,
+  by: orchester_core::run::Answerer,
+) -> Result<Value, ToolError> {
+  continue_run::continue_as(services, parse(Value::Object(arguments))?, by).await
+}
+
 /// The arguments as tool `T` takes them; a mismatch is the call's error.
 fn parse<T: DeserializeOwned>(arguments: Value) -> Result<T, ToolError> {
   serde_json::from_value(arguments).map_err(|error| ToolError::InvalidArguments(error.to_string()))

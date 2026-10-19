@@ -32,8 +32,8 @@ use super::{
 };
 use crate::{
   app_mcp::{
-    Missing, PersonDecision, Services, ToolError, Translate, answer_for_orchestrator, blocking, find_run,
-    setup::merge_proposed,
+    Missing, PersonDecision, Services, ToolError, Translate, answer_for_orchestrator, blocking,
+    continue_for_orchestrator, find_run, setup::merge_proposed,
   },
   display,
   messages::Message,
@@ -136,13 +136,14 @@ pub(super) async fn apply(
       blocking(move || unchanged_run(&root, (run, number), Some(&checkpoint))).await?;
       merge_proposed(services, translate, (project, run.to_string()), expected).await
     }
-    // The tool checks again that the choice is offered where it continues the run.
+    // The tool checks again that the choice is offered where it continues the run, decided by `by`: a person who
+    // applied the proposal decides as themselves.
     Change::Continue {
       run, number, attempt, ..
     } => {
       blocking(move || continuation::unchanged(&root, (&run.to_string(), number), attempt)).await?;
-      let (tool, arguments) = tool_arguments(scope, change);
-      app_tool((services, translate), tool, arguments).await
+      let (_, arguments) = tool_arguments(scope, change);
+      continue_for_orchestrator(services, arguments, by).await
     }
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
     Change::Answer { .. } | Change::Message { .. } => {
