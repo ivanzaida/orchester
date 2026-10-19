@@ -44,10 +44,11 @@ $uiPackage = "orchester-app"
 $uiTestThreads = 4
 $wholeWorkspaceFiles = @("Cargo.toml", "Cargo.lock", "rust-toolchain.toml")
 $noTestsName = "(none)"
-# Programs a crate's tests start from target/debug/ and do not build themselves (each test says so when one is
-# missing): orchester-app's live tests run the runner with its fake agents, and Orchester Cloud. A change to those
-# programs' crates therefore selects orchester-app too. They build with the test profile, whose programs land in
-# target/debug/ as well, so they share what the tests built.
+# Programs a crate's tests start: orchester-app's live tests run the runner with its fake agents, and Orchester Cloud
+# from target/debug/, which they do not build themselves (each test says so when it is missing). The runner's tests
+# build it again and start copies of their own (crates/workspace/tests/support/runner_programs.rs); building it here
+# first only keeps that step short. A change to those programs' crates therefore selects orchester-app too. They
+# build with the test profile, whose programs land in target/debug/ as well, so they share what the tests built.
 $programsForTests = @{
     "orchester-app" = @(
         @{ Package = "orchester-runner"; Features = "test-agent" },

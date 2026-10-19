@@ -5,10 +5,10 @@
 //! auto-approval leaves to a person, such as a command that reaches the network.
 
 use std::{
-  env, fs,
+  fs,
   path::{Path, PathBuf},
   process::Command,
-  sync::{Arc, OnceLock},
+  sync::Arc,
 };
 
 use orchester_core::{
@@ -18,46 +18,13 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
-  app_paths::runner_beside,
   tasks::integration_jobs::{MergeArgs, RunJobs},
   workspace::OpenProject,
 };
 use parking_lot::{Condvar, Mutex};
 use serde_json::{Value, json};
 
-use super::Served;
-
-/// The runner and the fake Codex, built into this profile's folder once per test process, before a
-/// test starts them (Windows keeps a running program's file).
-pub(super) fn programs() -> (PathBuf, PathBuf) {
-  static BUILT: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
-  BUILT.get_or_init(build_programs).clone()
-}
-
-fn build_programs() -> (PathBuf, PathBuf) {
-  let status = Command::new(env!("CARGO"))
-    .args([
-      "build",
-      "--quiet",
-      "-p",
-      "orchester-runner",
-      "--features",
-      "test-agent",
-      "--bins",
-    ])
-    .status()
-    .expect("run cargo");
-  assert!(status.success(), "cargo build -p orchester-runner: {status}");
-  let test = env::current_exe().expect("the test's path");
-  let profile = test
-    .parent()
-    .and_then(Path::parent)
-    .expect("tests live in <target>/<profile>/deps");
-  let fake = profile
-    .join("orchester-fake-codex")
-    .with_extension(env::consts::EXE_EXTENSION);
-  (runner_beside(&profile.join("orchester-app")), fake)
-}
+use super::{Served, runner_programs::programs};
 
 pub(super) fn git(repo: &Path, args: &[&str]) -> String {
   let output = Command::new("git")
@@ -76,7 +43,8 @@ pub(super) fn git(repo: &Path, args: &[&str]) -> String {
 
 /// A new git repository on `main` with one commit, and the app on a data folder beside it.
 pub(super) fn served(window_control: bool) -> (Served, PathBuf, PathBuf) {
-  let (runner, fake) = programs();
+  let programs = programs();
+  let (runner, fake) = (programs.runner.clone(), programs.fake_codex.clone());
   let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-31-live");
   fs::create_dir_all(&scratch).expect("scratch");
   let folder = tempfile::tempdir_in(scratch).expect("a temporary folder");

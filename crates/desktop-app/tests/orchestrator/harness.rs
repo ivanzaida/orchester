@@ -4,10 +4,9 @@
 
 use std::{
   collections::{BTreeMap, BTreeSet},
-  env, fs,
+  fs,
   path::{Path, PathBuf},
   process::Command,
-  sync::OnceLock,
   time::{Duration, Instant},
 };
 
@@ -32,42 +31,9 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb};
-use orchester_workspace::{app_paths::runner_beside, workspace::OrchestratorConsent};
+use orchester_workspace::workspace::OrchestratorConsent;
 
-use super::support::{Data, Window, add_project};
-
-/// The runner, the fake Claude Code and the fake Codex, built into this profile's folder once per test process.
-fn programs() -> (PathBuf, PathBuf, PathBuf) {
-  static BUILT: OnceLock<(PathBuf, PathBuf, PathBuf)> = OnceLock::new();
-  BUILT.get_or_init(build_programs).clone()
-}
-
-fn build_programs() -> (PathBuf, PathBuf, PathBuf) {
-  let status = Command::new(env!("CARGO"))
-    .args([
-      "build",
-      "--quiet",
-      "-p",
-      "orchester-runner",
-      "--features",
-      "test-agent",
-      "--bins",
-    ])
-    .status()
-    .expect("run cargo");
-  assert!(status.success(), "cargo build -p orchester-runner: {status}");
-  let test = env::current_exe().expect("the test's path");
-  let profile = test
-    .parent()
-    .and_then(Path::parent)
-    .expect("tests live in <target>/<profile>/deps");
-  let fake = |name: &str| profile.join(name).with_extension(env::consts::EXE_EXTENSION);
-  (
-    runner_beside(&profile.join("orchester-app")),
-    fake("orchester-fake-claude"),
-    fake("orchester-fake-codex"),
-  )
-}
+use super::support::{Data, Window, add_project, runner_programs::programs};
 
 pub fn git(repo: &Path, args: &[&str]) {
   let output = Command::new("git")
@@ -111,7 +77,8 @@ pub struct Orchestrator {
 
 impl Orchestrator {
   pub fn new(setup: Setup) -> Self {
-    let (runner, fake, fake_codex) = programs();
+    let programs = programs();
+    let (runner, fake, fake_codex) = (programs.runner.clone(), &programs.fake_claude, &programs.fake_codex);
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
     fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data::at(
@@ -139,8 +106,8 @@ impl Orchestrator {
       &repo,
     );
     let mut db = ProjectDb::open(&open.repo_root).expect("database");
-    let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", &fake);
-    let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", &fake_codex);
+    let claude = connection(AgentProvider::ClaudeCodeCli, "Claude · Kontur", fake);
+    let codex = connection(AgentProvider::CodexCli, "Codex · Kontur", fake_codex);
     if !matches!(setup, Setup::NoConnection | Setup::CodexOnly) {
       db.create_connection(&claude).expect("Claude Code connection");
     }

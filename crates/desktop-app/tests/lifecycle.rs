@@ -6,10 +6,9 @@
 //! the next start offers nothing; Quit now ends the agents and their processes at once, and the next start
 //! offers the interrupted run on the project's Overview, where Continue all takes it up again.
 //!
-//! The live tests need the runner and its fakes: `cargo build -p orchester-runner --features test-agent
-//! --bins`. The window's own close request (its ×, Alt+F4, the app's MCP `request_close`) reaches the same
-//! flow through `lurq`'s close handler, which a headless tree cannot raise: these tests ask the flow
-//! directly.
+//! The live tests build the runner and its fakes themselves (`support::runner_programs`). The window's own close
+//! request (its ×, Alt+F4, the app's MCP `request_close`) reaches the same flow through `lurq`'s close handler,
+//! which a headless tree cannot raise: these tests ask the flow directly.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
@@ -45,29 +44,12 @@ use orchester_workspace::{
   session::AppSession,
 };
 use serde_json::{Value, json};
-use support::{Data, Window};
+use support::{Data, Window, runner_programs::programs};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
 /// How long a real runner and agent may take for one step of a test.
 const PATIENCE: Duration = Duration::from_secs(60);
-
-/// The runner and the fake Codex beside the test's own programs.
-fn programs() -> (PathBuf, PathBuf) {
-  let folder = std::env::current_exe()
-    .expect("the test's path")
-    .parent()
-    .and_then(Path::parent)
-    .expect("the target folder")
-    .to_path_buf();
-  let program = |name: &str| folder.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-  let (runner, codex) = (program("orchester-runner"), program("orchester-fake-codex"));
-  assert!(
-    runner.is_file() && codex.is_file(),
-    "build the runner and its fakes first: cargo build -p orchester-runner --features test-agent --bins"
-  );
-  (runner, codex)
-}
 
 /// A window on the seeded `lifecycle` scenario with the real runner, and what the test closes it with.
 struct Live {
@@ -79,7 +61,8 @@ struct Live {
 
 impl Live {
   fn seeded() -> Self {
-    let (runner, codex) = programs();
+    let programs = programs();
+    let (runner, codex) = (programs.runner.clone(), programs.fake_codex.clone());
     let dir = TempDir::new().expect("a temporary folder");
     let request = kontur::SeedRequest {
       data_dir: dir.path().to_path_buf(),
