@@ -107,7 +107,6 @@
       "allow": "Allow 1 retry & continue",
       "accept": "Accept {{step}} as it is",
       "acceptMeaning": "{{step}} passes as it is; the steps after it run.",
-      "acceptPersonOnly": "A person accepts a step in the window. Automation may accept it only once a person turns on Let automation answer approvals in Settings.",
       "runAgain": "Run {{step}} again",
       "runAgainMeaning": "Runs {{step}} again on the same revision, as you ask.",
       "retryMeaning": "Runs {{step}} once more, then {{failed}} again.",
