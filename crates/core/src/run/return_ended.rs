@@ -1,10 +1,11 @@
-//! Returning the work of a run that ended (ORC-44): a person sends a run that succeeded or failed back to one of its
-//! agent steps with a note, e.g. to merge its base branch in and resolve the conflicts a merge into it found. The run
-//! is reopened and works again in a new attempt from that step: the step runs as a fresh execution whose prompt
-//! carries the note ([`Run::returned_note`]), then the steps after it and those that had not passed, as after any
-//! return. A run that waits for a person is returned with [`super::StuckDecision::ReturnTo`] instead, and one that
-//! never started has no worktree to go on in. Whether the run's work was merged, or its worktree removed, is the
-//! store's and the runner's to refuse: the run itself does not know.
+//! Returning the work of a run that ended (the project task ORC-44 · Return a finished run to an earlier step): a
+//! person sends a run that succeeded or failed back to one of its agent steps with a note, e.g. to merge its base
+//! branch in and resolve the conflicts a merge into it found. The run is reopened and works again in a new attempt from
+//! that step: the step runs as a fresh execution whose prompt carries the note ([`Run::returned_note`]), then the steps
+//! after it and those that had not passed, as after any return. A run that waits for a person is returned with
+//! [`super::StuckDecision::ReturnTo`] instead, and one that never started has no worktree to go on in. Whether the
+//! run's work was merged, or its worktree removed, is the store's and the runner's to refuse: the run itself does not
+//! know.
 
 use super::{
   attempt::StepExecution,
@@ -13,7 +14,7 @@ use super::{
   plan::ReviewNote,
   snapshot::StepExecutor,
   state::Run,
-  status::{AttemptReason, AttemptStatus, RunFailure, RunStatus, StepStatus},
+  status::{AttemptReason, AttemptStatus, MergeConflicts, RunFailure, RunStatus, StepStatus},
 };
 use crate::{
   id::{AttemptId, StepExecutionId},
@@ -57,8 +58,13 @@ impl Run {
   }
 
   /// Reopens the ended run in a new attempt from agent step `step` (one of [`Run::ended_return_targets`]), whose
-  /// prompt carries `note` as the person's instruction.
-  pub fn return_ended(&mut self, step: &StepKey, note: &ReviewNote, now: Timestamp) -> Result<Vec<RunEvent>, RunError> {
+  /// prompt carries `note` as the person's instruction, and the `conflicts` of a merge it resolves, as data.
+  pub fn return_ended(
+    &mut self,
+    step: &StepKey,
+    (note, conflicts): (&ReviewNote, Option<&MergeConflicts>),
+    now: Timestamp,
+  ) -> Result<Vec<RunEvent>, RunError> {
     if !self.can_return_ended() {
       return Err(RunError::InvalidRunTransition {
         status: self.status().clone(),
@@ -77,14 +83,15 @@ impl Run {
         reason: AttemptReason::ReturnedAfterEnd {
           return_to: step.clone(),
           note: note.clone(),
+          conflicts: conflicts.cloned(),
         },
         executions,
       })
     })
   }
 
-  /// A returned ended run executes an executed agent step and everything after it, in an attempt that comes after
-  /// the one the run ended with.
+  /// A returned ended run executes an executed agent step and everything after it, in the attempt that follows its
+  /// reopening.
   pub(super) fn check_returned_after_end(
     &self,
     return_to: &StepKey,
@@ -93,8 +100,10 @@ impl Run {
     let ended = self
       .current_attempt()
       .is_some_and(|attempt| matches!(attempt.status(), AttemptStatus::Succeeded | AttemptStatus::Failed));
-    if !ended {
-      return Err(RunError::InvalidAttempt("work is returned after the run ended"));
+    if !ended || !self.reopened {
+      return Err(RunError::InvalidAttempt(
+        "work is returned right after the ended run reopens",
+      ));
     }
     let executed_agent = matches!(
       self.snapshot().step(return_to).map(|step| step.executor()),
@@ -117,20 +126,25 @@ impl Run {
     }
   }
 
-  /// The person's note `execution`'s prompt carries: it is the execution of the step the work of the ended run was
-  /// returned to, in the attempt that returned it. `None` for any other execution.
-  pub fn returned_note(&self, execution: StepExecutionId) -> Option<&ReviewNote> {
+  /// The person's note `execution`'s prompt carries, and the conflicts it resolves: it is the execution of the step
+  /// the work of the ended run was returned to, in the attempt that returned it. `None` for any other execution.
+  pub fn returned_work(&self, execution: StepExecutionId) -> Option<(&ReviewNote, Option<&MergeConflicts>)> {
     let attempt = self
       .attempts()
       .iter()
       .find(|attempt| attempt.execution(execution).is_some())?;
-    let AttemptReason::ReturnedAfterEnd { return_to, note } = attempt.reason() else {
+    let AttemptReason::ReturnedAfterEnd {
+      return_to,
+      note,
+      conflicts,
+    } = attempt.reason()
+    else {
       return None;
     };
     attempt
       .execution(execution)
       .map(StepExecution::step)
       .filter(|step| *step == return_to)
-      .map(|_| note)
+      .map(|_| (note, conflicts.as_ref()))
   }
 }

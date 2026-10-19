@@ -1,38 +1,42 @@
-//! Returning the work of an ended run to a step (ORC-44) as the task page reads it: the note *Ask an agent to resolve*
-//! writes reads back as the conflicts it returns, and while the step works on them its row in *Runs of this task*
-//! says when and with which branch; a merged run, one whose worktree is gone, and one still at work are refused.
+//! Returning the work of an ended run to a step (the project task ORC-44 · Return a finished run to an earlier step)
+//! as the task page reads it: what a return to resolve a merge's conflicts is for is kept with it, and while its step
+//! works on them the run's row in *Runs of this task* says when and with which branch; a run that still works, one
+//! merged, one whose worktree is gone and one a merge waits in are refused.
 
 mod support;
 
-use std::fs;
-
 use orchester_core::{
-  integration::{MergeKind, RunMerge},
+  integration::{MergeKind, RunMerge, resolve::Resolution},
   revision::Revision,
-  run::{BranchName, ReviewNote},
+  run::{BranchName, MergeConflicts},
   store::MergeStore,
 };
 use orchester_workspace::tasks::{
-  changes::run_worktree,
   detail::TaskDetail,
-  return_work::{self, ConflictReturn, ReturnRefusal},
+  resolve::Worktree,
+  return_work::{self, ReturnRefusal},
 };
 
+fn conflicts() -> MergeConflicts {
+  MergeConflicts {
+    base: BranchName::new("main").expect("a branch"),
+    files: vec!["src/a.rs".to_owned()],
+  }
+}
+
+fn present(merge: Option<Resolution>) -> Worktree {
+  Worktree { present: true, merge }
+}
+
 #[test]
-fn return_work_a_conflict_note_reads_back_as_the_conflicts_it_returns() {
-  let files = ["src/a.rs".to_owned(), "src/b.rs".to_owned()];
-  let note = return_work::conflict_note("main", &files);
-  assert_eq!(
-    return_work::conflict_return(&note),
-    Some(ConflictReturn {
-      base: "main".to_owned(),
-      files: "src/a.rs, src/b.rs".to_owned(),
-    })
+fn return_work_the_conflict_note_names_no_file() {
+  let note = return_work::conflict_note(&BranchName::new("main").expect("a branch"));
+  assert!(
+    note.as_str().starts_with("Merge main into this branch"),
+    "{}",
+    note.as_str()
   );
-  assert_eq!(
-    return_work::conflict_return(&ReviewNote::new("Keep the old header.").expect("a note")),
-    None
-  );
+  assert!(note.as_str().contains("conflicts listed below"), "{}", note.as_str());
 }
 
 #[test]
@@ -42,15 +46,17 @@ fn return_work_while_the_step_resolves_the_run_row_says_when_and_with_what() {
   let mut run = fixture.started_run(task, support::at(20));
   fixture.succeed(&mut run, support::at(30));
   let step = run.ended_return_targets().remove(0);
-  let note = return_work::conflict_note("main", &["src/a.rs".to_owned()]);
-  let events = run.return_ended(&step, &note, support::at(40)).expect("returned");
+  let note = return_work::conflict_note(&conflicts().base);
+  let events = run
+    .return_ended(&step, (&note, Some(&conflicts())), support::at(40))
+    .expect("returned");
   fixture.record(&run, &events);
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run.start_step(execution, support::at(41)).expect("started");
   fixture.record(&run, &events);
-  let (resolving, conflict) = return_work::resolving_conflicts(&run).expect("the step resolves");
+  let (resolving, resolved) = return_work::resolving_conflicts(&run).expect("the step resolves");
   assert_eq!(resolving, &step);
-  assert_eq!(conflict.base, "main");
+  assert_eq!(resolved, &conflicts());
   let detail = TaskDetail::load_in(fixture.repo.path(), task).expect("detail");
   let row = &detail.history[0];
   assert_eq!(row.detail.key, "runs.history.atWorkResolving", "{:?}", row.detail);
@@ -66,7 +72,7 @@ fn return_work_while_the_step_resolves_the_run_row_says_when_and_with_what() {
 }
 
 #[test]
-fn return_work_is_refused_while_the_run_works_once_merged_and_without_its_worktree() {
+fn return_work_is_refused_while_the_run_works_once_merged_without_its_worktree_and_in_a_merge() {
   let mut fixture = support::Fixture::new();
   let task = fixture.task("Add login", support::at(10));
   let mut run = fixture.started_run(task, support::at(20));
@@ -75,20 +81,26 @@ fn return_work_is_refused_while_the_run_works_once_merged_and_without_its_worktr
   let detail = read(&root);
   let view = detail.run.as_ref().expect("its run");
   assert_eq!(
-    return_work::refusal(&root, &detail, view),
+    return_work::refusal(&detail, view, &present(None)),
     Some(ReturnRefusal::NotEnded)
   );
 
   fixture.succeed(&mut run, support::at(30));
   let detail = read(&root);
   let view = detail.run.as_ref().expect("its run");
+  let gone = Worktree {
+    present: false,
+    merge: None,
+  };
   assert_eq!(
-    return_work::refusal(&root, &detail, view),
-    Some(ReturnRefusal::WorktreeRemoved),
-    "the fixture's run has no worktree folder"
+    return_work::refusal(&detail, view, &gone),
+    Some(ReturnRefusal::WorktreeRemoved)
   );
-  fs::create_dir_all(run_worktree(&root, run.id())).expect("the worktree's folder");
-  assert_eq!(return_work::refusal(&root, &detail, view), None);
+  assert_eq!(
+    return_work::refusal(&detail, view, &present(Some(Resolution { files: Vec::new() }))),
+    Some(ReturnRefusal::InMerge)
+  );
+  assert_eq!(return_work::refusal(&detail, view, &present(None)), None);
 
   fixture
     .db
@@ -102,5 +114,8 @@ fn return_work_is_refused_while_the_run_works_once_merged_and_without_its_worktr
     .expect("merged");
   let detail = read(&root);
   let view = detail.run.as_ref().expect("its run");
-  assert_eq!(return_work::refusal(&root, &detail, view), Some(ReturnRefusal::Merged));
+  assert_eq!(
+    return_work::refusal(&detail, view, &present(None)),
+    Some(ReturnRefusal::Merged)
+  );
 }

@@ -1,6 +1,6 @@
-//! Returning the work of an ended run to a step (ORC-44) through the scheduler, with real worktrees and the fake CLI:
-//! the run works again from that step with the note in its prompt; a merged run and one whose worktree is gone are
-//! refused and stay as they were.
+//! Returning the work of an ended run to a step (the project task ORC-44 · Return a finished run to an earlier step)
+//! through the scheduler, with real worktrees and the fake CLI: the run works again from that step with the note in its
+//! prompt; a merged run and one whose worktree is gone are refused and stay as they were.
 mod support;
 
 use std::{fs, path::Path};
@@ -14,7 +14,7 @@ use orchester_core::{
   store::{MergeStore, RunStore},
   time::Timestamp,
 };
-use orchester_ipc::Rejection;
+use orchester_ipc::{Rejection, WorkReturn};
 use orchester_store::ProjectDb;
 use support::{Setup, project, reported, scheduler, wait_for, wait_for_idle};
 
@@ -30,6 +30,16 @@ fn read(root: &Path, id: RunId) -> Run {
 
 fn implement() -> StepKey {
   StepKey::new("implement").expect("a step key")
+}
+
+/// The return of `run` to Implement with the note, to resolve no merge's conflicts.
+fn returned(run: RunId) -> WorkReturn {
+  WorkReturn {
+    run,
+    step: implement(),
+    note: note(),
+    conflicts: None,
+  }
 }
 
 fn note() -> ReviewNote {
@@ -48,7 +58,7 @@ async fn returned_a_succeeded_run_works_again_from_the_step_with_the_note() {
   let succeeded = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   wait_for_idle(&scheduler).await;
   assert_eq!(succeeded.status(), &RunStatus::Succeeded);
-  scheduler.return_ended(id, implement(), note()).await.expect("returned");
+  scheduler.return_ended(returned(id)).await.expect("returned");
   let done = wait_for(root, &mut events, id, |run| {
     run.status() == &RunStatus::Succeeded && run.attempts().len() == 2
   })
@@ -59,6 +69,7 @@ async fn returned_a_succeeded_run_works_again_from_the_step_with_the_note() {
     &AttemptReason::ReturnedAfterEnd {
       return_to: implement(),
       note: note(),
+      conflicts: None,
     }
   );
   let db = ProjectDb::open(root).expect("open");
@@ -71,7 +82,7 @@ async fn returned_a_succeeded_run_works_again_from_the_step_with_the_note() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn returned_refuses_a_merged_run_and_one_whose_worktree_is_gone() {
+async fn returned_refuses_a_merged_run_a_gone_worktree_and_a_merge_in_it() {
   let project = project(&Setup::new("Say hello."));
   let root = project.repo.path();
   let (scheduler, mut events) = scheduler(root);
@@ -87,10 +98,30 @@ async fn returned_refuses_a_merged_run_and_one_whose_worktree_is_gone() {
   let kept = root.join(".orchester/kept-worktree");
   fs::rename(&worktree, &kept).expect("the worktree moved away");
   assert_eq!(
-    scheduler.return_ended(id, implement(), note()).await,
+    scheduler.return_ended(returned(id)).await,
     Err(Rejection::WorktreeRemoved)
   );
   fs::rename(&kept, &worktree).expect("the worktree back");
+
+  // A merge a person began in the worktree outside Orchester holds the run back too: git keeps it as `MERGE_HEAD`
+  // in the worktree's own git folder.
+  let git = |args: &[&str]| {
+    let output = std::process::Command::new("git")
+      .arg("-C")
+      .arg(&worktree)
+      .args(args)
+      .output()
+      .expect("git");
+    assert!(output.status.success(), "git {args:?}");
+    String::from_utf8(output.stdout).expect("text").trim().to_owned()
+  };
+  let merge_head = worktree.join(git(&["rev-parse", "--git-dir"])).join("MERGE_HEAD");
+  fs::write(&merge_head, format!("{}\n", git(&["rev-parse", "HEAD"]))).expect("a merge in progress");
+  assert_eq!(
+    scheduler.return_ended(returned(id)).await,
+    Err(Rejection::WorktreeInMerge)
+  );
+  fs::remove_file(&merge_head).expect("the merge gone");
 
   ProjectDb::open(root)
     .expect("open")
@@ -102,9 +133,6 @@ async fn returned_refuses_a_merged_run_and_one_whose_worktree_is_gone() {
       merged_at: Timestamp::now(),
     })
     .expect("merged");
-  assert_eq!(
-    scheduler.return_ended(id, implement(), note()).await,
-    Err(Rejection::RunMerged)
-  );
+  assert_eq!(scheduler.return_ended(returned(id)).await, Err(Rejection::RunMerged));
   assert_eq!(read(root, id), ended);
 }

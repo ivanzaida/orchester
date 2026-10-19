@@ -140,6 +140,9 @@ pub enum StoreError {
   ServerNotFound(ServerId),
   #[error("run {0} was merged already")]
   AlreadyMerged(RunId),
+  /// The run works again, or a merge waits in its worktree for a person: it is not merged now.
+  #[error("run {0} cannot be merged now: it works again or a merge waits in its worktree")]
+  NotMergeable(RunId),
   #[error("run {0} does not exist")]
   RunNotFound(RunId),
   #[error("memory {0} does not exist")]
@@ -219,6 +222,10 @@ pub enum RunStoreError {
   /// The events would return the work of run `0`, which was merged into its base branch. Nothing was recorded.
   #[error("run {0} cannot be returned: its work was merged")]
   Merged(RunId),
+  /// The events would continue run `0` while a merge waits in its worktree for a person to resolve it. Nothing was
+  /// recorded.
+  #[error("run {0} cannot continue: a merge waits in its worktree")]
+  Resolving(RunId),
 }
 
 impl From<rusqlite::Error> for RunStoreError {

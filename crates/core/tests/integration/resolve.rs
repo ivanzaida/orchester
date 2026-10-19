@@ -1,11 +1,13 @@
 //! Resolving a merge's conflicts by hand in the run's worktree, against real repositories: the base branch is merged
-//! into the run's branch there with git's markers, *Continue* commits it only once no marker is left, *Abort* puts
-//! the worktree back, and a worktree with uncommitted work is not merged into.
+//! into the run's branch there with git's markers; the index is the truth of what is resolved; a binary file or one a
+//! side deleted waits for a side to be kept; *Continue* commits only once every file is resolved; *Abort* puts the
+//! worktree back; a worktree with uncommitted work, off the run's branch or past its checkpoint is not merged into.
 
-use std::fs;
+use std::{fs, path::Path};
 
 use orchester_core::{
-  integration::resolve::{self, ResolveError, Started, holds_markers},
+  integration::resolve::{self, FileState, ResolveError, Side, Started, Undecided, holds_markers},
+  revision::Revision,
   run::BranchName,
 };
 
@@ -15,43 +17,72 @@ fn branch(name: &str) -> BranchName {
   BranchName::new(name).expect("a branch name")
 }
 
-/// A run worktree and `main` that both appended a line to the end of `list.txt` since the run started.
-fn conflicting() -> (Repo, std::path::PathBuf) {
+fn head(worktree: &Path) -> Revision {
+  Revision::new(&git_in(worktree, &["rev-parse", "HEAD"])).expect("a commit")
+}
+
+/// A repository whose run worktree and `main` both changed `file` since the run started, as `(run's, main's)`, from
+/// `first`; `None` deletes it on that side.
+fn conflicting(file: &str, first: &[u8], (run, main): (Option<&[u8]>, Option<&[u8]>)) -> (Repo, std::path::PathBuf) {
   let repo = Repo::new();
-  repo.commit(&repo.root, "list.txt", "first\n", "a list");
+  fs::write(repo.root.join(file), first).expect("write");
+  git_in(&repo.root, &["add", "--all"]);
+  git_in(&repo.root, &["commit", "--quiet", "-m", "the file"]);
   let base = repo.head();
   let worktree = repo.worktree("run", RUN_BRANCH, &base);
-  repo.commit(
-    &worktree,
-    "list.txt",
-    "first\nrun's\n",
-    "Implement: append the run's entry",
-  );
-  repo.commit(&repo.root, "list.txt", "first\nmain's\n", "append main's entry");
+  let side = |dir: &Path, content: Option<&[u8]>, message: &str| {
+    match content {
+      Some(content) => fs::write(dir.join(file), content).expect("write"),
+      None => fs::remove_file(dir.join(file)).expect("delete"),
+    }
+    git_in(dir, &["add", "--all"]);
+    git_in(dir, &["commit", "--quiet", "-m", message]);
+  };
+  side(&worktree, run, "Implement: the run's change");
+  side(&repo.root, main, "main's change");
   (repo, worktree)
 }
 
-fn start(worktree: &std::path::Path) -> Result<Started, ResolveError> {
+/// Both appended a line to the end of `list.txt`.
+fn appended() -> (Repo, std::path::PathBuf) {
+  conflicting(
+    "list.txt",
+    b"first\n",
+    (Some(b"first\nrun's\n"), Some(b"first\nmain's\n")),
+  )
+}
+
+fn start(worktree: &Path) -> Result<Started, ResolveError> {
   resolve::start(
     &Processes,
     &git_program(),
     worktree,
-    (&branch("main"), &branch(RUN_BRANCH)),
+    (&branch("main"), &branch(RUN_BRANCH), &head(worktree)),
   )
+}
+
+fn finish(worktree: &Path, expected: &Revision) -> Result<resolve::MergedIn, ResolveError> {
+  resolve::finish(&Processes, &git_program(), worktree, (&branch("main"), expected))
+}
+
+fn states(worktree: &Path) -> Vec<(String, FileState)> {
+  resolve::resolution(&Processes, &git_program(), worktree)
+    .expect("read")
+    .expect("a merge in progress")
+    .files
+    .into_iter()
+    .map(|file| (file.path, file.state))
+    .collect()
 }
 
 #[test]
 fn resolve_merges_the_base_into_the_worktree_and_leaves_the_markers() {
-  let (repo, worktree) = conflicting();
+  let (repo, worktree) = appended();
   let checkout = repo.head();
   assert_eq!(start(&worktree), Ok(Started::Conflicts(vec!["list.txt".to_owned()])));
   let text = fs::read_to_string(worktree.join("list.txt")).expect("the conflicted file");
   assert!(holds_markers(&text), "{text}");
-  let resolution = resolve::resolution(&Processes, &git_program(), &worktree)
-    .expect("read")
-    .expect("a merge in progress");
-  assert_eq!(resolution.conflicted, ["list.txt"]);
-  assert_eq!(resolution.markers, ["list.txt"]);
+  assert_eq!(states(&worktree), [("list.txt".to_owned(), FileState::Markers)]);
   // The person's checkout is not touched.
   assert_eq!(repo.head(), checkout);
   assert!(repo.is_clean());
@@ -60,29 +91,25 @@ fn resolve_merges_the_base_into_the_worktree_and_leaves_the_markers() {
 
 #[test]
 fn resolve_continue_refuses_while_markers_remain_and_commits_once_resolved() {
-  let (repo, worktree) = conflicting();
+  let (repo, worktree) = appended();
+  let expected = head(&worktree);
   start(&worktree).expect("merged with conflicts");
   assert_eq!(
-    resolve::finish(&Processes, &git_program(), &worktree),
+    finish(&worktree, &expected),
     Err(ResolveError::MarkersLeft(vec!["list.txt".to_owned()]))
   );
   fs::write(worktree.join("list.txt"), "first\nmain's\nrun's\n").expect("resolved by hand");
-  let resolution = resolve::resolution(&Processes, &git_program(), &worktree)
-    .expect("read")
-    .expect("still in the merge");
-  assert_eq!(resolution.conflicted, ["list.txt"]);
-  assert!(
-    resolution.markers.is_empty(),
-    "a resolved file holds no marker, staged or not"
+  assert_eq!(
+    states(&worktree),
+    [("list.txt".to_owned(), FileState::Resolved)],
+    "resolved by its text before it is added"
   );
-  let merged = resolve::finish(&Processes, &git_program(), &worktree).expect("committed");
+  let merged = finish(&worktree, &expected).expect("committed");
   assert_eq!(merged.base.as_str(), repo.head());
-  assert_eq!(merged.tip.as_str(), git_in(&worktree, &["rev-parse", "HEAD"]));
+  assert_eq!(merged.tip, head(&worktree));
   assert_eq!(resolve::resolution(&Processes, &git_program(), &worktree), Ok(None));
   assert_eq!(git_in(&worktree, &["status", "--porcelain"]), "");
-  // The run's branch holds main now, so main merges into it without a conflict.
-  let main = repo.head();
-  git_in(&worktree, &["merge-base", "--is-ancestor", &main, "HEAD"]);
+  git_in(&worktree, &["merge-base", "--is-ancestor", &repo.head(), "HEAD"]);
   assert_eq!(
     git_in(&worktree, &["log", "-1", "--format=%s"]),
     format!("Merge main into {RUN_BRANCH}")
@@ -90,12 +117,80 @@ fn resolve_continue_refuses_while_markers_remain_and_commits_once_resolved() {
 }
 
 #[test]
+fn resolve_a_file_marked_resolved_is_resolved_whatever_its_text_holds() {
+  let (_repo, worktree) = appended();
+  let expected = head(&worktree);
+  start(&worktree).expect("merged with conflicts");
+  // A file about git's markers holds one as its content; once the person marks it resolved, the index decides.
+  fs::write(
+    worktree.join("list.txt"),
+    "first\n<<<<<<< is how git marks a conflict\n",
+  )
+  .expect("written");
+  assert_eq!(states(&worktree), [("list.txt".to_owned(), FileState::Markers)]);
+  git_in(&worktree, &["add", "list.txt"]);
+  assert_eq!(states(&worktree), [("list.txt".to_owned(), FileState::Resolved)]);
+  finish(&worktree, &expected).expect("committed");
+}
+
+#[test]
+fn resolve_a_binary_conflict_waits_for_a_side_to_be_kept() {
+  let (_repo, worktree) = conflicting(
+    "logo.bin",
+    b"\x00\x01first",
+    (Some(b"\x00\x01run's"), Some(b"\x00\x01main's")),
+  );
+  let expected = head(&worktree);
+  start(&worktree).expect("merged with conflicts");
+  assert_eq!(
+    states(&worktree),
+    [("logo.bin".to_owned(), FileState::Undecided(Undecided::Unmergeable))]
+  );
+  assert_eq!(
+    finish(&worktree, &expected),
+    Err(ResolveError::Undecided(vec!["logo.bin".to_owned()]))
+  );
+  resolve::decide(&Processes, &git_program(), &worktree, ("logo.bin", Side::Base)).expect("kept main's");
+  assert_eq!(fs::read(worktree.join("logo.bin")).expect("kept"), b"\x00\x01main's");
+  assert_eq!(states(&worktree), [("logo.bin".to_owned(), FileState::Resolved)]);
+  finish(&worktree, &expected).expect("committed");
+}
+
+#[test]
+fn resolve_a_file_main_deleted_keeps_the_runs_or_goes() {
+  for (side, kept) in [(Side::Run, true), (Side::Base, false)] {
+    let (_repo, worktree) = conflicting("notes.txt", b"first\n", (Some(b"first\nrun's\n"), None));
+    let expected = head(&worktree);
+    start(&worktree).expect("merged with conflicts");
+    assert_eq!(
+      states(&worktree),
+      [("notes.txt".to_owned(), FileState::Undecided(Undecided::DeletedByBase))]
+    );
+    resolve::decide(&Processes, &git_program(), &worktree, ("notes.txt", side)).expect("decided");
+    assert_eq!(states(&worktree), [("notes.txt".to_owned(), FileState::Resolved)]);
+    finish(&worktree, &expected).expect("committed, a removed path too");
+    assert_eq!(worktree.join("notes.txt").is_file(), kept, "{side:?}");
+    assert_eq!(git_in(&worktree, &["status", "--porcelain"]), "");
+  }
+}
+
+#[test]
+fn resolve_a_file_the_run_deleted_waits_for_a_side() {
+  let (_repo, worktree) = conflicting("notes.txt", b"first\n", (None, Some(b"first\nmain's\n")));
+  start(&worktree).expect("merged with conflicts");
+  assert_eq!(
+    states(&worktree),
+    [("notes.txt".to_owned(), FileState::Undecided(Undecided::DeletedByRun))]
+  );
+}
+
+#[test]
 fn resolve_abort_puts_the_worktree_back() {
-  let (_repo, worktree) = conflicting();
-  let before = git_in(&worktree, &["rev-parse", "HEAD"]);
+  let (_repo, worktree) = appended();
+  let before = head(&worktree);
   start(&worktree).expect("merged with conflicts");
   resolve::abort(&Processes, &git_program(), &worktree).expect("aborted");
-  assert_eq!(git_in(&worktree, &["rev-parse", "HEAD"]), before);
+  assert_eq!(head(&worktree), before);
   assert_eq!(git_in(&worktree, &["status", "--porcelain"]), "");
   assert_eq!(
     resolve::abort(&Processes, &git_program(), &worktree),
@@ -104,12 +199,33 @@ fn resolve_abort_puts_the_worktree_back() {
 }
 
 #[test]
-fn resolve_refuses_a_worktree_with_uncommitted_work() {
-  let (_repo, worktree) = conflicting();
+fn resolve_refuses_uncommitted_work_another_branch_and_a_branch_past_its_checkpoint() {
+  let (_repo, worktree) = appended();
+  let checkpoint = head(&worktree);
   fs::write(worktree.join("notes.txt"), "the agent's\n").expect("uncommitted work");
   assert_eq!(
     start(&worktree),
     Err(ResolveError::Uncommitted(vec!["notes.txt".to_owned()]))
+  );
+  git_in(&worktree, &["add", "--all"]);
+  git_in(&worktree, &["commit", "--quiet", "-m", "not a checkpoint"]);
+  assert_eq!(
+    resolve::start(
+      &Processes,
+      &git_program(),
+      &worktree,
+      (&branch("main"), &branch(RUN_BRANCH), &checkpoint)
+    ),
+    Err(ResolveError::BranchMoved)
+  );
+  assert_eq!(
+    resolve::start(
+      &Processes,
+      &git_program(),
+      &worktree,
+      (&branch("main"), &branch("someone-else"), &head(&worktree))
+    ),
+    Err(ResolveError::NotOnBranch)
   );
   assert_eq!(resolve::resolution(&Processes, &git_program(), &worktree), Ok(None));
 }

@@ -1,12 +1,16 @@
 //! Resolving a merge's conflicts by hand in the run's worktree ([`crate::tasks::resolve`]) on a thread of its own:
-//! merging the base branch in and opening the editor, committing the merge once it is resolved, or aborting it. One
+//! merging the base branch in and opening the editor, keeping a side of a file git could not merge, committing the
+//! merge once it is resolved, or aborting it. One
 //! operation of the run at a time, as for its merge; once the merge in the worktree is committed (or git merged
 //! without a conflict) the merge into the base branch that conflicted is forgotten, so *Merge into main* is offered
 //! again.
 
 use std::{path::Path, sync::Arc, thread};
 
-use orchester_core::{id::RunId, integration::resolve::Started};
+use orchester_core::{
+  id::RunId,
+  integration::resolve::{Side, Started},
+};
 use orchester_exec::programs::Programs;
 
 use super::{Active, JobState, RunJobs};
@@ -17,10 +21,12 @@ use crate::{
 };
 
 /// What resolving by hand does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResolveStep {
   /// Merge the base branch into the worktree and open the editor.
   Start,
+  /// Keep `side`'s version of `path`, a file git could not merge by content.
+  Decide { path: Arc<str>, side: Side },
   /// Commit the resolved merge.
   Continue,
   /// Abort the merge.
@@ -71,11 +77,11 @@ impl RunJobs {
       return false;
     }
     self.update(|state| {
-      state.resolve.step = Some(step);
-      state.resolve.state = JobState::Running;
       if step == ResolveStep::Start {
         state.resolve.editor = None;
       }
+      state.resolve.step = Some(step.clone());
+      state.resolve.state = JobState::Running;
     });
     let job = self.clone();
     if let Err(error) = thread::Builder::new()
@@ -100,6 +106,10 @@ impl RunJobs {
         Ok(Started::Merged(_)) => (Ok(true), None),
         Err(message) => (Err(message), None),
       },
+      ResolveStep::Decide { path, side } => (
+        resolve::decide(programs, root, (run, &path, side)).map(|()| false),
+        None,
+      ),
       ResolveStep::Continue => (resolve::finish(programs, root, run).map(|()| true), None),
       ResolveStep::Abort => (resolve::abort(programs, root, run).map(|()| false), None),
     };

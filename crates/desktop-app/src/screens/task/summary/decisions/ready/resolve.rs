@@ -16,11 +16,11 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::StepKey;
+use orchester_core::{resource::StepKey, run::MergeConflicts};
 use orchester_workspace::tasks::{
   detail::RunView,
   integration_jobs::{EditorOpened, JobState, ResolveArgs, ResolveStep},
-  resolve::Editor,
+  resolve::{Editor, Worktree},
   return_work,
 };
 
@@ -61,6 +61,8 @@ impl lurq::app::component::DevtoolsInspectable for Asking {}
 pub struct Offer<'a> {
   pub task: &'a TaskContext,
   pub run: &'a RunView,
+  /// The run's worktree as last read; `None` before it is first read.
+  pub worktree: Option<&'a Worktree>,
   pub conflicts: &'a [String],
   pub step: &'a Signal<StepChoice>,
   pub asked: &'a Signal<Option<Asking>>,
@@ -125,13 +127,15 @@ impl Offer<'_> {
     };
     let branch = self.run.run.base_branch().map_or("", |branch| branch.as_str());
     let line = editor_line(ctx, &editor, branch);
-    let root = &self.task.project.open.repo_root;
-    if let Some(refusal) = return_work::refusal(root, &self.task.detail, self.run) {
-      return (button.unavailable(message_text(ctx, &refusal.message())).into(), line);
-    }
     let job = self.task.jobs.run(self.run.id());
     if job.resolving() {
       return (button.loading().into(), line);
+    }
+    let Some(worktree) = self.worktree else {
+      return (button.disabled().into(), line);
+    };
+    if let Some(refusal) = return_work::refusal(&self.task.detail, self.run, worktree) {
+      return (button.unavailable(message_text(ctx, &refusal.message())).into(), line);
     }
     if job.busy() {
       return (button.disabled().into(), line);
@@ -163,8 +167,10 @@ impl Offer<'_> {
       ctx.t("decisions.ready.resolve.askAgent"),
     )
     .icon(Icon::Bot);
-    let root = &self.task.project.open.repo_root;
-    if let Some(refusal) = return_work::refusal(root, &self.task.detail, self.run) {
+    if let Some(refusal) = self
+      .worktree
+      .and_then(|worktree| return_work::refusal(&self.task.detail, self.run, worktree))
+    {
       let reason = message_text(ctx, &refusal.message());
       return (AgentPart::Unavailable(button.unavailable(reason.clone())), Some(reason));
     }
@@ -211,8 +217,15 @@ impl Offer<'_> {
     if pending.is_some() {
       return button.loading();
     }
-    let note = return_work::conflict_note(base.as_str(), self.conflicts);
-    let command = return_work::command(self.run, step, note);
+    // The worktree is read first, and nothing of the run works on it meanwhile: *Resolve in editor* may be merging.
+    if self.worktree.is_none() || self.task.jobs.run(self.run.id()).busy() {
+      return button.disabled();
+    }
+    let conflicts = MergeConflicts {
+      base: base.clone(),
+      files: self.conflicts.to_vec(),
+    };
+    let command = return_work::command(self.run, step, (return_work::conflict_note(base), Some(conflicts)));
     let (action, asked) = (self.action.clone(), self.asked.clone());
     button.on_click(move || {
       // A second press while the first is under way would replace it (lurq's `FutureAction::run`).

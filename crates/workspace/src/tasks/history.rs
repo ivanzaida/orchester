@@ -218,5 +218,5 @@ fn resolving(db: &ProjectDb, run: &Run) -> Result<Option<(String, String)>, Stor
     .into_iter()
     .find(|start| start.attempt == attempt.id())
     .map(|start| crate::display::clock(start.at));
-  Ok(started.map(|time| (time, conflict.base)))
+  Ok(started.map(|time| (time, conflict.base.as_str().to_owned())))
 }

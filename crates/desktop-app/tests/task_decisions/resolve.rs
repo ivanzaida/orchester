@@ -195,6 +195,53 @@ fn decision_resolve_a_conflict_offers_three_ways_and_the_editor_merges_into_the_
 }
 
 #[test]
+fn decision_resolve_a_file_main_deleted_waits_for_a_side_to_be_kept() {
+  let _checkout = checkout_page();
+  let folder = tempfile::tempdir().expect("a folder for the stand-in");
+  let (editor, _) = stand_in(folder.path());
+  let mut page = Page::seeded_with_editor("decisions", editor);
+  // Main deletes a file the run changed: merging main into the run's worktree cannot keep both.
+  git_in(&page.repo, &["rm", "--quiet", FILES[1]]);
+  git_in(&page.repo, &["commit", "--quiet", "-m", "main drops the settings"]);
+  let run = latest_run(&page, CONFLICTING);
+  page.open(CONFLICTING, "task-merge");
+  page.merge_until(("task-merge", "task-notice-title"), "Not merged into main");
+  page.click("task-resolve-in-editor");
+  resolving(&mut page);
+  assert_eq!(
+    page.text("task-resolving-file-1"),
+    format!(
+      "{} main deleted it · the run changed it Keep the run's Keep main's",
+      FILES[1]
+    )
+  );
+  // Markers are said first; the file to decide on, once they are gone.
+  assert!(page.text("task-resolve-continue-reason").contains(FILES[0]));
+  page.click("task-resolve-keep-run-1");
+  page
+    .window
+    .until_within(super::MERGE_WAIT, "the run's side kept", |window| {
+      window
+        .texts("task-resolving-file-1")
+        .is_some_and(|texts| texts.join(" ").ends_with("Resolved"))
+    });
+  let worktree = worktree(&page, &run);
+  assert!(worktree.join(FILES[1]).is_file(), "the run's version is kept");
+  git_in(&worktree, &["checkout", "--ours", "--", FILES[0]]);
+  page.window.until("Continue once every file is resolved", |window| {
+    window.tree.tick_timers();
+    window.texts("task-resolve-continue-reason").is_none()
+  });
+  page.click("task-resolve-continue");
+  page
+    .window
+    .until_within(super::MERGE_WAIT, "the Ready card again", |window| {
+      window.texts("task-resolving-title").is_none() && window.texts("task-merge").is_some()
+    });
+  assert_eq!(git_in(&worktree, &["status", "--porcelain"]), "");
+}
+
+#[test]
 fn decision_resolve_abort_puts_the_worktree_back() {
   let _checkout = checkout_page();
   let folder = tempfile::tempdir().expect("a folder for the stand-in");

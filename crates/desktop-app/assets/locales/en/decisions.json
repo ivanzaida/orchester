@@ -212,6 +212,11 @@
         "openYourself": "Open the worktree in your editor to resolve the conflicts.",
         "conflicted": "Conflicted",
         "resolved": "Resolved",
+        "unmergeable": "Git can't merge it · keep a side",
+        "deletedByBase": "{{branch}} deleted it · the run changed it",
+        "deletedByRun": "The run deleted it · {{branch}} changed it",
+        "keepRun": "Keep the run's",
+        "keepBase": "Keep {{branch}}'s",
         "continue": "Continue",
         "abort": "Abort the merge"
       },

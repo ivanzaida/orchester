@@ -30,6 +30,8 @@ pub enum MarkKind {
   Restarted { step: Arc<str> },
   /// A person returned the work to `to` with `note`.
   ReturnedWithNote { to: Arc<str>, note: Arc<str> },
+  /// A person returned the work of the ended run to `to` to resolve the conflicts of a merge into `branch`.
+  ReturnedToResolve { to: Arc<str>, branch: Arc<str> },
 }
 
 /// A return or restart before the header of the step its attempt starts from.
@@ -70,7 +72,15 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
       after: others(attempt, return_to).map(name).collect(),
     },
     AttemptReason::Restart { step } => MarkKind::Restarted { step: name(step) },
-    AttemptReason::Returned { return_to, note, .. } | AttemptReason::ReturnedAfterEnd { return_to, note } => {
+    AttemptReason::ReturnedAfterEnd {
+      return_to,
+      conflicts: Some(conflicts),
+      ..
+    } => MarkKind::ReturnedToResolve {
+      to: name(return_to),
+      branch: conflicts.base.as_str().into(),
+    },
+    AttemptReason::Returned { return_to, note, .. } | AttemptReason::ReturnedAfterEnd { return_to, note, .. } => {
       MarkKind::ReturnedWithNote {
         to: name(return_to),
         note: note.as_str().into(),

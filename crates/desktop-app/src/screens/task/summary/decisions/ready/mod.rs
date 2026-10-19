@@ -28,10 +28,13 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{id::RunId, integration::resolve::Resolution};
+use orchester_core::id::RunId;
 use orchester_workspace::{
   background,
-  tasks::{integration_jobs::JobState, resolve as worktree},
+  tasks::{
+    integration_jobs::JobState,
+    resolve::{self as worktree, Worktree},
+  },
 };
 
 use self::{
@@ -91,8 +94,9 @@ impl Component for ReadyForReview {
       readiness: pull_request::read(ctx, &props, settled && reminded),
       draft: self.draft.clone(),
     };
-    let in_worktree = in_worktree(ctx, &props, (run.id(), self.look.get()));
-    if in_worktree.is_some() {
+    let worktree = in_worktree(ctx, &props, (run.id(), self.look.get()));
+    let in_merge = worktree.as_ref().and_then(|worktree| worktree.merge.as_ref());
+    if in_merge.is_some() {
       self.looking.start();
     } else {
       self.looking.stop();
@@ -103,7 +107,7 @@ impl Component for ReadyForReview {
     // A merge git made shows as soon as it is made, also while the task is not read again with it.
     let made = props.detail.merge.as_ref().or(job.merged.as_ref());
     let mut parts: Vec<Element> = match (made, &job.merge) {
-      (None, _) if let Some(resolution) = &in_worktree => resolving::resolving(ctx, &props, run, (resolution, &pull))
+      (None, _) if let Some(resolution) = in_merge => resolving::resolving(ctx, &props, run, (resolution, &pull))
         .into_iter()
         .chain([stages(run, None, now)])
         .chain(runs_section(ctx, &props))
@@ -120,6 +124,7 @@ impl Component for ReadyForReview {
           Offer {
             task: &props,
             run,
+            worktree: worktree.as_ref(),
             conflicts: &job.conflicts,
             step: &self.step,
             asked: &self.asked,
@@ -150,25 +155,27 @@ impl Component for ReadyForReview {
 
 /// What [`in_worktree`] read.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct InWorktree(Option<Resolution>);
+struct InWorktree(Worktree);
 
 impl lurq::app::component::DevtoolsInspectable for InWorktree {}
 
-/// The merge waiting in `run`'s worktree for the person to resolve it, read again when the task or its resolving
-/// changes and at each `look` while one waits; `None` while there is none or it is being read.
-fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Resolution> {
+/// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its
+/// resolving changes and at each `look` while one waits; `None` while it is first read.
+fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
   let services = Services::of(ctx);
   let root = task.project.open.repo_root.clone();
+  let job = task.jobs.run(run);
+  let idle = !job.resolving();
   let key = (
     root,
-    run,
-    (task.project.feed.revision.get(), task.jobs.run(run).resolve.ended, look),
+    (run, idle),
+    (task.project.feed.revision.get(), job.resolve.ended, look),
   );
   ctx
-    .future(key, move |(root, run, _)| {
+    .future(key, move |(root, (run, idle), _)| {
       let programs = services.programs.clone();
       async move {
-        background::run(move || worktree::read(&programs, &root, run))
+        background::run(move || worktree::read(&programs, &root, (run, idle)))
           .await
           .map_err(|_| ())?
           .map(InWorktree)
@@ -180,5 +187,5 @@ fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> 
     .state()
     .get()
     .data
-    .and_then(|read| read.0)
+    .map(|read| read.0)
 }

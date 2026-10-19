@@ -4,8 +4,8 @@
 //! rebase recorded here moves the base external evidence reads the run's commits from, only when
 //! git proves it ([`RebaseEvidence`]). Of the run's own commits below the new base, only the
 //! checkpointed ones the target has by ancestry keep the base where it was; one the target has as a
-//! pick, or one never checkpointed, is not told apart from the target's own. Merging the target into the run's
-//! branch to resolve a conflict ([`RunRebase::merged_in`]) moves the base the same way.
+//! pick, or one never checkpointed, is not told apart from the target's own. A merge of a newer commit of the
+//! target into the run's branch, to resolve a conflict, moves the base the same way, proven the same way.
 
 use crate::{id::RunId, revision::Revision, time::Timestamp};
 
@@ -52,21 +52,6 @@ impl RunRebase {
       checkpoint: evidence.checkpoint,
       recorded_at: now,
     })
-  }
-
-  /// The base branch's commit `base` merged into `run`'s branch by Orchester, which committed the merge as `tip`
-  /// in the run's worktree to resolve a conflict ([`crate::integration::resolve`]): the run's own commits sit on
-  /// `base` now, as after a rebase onto it, and `tip` holds its `last` checkpoint.
-  pub fn merged_in(run: RunId, (base, tip): (Revision, Revision), last: Option<&Revision>, now: Timestamp) -> Self {
-    Self {
-      run,
-      base,
-      checkpoint: last.map(|replaces| RebasedCheckpoint {
-        replaces: replaces.clone(),
-        tip,
-      }),
-      recorded_at: now,
-    }
   }
 
   /// A rebase as it was recorded.

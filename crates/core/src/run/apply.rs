@@ -318,6 +318,16 @@ impl Run {
     if !steps.is_subset(&known) {
       return Err(RunError::InvalidAttempt("an attempt executes only snapshot steps"));
     }
+    // A reopened run takes a follow-up or a return after it ended, and only it takes one.
+    let after_reopening = matches!(
+      reason,
+      AttemptReason::FollowUp { .. } | AttemptReason::ReturnedAfterEnd { .. }
+    );
+    if self.reopened != after_reopening {
+      return Err(RunError::InvalidAttempt(
+        "a reopened run's attempt is its follow-up or the return of its work",
+      ));
+    }
     match (self.attempts.is_empty(), reason) {
       (true, AttemptReason::Initial) if steps == known => Ok(()),
       (true, _) => Err(RunError::InvalidAttempt("the first attempt executes every step")),
@@ -366,10 +376,13 @@ impl Run {
       RunEventKind::Started
       | RunEventKind::Resumed
       | RunEventKind::Continued { .. }
-      | RunEventKind::Reopened
       | RunEventKind::RecoveryRequested
       | RunEventKind::RetryAllowed => {
         self.status = RunStatus::Running;
+      }
+      RunEventKind::Reopened => {
+        self.status = RunStatus::Running;
+        self.reopened = true;
       }
       RunEventKind::FollowUpFailed => self.end(RunStatus::Succeeded, AttemptStatus::Failed),
       RunEventKind::PauseRequested => self.pause_requested = true,
@@ -455,6 +468,7 @@ impl Run {
     {
       current.set_status(AttemptStatus::RoutedBack);
     }
+    self.reopened = false;
     let executions = executions
       .iter()
       .map(|planned| StepExecution::new(planned.id, planned.step.clone(), StepStatus::Pending))

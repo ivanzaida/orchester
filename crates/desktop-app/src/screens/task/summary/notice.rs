@@ -179,6 +179,7 @@ fn resolving(ctx: &Ctx, run: &RunView) -> Option<Said> {
   let view = run.steps.iter().find(|view| view.key == *step);
   let (step, agent) = step_words(ctx, view);
   let branch = conflict.base.as_str();
+  let files = conflict.files.join(", ");
   let title = ctx.t_args(
     "summary.notice.returnedResolvingTitle",
     [("step", step.as_str()), ("branch", branch)],
@@ -188,7 +189,7 @@ fn resolving(ctx: &Ctx, run: &RunView) -> Option<Said> {
     [
       ("agent", agent.as_str()),
       ("branch", branch),
-      ("files", conflict.files.as_str()),
+      ("files", files.as_str()),
       ("step", step.as_str()),
     ],
   );

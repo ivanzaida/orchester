@@ -182,6 +182,7 @@ pub(super) fn store(db: &mut ProjectDb, run: &Run, events: &[RunEvent]) -> Resul
   db.append_events(run, events).map_err(|error| match error {
     RunStoreError::WorktreeRemoved(_) => Rejection::WorktreeRemoved,
     RunStoreError::Merged(_) => Rejection::RunMerged,
+    RunStoreError::Resolving(_) => Rejection::WorktreeInMerge,
     other => failed("cannot record the run's change", &other),
   })
 }

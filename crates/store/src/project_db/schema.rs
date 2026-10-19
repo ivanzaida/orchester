@@ -37,6 +37,7 @@ mod recovery;
 mod returned_after_end;
 mod reviewer_usage;
 mod run_rebases;
+mod run_resolutions;
 mod shared_members;
 mod sharing;
 mod sources;
@@ -568,6 +569,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   api_providers::MIGRATION,
   project_approval_rules::MIGRATION,
   returned_after_end::MIGRATION,
+  run_resolutions::MIGRATION,
 ];
 
 /// The SQL of `migration`, for a test that applies it again to a database it shaped as the schema

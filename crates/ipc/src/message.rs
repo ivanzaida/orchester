@@ -14,8 +14,8 @@ use orchester_core::{
   question::{AnswerError, GivenAnswer},
   resource::StepKey,
   run::{
-    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, PermissionsApply, PlanDecision, PlanVersion,
-    PreflightProblem, ReviewNote, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
+    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
+    PlanVersion, PreflightProblem, ReviewNote, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
   },
   tokens::TokenBudget,
 };
@@ -44,12 +44,14 @@ impl fmt::Display for RequestId {
   }
 }
 
-/// The work of run `run` returned to its agent step `step` with `note` ([`Command::ReturnRun`]).
+/// The work of run `run` returned to its agent step `step` with `note` ([`Command::ReturnRun`]), and the conflicts of
+/// a merge it resolves, when that is what it is for.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkReturn {
   pub run: RunId,
   pub step: StepKey,
   pub note: ReviewNote,
+  pub conflicts: Option<MergeConflicts>,
 }
 
 /// Desktop to runner.
@@ -455,6 +457,9 @@ pub enum Rejection {
   RunNotEnded,
   /// The run's work was merged into its base branch: it is not returned to a step any more.
   RunMerged,
+  /// A merge waits in the run's worktree for a person to resolve it: the run does not continue until it is
+  /// committed or aborted.
+  WorktreeInMerge,
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)
   /// is refused before the run changes, and its messages stay queued.
   WorktreeRemoved,

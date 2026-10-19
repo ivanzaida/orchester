@@ -370,7 +370,11 @@
       "inMerge": "A merge is in progress in the run’s worktree already: continue or abort it.",
       "notInMerge": "No merge is in progress in the run’s worktree any more.",
       "markersLeft": "Conflict markers are still in {{files}}. Resolve them, save the files, then continue.",
-      "unreadable": "{{file}} cannot be read to check it for conflict markers."
+      "unreadable": "{{file}} cannot be read to check it for conflict markers.",
+      "undecided": "Keep one side of {{files}}: git could not merge them by content. Then continue.",
+      "notUnmerged": "{{file}} does not wait for a side to be kept any more.",
+      "branchMoved": "The run’s branch is not at its last checkpoint: it has commits Orchester did not record. Nothing was merged.",
+      "notTheBase": "The merge in the run’s worktree is not a merge of the run’s base branch. Abort it, then resolve again."
     }
   },
   "runs": {
@@ -476,6 +480,7 @@
         "noBaseBranch": "This run didn’t record the branch your checkout had when it started.",
         "notSucceeded": "Only a run whose every step passed can be merged.",
         "alreadyMerged": "This run was merged already.",
+        "notMergeable": "The run works again, or a merge waits in its worktree for you to resolve it, so its merge was not recorded.",
         "heldLocally": "This run’s local integration still holds work in your checkout. Finish it, cancel it or remove its kept originals in Local integration, then merge again. Nothing was merged.",
         "heldByOther": "The local integration of {{task}} holds work in your checkout. Finish it, cancel it or remove its kept originals in its Local integration, then merge again. Nothing was merged.",
         "anotherMerge": "Another merge is under way in this project. Merge this run once it is done.",
@@ -573,6 +578,7 @@
       "worktreeRemoved": "The run’s worktree was removed, so its agent cannot continue.",
       "notEnded": "The run has not ended: only a run that succeeded or failed can be returned to a step.",
       "merged": "The run’s work was merged, so it is not returned to a step any more.",
+      "worktreeInMerge": "A merge waits in the run’s worktree for you to resolve it. Continue or abort it first.",
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
       "failed": "The runner could not do this; its log has the details.",

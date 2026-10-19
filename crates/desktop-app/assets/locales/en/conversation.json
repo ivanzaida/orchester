@@ -206,7 +206,8 @@
       "restartedByYou": "You restarted {{step}} · it stopped without a result · attempt {{attempt}} · {{time}}",
       "returned": "{{failed}} returned the work to {{step}} · attempt {{attempt}} · {{time}}",
       "returnedByYou": "{{failed}} failed; you returned the work to {{step}} · attempt {{attempt}} · {{time}}",
-      "returnedWithNote": "You returned the work to {{step}} · attempt {{attempt}} · {{time}}"
+      "returnedWithNote": "You returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "returnedToResolve": "You returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}"
     },
     "mcp": {
       "disabled": "The server is turned off in Connections.",

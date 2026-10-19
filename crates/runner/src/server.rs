@@ -481,8 +481,8 @@ fn answer_stuck(later: &Later<'_>, scheduler: Scheduler, run: RunId, decision: S
 }
 
 fn answer_return(later: &Later<'_>, scheduler: Scheduler, returned: WorkReturn) -> Answer {
-  let WorkReturn { run, step, note } = returned;
-  later.answer(run, async move { scheduler.return_ended(run, step, note).await })
+  let run = returned.run;
+  later.answer(run, async move { scheduler.return_ended(returned).await })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

@@ -22,6 +22,7 @@ use orchester_core::{
 use super::{
   super::{super::run::RunTask, Continuation, Occasion},
   PromptParts, problem,
+  retry::LoadedReport,
 };
 
 impl RunTask {
@@ -108,10 +109,7 @@ impl RunTask {
         },
       ),
       memory,
-      retry: retry
-        .as_ref()
-        .map(|loaded| ReturnedWork::Retry(loaded.report(self)))
-        .or_else(|| self.run.returned_note(execution).map(ReturnedWork::AfterEnd)),
+      retry: self.returned(retry.as_ref(), execution),
       working,
     };
     assemble(&input, event).map_err(|PromptAssemblyError::UnavailableVariable { variable, .. }| {
@@ -119,6 +117,19 @@ impl RunTask {
         variable: variable.name().to_owned(),
       }
     })
+  }
+
+  /// Why the work came back to `execution`'s step: the failure `retry` reports, else the note of a person who
+  /// returned the work of the ended run to it.
+  fn returned<'a>(&'a self, retry: Option<&'a LoadedReport>, execution: StepExecutionId) -> Option<ReturnedWork<'a>> {
+    retry
+      .map(|loaded| ReturnedWork::Retry(loaded.report(self)))
+      .or_else(|| {
+        self
+          .run
+          .returned_work(execution)
+          .map(|(note, conflicts)| ReturnedWork::AfterEnd { note, conflicts })
+      })
   }
 
   /// The number of the attempt `execution` belongs to.

@@ -329,6 +329,18 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
         ctx.t_args("conversation.mark.returnedWithNote", args),
       )
     }
+    MarkKind::ReturnedToResolve { to, branch } => {
+      let args = [
+        ("step", &*labelled(ctx, to)),
+        ("branch", &**branch),
+        ("attempt", attempt.as_str()),
+        ("time", time.as_str()),
+      ];
+      (
+        Icon::CornerDownLeft,
+        ctx.t_args("conversation.mark.returnedToResolve", args),
+      )
+    }
   };
   let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
   let MarkKind::ReturnedWithNote { note, .. } = &mark.kind else {

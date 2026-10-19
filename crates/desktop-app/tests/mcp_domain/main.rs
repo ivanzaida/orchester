@@ -63,7 +63,7 @@ use orchester_app::{
   theme::{self, Mode},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
-use orchester_workspace::secrets::Vault;
+use orchester_workspace::{secrets::Vault, tasks::resolve::Editor};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
@@ -107,12 +107,14 @@ impl Served {
     (window_control, vault): (bool, Option<Arc<MemoryVault>>),
   ) -> Self {
     let runtime = Runtime::new().expect("tokio runtime");
+    // An editor that is not one a person named, at a path where nothing is: *Resolve in editor* never opens one here.
     let launch = signed_in::launch(
       database,
       runner,
       runtime.handle(),
       &signed_in::account_cloud::AccountCloud::start(),
-    );
+    )
+    .with_editor(Some(Editor::VsCode(folder.path().join("no-editor").join("code"))));
     let mut services = launch.services().cloned();
     if let (Some(services), Some(vault)) = (services.as_mut(), vault) {
       services.vault = Vault::with(vault);
