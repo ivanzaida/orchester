@@ -133,9 +133,9 @@ fn orchestrator_release_proposed_in_a_turn_on_its_own_is_applied_by_the_person()
   });
 }
 
-/// Queues a reviewed group of `keys`' drafts on `delivery` while the project is held, so nothing of it starts; holds
-/// the group as `actor` and lets the project go on. The group's key.
-fn held_group(
+/// Queues a reviewed group of `keys`' drafts on `delivery` while a person holds the project, so nothing of it starts;
+/// the project stays held. The group's key.
+fn queued_group(
   screen: &Orchestrator,
   delivery: orchester_core::id::ResourceId,
   keys: &[String],
@@ -184,15 +184,27 @@ fn held_group(
     })
     .collect();
   db.queue_task_group(&group, None, &reviewed).expect("queued");
-  db.set_queue_hold(
-    (HoldScope::Group(group.key()), HoldActor::Automation),
-    true,
-    Timestamp::now(),
-  )
-  .expect("group held");
+  group.key()
+}
+
+/// [`queued_group`], with the group held by automation and the project let go on. The group's key.
+fn held_group(
+  screen: &Orchestrator,
+  delivery: orchester_core::id::ResourceId,
+  keys: &[String],
+) -> orchester_core::id::IdempotencyKey {
+  use orchester_core::{
+    task_group::{HoldActor, HoldScope},
+    time::Timestamp,
+  };
+
+  let group = queued_group(screen, delivery, keys);
+  let mut db = screen.db();
+  db.set_queue_hold((HoldScope::Group(group), HoldActor::Automation), true, Timestamp::now())
+    .expect("group held");
   db.set_queue_hold((HoldScope::Project, HoldActor::Person), false, Timestamp::now())
     .expect("project released");
-  group.key()
+  group
 }
 
 #[test]
@@ -229,7 +241,8 @@ fn orchestrator_hold_card_names_the_group_its_tasks_and_resumes() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let delivery = screen.delivery();
   let keys = ["First", "Second"].map(|title| screen.draft_on(delivery, title));
-  let group = held_group(&screen, delivery, &keys);
+  // The project stays held by the person, so nothing of the group starts before the chat holds it.
+  let group = queued_group(&screen, delivery, &keys);
   screen.go(OrchestratorChat::New);
   screen.send(r#"Call hold_queue {"project":"Kontur","task":"KON-1"}"#);
   screen.until("the card", |screen| {

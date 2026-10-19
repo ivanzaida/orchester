@@ -45,6 +45,7 @@ pub(crate) use self::{
   continue_run::{Choice as ContinueChoice, ContinueRun, offered as continue_offered},
   messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
   pipeline_copy::duplicate_pipeline_draft,
+  queue_hold::not_in_group,
   questions::{check_answer, waiting_request},
   tasks::find_task,
 };

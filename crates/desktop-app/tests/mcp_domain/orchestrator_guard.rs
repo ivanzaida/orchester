@@ -1,14 +1,17 @@
 //! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5), on the seeded
 //! Kontur: in a turn a wait or a run's end started by itself, `merge_run` and `run_task` only propose, even with *Let
-//! the Orchestrator merge runs* and auto mode on; and `resume_run` refuses a run stopped at a limit or interrupted,
-//! which only the person resumes.
+//! the Orchestrator merge runs* and auto mode on; `resume_run` refuses a run stopped at a limit or interrupted,
+//! which only the person resumes; and a hold or a release of new starts that would change nothing is refused.
 
 use orchester_core::{
+  id::IdempotencyKey,
   orchestrator::ActionOutcome,
+  resource::Pipeline,
   run::{InterruptCause, RunLimit, review::AutoModeSettings},
-  store::{MergeStore, RunStore, TaskStore},
-  task_group::{HoldActor, HoldScope},
+  store::{MergeStore, ResourceStore, RunStore, TaskStore},
+  task_group::{HoldActor, HoldScope, ReviewedPipeline, Scheduling, TaskGroup},
   time::Timestamp,
+  tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
@@ -132,7 +135,7 @@ fn chat_release_is_proposed_only_for_what_automation_held() {
   };
   let release = || json!({ "project": "Kontur" });
   let nothing = chat_call(&mut served, &scope, "release_queue", release()).expect_err("nothing held");
-  assert_eq!(refusal(&nothing), "not_held");
+  assert_eq!(refusal(&nothing), "nothing_held");
   hold(&mut db, HoldActor::Person);
   let person = chat_call(&mut served, &scope, "release_queue", release()).expect_err("a person's hold");
   assert_eq!(refusal(&person), "person_only");
@@ -155,7 +158,7 @@ fn chat_release_applied_once_nothing_or_a_person_holds_is_refused() {
     .expect("released");
   assert_eq!(
     apply_refused(&mut served, &db, &scope),
-    ("not_held".to_owned(), "orchestrator.proposal.releaseNothing".to_owned()),
+    ("nothing_held".to_owned(), "orchestrator.proposal.releaseNothing".to_owned()),
     "no release shown that did not happen"
   );
   hold(&mut db, HoldActor::Automation);
@@ -170,4 +173,130 @@ fn chat_release_applied_once_nothing_or_a_person_holds_is_refused() {
     )
   );
   assert!(db.queue_holds().expect("holds").project, "the person's hold stays");
+}
+
+/// The newest action of `scope`'s conversation: its code and reason when refused.
+fn newest_refusal(db: &ProjectDb, scope: &ChatScope) -> (String, String) {
+  match actions(db, scope).pop().expect("kept").outcome {
+    ActionOutcome::Refused { code, reason } => (code, reason),
+    other => panic!("refused, not {other:?}"),
+  }
+}
+
+#[test]
+fn chat_hold_or_release_that_changes_nothing_is_refused() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  // A turn the person started.
+  let scope = chat(&served, &mut db);
+  let project = || json!({ "project": "Kontur" });
+  let released = chat_call(&mut served, &scope, "release_queue", project()).expect_err("nothing held");
+  assert_eq!(refusal(&released), "nothing_held");
+  assert_eq!(
+    newest_refusal(&db, &scope),
+    (
+      "nothing_held".to_owned(),
+      "orchestrator.tools.releaseNothing".to_owned()
+    ),
+    "no release shown that did not happen"
+  );
+  chat_call(&mut served, &scope, "hold_queue", project()).expect("held");
+  assert_eq!(actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Done);
+  let again = chat_call(&mut served, &scope, "hold_queue", project()).expect_err("held already");
+  assert_eq!(refusal(&again), "already_held");
+  assert_eq!(
+    newest_refusal(&db, &scope),
+    (
+      "already_held".to_owned(),
+      "orchestrator.tools.holdAlready".to_owned()
+    ),
+    "no hold shown that did not happen"
+  );
+  chat_call(&mut served, &scope, "release_queue", project()).expect("released");
+  assert_eq!(actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Done);
+  assert!(!db.queue_holds().expect("holds").project);
+}
+
+/// The seed's draft that is complete enough to run, queued alone in a reviewed group: its key and the group's.
+fn grouped(db: &mut ProjectDb) -> (String, IdempotencyKey) {
+  let draft = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.details().title.as_str() == "Drop the legacy sync worker")
+    .expect("the ready draft");
+  let pipeline = draft.details().pipeline.expect("its pipeline");
+  let version = db
+    .latest_version::<Pipeline>(pipeline)
+    .expect("read")
+    .expect("published")
+    .number();
+  let group = TaskGroup::new(
+    IdempotencyKey::generate(),
+    vec![draft.id()],
+    Scheduling::Sequential,
+    TokenBudget::new(1_000_000).expect("cap"),
+  )
+  .expect("group");
+  let reviewed = [ReviewedPipeline {
+    task: draft.id(),
+    pipeline,
+    version,
+  }];
+  db.queue_task_group(&group, None, &reviewed).expect("queued");
+  (draft.key().to_string(), group.key())
+}
+
+/// Holds new starts in `group` as `actor`.
+fn hold_group(db: &mut ProjectDb, group: IdempotencyKey, actor: HoldActor) {
+  db.set_queue_hold((HoldScope::Group(group), actor), true, Timestamp::now())
+    .expect("held");
+}
+
+#[test]
+fn chat_release_of_a_group_is_proposed_only_for_what_automation_held() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let own = chat(&served, &mut db);
+  let scope = ChatScope {
+    on_its_own: true,
+    ..own.clone()
+  };
+  let (task, group) = grouped(&mut db);
+  let release = || json!({ "project": "Kontur", "task": task });
+  let nothing = chat_call(&mut served, &scope, "release_queue", release()).expect_err("nothing held");
+  assert_eq!(refusal(&nothing), "nothing_held");
+  hold_group(&mut db, group, HoldActor::Automation);
+  let told = chat_call(&mut served, &scope, "release_queue", release()).expect("proposed");
+  assert_eq!(told["waits_for_person"], true, "{told}");
+  assert!(db.queue_holds().expect("holds").groups.contains(&group), "nothing released yet");
+  let seq = db.chat_entries(scope.chat).expect("entries").last().expect("it").seq;
+  super::orchestrator_continue::decide(&mut served, &scope, seq, Decision::Accept { widens: Vec::new() })
+    .expect("decided");
+  assert_eq!(actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Applied);
+  assert!(!db.queue_holds().expect("holds").groups.contains(&group), "released");
+  // A person's hold on the group is theirs to release, whoever asks.
+  hold_group(&mut db, group, HoldActor::Person);
+  for scope in [&scope, &own] {
+    let person = chat_call(&mut served, scope, "release_queue", release()).expect_err("a person's hold");
+    assert_eq!(refusal(&person), "person_only");
+  }
+  assert!(db.queue_holds().expect("holds").groups.contains(&group), "the person's hold stays");
+}
+
+#[test]
+fn chat_release_of_a_task_in_no_group_names_that() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let own = chat(&served, &mut db);
+  let scope = ChatScope {
+    on_its_own: true,
+    ..own.clone()
+  };
+  let (task, _) = task_run(&db, READY);
+  let release = json!({ "project": "Kontur", "task": task.key().to_string() });
+  for scope in [&scope, &own] {
+    let refused = chat_call(&mut served, scope, "release_queue", release.clone()).expect_err("in no group");
+    assert_eq!(refusal(&refused), "not_in_group", "on its own: {}", scope.on_its_own);
+  }
 }

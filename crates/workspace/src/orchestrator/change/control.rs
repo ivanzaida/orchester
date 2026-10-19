@@ -17,7 +17,7 @@ use serde_json::Value;
 
 use super::run_subject;
 use crate::{
-  app_mcp::{ToolError, find_run, find_task},
+  app_mcp::{ToolError, find_run, find_task, not_in_group},
   messages::Message,
   tasks::hold,
 };
@@ -105,37 +105,62 @@ pub(in crate::orchestrator) fn resumable(run: &Run, to: ToldTo) -> Result<(), To
 }
 
 /// Refused unless automation holds new starts where a release of the chat's lets them go on: in the whole project, or
-/// in the reviewed group of task `task` (its key). Nothing held there has nothing to release, and a person's hold is
-/// released by a person only, in Tasks; either is told as `to` reads it. Blocks on SQLite.
+/// in the reviewed group of task `task` (its key). A task in no group has no group to release (`not_in_group`), nothing
+/// held there has nothing to release (`nothing_held`), and a person's hold is released by a person only, in Tasks
+/// (`person_only`); the last two are told as `to` reads them. Blocks on SQLite.
 pub(in crate::orchestrator) fn releasable(db: &ProjectDb, task: Option<&str>, to: ToldTo) -> Result<(), ToolError> {
   let holds = db.queue_holds()?;
   let scope = match task {
-    None => Some(HoldScope::Project),
-    Some(key) => hold::group_of(db, find_task(db, key)?.id())?.map(HoldScope::Group),
+    None => HoldScope::Project,
+    Some(named) => {
+      let task = find_task(db, named)?;
+      let key = task.key().to_string();
+      HoldScope::Group(hold::group_of(db, task.id())?.ok_or_else(|| not_in_group(&key))?)
+    }
   };
   let held = match scope {
-    Some(HoldScope::Project) => holds.project,
-    Some(HoldScope::Group(group)) => holds.groups.contains(&group),
-    None => false,
+    HoldScope::Project => holds.project,
+    HoldScope::Group(group) => holds.groups.contains(&group),
   };
-  let (code, agent, applied) = match scope {
-    _ if !held => (
-      "not_held",
-      "orchestrator.tools.releaseNothing",
-      "orchestrator.proposal.releaseNothing",
-    ),
-    Some(held) if holds.by_person.contains(&held) => (
-      "person_only",
-      "orchestrator.tools.releasePersonHeld",
-      "orchestrator.proposal.releasePersonHeld",
-    ),
-    _ => return Ok(()),
-  };
+  if !held {
+    return Err(nothing_held(to));
+  }
+  if !holds.by_person.contains(&scope) {
+    return Ok(());
+  }
   let key = match to {
-    ToldTo::Agent => agent,
-    ToldTo::Applied => applied,
+    ToldTo::Agent => "orchestrator.tools.releasePersonHeld",
+    ToldTo::Applied => "orchestrator.proposal.releasePersonHeld",
   };
-  Err(ToolError::refused(code, vec![Message::new(key)]))
+  Err(ToolError::refused("person_only", vec![Message::new(key)]))
+}
+
+/// The code of a refused release where no new starts are held.
+const NOTHING_HELD: &str = "nothing_held";
+
+/// A release where no new starts are held, told as `to` reads it: the release changes nothing.
+fn nothing_held(to: ToldTo) -> ToolError {
+  let key = match to {
+    ToldTo::Agent => "orchestrator.tools.releaseNothing",
+    ToldTo::Applied => "orchestrator.proposal.releaseNothing",
+  };
+  ToolError::refused(NOTHING_HELD, vec![Message::new(key)])
+}
+
+/// What `hold_queue` (`held`) or `release_queue` answered (`told`), refused when it changed nothing: new starts held
+/// already, or none held to release (also one released between [`releasable`] and the release), told as `to` reads
+/// it. Its card then says it was not done instead of showing a hold or a release that did not happen.
+pub(in crate::orchestrator) fn hold_changed(told: Value, held: bool, to: ToldTo) -> Result<Value, ToolError> {
+  if told.get("changed").and_then(Value::as_bool) != Some(false) {
+    return Ok(told);
+  }
+  if !held {
+    return Err(nothing_held(to));
+  }
+  Err(ToolError::refused(
+    "already_held",
+    vec![Message::new("orchestrator.tools.holdAlready")],
+  ))
 }
 
 /// Refused when `run` ended since a pause of it was proposed: there is nothing to pause.

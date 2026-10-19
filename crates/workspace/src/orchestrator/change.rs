@@ -167,12 +167,14 @@ pub(super) async fn apply(
       let (tool, arguments) = tool_arguments(scope, change);
       app_tool((services, translate), tool, arguments).await
     }
-    // New starts let go on since, or held by a person, leave nothing for the chat's release to do.
+    // New starts let go on since, or held by a person, leave nothing for the chat's release to do; so does a hold
+    // released between this check and the release, which the tool answers as unchanged.
     Change::Release { task } => {
       blocking(move || control::releasable(&ProjectDb::open(&root)?, task.as_deref(), control::ToldTo::Applied))
         .await?;
       let (tool, arguments) = tool_arguments(scope, change);
-      app_tool((services, translate), tool, arguments).await
+      let told = app_tool((services, translate), tool, arguments).await?;
+      control::hold_changed(told, false, control::ToldTo::Applied)
     }
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
     Change::Message {

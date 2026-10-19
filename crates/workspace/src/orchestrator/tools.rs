@@ -183,7 +183,8 @@ const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped,
 /// What the agent reads first of `pause_run` and `release_queue`.
 const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its message begins with [Orchester]) it \
   only proposes this to the person, who applies or dismisses it in the conversation; otherwise it is done as \
-  follows.";
+  follows. There a release is refused before it is proposed when nothing is held (nothing_held) or only a person's \
+  hold is (person_only).";
 
 /// What the agent reads first of `continue_run`.
 const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
@@ -332,6 +333,13 @@ async fn act(
       .await
     }
     _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
+    // A hold or a release that changed nothing is refused, so its card shows no change that did not happen.
+    HOLD_QUEUE | RELEASE_QUEUE => {
+      let told = app_tool((services, translate), name, arguments.clone()).await;
+      Ok(Acted::done(told.and_then(|told| {
+        change::control::hold_changed(told, name == HOLD_QUEUE, change::control::ToldTo::Agent)
+      })))
+    }
     _ => Ok(Acted::done(
       app_tool((services, translate), name, arguments.clone()).await,
     )),

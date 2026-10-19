@@ -1697,7 +1697,8 @@
       "continueWaits": "Run #{{run}} still waits: how it goes on waits for the person, who applies or dismisses it in the conversation. Tell them what you would choose and why.",
       "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to.",
       "releaseNothing": "New starts are not held there: there is nothing to release.",
-      "releasePersonHeld": "A person held these new starts: only a person releases them, in Tasks. Tell them why you would release them."
+      "releasePersonHeld": "A person held these new starts: only a person releases them, in Tasks. Tell them why you would release them.",
+      "holdAlready": "New starts are held there already: there is nothing to hold. Nothing was changed."
     }
   }
 }

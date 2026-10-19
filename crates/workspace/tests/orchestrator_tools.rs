@@ -126,6 +126,10 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       "{name}: {told}"
     );
   }
+  let release = description("release_queue");
+  for part in ["refused before it is proposed", "nothing_held", "person_only"] {
+    assert!(release.contains(part), "release_queue says {part}: {release}");
+  }
   assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
   let resume = description("resume_run");
   for part in ["resumes only a run a pause stopped", "interrupted", "person_only"] {
