@@ -162,6 +162,23 @@ fn waits_without_turn_are_the_automatic_ones_of_every_conversation_oldest_first(
 }
 
 #[test]
+fn decision_authors_persist_person_automation_and_orchestrator_messages() {
+  let (_repo, mut db, run, _) = started_run();
+  let own = Message::from_person(
+    run.task(),
+    Some(run.id()),
+    Recipient::Orchestrator,
+    body("Keep it."),
+    at(20),
+  );
+  let automated = own.sent_by_automation().expect("on the person's side");
+  db.send_message(IdempotencyKey::generate(), &automated).expect("stored");
+  let stored = db.messages(run.task()).expect("messages");
+  assert_eq!(stored[0].answerer(), Some(Answerer::Automation));
+  assert!(!stored[0].by_orchestrator());
+}
+
+#[test]
 fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
   let (_repo, mut db, run, execution) = started_run();
   let sent = Message::from_person(
@@ -186,6 +203,10 @@ fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
   assert_eq!(
     stored.iter().map(Message::by_orchestrator).collect::<Vec<_>>(),
     [true, false]
+  );
+  assert_eq!(
+    stored.iter().map(Message::answerer).collect::<Vec<_>>(),
+    [Some(Answerer::Automation), Some(Answerer::Person)]
   );
   let invocation = db
     .start_invocation(run.id(), execution, &model(), at(22))

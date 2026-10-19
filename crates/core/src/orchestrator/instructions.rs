@@ -37,7 +37,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      write a Markdown link to `orchester:` followed by that link exactly as returned (a task whose `link` is \
      /project/<id>/tasks/KON-12 is [KON-12](orchester:/project/<id>/tasks/KON-12)). Never write or change a route \
      yourself; without a `link`, name the object without a link. Link a web page only with the `url` a tool \
-     returned for it.\n\
+     returned for it. A link is always the Markdown form [words](orchester:<link>): never put a link, a route or \
+     a key you link in backticks or a code block, and never show a route bare.\n\
      - When you give how several things stand, list each on a line of its own as \
      `- Label: [words](orchester:<link>) — detail`: a short label ending in a colon, exactly one link, then a dash \
      and what stands (such as `- Task: [KON-12 · Delivery log](orchester:/project/<id>/tasks/KON-12) — ready for \

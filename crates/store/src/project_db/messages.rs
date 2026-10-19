@@ -24,7 +24,7 @@ const PERSON: &str = "person";
 const AGENT: &str = "agent";
 const COLUMNS: &str = "id, task_id, run_id, author, kind, recipient_profile, step_execution_id, invocation_id, body, \
                        created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-                       undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator";
+                       undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation";
 
 impl ConversationStore for ProjectDb {
   type Error = StoreError;
@@ -96,11 +96,12 @@ impl ConversationStore for ProjectDb {
       return Err(StoreError::Unrepresentable("an agent's message as delivered"));
     };
     let (was, columns) = (DeliveryColumns::of(was), DeliveryColumns::of(delivery));
+    // Automation that sends a message again is recorded as its sender, as for one it wrote.
     let updated = self.connection.execute(
       "UPDATE messages SET run_id = ?2, step_execution_id = ?3, invocation_id = ?4, delivered_at = ?5, \
        acknowledged_at = ?6, arrival = ?7, undelivered_execution = ?8, undelivered_at = ?9, \
-       undelivered_reason = ?10, timing = ?11 WHERE id = ?1 AND delivered_at IS ?12 AND acknowledged_at IS ?13 \
-       AND undelivered_at IS ?14 AND timing = ?15",
+       undelivered_reason = ?10, timing = ?11, by_automation = by_automation OR ?16 WHERE id = ?1 \
+       AND delivered_at IS ?12 AND acknowledged_at IS ?13 AND undelivered_at IS ?14 AND timing = ?15",
       params![
         changed.id().to_string(),
         changed.run().map(|run| run.to_string()),
@@ -117,6 +118,7 @@ impl ConversationStore for ProjectDb {
         was.acknowledged_at,
         was.undelivered_at,
         timing_text(before.timing()),
+        changed.answerer() == Some(orchester_core::run::Answerer::Automation),
       ],
     )?;
     Ok(updated == 1)
@@ -171,8 +173,8 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
   connection.execute(
     "INSERT INTO messages (id, task_id, run_id, idempotency_key, author, kind, recipient_profile, step_execution_id, \
      invocation_id, body, created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-     undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+     undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
     params![
       message.id().to_string(),
       message.task().to_string(),
@@ -198,6 +200,7 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
       columns.undelivered_at,
       columns.undelivered_reason,
       message.by_orchestrator(),
+      message.answerer() == Some(orchester_core::run::Answerer::Automation),
     ],
   )?;
   Ok(())
@@ -302,6 +305,7 @@ struct StoredRow {
   undelivered_at: Option<i64>,
   undelivered_reason: Option<String>,
   by_orchestrator: bool,
+  by_automation: bool,
 }
 
 impl StoredRow {
@@ -326,6 +330,7 @@ impl StoredRow {
       undelivered_at: row.get(16)?,
       undelivered_reason: row.get(17)?,
       by_orchestrator: row.get(18)?,
+      by_automation: row.get(19)?,
     })
   }
 
@@ -353,6 +358,13 @@ impl StoredRow {
     let message = if self.by_orchestrator {
       message
         .sent_by_orchestrator()
+        .map_err(|error| corrupt("message", error))?
+    } else {
+      message
+    };
+    let message = if self.by_automation {
+      message
+        .sent_by_automation()
         .map_err(|error| corrupt("message", error))?
     } else {
       message
