@@ -17,9 +17,11 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
+  id::RunId,
   resource::StepKey,
   run::{Answerer, MergeConflicts},
 };
+use orchester_ipc::Command;
 use orchester_workspace::{
   decisions::DecisionKind,
   messages::Message,
@@ -28,6 +30,7 @@ use orchester_workspace::{
     integration_jobs::{EditorOpened, JobState, ResolveArgs, ResolveStep},
     resolve::{Editor, Worktree},
     return_work,
+    run::control_message,
   },
 };
 
@@ -276,6 +279,25 @@ impl Offer<'_> {
       action.run((Asking, command.clone()));
     })
   }
+}
+
+/// Sends *Ask an agent to resolve*'s return to the runner; once it took it, the merge that failed is forgotten, so the
+/// run that works again, and succeeds again, is not shown its old conflicts.
+pub fn ask_action(ctx: &mut Ctx, task: &TaskContext, run: RunId) -> DecisionAction<Asking> {
+  let services = Services::of(ctx);
+  let (runners, project) = (services.runners, task.project.open.clone());
+  let jobs = services.jobs.of(project.project.id()).of(run);
+  ctx.future_action(move |(asking, command): (Asking, Command)| {
+    let (runners, project, jobs) = (runners.clone(), project.clone(), jobs.clone());
+    async move {
+      runners.control_run_in(&project, command).await.map_err(|error| {
+        tracing::warn!(%error, "the runner did not take the return");
+        control_message(&error)
+      })?;
+      jobs.forget_merge_failure();
+      Ok(asking)
+    }
+  })
 }
 
 /// The step select with its button, or the button that cannot be used.

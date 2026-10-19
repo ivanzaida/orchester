@@ -41,9 +41,7 @@ use self::{
   pull_request::PullRequestRead,
   resolve::{Asking, Offer, StepChoice},
 };
-use super::{
-  super::run_details::run_details, TaskContext, action::decision_action, arranged, runs_section, stages::stages,
-};
+use super::{super::run_details::run_details, TaskContext, arranged, runs_section, stages::stages};
 use crate::{mcp::input_gate::InputGate, services::Services};
 
 /// How often a merge waiting in the run's worktree is read again while the person resolves it.
@@ -106,7 +104,7 @@ impl Component for ReadyForReview {
     } else {
       self.looking.stop();
     }
-    let action = decision_action::<Asking>(ctx, props.project.open.clone());
+    let action = resolve::ask_action(ctx, &props, run.id());
     let now = Services::of(ctx).clock.now();
     let job = props.jobs.run(run.id());
     // A merge git made shows as soon as it is made, also while the task is not read again with it.

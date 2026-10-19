@@ -70,6 +70,18 @@ pub struct ResolveArgs {
 }
 
 impl RunJobs {
+  /// Forgets the merge into the base branch that failed: the run's work went back to a step that resolves it, so
+  /// what that merge found no longer stands for the run.
+  pub fn forget_merge_failure(&self) {
+    self.update(|state| {
+      if matches!(state.merge, JobState::Failed(_)) {
+        state.merge = JobState::Idle;
+        state.conflicts.clear();
+        state.continues_locally = false;
+      }
+    });
+  }
+
   /// Starts `step` on a thread of its own; whether it began, which it does not while another operation of the run
   /// works.
   pub fn start_resolving(&self, step: ResolveStep, args: ResolveArgs) -> bool {
