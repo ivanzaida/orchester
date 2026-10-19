@@ -342,7 +342,9 @@
           "acceptResume": "Resume and send",
           "acceptContinueInterrupted": "Continue and send",
           "acceptRunAgain": "Run again with this message"
-        }
+        },
+        "doneAgain": "Ran {{task}} again · run #{{run}}",
+        "effectRanAgain": "Started run #{{run}} at {{time}}; its first agent reads: {{text}}"
       },
       "publish": {
         "waits": "Publish {{name}} v{{version}}?",
@@ -467,7 +469,7 @@
           "unverified": "waits unverified",
           "unchanged": "waits unchanged"
         },
-        "canceled": "canceled"
+        "cancelled": "cancelled"
       },
       "widens": {
         "repository": "repository: write",

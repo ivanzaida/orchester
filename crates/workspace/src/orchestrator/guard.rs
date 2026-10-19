@@ -33,6 +33,6 @@ pub(super) async fn resumable(scope: &ChatScope, arguments: &JsonObject) -> Resu
     .to_owned();
   let root = scope.root.clone();
   let run = blocking(move || find_run(&ProjectDb::open(&root)?, &named)).await?;
-  control::resumable(&run, control::RESUME_PERSON_ONLY)?;
+  control::resumable(&run, control::ResumeRefusal::Agent)?;
   Ok(run.id())
 }

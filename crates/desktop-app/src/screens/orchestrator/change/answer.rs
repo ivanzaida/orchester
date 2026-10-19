@@ -50,23 +50,35 @@ pub(super) fn answer(ctx: &Ctx, view: &View, (number, answer): (u32, &str)) -> W
 /// A message `text` to the agents of run `#number`, which moves the run as `then` says when none of its agents waits
 /// or works.
 pub(super) fn message(ctx: &Ctx, view: &View, (number, text, then): (u32, &str, Option<MessageThen>)) -> Words {
-  let run = number.to_string();
+  // A message that ran the task again names the run it started, once it is kept with the card (`ZvQqc`).
+  let again = view
+    .action
+    .started
+    .filter(|_| then == Some(MessageThen::RunAgain))
+    .and(view.run())
+    .map(|started| started.number.to_string());
+  let run = again.clone().unwrap_or_else(|| number.to_string());
   let args = [("run", run.as_str()), ("task", view.task())];
-  let title = match view.phase() {
-    Phase::Waits | Phase::Applying => "orchestrator.change.message.waits",
-    Phase::Applied | Phase::Done => "orchestrator.change.message.done",
-    Phase::Dismissed => "orchestrator.change.message.dismissed",
-    Phase::Refused(_) => "orchestrator.change.message.refused",
+  let title = match (view.phase(), &again) {
+    (Phase::Waits | Phase::Applying, _) => "orchestrator.change.message.waits",
+    (Phase::Applied | Phase::Done, Some(_)) => "orchestrator.change.message.doneAgain",
+    (Phase::Applied | Phase::Done, None) => "orchestrator.change.message.done",
+    (Phase::Dismissed, _) => "orchestrator.change.message.dismissed",
+    (Phase::Refused(_), _) => "orchestrator.change.message.refused",
   };
   let time = view.time();
-  let effect = match view.phase() {
-    Phase::Waits | Phase::Applying => ctx.t_args(moving(then).0, [("text", text)]),
-    Phase::Applied | Phase::Done => ctx.t_args(
+  let effect = match (view.phase(), &again) {
+    (Phase::Waits | Phase::Applying, _) => ctx.t_args(moving(then).0, [("text", text)]),
+    (Phase::Applied | Phase::Done, Some(started)) => ctx.t_args(
+      "orchestrator.change.message.effectRanAgain",
+      [("run", started.as_str()), ("text", text), ("time", time.as_str())],
+    ),
+    (Phase::Applied | Phase::Done, None) => ctx.t_args(
       "orchestrator.change.message.effectSent",
       [("text", text), ("time", time.as_str())],
     ),
-    Phase::Dismissed => ctx.t("orchestrator.change.message.effectDismissed"),
-    Phase::Refused(reason) => Arc::from(reason),
+    (Phase::Dismissed, _) => ctx.t("orchestrator.change.message.effectDismissed"),
+    (Phase::Refused(reason), _) => Arc::from(reason),
   };
   Words {
     glyph: Icon::MessageSquareText,

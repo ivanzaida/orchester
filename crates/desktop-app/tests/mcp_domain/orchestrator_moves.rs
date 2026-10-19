@@ -203,4 +203,9 @@ fn chat_resume_applied_after_its_run_was_interrupted_is_refused() {
     "person_only",
     "an interrupted run is not resumed"
   );
+  // The card names why: the run was interrupted since (the tests' words are the keys).
+  let ActionOutcome::Refused { reason, .. } = actions(&db, &own).pop().expect("kept").outcome else {
+    unreachable!("refused above")
+  };
+  assert_eq!(reason, "orchestrator.proposal.resumeStopped.interrupted");
 }

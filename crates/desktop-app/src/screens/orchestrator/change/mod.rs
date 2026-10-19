@@ -126,9 +126,12 @@ impl Component for ChangeCard {
     let notes = self.notes(ctx, (&props, &view, person_only), (read, &loaded.error));
     // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
     // and the apply refuses anything else than what was shown.
-    let shown = match (&loaded.error, read.and_then(|read| read.facts.as_ref())) {
-      (None, Some(read::Facts::Publication(publication))) => Some(publication.widens.clone()),
-      (None, Some(read::Facts::Run(_))) => Some(Vec::new()),
+    let shown = match (&loaded.error, read.map(|read| read.facts.as_ref())) {
+      (None, Some(Some(read::Facts::Publication(publication)))) => Some(publication.widens.clone()),
+      (None, Some(Some(read::Facts::Run(_)))) => Some(Vec::new()),
+      // A change with nothing to read (a release of new starts, a run or draft no longer there) widens nothing; the
+      // tool it goes through refuses it when there is nothing to do.
+      (None, Some(None)) => Some(Vec::new()),
       _ => None,
     };
     card::frame(id, view.phase().name())
@@ -143,7 +146,7 @@ impl Component for ChangeCard {
           .width(Dimension::Pct(100.0)),
       )
       .with_children(notes.1)
-      .child(self.actions(ctx, &props, (&view, accept), shown))
+      .with_children(self.actions(ctx, &props, (&view, accept), shown))
   }
 }
 
@@ -225,16 +228,22 @@ impl ChangeCard {
     (before, after)
   }
 
-  /// The person's action and *Dismiss* while it waits, then the places it opens. The action is taken only once the
-  /// card knows what it widens (`shown`).
+  /// The person's action and *Dismiss* while it waits, then the places it opens; `None` when there is neither. The
+  /// action is taken only once the card knows what it widens (`shown`).
   fn actions(
     &self,
     ctx: &mut Ctx,
     props: &ChangeProps,
     (view, accept): (&View, Option<Accept>),
     shown: Option<Vec<Message>>,
-  ) -> Row {
+  ) -> Option<Row> {
     let id = props.id.as_str();
+    let opens = opens(ctx, props, view);
+    let waits = matches!(view.phase(), Phase::Waits) && props.scope.is_some() && accept.is_some();
+    // A card with nothing to do or open has no actions row, nor its gap (an applied release).
+    if !waits && opens.is_empty() {
+      return None;
+    }
     let mut row = Row::new()
       .id(format!("{id}-actions"))
       .width(Dimension::Pct(100.0))
@@ -276,15 +285,12 @@ impl ChangeCard {
       row = row.child(accept).child(dismiss);
     }
     let navigation = Navigation::of(ctx);
-    row.with_children(
-      opens(ctx, props, view)
-        .into_iter()
-        .enumerate()
-        .map(|(index, (glyph, label, route))| {
-          ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
-            .icon(glyph)
-            .opens(navigation.to(route))
-        }),
+    Some(
+      row.with_children(opens.into_iter().enumerate().map(|(index, (glyph, label, route))| {
+        ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
+          .icon(glyph)
+          .opens(navigation.to(route))
+      })),
     )
   }
 }

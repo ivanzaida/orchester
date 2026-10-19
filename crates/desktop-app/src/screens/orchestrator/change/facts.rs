@@ -393,7 +393,7 @@ fn stands(ctx: &Ctx, view: &View, run: &RunFacts) -> Option<Arc<str>> {
       "orchestrator.change.facts.goingTokens",
       [("tokens", compact_tokens(*tokens))],
     ),
-    Stands::Cancelled => ctx.t("orchestrator.change.facts.canceled"),
+    Stands::Cancelled => ctx.t("orchestrator.change.facts.cancelled"),
     Stands::Ready { since: Some(since) } => ctx.t_args("orchestrator.change.facts.ready", [("time", clock(*since))]),
     Stands::Ready { since: None } => ctx.t("orchestrator.change.facts.readyNow"),
     Stands::Merged { at, .. } => ctx.t_args("orchestrator.change.facts.merged", [("time", clock(*at))]),

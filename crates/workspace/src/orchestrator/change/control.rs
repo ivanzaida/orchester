@@ -8,7 +8,7 @@ use std::path::Path;
 use orchester_core::{
   id::ProjectId,
   orchestrator::change::{Change, ProposedChange},
-  run::{PauseReason, Run, RunStatus},
+  run::{PauseReason, Run, RunLimit, RunStatus},
 };
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
@@ -55,28 +55,45 @@ pub(super) fn control_change(
   let change = if name == PAUSE_RUN {
     Change::Pause { run: id, number }
   } else {
-    resumable(&run, RESUME_PERSON_ONLY)?;
+    resumable(&run, ResumeRefusal::Agent)?;
     Change::Resume { run: id, number }
   };
   Ok((ProposedChange { subject, change }, task))
 }
 
-/// Refused unless `run` is one the chat resumes: a pause stopped it. One stopped at a limit or interrupted is the
-/// person's (`person_only`), as `refusal` (a [`Message`] key with the run's number) tells.
-pub(in crate::orchestrator) fn resumable(run: &Run, refusal: &'static str) -> Result<(), ToolError> {
-  match run.status() {
-    RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Err(ToolError::refused(
-      "person_only",
-      vec![Message::new(refusal).with("run", run.number().get().to_string())],
-    )),
-    _ => Ok(()),
-  }
+/// Who a refused resume is told to.
+#[derive(Clone, Copy)]
+pub(in crate::orchestrator) enum ResumeRefusal {
+  /// The chat's agent, whose call is refused.
+  Agent,
+  /// The person, whose Apply of a proposed resume is refused: the run stopped since, as its words name.
+  Applied,
 }
 
-/// Why the chat's call refuses a resume, told to its agent.
-pub(in crate::orchestrator) const RESUME_PERSON_ONLY: &str = "orchestrator.tools.resumePersonOnly";
-/// Why a proposed resume the person applies is refused: the run stopped otherwise since.
-pub(super) const RESUME_STOPPED: &str = "orchestrator.proposal.resumeStopped";
+/// Refused unless `run` is one the chat resumes: a pause stopped it. One stopped at a limit or interrupted is the
+/// person's (`person_only`), told as `to` reads it.
+pub(in crate::orchestrator) fn resumable(run: &Run, to: ResumeRefusal) -> Result<(), ToolError> {
+  let since = match run.status() {
+    RunStatus::Paused(PauseReason::LimitReached(limit)) => match limit {
+      RunLimit::Tokens => "orchestrator.proposal.resumeStopped.tokens",
+      RunLimit::Time => "orchestrator.proposal.resumeStopped.time",
+      RunLimit::DailyBudget => "orchestrator.proposal.resumeStopped.daily",
+      RunLimit::GroupBudget => "orchestrator.proposal.resumeStopped.group",
+      RunLimit::StepBudget { .. } => "orchestrator.proposal.resumeStopped.step",
+      RunLimit::PlanLimit { .. } => "orchestrator.proposal.resumeStopped.plan",
+    },
+    RunStatus::Interrupted(_) => "orchestrator.proposal.resumeStopped.interrupted",
+    _ => return Ok(()),
+  };
+  let key = match to {
+    ResumeRefusal::Agent => "orchestrator.tools.resumePersonOnly",
+    ResumeRefusal::Applied => since,
+  };
+  Err(ToolError::refused(
+    "person_only",
+    vec![Message::new(key).with("run", run.number().get().to_string())],
+  ))
+}
 
 /// Refused when `run` ended since a pause of it was proposed: there is nothing to pause.
 pub(super) fn pausable(run: &Run) -> Result<(), ToolError> {

@@ -1167,7 +1167,6 @@
   "appMcp": {
     "errors": {
       "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
-      "messageChangedRun": "The run changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
@@ -1665,7 +1664,15 @@
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
       "messageChanged": "Run #{{run}} changed since this was proposed: sending would no longer do what this card says. Nothing was sent; ask the Orchestrator to propose it again.",
-      "resumeStopped": "Run #{{run}} stopped at a limit or was interrupted since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+      "resumeStopped": {
+        "tokens": "Run #{{run}} stopped at its token budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "time": "Run #{{run}} stopped at its time limit since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "daily": "Run #{{run}} stopped at the daily budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "group": "Run #{{run}} stopped at its group's budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "step": "Run #{{run}} stopped at a step's budget since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "plan": "Run #{{run}} stopped at an account's plan limit since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+        "interrupted": "Run #{{run}} was interrupted since this was proposed: continuing it is yours, on the task's Summary. Nothing was changed."
+      },
       "pauseEnded": "Run #{{run}} ended since this was proposed: there is nothing to pause. Nothing was changed.",
       "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again."
     },

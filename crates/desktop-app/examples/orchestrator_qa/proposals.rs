@@ -1,7 +1,7 @@
 //! `proposals`: a conversation with the proposals of turns a wait or a run's end started by itself
 //! (`Orchestrator · proposals in automatic turns · states` `ExRt1`), seeded as the chat keeps them: a pause waiting,
-//! applied, dismissed and refused because its run ended; a resume waiting, applied and refused because its run stopped
-//! at a limit since; a release of new starts waiting and applied; and a message refused because its run changed since
+//! applied, dismissed and refused because its run ended; a resume waiting, applied and refused on a run stopped at
+//! its token budget; a release of new starts waiting and applied; and a message refused because its run changed since
 //! it was proposed. Each card reads its run's facts from the seed as it stands; a refusal keeps the words the apply
 //! path gives it, in the window's language. One turn holds every card, in this order (`-0` to `-9` of its action ids),
 //! so a verifier scrolls to each; the waits and run ends that follow land in another conversation ([`elsewhere`]).
@@ -15,7 +15,7 @@ use orchester_core::{
     ActionOutcome, ChatAction, TurnState,
     change::{Change, ProposedChange},
   },
-  run::Run,
+  run::{PauseReason, Run, RunLimit, RunStatus},
   store::{RunStore, TaskStore},
   time::Timestamp,
 };
@@ -34,6 +34,12 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
   let runs = latest_runs(&db)?;
   let going = pick(&runs, |run| !run.status().is_terminal())?;
   let ended = pick(&runs, |run| run.status().is_terminal())?;
+  let limited = pick(&runs, |run| {
+    matches!(
+      run.status(),
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens))
+    )
+  })?;
   let words = |key: &'static str, run: &(Run, String)| -> String {
     let message = Message::new(key).with("run", run.0.number().get().to_string());
     let args = message.args.iter().map(|(name, value)| (*name, value.as_str()));
@@ -72,9 +78,9 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
     action(("resume_run", going), resume(going), ActionOutcome::Waits),
     settled(action(("resume_run", going), resume(going), ActionOutcome::Applied)),
     settled(action(
-      ("resume_run", going),
-      resume(going),
-      refused("orchestrator.proposal.resumeStopped", "person_only", going),
+      ("resume_run", limited),
+      resume(limited),
+      refused("orchestrator.proposal.resumeStopped.tokens", "person_only", limited),
     )),
     release(ActionOutcome::Waits),
     settled(release(ActionOutcome::Applied)),

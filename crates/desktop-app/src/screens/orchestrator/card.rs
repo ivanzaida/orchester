@@ -1,7 +1,7 @@
 //! What the Orchestrator's proposal and action cards share (`Action card` `nQIhx`, the proposals of `b55NqO`,
 //! `UKgrR`, `Ee2JE`): the raised frame, radius 10, 12 over and under and 14 at its sides, its parts 10 apart; the
-//! head with a 14 icon, the title (12.5/600), a chip and, at its end, the state's 12 icon and words; a note in 11.5
-//! beside its 12 icon; and the person's decision on a proposal, taken off the event loop.
+//! head with a 14 icon, the title (12.5/600, line height 1.5), a chip and, at its end, the state's 12 icon and words; a
+//! note in 11.5 beside its 12 icon; and the person's decision on a proposal, taken off the event loop.
 
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ use orchester_workspace::{
 use crate::{
   mcp::domain,
   services::Services,
-  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::icon::{Icon, icon},
 };
 
@@ -62,7 +62,7 @@ pub(super) fn head(id: &str, (glyph, title): (Icon, &str), chip: Option<Element>
       // One line, as every card's head: a title too long for it ends in an ellipsis.
       Text::new(title)
         .id(format!("{id}-title"))
-        .variant(ConversationText::ResultTitle.role())
+        .variant(OrchestratorText::CardTitle.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)

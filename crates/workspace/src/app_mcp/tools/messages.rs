@@ -76,11 +76,19 @@ pub async fn send_message(
 ) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
+  let (timing, checked) = (args.timing, expected.map(str::to_owned));
   let (project, prepared) = blocking(move || {
     let project = reading.project(&project)?;
     let named = find_run(&orchester_store::ProjectDb::open(&project.repo_root)?, &run)?;
     // Automation reads the run as stored: the runner it asks starts if the project has none.
     let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None)).map_err(refusal)?;
+    // Checked first: a run that moved on since is refused as changed, and one that now waits on a plan would take the
+    // message as its plan's changes.
+    as_checked(
+      &prepared,
+      way_of(&prepared.mode, timing),
+      (checked.as_deref(), named.number().get()),
+    )?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if by != SentBy::Person && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
@@ -92,8 +100,6 @@ pub async fn send_message(
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
   let way = way_of(&prepared.mode, args.timing);
-  // Checked first: a run that now waits on a plan would take the message as its plan's changes.
-  as_checked(&prepared, way, expected)?;
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
     if by == SentBy::Orchestrator {
       return Err(plan_person_only());
@@ -160,20 +166,19 @@ pub fn refusal(error: OutgoingError) -> ToolError {
 }
 
 /// Refused unless the message does what it was checked or proposed as (`expected`, the Orchestrator's): one whose run
-/// moved on since would do something else (`changed_since_proposed`). None of the chat's messages is checked as a
-/// plan's changes, so a run that waits on a plan refuses every one.
-fn as_checked(prepared: &Prepared, way: Way, expected: Option<&str>) -> Result<(), ToolError> {
+/// (`#number`) moved on since would do something else (`changed_since_proposed`). None of the chat's messages is
+/// checked as a plan's changes, so a run that waits on a plan refuses every one.
+fn as_checked(prepared: &Prepared, way: Way, (expected, number): (Option<&str>, u32)) -> Result<(), ToolError> {
   let Some(expected) = expected else {
     return Ok(());
   };
   if action(&prepared.mode, way) == expected {
     return Ok(());
   }
-  let reason = match prepared.detail.run.as_ref() {
-    Some(view) => Message::new("appMcp.errors.messageChanged").with("run", view.run.number().get().to_string()),
-    None => Message::new("appMcp.errors.messageChangedRun"),
-  };
-  Err(ToolError::refused("changed_since_proposed", vec![reason]))
+  Err(ToolError::refused(
+    "changed_since_proposed",
+    vec![Message::new("appMcp.errors.messageChanged").with("run", number.to_string())],
+  ))
 }
 
 /// How a message sent with `timing` in `mode` goes: as the composer's first way, or after the turn of an agent that

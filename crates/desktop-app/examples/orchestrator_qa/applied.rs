@@ -12,7 +12,7 @@ use orchester_app::services::Services;
 use orchester_core::{
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
-  orchestrator::{Chat, EntryKind, TurnState},
+  orchestrator::{ActionOutcome, Chat, EntryKind, TurnState},
   run::{Run, RunStatus},
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
@@ -135,6 +135,23 @@ impl Asking<'_> {
         Decision::Accept { widens: Vec::new() },
       ))
       .map_err(|message| format!("the {tool} proposal was not taken: {}", message.key))?;
+    // Decided is not applied: a refused apply would show another state than the one this conversation is for.
+    let applied = db
+      .chat_entries(self.scope.chat)?
+      .into_iter()
+      .find(|entry| entry.seq == seq)
+      .and_then(|entry| match entry.kind {
+        EntryKind::Action(action) => Some(action),
+        _ => None,
+      })
+      .ok_or("the proposal is kept")?;
+    if applied.outcome != ActionOutcome::Applied {
+      return Err(format!("the {tool} proposal was not applied: {:?}", applied.outcome).into());
+    }
+    let runs_again = applied.change.as_ref().is_some_and(|change| change.change.runs_again());
+    if runs_again && applied.started.is_none() {
+      return Err("the message that ran the task again kept no run".into());
+    }
     Ok(())
   }
 }

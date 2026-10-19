@@ -155,7 +155,7 @@ pub(super) async fn apply(
     Change::Resume { run, .. } => {
       blocking(move || {
         let run = find_run(&ProjectDb::open(&root)?, &run.to_string())?;
-        control::resumable(&run, control::RESUME_STOPPED)
+        control::resumable(&run, control::ResumeRefusal::Applied)
       })
       .await?;
       let (tool, arguments) = tool_arguments(scope, change);
