@@ -88,10 +88,15 @@ fn limits_blocked_email_survives_a_flood_of_new_keys() {
 async fn limits_hashing_waits_for_a_slot_only_so_long() {
   let passwords = Passwords::new(1, Duration::from_millis(1));
   let password = || Credential::new("a long enough password".into());
-  let (first, second) = tokio::join!(passwords.hash(password()), passwords.hash(password()));
-  assert!(
-    first.is_ok() != second.is_ok(),
-    "one hash runs, the other is refused instead of queueing"
+  // Two wait for the only slot. A wait of 1 ms ends at the system timer's next tick, about 15.6 ms on Windows, which
+  // is about as long as a hash: the slot may be free again by then, and a waiter that finds it free runs, as it may.
+  // Both waits end at that tick, so the slot takes at most one of them and the other is refused instead of queueing.
+  let (first, second, third) = tokio::join!(
+    passwords.hash(password()),
+    passwords.hash(password()),
+    passwords.hash(password())
   );
-  assert!(busy(&first.and(second)));
+  assert!(first.is_ok(), "the first finds the slot free");
+  assert!(busy(&second) || busy(&third), "a waiter is refused instead of queueing");
+  assert!([second, third].iter().all(|waited| waited.is_ok() || busy(waited)));
 }

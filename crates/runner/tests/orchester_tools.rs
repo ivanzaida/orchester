@@ -142,7 +142,8 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
     reported(&db, id, "orchester-tools: "),
     [
       "approve,read_file,list_files,search_file,edit_file,create_file,delete_file,move_file,find_references,\
-       search_external_file,read_external_file,get_task,save_memory,report_progress,ask_question"
+       search_external_file,read_external_file,list_run_processes,stop_run_process,call_run_app,start_qa_app,get_task,\
+       save_memory,report_progress,ask_question"
     ]
   );
   let decisions = reported(&db, id, "orchester-permission: ");
@@ -203,8 +204,8 @@ async fn orchester_tools_serve_codex_and_ask_in_the_runner() {
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
     [
-      "read_file,list_files,search_file,find_references,search_external_file,read_external_file,get_task,save_memory,\
-      report_progress"
+      "read_file,list_files,search_file,find_references,search_external_file,read_external_file,list_run_processes,\
+       stop_run_process,call_run_app,get_task,save_memory,report_progress"
     ]
   );
   assert_eq!(reported(&db, id, "turn-request: "), ["5", "7"]);

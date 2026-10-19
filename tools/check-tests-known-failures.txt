@@ -10,38 +10,9 @@
 # 04c7f8f3 (2026-10-19, Windows) by `tools/check.ps1 -Tests all`; each was run again alone with its name filter.
 # The orchester-desktop crate is frozen and not listed: its tests run only when a branch changes it.
 
-# Fail every time: the expectations are older than the code.
-orchester-core claude_approvals claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_decides # expects Claude Code arguments the invocation no longer builds
-orchester-core claude_invocation claude_invocation_read_only_runs_the_listed_commands_and_asks_for_others # expects Claude Code arguments the invocation no longer builds
-orchester-core claude_invocation claude_invocation_read_only_without_commands_asks_about_every_command # expects Claude Code arguments the invocation no longer builds
-orchester-core claude_invocation claude_invocation_write_allows_the_listed_commands_and_asks_for_others # expects Claude Code arguments the invocation no longer builds
-orchester-core claude_invocation claude_invocation_write_runs_listed_file_commands_in_their_listed_forms_only # expects Claude Code arguments the invocation no longer builds
-orchester-runner orchester_file_tools orchester_file_tools_refuse_changes_in_a_read_only_step # expects the tool list without the run-app tools (list_run_processes, stop_run_process, call_run_app)
-orchester-runner orchester_skill_tools orchester_skill_tools_serve_codex_pinned_and_repository_skills # expects the tool list without the run-app tools
-orchester-runner orchester_tools orchester_tools_answer_claudes_prompt_in_the_runs_sources # expects the tool list without the run-app tools
-orchester-runner orchester_tools orchester_tools_serve_claude_code_through_its_permission_prompt # expects the tool list without the run-app tools
-orchester-runner orchester_tools orchester_tools_serve_codex_and_ask_in_the_runner # expects the tool list without the run-app tools
-orchester-app seed seed_names_every_scenario_once # the expected scenario list lacks api-providers, usage, usage-empty and usage-bare
-orchester-app settings_accounts settings_accounts_lists_accounts_by_cli_with_what_their_clis_say # its run with stand-in CLIs never sees the settings-tab-general and settings-tab-servers tabs (main.rs:58)
-
-# Fail every time: a defect in the code or its test fixture.
-orchester-store project_owners owners_of_projects_known_before_are_the_account_signed_in_then # migrating the downgraded schema fails: duplicate column name needs_code
-orchester-workspace secrets transaction_failures::secrets_replacement_begin_failure_does_not_claim_or_store_a_new_value # reports errors.databaseLocked where the test expects errors.storage
-orchester-app session session_that_cannot_land_ends_cleanly # the stand-in cloud's sign-in fails: Store(Corrupt { what: "project id" })
-orchester-app local_integration abort::headless_timer_refresh_observes_completed_owned_abort_without_feed_notification # fails on master, known since 2026-10-18
-
-# Fail every time on this machine: Windows refuses what the test sets up.
-orchester-exec local_file_ownership local_integration_execution_root_anchors_refuse_in_place_reparse_substitution_of_scratch_and_git_directory # the junction over .git that the test expects to be refused is made
-orchester-workspace skills_repository skills_repository_accepts_in_project_reference_file_links # creating a symbolic link needs Developer Mode or the privilege (OS error 1314)
-orchester-workspace skills_repository skills_repository_never_opens_a_special_file # creating a symbolic link needs Developer Mode or the privilege (OS error 1314)
-orchester-workspace skills_repository skills_repository_refuses_external_skill_reference_and_agent_file_links # creating a symbolic link needs Developer Mode or the privilege (OS error 1314)
-orchester-workspace skills_repository skills_repository_refuses_protected_targets_and_other_skill_roots # creating a symbolic link needs Developer Mode or the privilege (OS error 1314)
-
 # Flaky: failed in a whole-binary run under load, passed twice alone with its name filter.
 orchester-app lifecycle lifecycle_quit_now_while_agents_save_ends_them_and_the_next_starts_offer_their_runs_until_continued # flaky: timed out waiting for the interrupted runs offered
 orchester-app orchestrator links::orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as_they_are # flaky: timed out waiting for the answer
-orchester-cloud limits limits_hashing_waits_for_a_slot_only_so_long # flaky: a 1 ms wait for a hashing slot depends on timing
-orchester-workspace runner_process runner_process_forget_if_idle_answers_every_asker_of_one_question # flaky: one asker got Busy, the other Unknown
 
 # Run no test on purpose: (none).
 orchester-cloud cloud (none) # runs only with ORCHESTER_CLOUD_TEST_DATABASE_URL (a PostgreSQL), see docs/cloud-hosting.md

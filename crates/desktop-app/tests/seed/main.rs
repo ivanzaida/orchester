@@ -188,10 +188,14 @@ fn seed_names_every_scenario_once() {
       "live",
       "lifecycle",
       "connections",
+      "api-providers",
       "pipelines",
       "pipelines-empty",
       "accounts",
-      "pull-requests"
+      "pull-requests",
+      "usage",
+      "usage-empty",
+      "usage-bare"
     ]
   );
   for name in names {
