@@ -13,6 +13,7 @@ pub mod local;
 mod merge;
 mod merged;
 mod recorded;
+pub mod resolve;
 
 use std::path::Path;
 

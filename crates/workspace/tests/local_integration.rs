@@ -16,6 +16,8 @@ mod git_untouched;
 mod hooks;
 #[path = "local_integration/ignore_transitions.rs"]
 mod ignore_transitions;
+#[path = "local_integration/merged_in.rs"]
+mod merged_in;
 #[path = "local_integration/merged_outside.rs"]
 mod merged_outside;
 #[path = "local_integration/metadata.rs"]
@@ -26,6 +28,8 @@ mod privacy;
 mod rebase;
 #[path = "local_integration/release_regressions.rs"]
 mod release_regressions;
+#[path = "local_integration/resolve_worktree.rs"]
+mod resolve_worktree;
 #[path = "local_integration/review_regressions.rs"]
 mod review_regressions;
 #[path = "local_integration/schema.rs"]

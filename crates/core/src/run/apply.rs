@@ -115,12 +115,14 @@ impl Run {
           Err(RunError::StepsNotPassed)
         }
       }
-      RunEventKind::Reopened => self.expect_status(kind, self.status == RunStatus::Succeeded),
-      // A run that never started has no worktree to resume in.
+      // A succeeded run reopens for a follow-up or a return; a failed one only for a return, which the attempt that
+      // follows checks.
+      RunEventKind::Reopened | RunEventKind::ReturnDecided { .. } => self.expect_status(kind, self.can_return_ended()),
       RunEventKind::RecoveryDecided { .. } => self.expect_status(
         kind,
         matches!(self.status, RunStatus::Failed(_) | RunStatus::WaitingForPerson(_)),
       ),
+      // A run that never started has no worktree to resume in.
       RunEventKind::RecoveryRequested => self.expect_status(
         kind,
         matches!(&self.status, RunStatus::Failed(failure) if !matches!(failure, RunFailure::WorktreeNotCreated(_))),
@@ -320,6 +322,16 @@ impl Run {
     if !steps.is_subset(&known) {
       return Err(RunError::InvalidAttempt("an attempt executes only snapshot steps"));
     }
+    // A reopened run takes a follow-up or a return after it ended, and only it takes one.
+    let after_reopening = matches!(
+      reason,
+      AttemptReason::FollowUp { .. } | AttemptReason::ReturnedAfterEnd { .. }
+    );
+    if self.reopened != after_reopening {
+      return Err(RunError::InvalidAttempt(
+        "a reopened run's attempt is its follow-up or the return of its work",
+      ));
+    }
     match (self.attempts.is_empty(), reason) {
       (true, AttemptReason::Initial) if steps == known => Ok(()),
       (true, _) => Err(RunError::InvalidAttempt("the first attempt executes every step")),
@@ -329,6 +341,9 @@ impl Run {
       (false, AttemptReason::Restart { step }) => self.check_restart(step, executions),
       (false, AttemptReason::Returned { return_to, .. }) => self.check_returned(return_to, executions),
       (false, AttemptReason::Accepted { step }) => self.check_accepted(step, executions),
+      (false, AttemptReason::ReturnedAfterEnd { return_to, .. }) => {
+        self.check_returned_after_end(return_to, executions)
+      }
       (false, AttemptReason::Initial) => Err(RunError::InvalidAttempt("only the first attempt is initial")),
     }
   }
@@ -361,15 +376,19 @@ impl Run {
   fn apply(&mut self, kind: &RunEventKind, at: Timestamp) {
     match kind {
       RunEventKind::Created(_) => unreachable!("Run::check rejects a second creation event"),
-      RunEventKind::StuckDecided { .. } | RunEventKind::RecoveryDecided { .. } => {}
+      RunEventKind::StuckDecided { .. } | RunEventKind::RecoveryDecided { .. } | RunEventKind::ReturnDecided { .. } => {
+      }
       RunEventKind::BranchChosen { branch } => Arc::make_mut(&mut self.created).branch = branch.clone(),
       RunEventKind::Started
       | RunEventKind::Resumed
       | RunEventKind::Continued { .. }
-      | RunEventKind::Reopened
       | RunEventKind::RecoveryRequested
       | RunEventKind::RetryAllowed => {
         self.status = RunStatus::Running;
+      }
+      RunEventKind::Reopened => {
+        self.status = RunStatus::Running;
+        self.reopened = true;
       }
       RunEventKind::FollowUpFailed => self.end(RunStatus::Succeeded, AttemptStatus::Failed),
       RunEventKind::PauseRequested => self.pause_requested = true,
@@ -455,6 +474,7 @@ impl Run {
     {
       current.set_status(AttemptStatus::RoutedBack);
     }
+    self.reopened = false;
     let executions = executions
       .iter()
       .map(|planned| StepExecution::new(planned.id, planned.step.clone(), StepStatus::Pending))

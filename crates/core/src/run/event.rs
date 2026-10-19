@@ -170,7 +170,8 @@ pub enum RunEventKind {
   },
   Succeeded,
   /// A succeeded run works again: a follow-up attempt comes with this event
-  /// ([`super::Run::follow_up`]).
+  /// ([`super::Run::follow_up`]); or an ended run, succeeded or failed, whose work a person returned to an agent
+  /// step ([`super::Run::return_ended`]).
   Reopened,
   /// A person resumes a failed run through its conversation; a recovery attempt follows.
   RecoveryRequested,
@@ -190,6 +191,11 @@ pub enum RunEventKind {
   /// Who chose how a waiting run proceeds, including retries, returns, acceptance and stopping.
   StuckDecided {
     decision: super::StuckDecision,
+    by: Answerer,
+  },
+  /// Who returned the work of the ended run to `step`; its reopening and the attempt from `step` follow.
+  ReturnDecided {
+    step: StepKey,
     by: Answerer,
   },
   /// A message explicitly continued a failed or waiting run from this step.
@@ -315,6 +321,7 @@ impl RunEventKind {
       Self::RetryAllowed => "retry_allowed",
       Self::StuckDecided { .. } => "stuck_decided",
       Self::RecoveryDecided { .. } => "recovery_decided",
+      Self::ReturnDecided { .. } => "return_decided",
       Self::Cancelled => "cancelled",
       Self::AttemptStarted { .. } => "attempt_started",
       Self::StepStarted { .. } => "step_started",

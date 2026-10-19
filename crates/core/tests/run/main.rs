@@ -19,6 +19,7 @@ mod prompt;
 mod prompt_values;
 mod recovery;
 mod retry_prompt;
+mod return_ended;
 mod schedule;
 mod skills;
 mod snapshot;

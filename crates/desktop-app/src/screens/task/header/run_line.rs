@@ -93,7 +93,12 @@ const fn stuck_words(status: &RunStatus) -> Option<&'static str> {
 /// Whether merging the latest run failed in this session, and whether it failed on a conflict. The
 /// merge's own panel says why in full.
 fn merge_failed(task: &TaskContext) -> Option<bool> {
-  let run = task.detail.run.as_ref().filter(|_| task.detail.merge.is_none())?;
+  // A run whose work went back to a step after its merge failed works again: the failure is behind it.
+  let run = task
+    .detail
+    .run
+    .as_ref()
+    .filter(|run| task.detail.merge.is_none() && *run.run.status() == RunStatus::Succeeded)?;
   let JobState::Failed(reason) = task.jobs.run(run.id()).merge else {
     return None;
   };

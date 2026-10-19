@@ -23,6 +23,7 @@ use orchester_core::{
 };
 use orchester_ipc::{
   AttachSession, ChatTools, Command, Endpoint, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
+  WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -322,6 +323,7 @@ async fn answer(
         handle.keep_permissions_for_next_invocation(run, profile).await
       });
     }
+    Command::ReturnRun(ref returned) => return answer_return(&later, handle, returned.clone()),
     ref decision @ (Command::DecidePlan { .. }
     | Command::DecideStuckRun { .. }
     | Command::DecideStuckRunAs { .. }
@@ -504,6 +506,11 @@ fn answer_stuck(
       None => scheduler.decide_stuck(run, decision).await,
     }
   })
+}
+
+fn answer_return(later: &Later<'_>, scheduler: Scheduler, returned: WorkReturn) -> Answer {
+  let run = returned.run;
+  later.answer(run, async move { scheduler.return_ended(returned).await })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

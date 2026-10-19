@@ -25,6 +25,7 @@ mod progress;
 mod prompt;
 mod recovery;
 mod result;
+mod return_ended;
 pub mod review;
 mod schedule;
 mod snapshot;
@@ -67,14 +68,14 @@ pub use self::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,
     NativePrompt, NativeSetting, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
-    PromptSection, PromptSource, ResultDelivery, RetryReport, RunContext, SkillListing, WorkingTools,
+    PromptSection, PromptSource, ResultDelivery, RetryReport, ReturnedWork, RunContext, SkillListing, WorkingTools,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
-    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
-    StepFailure, StepStatus, Stuck, WaitReason,
+    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, MergeConflicts, PauseReason, RunFailure, RunLimit,
+    RunStatus, StepFailure, StepStatus, Stuck, WaitReason,
   },
   stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
   tool_approval::{

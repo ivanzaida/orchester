@@ -287,10 +287,31 @@ fn list(ctx: &Ctx, labels: &[Arc<str>]) -> String {
 /// A return or restart: what returned the work, to which step, in which attempt; a person's note is their
 /// message under it.
 pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
+  let (glyph, text) = mark_line(ctx, timeline, mark);
+  let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
+  let MarkKind::ReturnedWithNote { note, .. } = &mark.kind else {
+    return line;
+  };
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .child(line)
+    .child(person_note(
+      ctx,
+      &format!("conversation-mark-note-{}", mark.attempt),
+      note,
+      mark.at,
+      mark.by,
+    ))
+    .into()
+}
+
+/// The glyph and the words of `mark`'s line.
+fn mark_line(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> (Icon, Arc<str>) {
   let time = mark.at.map(display::clock).unwrap_or_default();
   let attempt = mark.attempt.to_string();
   let labelled = |ctx: &Ctx, name: &Arc<str>| labelled(ctx, timeline, name);
-  let (glyph, text) = match &mark.kind {
+  match &mark.kind {
     MarkKind::Returned { to, failed, .. } => {
       let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
         "conversation.mark.returnedByAutomation"
@@ -322,41 +343,23 @@ pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
       ];
       (Icon::RotateCcw, ctx.t_args(key, args))
     }
-    MarkKind::ReturnedWithNote { to, .. } => {
+    MarkKind::ReturnedWithNote { to, resolving, .. } => {
+      let automation = mark.by == Some(orchester_core::run::Answerer::Automation);
+      let key = match (resolving, automation) {
+        (Some(_), true) => "conversation.mark.returnedToResolveByAutomation",
+        (Some(_), false) => "conversation.mark.returnedToResolve",
+        (None, true) => "conversation.mark.returnedWithNoteByAutomation",
+        (None, false) => "conversation.mark.returnedWithNote",
+      };
       let args = [
         ("step", &*labelled(ctx, to)),
+        ("branch", resolving.as_deref().unwrap_or_default()),
         ("attempt", attempt.as_str()),
         ("time", time.as_str()),
       ];
-      (
-        Icon::CornerDownLeft,
-        ctx.t_args(
-          if mark.by == Some(orchester_core::run::Answerer::Automation) {
-            "conversation.mark.returnedWithNoteByAutomation"
-          } else {
-            "conversation.mark.returnedWithNote"
-          },
-          args,
-        ),
-      )
+      (Icon::CornerDownLeft, ctx.t_args(key, args))
     }
-  };
-  let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
-  let MarkKind::ReturnedWithNote { note, .. } = &mark.kind else {
-    return line;
-  };
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Md)
-    .child(line)
-    .child(person_note(
-      ctx,
-      &format!("conversation-mark-note-{}", mark.attempt),
-      note,
-      mark.at,
-      mark.by,
-    ))
-    .into()
+  }
 }
 
 /// "03 Implement" for the step named `name` of the run, or the name alone once its pipeline has no such

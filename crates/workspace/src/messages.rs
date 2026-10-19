@@ -69,6 +69,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::AccountFolderTaken => Message::new("accounts.errors.folderTaken"),
     StoreError::DuplicateSecretName { .. } => Message::new("errors.secretNameTaken"),
     StoreError::AlreadyMerged(_) => Message::new("runs.merge.failure.alreadyMerged"),
+    StoreError::NotMergeable(_) => Message::new("runs.merge.failure.notMergeable"),
     StoreError::TaskNotEditable { source, .. } => edit_error(source),
     StoreError::TaskGroupReviewChanged(_) => Message::new("tasks.bulk.reviewChanged"),
     StoreError::TaskNotSelectable { problem, .. } => crate::tasks::group::problem_message(problem),

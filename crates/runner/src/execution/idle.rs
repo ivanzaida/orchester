@@ -181,6 +181,8 @@ pub(super) fn load(db: &ProjectDb, run: RunId) -> Result<Run, Rejection> {
 pub(super) fn store(db: &mut ProjectDb, run: &Run, events: &[RunEvent]) -> Result<(), Rejection> {
   db.append_events(run, events).map_err(|error| match error {
     RunStoreError::WorktreeRemoved(_) => Rejection::WorktreeRemoved,
+    RunStoreError::Merged(_) => Rejection::RunMerged,
+    RunStoreError::Resolving(_) => Rejection::WorktreeInMerge,
     other => failed("cannot record the run's change", &other),
   })
 }

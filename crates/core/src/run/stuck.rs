@@ -412,7 +412,7 @@ impl Run {
 }
 
 /// When an attempt started, and whether a person's decision started it (a retry or return they
-/// chose for a run that waited for them) rather than the run by itself.
+/// chose for a run that waited for them, or the work of an ended run they returned) rather than the run by itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AttemptStart {
   pub attempt: AttemptId,
@@ -429,6 +429,7 @@ fn attempt_decider(events: &[RunEvent]) -> Option<super::Answerer> {
     .find_map(|event| match event.kind() {
       RunEventKind::StuckDecided { by, .. }
       | RunEventKind::RecoveryDecided { by, .. }
+      | RunEventKind::ReturnDecided { by, .. }
       | RunEventKind::StepAccepted { by, .. } => Some(*by),
       _ => None,
     })
