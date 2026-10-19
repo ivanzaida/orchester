@@ -8,9 +8,9 @@ use orchester_core::store::{ConnectionStore, McpServerStore};
 
 use super::harness::Seeded;
 
-/// The narrowest a row's name may be laid out: a compact row's name takes its text column (182 at 960),
+/// The narrowest a row's name may be laid out: a compact row's name takes its text column (242 in `b3aoUZ`),
 /// a wide row's is as wide as its words (the seed's shortest, `sentry`, is about 39).
-const COMPACT_NAME_MIN_WIDTH: f32 = 150.0;
+const COMPACT_NAME_MIN_WIDTH: f32 = 200.0;
 const WIDE_NAME_MIN_WIDTH: f32 = 30.0;
 
 /// The connections the seed made, by row id, with their names.
@@ -81,9 +81,11 @@ fn connections_at_960_show_compact_rows_with_their_names() {
     bounds(&mut seeded, "connections-list"),
     bounds(&mut seeded, "connection-inspector"),
   );
-  // The inspector keeps its width; the page's sides and the gap beside it narrow (`b3aoUZ`).
-  assert!((inspector.width - 360.0).abs() < 0.5, "{inspector:?}");
-  assert!((list.width - 268.0).abs() < 0.5, "{list:?}");
+  assert!((inspector.width - 300.0).abs() < 0.5, "{inspector:?}");
+  assert!(
+    (list.width - 328.0).abs() < 0.5,
+    "the list as wide as b3aoUZ's: {list:?}"
+  );
 }
 
 #[test]
@@ -140,4 +142,28 @@ fn connections_rows_scroll_in_a_short_window_and_the_note_stays_in_view() {
   );
   let note = bounds(&mut seeded, "connections-ownership");
   assert!(note.y + note.height <= HEIGHT, "the note stays in view: {note:?}");
+}
+
+/// Test connection and Edit connection side by side inside the inspector.
+fn assert_actions_on_one_row(seeded: &mut Seeded, at: &str) {
+  let inspector = bounds(seeded, "connection-inspector");
+  let (test, edit) = (bounds(seeded, "connection-test"), bounds(seeded, "connection-edit"));
+  assert!((test.y - edit.y).abs() < 0.5, "on one row at {at}: {test:?}, {edit:?}");
+  assert!(
+    edit.x >= test.x + test.width && edit.x + edit.width <= inspector.x + inspector.width,
+    "side by side inside the inspector at {at}: {test:?}, {edit:?} in {inspector:?}"
+  );
+}
+
+#[test]
+fn connections_inspector_actions_stay_on_one_row_at_960_and_1440() {
+  for (width, inspector_width) in [(960, 300.0), (1440, 360.0)] {
+    let mut seeded = at_size("api-providers", (width, 1180));
+    let inspector = bounds(&mut seeded, "connection-inspector");
+    assert!(
+      (inspector.width - inspector_width).abs() < 0.5,
+      "at {width}: {inspector:?}"
+    );
+    assert_actions_on_one_row(&mut seeded, &width.to_string());
+  }
 }

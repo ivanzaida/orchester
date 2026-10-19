@@ -295,6 +295,7 @@ impl ConnectionsScreen {
       failed: failed.as_ref(),
       confirming,
       now: Services::of(ctx).clock.now(),
+      narrow: super::narrow(ctx),
     };
     let actions = self.actions(ctx, project, listed, (id, work));
     inspector::inspector(ctx, &inspecting, &actions)
