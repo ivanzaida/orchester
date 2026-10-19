@@ -29,9 +29,12 @@ pub enum MarkKind {
   /// `step` broke and starts again as a fresh session.
   Restarted { step: Arc<str> },
   /// A person returned the work to `to` with `note`.
-  ReturnedWithNote { to: Arc<str>, note: Arc<str> },
-  /// A person returned the work of the ended run to `to` to resolve the conflicts of a merge into `branch`.
-  ReturnedToResolve { to: Arc<str>, branch: Arc<str> },
+  /// `resolving`: the branch whose merge's conflicts the work of the ended run was returned to resolve.
+  ReturnedWithNote {
+    to: Arc<str>,
+    note: Arc<str>,
+    resolving: Option<Arc<str>>,
+  },
 }
 
 /// A return or restart before the header of the step its attempt starts from.
@@ -73,20 +76,20 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
       after: others(attempt, return_to).map(name).collect(),
     },
     AttemptReason::Restart { step } => MarkKind::Restarted { step: name(step) },
+    AttemptReason::Returned { return_to, note, .. } => MarkKind::ReturnedWithNote {
+      to: name(return_to),
+      note: note.as_str().into(),
+      resolving: None,
+    },
     AttemptReason::ReturnedAfterEnd {
       return_to,
-      conflicts: Some(conflicts),
-      ..
-    } => MarkKind::ReturnedToResolve {
+      note,
+      conflicts,
+    } => MarkKind::ReturnedWithNote {
       to: name(return_to),
-      branch: conflicts.base.as_str().into(),
+      note: note.as_str().into(),
+      resolving: conflicts.as_ref().map(|conflicts| conflicts.base.as_str().into()),
     },
-    AttemptReason::Returned { return_to, note, .. } | AttemptReason::ReturnedAfterEnd { return_to, note, .. } => {
-      MarkKind::ReturnedWithNote {
-        to: name(return_to),
-        note: note.as_str().into(),
-      }
-    }
     // An accepted step passed in the attempt before: what runs after it starts no return of its own.
     AttemptReason::Initial
     | AttemptReason::FollowUp { .. }

@@ -36,7 +36,6 @@ pub(super) fn matches(item: &Item, needle: &str, rendered: Rendered<'_>) -> bool
     ItemKind::Tools(group) => group.entries.iter().any(|entry| entry_matches(entry, needle)),
     ItemKind::Mark(mark) => match &mark.kind {
       MarkKind::ReturnedWithNote { note, .. } => written(note),
-      MarkKind::ReturnedToResolve { branch, .. } => written(branch),
       MarkKind::Returned { .. } | MarkKind::Restarted { .. } => false,
     },
     ItemKind::Step(_) | ItemKind::End(_) => false,

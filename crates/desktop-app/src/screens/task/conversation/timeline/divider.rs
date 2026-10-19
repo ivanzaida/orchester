@@ -343,42 +343,21 @@ fn mark_line(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> (Icon, Arc<str>) {
       ];
       (Icon::RotateCcw, ctx.t_args(key, args))
     }
-    MarkKind::ReturnedWithNote { to, .. } => {
+    MarkKind::ReturnedWithNote { to, resolving, .. } => {
+      let automation = mark.by == Some(orchester_core::run::Answerer::Automation);
+      let key = match (resolving, automation) {
+        (Some(_), true) => "conversation.mark.returnedToResolveByAutomation",
+        (Some(_), false) => "conversation.mark.returnedToResolve",
+        (None, true) => "conversation.mark.returnedWithNoteByAutomation",
+        (None, false) => "conversation.mark.returnedWithNote",
+      };
       let args = [
         ("step", &*labelled(ctx, to)),
+        ("branch", resolving.as_deref().unwrap_or_default()),
         ("attempt", attempt.as_str()),
         ("time", time.as_str()),
       ];
-      (
-        Icon::CornerDownLeft,
-        ctx.t_args(
-          if mark.by == Some(orchester_core::run::Answerer::Automation) {
-            "conversation.mark.returnedWithNoteByAutomation"
-          } else {
-            "conversation.mark.returnedWithNote"
-          },
-          args,
-        ),
-      )
-    }
-    MarkKind::ReturnedToResolve { to, branch } => {
-      let args = [
-        ("step", &*labelled(ctx, to)),
-        ("branch", &**branch),
-        ("attempt", attempt.as_str()),
-        ("time", time.as_str()),
-      ];
-      (
-        Icon::CornerDownLeft,
-        ctx.t_args(
-          if mark.by == Some(orchester_core::run::Answerer::Automation) {
-            "conversation.mark.returnedToResolveByAutomation"
-          } else {
-            "conversation.mark.returnedToResolve"
-          },
-          args,
-        ),
-      )
+      (Icon::CornerDownLeft, ctx.t_args(key, args))
     }
   }
 }
