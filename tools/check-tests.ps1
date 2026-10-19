@@ -218,7 +218,7 @@ function Get-LogTail([string] $LogName, [string] $Stream, [int] $Count) {
 # ignored), the tests that passed, and the names in its closing "failures:" list.
 function Read-TestRun([string] $LogName) {
     $path = Join-Path $logRoot "$LogName.out.log"
-    $lines = if (Test-Path $path) { @(Get-Content -Path $path) } else { @() }
+    $lines = @(if (Test-Path $path) { Get-Content -Path $path })
     $run = [PSCustomObject]@{
         Lines = $lines
         Counted = $false
@@ -232,7 +232,7 @@ function Read-TestRun([string] $LogName) {
             $run.Counted = $true
             $run.Ran += [int]$Matches[1] + [int]$Matches[2]
         }
-        elseif ($line -cmatch '^test (\S+) \.\.\. ok$') { $null = $run.Passed.Add($Matches[1]) }
+        elseif ($line -cmatch '^test (\S+)(?: - should panic)? \.\.\. ok$') { $null = $run.Passed.Add($Matches[1]) }
     }
     # A harness of its own that skips everything says so without a result line.
     if (-not $run.Counted -and ($lines | Where-Object { $_ -cmatch '^running 0 tests' })) { $run.Counted = $true }
