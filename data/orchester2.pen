@@ -538627,16 +538627,16 @@
                                       "name": "State icon",
                                       "width": 12,
                                       "height": 12,
-                                      "icon": "hourglass",
+                                      "icon": "circle-check",
                                       "library": "lucide",
-                                      "fill": "$warning"
+                                      "fill": "$success"
                                     },
                                     {
                                       "type": "text",
                                       "id": "h1plg",
                                       "name": "State label",
                                       "fill": "$text_secondary",
-                                      "content": "Waits for you · 15:30",
+                                      "content": "Merged without Orchester",
                                       "lineHeight": 1.2,
                                       "fontFamily": "$font_sans",
                                       "fontSize": 11.5,
@@ -718226,46 +718226,6 @@
                               "children": [
                                 {
                                   "type": "frame",
-                                  "id": "k0VhZa",
-                                  "name": "Merged without Orchester · external panel",
-                                  "width": "fill_container",
-                                  "cornerRadius": "$radius_lg",
-                                  "stroke": "$success",
-                                  "strokeWidth": 1,
-                                  "layout": "vertical",
-                                  "gap": 8,
-                                  "padding": 16,
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "lOElT",
-                                      "name": "Complete actions heading",
-                                      "fill": "$text_primary",
-                                      "textGrowth": "fixed-width",
-                                      "width": "fill_container",
-                                      "content": "Merged",
-                                      "lineHeight": 1.5,
-                                      "fontFamily": "$font_sans",
-                                      "fontSize": 14,
-                                      "fontWeight": "normal"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "gXSBY",
-                                      "name": "Complete actions explanation",
-                                      "fill": "$text_secondary",
-                                      "textGrowth": "fixed-width",
-                                      "width": "fill_container",
-                                      "content": "The run's work on orchester/kon-8-run-1 is in main: it was merged without Orchester.",
-                                      "lineHeight": 1.5,
-                                      "fontFamily": "$font_sans",
-                                      "fontSize": 11.5,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
                                   "id": "LeqFD",
                                   "name": "Recovery record",
                                   "width": "fill_container",
@@ -719647,7 +719607,7 @@
                                       "fill": "$text_secondary",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
-                                      "content": "Without Orchester · 7f13754",
+                                      "content": "Not recorded",
                                       "lineHeight": 1.5,
                                       "fontFamily": "$font_mono",
                                       "fontSize": 11.5,
