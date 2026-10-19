@@ -48,6 +48,7 @@ fn answered(run: RunId, message: bool, outcome: ActionOutcome) -> EntryKind {
       number: 3,
       text: "Keep the old export.".to_owned(),
       now: false,
+      then: None,
     }
   } else {
     Change::Answer {

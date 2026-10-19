@@ -10,6 +10,7 @@
 
 mod answer;
 mod continuation;
+pub(super) mod control;
 
 use std::path::Path;
 
@@ -70,6 +71,10 @@ pub(super) async fn subject(
     (None, CONTINUE_RUN) => {
       let arguments = arguments.clone();
       blocking(move || continuation::continue_change(&root, &arguments)).await?
+    }
+    (None, control::PAUSE_RUN | control::RESUME_RUN | control::RELEASE_QUEUE) => {
+      let (name, arguments) = (name.to_owned(), arguments.clone());
+      blocking(move || control::control_change(&root, &name, &arguments)).await?
     }
     (None, _) => {
       let (named, cancel) = (text("run")?, name == CANCEL_RUN);
@@ -145,6 +150,11 @@ pub(super) async fn apply(
       let (_, arguments) = tool_arguments(scope, change);
       continue_for_orchestrator(services, arguments, by).await
     }
+    // The tool checks the run's state again where it pauses, resumes or releases.
+    Change::Pause { .. } | Change::Resume { .. } | Change::Release { .. } => {
+      let (tool, arguments) = tool_arguments(scope, change);
+      app_tool((services, translate), tool, arguments).await
+    }
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
     Change::Answer { .. } | Change::Message { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
@@ -163,6 +173,9 @@ pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'s
     Change::Answer { run, .. } => (ANSWER_QUESTION, "run", run.to_string()),
     Change::Message { run, .. } => (SEND_MESSAGE, "run", run.to_string()),
     Change::Continue { run, .. } => (CONTINUE_RUN, "run", run.to_string()),
+    Change::Pause { run, .. } => (control::PAUSE_RUN, "run", run.to_string()),
+    Change::Resume { run, .. } => (control::RESUME_RUN, "run", run.to_string()),
+    Change::Release { task } => return control::release_arguments(scope.project, task.as_deref()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
@@ -309,9 +322,21 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
       Message::new("orchestrator.tools.answerWaits").with("run", number.to_string()),
       json!({ "answer": { "run": number, "task": subject, "question": request, "choices": choices, "text": text } }),
     ),
-    Change::Message { number, text, .. } => (
+    Change::Message { number, text, then, .. } => (
       Message::new("orchestrator.tools.messageWaits").with("run", number.to_string()),
-      json!({ "message": { "run": number, "task": subject, "text": text } }),
+      json!({ "message": { "run": number, "task": subject, "text": text, "then": then } }),
+    ),
+    Change::Pause { number, .. } => (
+      Message::new("orchestrator.tools.pauseWaits").with("run", number.to_string()),
+      json!({ "pause": { "run": number, "task": subject } }),
+    ),
+    Change::Resume { number, .. } => (
+      Message::new("orchestrator.tools.resumeWaits").with("run", number.to_string()),
+      json!({ "resume": { "run": number, "task": subject } }),
+    ),
+    Change::Release { task } => (
+      Message::new("orchestrator.tools.releaseWaits"),
+      json!({ "release": { "task": task } }),
     ),
     Change::Continue {
       number, step, choice, ..

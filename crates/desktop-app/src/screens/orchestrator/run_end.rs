@@ -1,9 +1,9 @@
-//! The end of a task's latest run in the Orchestrator's conversation (`docs/design/orchestrator-toolset.md`,
-//! "Decisions" 5): in the action card's frame (`Action card` `nQIhx`), as an agent's wait ([`super::wait`]), its head
-//! with how the run ended or stopped, the task and the run, and at its end how it stands and when it was noticed;
+//! The end of a task's latest run in the Orchestrator's conversation (`Orchestrator · run ends · states` `J9n4q4`,
+//! `docs/design/orchestrator-toolset.md`, "Decisions" 5): in the action card's frame (`Action card` `nQIhx`), as an
+//! agent's wait ([`super::wait`]), its head with how the run ended or stopped, the task and the run (and how many
+//! more runs a shared limit stopped at once), and at its end the end's icon in its color and when it was noticed;
 //! what happens with it (the Orchestrator takes it up by itself while *Let the Orchestrator answer agents* is on, else
-//! it waits for the person); and *Open* the task's Summary. No Pencil frame draws it yet: it keeps to the wait card's
-//! look.
+//! it waits for the person); and *Open* the task's Summary.
 
 use std::sync::Arc;
 

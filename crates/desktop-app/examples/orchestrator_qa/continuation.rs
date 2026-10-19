@@ -50,6 +50,7 @@ pub fn conversation(
     name: db.project().name().as_str().to_owned(),
     root: prepared.repo.clone(),
     chat: chat.id(),
+    on_its_own: false,
   };
   let tools = app_mcp::Services::new(
     services.workspace.clone(),

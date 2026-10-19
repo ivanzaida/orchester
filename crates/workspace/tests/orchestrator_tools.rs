@@ -115,6 +115,18 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       "{name}: {told}"
     );
   }
+  assert!(
+    description("send_message").contains("is always proposed: moving a run is the person's"),
+    "a message that moves a run waits for the person"
+  );
+  for name in ["pause_run", "release_queue"] {
+    let told = description(name);
+    assert!(
+      told.contains("In a turn Orchester started by itself") && told.contains("only proposes"),
+      "{name}: {told}"
+    );
+  }
+  assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
   let resume = description("resume_run");
   for part in ["resumes only a run a pause stopped", "interrupted", "person_only"] {
     assert!(resume.contains(part), "resume_run says {part}: {resume}");

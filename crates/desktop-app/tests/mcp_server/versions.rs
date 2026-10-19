@@ -94,6 +94,7 @@ fn the_chat_server_declines_the_newer_revision_and_lists_its_tools_on_2025_11_25
     name: "Kontur".to_owned(),
     root: data.dir.path().to_path_buf(),
     chat: ChatId::generate(),
+    on_its_own: false,
   };
   let servers = ChatServers::default();
   let tools = servers

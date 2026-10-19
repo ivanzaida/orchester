@@ -59,6 +59,7 @@ fn create_in_chat(services: &Services, project: ProjectId, root: &std::path::Pat
     name: "Notes".to_owned(),
     root: root.to_path_buf(),
     chat: ChatId::generate(),
+    on_its_own: false,
   };
   // Its servers stop when it goes.
   let servers = ChatServers::default();

@@ -10,6 +10,8 @@
 
 mod support;
 
+use std::collections::HashSet;
+
 use orchester_core::{
   connection::{
     AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionCheck, ModelCatalog, SignIn,
@@ -31,7 +33,7 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::waits::{Followed, follow_in};
+use orchester_workspace::orchestrator::waits::{Followed, MergeChecks, check_merges_in, follow_in};
 use support::{Fixture, at};
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
@@ -82,11 +84,9 @@ fn project(fixture: &Fixture) -> ProjectId {
 
 /// Follows the ends with the project's runner attached.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
-  follow_in(
-    (fixture.repo.path(), project(fixture), &Programs::processes()),
-    (answers, true),
-  )
-  .expect("followed")
+  let (root, programs) = (fixture.repo.path(), Programs::processes());
+  let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
+  follow_in((root, project(fixture), &programs), &checks, (answers, true)).expect("followed")
 }
 
 /// The waits of conversation `chat`, with their turns.
@@ -369,4 +369,22 @@ fn run_ends_of_a_run_the_chat_started_start_no_turn() {
   assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
   let (wait, _) = &waits_in(&fixture, chat.id())[0];
   assert!(wait.own && !wait.automatic, "{wait:?}");
+}
+
+#[test]
+fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() {
+  let mut fixture = Fixture::new();
+  let mut run = working(&mut fixture, "Nothing to merge");
+  fixture.succeed(&mut run, Timestamp::now());
+  let checks = MergeChecks {
+    quiet: HashSet::from([run.id()]),
+    waiting: HashSet::new(),
+  };
+  let followed = follow_in(
+    (fixture.repo.path(), project(&fixture), &Programs::processes()),
+    &checks,
+    (false, true),
+  )
+  .expect("followed");
+  assert_eq!(followed, Followed::default(), "never told as ready to merge");
 }

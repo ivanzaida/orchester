@@ -304,7 +304,10 @@
         "merge": "Only a person merges a run the Orchestrator proposed: input from automation is refused here.",
         "answer": "Only a person sends an answer the Orchestrator proposed: input from automation is refused here.",
         "message": "Only a person sends a message the Orchestrator proposed: input from automation is refused here.",
-        "continue": "Only a person decides how a run goes on that the Orchestrator proposed: input from automation is refused here."
+        "continue": "Only a person decides how a run goes on that the Orchestrator proposed: input from automation is refused here.",
+        "pause": "Only a person pauses a run the Orchestrator proposed to pause: input from automation is refused here.",
+        "resume": "Only a person resumes a run the Orchestrator proposed to resume: input from automation is refused here.",
+        "release": "Only a person releases new starts the Orchestrator proposed to release: input from automation is refused here."
       },
       "answer": {
         "waits": "Answer the question in run #{{run}} of {{task}}?",
@@ -326,7 +329,20 @@
         "effectWaits": "Nothing is sent yet. Send message gives the run's agents this message, as the task's composer would: {{text}}",
         "effectSent": "Sent at {{time}}, as the task's composer sends it; the task's conversation shows it as the Orchestrator's: {{text}}",
         "effectDismissed": "You dismissed it. Nothing was sent.",
-        "accept": "Send message"
+        "accept": "Send message",
+        "then": {
+          "followUp": "Nothing is sent yet. The run is ready for review: sending follows it up, and a new attempt works on this message: {{text}}",
+          "continue": "Nothing is sent yet. The run failed or waits for a decision: sending continues it with this message's instructions: {{text}}",
+          "resume": "Nothing is sent yet. A pause stopped the run: sending resumes it, and its agent reads this message: {{text}}",
+          "continueInterrupted": "Nothing is sent yet. The run was interrupted: sending continues it from its last checkpoint, and its agent reads this message: {{text}}",
+          "raiseLimit": "Nothing is sent yet. The run stopped at a limit: the message waits until you raise it on the task's Summary: {{text}}",
+          "runAgain": "Nothing is sent yet. The run ended: sending runs the task again, and its next run's first agent reads this message: {{text}}",
+          "acceptFollowUp": "Send and follow up",
+          "acceptContinue": "Send and continue",
+          "acceptResume": "Resume and send",
+          "acceptContinueInterrupted": "Continue and send",
+          "acceptRunAgain": "Run again with this message"
+        }
       },
       "publish": {
         "waits": "Publish {{name}} v{{version}}?",
@@ -488,6 +504,41 @@
         "effectDismissed": "You dismissed it. The run still waits for your decision on its Summary.",
         "acceptRetry": "Allow retry",
         "acceptReturn": "Return to {{step}}"
+      },
+      "pause": {
+        "waits": "Pause run #{{run}} of {{task}}?",
+        "done": "Paused run #{{run}} of {{task}}",
+        "dismissed": "Pausing run #{{run}} of {{task}} · dismissed",
+        "refused": "Pausing run #{{run}} of {{task}} · not done",
+        "byYou": "Paused by you · {{time}}",
+        "effectWaits": "Nothing changed yet. Pause stops the run at its next checkpoint, as the task's page does.",
+        "effectApplied": "The run pauses at its next checkpoint; asked at {{time}}.",
+        "effectDismissed": "You dismissed it. The run goes on.",
+        "accept": "Pause"
+      },
+      "resume": {
+        "waits": "Resume run #{{run}} of {{task}}?",
+        "done": "Resumed run #{{run}} of {{task}}",
+        "dismissed": "Resuming run #{{run}} of {{task}} · dismissed",
+        "refused": "Resuming run #{{run}} of {{task}} · not done",
+        "byYou": "Resumed by you · {{time}}",
+        "effectWaits": "Nothing changed yet. Resume lets the paused run go on, as the task's page does.",
+        "effectApplied": "The run went on at {{time}}.",
+        "effectDismissed": "You dismissed it. The run stays paused.",
+        "accept": "Resume"
+      },
+      "release": {
+        "waits": "Let the project's new starts go on?",
+        "waitsGroup": "Let new starts of {{group}}'s group go on?",
+        "done": "Released the project's new starts",
+        "doneGroup": "Released new starts of {{group}}'s group",
+        "dismissed": "Releasing new starts · dismissed",
+        "refused": "Releasing new starts · not done",
+        "byYou": "Released by you · {{time}}",
+        "effectWaits": "Nothing changed yet. Release lets the held tasks start again, in the queue's order.",
+        "effectApplied": "New starts went on at {{time}}.",
+        "effectDismissed": "You dismissed it. New starts stay held.",
+        "accept": "Release"
       }
     },
     "end": {

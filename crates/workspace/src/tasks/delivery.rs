@@ -106,7 +106,7 @@ impl Unmerged {
 
 /// What became of each of `works`, in their order: git lists the branches once for all of them. What git cannot
 /// tell waits to be merged, which a merge in Orchester settles.
-fn deliveries(programs: &Programs, repo_root: &Path, works: &[RunWork]) -> Vec<Delivery> {
+pub(crate) fn deliveries(programs: &Programs, repo_root: &Path, works: &[RunWork]) -> Vec<Delivery> {
   if works.is_empty() {
     return Vec::new();
   }

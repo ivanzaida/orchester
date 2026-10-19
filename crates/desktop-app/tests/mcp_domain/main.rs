@@ -28,6 +28,7 @@ mod merged_outside;
 mod orchestrator_chat;
 mod orchestrator_continue;
 mod orchestrator_guard;
+mod orchestrator_moves;
 mod person_decisions;
 mod pipeline_permissions;
 mod pull_requests;

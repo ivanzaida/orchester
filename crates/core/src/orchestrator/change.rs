@@ -56,13 +56,25 @@ pub enum Change {
   },
   /// Send `text` to the agents of run `run`, `#number`, its task's latest, as the task's composer sends it in the
   /// run's state: the answer to an agent's question in the conversation among others; `now` to an agent at work
-  /// whose connection takes it mid-turn, else after its turn.
+  /// whose connection takes it mid-turn, else after its turn. `then` is what sending it does to a run no agent of
+  /// which waits or works: it follows the run up, continues or resumes it, or runs the task again.
   Message {
     run: RunId,
     number: u32,
     text: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     now: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    then: Option<MessageThen>,
+  },
+  /// Pause run `run`, `#number`, at its next checkpoint.
+  Pause { run: RunId, number: u32 },
+  /// Resume run `run`, `#number`, which a pause stopped.
+  Resume { run: RunId, number: u32 },
+  /// Let new starts go on: of the reviewed group task `task` (its key) belongs to, else of the whole project.
+  Release {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    task: Option<String>,
   },
   /// Continue run `run`, `#number`, which stopped in its attempt `attempt` and waits for a person's decision, at the
   /// step `step` for `why` when they are known, with `choice`, as `continue_run` continues it.
@@ -114,23 +126,63 @@ pub enum ContinueChoice {
   },
 }
 
+/// What a message to a run none of whose agents waits or works does to it, as the task's composer sends it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageThen {
+  /// The run is ready for review: a follow-up attempt works on the message.
+  FollowUp,
+  /// The run failed or waits for a decision: it continues with the message's instructions.
+  Continue,
+  /// A pause stopped the run: it resumes, and its agent reads the message.
+  Resume,
+  /// The run was interrupted: it continues from its last checkpoint, and its agent reads the message.
+  ContinueInterrupted,
+  /// The run stopped at a limit of its own: the message waits until a person raises it.
+  RaiseLimit,
+  /// The run ended: the task runs again, and its next run's first agent reads the message.
+  RunAgain,
+}
+
 impl Change {
-  /// The run it acts on; `None` for a publication.
+  /// The run it acts on; `None` for a publication or a release of new starts.
   pub const fn run(&self) -> Option<RunId> {
     match self {
-      Self::Publish { .. } => None,
+      Self::Publish { .. } | Self::Release { .. } => None,
       Self::Cancel { run, .. }
       | Self::Merge { run, .. }
       | Self::Answer { run, .. }
       | Self::Message { run, .. }
-      | Self::Continue { run, .. } => Some(*run),
+      | Self::Continue { run, .. }
+      | Self::Pause { run, .. }
+      | Self::Resume { run, .. } => Some(*run),
     }
   }
 
-  /// Whether it carries a run's agents on: an answer to a question, a message, or a decision on how a stopped run
-  /// continues. What the run does next follows from it.
+  /// Whether it carries a run's agents on: an answer to a question, a message, a decision on how a stopped run
+  /// continues, or a resume. What the run does next follows from it.
   pub const fn carries_run_on(&self) -> bool {
-    matches!(self, Self::Answer { .. } | Self::Message { .. } | Self::Continue { .. })
+    matches!(
+      self,
+      Self::Answer { .. } | Self::Message { .. } | Self::Continue { .. } | Self::Resume { .. }
+    )
+  }
+
+  /// Whether it moves a run no agent of which waits or works: a message that follows it up, continues or resumes
+  /// it, or runs its task again. Such a message is the person's to send, never the chat's by itself.
+  pub const fn moves_run(&self) -> bool {
+    matches!(self, Self::Message { then: Some(_), .. })
+  }
+
+  /// Whether it runs the task again: its next run follows from it.
+  pub const fn runs_again(&self) -> bool {
+    matches!(
+      self,
+      Self::Message {
+        then: Some(MessageThen::RunAgain),
+        ..
+      }
+    )
   }
 }
 

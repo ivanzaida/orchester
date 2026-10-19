@@ -1,10 +1,9 @@
-//! A wait of an agent of the project in the Orchestrator's conversation (`docs/design/orchestrator-toolset.md`,
-//! "Decisions" 5): in the action card's frame (`Action card` `nQIhx`), its head with what the agent waits for, the
-//! task and the run, and at its end *Waits* and when it was noticed; what happens with it (the Orchestrator reads and
-//! answers it by itself while *Let the Orchestrator answer agents* is on, else it waits for the person); and *Open*
-//! its card on the task's Conversation. No Pencil frame draws it yet: it keeps to the action card's look, with the
-//! waiting state of a proposal. The end of a task's run is a wait of its own kind, with its own card
-//! ([`super::run_end`]).
+//! A wait of an agent of the project in the Orchestrator's conversation (`Orchestrator · agent waits · states`
+//! `hW2fQ`, `docs/design/orchestrator-toolset.md`, "Decisions" 5): in the action card's frame (`Action card` `nQIhx`),
+//! its head with what the agent waits for, the task and the run, and at its end *Waits* and when it was noticed; what
+//! happens with it (the Orchestrator reads and answers it by itself while *Let the Orchestrator answer agents* is on,
+//! else it waits for the person); and *Open* its card on the task's Conversation. The end of a task's run is a wait of
+//! its own kind, with its own card ([`super::run_end`]).
 
 use lurq::{
   app::{

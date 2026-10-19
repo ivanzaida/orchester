@@ -23,7 +23,12 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
-  blocked, change, duplicate, guard,
+  blocked,
+  change::{
+    self,
+    control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
+  },
+  duplicate, guard,
   keep::{self, HOLD_QUEUE, Named},
   proposal,
 };
@@ -101,9 +106,7 @@ pub(super) const RUN_TASK: &str = "run_task";
 /// The tool whose calls always wait for the person.
 pub(super) const CANCEL_RUN: &str = "cancel_run";
 /// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
-pub(super) const MERGE_RUN: &str = "merge_run";
-/// The tool the chat resumes a run with that a pause stopped; any other is the person's.
-pub(super) const RESUME_RUN: &str = "resume_run";
+pub(in crate::orchestrator) const MERGE_RUN: &str = "merge_run";
 /// The tool whose calls always wait for the person, and only for a retry or a return to an earlier step.
 pub(super) const CONTINUE_RUN: &str = "continue_run";
 /// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
@@ -137,6 +140,7 @@ fn in_chat(tool: &Tool) -> Option<String> {
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
     RESUME_RUN => RESUME_PAUSED,
+    PAUSE_RUN | RELEASE_QUEUE => PROPOSE_ON_ITS_OWN,
     CONTINUE_RUN => PROPOSE_CONTINUE,
     ANSWER_QUESTION | SEND_MESSAGE => PROPOSE_ANSWER,
     _ if Publishing::of_tool(name).is_some() => PROPOSE_PUBLISH,
@@ -171,9 +175,15 @@ const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the mer
   the Local integration page.";
 
 /// What the agent reads first of `resume_run`.
-const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped. A run stopped at a limit (its budget \
-  or time limit, the daily or a group's budget, a step's budget, an account's plan limit) or interrupted is the \
-  person's to resume or continue on the task's Summary, and is refused here (person_only).";
+const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped, and in a turn Orchester started by \
+  itself it only proposes that. A run stopped at a limit (its budget or time limit, the daily or a group's budget, a \
+  step's budget, an account's plan limit) or interrupted is the person's to resume or continue on the task's \
+  Summary, and is refused here (person_only).";
+
+/// What the agent reads first of `pause_run` and `release_queue`.
+const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its message begins with [Orchester]) it \
+  only proposes this to the person, who applies or dismisses it in the conversation; otherwise it is done as \
+  follows.";
 
 /// What the agent reads first of `continue_run`.
 const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
@@ -185,15 +195,16 @@ const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and retur
 /// What the agent reads first of `answer_question` and `send_message`.
 const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \
   dismisses it in the conversation, unless the person turned on Let the Orchestrator answer agents in Settings: then \
-  it is sent at once. Either way it is recorded as automation's and the task's conversation names you as its \
-  sender. A message that would decide the plan a run waits on is refused (plan_decision_person_only): plan \
-  decisions are the person's. It is done as follows.";
+  it is sent at once. Either way it is recorded as automation's and the task's conversation names you as its sender. \
+  A message to a run none of whose agents waits or works, which would follow it up, continue or resume it, or run \
+  the task again, is always proposed: moving a run is the person's. A message that would decide the plan a run waits \
+  on is refused (plan_decision_person_only): plan decisions are the person's. It is done as follows.";
 
 /// What the agent reads first of a tool that publishes a draft.
 const PROPOSE_PUBLISH: &str = "In this chat it proposes the publication to the person, who applies or dismisses it \
   in the conversation, unless the person turned on Let the Orchestrator publish drafts in Settings: then it \
-  publishes at once. Either way it is done as follows, and what widens what agents may do still needs Let \
-  automation change agent permissions.";
+  publishes at once, but never in a turn Orchester started by itself: there it only proposes. Either way it is done \
+  as follows, and what widens what agents may do still needs Let automation change agent permissions.";
 
 /// Whose tools they are: the project's, for one conversation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -203,6 +214,8 @@ pub struct ChatScope {
   pub name: String,
   pub root: PathBuf,
   pub chat: ChatId,
+  /// A wait or a run's end started the turn by itself: nobody asked for anything in it ([`super::guard`]).
+  pub on_its_own: bool,
 }
 
 /// Calls the chat's tool `name` with `arguments` in `scope`; a change it made, proposed or refused is kept in the
@@ -295,22 +308,19 @@ async fn act(
   arguments: &JsonObject,
 ) -> Acted {
   let acted = match name {
+    // In a turn nobody asked for, what would change how runs go on or what agents run on is only proposed.
+    _ if guard::proposed_on_its_own(scope, name) => propose_change(translate, scope, name, arguments).await,
     RUN_TASK => start((services, translate), scope, arguments).await,
     CANCEL_RUN | CONTINUE_RUN => propose_change(translate, scope, name, arguments).await,
-    // In a turn nobody asked for, a merge is only proposed.
-    MERGE_RUN => match guard::on_its_own(scope).await {
-      Ok(true) => propose_change(translate, scope, name, arguments).await,
-      Ok(false) => {
-        switched(
-          (services, translate),
-          scope,
-          (name, arguments),
-          OrchestratorConsent::MergeRuns,
-        )
-        .await
-      }
-      Err(error) => Err(error),
-    },
+    MERGE_RUN => {
+      switched(
+        (services, translate),
+        scope,
+        (name, arguments),
+        OrchestratorConsent::MergeRuns,
+      )
+      .await
+    }
     RESUME_RUN => resume((services, translate), scope, arguments).await,
     ANSWER_QUESTION | SEND_MESSAGE => {
       switched(
@@ -342,6 +352,10 @@ async fn switched(
     return propose_change(translate, scope, name, arguments).await;
   }
   let (change, task) = change::subject(scope, name, arguments).await?;
+  // A message that moves a run none of whose agents waits or works is the person's to send.
+  if change.change.moves_run() {
+    return Ok(proposed(translate, change, task));
+  }
   let result = change::apply(
     (services, translate),
     scope,
@@ -367,7 +381,7 @@ async fn start(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   // In a turn nobody asked for, a start is only proposed.
-  if !auto_mode(scope).await? || guard::on_its_own(scope).await? {
+  if scope.on_its_own || !auto_mode(scope).await? {
     let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
     return Ok(Acted {
       result: Ok(told),
@@ -425,7 +439,12 @@ async fn propose_change(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   let (change, task) = change::subject(scope, name, arguments).await?;
-  Ok(Acted {
+  Ok(proposed(translate, change, task))
+}
+
+/// `change`, of task `task`, proposed to the person: what the agent is told, and what its action keeps.
+fn proposed(translate: &Translate, change: ProposedChange, task: Option<String>) -> Acted {
+  Acted {
     result: Ok(change::told(translate, &change)),
     kept: Kept {
       waits: Some(ActionOutcome::Waits),
@@ -433,7 +452,7 @@ async fn propose_change(
       change: Some(change),
       ..Kept::default()
     },
-  })
+  }
 }
 
 /// A publication: proposed to the person, unless they let the Orchestrator publish drafts; then published, unless

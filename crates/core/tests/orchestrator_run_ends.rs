@@ -9,7 +9,7 @@ use orchester_core::{
   id::{ProjectId, RunId},
   orchestrator::{
     ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, RunEnd, StopReason, WaitKind,
-    change::{Change, ContinueChoice, ProposedChange, StepName},
+    change::{Change, ContinueChoice, MessageThen, ProposedChange, StepName},
     instructions::{system_prompt, wait_prompt},
     wait::raised_by_own,
   },
@@ -87,6 +87,7 @@ fn messaged(run: RunId) -> EntryKind {
         number: 3,
         text: "Keep the old export.".to_owned(),
         now: false,
+        then: None,
       },
     })),
     ..ChatAction::new("send_message", Some("KON-12".to_owned()), ActionOutcome::Done)
@@ -173,6 +174,46 @@ fn orchestrator_run_that_succeeded_is_never_the_chats_own() {
       "a success turn cannot loop"
     );
   }
+}
+
+/// The chat's message to `run`'s agents that moved the run as `then` says, applied by the person.
+fn moved(run: RunId, then: MessageThen) -> EntryKind {
+  EntryKind::Action(ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: "Sync contacts".to_owned(),
+      change: Change::Message {
+        run,
+        number: 3,
+        text: "Use the cached export.".to_owned(),
+        now: false,
+        then: Some(then),
+      },
+    })),
+    ..ChatAction::new("send_message", Some("KON-12".to_owned()), ActionOutcome::Applied)
+  })
+}
+
+#[test]
+fn orchestrator_run_that_succeeded_after_the_chats_move_is_its_own() {
+  let run = RunId::generate();
+  let ready = ended(run, RunEnd::Succeeded);
+  assert!(
+    raised_by_own(&[entry(1, moved(run, MessageThen::FollowUp))], &ready),
+    "the chat's follow-up led to it: no turn, or the chat would follow it up again"
+  );
+  let next = RunId::generate();
+  for end in [RunEnd::Succeeded, RunEnd::Failed] {
+    assert!(
+      raised_by_own(&[entry(1, moved(run, MessageThen::RunAgain))], &ended(next, end)),
+      "{end:?}: the chat's message ran the task again, and its next run ended"
+    );
+  }
+  let mut question = ended(next, RunEnd::Succeeded);
+  question.kind = WaitKind::Question;
+  assert!(
+    !raised_by_own(&[entry(1, moved(run, MessageThen::RunAgain))], &question),
+    "an agent of the next run that asks is not the chat's doing"
+  );
 }
 
 #[test]

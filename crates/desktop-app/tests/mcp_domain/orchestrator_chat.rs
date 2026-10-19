@@ -73,6 +73,7 @@ pub(super) fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
     name: "Kontur".to_owned(),
     root: open.repo_root.clone(),
     chat: chat.id(),
+    on_its_own: false,
   }
 }
 

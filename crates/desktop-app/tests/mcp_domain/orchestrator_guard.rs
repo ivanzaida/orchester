@@ -4,8 +4,7 @@
 //! which only the person resumes.
 
 use orchester_core::{
-  id::{ChatMessageId, RunId},
-  orchestrator::{ActionOutcome, AgentWait, RunEnd, WaitKind},
+  orchestrator::ActionOutcome,
   run::{InterruptCause, RunLimit, review::AutoModeSettings},
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
@@ -21,32 +20,6 @@ use super::{
 
 /// What the seed's run that succeeded and waits to be merged belongs to.
 const READY: &str = "Show the signed-in account";
-
-/// A turn of `scope`'s conversation, which the end of `run` started by itself, thinks.
-fn turn_on_its_own(db: &mut ProjectDb, scope: &ChatScope, run: RunId) {
-  let chat = db.chat(scope.chat).expect("read").expect("the conversation");
-  let ended = AgentWait {
-    kind: WaitKind::Ended(RunEnd::Succeeded),
-    task: "KON-0".to_owned(),
-    title: READY.to_owned(),
-    run,
-    number: 1,
-    step: None,
-    place: None,
-    others: 0,
-    agent: None,
-    link: String::new(),
-    own: false,
-    automatic: true,
-  };
-  db.keep_agent_wait(&chat, ("end:test", &ended), Timestamp::now())
-    .expect("kept");
-  let seq = db.automatic_waits_without_turn().expect("read")[0].seq;
-  assert!(
-    db.start_wait_turn((scope.chat, seq), ChatMessageId::generate())
-      .expect("started")
-  );
-}
 
 fn refusal(error: &ToolError) -> &str {
   match error {
@@ -71,7 +44,11 @@ fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
     reviewer: current.reviewer,
   })
   .expect("auto mode on");
-  turn_on_its_own(&mut db, &scope, run.id());
+  // The tools of a turn a run's end started by itself.
+  let scope = ChatScope {
+    on_its_own: true,
+    ..scope
+  };
   let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
   let told = chat_call(&mut served, &scope, "merge_run", merge).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");

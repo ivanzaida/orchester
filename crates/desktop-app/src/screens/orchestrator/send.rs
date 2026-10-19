@@ -57,6 +57,7 @@ pub(super) fn send_action(ctx: &mut Ctx) -> SendAction {
         name: project.project.name().as_str().to_owned(),
         root: project.repo_root.clone(),
         chat: outgoing.chat,
+        on_its_own: false,
       };
       let served = services
         .chat_tools

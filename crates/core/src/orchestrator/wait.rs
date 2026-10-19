@@ -7,7 +7,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::chat::{ChatEntry, EntryKind};
+use super::{
+  change::Change,
+  chat::{ChatAction, ChatEntry, EntryKind},
+};
 use crate::{
   id::{ChatId, RunId},
   run::{Run, RunLimit, RunStatus, Stuck},
@@ -129,34 +132,40 @@ pub struct AgentWait {
 
 /// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,
 /// those of every conversation in the order they were kept (the person may have started another since), the newest
-/// entry about its run, before a wait of the run, is an answer, a message or a decision on how the run continues that
-/// the chat gave (applied, or done itself), or a resume of the run the chat did; for a run's end also a start of the
-/// run the chat took itself. A run that succeeded is never the chat's own: its turn only tells the person and
-/// proposes, so it cannot answer the chat in a loop. An agent the Orchestrator answered that asks again, or a run it
-/// continued, resumed or started that stops, is answered by a person, or by an Orchestrator turn the person starts.
+/// entry about its run, before a wait of the run, is the chat's own doing (applied, or done itself;
+/// [`own_doing`]). An agent the Orchestrator answered that asks again, or a run it continued, resumed or started that
+/// stops, is answered by a person, or by an Orchestrator turn the person starts.
 pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
-  let run = wait.run;
-  let end = wait.kind.run_end();
-  if end == Some(RunEnd::Succeeded) {
-    return false;
-  }
   for entry in entries.iter().rev() {
     match &entry.kind {
-      EntryKind::Wait { wait: kept, .. } if kept.run == run => return false,
-      EntryKind::Action(action) if action.outcome.answered() => {
-        let carried = action
-          .change
-          .as_ref()
-          .is_some_and(|change| change.change.carries_run_on() && change.change.run() == Some(run));
-        let started = end.is_some() && action.started == Some(run);
-        if carried || action.resumed == Some(run) || started {
-          return true;
-        }
-      }
+      EntryKind::Wait { wait: kept, .. } if kept.run == wait.run => return false,
+      EntryKind::Action(action) if action.outcome.answered() && own_doing(action, wait) => return true,
       _ => {}
     }
   }
   false
+}
+
+/// Whether `wait` follows from `action`, carried out: an answer, a message, a decision on how the run continues or a
+/// resume of its run; for a run's end also the chat's start of the run, or its message that ran the task again. A run
+/// that succeeded follows only from a message of the chat's that moved the run (a follow-up, a continuation, a resume)
+/// or ran the task again: its turn only tells the person and proposes, so nothing else of the chat's makes it loop.
+fn own_doing(action: &ChatAction, wait: &AgentWait) -> bool {
+  let end = wait.kind.run_end();
+  let change = action.change.as_ref().map(|change| &change.change);
+  let on_run = change.is_some_and(|change| change.run() == Some(wait.run));
+  let again = end.is_some()
+    && change.is_some_and(Change::runs_again)
+    && action
+      .task
+      .as_deref()
+      .is_some_and(|task| task.eq_ignore_ascii_case(&wait.task));
+  if end == Some(RunEnd::Succeeded) {
+    return again || (on_run && change.is_some_and(Change::moves_run));
+  }
+  let carried = on_run && change.is_some_and(Change::carries_run_on);
+  let started = end.is_some() && action.started == Some(wait.run);
+  carried || again || started || action.resumed == Some(wait.run)
 }
 
 const fn is_zero(count: &u32) -> bool {

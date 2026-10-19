@@ -6,12 +6,17 @@
 //! runs at once, so all the runs one of them stopped on a day are one end. Not ends: ends from before the project
 //! followed them ([`ProjectDb::run_ends_since`]), a pause, a cancel, a *Quit now* or a stop a person asked for, an
 //! interruption the runner continues by itself when it comes back, and a run that succeeded and was merged, in
-//! Orchester or outside it.
+//! Orchester or outside it, or has nothing to merge. Git is asked about runs that succeeded once per follow, in one
+//! reading of the branches and outside the follower's lock ([`merge_checks`]).
 
-use std::{collections::HashMap, path::Path};
+use std::{
+  collections::{HashMap, HashSet},
+  path::Path,
+};
 
 use orchester_core::{
-  id::ProjectId,
+  id::{ProjectId, RunId},
+  integration::RunWork,
   orchestrator::{AgentWait, RunEnd, StopReason, WaitKind, change::StepName},
   resource::StepKey,
   run::{InterruptCause, PauseReason, Run, RunFailure, RunLimit, RunStatus},
@@ -33,11 +38,55 @@ use crate::{
 /// The kind of the event a person's decision on a stopped run is kept by; a failure right after it is their stop.
 const STUCK_DECIDED: &str = "stuck_decided";
 
-/// Where the ends are read: project `project` at `root`, whose git `programs` read a merge outside Orchester.
+/// Where the ends are read: project `project` at `root`, whose git `programs` read a merge outside Orchester for a
+/// run that `checks` does not tell yet.
 pub(super) struct Reading<'a> {
   pub(super) project: ProjectId,
   pub(super) root: &'a Path,
   pub(super) programs: &'a Programs,
+  pub(super) checks: &'a MergeChecks,
+}
+
+/// What git told of the project's runs that succeeded and that Orchester did not merge: those whose work it holds
+/// merged outside Orchester, or that have nothing to merge (`quiet`), are never told as ready to merge; the others
+/// wait to be merged.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MergeChecks {
+  pub quiet: HashSet<RunId>,
+  pub waiting: HashSet<RunId>,
+}
+
+/// Asks git, in one reading of the branches, about the runs that succeeded since the chat follows ends, that
+/// Orchester did not merge and that `settled` does not settle, but those already known `quiet`. Blocks on SQLite and
+/// git.
+pub(super) fn merge_checks(
+  db: &ProjectDb,
+  (root, programs): (&Path, &Programs),
+  (settled, quiet): (impl Fn(&str) -> bool, &HashSet<RunId>),
+) -> Result<MergeChecks, StoreError> {
+  let mut runs = Vec::new();
+  for ended in db.ended_runs_since(db.run_ends_since()?)? {
+    let key = format!("end:{}:{}", ended.run, ended.sequence.get());
+    if ended.kind != "succeeded" || settled(&key) || quiet.contains(&ended.run) {
+      continue;
+    }
+    if db.run_merge(ended.run)?.is_some() {
+      continue;
+    }
+    if let Some(run) = db.run(ended.run).map_err(run_store_error)? {
+      runs.push(run);
+    }
+  }
+  let works: Vec<RunWork> = runs.iter().map(RunWork::of).collect();
+  let mut checks = MergeChecks::default();
+  for (run, found) in runs.iter().zip(delivery::deliveries(programs, root, &works)) {
+    let set = match found {
+      Delivery::Waiting => &mut checks.waiting,
+      Delivery::MergedOutside(_) | Delivery::NothingToMerge => &mut checks.quiet,
+    };
+    set.insert(run.id());
+  }
+  Ok(checks)
 }
 
 /// The ends of the latest runs of the project's tasks that stand now, each by the key it is kept by, but those that
@@ -115,14 +164,19 @@ fn end_of(run: &Run, kind: &str) -> Option<RunEnd> {
   }
 }
 
-/// Whether `run`, which succeeded, was merged: in Orchester, or, as git tells, outside it.
+/// Whether `run`, which succeeded, is not to be told as ready to merge: merged in Orchester, or, as git tells, merged
+/// outside it or with nothing to merge. Git is asked here only for a run the checks before did not tell.
 fn merged(db: &ProjectDb, reading: &Reading, run: &Run) -> Result<bool, StoreError> {
-  if db.run_merge(run.id())?.is_some() {
+  let checks = reading.checks;
+  if db.run_merge(run.id())?.is_some() || checks.quiet.contains(&run.id()) {
     return Ok(true);
   }
-  Ok(matches!(
+  if checks.waiting.contains(&run.id()) {
+    return Ok(false);
+  }
+  Ok(!matches!(
     delivery::of_run(reading.programs, reading.root, run),
-    Delivery::MergedOutside(_)
+    Delivery::Waiting
   ))
 }
 

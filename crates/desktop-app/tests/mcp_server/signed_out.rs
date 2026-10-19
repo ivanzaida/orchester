@@ -148,6 +148,7 @@ fn signed_out_the_orchestrators_chat_tools_are_refused_too() {
     name: "Kontur".to_owned(),
     root: data.dir.path().to_path_buf(),
     chat: ChatId::generate(),
+    on_its_own: false,
   };
   // Its servers stop when it goes.
   let servers = ChatServers::default();

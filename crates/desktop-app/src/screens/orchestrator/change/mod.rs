@@ -8,6 +8,7 @@
 
 mod answer;
 mod continuation;
+mod control;
 mod facts;
 mod widens;
 mod words;

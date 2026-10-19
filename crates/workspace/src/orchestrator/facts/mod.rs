@@ -138,7 +138,10 @@ pub fn load_in(root: &Path, programs: &Programs, action: &ChatAction) -> Result<
       | Change::Merge { run, .. }
       | Change::Answer { run, .. }
       | Change::Message { run, .. }
-      | Change::Continue { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
+      | Change::Continue { run, .. }
+      | Change::Pause { run, .. }
+      | Change::Resume { run, .. } => run::read(root, &db, programs, *run).map(|found| found.map(Facts::Run)),
+      Change::Release { .. } => Ok(None),
     },
     (None, Some(run)) => run::read(root, &db, programs, run).map(|found| found.map(Facts::Run)),
     (None, None) => Ok(None),
