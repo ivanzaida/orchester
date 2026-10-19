@@ -3,13 +3,17 @@
 //! at its sides and between its cells): a 28 glyph tile, the name in 13/500 with what it is in 11.5
 //! `text_muted` under it, its type and what uses it in 12 `text_secondary`, its status, and a chevron. The
 //! inspected row takes the `hover` fill; a press on another opens its inspector. Rows are pointer-only.
+//!
+//! A narrow window has no header and compact rows (`Connection list row/compact` `a9O5lF` in `b3aoUZ`): 10 over
+//! and under, 12 at the sides, the tile, then the name in 12.5/500 over its status and what it is, which wraps,
+//! 3 apart, and the chevron; the type and what uses it are left to the inspector.
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -46,12 +50,14 @@ const OPEN_WIDTH: f32 = 14.0;
 /// What opens a connection's inspector.
 pub(super) type OpenConnection = std::sync::Arc<dyn Fn(ConnectionId) -> Open + Send + Sync>;
 
-/// The rows of `entries`, `selected` inspected; a press on a row opens its connection's inspector with `open`.
+/// The rows of `entries`, `selected` inspected, compact when `compact`; a press on a row opens its connection's
+/// inspector with `open`.
 pub(super) fn table(
   ctx: &Ctx,
   (listed, accounts): (&ProjectConnections, &Accounts),
   entries: &[Entry<'_>],
   (selected, open): (Option<ConnectionId>, &OpenConnection),
+  compact: bool,
 ) -> Column {
   Column::new()
     .id("connections-list")
@@ -59,11 +65,23 @@ pub(super) fn table(
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .clip()
-    .child(heading(ctx))
+    .describe("compact", if compact { "true" } else { "false" })
+    .with_children((!compact).then(|| heading(ctx)))
     .with_children(entries.iter().map(|entry| {
       let id = entry.id();
-      row(ctx, (listed, accounts), *entry, Some(id) == selected, open(id))
+      let look = Look {
+        selected: Some(id) == selected,
+        compact,
+      };
+      row(ctx, (listed, accounts), *entry, look, open(id))
     }))
+}
+
+/// How a row is shown: inspected, and compact in a narrow window.
+#[derive(Clone, Copy)]
+struct Look {
+  selected: bool,
+  compact: bool,
 }
 
 fn heading(ctx: &Ctx) -> Row {
@@ -176,7 +194,7 @@ fn mcp_line(ctx: &Ctx, server: &orchester_core::connection::mcp::McpServer) -> S
   }
 }
 
-fn row(ctx: &Ctx, listed: (&ProjectConnections, &Accounts), entry: Entry<'_>, selected: bool, open: Open) -> Element {
+fn row(ctx: &Ctx, listed: (&ProjectConnections, &Accounts), entry: Entry<'_>, look: Look, open: Open) -> Element {
   let shape = shape(ctx, listed, entry);
   let id = format!("connection-row-{}", entry.id());
   let tile = Row::new()
@@ -189,6 +207,32 @@ fn row(ctx: &Ctx, listed: (&ProjectConnections, &Accounts), entry: Entry<'_>, se
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(icon(shape.glyph, IconSize::Md, PaletteColor::TextSecondary));
+  let row = if look.compact {
+    compact_cells(ctx, &id, tile, &shape)
+  } else {
+    wide_cells(ctx, &id, tile, &shape)
+  }
+  .width(Dimension::Pct(100.0))
+  .align_items(Alignment::Center)
+  .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+  .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+  let row = if look.selected {
+    row.background(ExtraColor::Hover.role())
+  } else {
+    row
+  };
+  opening(open)
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .describe("selected", if look.selected { "true" } else { "false" })
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .child(row)
+    .into()
+}
+
+/// A row's cells in a table with columns: the tile and the name over what the connection is, its type, what
+/// uses it and its status, each in its column.
+fn wide_cells(ctx: &Ctx, id: &str, tile: Row, shape: &Shape) -> Row {
   let text = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -207,13 +251,10 @@ fn row(ctx: &Ctx, listed: (&ProjectConnections, &Accounts), entry: Entry<'_>, se
       .flex_shrink(0.0)
       .nowrap()
   };
-  let row = Row::new()
-    .width(Dimension::Pct(100.0))
+  Row::new()
     .height(Dimension::Px(ROW_HEIGHT))
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Md)
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
       Row::new()
         .flex(1.0)
@@ -229,19 +270,44 @@ fn row(ctx: &Ctx, listed: (&ProjectConnections, &Accounts), entry: Entry<'_>, se
       Row::new()
         .width(Dimension::Px(STATUS_WIDTH))
         .flex_shrink(0.0)
-        .child(status_line(ctx, &format!("{id}-status"), shape.status, IconSize::Base)),
+        .child(status_line(
+          ctx,
+          &format!("{id}-status"),
+          shape.status,
+          (IconSize::Base, TypographyStyle::Label),
+        )),
     )
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
-  let row = if selected {
-    row.background(ExtraColor::Hover.role())
-  } else {
-    row
-  };
-  opening(open)
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .describe("selected", if selected { "true" } else { "false" })
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(row)
-    .into()
+}
+
+/// A compact row's cells (`a9O5lF`): the tile, then the name, the status and what the connection is stacked in
+/// the room left, the name cut short rather than squeezed.
+fn compact_cells(ctx: &Ctx, id: &str, tile: Row, shape: &Shape) -> Row {
+  let text = Column::new()
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Fine.role())
+    .child(
+      Text::new(&shape.name)
+        .id(format!("{id}-name"))
+        .variant(ConnectionsText::CompactName.role())
+        .width(Dimension::Pct(100.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .child(status_line(
+      ctx,
+      &format!("{id}-status"),
+      shape.status,
+      (IconSize::Sm, ConnectionsText::CompactStatus.role()),
+    ))
+    .child(
+      Text::new(&shape.line)
+        .variant(ConnectionsText::CompactLine.role())
+        .width(Dimension::Pct(100.0)),
+    );
+  Row::new()
+    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
+    .spacing(ExtraSpacing::Loose.role())
+    .child(tile)
+    .child(text)
 }
