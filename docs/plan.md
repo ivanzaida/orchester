@@ -34,8 +34,8 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 3. Agent profiles: **Implement** (Codex, workspace write, network per the capability table) and **Review** (a different
    profile, read-only), so the reviewer is never the author.
 4. Pipeline *Orchester change*:
-   Implement → command `powershell -File tools/check.ps1` → command with the task's filtered `cargo test` lines →
-   Review → Ready for review.
+   Implement → command `powershell -File tools/check.ps1 -Tests changed` (the check and the tests of the changed
+   crates, `docs/stable-build.md`) → Review → Ready for review.
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
 5. Environment: nothing for builds. Cargo builds into each worktree's own git-ignored `target/`, which goes away

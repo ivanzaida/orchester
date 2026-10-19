@@ -1,11 +1,19 @@
 # Repository quality gate: formatting, clippy with warnings denied, the 600-line file limit and the web checks.
 # Run from anywhere: powershell -File tools/check.ps1
 #
+# With `-Tests changed` it also runs the tests of the crates the branch changed and of the crates that depend on them
+# (tools/check-tests.ps1), as the pipelines' Check step does; `-Tests all` runs every crate's tests. Without it no test
+# runs, so the check agents run by hand stays fast.
+#
 # Clippy runs in two parts on purpose: the workspace without orchester-cloud, then orchester-cloud. A single
 # `cargo clippy --workspace --all-features` stays red. actix-web (the cloud's HTTP server) turns on tracing's `log`
 # feature, which Cargo then turns on for every crate in the same build. The larger expansion of each tracing macro
 # pushes 19 existing functions over clippy's cognitive-complexity limit. Do not "fix" those functions for it; they
 # pass in every build that ships them (docs/cloud-hosting.md, "Clippy runs in two parts, on purpose").
+param(
+    [ValidateSet("changed", "all")]
+    [string] $Tests = ""
+)
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -102,6 +110,18 @@ try {
     }
     else {
         Write-Output "web: skipped, Node (node) is not on PATH; the web checks did not run"
+    }
+
+    if ($Tests) {
+        Write-Output "== tests ($Tests)"
+        try {
+            & (Join-Path $PSScriptRoot "check-tests.ps1") -Scope $Tests
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+        }
+        catch {
+            Write-Output "tests: could not run: $_"
+            $failed = $true
+        }
     }
 }
 finally {
