@@ -153,8 +153,8 @@ async fn orchester_file_tools_refuse_changes_in_a_read_only_step() {
   let listed = reported(&db, run.id(), "orchester-tools: ").pop().expect("listed");
   assert_eq!(
     listed,
-    "read_file,list_files,search_file,find_references,search_external_file,read_external_file,get_task,save_memory,\
-     report_progress"
+    "read_file,list_files,search_file,find_references,search_external_file,read_external_file,list_run_processes,\
+     stop_run_process,call_run_app,get_task,save_memory,report_progress"
   );
   assert_eq!(
     reported(&db, run.id(), "orchester-call: "),

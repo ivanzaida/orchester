@@ -322,8 +322,16 @@ fn organization_restarts_validate_readiness_atomically_and_record_history() {
       Restart::Reconnect => run.continue_after_reconnect(at(22)),
     }
     .expect("restart");
+    // A recovery records who decided it before it is requested.
+    let restarted = match restart {
+      Restart::Recovery => {
+        assert!(matches!(events[0].kind(), RunEventKind::RecoveryDecided { .. }));
+        &events[1]
+      }
+      _ => &events[0],
+    };
     assert!(matches!(
-      events[0].kind(),
+      restarted.kind(),
       RunEventKind::Reopened | RunEventKind::RecoveryRequested | RunEventKind::Resumed | RunEventKind::Continued { .. }
     ));
     assert!(

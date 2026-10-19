@@ -12,7 +12,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   time::Timestamp,
 };
-use orchester_store::{AppDb, StoreError, StoredCloudAccount};
+use orchester_store::{AppDb, StoreError};
 
 fn project(name: &str) -> Project {
   Project::new(
@@ -107,26 +107,18 @@ fn owners_of_projects_known_before_are_the_account_signed_in_then() {
   assert_eq!(names(&db, None), ["Kontur"], "no account was signed in: nobody's yet");
   drop(db);
 
+  // The schema before owners, with an account signed in then and a project from then. Every migration commits with
+  // its version, so a database at that version has exactly that schema.
   let signed_in = dir.path().join("signed-in.db");
-  let mut db = AppDb::open(&signed_in).expect("create");
+  let raw = AppDb::create_at_version(&signed_in, BEFORE_OWNERS).expect("the schema before owners");
   let bohdan = CloudAccountId::generate();
-  db.set_cloud_account(Some(&StoredCloudAccount {
-    account: bohdan,
-    email: "bohdan@example.com".into(),
-    display_name: "Bohdan Koval".into(),
-    device_name: "Laptop".into(),
-    signed_in_at: at(1),
-    cloud_address: "https://cloud.test".into(),
-  }))
-  .expect("signed in");
-  drop(db);
-  // Back to the schema before owners, with the account still signed in and a project from then.
-  let raw = rusqlite::Connection::open(&signed_in).expect("raw connection");
   raw
-    .execute_batch(&format!(
-      "ALTER TABLE projects DROP COLUMN owner; PRAGMA user_version = {BEFORE_OWNERS};"
-    ))
-    .expect("the schema before owners");
+    .execute(
+      "INSERT INTO cloud_account (id, account_id, email, display_name, device_name, signed_in_at, cloud_address) \
+       VALUES (1, ?1, 'bohdan@example.com', 'Bohdan Koval', 'Laptop', 1, 'https://cloud.test')",
+      [bohdan.to_string()],
+    )
+    .expect("signed in");
   raw
     .execute(
       "INSERT INTO projects (id, name, repo_root, added_at, last_opened_at) VALUES (?1, 'Ledger', 'H:/l', 1, 1)",

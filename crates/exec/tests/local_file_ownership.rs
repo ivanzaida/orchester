@@ -189,6 +189,8 @@ fn local_integration_execution_root_anchors_refuse_in_place_reparse_substitution
   fs::remove_dir(&control).expect("remove only our junction entry");
   let root = dir.path().join("repo");
   fs::create_dir_all(root.join(".git")).expect("private Git directory");
+  // A Git directory is never empty, which is what keeps the held one from being converted in place.
+  fs::write(root.join(".git/HEAD"), b"ref: refs/heads/main\n").expect("Git HEAD");
   fs::create_dir(root.join("scratch")).expect("scratch");
   let root_owner = Directory::open(&root).expect("root");
   let scratch = Directory::open(&root.join("scratch")).expect("scratch");
