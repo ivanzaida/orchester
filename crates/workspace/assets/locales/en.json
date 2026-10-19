@@ -370,7 +370,6 @@
       "inMerge": "A merge is in progress in the run’s worktree already: continue or abort it.",
       "notInMerge": "No merge is in progress in the run’s worktree any more.",
       "markersLeft": "Conflict markers are still in {{files}}. Resolve them, save the files, then continue.",
-      "unreadable": "{{file}} cannot be read to check it for conflict markers.",
       "undecided": "Keep one side of {{files}}: git could not merge them by content. Then continue.",
       "notUnmerged": "{{file}} does not wait for a side to be kept any more.",
       "branchMoved": "The run’s branch is not at its last checkpoint: it has commits Orchester did not record. Nothing was merged.",

@@ -293,6 +293,20 @@ impl Merged {
   }
 }
 
+/// Refuses a run merged already, or one a merge waiting in its worktree for the person holds back: before git changes
+/// anything, as the record of the merge would be refused after it.
+fn not_merged_or_held(db: &ProjectDb, run: RunId) -> Result<(), IntegrationProblem> {
+  if db.run_merge(run)?.is_some() {
+    return Err(IntegrationProblem::AlreadyMerged);
+  }
+  if db.resolution(run)?.is_some() {
+    return Err(IntegrationProblem::Store(Message::new(
+      "runs.merge.failure.notMergeable",
+    )));
+  }
+  Ok(())
+}
+
 /// Merges run `run` of the project at `repo_root`, records the merge and removes what the run left
 /// that is safe to remove: its clean worktrees and its merged branches. With `expected`, only while the run's
 /// branch is at that commit (the one a person reviewed); a branch that moved since merges nothing.
@@ -318,9 +332,7 @@ pub fn merge_in(
     .run(run)
     .map_err(run_store_error)?
     .ok_or(IntegrationProblem::Store(Message::new("errors.storage")))?;
-  if db.run_merge(run.id())?.is_some() {
-    return Err(IntegrationProblem::AlreadyMerged);
-  }
+  not_merged_or_held(&db, run.id())?;
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   if let Some(holder) = super::local_integration::checkout_holder(&db, run.id())? {
     return Err(IntegrationProblem::HeldLocally(holder));

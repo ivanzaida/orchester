@@ -212,6 +212,7 @@
         "openYourself": "Open the worktree in your editor to resolve the conflicts.",
         "conflicted": "Conflicted",
         "resolved": "Resolved",
+        "resolvedWithMarkers": "Resolved · conflict markers are still in its text",
         "unmergeable": "Git can't merge it · keep a side",
         "deletedByBase": "{{branch}} deleted it · the run changed it",
         "deletedByRun": "The run deleted it · {{branch}} changed it",

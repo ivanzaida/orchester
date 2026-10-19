@@ -58,6 +58,9 @@ pub enum FileState {
   Undecided(Undecided),
   /// Marked resolved in the index, or still unmerged with text that holds no marker any more.
   Resolved,
+  /// Marked resolved in the index while its text still holds a conflict marker: the index decides, so it does not
+  /// hold the merge back, but the person may want to look again (or the text is about markers).
+  ResolvedWithMarkers,
 }
 
 /// A file that conflicted in the merge, as `git` names it from the worktree's root.
@@ -143,9 +146,6 @@ pub enum ResolveError {
   /// The file is not one the merge left unmerged.
   #[error("{0} is not unmerged")]
   NotUnmerged(String),
-  /// A conflicted file could not be read.
-  #[error("{path} cannot be read: {detail}")]
-  Unreadable { path: String, detail: String },
 }
 
 /// Whether a merge is in progress in `worktree`.
@@ -165,15 +165,17 @@ pub fn resolution(
   }
   let mut files = Vec::new();
   for (path, stages) in staged(&in_worktree, &["ls-files", "--unmerged", "-z"])? {
-    let state = unmerged_state(worktree, &path, &stages)?;
+    let state = unmerged_state(worktree, &path, &stages);
     files.push(ConflictFile { path, state });
   }
   for (path, _) in staged(&in_worktree, &["ls-files", "--resolve-undo", "-z"])? {
     if !files.iter().any(|file| file.path == path) {
-      files.push(ConflictFile {
-        path,
-        state: FileState::Resolved,
-      });
+      let state = if text_holds_markers(&worktree.join(&path)) {
+        FileState::ResolvedWithMarkers
+      } else {
+        FileState::Resolved
+      };
+      files.push(ConflictFile { path, state });
     }
   }
   Ok(Some(Resolution { files }))
@@ -226,7 +228,8 @@ pub fn decide(
   if !merging(&git)? {
     return Err(ResolveError::NotInMerge);
   }
-  let stages = staged(&git, &["ls-files", "--unmerged", "-z", "--", path])?
+  let literal = literal(path);
+  let stages = staged(&git, &["ls-files", "--unmerged", "-z", "--", &literal])?
     .remove(path)
     .ok_or_else(|| ResolveError::NotUnmerged(path.to_owned()))?;
   let (stage, option) = match side {
@@ -234,10 +237,10 @@ pub fn decide(
     Side::Base => (BASE_STAGE, "--theirs"),
   };
   if stages.contains(&stage) {
-    git.stdout(&["checkout", option, "--", path])?;
-    git.stdout(&["add", "--", path])?;
+    git.stdout(&["checkout", option, "--", &literal])?;
+    git.stdout(&["add", "--", &literal])?;
   } else {
-    git.stdout(&["rm", "--quiet", "--", path])?;
+    git.stdout(&["rm", "--quiet", "--", &literal])?;
   }
   Ok(())
 }
@@ -270,8 +273,9 @@ pub fn finish(
   }
   let unmerged: Vec<String> = staged(&git, &["ls-files", "--unmerged", "-z"])?.into_keys().collect();
   if !unmerged.is_empty() {
+    let literals: Vec<String> = unmerged.iter().map(|path| literal(path)).collect();
     let mut add = vec!["add", "--"];
-    add.extend(unmerged.iter().map(String::as_str));
+    add.extend(literals.iter().map(String::as_str));
     git.stdout(&add)?;
   }
   git.stdout(&["add", "-u"])?;
@@ -296,35 +300,54 @@ pub fn holds_markers(text: &str) -> bool {
     .any(|line| MARKERS.iter().any(|marker| line.starts_with(marker)))
 }
 
-/// How the unmerged `path` with index `stages` stands, read from the worktree.
-fn unmerged_state(worktree: &Path, path: &str, stages: &[u8]) -> Result<FileState, ResolveError> {
+/// How the unmerged `path` with index `stages` stands, read from the worktree. A path that is no regular file there
+/// (gone, a directory, a submodule) or cannot be read waits for the person to keep a side, as a binary one does.
+fn unmerged_state(worktree: &Path, path: &str, stages: &[u8]) -> FileState {
   if !stages.contains(&RUN_STAGE) {
-    return Ok(FileState::Undecided(Undecided::DeletedByRun));
+    return FileState::Undecided(Undecided::DeletedByRun);
   }
   if !stages.contains(&BASE_STAGE) {
-    return Ok(FileState::Undecided(Undecided::DeletedByBase));
+    return FileState::Undecided(Undecided::DeletedByBase);
   }
-  let unreadable = |error: std::io::Error| ResolveError::Unreadable {
-    path: path.to_owned(),
-    detail: error.to_string(),
+  let file = worktree.join(path);
+  let Some(text) = regular_text(&file) else {
+    return FileState::Undecided(Undecided::Unmergeable);
   };
-  let mut probe = Vec::new();
-  match fs::File::open(worktree.join(path)) {
-    Ok(file) => file.take(BINARY_PROBE).read_to_end(&mut probe).map_err(unreadable)?,
-    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-      return Ok(FileState::Undecided(Undecided::Unmergeable));
-    }
-    Err(error) => return Err(unreadable(error)),
-  };
-  if probe.contains(&0) {
-    return Ok(FileState::Undecided(Undecided::Unmergeable));
-  }
-  let text = fs::read(worktree.join(path)).map_err(unreadable)?;
-  Ok(if holds_markers(&String::from_utf8_lossy(&text)) {
+  if holds_markers(&text) {
     FileState::Markers
   } else {
     FileState::Resolved
-  })
+  }
+}
+
+/// Whether the regular text file `file` holds a conflict marker; a file that cannot be read as text holds none.
+fn text_holds_markers(file: &Path) -> bool {
+  regular_text(file).is_some_and(|text| holds_markers(&text))
+}
+
+/// The text of the regular file `file`; `None` for anything else, a file that cannot be read, or a binary one (a NUL
+/// in its first bytes, git's own test).
+fn regular_text(file: &Path) -> Option<String> {
+  if !fs::symlink_metadata(file).is_ok_and(|metadata| metadata.is_file()) {
+    return None;
+  }
+  let mut probe = Vec::new();
+  fs::File::open(file)
+    .ok()?
+    .take(BINARY_PROBE)
+    .read_to_end(&mut probe)
+    .ok()?;
+  if probe.contains(&0) {
+    return None;
+  }
+  fs::read(file)
+    .ok()
+    .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// `path` as a pathspec git takes literally: brackets, stars and question marks in a name are no glob.
+fn literal(path: &str) -> String {
+  format!(":(literal){path}")
 }
 
 /// The merge commit at the worktree's `HEAD` and the base commit it merged in, its second parent.

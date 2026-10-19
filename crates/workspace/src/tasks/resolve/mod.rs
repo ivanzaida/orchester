@@ -57,8 +57,11 @@ pub struct Worktree {
 /// `run`'s worktree under `repo_root` as it is now. With `idle` (no resolving of the run under way) a recorded
 /// resolution whose merge is gone from the worktree ends: a person aborted or committed it themselves.
 pub fn read(programs: &Programs, repo_root: &Path, (run, idle): (RunId, bool)) -> Result<Worktree, Message> {
+  let read_at = Timestamp::now();
   let worktree = run_worktree(repo_root, run);
   if !worktree.is_dir() {
+    // No merge waits in a worktree that is gone.
+    open(repo_root)?.end_resolution(run).map_err(storage)?;
     return Ok(Worktree {
       present: false,
       merge: None,
@@ -66,10 +69,8 @@ pub fn read(programs: &Programs, repo_root: &Path, (run, idle): (RunId, bool)) -
   }
   let merge = resolve::resolution(&programs.runner(), Path::new(GIT), &worktree).map_err(|error| problem(&error))?;
   if idle && merge.is_none() {
-    let mut db = open(repo_root)?;
-    if db.resolution(run).map_err(storage)?.is_some() {
-      db.end_resolution(run).map_err(storage)?;
-    }
+    // Only a resolution older than this read: one *Resolve in editor* begins meanwhile has not merged yet.
+    open(repo_root)?.end_resolution_before(run, read_at).map_err(storage)?;
   }
   Ok(Worktree { present: true, merge })
 }
@@ -212,6 +213,5 @@ fn problem(error: &ResolveError) -> Message {
     ResolveError::MarkersLeft(left) => markers_left(left),
     ResolveError::Undecided(left) => undecided(left),
     ResolveError::NotUnmerged(path) => Message::new("tasks.resolve.notUnmerged").with("file", path.clone()),
-    ResolveError::Unreadable { path, .. } => Message::new("tasks.resolve.unreadable").with("file", path.clone()),
   }
 }

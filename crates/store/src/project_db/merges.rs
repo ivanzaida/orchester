@@ -4,7 +4,7 @@ use orchester_core::{
   id::RunId,
   integration::{MergeKind, RunMerge},
   revision::Revision,
-  run::BranchName,
+  run::{BranchName, RunStatus},
   store::MergeStore,
   time::Timestamp,
 };
@@ -21,7 +21,8 @@ impl MergeStore for ProjectDb {
     // A run merges as it succeeded: not once it was reopened and works again (a follow-up, a return of its work), nor
     // while a merge waits in its worktree for a person.
     let status = super::runs::stored_status(&transaction, merge.run)?.ok_or(StoreError::RunNotFound(merge.run))?;
-    let reopened = status.has_live_work() && succeeded_once(&transaction, merge.run)?;
+    // A run that never succeeded may still be found merged outside Orchester; one reopened since is not merged.
+    let reopened = status != RunStatus::Succeeded && succeeded_once(&transaction, merge.run)?;
     if reopened || super::resolutions::resolution(&transaction, merge.run)?.is_some() {
       return Err(StoreError::NotMergeable(merge.run));
     }

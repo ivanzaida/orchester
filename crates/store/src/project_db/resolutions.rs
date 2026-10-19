@@ -50,6 +50,16 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Ends `run`'s resolution when it began before `before`: one a newer start recorded meanwhile stands. Whether it
+  /// ended one.
+  pub fn end_resolution_before(&mut self, run: RunId, before: Timestamp) -> Result<bool, StoreError> {
+    let ended = self.connection.execute(
+      "DELETE FROM run_resolutions WHERE run_id = ?1 AND started_at < ?2",
+      params![run.to_string(), before.unix_millis()],
+    )?;
+    Ok(ended > 0)
+  }
+
   /// When `run`'s resolution began, while it is recorded.
   pub fn resolution(&self, run: RunId) -> Result<Option<Timestamp>, StoreError> {
     resolution(&self.connection, run)

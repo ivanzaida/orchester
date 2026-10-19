@@ -123,6 +123,47 @@ fn returned_after_end_a_resolution_holds_the_run_back_and_its_merge() {
 }
 
 #[test]
+fn returned_after_end_a_removed_worktree_ends_its_resolution_and_an_older_one_ends_after_a_read() {
+  use orchester_core::{integration::RemovalStart, store::WorktreeStore};
+  let (_repo, mut db, run) = succeeded();
+  db.begin_resolution(run.id(), at(20)).expect("begin");
+  assert!(
+    !db.end_resolution_before(run.id(), at(20)).expect("end"),
+    "begun at the read: it stands"
+  );
+  assert!(
+    db.end_resolution_before(run.id(), at(21)).expect("end"),
+    "older than the read"
+  );
+  db.begin_resolution(run.id(), at(22)).expect("begin");
+  assert_eq!(
+    db.begin_worktree_removal(run.id(), at(23)).expect("remove"),
+    RemovalStart::Recorded
+  );
+  assert_eq!(
+    db.resolution(run.id()).expect("read"),
+    None,
+    "the merge in the worktree went with it"
+  );
+}
+
+#[test]
+fn returned_after_end_a_reopened_run_that_ended_otherwise_is_not_merged() {
+  let (_repo, mut db, mut run) = succeeded();
+  let step = run.ended_return_targets().remove(0);
+  let events = run
+    .return_ended(&step, (&note(), None), Answerer::Person, at(20))
+    .expect("returned");
+  db.append_events(&run, &events).expect("reopened");
+  let events = run.cancel(at(21)).expect("cancelled");
+  db.append_events(&run, &events).expect("cancelled");
+  assert!(matches!(
+    db.save_run_merge(&merge_of(&run)),
+    Err(StoreError::NotMergeable(_))
+  ));
+}
+
+#[test]
 fn returned_after_end_a_merged_run_begins_no_resolution() {
   let (_repo, mut db, run) = succeeded();
   db.save_run_merge(&merge_of(&run)).expect("merged");

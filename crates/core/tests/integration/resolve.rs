@@ -129,8 +129,42 @@ fn resolve_a_file_marked_resolved_is_resolved_whatever_its_text_holds() {
   .expect("written");
   assert_eq!(states(&worktree), [("list.txt".to_owned(), FileState::Markers)]);
   git_in(&worktree, &["add", "list.txt"]);
-  assert_eq!(states(&worktree), [("list.txt".to_owned(), FileState::Resolved)]);
+  assert_eq!(
+    states(&worktree),
+    [("list.txt".to_owned(), FileState::ResolvedWithMarkers)],
+    "resolved, with a note that markers are in its text"
+  );
   finish(&worktree, &expected).expect("committed");
+}
+
+#[test]
+fn resolve_a_side_is_kept_for_the_file_named_never_one_a_glob_would_match() {
+  let repo = Repo::new();
+  for name in ["a[1].bin", "a1.bin"] {
+    fs::write(repo.root.join(name), b"\x00first").expect("write");
+  }
+  git_in(&repo.root, &["add", "--all"]);
+  git_in(&repo.root, &["commit", "--quiet", "-m", "two binaries"]);
+  let base = repo.head();
+  let worktree = repo.worktree("run", RUN_BRANCH, &base);
+  for (dir, content) in [(&worktree, b"\x00run's" as &[u8]), (&repo.root, b"\x00main's")] {
+    for name in ["a[1].bin", "a1.bin"] {
+      fs::write(dir.join(name), content).expect("write");
+    }
+    git_in(dir, &["add", "--all"]);
+    git_in(dir, &["commit", "--quiet", "-m", "changed"]);
+  }
+  start(&worktree).expect("merged with conflicts");
+  resolve::decide(&Processes, &git_program(), &worktree, ("a[1].bin", Side::Base)).expect("kept main's");
+  assert_eq!(
+    states(&worktree),
+    [
+      ("a1.bin".to_owned(), FileState::Undecided(Undecided::Unmergeable)),
+      ("a[1].bin".to_owned(), FileState::Resolved),
+    ],
+    "`a[1].bin` as a glob would match a1.bin: it is taken literally"
+  );
+  assert_eq!(fs::read(worktree.join("a1.bin")).expect("untouched"), b"\x00run's");
 }
 
 #[test]

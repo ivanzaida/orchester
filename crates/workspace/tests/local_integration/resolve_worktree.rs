@@ -62,6 +62,31 @@ fn local_integration_resolve_a_merge_ended_outside_orchester_ends_its_resolution
 }
 
 #[test]
+fn local_integration_resolve_a_held_run_is_not_merged_and_a_gone_worktree_ends_the_hold() {
+  let fixture = conflicting();
+  let root = fixture.root();
+  resolve::start(&programs(), root, fixture.run).expect("merged into the worktree");
+  let main = git(root, &["rev-parse", "main"]);
+  assert!(
+    orchester_workspace::tasks::integration::merge_in(root, &programs(), (fixture.run, None)).is_err(),
+    "the merge waits in the worktree"
+  );
+  assert_eq!(git(root, &["rev-parse", "main"]), main, "git changed nothing");
+  git(
+    root,
+    &[
+      "worktree",
+      "remove",
+      "--force",
+      fixture.task_root.to_str().expect("a path"),
+    ],
+  );
+  let worktree = resolve::read(&programs(), root, (fixture.run, false)).expect("read");
+  assert!(!worktree.present);
+  assert_eq!(resolution(root, &fixture), None);
+}
+
+#[test]
 fn local_integration_resolve_continue_commits_and_ends_the_resolution() {
   let fixture = conflicting();
   let root = fixture.root();

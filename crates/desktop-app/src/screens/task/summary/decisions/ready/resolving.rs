@@ -183,6 +183,12 @@ fn file_row(ctx: &Ctx, presses: &Presses, (index, file): (usize, &ConflictFile))
       ctx.t("decisions.ready.resolving.resolved"),
       "resolved",
     ),
+    FileState::ResolvedWithMarkers => (
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      ctx.t("decisions.ready.resolving.resolvedWithMarkers"),
+      "resolved",
+    ),
   };
   let keep = |id: &str, label: Arc<str>, side: Side| -> Element {
     let step = ResolveStep::Decide {
