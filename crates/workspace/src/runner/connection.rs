@@ -510,8 +510,9 @@ impl Session {
       return IdleAnswer::Dropped;
     }
     loop {
-      // The answer first: a runner that answered Stopping sends Stopped right behind the reply, and reading that
-      // here before the answer would take the runner's stop for a dropped connection.
+      // The answer first: the reply reaches `answer` through `handle` of this same event channel, and a runner that
+      // answered Stopping sends Stopped right behind it, so both branches are ready at once. Reading Stopped before
+      // the answer would take the runner's stop for a dropped connection.
       tokio::select! {
         biased;
         answered = &mut answer => return match answered {
