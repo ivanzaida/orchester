@@ -3,8 +3,8 @@
 //! and a call of one without a rule asks the permission prompt first and runs only when allowed. The fake lists the
 //! tools (`orchester-tools: <names>`), then makes the calls of [`fake_tool_calls`], reporting each decision
 //! (`orchester-permission: <tool> <decision>`) and answer (`orchester-call: <tool> <ok|error> <bytes>: <first line> |
-//! <last line>`). With "without asking" it runs the calls that should ask without asking (`orchester-permission:
-//! <tool> skipped`), as a CLI that ignored its rules would.
+//! <last line>`). With "Use Orchester's tools without asking" it runs the calls that should ask without asking
+//! (`orchester-permission: <tool> skipped`), as a CLI that ignored its rules would.
 
 use std::{path::Path, process::ExitCode};
 
@@ -163,7 +163,9 @@ impl Fake {
     self.assistant(&format!("msg_{call}"), &block.to_string());
     let rule = fake_claude_rules::mcp(args, &name);
     // A CLI that runs a call it should have asked about: the runner must ask itself.
-    let unasked = self.prompt.contains("without asking") && rule == fake_claude_rules::Decision::Ask;
+    // The whole trigger: Orchester's own prompt says its run-process tools run "without asking".
+    let unasked =
+      self.prompt.contains("Use Orchester's tools without asking") && rule == fake_claude_rules::Decision::Ask;
     let decision = if unasked {
       "skipped".to_owned()
     } else if rule == fake_claude_rules::Decision::Ask {

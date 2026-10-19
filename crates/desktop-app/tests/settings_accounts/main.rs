@@ -55,7 +55,7 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
       assert!(joined(&mut window, "account-fact-method").contains("ChatGPT"));
       assert!(joined(&mut window, "account-runs-get").contains("CODEX_HOME"));
       assert!(joined(&mut window, "account-no-token").contains("codex login status"));
-      assert!(shown(&mut window, "settings-tab-general") && shown(&mut window, "settings-tab-servers"));
+      assert!(shown(&mut window, "settings-tab-general") && shown(&mut window, "settings-tab-orchester"));
     },
   );
 }

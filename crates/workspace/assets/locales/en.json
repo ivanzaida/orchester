@@ -1228,7 +1228,6 @@
       "mergedOutside": "The run’s work is in {{branch}} already: it was merged without Orchester.",
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
-      "acceptPersonOnly": "Accepting a step that could not check everything passes it in a person’s place, which a person decides on the task page, or lets automation decide by turning on Let automation answer approvals.",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
       "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
       "mcpProgramAndUrl": "A server is either a program (program) or a remote server (url), not both.",

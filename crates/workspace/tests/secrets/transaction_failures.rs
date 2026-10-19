@@ -126,7 +126,8 @@ fn secrets_replacement_begin_failure_does_not_claim_or_store_a_new_value() {
   assert!(matches!(&error, SecretError::Store(StoreError::Sqlite(
     rusqlite::Error::SqliteFailure(cause, _)
   )) if cause.code == rusqlite::ErrorCode::DatabaseBusy));
-  assert_eq!(messages::secret_error(&error).key, "errors.storage");
+  // A writer that holds the database says so (ORC-6), rather than a general storage failure.
+  assert_eq!(messages::secret_error(&error).key, "errors.databaseLocked");
   assert_eq!(vault.writes.load(Ordering::SeqCst), 0);
   assert!(vault.stored.lock().is_none());
   assert_eq!(db.secret(active.id()).expect("metadata"), Some(active));
