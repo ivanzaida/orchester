@@ -13,7 +13,10 @@ use lurq::{
   components::{Column, Row, SelectOption, Text},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{connection::AgentProvider, secret::Secret};
+use orchester_core::{
+  connection::AgentProvider,
+  secret::{Environment, Secret},
+};
 use orchester_workspace::connections::{api_provider::base_url, data::ProjectConnections};
 
 use super::{KeyChoice, OnProvider, ProviderForm, active, name_problem};
@@ -74,7 +77,7 @@ impl ProviderForm {
     };
     let sign_in = card(
       "connection-runs-sign-in",
-      Icon::CircleUserRound,
+      Icon::User,
       (
         "connections.apiProvider.signIn",
         ctx.t("connections.apiProvider.signInDetail"),
@@ -94,7 +97,8 @@ impl ProviderForm {
     Row::new()
       .id("connection-runs-on")
       .width(Dimension::Pct(100.0))
-      .padding(Padding::new().top(ExtraSpacing::Inset.role()))
+      // 32 from the cards to Base URL's label (`virfc`): this and the row's own 16.
+      .padding(Padding::new().top(ExtraSpacing::Inset.role()).bottom(SpacingSize::Md))
       .spacing(SpacingSize::Md)
       .child(Column::new().flex(1.0).child(sign_in))
       .child(Column::new().flex(1.0).child(provider))
@@ -140,7 +144,7 @@ impl ProviderForm {
           "connections.apiProvider.secretName",
           [
             ("name", secret.name().as_str()),
-            ("environment", secret.environment().as_str()),
+            ("environment", &*ctx.t(environment_key(secret.environment()))),
           ],
         )
         .to_string()
@@ -245,23 +249,33 @@ impl ProviderForm {
       .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()));
     let listed = self.models.get().0;
     for (index, model) in listed.iter().enumerate() {
-      let (model, models) = (model.clone(), self.models.clone());
+      let (model, models, error) = (model.clone(), self.models.clone(), self.model_error.clone());
       chips = chips.child(
         TagChip::new(format!("connection-provider-model-{index}"), model.as_str())
           .mono()
           .removable(ctx.t("connections.apiProvider.removeModel"), move || {
             models.update(|models| models.0.retain(|kept| *kept != model));
+            error.set(None);
           }),
       );
     }
-    let input = FieldInput::new(
+    // Only the current problem: one about ids the field no longer holds is gone (`UW2bO`).
+    let draft = self.model.get();
+    let problem = self
+      .model_error
+      .get()
+      .filter(|problem| !draft.trim().is_empty() && problem.draft == draft);
+    let mut input = FieldInput::new(
       "connection-provider-model",
       ctx.t("connections.apiProvider.model"),
       self.model.clone(),
     )
     .placeholder(ctx.t("connections.apiProvider.modelsPlaceholder"))
-    .mono()
-    .render(ctx);
+    .mono();
+    if problem.is_some() {
+      input = input.invalid();
+    }
+    let input = input.render(ctx);
     let (models, typed, error) = (self.models.clone(), self.model.clone(), self.model_error.clone());
     let add = ActionButton::new(
       "connection-provider-add-model",
@@ -282,10 +296,7 @@ impl ProviderForm {
           .child(add),
       )
       .with_children(
-        self
-          .model_error
-          .get()
-          .map(|problem| field_error("connection-provider-model-error", &message_text(ctx, &problem))),
+        problem.map(|problem| field_error("connection-provider-model-error", &message_text(ctx, &problem.message))),
       );
     stacked_row(
       Label::new("connection-provider-models", ctx.t("connections.apiProvider.models"))
@@ -318,6 +329,15 @@ impl ProviderForm {
           .color(PaletteColor::TextMuted),
       )
       .into()
+  }
+}
+
+/// The environment's name as Secrets shows it (*Development*).
+const fn environment_key(environment: Environment) -> &'static str {
+  match environment {
+    Environment::Development => "connections.apiProvider.environments.development",
+    Environment::Staging => "connections.apiProvider.environments.staging",
+    Environment::Production => "connections.apiProvider.environments.production",
   }
 }
 

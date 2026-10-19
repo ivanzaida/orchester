@@ -18,4 +18,5 @@ mod api_provider;
 mod harness;
 mod list;
 mod mcp;
+mod qa_scenarios;
 mod reads;

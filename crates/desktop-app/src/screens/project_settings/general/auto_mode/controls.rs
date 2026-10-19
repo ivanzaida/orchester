@@ -14,6 +14,7 @@ use crate::{
   screens::project_settings::{page, work::Save},
   ui::{
     button::{ActionButton, ButtonKind},
+    choice_field::{Choice, ChoiceField},
     field::{FieldInput, SelectField, field},
     form_section::{Place, section as form_section},
     icon::Icon,
@@ -112,24 +113,12 @@ fn unavailable_reviewer(ctx: &mut Ctx, props: &Props) -> Element {
   )
 }
 fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::ReviewOptions, busy: bool) -> Element {
-  let default = default_connection_label(ctx, options.default_connection.as_deref());
-  let connections = std::iter::once((String::new(), default))
-    .chain(options.connections.into_iter().map(|(id, name)| (id, name.into())))
-    .collect();
-  let unavailable = on_providers(ctx, options.on_providers);
-  let connection = select(
-    ctx,
-    "settings-reviewer-connection",
-    "project_settings.connection",
-    (&tab.connection, unavailable),
-    connections,
-    busy,
-  );
+  let connection = connection_select(ctx, tab, &options, busy);
   let model = select(
     ctx,
     "settings-reviewer-model",
     "project_settings.model",
-    (&tab.model, Vec::new()),
+    &tab.model,
     options
       .models
       .into_iter()
@@ -141,7 +130,7 @@ fn reviewer_row(ctx: &mut Ctx, tab: &AutoMode, options: project_settings::Review
     ctx,
     "settings-reviewer-effort",
     "project_settings.effort",
-    (&tab.effort, Vec::new()),
+    &tab.effort,
     std::iter::once((String::new(), ctx.t("project_settings.defaultEffort")))
       .chain(
         options
@@ -210,21 +199,73 @@ fn model_label(ctx: &Ctx, model: &str) -> Arc<str> {
   ctx.t(key)
 }
 
-/// The connections on an API provider, listed unavailable with why (`kGBHZ`): the reviewer starts its CLI on its own
-/// sign-in.
-fn on_providers(ctx: &Ctx, connections: Vec<(String, String)>) -> Vec<SelectOption<String>> {
+/// The reviewer's connection (`kGBHZ`): the default, the connections a reviewer runs on, and those on an API provider
+/// listed faded with a lock and why, the reason wrapped, as the profile's connection menu lists them. Locked while a
+/// save or a question is under way.
+fn connection_select(ctx: &mut Ctx, tab: &AutoMode, options: &project_settings::ReviewOptions, busy: bool) -> Element {
+  let default = default_connection_label(ctx, options.default_connection.as_deref());
+  if busy {
+    let connections = std::iter::once((String::new(), default))
+      .chain(
+        options
+          .connections
+          .iter()
+          .map(|(id, name)| (id.clone(), name.as_str().into())),
+      )
+      .collect();
+    return select(
+      ctx,
+      "settings-reviewer-connection",
+      "project_settings.connection",
+      &tab.connection,
+      connections,
+      true,
+    );
+  }
+  let choice = |value: String, label: Arc<str>, unavailable: Option<Arc<str>>| Choice {
+    value,
+    label,
+    icon: Icon::Bot,
+    detail: None,
+    separator: false,
+    warning: false,
+    trigger: None,
+    unavailable,
+  };
   let reason = ctx.t("project_settings.reviewerApiProvider");
-  connections
-    .into_iter()
-    .map(|(id, name)| SelectOption::new(id, name).detail(reason.clone()).disabled(true))
-    .collect()
+  let choices = std::iter::once(choice(String::new(), default, None))
+    .chain(
+      options
+        .connections
+        .iter()
+        .map(|(id, name)| choice(id.clone(), name.as_str().into(), None)),
+    )
+    .chain(
+      options
+        .on_providers
+        .iter()
+        .map(|(id, name)| choice(id.clone(), name.as_str().into(), Some(reason.clone()))),
+    )
+    .collect();
+  ChoiceField {
+    id: "settings-reviewer-connection".into(),
+    name: ctx.t("project_settings.connection"),
+    value: tab.connection.clone(),
+    open: tab.connection_open.clone(),
+    choices,
+    width: page::CONTROL_WIDTH,
+    icon_in_field: false,
+    placeholder: None,
+    mono: false,
+  }
+  .render(ctx)
 }
 
 fn select(
   ctx: &mut Ctx,
   id: &str,
   key: &str,
-  (value, unavailable): (&Signal<String>, Vec<SelectOption<String>>),
+  value: &Signal<String>,
   options: Vec<(String, Arc<str>)>,
   locked: bool,
 ) -> Element {
@@ -245,7 +286,6 @@ fn select(
       options
         .into_iter()
         .map(|(value, label)| SelectOption::new(value, label))
-        .chain(unavailable)
         .collect(),
     )
     .render(ctx)

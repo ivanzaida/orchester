@@ -123,16 +123,26 @@ impl Settings {
       .focus();
     self.window.pass();
   }
+  /// Chooses `label` in the select `id`, or in the choice field `id` (`ui::choice_field`) by opening its menu and
+  /// clicking the row whose first words are `label`.
   pub fn choose(&mut self, id: &str, label: &str) {
-    let mut select = self
-      .window
-      .tree
-      .get_element_by_id_mut(id)
-      .and_then(|e| e.as_select())
-      .expect("select");
-    let i = select.labels().iter().position(|v| &**v == label).expect("option");
-    select.commit(i);
-    self.window.pass();
+    if let Some(mut select) = self.window.tree.get_element_by_id_mut(id).and_then(|e| e.as_select()) {
+      let i = select.labels().iter().position(|v| &**v == label).expect("option");
+      select.commit(i);
+      self.window.pass();
+      return;
+    }
+    self.click(id);
+    let option = (0..)
+      .map(|index| format!("{id}-option-{index}"))
+      .map_while(|option| {
+        let first = self.window.texts(&option)?.first().cloned()?;
+        Some((option, first))
+      })
+      .find(|(_, first)| first == label)
+      .map(|(option, _)| option)
+      .unwrap_or_else(|| panic!("{id} offers {label}"));
+    self.click(&option);
   }
   pub fn saved(&mut self) {
     self.until("saved readback", |s| {

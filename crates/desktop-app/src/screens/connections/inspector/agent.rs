@@ -306,6 +306,8 @@ pub(super) fn models(
           );
           badge(&id, BadgeTone::Warning, &word).into()
         }
+        // An API provider's model ids are typed: shown as written, in Geist Mono (`y2qhJ`).
+        None if connection.api_provider().is_some() => TagChip::new(id, model.id().as_str()).mono().into(),
         None => TagChip::new(id, model.id().as_str()).into(),
       }
     }));
