@@ -13,7 +13,7 @@ use orchester_core::{
 use super::harness::{Orchestrator, Setup};
 
 /// A conversation started with `text` at `at`, answered with `reply`.
-fn kept(screen: &Orchestrator, text: &str, at: Timestamp, reply: &str) -> ChatId {
+pub(super) fn kept(screen: &Orchestrator, text: &str, at: Timestamp, reply: &str) -> ChatId {
   let mut db = screen.db();
   let (chat, message) = (ChatId::generate(), ChatMessageId::generate());
   let body = MessageBody::new(text).expect("text");
