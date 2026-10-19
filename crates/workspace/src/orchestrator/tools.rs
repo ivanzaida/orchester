@@ -309,9 +309,9 @@ async fn act(
 ) -> Acted {
   let acted = match name {
     // In a turn nobody asked for, what would change how runs go on or what agents run on is only proposed.
-    _ if guard::proposed_on_its_own(scope, name) => propose_change(translate, scope, name, arguments).await,
+    _ if guard::proposed_on_its_own(scope, name) => propose_change((services, translate), scope, name, arguments).await,
     RUN_TASK => start((services, translate), scope, arguments).await,
-    CANCEL_RUN | CONTINUE_RUN => propose_change(translate, scope, name, arguments).await,
+    CANCEL_RUN | CONTINUE_RUN => propose_change((services, translate), scope, name, arguments).await,
     MERGE_RUN => {
       switched(
         (services, translate),
@@ -349,9 +349,9 @@ async fn switched(
   consent: OrchestratorConsent,
 ) -> Result<Acted, ToolError> {
   if !allows(services, consent).await? {
-    return propose_change(translate, scope, name, arguments).await;
+    return propose_change((services, translate), scope, name, arguments).await;
   }
-  let (change, task) = change::subject(scope, name, arguments).await?;
+  let (change, task) = change::subject((scope, services.programs()), name, arguments).await?;
   // A message that moves a run none of whose agents waits or works is the person's to send.
   if change.change.moves_run() {
     return Ok(proposed(translate, change, task));
@@ -433,12 +433,12 @@ async fn resume(
 
 /// A cancel, merge, publication, answer, message or continuation the person applies.
 async fn propose_change(
-  translate: &Translate,
+  (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let (change, task) = change::subject(scope, name, arguments).await?;
+  let (change, task) = change::subject((scope, services.programs()), name, arguments).await?;
   Ok(proposed(translate, change, task))
 }
 
@@ -464,11 +464,11 @@ async fn publish(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   if !allows(services, OrchestratorConsent::PublishDrafts).await? {
-    return propose_change(translate, scope, name, arguments).await;
+    return propose_change((services, translate), scope, name, arguments).await;
   }
-  let (change, _) = change::subject(scope, name, arguments).await?;
+  let (change, _) = change::subject((scope, services.programs()), name, arguments).await?;
   if !change::widens(scope, &change).await?.is_empty() && !changes_permissions(services).await? {
-    return propose_change(translate, scope, name, arguments).await;
+    return propose_change((services, translate), scope, name, arguments).await;
   }
   // The tool is given the draft that was checked, by its id: a name could name another one by now.
   let (tool, arguments) = change::tool_arguments(scope, &change);

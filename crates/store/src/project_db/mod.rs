@@ -40,6 +40,7 @@ mod read_only;
 mod rebases;
 mod repository;
 mod repository_import;
+mod resolutions;
 mod resources;
 mod reviewer_usage;
 mod revision_diffs;
@@ -82,6 +83,7 @@ pub use self::{
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
+  resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
   runs::RunBranch,

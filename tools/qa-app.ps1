@@ -2,7 +2,7 @@
 # verification (.claude/skills/design-verification/SKILL.md):
 #
 #   powershell -File tools/qa-app.ps1 -Name <task> -Scenario <scenario> [-FakeAgents] [-NoRunner] [-SignedOut]
-#       [-WindowX <x> -WindowY <y>]
+#       [-WindowX <x> -WindowY <y>] [-Editor <program>]
 #
 # 1. Builds the QA app (examples/qa_app: the app's own window, signed in to a stand-in Orchester Cloud on loopback
 #    with its token in a keychain in memory, past the sign-in gate; -SignedOut stops at the gate, with that stand-in
@@ -21,6 +21,11 @@
 # pixels of the virtual desktop (negative for a display left of or above the main one), instead of where
 # the system puts it: ORCHESTER_APP_WINDOW_POSITION=<x>,<y> for the QA app only, nothing stored.
 #
+# -Editor names the program *Resolve in editor* starts with a run's worktree and its conflicting files
+# (ORCHESTER_EDITOR for the QA app only), e.g. a stand-in script that writes down what it got, so no editor
+# opens on the person's desktop. Without it the QA app has none named: an ORCHESTER_EDITOR of the caller's is
+# dropped, and the app falls back to VS Code's code or the system's folder program, which a person's press opens.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never the user's install (E:\projects\orchester), the user's discovery
@@ -30,13 +35,14 @@ param(
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "usage", "usage-empty", "usage-bare")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "usage", "usage-empty", "usage-bare")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
     [switch]$SignedOut,
     [int]$WindowX,
-    [int]$WindowY
+    [int]$WindowY,
+    [string]$Editor
 )
 $ErrorActionPreference = "Stop"
 
@@ -139,6 +145,7 @@ $env:ORCHESTER_APP_MCP_START_WITHOUT_FOCUS = "1"
 $env:ORCHESTER_APP_MCP_WINDOW_CONTROL = "on"
 $env:ORCHESTER_APP_MCP_DISCOVERY = $mcp
 $env:ORCHESTER_APP_WINDOW_POSITION = $windowPosition
+$env:ORCHESTER_EDITOR = if ($Editor) { [System.IO.Path]::GetFullPath($Editor) } else { $null }
 $appProgram = Join-Path $bin "orchester-app-qa$exe"
 # Start-Process takes no empty argument list: an option that is always there leads the QA app's arguments.
 $appArguments = if ($SignedOut) { "--signed-out" } else { "--signed-in" }

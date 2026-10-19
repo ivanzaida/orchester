@@ -23,6 +23,7 @@ use orchester_core::{
   store::{ResourceStore, TaskStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -43,7 +44,7 @@ use crate::{
 /// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers, sends or
 /// continues, and the key of the task it names; a refusal when there is nothing to change.
 pub(super) async fn subject(
-  scope: &ChatScope,
+  (scope, programs): (&ChatScope, &Programs),
   name: &str,
   arguments: &JsonObject,
 ) -> Result<(ProposedChange, Option<String>), ToolError> {
@@ -69,8 +70,8 @@ pub(super) async fn subject(
       blocking(move || answer::message_change(&root, sending)).await?
     }
     (None, CONTINUE_RUN) => {
-      let arguments = arguments.clone();
-      blocking(move || continuation::continue_change(&root, &arguments)).await?
+      let (arguments, programs) = (arguments.clone(), programs.clone());
+      blocking(move || continuation::continue_change((&root, &programs), &arguments)).await?
     }
     (None, control::PAUSE_RUN | control::RESUME_RUN | control::RELEASE_QUEUE) => {
       let (name, arguments) = (name.to_owned(), arguments.clone());

@@ -23,7 +23,7 @@ use orchester_workspace::{
   secrets::Vault,
   session::AppSession,
   sharing::{self, Servers, cloud::Cloud},
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
+  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
   workspace::Workspace,
 };
 use tokio::{runtime::Handle, task::JoinHandle};
@@ -74,6 +74,9 @@ pub struct Services {
   pub recovery: Recovery,
   /// The servers of the Orchestrator chat's domain tools, one per conversation that sent a message.
   pub chat_tools: ChatServers,
+  /// The editor *Resolve in editor* opens a run's worktree in, found as the session starts; `None` where there is
+  /// none.
+  pub editor: Option<Editor>,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -120,6 +123,7 @@ impl Services {
       previous_end: session.previous_end(),
       session_start: session.started_at(),
       chat_tools: ChatServers::default(),
+      editor: Editor::find(),
     }
   }
 

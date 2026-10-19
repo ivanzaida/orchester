@@ -9,4 +9,5 @@ mod merge_beside;
 mod merge_guards;
 mod merged;
 mod recorded;
+mod resolve;
 mod support;

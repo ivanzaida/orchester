@@ -40,8 +40,10 @@ use crate::{
   },
 };
 
-/// The inspector's width (`VIpsx`) and its glyph tile (`Glyph` `O38ZPI`).
-pub(super) const INSPECTOR_WIDTH: f32 = 360.0;
+/// The inspector's width (`VIpsx`), in a narrow window (`Inspector · Claude · DeepSeek` `KGweN` in `b3aoUZ`), and
+/// its glyph tile (`Glyph` `O38ZPI`).
+const INSPECTOR_WIDTH: f32 = 360.0;
+const NARROW_INSPECTOR_WIDTH: f32 = 300.0;
 const GLYPH_TILE: f32 = 32.0;
 
 /// A question the inspector asks in place before it acts.
@@ -70,6 +72,8 @@ pub(super) struct Inspecting<'a> {
   pub failed: Option<&'a Message>,
   pub confirming: Option<Confirm>,
   pub now: Timestamp,
+  /// The window is narrow: the inspector is narrower and its footer's actions have no icons.
+  pub narrow: bool,
 }
 
 /// What the inspector's actions do.
@@ -97,7 +101,11 @@ pub(super) fn inspector(ctx: &mut Ctx, inspecting: &Inspecting<'_>, actions: &Ac
     .with_children(parts.body);
   Column::new()
     .id("connection-inspector")
-    .width(Dimension::Px(INSPECTOR_WIDTH))
+    .width(Dimension::Px(if inspecting.narrow {
+      NARROW_INSPECTOR_WIDTH
+    } else {
+      INSPECTOR_WIDTH
+    }))
     .height(Dimension::Pct(100.0))
     .flex_shrink(0.0)
     .background(PaletteColor::SurfacePanel)
@@ -144,7 +152,12 @@ fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<
         .id("connection-inspector-title")
         .variant(ConnectionsText::InspectorTitle.role()),
     )
-    .child(status_line(ctx, "connection-inspector-status", status, IconSize::Sm));
+    .child(status_line(
+      ctx,
+      "connection-inspector-status",
+      status,
+      (IconSize::Sm, TypographyStyle::Label),
+    ));
   Row::new()
     .id("connection-inspector-header")
     .width(Dimension::Pct(100.0))
@@ -158,8 +171,8 @@ fn header(ctx: &Ctx, (glyph, name): (Icon, &str), status: Shown, action: Option<
     .into()
 }
 
-/// A status as an icon of `size` and its word, 5 apart (`Status line` `YUNCc`).
-pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, size: IconSize) -> Row {
+/// A status as an icon of `size` and its word in `text`, 5 apart (`Status line` `YUNCc`).
+pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, (size, text): (IconSize, TypographyStyle)) -> Row {
   let word = ctx.t(status.key);
   Row::new()
     .id(id.to_owned())
@@ -167,12 +180,7 @@ pub(super) fn status_line(ctx: &Ctx, id: &str, status: Shown, size: IconSize) ->
     .align_items(Alignment::Center)
     .describe("status", word.clone())
     .child(icon(status.icon, size, status.tone.color()))
-    .child(
-      Text::new(&word)
-        .variant(TypographyStyle::Label)
-        .color(status.tone.word_color())
-        .nowrap(),
-    )
+    .child(Text::new(&word).variant(text).color(status.tone.word_color()).nowrap())
 }
 
 /// The status a connection shows: checking while its check runs.
@@ -222,9 +230,16 @@ fn footer(
     .into()
 }
 
-/// Test connection or Check again on `id`: checking while it runs, unavailable while other work does.
+/// `button` of the footer with `icon`, which a narrow window leaves out so two actions fit side by side in the
+/// narrower inspector (`Test connection` `u9IRO`, `Edit connection` `C6jmkO` in `b3aoUZ`).
+fn footer_action(inspecting: &Inspecting<'_>, button: ActionButton, icon: Icon) -> ActionButton {
+  if inspecting.narrow { button } else { button.icon(icon) }
+}
+
+/// Test connection, Check again or Refresh models on `id`, without its icon: checking while it runs, unavailable
+/// while other work does.
 fn check_button(inspecting: &Inspecting<'_>, (id, label): (&str, Arc<str>), actions: &Actions) -> ActionButton {
-  let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label).icon(Icon::PlugZap);
+  let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, label);
   match inspecting.running {
     Some(Work::Check) => button.loading(),
     Some(_) => button.disabled(),

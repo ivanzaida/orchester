@@ -50,6 +50,8 @@ impl DevtoolsInspectable for Asked {}
 pub struct AutoMode {
   save: Save,
   connection: Signal<String>,
+  /// Whether the reviewer's connection menu is open.
+  connection_open: Signal<bool>,
   model: Signal<String>,
   effort: Signal<String>,
   stored: Signal<Stored>,
@@ -66,6 +68,7 @@ impl Component for AutoMode {
     let tab = Self {
       save: work::action(ctx, ctx.props::<Props>().tab.project.open.project.id()),
       connection: ctx.signal(connection),
+      connection_open: ctx.signal(false),
       model: ctx.signal(model),
       effort: ctx.signal(effort),
       stored: ctx.signal(Stored(settings.clone())),

@@ -118,6 +118,11 @@ impl Services {
     &self.workspace
   }
 
+  /// The programs the tools run git with.
+  pub(crate) const fn programs(&self) -> &Programs {
+    &self.programs
+  }
+
   /// The project `named` by its id or, ignoring case, its name, opened as the app opens it. Blocks on
   /// SQLite. It is not recorded as the most recently used project: only a person opening it is.
   pub(super) fn project(&self, named: &str) -> Result<OpenProject, ToolError> {

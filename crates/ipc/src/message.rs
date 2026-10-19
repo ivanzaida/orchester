@@ -14,8 +14,9 @@ use orchester_core::{
   question::{AnswerError, GivenAnswer},
   resource::StepKey,
   run::{
-    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, EventSequence, InterruptCause, PermissionsApply, PlanDecision,
-    PlanVersion, PreflightProblem, RunAgainBlock, RunLimit, RunNumber, StuckDecision, WorktreeFailure,
+    AcceptRefusal, Answerer, ApprovalAnswer, AutoAsk, EventSequence, InterruptCause, MergeConflicts, PermissionsApply,
+    PlanDecision, PlanVersion, PreflightProblem, ReviewNote, RunAgainBlock, RunLimit, RunNumber, StuckDecision,
+    WorktreeFailure,
   },
   tokens::TokenBudget,
 };
@@ -42,6 +43,19 @@ impl fmt::Display for RequestId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "request {}", self.0)
   }
+}
+
+/// The work of run `run` returned to its agent step `step` with `note` ([`Command::ReturnRun`]), and the conflicts of
+/// a merge it resolves, when that is what it is for; `by` a person or automation, who read the run at `expected`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkReturn {
+  pub run: RunId,
+  pub step: StepKey,
+  pub note: ReviewNote,
+  pub conflicts: Option<MergeConflicts>,
+  pub by: Answerer,
+  /// The event sequence shown when the run was read: a later state refuses the return.
+  pub expected: EventSequence,
 }
 
 /// Desktop to runner.
@@ -169,6 +183,11 @@ pub enum Command {
     decision: StuckDecision,
     by: Answerer,
   },
+  /// A person returns the work of a run that ended (succeeded, or failed after it started) to one of its agent steps
+  /// with a note (protocol 29): the run works again in a new attempt from that step, answered with
+  /// [`Reply::Accepted`] once it runs. [`Rejection::RunNotEnded`] for a run that has not ended so,
+  /// [`Rejection::RunMerged`] for one whose work was merged, [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  ReturnRun(WorkReturn),
   /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
   /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
   /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and
@@ -446,6 +465,15 @@ pub enum Rejection {
   RunNotWaiting,
   /// The run has ended: there is nothing to cancel, and no agent reads messages to it.
   RunEnded,
+  /// Returning the work of a run needs one that ended: succeeded, or failed after it started.
+  RunNotEnded,
+  /// The run's work was merged into its base branch: it is not returned to a step any more.
+  RunMerged,
+  /// A merge waits in the run's worktree for a person to resolve it: the run does not continue until it is
+  /// committed or aborted.
+  WorktreeInMerge,
+  /// The run changed since it was read for the decision: nothing was decided.
+  RunChangedMeanwhile,
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)
   /// is refused before the run changes, and its messages stay queued.
   WorktreeRemoved,

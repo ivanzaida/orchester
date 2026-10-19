@@ -47,7 +47,7 @@ use thiserror::Error;
 pub use self::{
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
   native::{NativePrompt, NativeSetting},
-  retry::{FailureReport, RetryReport},
+  retry::{FailureReport, RetryReport, ReturnedWork},
   source::{InstructionVersion, InvocationPrompt, PromptPart, PromptSource},
   working::WorkingTools,
 };
@@ -215,9 +215,10 @@ pub struct PromptInput<'a> {
   pub messages: Option<DeliveredMessages<'a>>,
   /// The task and project memory recalled for this invocation, in prompt order.
   pub memory: &'a [RecalledMemory],
-  /// The failure that sent the work back, when this execution's attempt is a retry that reports it
-  /// to this step ([`super::Run::retry_report`]).
-  pub retry: Option<RetryReport<'a>>,
+  /// Why the work came back to this step: the failure that sent it back, when this execution's attempt is a retry
+  /// that reports it to this step ([`super::Run::retry_report`]), or the person's note when they returned the work
+  /// of the ended run to it ([`super::Run::returned_note`]).
+  pub retry: Option<ReturnedWork<'a>>,
   /// What the agent's CLI and the step's permissions give it to work with, for the *Files and
   /// commands* part; `None` leaves the part out (a native agent, a preview).
   pub working: Option<WorkingTools>,

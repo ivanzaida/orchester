@@ -1,8 +1,9 @@
 //! The base and the last checkpoint external evidence reads a run's commits from: the ones it
 //! recorded, unless git proves its branch was rebased onto a newer commit of the target since
-//! (`orchester_core::integration::local::RunRebase`). A rebase proven now is recorded; one proven
-//! before stands while its base is still below the branch tip, e.g. once the reflog that proved it
-//! expired.
+//! (`orchester_core::integration::local::RunRebase`), or merged a newer commit of the target into it (*Resolve in
+//! editor*, or an agent the work was returned to). A rebase or merge proven now is recorded; one recorded before
+//! stands while its base is still below the branch tip, e.g. once the reflog that proved it expired, unless a proof
+//! now has a newer base.
 
 use orchester_core::{
   integration::local::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase},
@@ -27,19 +28,21 @@ pub(super) fn effective(
   let Some(tip) = tip else {
     return Ok(recorded(run, None, last.as_ref()));
   };
-  let stored = db.run_rebase(run.id())?;
-  let rebase = match prove(db, main, run, (tip, target))? {
-    Some(proven) => {
-      if !stored.as_ref().is_some_and(|stored| stored.same_as(&proven)) {
-        ProjectDb::open(main.root())?.save_run_rebase(&proven)?;
-      }
-      Some(proven)
-    }
-    None => match stored {
-      Some(stored) if main.is_ancestor(stored.base().as_str(), tip)? => Some(stored),
-      _ => None,
-    },
+  let stored = match db.run_rebase(run.id())? {
+    Some(stored) if main.is_ancestor(stored.base().as_str(), tip)? => Some(stored),
+    _ => None,
   };
+  let proven = newer(
+    main,
+    prove(db, main, run, (tip, target))?,
+    merged_in(db, main, (run, stored.as_ref()), (tip, target))?,
+  )?;
+  let rebase = newer(main, stored.clone(), proven)?;
+  if let Some(rebase) = &rebase
+    && !stored.as_ref().is_some_and(|stored| stored.same_as(rebase))
+  {
+    ProjectDb::open(main.root())?.save_run_rebase(rebase)?;
+  }
   Ok(recorded(run, rebase.as_ref(), last.as_ref()))
 }
 
@@ -68,23 +71,91 @@ fn prove(
   if !(newer_than_base && under_tip_and_target) {
     return Ok(None);
   }
-  let mut own_work_below = false;
-  for checkpoint in db.checkpoint_revisions(run.id())? {
-    let checkpoint = checkpoint.as_str();
-    if present(main, checkpoint)?
-      && main.is_ancestor(checkpoint, onto.as_str())?
-      && !main.is_ancestor(checkpoint, base)?
-    {
-      own_work_below = true;
-      break;
-    }
-  }
+  let own_work_below = own_work_below(db, main, run, onto.as_str())?;
   let checkpoint = rebased_checkpoint(main, run, (onto.as_str(), tip))?;
   let evidence = RebaseEvidence {
     onto,
     newer_than_base,
     under_tip_and_target,
     own_work_below,
+    checkpoint,
+  };
+  Ok(RunRebase::proven(run.id(), evidence, Timestamp::now()))
+}
+
+/// Whether a checkpoint of `run` lies between its recorded base and `onto`: then commits of its own are below `onto`,
+/// and moving its base there would hide that the target has them.
+fn own_work_below(db: &ProjectDb, main: &LocalGit, run: &Run, onto: &str) -> Result<bool, IntegrationError> {
+  let base = run.base().as_str();
+  for checkpoint in db.checkpoint_revisions(run.id())? {
+    let checkpoint = checkpoint.as_str();
+    if present(main, checkpoint)? && main.is_ancestor(checkpoint, onto)? && !main.is_ancestor(checkpoint, base)? {
+      return Ok(true);
+    }
+  }
+  Ok(false)
+}
+
+/// Of two recorded or proven rebases, the one whose base is newer: a base that has the other's below it.
+fn newer(
+  main: &LocalGit,
+  one: Option<RunRebase>,
+  other: Option<RunRebase>,
+) -> Result<Option<RunRebase>, IntegrationError> {
+  Ok(match (one, other) {
+    (Some(one), Some(other)) if main.is_ancestor(one.base().as_str(), other.base().as_str())? => Some(other),
+    (Some(one), _) => Some(one),
+    (None, other) => other,
+  })
+}
+
+/// The base merged into `run`'s branch that git proves, its branch at `tip` and the target at `target`: the newest
+/// merge commit on the branch's own line since the run's base, whose second parent is a commit the target has and
+/// newer than the run's base (Orchester's *Resolve in editor* commits one, and so may an agent the work was returned
+/// to). Its own commits sit on that commit now, as after a rebase onto it. The last checkpoint stands for itself when
+/// it is the tip, or when the merge is the tip and was made right on it; else nothing is proven.
+fn merged_in(
+  db: &ProjectDb,
+  main: &LocalGit,
+  (run, stored): (&Run, Option<&RunRebase>),
+  (tip, target): (&str, &str),
+) -> Result<Option<RunRebase>, IntegrationError> {
+  let base = run.base().as_str();
+  let excluded = format!("^{base}");
+  let merges = main.text(&[
+    "rev-list",
+    "--first-parent",
+    "--merges",
+    "--parents",
+    "--max-count=1",
+    tip,
+    &excluded,
+  ])?;
+  let Some((merge, first, second)) = merges.lines().next().and_then(|line| {
+    let mut commits = line.split(' ');
+    Some((commits.next()?, commits.next()?, commits.next()?))
+  }) else {
+    return Ok(None);
+  };
+  let revision = |sha: &str| Revision::new(sha).map_err(|_| IntegrationError::from(LocalGitError::Data));
+  let onto = revision(second)?;
+  // The commit that holds the last checkpoint now: the checkpoint, or the tip a recorded rebase made of it.
+  let last = run.last_checkpoint().map(|checkpoint| checkpoint.revision());
+  let held = stored.map_or(last, |stored| stored.checkpoint_for(last));
+  let checkpoint = match (last, held) {
+    (Some(_), Some(held)) if held.as_str() == tip => stored.and_then(|stored| stored.checkpoint().cloned()),
+    (Some(last), Some(held)) if merge == tip && first == held.as_str() => Some(RebasedCheckpoint {
+      replaces: last.clone(),
+      tip: revision(tip)?,
+    }),
+    (Some(_), _) => return Ok(None),
+    (None, _) => None,
+  };
+  let evidence = RebaseEvidence {
+    newer_than_base: second != base && main.is_ancestor(base, second)?,
+    under_tip_and_target: main.is_ancestor(second, target)?,
+    own_work_below: own_work_below(db, main, run, second)?,
+    onto,
     checkpoint,
   };
   Ok(RunRebase::proven(run.id(), evidence, Timestamp::now()))

@@ -59,6 +59,8 @@ impl DevtoolsInspectable for Props {}
 #[derive(Clone)]
 struct Choices {
   connection: Signal<String>,
+  /// Whether the connection's menu is open.
+  connection_open: Signal<bool>,
   model: Signal<String>,
   custom: Signal<String>,
   effort: Signal<String>,
@@ -81,6 +83,7 @@ impl Component for SettingsScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let choices = Choices {
       connection: ctx.signal(String::new()),
+      connection_open: ctx.signal(false),
       model: ctx.signal(String::new()),
       custom: ctx.signal(String::new()),
       effort: ctx.signal(String::new()),

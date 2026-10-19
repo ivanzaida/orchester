@@ -120,6 +120,7 @@ pub(super) fn choices(ctx: &Ctx, accounts: &Accounts, readings: &PlanReadings, p
         separator: false,
         warning,
         trigger,
+        unavailable: None,
       }
     })
     .collect();
@@ -131,6 +132,7 @@ pub(super) fn choices(ctx: &Ctx, accounts: &Accounts, readings: &PlanReadings, p
     separator: true,
     warning: false,
     trigger: None,
+    unavailable: None,
   });
   choices
 }
@@ -210,6 +212,8 @@ impl Component for AccountPicker {
       choices: props.choices.clone(),
       width: props.width,
       icon_in_field: true,
+      placeholder: None,
+      mono: false,
     }
     .render(ctx)
   }
