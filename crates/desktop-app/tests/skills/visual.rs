@@ -94,6 +94,71 @@ fn skills_visual_import_paths_types_totals_and_returned_metadata_do_not_overlap(
   );
 }
 
+/// WMT1W `r3tdmV` / `WYErT`: the header centers its contents in 40 with room above them, the
+/// footer's explanation is inset 10/12 inside its own band, and a pointer-only source has no arrow.
+#[test]
+fn skills_visual_found_header_footer_insets_and_pointer_row() {
+  let mut s = Skills::new();
+  prepare_import(&s);
+  fs::write(s.repo.join("CLAUDE.md"), "@AGENTS.md\n").expect("pointer");
+  s.go(ProjectPage::Skills(Default::default()));
+  assert!(s.text("skills-found").contains("4 items"));
+  let found = bounds(&mut s, "skills-found");
+  let header = bounds(&mut s, "skills-found-header");
+  let title = bounds(&mut s, "skills-found-title");
+  let folder = bounds(&mut s, "skills-found-folder");
+  // The fixture's folder is long enough to wrap: the header grows around it instead of cutting it.
+  assert!(folder.height > 20.0, "long folder wraps: {folder:?}");
+  assert!(
+    header.height >= 40.0 && folder.y - header.y >= 9.9 && header.y + header.height - folder.y - folder.height >= 9.9,
+    "header keeps room around the whole folder: {header:?} / {folder:?}"
+  );
+  assert!(
+    (folder.y + folder.height / 2.0 - (header.y + header.height / 2.0)).abs() < 1.0,
+    "folder centered: {folder:?} in {header:?}"
+  );
+  let middle = header.y + header.height / 2.0;
+  assert!(
+    (title.y + title.height / 2.0 - middle).abs() < 1.0,
+    "title centered: {title:?} in {header:?}"
+  );
+  assert!(title.y - header.y >= 10.0, "room above the title: {title:?}");
+  assert!(
+    folder.x + folder.width <= header.x + header.width - 11.9,
+    "folder ends at the header's inset: {folder:?}"
+  );
+  let footer = bounds(&mut s, "skills-found-footer");
+  let note = bounds(&mut s, "skills-found-note");
+  assert!(
+    s.text("skills-found-note")
+      .contains("Import from repository shows each item")
+  );
+  assert!(
+    (note.x - footer.x - 12.0).abs() < 0.1,
+    "explanation inset from the left: {note:?} in {footer:?}"
+  );
+  assert!(
+    note.y - footer.y >= 10.0 && note.y - footer.y < 11.5,
+    "explanation inset from the top: {note:?} in {footer:?}"
+  );
+  assert!(footer.y + footer.height <= found.y + found.height + 0.1);
+  assert!(
+    found.y + found.height - footer.y - footer.height < 1.1,
+    "footer closes the box"
+  );
+  assert!(s.text("skill-source-1").contains("CLAUDE.md"));
+  assert!(s.text("skill-source-summary-1").contains("nothing to import"));
+  assert!(s.window.tree.get_element_by_id("skill-source-arrow-1").is_none());
+  assert!(s.window.tree.get_element_by_id("skill-source-arrow-0").is_some());
+  let long = bounds(&mut s, "skill-source-3");
+  let row = bounds(&mut s, "skill-source-row-3");
+  assert!(s.text("skill-source-3").contains("long-supported-repository-name"));
+  assert!(
+    row.y + row.height >= long.y + long.height - 0.1,
+    "row holds the wrapped source"
+  );
+}
+
 #[test]
 fn skills_visual_empty_description_explanation_and_saved_published_header_are_visible() {
   let mut s = Skills::new();
