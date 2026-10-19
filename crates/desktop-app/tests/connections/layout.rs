@@ -1,7 +1,8 @@
 //! The list's layout by window width: compact rows without a header in a narrow window
-//! (`Connections · All connections · 960` `Halhq`, `b3aoUZ`), a table with columns in a wide one (`z4QquH`).
+//! (`Connections · All connections · 960` `Halhq`, `b3aoUZ`), a table with columns in a wide one (`z4QquH`), and
+//! rows that scroll in a short window under the note that stays at the column's foot.
 
-use lurq::core::ElementRect;
+use lurq::{app::events::ScrollPhase, core::ElementRect};
 use orchester_app::routes::ConnectionsTab;
 use orchester_core::store::{ConnectionStore, McpServerStore};
 
@@ -37,9 +38,9 @@ fn bounds(seeded: &mut Seeded, id: &str) -> ElementRect {
     .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
-fn at_width(width: u32) -> Seeded {
-  let mut seeded = Seeded::new("connections");
-  seeded.window.tree.resize(width, 900);
+fn at_size(scenario: &str, (width, height): (u32, u32)) -> Seeded {
+  let mut seeded = Seeded::new(scenario);
+  seeded.window.tree.resize(width, height);
   seeded.list(ConnectionsTab::All);
   seeded.window.pass();
   seeded
@@ -64,7 +65,7 @@ fn assert_names_shown(seeded: &mut Seeded, min_width: f32, at: &str) {
 
 #[test]
 fn connections_at_960_show_compact_rows_with_their_names() {
-  let mut seeded = at_width(960);
+  let mut seeded = at_size("connections", (960, 900));
   assert_names_shown(&mut seeded, COMPACT_NAME_MIN_WIDTH, "960");
   assert!(!seeded.exists("connections-list-header"), "no header at 960");
   assert!(!seeded.exists("connections-notice"), "no notice at 960");
@@ -87,7 +88,7 @@ fn connections_at_960_show_compact_rows_with_their_names() {
 
 #[test]
 fn connections_at_1440_keep_the_table_with_columns() {
-  let mut seeded = at_width(1440);
+  let mut seeded = at_size("connections", (1440, 900));
   assert_names_shown(&mut seeded, WIDE_NAME_MIN_WIDTH, "1440");
   assert!(seeded.exists("connections-list-header"));
   assert!(seeded.exists("connections-notice"));
@@ -107,4 +108,36 @@ fn connections_at_1440_keep_the_table_with_columns() {
     (list.width - 728.0).abs() < 0.5,
     "the list as wide as z4QquH's: {list:?}"
   );
+}
+
+#[test]
+fn connections_rows_scroll_in_a_short_window_and_the_note_stays_in_view() {
+  const HEIGHT: f32 = 640.0;
+  let mut seeded = at_size("api-providers", (960, 640));
+  let last = Seeded::row(seeded.server("sentry").expect("sentry").id());
+  let bottom = |seeded: &mut Seeded, id: &str| {
+    let bounds = bounds(seeded, id);
+    bounds.y + bounds.height
+  };
+  let note = bounds(&mut seeded, "connections-ownership");
+  assert!(
+    note.height > 0.0 && note.y + note.height <= HEIGHT,
+    "the note in view: {note:?}"
+  );
+  let scroll = bounds(&mut seeded, "connections-list-scroll");
+  assert!(
+    bottom(&mut seeded, &last) > scroll.y + scroll.height,
+    "the last row below the rows' room before scrolling"
+  );
+  let (x, y) = (scroll.x + scroll.width / 2.0, scroll.y + scroll.height / 2.0);
+  seeded.window.tree.mouse_move(x, y);
+  seeded.window.tree.scroll(x, y, 0.0, -4000.0, ScrollPhase::Scroll);
+  seeded.window.pass();
+  seeded.window.pass();
+  assert!(
+    bottom(&mut seeded, &last) <= scroll.y + scroll.height + 0.5,
+    "scrolled into the rows' room"
+  );
+  let note = bounds(&mut seeded, "connections-ownership");
+  assert!(note.y + note.height <= HEIGHT, "the note stays in view: {note:?}");
 }

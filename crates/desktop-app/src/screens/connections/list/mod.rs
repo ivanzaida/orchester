@@ -15,7 +15,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::{Column, Row, Spacer},
+  components::{Column, Row, ScrollVertical, Spacer},
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -203,10 +203,10 @@ impl ConnectionsScreen {
       .unwrap_or(first);
     let open = self.open(ctx, project, view);
     let narrow = super::narrow(ctx);
-    let list = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .height(Dimension::Pct(100.0))
+    // The rows and the notice scroll when they are taller than the window leaves them; the note on whose the
+    // connections are stays at the column's foot (`List column` `QNpoj`).
+    let scrolled = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(ConnectionsSpacing::List.role())
       .child(table::table(
         ctx,
@@ -215,8 +215,19 @@ impl ConnectionsScreen {
         (Some(chosen.id()), &open),
         narrow,
       ))
-      .with_children(tab_notice(ctx, view.tab(), project, narrow))
-      .child(Spacer::new().flex(1.0))
+      .with_children(tab_notice(ctx, view.tab(), project, narrow));
+    let list = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .height(Dimension::Pct(100.0))
+      .spacing(ConnectionsSpacing::List.role())
+      .child(
+        ScrollVertical::new(scrolled)
+          .id("connections-list-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0)),
+      )
       .child(ownership(ctx, project));
     let inspector = self.inspector(ctx, project, (listed, accounts), chosen, work);
     Row::new()
