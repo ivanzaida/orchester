@@ -510,7 +510,10 @@ impl Session {
       return IdleAnswer::Dropped;
     }
     loop {
+      // The answer first: a runner that answered Stopping sends Stopped right behind the reply, and reading that
+      // here before the answer would take the runner's stop for a dropped connection.
       tokio::select! {
+        biased;
         answered = &mut answer => return match answered {
           Ok(Ok(Reply::Stopping)) => IdleAnswer::Stopping,
           Ok(Ok(Reply::Rejected(_))) => IdleAnswer::Busy,
