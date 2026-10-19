@@ -376,7 +376,7 @@ impl Workspace {
     self.permission_consent.lock().revoke();
   }
 
-  /// A failed or uncompleted authority read never retains an earlier grant.
+  /// A failed or abandoned background read never retains an earlier grant.
   pub fn invalidate_automation_consent(&self) {
     self.permission_consent.lock().allowed = false;
     self.approval_consent.lock().allowed = false;

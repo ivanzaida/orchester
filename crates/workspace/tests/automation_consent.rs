@@ -1,4 +1,4 @@
-//! UI permission snapshots reflect actual serialized storage, and fail closed before I/O completes.
+//! UI permission snapshots reflect actual serialized storage, and fail closed while a save is in flight.
 use std::{
   sync::{Arc, Barrier},
   thread,
