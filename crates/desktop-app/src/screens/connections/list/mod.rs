@@ -15,7 +15,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::{Column, Row, Spacer},
+  components::{Column, Row, ScrollVertical, Spacer},
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -113,6 +113,11 @@ impl Component for ConnectionsScreen {
     let loaded = data::load(ctx, project.open.repo_root.clone(), revision);
     let accounts = accounts::listed(ctx);
     let id = project.open.project.id();
+    let sides = if super::narrow(ctx) {
+      ConnectionsSpacing::NarrowPage
+    } else {
+      ConnectionsSpacing::Page
+    };
     let page = Column::new()
       .id(format!("screen-{}", Screen::Connections.name()))
       .width(Dimension::Pct(100.0))
@@ -121,8 +126,8 @@ impl Component for ConnectionsScreen {
         Padding::new()
           .top(ExtraSpacing::Roomy.role())
           .bottom(SpacingSize::Xl)
-          .left(ConnectionsSpacing::Page.role())
-          .right(ConnectionsSpacing::Page.role()),
+          .left(sides.role())
+          .right(sides.role()),
       )
       .spacing(SpacingSize::Lg)
       .child(header::header(ctx, id, view.tab(), &self.menu));
@@ -197,19 +202,32 @@ impl ConnectionsScreen {
       .and_then(|id| entries.iter().copied().find(|entry| entry.id() == id))
       .unwrap_or(first);
     let open = self.open(ctx, project, view);
-    let list = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .height(Dimension::Pct(100.0))
+    let narrow = super::narrow(ctx);
+    // The rows and the notice scroll when they are taller than the window leaves them; the note on whose the
+    // connections are stays at the column's foot (`List column` `QNpoj`).
+    let scrolled = Column::new()
+      .width(Dimension::Pct(100.0))
       .spacing(ConnectionsSpacing::List.role())
       .child(table::table(
         ctx,
         (listed, accounts),
         &entries,
         (Some(chosen.id()), &open),
+        narrow,
       ))
-      .child(tab_notice(ctx, view.tab(), project))
-      .child(Spacer::new().flex(1.0))
+      .with_children(tab_notice(ctx, view.tab(), project, narrow));
+    let list = Column::new()
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .height(Dimension::Pct(100.0))
+      .spacing(ConnectionsSpacing::List.role())
+      .child(
+        ScrollVertical::new(scrolled)
+          .id("connections-list-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0)),
+      )
       .child(ownership(ctx, project));
     let inspector = self.inspector(ctx, project, (listed, accounts), chosen, work);
     Row::new()
@@ -217,7 +235,11 @@ impl ConnectionsScreen {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
-      .spacing(SpacingSize::Xl)
+      .spacing(if narrow {
+        ConnectionsSpacing::NarrowBody.role()
+      } else {
+        SpacingSize::Xl
+      })
       .child(list)
       .child(inspector)
       .into()
@@ -273,6 +295,7 @@ impl ConnectionsScreen {
       failed: failed.as_ref(),
       confirming,
       now: Services::of(ctx).clock.now(),
+      narrow: super::narrow(ctx),
     };
     let actions = self.actions(ctx, project, listed, (id, work));
     inspector::inspector(ctx, &inspecting, &actions)
@@ -325,9 +348,10 @@ impl ConnectionsScreen {
   }
 }
 
-/// What the tab's kind is about (`Notice · Each agent can use a different provider` `oy0c2`).
-/// On GitHub, why its Add GitHub connection is locked follows.
-fn tab_notice(ctx: &Ctx, tab: ConnectionsTab, project: &ShownProject) -> Column {
+/// What the tab's kind is about (`Notice · Each agent can use a different provider` `oy0c2`), which a narrow
+/// window has no room for (`List column` `d7H93k` in `b3aoUZ`). On GitHub, why its Add GitHub connection is
+/// locked follows, in a narrow window too.
+fn tab_notice(ctx: &Ctx, tab: ConnectionsTab, project: &ShownProject, narrow: bool) -> Option<Column> {
   let (glyph, key) = match tab {
     ConnectionsTab::All | ConnectionsTab::AgentProviders => (Icon::Workflow, "connections.notice.providers"),
     ConnectionsTab::GitHub => (Icon::GitPullRequest, "connections.notice.github"),
@@ -336,15 +360,17 @@ fn tab_notice(ctx: &Ctx, tab: ConnectionsTab, project: &ShownProject) -> Column 
   let name = project.open.project.name().as_str();
   let reason = (tab == ConnectionsTab::GitHub)
     .then(|| reason_line("connections-add-reason", &ctx.t("connections.github.addUnavailable")));
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(handling_notice(
-      "connections-notice",
-      glyph,
-      &ctx.t_args(key, [("project", name)]),
-    ))
-    .with_children(reason)
+  if narrow && reason.is_none() {
+    return None;
+  }
+  let notice = (!narrow).then(|| handling_notice("connections-notice", glyph, &ctx.t_args(key, [("project", name)])));
+  Some(
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(SpacingSize::Sm)
+      .with_children(notice)
+      .with_children(reason),
+  )
 }
 
 /// Whose the connections are (`Note · Connections belong to Kontur.` `OVuKt`).

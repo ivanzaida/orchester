@@ -17,7 +17,7 @@ use orchester_core::{
 use super::{
   Actions, Inspecting, Parts,
   agent::{models, properties},
-  check_button, footer,
+  check_button, footer, footer_action,
 };
 use crate::ui::{
   button::{ActionButton, ButtonKind},
@@ -48,10 +48,17 @@ pub(super) fn parts(
   } else {
     ButtonKind::Secondary
   };
-  let edit = ActionButton::new("connection-edit", kind, ctx.t("connections.edit"))
-    .icon(Icon::Pencil)
-    .opens(edit(id));
-  let test = check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions);
+  let edit = footer_action(
+    inspecting,
+    ActionButton::new("connection-edit", kind, ctx.t("connections.edit")),
+    Icon::Pencil,
+  )
+  .opens(edit(id));
+  let test = footer_action(
+    inspecting,
+    check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions),
+    Icon::PlugZap,
+  );
   let buttons = if missing {
     vec![edit.into(), test.into()]
   } else {

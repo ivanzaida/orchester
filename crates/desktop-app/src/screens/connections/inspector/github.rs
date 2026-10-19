@@ -12,7 +12,7 @@ use lurq::{
 use orchester_core::connection::{GitHubCheckResult, GitHubConnection, GitHubState, REQUIRED_SCOPE};
 use orchester_workspace::display;
 
-use super::{Actions, Inspecting, Parts, check_button, footer, header, last_checked, shown};
+use super::{Actions, Inspecting, Parts, check_button, footer, footer_action, header, last_checked, shown};
 use crate::{
   screens::connections::{
     data::github_state,
@@ -51,10 +51,13 @@ pub(super) fn parts(
   });
   let reason = ctx.t("connections.github.editUnavailable");
   let locked = |id: &str, key: &str, glyph: Icon| -> Element {
-    ActionButton::new(id.to_owned(), ButtonKind::Secondary, ctx.t(key))
-      .icon(glyph)
-      .unavailable(reason.clone())
-      .into()
+    footer_action(
+      inspecting,
+      ActionButton::new(id.to_owned(), ButtonKind::Secondary, ctx.t(key)),
+      glyph,
+    )
+    .unavailable(reason.clone())
+    .into()
   };
   // gh that is missing or answers as another program is pointed at another file; one that answers is edited.
   let other = match state {
@@ -65,12 +68,15 @@ pub(super) fn parts(
     ),
     _ => locked("connection-edit", "connections.edit", Icon::Pencil),
   };
-  let check = check_button(
+  let check = footer_action(
     inspecting,
-    ("connection-check", ctx.t("connections.checkAgain")),
-    actions,
-  )
-  .icon(Icon::RefreshCw);
+    check_button(
+      inspecting,
+      ("connection-check", ctx.t("connections.checkAgain")),
+      actions,
+    ),
+    Icon::RefreshCw,
+  );
   let mut rows = vec![vec![check.into(), other]];
   if matches!(
     state,
@@ -84,7 +90,11 @@ pub(super) fn parts(
   }
   if let GitHubState::WrongAccount { active, .. } = &state {
     let label = ctx.t_args("connections.github.useAccount", [("account", active.as_str())]);
-    let button = ActionButton::new("connection-use-account", ButtonKind::Secondary, label).icon(Icon::UserRoundCheck);
+    let button = footer_action(
+      inspecting,
+      ActionButton::new("connection-use-account", ButtonKind::Secondary, label),
+      Icon::UserRoundCheck,
+    );
     rows.push(vec![match inspecting.running {
       Some(Work::UseActiveAccount) => button.loading().into(),
       Some(_) => button.disabled().into(),

@@ -19,7 +19,7 @@ use orchester_core::connection::{
 use orchester_exec::launch::{Launch, Via};
 use orchester_workspace::{connections::data::sign_in_command, display};
 
-use super::{Actions, Inspecting, Parts, check_button, footer, header, last_checked, shown, used_by};
+use super::{Actions, Inspecting, Parts, check_button, footer, footer_action, header, last_checked, shown, used_by};
 use crate::{
   screens::connections::words::{agent_glyph, checked_version, connection_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography},
@@ -100,9 +100,12 @@ fn cli(
     .of_connection(connection.account(), connection.provider());
   // Edit connection chooses the connection's account (`M42rM`); its name and program are not edited here yet.
   let (edit, id) = (actions.edit.clone(), connection.id());
-  let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
-    .icon(Icon::Pencil)
-    .opens(edit(id));
+  let edit = footer_action(
+    inspecting,
+    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")),
+    Icon::Pencil,
+  )
+  .opens(edit(id));
   // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
   // chooses one.
   if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
@@ -121,7 +124,8 @@ fn cli(
   // Signed out on one of the person's accounts: the fix is in Settings › Accounts, not a command here (`M42rM`).
   if let Some(account) = account.filter(|_| status == ConnectionStatus::SignInRequired) {
     let sentence = signed_out_sentence(ctx, account);
-    let buttons = vec![open_in_settings(ctx, account).into(), edit.into()];
+    let open = footer_action(inspecting, open_in_settings(ctx, account), Icon::ArrowUpRight);
+    let buttons = vec![open.into(), edit.into()];
     return Parts {
       header,
       body,
@@ -145,7 +149,12 @@ fn cli(
       .render(ctx)
     });
   let buttons = vec![
-    check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions).into(),
+    footer_action(
+      inspecting,
+      check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions),
+      Icon::PlugZap,
+    )
+    .into(),
     edit.into(),
   ];
   let more = command.into_iter().collect();
@@ -362,14 +371,20 @@ fn native(
   let models = native_models(ctx, api);
   let reason: Arc<str> = ctx.t("connections.native.testUnavailable");
   let buttons = vec![
-    ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test"))
-      .icon(Icon::PlugZap)
-      .unavailable(reason.clone())
-      .into(),
-    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
-      .icon(Icon::Pencil)
-      .unavailable(reason.clone())
-      .into(),
+    footer_action(
+      inspecting,
+      ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test")),
+      Icon::PlugZap,
+    )
+    .unavailable(reason.clone())
+    .into(),
+    footer_action(
+      inspecting,
+      ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")),
+      Icon::Pencil,
+    )
+    .unavailable(reason.clone())
+    .into(),
   ];
   Parts {
     header,
@@ -540,7 +555,6 @@ fn open_in_settings(ctx: &mut Ctx, account: &orchester_core::account::AgentAccou
     ButtonKind::Secondary,
     ctx.t_args("connections.account.openInSettings", [("account", name.as_str())]),
   )
-  .icon(Icon::ArrowUpRight)
   .bounded_label()
   .opens(
     navigation.to(crate::routes::Route::Accounts(crate::routes::AccountsView::of(
