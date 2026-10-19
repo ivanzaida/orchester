@@ -24,6 +24,7 @@ use orchester_core::{
   store::{ActivityStore, ConnectionStore, ConversationStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::orchestrator::waits::{Followed, follow_in};
 use support::{Fixture, at};
@@ -92,7 +93,11 @@ fn project(fixture: &Fixture) -> ProjectId {
 
 /// Follows the waits with the project's runner attached.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
-  follow_in(fixture.repo.path(), project(fixture), (answers, true)).expect("followed")
+  follow_in(
+    (fixture.repo.path(), project(fixture), &Programs::processes()),
+    (answers, true),
+  )
+  .expect("followed")
 }
 
 /// The waits of the project's latest conversation, with their turns.
@@ -299,7 +304,11 @@ fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
   ready(&mut fixture);
   let mut run = working(&mut fixture);
   ask(&mut fixture, &mut run);
-  let detached = follow_in(fixture.repo.path(), project(&fixture), (true, false)).expect("followed");
+  let detached = follow_in(
+    (fixture.repo.path(), project(&fixture), &Programs::processes()),
+    (true, false),
+  )
+  .expect("followed");
   assert_eq!(
     detached,
     Followed {

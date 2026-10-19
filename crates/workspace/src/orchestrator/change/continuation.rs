@@ -7,7 +7,10 @@
 use std::path::Path;
 
 use orchester_core::{
-  orchestrator::change::{Change, ContinueChoice, ProposedChange},
+  orchestrator::{
+    StopReason,
+    change::{Change, ContinueChoice, ProposedChange, StepName},
+  },
   run::{Run, RunStatus},
 };
 use orchester_store::ProjectDb;
@@ -40,12 +43,9 @@ pub(super) fn continue_change(
   let (subject, task) = run_subject(&db, &run)?;
   let choice = match asked.choice {
     app_mcp::ContinueChoice::ReturnTo { step, note } => {
+      let to = target.as_ref().and_then(|target| StepName::in_run(&run, target));
       let key = target.map_or(step, |target| target.to_string());
-      ContinueChoice::ReturnTo {
-        name: step_name(&run, &key).unwrap_or_else(|| key.clone()),
-        step: key,
-        note,
-      }
+      ContinueChoice::ReturnTo { to, step: key, note }
     }
     app_mcp::ContinueChoice::AllowRetry => ContinueChoice::AllowRetry,
     app_mcp::ContinueChoice::RaiseLimits { .. }
@@ -58,6 +58,7 @@ pub(super) fn continue_change(
     number: run.number().get(),
     attempt: attempt(&run),
     step: stopped_step(&run),
+    why: StopReason::of_run(&run),
     choice,
   };
   Ok((ProposedChange { subject, change }, task))
@@ -98,21 +99,10 @@ fn attempt(run: &Run) -> u32 {
   run.current_attempt().map_or(0, |attempt| attempt.number().get())
 }
 
-/// The name of the step `run` stopped at and waits for a decision on, while its pipeline has it.
-fn stopped_step(run: &Run) -> Option<String> {
+/// The step `run` stopped at and waits for a decision on, while its pipeline has it.
+fn stopped_step(run: &Run) -> Option<StepName> {
   match run.status() {
-    RunStatus::WaitingForPerson(stuck) => step_name(run, stuck.step().as_str()),
+    RunStatus::WaitingForPerson(stuck) => StepName::in_run(run, stuck.step()),
     _ => None,
   }
-}
-
-/// The name of `run`'s step `key`.
-fn step_name(run: &Run, key: &str) -> Option<String> {
-  run
-    .snapshot()
-    .body()
-    .steps()
-    .iter()
-    .find(|step| step.key.as_str() == key)
-    .map(|step| step.name.as_str().to_owned())
 }

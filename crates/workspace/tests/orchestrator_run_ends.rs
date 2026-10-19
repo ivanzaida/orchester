@@ -1,10 +1,11 @@
 //! The Orchestrator chat follows the ends of its project's runs (`orchestrator::waits`, `docs/design/
 //! orchestrator-toolset.md`, decision 5): a task's latest run that succeeded, failed, stopped for a decision, stopped
 //! at a limit or was interrupted is kept once, linking to the task's Summary, in the conversation that last dealt with
-//! its task, else the latest one; ends from before the project followed them, a pause the person asked for and an
-//! interruption the runner continues by itself are not kept; with *Let the Orchestrator answer agents* on an end starts
-//! one Orchestrator turn by itself, with the prompt its end calls for, but none for an end the chat's own decision on
-//! the run led to, and none while the switch is off.
+//! its task, else the latest one; the runs the daily budget stopped at once are one entry; ends from before the project
+//! followed them, a pause, *Quit now* or a stop the person asked for, an interruption the runner continues by itself
+//! and a run merged are not kept; with *Let the Orchestrator answer agents* on an end starts one Orchestrator turn by
+//! itself, with the prompt its end calls for, but none for an end the chat's own decision on or start of the run led
+//! to, and none while the switch is off.
 //! `cargo test -p orchester-workspace --test orchestrator_run_ends run_ends`.
 
 mod support;
@@ -15,16 +16,20 @@ use orchester_core::{
   },
   conversation::MessageBody,
   id::{ChatId, ChatMessageId, ConnectionId, ProjectId},
+  integration::{MergeKind, RunMerge},
   name::Name,
   orchestrator::{
-    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, OrchestratorSettings, RunEnd, TurnState, WaitKind, WaitTurn,
-    change::{Change, ContinueChoice, ProposedChange},
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, OrchestratorSettings, RunEnd, StopReason, TurnState,
+    WaitKind, WaitTurn,
+    change::{Change, ContinueChoice, ProposedChange, StepName},
   },
   resource::ModelId,
-  run::{InterruptCause, Run, RunLimit, StepFailure},
-  store::ConnectionStore,
+  revision::Revision,
+  run::{BranchName, InterruptCause, Run, RunLimit, StepFailure, StuckDecision},
+  store::{ConnectionStore, MergeStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::orchestrator::waits::{Followed, follow_in};
 use support::{Fixture, at};
@@ -77,7 +82,11 @@ fn project(fixture: &Fixture) -> ProjectId {
 
 /// Follows the ends with the project's runner attached.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
-  follow_in(fixture.repo.path(), project(fixture), (answers, true)).expect("followed")
+  follow_in(
+    (fixture.repo.path(), project(fixture), &Programs::processes()),
+    (answers, true),
+  )
+  .expect("followed")
 }
 
 /// The waits of conversation `chat`, with their turns.
@@ -161,15 +170,18 @@ fn run_ends_name_how_the_run_stopped_and_leave_out_what_is_no_end() {
   let mut paused = working(&mut fixture, "Paused by the person");
   let events = paused.pause(Timestamp::now()).expect("pause asked");
   fixture.record(&paused, &events);
-  let mut lost = working(&mut fixture, "Runner lost");
-  let events = lost
-    .interrupt(InterruptCause::RunnerLost, Timestamp::now())
-    .expect("interrupted");
-  fixture.record(&lost, &events);
+  for (title, cause) in [
+    ("Runner lost", InterruptCause::RunnerLost),
+    ("Quit now", InterruptCause::QuitNow),
+  ] {
+    let mut run = working(&mut fixture, title);
+    let events = run.interrupt(cause, Timestamp::now()).expect("interrupted");
+    fixture.record(&run, &events);
+  }
   assert_eq!(
     follow(&fixture, false),
     Followed::default(),
-    "history, a person's pause and a run the runner continues itself are no ends"
+    "history, a person's pause or Quit now and a run the runner continues itself are no ends"
   );
   let mut limited = working(&mut fixture, "Spent its budget");
   let events = limited
@@ -192,7 +204,12 @@ fn run_ends_name_how_the_run_stopped_and_leave_out_what_is_no_end() {
   assert_eq!(
     kept,
     vec![
-      ("Could not check".to_owned(), WaitKind::Ended(RunEnd::Stopped)),
+      (
+        "Could not check".to_owned(),
+        WaitKind::Ended(RunEnd::Stopped {
+          why: StopReason::Unverified
+        })
+      ),
       ("Crashed".to_owned(), WaitKind::Ended(RunEnd::Interrupted)),
       (
         "Spent its budget".to_owned(),
@@ -218,7 +235,7 @@ fn run_ends_start_one_turn_with_their_prompt_while_answering_agents_is_on() {
   let prompt = fixture.db.chat_turn(started.message).expect("read").expect("the turn");
   for part in [
     "Run #1 of ORC-1 (Add login) succeeded: its work is ready to merge",
-    "Merge it only if the person asked you earlier in this conversation",
+    "If the person asked you earlier in this conversation to merge this task's run",
   ] {
     assert!(
       prompt.text.as_str().contains(part),
@@ -245,7 +262,11 @@ fn run_ends_the_chats_own_decision_led_to_start_no_turn() {
         run: run.id(),
         number: 1,
         attempt: 1,
-        step: Some("Implement".to_owned()),
+        step: Some(StepName {
+          place: 1,
+          name: "Implement".to_owned(),
+        }),
+        why: None,
         choice: ContinueChoice::AllowRetry,
       },
     })),
@@ -268,7 +289,7 @@ fn run_end_turns_name_what_the_person_chooses_for_a_run_that_stopped() {
   let started = follow(&fixture, true).turn.expect("a turn");
   let prompt = fixture.db.chat_turn(started.message).expect("read").expect("the turn");
   for part in [
-    "Run #1 of ORC-1 (Add login) stopped at the step Implement and waits for a decision",
+    "Run #1 of ORC-1 (Add login) stopped at the step Implement (its step could not check everything) and waits",
     "continue_run",
     "the person applies",
   ] {
@@ -278,4 +299,74 @@ fn run_end_turns_name_what_the_person_chooses_for_a_run_that_stopped() {
       prompt.text.as_str()
     );
   }
+}
+
+#[test]
+fn run_ends_leave_out_a_persons_stop_and_a_merged_run() {
+  let mut fixture = Fixture::new();
+  let mut stopped = working(&mut fixture, "Could not check");
+  fail(&mut fixture, &mut stopped, StepFailure::Unverified);
+  assert!(follow(&fixture, false).kept, "it waits for a decision");
+  let events = stopped
+    .decide_stuck(&StuckDecision::Stop, Timestamp::now())
+    .expect("stopped by the person");
+  fixture.record(&stopped, &events);
+  let mut merged = working(&mut fixture, "Merged at once");
+  fixture.succeed(&mut merged, Timestamp::now());
+  fixture
+    .db
+    .save_run_merge(&RunMerge {
+      run: merged.id(),
+      into: BranchName::new("main").expect("branch"),
+      revision: Revision::new(&"a".repeat(40)).expect("revision"),
+      kind: MergeKind::FastForward,
+      merged_at: Timestamp::now(),
+    })
+    .expect("merged");
+  assert_eq!(
+    follow(&fixture, false),
+    Followed::default(),
+    "the person's stop and a run merged before it was noticed are no ends"
+  );
+  assert_eq!(waits(&fixture).len(), 1, "only the wait for the decision");
+}
+
+#[test]
+fn run_ends_keep_the_runs_the_daily_budget_stopped_at_once_as_one() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  for title in ["First", "Second", "Third"] {
+    let mut run = working(&mut fixture, title);
+    let events = run
+      .stop_at_limit(RunLimit::DailyBudget, Timestamp::now())
+      .expect("stopped");
+    fixture.record(&run, &events);
+  }
+  let followed = follow(&fixture, true);
+  assert!(
+    followed.kept && followed.turn.is_some(),
+    "one turn for the limit: {followed:?}"
+  );
+  let kept = waits(&fixture);
+  assert_eq!(kept.len(), 1, "{kept:?}");
+  assert_eq!(kept[0].0.others, 2);
+  assert_eq!(follow(&fixture, true).turn, None, "one turn per limit");
+}
+
+#[test]
+fn run_ends_of_a_run_the_chat_started_start_no_turn() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = working(&mut fixture, "Add login");
+  let started = ChatAction {
+    started: Some(run.id()),
+    auto_mode: true,
+    ..ChatAction::new("run_task", Some("ORC-1".to_owned()), ActionOutcome::Done)
+  };
+  let chat = acted(&mut fixture, &started, 10);
+  fail(&mut fixture, &mut run, StepFailure::ReportedFailed);
+  let followed = follow(&fixture, true);
+  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  let (wait, _) = &waits_in(&fixture, chat.id())[0];
+  assert!(wait.own && !wait.automatic, "{wait:?}");
 }

@@ -102,6 +102,19 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
+  /// Whether the turn that thinks in `chat` is one a wait or a run's end started by itself, not a person's.
+  pub fn thinks_on_its_own(&self, chat: ChatId) -> Result<bool, StoreError> {
+    let own = self
+      .connection
+      .query_row(
+        "SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1 AND turn = 'thinking' AND kind = 'wait'",
+        [chat.to_string()],
+        |_| Ok(()),
+      )
+      .optional()?;
+    Ok(own.is_some())
+  }
+
   /// The conversation whose last entry is the newest; `None` while the project has none.
   pub fn latest_chat(&self) -> Result<Option<ChatId>, StoreError> {
     let id = self

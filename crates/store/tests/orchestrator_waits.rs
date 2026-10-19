@@ -26,6 +26,8 @@ fn wait(run: RunId) -> AgentWait {
     number: 1,
     step: Some("Implement".to_owned()),
     agent: Some("Builder".to_owned()),
+    place: None,
+    others: 0,
     link: "/project/p/tasks/ORC-1/conversation".to_owned(),
     own: false,
     automatic: true,

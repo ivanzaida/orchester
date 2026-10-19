@@ -23,7 +23,7 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
-  blocked, change, duplicate,
+  blocked, change, duplicate, guard,
   keep::{self, HOLD_QUEUE, Named},
   proposal,
 };
@@ -102,6 +102,8 @@ pub(super) const RUN_TASK: &str = "run_task";
 pub(super) const CANCEL_RUN: &str = "cancel_run";
 /// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
 pub(super) const MERGE_RUN: &str = "merge_run";
+/// The tool the chat resumes a run with that a pause stopped; any other is the person's.
+pub(super) const RESUME_RUN: &str = "resume_run";
 /// The tool whose calls always wait for the person, and only for a retry or a return to an earlier step.
 pub(super) const CONTINUE_RUN: &str = "continue_run";
 /// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
@@ -134,6 +136,7 @@ fn in_chat(tool: &Tool) -> Option<String> {
     DUPLICATE_PIPELINE => DUPLICATE_AS_DRAFT,
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
+    RESUME_RUN => RESUME_PAUSED,
     CONTINUE_RUN => PROPOSE_CONTINUE,
     ANSWER_QUESTION | SEND_MESSAGE => PROPOSE_ANSWER,
     _ if Publishing::of_tool(name).is_some() => PROPOSE_PUBLISH,
@@ -146,7 +149,8 @@ fn in_chat(tool: &Tool) -> Option<String> {
 const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that the task could run now (a draft is \
   queued and started, a queued task starts, an ended one runs again) and starts nothing. The person starts or \
   dismisses it in the conversation. When auto mode is on for the project (get_auto_mode's new_runs), it starts the \
-  run instead, through the same checks, and answers with the run. Refusals name why.";
+  run instead, through the same checks, and answers with the run, but never in a turn Orchester started by itself: \
+  there it only proposes. Refusals name why.";
 
 /// What the agent reads first of `duplicate_pipeline`.
 const DUPLICATE_AS_DRAFT: &str = "In this chat it saves the copy as a draft, and its first version is published as \
@@ -160,10 +164,16 @@ const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks 
 /// What the agent reads first of `merge_run`.
 const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the merge to the person, who applies or \
   dismisses it in the conversation, unless the person turned on Let the Orchestrator merge runs in Settings: then it \
-  merges at once. Call it only for a run the person asked you in this chat to merge. Either way the merge keeps the \
+  merges at once, but never in a turn Orchester started by itself: there it only proposes. Call it only for a run \
+  the person asked you in this chat to merge. Either way the merge keeps the \
   rules below: only a task's latest run that succeeded, and only when the main checkout needs no local integration; \
   a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to the person on \
   the Local integration page.";
+
+/// What the agent reads first of `resume_run`.
+const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped. A run stopped at a limit (its budget \
+  or time limit, the daily or a group's budget, a step's budget, an account's plan limit) or interrupted is the \
+  person's to resume or continue on the task's Summary, and is refused here (person_only).";
 
 /// What the agent reads first of `continue_run`.
 const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
@@ -240,6 +250,7 @@ pub(super) async fn act_and_keep(
   let action = ChatAction {
     change: kept.change.map(Box::new),
     started: kept.started,
+    resumed: kept.resumed,
     auto_mode: kept.auto_mode,
     ..ChatAction::new(name, None, outcome)
   };
@@ -272,6 +283,7 @@ struct Kept {
   task: Option<String>,
   change: Option<ProposedChange>,
   started: Option<RunId>,
+  resumed: Option<RunId>,
   auto_mode: bool,
 }
 
@@ -285,15 +297,21 @@ async fn act(
   let acted = match name {
     RUN_TASK => start((services, translate), scope, arguments).await,
     CANCEL_RUN | CONTINUE_RUN => propose_change(translate, scope, name, arguments).await,
-    MERGE_RUN => {
-      switched(
-        (services, translate),
-        scope,
-        (name, arguments),
-        OrchestratorConsent::MergeRuns,
-      )
-      .await
-    }
+    // In a turn nobody asked for, a merge is only proposed.
+    MERGE_RUN => match guard::on_its_own(scope).await {
+      Ok(true) => propose_change(translate, scope, name, arguments).await,
+      Ok(false) => {
+        switched(
+          (services, translate),
+          scope,
+          (name, arguments),
+          OrchestratorConsent::MergeRuns,
+        )
+        .await
+      }
+      Err(error) => Err(error),
+    },
+    RESUME_RUN => resume((services, translate), scope, arguments).await,
     ANSWER_QUESTION | SEND_MESSAGE => {
       switched(
         (services, translate),
@@ -348,7 +366,8 @@ async fn start(
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  if !auto_mode(scope).await? {
+  // In a turn nobody asked for, a start is only proposed.
+  if !auto_mode(scope).await? || guard::on_its_own(scope).await? {
     let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
     return Ok(Acted {
       result: Ok(told),
@@ -375,6 +394,24 @@ async fn start(
     kept: Kept {
       started,
       auto_mode: true,
+      ..Kept::default()
+    },
+  })
+}
+
+/// `resume_run`: refused for a run that is the person's to resume ([`guard::resumable`]); the run it resumed is kept.
+async fn resume(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  let run = guard::resumable(scope, arguments).await?;
+  let result = app_tool((services, translate), RESUME_RUN, arguments.clone()).await;
+  let resumed = result.is_ok().then_some(run);
+  Ok(Acted {
+    result,
+    kept: Kept {
+      resumed,
       ..Kept::default()
     },
   })

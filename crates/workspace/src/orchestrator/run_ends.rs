@@ -2,82 +2,161 @@
 //! `docs/design/orchestrator-toolset.md`, decision 5): when a task's latest run succeeds, fails, stops for a decision
 //! on how it goes on, stops at a limit or is interrupted, a conversation keeps one entry for it, linking to the task's
 //! Summary. Each end is known by the run and the event that put the run there, so a run that stops again after it
-//! went on is a new end, and one that stays where it is stays one. Ends from before the project followed them
-//! ([`ProjectDb::run_ends_since`]) are history, not news, and an interruption the runner continues by itself when it
-//! comes back is not one.
+//! went on is a new end, and one that stays where it is stays one; the daily budget and a group's budget stop many
+//! runs at once, so all the runs one of them stopped on a day are one end. Not ends: ends from before the project
+//! followed them ([`ProjectDb::run_ends_since`]), a pause, a cancel, a *Quit now* or a stop a person asked for, an
+//! interruption the runner continues by itself when it comes back, and a run that succeeded and was merged, in
+//! Orchester or outside it.
+
+use std::{collections::HashMap, path::Path};
 
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{AgentWait, RunEnd, WaitKind},
+  orchestrator::{AgentWait, RunEnd, StopReason, WaitKind, change::StepName},
   resource::StepKey,
-  run::{PauseReason, Run, RunFailure, RunLimit, RunStatus},
-  store::{RunStore, TaskStore},
+  run::{InterruptCause, PauseReason, Run, RunFailure, RunLimit, RunStatus},
+  store::{MergeStore, RunStore, TaskStore},
   task::Task,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_exec::programs::Programs;
+use orchester_store::{EndedRun, ProjectDb, StoreError};
 
 use crate::{
   links::{Link, TaskPage},
-  tasks::detail::run_store_error,
+  tasks::{
+    delivery::{self, Delivery},
+    detail::run_store_error,
+    hold,
+  },
 };
 
-/// The ends of the latest runs of project `project`'s tasks that stand now, each by the key it is kept by.
-pub(super) fn current_ends(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, AgentWait)>, StoreError> {
-  let since = db.run_ends_since()?;
-  let mut ends = Vec::new();
-  for task in db.tasks()? {
-    let Some(Ok(run)) = db.runs_of_task(task.id()).map_err(run_store_error)?.pop() else {
-      continue;
-    };
-    let Some((end, event)) = end_of(run.status()) else {
-      continue;
-    };
-    let Some((sequence, at)) = db.latest_run_event(run.id(), event)? else {
-      continue;
-    };
-    if at < since {
+/// The kind of the event a person's decision on a stopped run is kept by; a failure right after it is their stop.
+const STUCK_DECIDED: &str = "stuck_decided";
+
+/// Where the ends are read: project `project` at `root`, whose git `programs` read a merge outside Orchester.
+pub(super) struct Reading<'a> {
+  pub(super) project: ProjectId,
+  pub(super) root: &'a Path,
+  pub(super) programs: &'a Programs,
+}
+
+/// The ends of the latest runs of the project's tasks that stand now, each by the key it is kept by, but those that
+/// `settled` tells need no look: kept already, and starting no turn that still waits.
+pub(super) fn current_ends(
+  db: &ProjectDb,
+  reading: &Reading,
+  settled: impl Fn(&str) -> bool,
+) -> Result<Vec<(String, AgentWait)>, StoreError> {
+  let mut ends: Vec<(String, AgentWait)> = Vec::new();
+  let mut batches: HashMap<String, usize> = HashMap::new();
+  for ended in db.ended_runs_since(db.run_ends_since()?)? {
+    let own_key = format!("end:{}:{}", ended.run, ended.sequence.get());
+    // A run at a shared limit is one of a batch, kept under the batch's key: it is looked at to count it.
+    if ended.kind != "paused" && settled(&own_key) {
       continue;
     }
-    let key = format!("end:{}:{}", run.id(), sequence.get());
-    ends.push((key, ended(project, &task, &run, end)));
+    let Some((run, end)) = standing(db, reading, &ended)? else {
+      continue;
+    };
+    let key = match batch_key(db, &run, end, &ended)? {
+      Some(batch) => batch,
+      None => own_key,
+    };
+    if let Some(index) = batches.get(&key) {
+      ends[*index].1.others += 1;
+      continue;
+    }
+    if settled(&key) {
+      continue;
+    }
+    let Some(task) = db.task(run.task())? else {
+      continue;
+    };
+    if key.starts_with("end:limit:") {
+      batches.insert(key.clone(), ends.len());
+    }
+    ends.push((key, ended_wait(reading.project, &task, &run, end)));
   }
   Ok(ends)
 }
 
-/// How a run that stands at `status` ended or stopped, and the kind of the event that put it there
-/// (`RunEventKind::name`); `None` for a run at work, paused by a person, canceled, or interrupted so that the runner
-/// continues it when it comes back.
-fn end_of(status: &RunStatus) -> Option<(RunEnd, &'static str)> {
-  match status {
-    RunStatus::Succeeded => Some((RunEnd::Succeeded, "succeeded")),
-    RunStatus::Failed(_) => Some((RunEnd::Failed, "failed")),
-    RunStatus::WaitingForPerson(_) => Some((RunEnd::Stopped, "waiting_for_person")),
-    RunStatus::Paused(PauseReason::LimitReached(limit)) => Some((RunEnd::Limit { limit: *limit }, "paused")),
-    RunStatus::Interrupted(cause) if !cause.continues_on_reconnect() => Some((RunEnd::Interrupted, "interrupted")),
-    RunStatus::Pending
-    | RunStatus::Running
-    | RunStatus::Paused(PauseReason::Requested)
-    | RunStatus::Interrupted(_)
-    | RunStatus::Cancelled => None,
+/// `ended`'s run and its end, while it still stands where that event put it and that is an end.
+fn standing(db: &ProjectDb, reading: &Reading, ended: &EndedRun) -> Result<Option<(Run, RunEnd)>, StoreError> {
+  // A failure right after a person's decision on the stopped run is their stop.
+  if ended.kind == "failed" && ended.after.as_deref() == Some(STUCK_DECIDED) {
+    return Ok(None);
+  }
+  let Some(run) = db.run(ended.run).map_err(run_store_error)? else {
+    return Ok(None);
+  };
+  let Some(end) = end_of(&run, &ended.kind) else {
+    return Ok(None);
+  };
+  if end == RunEnd::Succeeded && merged(db, reading, &run)? {
+    return Ok(None);
+  }
+  Ok(Some((run, end)))
+}
+
+/// How `run` ended or stopped, while its status is the one the event of kind `kind` (`RunEventKind::name`) put it in;
+/// `None` for a run that went on since, or whose stop is no end.
+fn end_of(run: &Run, kind: &str) -> Option<RunEnd> {
+  match (run.status(), kind) {
+    (RunStatus::Succeeded, "succeeded") => Some(RunEnd::Succeeded),
+    (RunStatus::Failed(_), "failed") => Some(RunEnd::Failed),
+    (RunStatus::WaitingForPerson(_), "waiting_for_person") => {
+      StopReason::of_run(run).map(|why| RunEnd::Stopped { why })
+    }
+    (RunStatus::Paused(PauseReason::LimitReached(limit)), "paused") => Some(RunEnd::Limit { limit: *limit }),
+    (RunStatus::Interrupted(InterruptCause::Crashed | InterruptCause::RunnerFailed), "interrupted") => {
+      Some(RunEnd::Interrupted)
+    }
+    _ => None,
   }
 }
 
-/// The end `end` of `task`'s latest run `run`, as the conversation keeps it: named after the step it stopped at,
-/// when it stopped at one, and linking to the task's Summary.
-fn ended(project: ProjectId, task: &Task, run: &Run, end: RunEnd) -> AgentWait {
+/// Whether `run`, which succeeded, was merged: in Orchester, or, as git tells, outside it.
+fn merged(db: &ProjectDb, reading: &Reading, run: &Run) -> Result<bool, StoreError> {
+  if db.run_merge(run.id())?.is_some() {
+    return Ok(true);
+  }
+  Ok(matches!(
+    delivery::of_run(reading.programs, reading.root, run),
+    Delivery::MergedOutside(_)
+  ))
+}
+
+/// The key of the batch `run` is one of when the daily budget or its group's budget stopped it: those it stopped on
+/// the day `ended` happened; `None` for an end of its own.
+fn batch_key(db: &ProjectDb, run: &Run, end: RunEnd, ended: &EndedRun) -> Result<Option<String>, StoreError> {
+  let day = ended.at.local_day_start().unix_millis();
+  Ok(match end {
+    RunEnd::Limit {
+      limit: RunLimit::DailyBudget,
+    } => Some(format!("end:limit:daily:{day}")),
+    RunEnd::Limit {
+      limit: RunLimit::GroupBudget,
+    } => {
+      let group = hold::group_of(db, run.task())?.map_or_else(String::new, |group| group.to_string());
+      Some(format!("end:limit:group:{group}:{day}"))
+    }
+    _ => None,
+  })
+}
+
+/// The end `end` of `task`'s latest run `run`, as the conversation keeps it: named after the step it stopped at, when
+/// it stopped at one, and linking to the task's Summary.
+fn ended_wait(project: ProjectId, task: &Task, run: &Run, end: RunEnd) -> AgentWait {
+  let stopped = stopped_step(run).and_then(|key| StepName::in_run(run, key));
   AgentWait {
     kind: WaitKind::Ended(end),
     task: task.key().to_string(),
     title: task.details().title.as_str().to_owned(),
     run: run.id(),
     number: run.number().get(),
-    step: stopped_step(run).and_then(|key| {
-      run
-        .snapshot()
-        .body()
-        .step(key)
-        .map(|step| step.name.as_str().to_owned())
-    }),
+    place: stopped.as_ref().map(|step| step.place),
+    step: stopped.map(|step| step.name),
+    others: 0,
     agent: None,
     link: Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
     own: false,

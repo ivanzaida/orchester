@@ -63,11 +63,11 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
       .await?
       .map_err(|error| messages::store_error(&error))?
   };
-  let mut followed = keep(open, (answers, false)).await?;
+  let mut followed = keep(services, open, (answers, false)).await?;
   if followed.pending {
     match services.runners.chat_runner(open).await {
       Ok(()) => {
-        let started = keep(open, (answers, true)).await?;
+        let started = keep(services, open, (answers, true)).await?;
         followed.kept |= started.kept;
         followed.turn = started.turn;
       }
@@ -83,12 +83,12 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
   Ok(())
 }
 
-/// Follows `open`'s waits once, with *Let the Orchestrator answer agents* on when `answers`, and starting a turn only
-/// when the runner is `attached`.
-async fn keep(open: &OpenProject, (answers, attached): (bool, bool)) -> Result<Followed, Message> {
-  let (root, project) = (open.repo_root.clone(), open.project.id());
+/// Follows `open`'s waits and run ends once, git read with `services`' programs, with *Let the Orchestrator answer
+/// agents* on when `answers`, and starting a turn only when the runner is `attached`.
+async fn keep(services: &Services, open: &OpenProject, (answers, attached): (bool, bool)) -> Result<Followed, Message> {
+  let (root, project, programs) = (open.repo_root.clone(), open.project.id(), services.programs.clone());
   let _keeping = KEEPING.lock().await;
-  background::run(move || waits::follow_in(&root, project, (answers, attached))).await?
+  background::run(move || waits::follow_in((&root, project, &programs), (answers, attached))).await?
 }
 
 /// Serves the tools of `turn` and asks `open`'s runner to answer it; a turn neither takes ends failed.

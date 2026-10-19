@@ -56,30 +56,43 @@ person can click.
    - The chat may propose how a run that waits for a person's decision goes on (`continue_run`): only `allow_retry`
      (one more retry of the step that used up its retries or broke again, or the step that waits unverified or
      unchanged run again) and `return_to` (an earlier agent step, with a note for its agent). It is always a proposal
-     card the person applies or dismisses, showing the run, the step it stopped at, the choice and the note; applying
-     calls `continue_run` exactly as an MCP client does, and is refused when the run went on since it was proposed (a
-     newer attempt). No switch lets the chat continue a run itself: none of the person's switches was given for it
-     (*answer agents* is about what agents asked, *merge runs* about merging), and a retry spends more of the budget
-     and overrides the retries the pipeline allows, which the pipeline left to a person. `raise_limits`,
-     `raise_step_budget`, `resume` and `accept` stay the person's and are refused (`person_only`). The chat passes the
-     choice through, so where `continue_run` offers `return_to` for a run that ended, the chat may propose it too.
+     card the person applies or dismisses, showing the run, the step it stopped at and why, the choice and the note.
+     Applying is the person's own decision, recorded as theirs, exactly as the task's Summary decides it; it is
+     refused when the run went on since it was proposed (a newer attempt). No switch lets the chat continue a run
+     itself: none of the person's switches was given for it (*answer agents* is about what agents asked, *merge runs*
+     about merging), and a retry spends more of the budget and overrides the retries the pipeline allows, which the
+     pipeline left to a person. `raise_limits`, `raise_step_budget`, `resume` and `accept` stay the person's and are
+     refused (`person_only`). Continuing a run that ended (`return_to` after a failure, ORC-44) is another branch's
+     work and not offered here.
+   - The chat resumes only a run a pause stopped (`resume_run`). A run stopped at a limit (its token budget or time
+     limit, the daily or a group's budget, a step's budget, an account's plan limit) or interrupted is the person's to
+     resume or continue, and the chat's call is refused (`person_only`).
    - The chat follows the ends of its project's runs as it follows the agents' waits: when a task's latest run
      succeeds (ready to merge), fails, stops for a decision (a step used up its retries, broke again, or waits
-     unverified or unchanged), stops at a limit (its token budget or time limit, the daily or group budget, a step's
-     budget, an account's plan limit) or is interrupted, the conversation chosen as for a wait gets one entry for it,
-     linking to the task's Summary. Each end is kept once, by the run and the event that put it there: a run that stops
-     again after it went on is a new end. Not followed: a pause the person asked for, a cancel, an interruption the
-     runner continues by itself when it comes back, and ends from before the project followed them (a project starts
-     following when its database gains them, so its history does not flood the chat).
+     unverified or unchanged), stops at a limit (its token budget or time limit, the daily or a group's budget, a
+     step's budget, an account's plan limit) or is interrupted, the conversation chosen as for a wait gets one entry
+     for it, linking to the task's Summary. Each end is kept once, by the run and the event that put it there: a run
+     that stops again after it went on is a new end. The daily budget and a group's budget stop many runs at once: all
+     the runs one of them stopped on a day are one entry, naming the first and counting the others. Not followed: a
+     pause or a cancel, *Quit now* and a stop of a waiting run the person asked for, an interruption the runner
+     continues by itself when it comes back, a run that succeeded and was merged (in Orchester, or outside it as git
+     tells), and ends from before the project followed them (a project starts following when its database gains
+     them, so its history does not flood the chat).
    - With *Let the Orchestrator answer agents* on, an end starts one Orchestrator turn by itself, under the same rules
      as a wait's (at most one per end, never while another turn of its conversation thinks, only while the run still
-     stands so). For a run that succeeded the turn tells the person it is ready to merge, and merges it only when the
-     person asked earlier in that conversation for that run's merge, through `merge_run` and its rules (at once only
-     with *Let the Orchestrator merge runs*, else proposed). For any other end the turn reads the run and tells the
-     person what happened and the choices they have; it may propose `continue_run`, and starts, resumes, cancels and
-     merges nothing. No turn starts for an end the chat's own doing led to: its answer, message or continuation of
-     the run (applied or done itself), or a resume of the task's run it did, is the newest entry about the run; so
-     the chat never takes up its own doing in a loop, and one turn follows each end at most.
+     stands so). For a run that succeeded the turn tells the person it is ready to merge; if the person asked earlier
+     in that conversation for that run's merge, it calls `merge_run`, which only proposes it. For a run that waits for
+     a decision the turn reads the run, tells the person what happened and the choices, and may propose a retry or a
+     return (`continue_run`). For a failure, a limit or an interruption the turn reads the run and tells the person
+     what happened and the choices they have on the task's Summary, which are theirs. Such a turn starts, resumes,
+     cancels and merges nothing itself.
+   - In a turn a wait or an end started by itself nobody asked for anything, so `merge_run` and `run_task` only
+     propose, whatever *Let the Orchestrator merge runs* and auto mode say. This holds by the tools, not by the prompt.
+   - No turn starts for a wait or an end the chat's own doing led to (`raised_by_own`), so the chat never takes up its
+     own doing in a loop: the newest entry about the run, before a wait of the run, is its answer, message or
+     continuation of the run (applied or done itself) or its resume of the run; for an end, also its own start of the
+     run. A run that succeeded is never the chat's own: its turn only tells the person and proposes, so it cannot
+     loop. Each wait or end starts one turn at most.
    - **Never from the chat:** answering approvals, deciding plans, widening permissions, secret values and deleting
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
@@ -95,7 +108,7 @@ project.
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
 | Tasks | `list_tasks`, `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing) | — |
-| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing) | `run_task` (direct in auto mode), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*), `continue_run` (`allow_retry` and `return_to` only, always proposed) |
+| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; only a run a pause stopped) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started), `continue_run` (`allow_retry` and `return_to` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |

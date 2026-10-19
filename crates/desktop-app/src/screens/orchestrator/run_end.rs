@@ -5,6 +5,8 @@
 //! it waits for the person); and *Open* the task's Summary. No Pencil frame draws it yet: it keeps to the wait card's
 //! look.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -41,11 +43,16 @@ pub(super) fn card(
   project: ProjectId,
 ) -> Element {
   let run = wait.number.to_string();
-  let step = wait.step.as_deref().unwrap_or_default();
+  let step = step_label(ctx, wait);
   let (glyph, color) = look(end);
   let title = ctx.t_args(
-    title(end, wait.step.is_some()),
-    [("task", wait.task.as_str()), ("run", run.as_str()), ("step", step)],
+    title(end, (wait.step.is_some(), wait.others > 0)),
+    [
+      ("task", wait.task.as_str()),
+      ("run", run.as_str()),
+      ("step", &*step),
+      ("count", &wait.others.to_string()),
+    ],
   );
   let time = at.map(display::clock).unwrap_or_default();
   let state = State {
@@ -72,27 +79,42 @@ const fn look(end: RunEnd) -> (Icon, PaletteColor) {
   match end {
     RunEnd::Succeeded => (Icon::GitMerge, PaletteColor::Success),
     RunEnd::Failed => (Icon::CircleX, PaletteColor::Danger),
-    RunEnd::Stopped => (Icon::Hand, PaletteColor::Warning),
+    RunEnd::Stopped { .. } => (Icon::Hand, PaletteColor::Warning),
     RunEnd::Limit { .. } => (Icon::Gauge, PaletteColor::Warning),
     RunEnd::Interrupted => (Icon::CirclePause, PaletteColor::Warning),
   }
 }
 
-/// The title of `end`, naming the step it stopped at when it is `named`.
-const fn title(end: RunEnd, named: bool) -> &'static str {
+/// The step `wait`'s run stopped at, with its place in the pipeline when it is known (`03 Implement`).
+fn step_label(ctx: &Ctx, wait: &AgentWait) -> Arc<str> {
+  match (wait.place, wait.step.as_deref()) {
+    (Some(place), Some(step)) => ctx.t_args(
+      "orchestrator.change.facts.stepLabel",
+      [("number", format!("{place:02}")), ("step", step.to_owned())],
+    ),
+    (None, Some(step)) => Arc::from(step),
+    (_, None) => Arc::from(""),
+  }
+}
+
+/// The title of `end`, naming the step it stopped at when it is `named`, and the other runs the same limit stopped
+/// when there are `more`.
+const fn title(end: RunEnd, (named, more): (bool, bool)) -> &'static str {
   match (end, named) {
     (RunEnd::Succeeded, _) => "orchestrator.end.succeeded",
     (RunEnd::Failed, true) => "orchestrator.end.failedAt",
     (RunEnd::Failed, false) => "orchestrator.end.failed",
-    (RunEnd::Stopped, true) => "orchestrator.end.stoppedAt",
-    (RunEnd::Stopped, false) => "orchestrator.end.stopped",
-    (RunEnd::Limit { limit }, _) => match limit {
-      RunLimit::Tokens => "orchestrator.end.limitTokens",
-      RunLimit::Time => "orchestrator.end.limitTime",
-      RunLimit::DailyBudget => "orchestrator.end.limitDaily",
-      RunLimit::GroupBudget => "orchestrator.end.limitGroup",
-      RunLimit::StepBudget { .. } => "orchestrator.end.limitStep",
-      RunLimit::PlanLimit { .. } => "orchestrator.end.limitPlan",
+    (RunEnd::Stopped { .. }, true) => "orchestrator.end.stoppedAt",
+    (RunEnd::Stopped { .. }, false) => "orchestrator.end.stopped",
+    (RunEnd::Limit { limit }, _) => match (limit, more) {
+      (RunLimit::DailyBudget, true) => "orchestrator.end.limitDailyMore",
+      (RunLimit::GroupBudget, true) => "orchestrator.end.limitGroupMore",
+      (RunLimit::Tokens, _) => "orchestrator.end.limitTokens",
+      (RunLimit::Time, _) => "orchestrator.end.limitTime",
+      (RunLimit::DailyBudget, false) => "orchestrator.end.limitDaily",
+      (RunLimit::GroupBudget, false) => "orchestrator.end.limitGroup",
+      (RunLimit::StepBudget { .. }, _) => "orchestrator.end.limitStep",
+      (RunLimit::PlanLimit { .. }, _) => "orchestrator.end.limitPlan",
     },
     (RunEnd::Interrupted, _) => "orchestrator.end.interrupted",
   }
@@ -133,7 +155,7 @@ const fn name(end: RunEnd) -> &'static str {
   match end {
     RunEnd::Succeeded => "run_succeeded",
     RunEnd::Failed => "run_failed",
-    RunEnd::Stopped => "run_stopped",
+    RunEnd::Stopped { .. } => "run_stopped",
     RunEnd::Limit { .. } => "run_limit",
     RunEnd::Interrupted => "run_interrupted",
   }

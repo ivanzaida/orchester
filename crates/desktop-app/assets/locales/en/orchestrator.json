@@ -444,7 +444,15 @@
         "choice": "Choice",
         "note": "Note",
         "choiceRetry": "Allow 1 retry & continue",
-        "choiceReturn": "Return to {{step}}"
+        "choiceReturn": "Return to {{step}}",
+        "decision": "waits for your decision · {{tokens}} tokens",
+        "why": {
+          "retries": "used up its {{count}} retries",
+          "retriesOne": "used up its retry",
+          "brokeAgain": "broke again",
+          "unverified": "waits unverified",
+          "unchanged": "waits unchanged"
+        }
       },
       "widens": {
         "repository": "repository: write",
@@ -501,7 +509,9 @@
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
       "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you.",
-      "open": "Open {{task}}'s summary"
+      "open": "Open {{task}}'s summary",
+      "limitDailyMore": "Run #{{run}} of {{task}} and {{count}} more stopped at the daily budget",
+      "limitGroupMore": "Run #{{run}} of {{task}} and {{count}} more stopped at their group's budget"
     }
   }
 }

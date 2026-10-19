@@ -83,6 +83,7 @@ pub use self::{
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
   resources::ResourceUpdate,
+  run_ends::EndedRun,
   runs::RunBranch,
   shared_members::SharedMember,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},

@@ -1658,6 +1658,7 @@
       "answerWaits": "Nothing is answered yet: your answer to the question in run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would answer and why.",
       "messageWaits": "Nothing is sent yet: your message to the agents of run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would send and why.",
       "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card.",
+      "resumePersonOnly": "Run #{{run}} stopped at a limit or was interrupted: resuming or continuing it is the person's, on the task's Summary. Tell them what stopped it and what you recommend.",
       "continueWaits": "Run #{{run}} still waits: how it goes on waits for the person, who applies or dismisses it in the conversation. Tell them what you would choose and why.",
       "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry or return_to."
     }

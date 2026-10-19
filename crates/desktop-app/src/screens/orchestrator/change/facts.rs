@@ -19,7 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ProjectId,
-  orchestrator::change::{Change, ContinueChoice, Publishing},
+  orchestrator::change::{Change, Publishing},
   project::TaskKey,
   time::Timestamp,
   tokens::compact_tokens,
@@ -47,7 +47,7 @@ const NUMBER_WIDTH: f32 = 44.0;
 const SIGN_WIDTH: f32 = 24.0;
 
 /// A part of a fact's value.
-enum Part {
+pub(super) enum Part {
   /// Words that open `route`.
   Link(Arc<str>, Route),
   Value(Arc<str>),
@@ -310,35 +310,10 @@ fn run_rows(ctx: &Ctx, view: &View, run: &RunFacts, project: ProjectId) -> Vec<(
       }
     }
     Some(Change::Merge { .. }) => rows.extend(merge_rows(ctx, run, project)),
-    Some(Change::Continue { step, choice, .. }) => rows.extend(continue_rows(ctx, step.as_deref(), choice)),
-    _ => {}
-  }
-  rows
-}
-
-/// The step a run stopped at, how it goes on, and a return's note for its agent.
-fn continue_rows(ctx: &Ctx, step: Option<&str>, choice: &ContinueChoice) -> Vec<(Arc<str>, Vec<Part>)> {
-  let mut rows: Vec<(Arc<str>, Vec<Part>)> = step
-    .map(|step| {
-      (
-        ctx.t("orchestrator.change.facts.stopped"),
-        vec![Part::Value(step.into())],
-      )
-    })
-    .into_iter()
-    .collect();
-  let chosen = match choice {
-    ContinueChoice::AllowRetry => ctx.t("orchestrator.change.facts.choiceRetry"),
-    ContinueChoice::ReturnTo { name, .. } => {
-      ctx.t_args("orchestrator.change.facts.choiceReturn", [("step", name.as_str())])
+    Some(Change::Continue { step, why, choice, .. }) => {
+      rows.extend(super::continuation::rows(ctx, (step.as_ref(), *why), choice));
     }
-  };
-  rows.push((ctx.t("orchestrator.change.facts.choice"), vec![Part::Value(chosen)]));
-  if let ContinueChoice::ReturnTo { note, .. } = choice {
-    rows.push((
-      ctx.t("orchestrator.change.facts.note"),
-      vec![Part::Value(note.as_str().into())],
-    ));
+    _ => {}
   }
   rows
 }
@@ -408,6 +383,10 @@ fn stands(ctx: &Ctx, view: &View, run: &RunFacts) -> Option<Arc<str>> {
     Stands::Going { step: Some(at), tokens } => ctx.t_args(
       "orchestrator.change.facts.going",
       [("step", &*step(at)), ("tokens", &compact_tokens(*tokens))],
+    ),
+    Stands::Decision { tokens } => ctx.t_args(
+      "orchestrator.change.facts.decision",
+      [("tokens", compact_tokens(*tokens))],
     ),
     Stands::Going { step: None, tokens } => ctx.t_args(
       "orchestrator.change.facts.goingTokens",

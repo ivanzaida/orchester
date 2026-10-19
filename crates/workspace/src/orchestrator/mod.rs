@@ -8,6 +8,7 @@ mod change;
 pub mod chat;
 mod duplicate;
 pub mod facts;
+mod guard;
 mod keep;
 pub mod proposal;
 pub mod recover;

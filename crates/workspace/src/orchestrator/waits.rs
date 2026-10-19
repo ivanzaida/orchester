@@ -27,9 +27,13 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{KeptWait, ProjectDb, StoreError};
 
-use super::{run_ends::current_ends, settings::OrchestratorSetup};
+use super::{
+  run_ends::{Reading, current_ends},
+  settings::OrchestratorSetup,
+};
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
@@ -59,22 +63,33 @@ pub struct Followed {
 /// it is off, nor while the Orchestrator has nothing published to run on (the runner could not take the turn).
 /// `attached`: whether the project's runner has attached. A runner that attaches ends the turns still thinking as
 /// interrupted, so a turn starts only once it is there: without it the turn stays `pending`, for the app to attach the
-/// runner and follow again. Blocks on SQLite.
-pub fn follow_in(root: &Path, project: ProjectId, (answers, attached): (bool, bool)) -> Result<Followed, Message> {
+/// runner and follow again. `programs` run git to tell a run merged outside Orchester. Blocks on SQLite and git.
+pub fn follow_in(
+  (root, project, programs): (&Path, ProjectId, &Programs),
+  (answers, attached): (bool, bool),
+) -> Result<Followed, Message> {
   let ready = answers && OrchestratorSetup::load_in(root)?.readiness().is_ready();
-  follow(root, project, (answers, ready), attached).map_err(|error| messages::store_error(&error))
+  let reading = Reading {
+    project,
+    root,
+    programs,
+  };
+  follow(&reading, (answers, ready), attached).map_err(|error| messages::store_error(&error))
 }
 
-fn follow(
-  root: &Path,
-  project: ProjectId,
-  (answers, ready): (bool, bool),
-  attached: bool,
-) -> Result<Followed, StoreError> {
-  let mut db = ProjectDb::open(root)?;
-  let mut now = current_waits(&db, project)?;
-  now.extend(current_ends(&db, project)?);
+fn follow(reading: &Reading, (answers, ready): (bool, bool), attached: bool) -> Result<Followed, StoreError> {
+  let mut db = ProjectDb::open(reading.root)?;
   let kept = db.kept_wait_keys()?;
+  // An end kept that starts no turn still to come needs no look again.
+  let pending: HashSet<String> = db
+    .automatic_waits_without_turn()?
+    .into_iter()
+    .map(|kept| kept.key)
+    .collect();
+  let mut now = current_waits(&db, reading.project)?;
+  now.extend(current_ends(&db, reading, |key| {
+    kept.contains(key) && !pending.contains(key)
+  })?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new(&mut db, &new, answers)?;
   let followed = Followed {
@@ -263,6 +278,8 @@ impl Waiting<'_> {
         .map(str::to_owned)
         .or_else(|| step.and_then(|step| step.agent.as_deref().map(str::to_owned))),
       link: Link::Task(self.project, self.task.key().clone(), TaskPage::Conversation).path(),
+      place: None,
+      others: 0,
       own: false,
       automatic: false,
     }

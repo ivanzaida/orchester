@@ -2,7 +2,7 @@
 //! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, or the end
 //! of a task's run, started by itself ([`wait_prompt`]).
 
-use super::wait::{AgentWait, RunEnd, WaitKind};
+use super::wait::{AgentWait, RunEnd, StopReason, WaitKind};
 use crate::{id::ProjectId, run::RunLimit};
 
 /// The name the Orchestrator's agent knows Orchester's domain tools by (`mcp__orchester__<tool>`).
@@ -76,6 +76,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      only a task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal \
      (such as needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the \
      Local integration page.\n\
+     - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
+     propose, whatever the person's switches and auto mode.\n\
      - Always tell the person what you answered, sent or merged, with its link."
   )
 }
@@ -109,8 +111,9 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
 }
 
 /// The prompt of the Orchestrator turn the end of `wait`'s run (`end`) started by itself: how it ended and what to do.
-/// A run that succeeded is told to the person, and merged only when the person asked for its merge in the
-/// conversation; any other end is read and explained, with the choices the person has.
+/// A run that succeeded is told to the person, and its merge only proposed (a turn nobody asked for proposes every
+/// merge); a run that waits for a decision is read and explained, and its retry or return may be proposed; any other
+/// end is read and explained with the choices the person has, which are the person's.
 fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   let at = wait
     .step
@@ -120,34 +123,61 @@ fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   let what = match end {
     RunEnd::Succeeded => "succeeded: its work is ready to merge".to_owned(),
     RunEnd::Failed => format!("failed{at}"),
-    RunEnd::Stopped => format!("stopped{at} and waits for a decision on how it goes on"),
+    RunEnd::Stopped { why } => format!(
+      "stopped{at} ({}) and waits for a decision on how it goes on",
+      why_words(why)
+    ),
     RunEnd::Limit { limit } => format!("stopped at {}{at}", limit_words(limit)),
     RunEnd::Interrupted => "was interrupted and goes on only when a person continues it".to_owned(),
   };
-  let todo = match end {
-    RunEnd::Succeeded => {
-      "Tell the person it is ready to merge, with the link. Merge it only if the person asked you earlier in this \
-       conversation to merge this task's run: then call merge_run for it, which merges at once only while the person \
-       lets the Orchestrator merge runs and proposes the merge otherwise. Never merge a run nobody asked you to \
-       merge, and start, cancel or continue nothing."
-    }
-    RunEnd::Failed | RunEnd::Stopped | RunEnd::Limit { .. } | RunEnd::Interrupted => {
-      "Read the run first (get_run, get_conversation). Tell the person what happened and the choices they have, with \
-       the link. When the run waits for a decision on how it goes on and continue_run offers a fitting choice \
-       (allow_retry, or return_to with a note for an earlier agent step), you may propose it: the person applies \
-       it. Raising limits or budgets, resuming and accepting a step are the person's: say where they do it. Start, \
-       resume, cancel or merge nothing."
-    }
+  let others = match wait.others {
+    0 => String::new(),
+    1 => " The same limit stopped 1 more run of the project at once.".to_owned(),
+    count => format!(" The same limit stopped {count} more runs of the project at once."),
   };
   format!(
-    "[Orchester] Run #{number} of {task} ({title}) {what}; its summary: {link}.\n\
+    "[Orchester] Run #{number} of {task} ({title}) {what}; its summary: {link}.{others}\n\
      Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator answer agents is on. \
      {todo}",
     number = wait.number,
     task = wait.task,
     title = wait.title,
     link = wait.link,
+    todo = end_todo(end),
   )
+}
+
+/// What the turn of `end` is to do.
+const fn end_todo(end: RunEnd) -> &'static str {
+  match end {
+    RunEnd::Succeeded => {
+      "Tell the person it is ready to merge, with the link. If the person asked you earlier in this conversation to \
+       merge this task's run, call merge_run for it: in this turn it only proposes the merge, which the person \
+       applies. Never merge a run nobody asked you to merge, and start, resume, cancel or continue nothing."
+    }
+    RunEnd::Stopped { .. } => {
+      "Read the run first (get_run, get_conversation). Tell the person what happened and the choices they have, with \
+       the link. When one more retry, or a return to an earlier agent step with a note for its agent, plainly helps, \
+       you may propose it with continue_run (allow_retry or return_to): the person applies it. Accepting the step \
+       as it is stays the person's. Start, resume, cancel or merge nothing."
+    }
+    RunEnd::Failed | RunEnd::Limit { .. } | RunEnd::Interrupted => {
+      "Read the run first (get_run, get_conversation). Tell the person what happened and the choices they have on the \
+       task's Summary, with the link: raising a limit or a budget, resuming, continuing or running the task again \
+       are the person's, and continue_run offers you nothing for this run. Start, resume, cancel, continue or merge \
+       nothing."
+    }
+  }
+}
+
+/// Why a run waits for a decision, as the prompt names it.
+fn why_words(why: StopReason) -> String {
+  match why {
+    StopReason::RetriesExhausted { retries } => format!("its step used up its {retries} retries"),
+    StopReason::BrokeAgain => "its step broke again".to_owned(),
+    StopReason::Unverified => "its step could not check everything".to_owned(),
+    StopReason::Unchanged => "its step was not run again on unchanged work".to_owned(),
+  }
 }
 
 /// The limit a run stopped at, as the prompt names it.

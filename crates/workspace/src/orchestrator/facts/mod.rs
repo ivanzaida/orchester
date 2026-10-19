@@ -108,6 +108,8 @@ pub struct RunFacts {
 pub enum Stands {
   /// It works or waits: the step it is on (its place and name), and its tokens.
   Going { step: Option<(usize, String)>, tokens: u64 },
+  /// It waits for a person's decision on how it goes on, with its tokens.
+  Decision { tokens: u64 },
   /// It was cancelled: the step it stopped at, and its tokens.
   Cancelled { step: Option<(usize, String)>, tokens: u64 },
   /// It succeeded, and when; not merged.

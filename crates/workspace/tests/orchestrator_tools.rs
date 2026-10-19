@@ -108,6 +108,17 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
   ] {
     assert!(merge.contains(part), "merge_run says {part}: {merge}");
   }
+  for name in ["run_task", "merge_run"] {
+    let told = description(name);
+    assert!(
+      told.contains("never in a turn Orchester started by itself: there it only proposes"),
+      "{name}: {told}"
+    );
+  }
+  let resume = description("resume_run");
+  for part in ["resumes only a run a pause stopped", "interrupted", "person_only"] {
+    assert!(resume.contains(part), "resume_run says {part}: {resume}");
+  }
   let continued = description("continue_run");
   for part in [
     "only allow_retry and return_to",

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::chat::{ChatEntry, EntryKind};
 use crate::{
   id::{ChatId, RunId},
-  run::RunLimit,
+  run::{Run, RunLimit, RunStatus, Stuck},
 };
 
 /// What an agent waits for.
@@ -44,9 +44,11 @@ pub enum RunEnd {
   /// It succeeded: its work is ready to merge.
   Succeeded,
   Failed,
-  /// A step used up its retries, broke again, or waits unverified or unchanged: the run waits for a person's
+  /// A step used up its retries, broke again, or waits unverified or unchanged (`why`): the run waits for a person's
   /// decision on how it goes on.
-  Stopped,
+  Stopped {
+    why: StopReason,
+  },
   /// It stopped at `limit`: its token budget, time limit, the daily or group budget, a step's budget or an account's
   /// plan limit.
   Limit {
@@ -54,6 +56,43 @@ pub enum RunEnd {
   },
   /// It stopped without settling, and goes on only when a person continues it.
   Interrupted,
+}
+
+/// Why a run waits for a person's decision on how it goes on ([`Stuck`]), as people read it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "reason", rename_all = "snake_case")]
+pub enum StopReason {
+  /// Its step used up the `retries` its failure route allows.
+  RetriesExhausted { retries: u32 },
+  /// Its step broke again in the attempt that restarted it.
+  BrokeAgain,
+  /// Its step could not check everything it is for.
+  Unverified,
+  /// Its step was not run again on work that has not changed.
+  Unchanged,
+}
+
+impl StopReason {
+  /// Why `run` waits for a person's decision, its step's failure route allowing the retries it names; `None` for a
+  /// run that does not wait for one.
+  pub fn of_run(run: &Run) -> Option<Self> {
+    let RunStatus::WaitingForPerson(stuck) = run.status() else {
+      return None;
+    };
+    Some(match stuck {
+      Stuck::RetriesExhausted(step) => Self::RetriesExhausted {
+        retries: run
+          .snapshot()
+          .body()
+          .step(step)
+          .and_then(|step| step.on_failure.as_ref())
+          .map_or(0, |route| route.max_retries.get()),
+      },
+      Stuck::BrokeAgain(_) => Self::BrokeAgain,
+      Stuck::Unverified(_) => Self::Unverified,
+      Stuck::Unchanged(_) => Self::Unchanged,
+    })
+  }
 }
 
 /// One wait, as the conversation keeps it.
@@ -68,6 +107,12 @@ pub struct AgentWait {
   /// The waiting step's name, while the run's pipeline has it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub step: Option<String>,
+  /// The step's place in the run's pipeline, from 1, when a run's end names its step.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub place: Option<u32>,
+  /// How many other runs the same limit stopped at once, kept in this one entry (the daily or a group's budget).
+  #[serde(default, skip_serializing_if = "is_zero")]
+  pub others: u32,
   /// The waiting agent's role, when it is known.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub agent: Option<String>,
@@ -82,30 +127,29 @@ pub struct AgentWait {
   pub automatic: bool,
 }
 
-/// The tool whose action resumes a run the chat names by its task: what follows from it is the chat's own doing.
-const RESUME_RUN: &str = "resume_run";
-
-/// Whether `wait` now was raised by the Orchestrator's own action: in `entries`, those of every conversation in the
-/// order they were kept (the person may have started another since), the newest entry about its run is an answer, a
-/// message or a decision on how the run continues that the chat gave (applied, or done itself), or a resume of its
-/// task's run the chat did, not a wait. An agent the Orchestrator answered that asks again, or a run it continued or
-/// resumed that stops again, is answered by a person, or by an Orchestrator turn the person starts.
+/// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,
+/// those of every conversation in the order they were kept (the person may have started another since), the newest
+/// entry about its run, before a wait of the run, is an answer, a message or a decision on how the run continues that
+/// the chat gave (applied, or done itself), or a resume of the run the chat did; for a run's end also a start of the
+/// run the chat took itself. A run that succeeded is never the chat's own: its turn only tells the person and
+/// proposes, so it cannot answer the chat in a loop. An agent the Orchestrator answered that asks again, or a run it
+/// continued, resumed or started that stops, is answered by a person, or by an Orchestrator turn the person starts.
 pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
   let run = wait.run;
+  let end = wait.kind.run_end();
+  if end == Some(RunEnd::Succeeded) {
+    return false;
+  }
   for entry in entries.iter().rev() {
     match &entry.kind {
       EntryKind::Wait { wait: kept, .. } if kept.run == run => return false,
-      EntryKind::Action(action) => {
+      EntryKind::Action(action) if action.outcome.answered() => {
         let carried = action
           .change
           .as_ref()
           .is_some_and(|change| change.change.carries_run_on() && change.change.run() == Some(run));
-        let resumed = action.tool == RESUME_RUN
-          && action
-            .task
-            .as_deref()
-            .is_some_and(|task| task.eq_ignore_ascii_case(&wait.task));
-        if (carried || resumed) && action.outcome.answered() {
+        let started = end.is_some() && action.started == Some(run);
+        if carried || action.resumed == Some(run) || started {
           return true;
         }
       }
@@ -113,6 +157,10 @@ pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
     }
   }
   false
+}
+
+const fn is_zero(count: &u32) -> bool {
+  *count == 0
 }
 
 /// The conversation that last dealt with `wait`'s task, among `entries`, those of every conversation, each with the

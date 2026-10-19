@@ -1,14 +1,15 @@
 //! The Orchestrator chat's `continue_run` (`docs/design/orchestrator-toolset.md`, decision 5), on the seeded Kontur's
 //! run that waits for a decision after its retries: one more retry or a return to an earlier step is always a
 //! proposal, whatever the person's switches, which the person dismisses or applies through `continue_run`; one the run
-//! went on from since it was proposed is refused; raising limits, resuming and accepting a step are the person's and
+//! went on from since it was proposed is refused; applying is the person's own decision, which needs no consent for
+//! automation; raising limits, resuming and accepting a step are the person's and
 //! refused, as is a choice the run does not offer.
 
 use std::{thread, time::Duration};
 
 use orchester_core::{
   orchestrator::{
-    ActionOutcome, EntryKind,
+    ActionOutcome, EntryKind, StopReason,
     change::{Change, ContinueChoice},
   },
   run::{RunStatus, StuckDecision},
@@ -84,10 +85,10 @@ fn retry(run: &str) -> Value {
 }
 
 #[test]
-fn chat_continue_is_a_proposal_the_person_dismisses_or_applies() {
+fn chat_continue_is_a_proposal_the_person_dismisses() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
-  let (task, mut run) = task_run(&db, STUCK);
+  let (task, run) = task_run(&db, STUCK);
   assert!(
     matches!(run.status(), RunStatus::WaitingForPerson(_)),
     "{:?}",
@@ -110,14 +111,26 @@ fn chat_continue_is_a_proposal_the_person_dismisses_or_applies() {
   assert_eq!(proposed.outcome, ActionOutcome::Waits);
   assert_eq!(proposed.task.as_deref(), Some(task.key().to_string().as_str()));
   let Some(Change::Continue {
-    attempt, step, choice, ..
+    attempt,
+    step,
+    why,
+    choice,
+    ..
   }) = proposed.change.as_ref().map(|change| change.change.clone())
   else {
     panic!("a continuation: {proposed:?}");
   };
   let now = run.current_attempt().expect("an attempt").number().get();
   assert_eq!((attempt, choice), (now, ContinueChoice::AllowRetry));
-  assert_eq!(step.as_deref(), Some("Review"), "the step it stopped at");
+  assert_eq!(
+    step.map(|step| step.name).as_deref(),
+    Some("Review"),
+    "the step it stopped at"
+  );
+  assert!(
+    matches!(why, Some(StopReason::RetriesExhausted { retries }) if retries > 0),
+    "{why:?}"
+  );
   decide(&mut served, &scope, newest_action(&db, &scope), Decision::Dismiss).expect("dismissed");
   assert_eq!(
     actions(&db, &scope).pop().expect("it").outcome,
@@ -125,7 +138,15 @@ fn chat_continue_is_a_proposal_the_person_dismisses_or_applies() {
   );
   let unchanged = db.run(run.id()).expect("read").expect("the run");
   assert_eq!(unchanged.status(), run.status(), "a dismissal changes nothing");
+}
 
+#[test]
+fn chat_continue_return_is_refused_once_the_run_went_on() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let (_, mut run) = task_run(&db, STUCK);
+  let number = run.number().get().to_string();
+  let scope = chat(&served, &mut db);
   let target = run
     .return_targets()
     .into_iter()
@@ -137,7 +158,7 @@ fn chat_continue_is_a_proposal_the_person_dismisses_or_applies() {
   });
   chat_call(&mut served, &scope, "continue_run", back).expect("proposed");
   let Some(Change::Continue {
-    choice: ContinueChoice::ReturnTo { step, note, .. },
+    choice: ContinueChoice::ReturnTo { step, to, note },
     ..
   }) = actions(&db, &scope)
     .pop()
@@ -148,6 +169,10 @@ fn chat_continue_is_a_proposal_the_person_dismisses_or_applies() {
   assert_eq!(
     (step.as_str(), note.as_str()),
     (target.as_str(), "Keep the ETag per URL.")
+  );
+  assert!(
+    to.is_some_and(|to| to.place > 0),
+    "the step it returns to, as people read it"
   );
   // The person retries on the task's page before applying the chat's proposal: the run went on since.
   let events = run
@@ -192,6 +217,10 @@ fn chat_continue_applied_goes_on_through_continue_run() {
     panic!("refused without a runner");
   };
   assert!(code.starts_with("runner"), "{code}");
+  assert_ne!(
+    code, "automation_not_allowed",
+    "the person's Apply is their own decision, not automation's"
+  );
 }
 
 #[test]

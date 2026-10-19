@@ -6,8 +6,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::wait::StopReason;
 use crate::{
   id::{ResourceId, RunId},
+  resource::StepKey,
+  run::Run,
   time::Timestamp,
 };
 
@@ -62,15 +65,36 @@ pub enum Change {
     now: bool,
   },
   /// Continue run `run`, `#number`, which stopped in its attempt `attempt` and waits for a person's decision, at the
-  /// step named `step` when it is known, with `choice`, as `continue_run` continues it.
+  /// step `step` for `why` when they are known, with `choice`, as `continue_run` continues it.
   Continue {
     run: RunId,
     number: u32,
     attempt: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    step: Option<String>,
+    step: Option<StepName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    why: Option<StopReason>,
     choice: ContinueChoice,
   },
+}
+
+/// A step of a run's pipeline as people read it: its place in the pipeline, from 1, and its name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StepName {
+  pub place: u32,
+  pub name: String,
+}
+
+impl StepName {
+  /// `run`'s step `key` as people read it; `None` for a step its pipeline does not list.
+  pub fn in_run(run: &Run, key: &StepKey) -> Option<Self> {
+    let steps = run.snapshot().body().steps();
+    let index = steps.iter().position(|step| step.key == *key)?;
+    Some(Self {
+      place: u32::try_from(index + 1).ok()?,
+      name: steps[index].name.as_str().to_owned(),
+    })
+  }
 }
 
 /// How a run that waits for a person's decision goes on, of what the chat may propose: raising limits or budgets,
@@ -80,8 +104,14 @@ pub enum Change {
 pub enum ContinueChoice {
   /// One more retry of the stopped step (or, for a step that waits unverified or unchanged, that step again).
   AllowRetry,
-  /// Back to the earlier agent step `step` (its key), named `name`, with `note` for its agent.
-  ReturnTo { step: String, name: String, note: String },
+  /// Back to the earlier agent step `step` (its key), `to` as people read it while the run's pipeline lists it, with
+  /// `note` for its agent.
+  ReturnTo {
+    step: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    to: Option<StepName>,
+    note: String,
+  },
 }
 
 impl Change {
