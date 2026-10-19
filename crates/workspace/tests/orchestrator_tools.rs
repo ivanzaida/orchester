@@ -126,10 +126,6 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       "{name}: {told}"
     );
   }
-  let release = description("release_queue");
-  for part in ["refused before it is proposed", "nothing_held", "person_only"] {
-    assert!(release.contains(part), "release_queue says {part}: {release}");
-  }
   assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
   let resume = description("resume_run");
   for part in ["resumes only a run a pause stopped", "interrupted", "person_only"] {
@@ -168,6 +164,18 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
         kind.tool()
       );
     }
+  }
+}
+
+#[test]
+fn orchestrator_tools_say_which_releases_are_refused_before_they_are_proposed() {
+  let release = listed()
+    .into_iter()
+    .find(|tool| tool.name == "release_queue")
+    .and_then(|tool| tool.description.map(|told| told.into_owned()))
+    .expect("release_queue is listed with a description");
+  for part in ["refused before it is proposed", "nothing_held", "person_only"] {
+    assert!(release.contains(part), "release_queue says {part}: {release}");
   }
 }
 

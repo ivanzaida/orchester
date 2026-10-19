@@ -158,7 +158,10 @@ fn chat_release_applied_once_nothing_or_a_person_holds_is_refused() {
     .expect("released");
   assert_eq!(
     apply_refused(&mut served, &db, &scope),
-    ("nothing_held".to_owned(), "orchestrator.proposal.releaseNothing".to_owned()),
+    (
+      "nothing_held".to_owned(),
+      "orchestrator.proposal.releaseNothing".to_owned()
+    ),
     "no release shown that did not happen"
   );
   hold(&mut db, HoldActor::Automation);
@@ -206,10 +209,7 @@ fn chat_hold_or_release_that_changes_nothing_is_refused() {
   assert_eq!(refusal(&again), "already_held");
   assert_eq!(
     newest_refusal(&db, &scope),
-    (
-      "already_held".to_owned(),
-      "orchestrator.tools.holdAlready".to_owned()
-    ),
+    ("already_held".to_owned(), "orchestrator.tools.holdAlready".to_owned()),
     "no hold shown that did not happen"
   );
   chat_call(&mut served, &scope, "release_queue", project()).expect("released");
@@ -269,11 +269,17 @@ fn chat_release_of_a_group_is_proposed_only_for_what_automation_held() {
   hold_group(&mut db, group, HoldActor::Automation);
   let told = chat_call(&mut served, &scope, "release_queue", release()).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
-  assert!(db.queue_holds().expect("holds").groups.contains(&group), "nothing released yet");
+  assert!(
+    db.queue_holds().expect("holds").groups.contains(&group),
+    "nothing released yet"
+  );
   let seq = db.chat_entries(scope.chat).expect("entries").last().expect("it").seq;
   super::orchestrator_continue::decide(&mut served, &scope, seq, Decision::Accept { widens: Vec::new() })
     .expect("decided");
-  assert_eq!(actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Applied);
+  assert_eq!(
+    actions(&db, &scope).pop().expect("kept").outcome,
+    ActionOutcome::Applied
+  );
   assert!(!db.queue_holds().expect("holds").groups.contains(&group), "released");
   // A person's hold on the group is theirs to release, whoever asks.
   hold_group(&mut db, group, HoldActor::Person);
@@ -281,7 +287,10 @@ fn chat_release_of_a_group_is_proposed_only_for_what_automation_held() {
     let person = chat_call(&mut served, scope, "release_queue", release()).expect_err("a person's hold");
     assert_eq!(refusal(&person), "person_only");
   }
-  assert!(db.queue_holds().expect("holds").groups.contains(&group), "the person's hold stays");
+  assert!(
+    db.queue_holds().expect("holds").groups.contains(&group),
+    "the person's hold stays"
+  );
 }
 
 #[test]
