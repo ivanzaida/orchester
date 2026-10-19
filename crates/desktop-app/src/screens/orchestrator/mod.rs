@@ -3,8 +3,9 @@
 //! an agent CLI the project's runner starts read-only in the project folder, which acts through Orchester's domain
 //! tools with the same checks as the app (`orchester_workspace::orchestrator`). The screen shows the conversation the
 //! route names, the latest one by default, or a new one (`start`); its header (`header`), the turns (`timeline`),
-//! the composer (`composer`) and History beside them (`history`). Sending keeps the draft until its message is kept,
-//! and a failed send keeps it with *Retry*, which sends the same message once.
+//! the composer (`composer`) and History beside them (`history`). Each conversation's draft is kept for as long as
+//! the app runs (`draft`). Sending keeps the draft until its message is kept, and a failed send keeps it with
+//! *Retry*, which sends the same message once.
 
 mod action;
 mod body;
@@ -12,6 +13,7 @@ mod card;
 mod change;
 mod composer;
 mod data;
+mod draft;
 mod header;
 mod held;
 mod history;
@@ -37,13 +39,14 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  id::{ChatId, ChatMessageId},
+  id::{ChatId, ChatMessageId, ProjectId},
   time::Timestamp,
 };
 use orchester_workspace::{display, orchestrator::send::Outgoing};
 
 use self::{
   data::Shown,
+  draft::Conversation,
   header::{Head, Named},
   send::{SendAction, Sending, Sent, StopAction},
 };
@@ -76,12 +79,23 @@ struct Props {
 
 impl DevtoolsInspectable for Props {}
 
+/// The message a draft was last sent as, and whose draft it was.
+#[derive(Clone)]
+struct Drafted {
+  from: Conversation,
+  outgoing: Outgoing,
+}
+
+impl DevtoolsInspectable for Drafted {}
+
 /// What the screen keeps while it is shown.
 #[derive(Clone)]
 struct View {
   draft: Signal<String>,
+  /// Whose draft `draft` holds; `None` until the screen knows which conversation it shows.
+  of: Signal<Option<Conversation>>,
   /// The message the draft was last sent as, so sending it again keeps it once.
-  outgoing: Signal<Option<Outgoing>>,
+  outgoing: Signal<Option<Drafted>>,
   history: Signal<bool>,
   search: Signal<String>,
   /// Set to put the focus in the message field.
@@ -105,6 +119,7 @@ impl Component for OrchestratorScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let view = View {
       draft: ctx.signal(String::new()),
+      of: ctx.signal(None),
       outgoing: ctx.signal(None),
       history: ctx.signal(false),
       search: ctx.signal(String::new()),
@@ -116,33 +131,29 @@ impl Component for OrchestratorScreen {
       links: chat::links(ctx),
     };
     let project = ctx.props::<Props>().project.open.project.id();
+    let of = view.of.clone();
+    ctx.watch(&view.draft, move |text| {
+      if let Some(of) = of.get_untracked() {
+        draft::set(project, of, text);
+      }
+    });
     let navigation = Navigation::of(ctx);
-    let (draft, outgoing) = (view.draft.clone(), view.outgoing.clone());
+    let done = view.clone();
     ctx.watch(&view.send.state(), move |state| {
       if !state.is_fulfilled() {
         return;
       }
-      let Some(Sent {
-        chat,
-        message,
-        from_draft,
-      }) = state.data
-      else {
+      let Some(sent) = state.data else {
         return;
       };
-      // The draft is done with only while it still is the message sent: what the person wrote since stays.
-      let sent = outgoing.get_untracked();
-      let unchanged = sent.is_some_and(|sent| sent.message == message && sent.text == draft.get_untracked());
-      if from_draft && unchanged {
-        draft.set(String::new());
-        outgoing.set(None);
-      }
       // A new conversation is kept now: the route names it, so History and a reload find it.
       let new = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::New));
-      if navigation.route_now() == new {
+      let started = navigation.route_now() == new;
+      done.sent(project, sent, started);
+      if started {
         navigation.replace(Route::Project(
           project,
-          ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)),
+          ProjectPage::Orchestrator(OrchestratorChat::Chat(sent.chat)),
         ));
       }
     });
@@ -157,6 +168,10 @@ impl Component for OrchestratorScreen {
       view.focus.set(false);
     }
     let reads = data::read(ctx, &props.project.open.repo_root, props.chat);
+    // Until History says which conversation is the latest, the screen shows none.
+    if reads.target.is_some() || reads.shown != Shown::Loading {
+      view.hold_draft_of(props.project.open.project.id(), reads.target.into());
+    }
     let readiness = reads.setup.ready().map(|setup| setup.readiness());
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat),
@@ -214,24 +229,67 @@ impl Component for OrchestratorScreen {
 }
 
 impl View {
+  /// The composer holds the draft of `of` in `project`, as it was when that conversation was last shown.
+  fn hold_draft_of(&self, project: ProjectId, of: Conversation) {
+    if self.of.get_untracked() != Some(of) {
+      self.load_draft(project, of);
+    }
+  }
+
+  fn load_draft(&self, project: ProjectId, of: Conversation) {
+    self.of.set(Some(of));
+    let kept = draft::draft(project, of);
+    if self.draft.get_untracked() != kept {
+      self.draft.set(kept);
+    }
+  }
+
+  /// `sent` was kept. Its draft empties while it still is the message sent: what the person wrote since stays, and
+  /// goes with the conversation a new one's first message `started`.
+  fn sent(&self, project: ProjectId, sent: Sent, started: bool) {
+    let drafted = self
+      .outgoing
+      .get_untracked()
+      .filter(|drafted| sent.from_draft && drafted.outgoing.message == sent.message);
+    let Some(Drafted { from, outgoing }) = drafted else {
+      return;
+    };
+    if draft::sent(project, from, &outgoing.text) {
+      self.outgoing.set(None);
+    }
+    let of = if started && from == Conversation::New {
+      draft::started(project, sent.chat);
+      Conversation::Chat(sent.chat)
+    } else {
+      from
+    };
+    if self.of.get_untracked() == Some(from) {
+      self.load_draft(project, of);
+    }
+  }
+
   /// Sends the draft, as the message it was last sent as when its words did not change since, to conversation
   /// `chat` (a new one when `None`).
   fn send_draft(&self, project: &ShownProject, chat: Option<ChatId>) -> Arc<dyn Fn() + Send + Sync> {
     let (view, project) = (self.clone(), project.open.clone());
+    let from = Conversation::from(chat);
     Arc::new(move || {
       let text = view.draft.get_untracked();
       if text.trim().is_empty() || view.send.state().get_untracked().is_pending() {
         return;
       }
       let outgoing = match view.outgoing.get_untracked() {
-        Some(kept) if kept.text == text && chat.is_none_or(|chat| kept.chat == chat) => kept,
+        Some(kept) if kept.from == from && kept.outgoing.text == text => kept.outgoing,
         _ => Outgoing {
           chat: chat.unwrap_or_else(ChatId::generate),
           message: ChatMessageId::generate(),
           text,
         },
       };
-      view.outgoing.set(Some(outgoing.clone()));
+      view.outgoing.set(Some(Drafted {
+        from,
+        outgoing: outgoing.clone(),
+      }));
       view.send.run(Sending {
         project: project.clone(),
         outgoing,
