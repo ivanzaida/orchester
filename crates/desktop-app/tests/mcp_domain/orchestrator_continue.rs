@@ -37,7 +37,7 @@ use super::{
 const STUCK: &str = "Cache GitHub API responses";
 
 /// Takes the person's `decision` on the action `seq` of `scope`'s conversation, as the window takes it.
-fn decide(served: &mut Served, scope: &ChatScope, seq: i64, decision: Decision) -> Result<(), Message> {
+pub(super) fn decide(served: &mut Served, scope: &ChatScope, seq: i64, decision: Decision) -> Result<(), Message> {
   let s = served.services();
   let services = app_mcp::Services::new(
     s.workspace.clone(),

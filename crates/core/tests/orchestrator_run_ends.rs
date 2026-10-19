@@ -88,6 +88,7 @@ fn messaged(run: RunId) -> EntryKind {
         text: "Keep the old export.".to_owned(),
         now: false,
         then: None,
+        sent_as: None,
       },
     })),
     ..ChatAction::new("send_message", Some("KON-12".to_owned()), ActionOutcome::Done)
@@ -187,6 +188,7 @@ fn moved(run: RunId, then: MessageThen) -> EntryKind {
         text: "Use the cached export.".to_owned(),
         now: false,
         then: Some(then),
+        sent_as: None,
       },
     })),
     ..ChatAction::new("send_message", Some("KON-12".to_owned()), ActionOutcome::Applied)
@@ -202,16 +204,27 @@ fn orchestrator_run_that_succeeded_after_the_chats_move_is_its_own() {
     "the chat's follow-up led to it: no turn, or the chat would follow it up again"
   );
   let next = RunId::generate();
+  let again = |started: Option<RunId>| {
+    let EntryKind::Action(action) = moved(run, MessageThen::RunAgain) else {
+      unreachable!("moved keeps an action")
+    };
+    entry(1, EntryKind::Action(ChatAction { started, ..action }))
+  };
   for end in [RunEnd::Succeeded, RunEnd::Failed] {
     assert!(
-      raised_by_own(&[entry(1, moved(run, MessageThen::RunAgain))], &ended(next, end)),
-      "{end:?}: the chat's message ran the task again, and its next run ended"
+      raised_by_own(&[again(Some(next))], &ended(next, end)),
+      "{end:?}: the run the chat's message started ended"
     );
   }
+  let later = RunId::generate();
+  assert!(
+    !raised_by_own(&[again(Some(next))], &ended(later, RunEnd::Failed)),
+    "a later run of the task a person started gets its turn"
+  );
   let mut question = ended(next, RunEnd::Succeeded);
   question.kind = WaitKind::Question;
   assert!(
-    !raised_by_own(&[entry(1, moved(run, MessageThen::RunAgain))], &question),
+    !raised_by_own(&[again(Some(next))], &question),
     "an agent of the next run that asks is not the chat's doing"
   );
 }
@@ -268,8 +281,19 @@ fn orchestrator_run_end_prompt_says_what_to_do_with_each_end() {
   ] {
     assert!(stopped.contains(part), "{part} in {stopped}");
   }
+  let failed = wait_prompt(&ended(run, RunEnd::Failed));
+  for part in [
+    "failed at the step Review",
+    "propose it with continue_run (return_to): the person applies it",
+    "Running the task again is the person's",
+  ] {
+    assert!(failed.contains(part), "{part} in {failed}");
+  }
+  assert!(
+    !failed.contains("allow_retry") && !failed.contains("merge_run"),
+    "{failed}"
+  );
   for (end, says) in [
-    (RunEnd::Failed, "failed at the step Review"),
     (
       RunEnd::Limit {
         limit: RunLimit::DailyBudget,
@@ -315,7 +339,7 @@ fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
   for rule in [
     "how a stopped run continues",
     "continue_run proposes how a run that waits for a decision goes on: allow_retry",
-    "return_to (an earlier agent step, with a note for its agent)",
+    "return_to (an earlier agent step, with a note for its agent; also for a run that ended",
     "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's",
     "In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
      propose",

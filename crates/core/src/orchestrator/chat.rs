@@ -197,7 +197,7 @@ pub struct ChatAction {
   /// chat itself: its card reads its facts from it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub change: Option<Box<ProposedChange>>,
-  /// The run a start the chat took itself started.
+  /// The run a start the chat took itself started, or that its message that ran the task again started.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub started: Option<RunId>,
   /// The run a resume the chat did itself resumed.

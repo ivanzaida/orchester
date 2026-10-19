@@ -4,7 +4,7 @@
 //! proposal.
 
 use orchester_core::{
-  id::ChatId,
+  id::{ChatId, RunId},
   orchestrator::{ActionOutcome, ChatAction},
   time::Timestamp,
 };
@@ -84,6 +84,23 @@ impl ProjectDb {
         outcome,
         settled: Some(at),
         claimed: None,
+        ..found
+      },
+    )
+  }
+
+  /// Keeps on the settled action `seq` of `chat` the run that carrying it out started (a message that ran its task
+  /// again); the action as it was, or `None` when it is not settled.
+  pub fn keep_chat_action_start(
+    &mut self,
+    (chat, seq): (ChatId, i64),
+    run: RunId,
+  ) -> Result<Option<ChatAction>, StoreError> {
+    self.replace_chat_action(
+      (chat, seq),
+      |found| found.settled.is_some(),
+      |found| ChatAction {
+        started: Some(run),
         ..found
       },
     )

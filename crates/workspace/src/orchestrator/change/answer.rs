@@ -16,7 +16,9 @@ use serde_json::{Value, json};
 
 use super::run_subject;
 use crate::{
-  app_mcp::{ToolError, check_answer, find_run, outgoing_refusal, plan_person_only, waiting_request},
+  app_mcp::{
+    SendTiming, ToolError, check_answer, find_run, outgoing_refusal, plan_person_only, sent_as, waiting_request,
+  },
   messages::Message,
   tasks::conversation::{
     composer::ComposerMode,
@@ -113,6 +115,10 @@ pub(super) fn message_change(root: &Path, sending: Sending) -> Result<(ProposedC
     }
     ref mode => moves(mode),
   };
+  let sent_as = sent_as(
+    &prepared.mode,
+    Some(if now { SendTiming::Now } else { SendTiming::AfterTurn }),
+  );
   let (subject, task) = run_subject(&db, &run)?;
   let change = Change::Message {
     run: run.id(),
@@ -120,6 +126,7 @@ pub(super) fn message_change(root: &Path, sending: Sending) -> Result<(ProposedC
     text: text.into(),
     now,
     then,
+    sent_as: Some(sent_as.to_owned()),
   };
   Ok((ProposedChange { subject, change }, task))
 }

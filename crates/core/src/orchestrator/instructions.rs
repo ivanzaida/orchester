@@ -55,8 +55,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      - hold_queue holds new starts (the whole project, or with a task its reviewed group) and release_queue lets \
      them go on; running runs go on either way.\n\
      - continue_run proposes how a run that waits for a decision goes on: allow_retry (one more retry of its \
-     stopped step) or return_to (an earlier agent step, with a note for its agent). The person applies or dismisses \
-     it. Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them \
+     stopped step) or return_to (an earlier agent step, with a note for its agent; also for a run that ended, where \
+     continue_run offers it). The person applies or dismisses it. Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them \
      to do it on the task's Summary.\n\
      \n\
      Agents that wait:\n\
@@ -112,8 +112,8 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
 
 /// The prompt of the Orchestrator turn the end of `wait`'s run (`end`) started by itself: how it ended and what to do.
 /// A run that succeeded is told to the person, and its merge only proposed (a turn nobody asked for proposes every
-/// merge); a run that waits for a decision is read and explained, and its retry or return may be proposed; any other
-/// end is read and explained with the choices the person has, which are the person's.
+/// merge); a run that waits for a decision, or failed, is read and explained, and its retry or return may be
+/// proposed; any other end is read and explained with the choices the person has, which are the person's.
 fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   let at = wait
     .step
@@ -161,11 +161,16 @@ const fn end_todo(end: RunEnd) -> &'static str {
        you may propose it with continue_run (allow_retry or return_to): the person applies it. Accepting the step \
        as it is stays the person's. Start, resume, cancel or merge nothing."
     }
-    RunEnd::Failed | RunEnd::Limit { .. } | RunEnd::Interrupted => {
+    RunEnd::Failed => {
+      "Read the run first (get_run, get_conversation). Tell the person what happened and the choices they have, with \
+       the link. When returning the work to an earlier agent step with a note for its agent plainly helps, you may \
+       propose it with continue_run (return_to): the person applies it. Running the task again is the person's. \
+       Start, resume, cancel or merge nothing."
+    }
+    RunEnd::Limit { .. } | RunEnd::Interrupted => {
       "Read the run first (get_run, get_conversation). Tell the person what happened and the choices they have on the \
-       task's Summary, with the link: raising a limit or a budget, resuming, continuing or running the task again \
-       are the person's, and continue_run offers you nothing for this run. Start, resume, cancel, continue or merge \
-       nothing."
+       task's Summary, with the link: raising a limit or a budget, resuming or continuing are the person's, and \
+       continue_run offers you nothing for this run. Start, resume, cancel, continue or merge nothing."
     }
   }
 }

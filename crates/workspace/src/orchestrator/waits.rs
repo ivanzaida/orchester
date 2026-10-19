@@ -16,7 +16,7 @@ use std::{collections::HashSet, path::Path};
 
 use orchester_core::{
   conversation::{Message as TaskMessage, Sender},
-  id::{ChatId, ChatMessageId, ProjectId, RunId, StepExecutionId},
+  id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
   orchestrator::{
     AgentWait, Chat, ChatEntry, WaitKind,
     wait::{dealt_with, raised_by_own},
@@ -30,7 +30,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::{KeptWait, ProjectDb, StoreError};
 
-pub use super::run_ends::MergeChecks;
+pub use super::run_ends::{MergeChecks, SucceededAt};
 use super::{
   run_ends::{Reading, current_ends, merge_checks},
   settings::OrchestratorSetup,
@@ -86,7 +86,10 @@ pub fn follow_in(
 /// Orchester did not merge, and that the conversations do not settle yet, but those known `quiet` (merged outside
 /// Orchester, or with nothing to merge): for [`follow_in`], asked before it, outside the follower's lock. Blocks on
 /// SQLite and git.
-pub fn check_merges_in((root, programs): (&Path, &Programs), quiet: &HashSet<RunId>) -> Result<MergeChecks, Message> {
+pub fn check_merges_in(
+  (root, programs): (&Path, &Programs),
+  quiet: &HashSet<SucceededAt>,
+) -> Result<MergeChecks, Message> {
   let checked = || {
     let db = ProjectDb::open(root)?;
     let (kept, pending) = settled(&db)?;

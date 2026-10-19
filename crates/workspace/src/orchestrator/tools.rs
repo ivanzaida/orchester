@@ -187,10 +187,10 @@ const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its mes
 
 /// What the agent reads first of `continue_run`.
 const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
-  retries, broke again, or waits unverified or unchanged: it checks the choice as below and proposes it to the \
-  person, who applies or dismisses it in the conversation; no switch lets you continue a run yourself. \
-  raise_limits, raise_step_budget, resume and accept are the person's and refused here (person_only). Give return_to \
-  a note that tells the agent what to do differently.";
+  retries, broke again, or waits unverified or unchanged, and return_to also for a run that ended where it offers \
+  it: it checks the choice as below and proposes it to the person, who applies or dismisses it in the \
+  conversation; no switch lets you continue a run yourself. raise_limits, raise_step_budget, resume and accept are \
+  the person's and refused here (person_only). Give return_to a note that tells the agent what to do differently.";
 
 /// What the agent reads first of `answer_question` and `send_message`.
 const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \

@@ -84,6 +84,12 @@ pub async fn decide(
     return Err(taken());
   };
   runners.chat_changed(&scope.root);
+  // A message that ran the task again keeps the run it started, which the chat's own doing then names.
+  let again = action
+    .change
+    .as_ref()
+    .filter(|change| change.change.runs_again())
+    .and_then(|change| change.change.run());
   // A start reads as done as before; a change as the person's, apart from what the chat did itself.
   let (carried, applied) = match (action.task, action.outcome, action.change) {
     (Some(task), ActionOutcome::Proposed(start), _) => (
@@ -106,14 +112,21 @@ pub async fn decide(
       ActionOutcome::Applied,
     ),
   };
-  let outcome = match carried {
-    Ok(_) => applied,
-    Err(error) => refusal(&error, translate),
+  let (outcome, again) = match carried {
+    Ok(_) => (applied, again),
+    Err(error) => (refusal(&error, translate), None),
   };
   let root = scope.root.clone();
-  background::run(move || ProjectDb::open(&root)?.finish_chat_action((chat, seq), outcome, Timestamp::now()))
-    .await?
-    .map_err(|error| store_error(&error))?;
+  background::run(move || {
+    let mut db = ProjectDb::open(&root)?;
+    db.finish_chat_action((chat, seq), outcome, Timestamp::now())?;
+    match again.map(|old| change::started_again(&db, old)).transpose()?.flatten() {
+      Some(started) => db.keep_chat_action_start((chat, seq), started).map(drop),
+      None => Ok(()),
+    }
+  })
+  .await?
+  .map_err(|error| store_error(&error))?;
   runners.chat_changed(&scope.root);
   Ok(())
 }

@@ -52,9 +52,13 @@ pub(super) struct Reading<'a> {
 /// wait to be merged.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MergeChecks {
-  pub quiet: HashSet<RunId>,
-  pub waiting: HashSet<RunId>,
+  pub quiet: HashSet<SucceededAt>,
+  pub waiting: HashSet<SucceededAt>,
 }
+
+/// A run that succeeded, by the sequence of the event it succeeded with: a run that succeeds again after a follow-up
+/// is asked about again.
+pub type SucceededAt = (RunId, u64);
 
 /// Asks git, in one reading of the branches, about the runs that succeeded since the chat follows ends, that
 /// Orchester did not merge and that `settled` does not settle, but those already known `quiet`. Blocks on SQLite and
@@ -62,29 +66,30 @@ pub struct MergeChecks {
 pub(super) fn merge_checks(
   db: &ProjectDb,
   (root, programs): (&Path, &Programs),
-  (settled, quiet): (impl Fn(&str) -> bool, &HashSet<RunId>),
+  (settled, quiet): (impl Fn(&str) -> bool, &HashSet<SucceededAt>),
 ) -> Result<MergeChecks, StoreError> {
   let mut runs = Vec::new();
   for ended in db.ended_runs_since(db.run_ends_since()?)? {
     let key = format!("end:{}:{}", ended.run, ended.sequence.get());
-    if ended.kind != "succeeded" || settled(&key) || quiet.contains(&ended.run) {
+    let at = (ended.run, ended.sequence.get());
+    if ended.kind != "succeeded" || settled(&key) || quiet.contains(&at) {
       continue;
     }
     if db.run_merge(ended.run)?.is_some() {
       continue;
     }
     if let Some(run) = db.run(ended.run).map_err(run_store_error)? {
-      runs.push(run);
+      runs.push((run, at));
     }
   }
-  let works: Vec<RunWork> = runs.iter().map(RunWork::of).collect();
+  let works: Vec<RunWork> = runs.iter().map(|(run, _)| RunWork::of(run)).collect();
   let mut checks = MergeChecks::default();
-  for (run, found) in runs.iter().zip(delivery::deliveries(programs, root, &works)) {
+  for ((_, at), found) in runs.iter().zip(delivery::deliveries(programs, root, &works)) {
     let set = match found {
       Delivery::Waiting => &mut checks.waiting,
       Delivery::MergedOutside(_) | Delivery::NothingToMerge => &mut checks.quiet,
     };
-    set.insert(run.id());
+    set.insert(*at);
   }
   Ok(checks)
 }
@@ -141,7 +146,7 @@ fn standing(db: &ProjectDb, reading: &Reading, ended: &EndedRun) -> Result<Optio
   let Some(end) = end_of(&run, &ended.kind) else {
     return Ok(None);
   };
-  if end == RunEnd::Succeeded && merged(db, reading, &run)? {
+  if end == RunEnd::Succeeded && merged(db, reading, (&run, ended))? {
     return Ok(None);
   }
   Ok(Some((run, end)))
@@ -164,14 +169,14 @@ fn end_of(run: &Run, kind: &str) -> Option<RunEnd> {
   }
 }
 
-/// Whether `run`, which succeeded, is not to be told as ready to merge: merged in Orchester, or, as git tells, merged
-/// outside it or with nothing to merge. Git is asked here only for a run the checks before did not tell.
-fn merged(db: &ProjectDb, reading: &Reading, run: &Run) -> Result<bool, StoreError> {
-  let checks = reading.checks;
-  if db.run_merge(run.id())?.is_some() || checks.quiet.contains(&run.id()) {
+/// Whether `run`, which succeeded with `ended`, is not to be told as ready to merge: merged in Orchester, or, as git
+/// tells, merged outside it or with nothing to merge. Git is asked here only for a run the checks before did not tell.
+fn merged(db: &ProjectDb, reading: &Reading, (run, ended): (&Run, &EndedRun)) -> Result<bool, StoreError> {
+  let (checks, at) = (reading.checks, (run.id(), ended.sequence.get()));
+  if db.run_merge(run.id())?.is_some() || checks.quiet.contains(&at) {
     return Ok(true);
   }
-  if checks.waiting.contains(&run.id()) {
+  if checks.waiting.contains(&at) {
     return Ok(false);
   }
   Ok(!matches!(

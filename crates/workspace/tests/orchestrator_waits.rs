@@ -244,6 +244,7 @@ fn answered_by_chat(fixture: &mut Fixture, run: &Run) -> Chat {
         text: "Use the email.".to_owned(),
         now: false,
         then: None,
+        sent_as: None,
       },
     })),
     ..ChatAction::new("send_message", Some("ORC-1".to_owned()), ActionOutcome::Done)

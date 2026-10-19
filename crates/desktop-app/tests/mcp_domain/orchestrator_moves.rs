@@ -6,13 +6,17 @@
 //! pause, a resume, a release of new starts and a publication are only proposed.
 
 use orchester_core::{
-  orchestrator::ActionOutcome,
+  orchestrator::{ActionOutcome, EntryKind},
   resource::{Draft, Pipeline, PromptText},
-  store::TaskStore,
+  run::InterruptCause,
+  store::{RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{orchestrator::tools::ChatScope, workspace::OrchestratorConsent};
+use orchester_workspace::{
+  orchestrator::{proposal::Decision, tools::ChatScope},
+  workspace::OrchestratorConsent,
+};
 use serde_json::{Value, json};
 
 use super::{
@@ -141,4 +145,62 @@ fn chat_turn_on_its_own_proposes_pausing_resuming_releasing_and_publishing() {
       "{tool}"
     );
   }
+}
+
+/// Takes the person's Apply on the newest action of `scope`'s conversation, as the window takes it.
+fn apply_newest(served: &mut Served, db: &ProjectDb, scope: &ChatScope) {
+  let seq = db
+    .chat_entries(scope.chat)
+    .expect("entries")
+    .into_iter()
+    .rev()
+    .find(|entry| matches!(entry.kind, EntryKind::Action(_)))
+    .expect("an action")
+    .seq;
+  super::orchestrator_continue::decide(served, scope, seq, Decision::Accept { widens: Vec::new() }).expect("decided");
+}
+
+/// The code of the newest action's refusal.
+fn refused_with(db: &ProjectDb, scope: &ChatScope) -> String {
+  match actions(db, scope).pop().expect("kept").outcome {
+    ActionOutcome::Refused { code, .. } => code,
+    other => panic!("refused, not {other:?}"),
+  }
+}
+
+#[test]
+fn chat_message_applied_after_its_run_moved_on_is_refused() {
+  let (mut served, seeded, mut db, scope) = switched_on();
+  let (_, mut run) = task_run(&db, &titled(&seeded, "interrupted"));
+  let told = chat_call(&mut served, &scope, "send_message", message(&run.id().to_string())).expect("proposed");
+  assert_eq!(told["proposed"]["message"]["then"], "continue_interrupted", "{told}");
+  // The person cancels the run on its page: the message would now run the task again.
+  let events = run.cancel(Timestamp::now()).expect("cancelled");
+  db.append_events(&run, &events).expect("recorded");
+  apply_newest(&mut served, &db, &scope);
+  assert_eq!(refused_with(&db, &scope), "changed_since_proposed");
+}
+
+#[test]
+fn chat_resume_applied_after_its_run_was_interrupted_is_refused() {
+  let (mut served, seeded, mut db, scope) = switched_on();
+  let own = ChatScope {
+    on_its_own: true,
+    ..scope
+  };
+  // A run the chat would resume once its pause settles; it is at work still.
+  let (_, mut run) = task_run(&db, &titled(&seeded, "running"));
+  let resume = json!({ "project": "Kontur", "run": run.id().to_string() });
+  chat_call(&mut served, &own, "resume_run", resume).expect("proposed");
+  // The app ends without closing: the run is interrupted before the person applies the resume.
+  let events = run
+    .interrupt(InterruptCause::Crashed, Timestamp::now())
+    .expect("interrupted");
+  db.append_events(&run, &events).expect("recorded");
+  apply_newest(&mut served, &db, &own);
+  assert_eq!(
+    refused_with(&db, &own),
+    "person_only",
+    "an interrupted run is not resumed"
+  );
 }

@@ -72,7 +72,7 @@ pub enum SendTiming {
 pub async fn send_message(
   services: &Services,
   args: SendMessage,
-  (translate, by): (&Translate, SentBy),
+  (translate, by, expected): (&Translate, SentBy, Option<&str>),
 ) -> Result<Value, ToolError> {
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
@@ -108,11 +108,22 @@ pub async fn send_message(
     return reply(&project, run, ("request_plan_changes", Sent::Taken), translate).await;
   }
   let key = IdempotencyKey::generate();
-  let way = match (&prepared.mode, args.timing) {
-    (ComposerMode::Steer(working), Some(SendTiming::Now)) if working.mid_turn => Way::Primary,
-    (ComposerMode::Steer(working), _) if working.mid_turn => Way::Second,
-    _ => Way::Primary,
-  };
+  let way = way_of(&prepared.mode, args.timing);
+  // The Orchestrator's message goes only as it was checked or proposed: one whose run moved on since is refused.
+  if let Some(expected) = expected
+    && action(&prepared.mode, way) != expected
+  {
+    let number = prepared
+      .detail
+      .run
+      .as_ref()
+      .map(|view| view.run.number().get().to_string())
+      .unwrap_or_default();
+    return Err(ToolError::refused(
+      "changed_since_proposed",
+      vec![Message::new("orchestrator.proposal.messageChanged").with("run", number)],
+    ));
+  }
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then) = blocking(move || {
     let stored = match by {
@@ -159,6 +170,22 @@ pub fn refusal(error: OutgoingError) -> ToolError {
       ToolError::refused("not_sent", vec![reason])
     }
   }
+}
+
+/// How a message sent with `timing` in `mode` goes: as the composer's first way, or after the turn of an agent that
+/// takes messages mid-turn.
+fn way_of(mode: &ComposerMode, timing: Option<SendTiming>) -> Way {
+  match (mode, timing) {
+    (ComposerMode::Steer(working), Some(SendTiming::Now)) if working.mid_turn => Way::Primary,
+    (ComposerMode::Steer(working), _) if working.mid_turn => Way::Second,
+    _ => Way::Primary,
+  }
+}
+
+/// What a message sent with `timing` in `mode` does, as the result names it ([`action`]): what the Orchestrator's
+/// message is checked or proposed as, and sent only as.
+pub(crate) fn sent_as(mode: &ComposerMode, timing: Option<SendTiming>) -> &'static str {
+  action(mode, way_of(mode, timing))
 }
 
 /// What the composer's action is in the run's state, as the result names it.

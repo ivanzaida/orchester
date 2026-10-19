@@ -377,7 +377,7 @@ fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() 
   let mut run = working(&mut fixture, "Nothing to merge");
   fixture.succeed(&mut run, Timestamp::now());
   let checks = MergeChecks {
-    quiet: HashSet::from([run.id()]),
+    quiet: HashSet::from([(run.id(), run.last_sequence().get())]),
     waiting: HashSet::new(),
   };
   let followed = follow_in(

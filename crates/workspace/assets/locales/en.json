@@ -1663,6 +1663,9 @@
       "taken": "This proposal was already decided, here or in another tab: nothing more was done.",
       "noCheckpoint": "Run #{{run}} has no checkpoint: none of its work is committed, so there is nothing to merge.",
       "runChanged": "Run #{{run}} has newer work than when its merge was proposed: it is not what you were asked to merge. Nothing was merged; ask the Orchestrator to propose it again.",
+      "messageChanged": "Run #{{run}} changed since this was proposed: sending would no longer do what this card says. Nothing was sent; ask the Orchestrator to propose it again.",
+      "resumeStopped": "Run #{{run}} stopped at a limit or was interrupted since this was proposed: resuming it is yours, on the task's Summary. Nothing was changed.",
+      "pauseEnded": "Run #{{run}} ended since this was proposed: there is nothing to pause. Nothing was changed.",
       "runMovedOn": "Run #{{run}} went on since this was proposed: it no longer waits for this decision. Nothing was changed; ask the Orchestrator to propose it again."
     },
     "start": {

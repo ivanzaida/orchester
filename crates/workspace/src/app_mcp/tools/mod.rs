@@ -43,7 +43,7 @@ pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
 pub(crate) use self::{
   continue_run::{Choice as ContinueChoice, ContinueRun, offered as continue_offered},
-  messages::{plan_person_only, refusal as outgoing_refusal},
+  messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
   pipeline_copy::duplicate_pipeline_draft,
   questions::{check_answer, waiting_request},
   tasks::find_task,
@@ -357,7 +357,7 @@ async fn dispatch(
     "cancel_run" => runs::control_run(services, parse(arguments)?, Control::Cancel).await,
     "return_to_draft" => return_to_draft::return_to_draft(services, parse(arguments)?).await,
     "continue_run" => continue_run::continue_run(services, parse(arguments)?).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Client)).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, SentBy::Client, None)).await,
     "remove_worktree" => worktree::remove_worktree(services, parse(arguments)?, translate).await,
     "list_pipelines" => projects::list_pipelines(services, parse(arguments)?, translate).await,
     "get_usage" => usage::get_usage(services, parse(arguments)?).await,
@@ -401,7 +401,7 @@ pub async fn answer_for_orchestrator(
   translate: &Translate,
   name: &str,
   arguments: JsonObject,
-  by: orchester_core::run::Answerer,
+  (by, expected): (orchester_core::run::Answerer, Option<&str>),
 ) -> Result<Value, ToolError> {
   let arguments = Value::Object(arguments);
   let by = match by {
@@ -410,7 +410,7 @@ pub async fn answer_for_orchestrator(
   };
   match name {
     "answer_question" => questions::answer_question(services, parse(arguments)?, by).await,
-    "send_message" => messages::send_message(services, parse(arguments)?, (translate, by)).await,
+    "send_message" => messages::send_message(services, parse(arguments)?, (translate, by, expected)).await,
     other => Err(ToolError::InvalidArguments(format!("{other} answers no agent"))),
   }
 }

@@ -55,22 +55,38 @@ pub(super) fn control_change(
   let change = if name == PAUSE_RUN {
     Change::Pause { run: id, number }
   } else {
-    resumable(&run)?;
+    resumable(&run, RESUME_PERSON_ONLY)?;
     Change::Resume { run: id, number }
   };
   Ok((ProposedChange { subject, change }, task))
 }
 
 /// Refused unless `run` is one the chat resumes: a pause stopped it. One stopped at a limit or interrupted is the
-/// person's (`person_only`).
-pub(in crate::orchestrator) fn resumable(run: &Run) -> Result<(), ToolError> {
+/// person's (`person_only`), as `refusal` (a [`Message`] key with the run's number) tells.
+pub(in crate::orchestrator) fn resumable(run: &Run, refusal: &'static str) -> Result<(), ToolError> {
   match run.status() {
     RunStatus::Paused(PauseReason::LimitReached(_)) | RunStatus::Interrupted(_) => Err(ToolError::refused(
       "person_only",
-      vec![Message::new("orchestrator.tools.resumePersonOnly").with("run", run.number().get().to_string())],
+      vec![Message::new(refusal).with("run", run.number().get().to_string())],
     )),
     _ => Ok(()),
   }
+}
+
+/// Why the chat's call refuses a resume, told to its agent.
+pub(in crate::orchestrator) const RESUME_PERSON_ONLY: &str = "orchestrator.tools.resumePersonOnly";
+/// Why a proposed resume the person applies is refused: the run stopped otherwise since.
+pub(super) const RESUME_STOPPED: &str = "orchestrator.proposal.resumeStopped";
+
+/// Refused when `run` ended since a pause of it was proposed: there is nothing to pause.
+pub(super) fn pausable(run: &Run) -> Result<(), ToolError> {
+  if !run.status().is_terminal() {
+    return Ok(());
+  }
+  Err(ToolError::refused(
+    "run_ended",
+    vec![Message::new("orchestrator.proposal.pauseEnded").with("run", run.number().get().to_string())],
+  ))
 }
 
 /// `release_queue` and its arguments: new starts go on in project `project`, in the reviewed group of task `task` when

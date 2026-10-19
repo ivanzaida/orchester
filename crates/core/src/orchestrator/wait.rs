@@ -147,25 +147,21 @@ pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
 }
 
 /// Whether `wait` follows from `action`, carried out: an answer, a message, a decision on how the run continues or a
-/// resume of its run; for a run's end also the chat's start of the run, or its message that ran the task again. A run
-/// that succeeded follows only from a message of the chat's that moved the run (a follow-up, a continuation, a resume)
-/// or ran the task again: its turn only tells the person and proposes, so nothing else of the chat's makes it loop.
+/// resume of its run; for a run's end also the chat's start of the run (`started`: its own start, or the run its
+/// message that ran the task again started). A run that succeeded follows only from a message of the chat's that
+/// moved the run (a follow-up, a continuation, a resume) or from its message that ran the task again: its turn only
+/// tells the person and proposes, so nothing else of the chat's makes it loop.
 fn own_doing(action: &ChatAction, wait: &AgentWait) -> bool {
   let end = wait.kind.run_end();
   let change = action.change.as_ref().map(|change| &change.change);
   let on_run = change.is_some_and(|change| change.run() == Some(wait.run));
-  let again = end.is_some()
-    && change.is_some_and(Change::runs_again)
-    && action
-      .task
-      .as_deref()
-      .is_some_and(|task| task.eq_ignore_ascii_case(&wait.task));
+  let started = end.is_some() && action.started == Some(wait.run);
   if end == Some(RunEnd::Succeeded) {
+    let again = started && change.is_some_and(Change::runs_again);
     return again || (on_run && change.is_some_and(Change::moves_run));
   }
   let carried = on_run && change.is_some_and(Change::carries_run_on);
-  let started = end.is_some() && action.started == Some(wait.run);
-  carried || again || started || action.resumed == Some(wait.run)
+  carried || started || action.resumed == Some(wait.run)
 }
 
 const fn is_zero(count: &u32) -> bool {

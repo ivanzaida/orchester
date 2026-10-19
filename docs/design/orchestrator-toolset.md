@@ -62,17 +62,21 @@ person can click.
      itself: none of the person's switches was given for it (*answer agents* is about what agents asked, *merge runs*
      about merging), and a retry spends more of the budget and overrides the retries the pipeline allows, which the
      pipeline left to a person. `raise_limits`, `raise_step_budget`, `resume` and `accept` stay the person's and are
-     refused (`person_only`). Continuing a run that ended (`return_to` after a failure, ORC-44) is another branch's
-     work and not offered here.
+     refused (`person_only`). Where `continue_run` returns a run that ended (succeeded or failed) to an earlier agent
+     step (ORC-44), the chat may propose that `return_to` too, under the same rules; a turn a failure started may
+     propose it.
    - The chat resumes only a run a pause stopped (`resume_run`). A run stopped at a limit (its token budget or time
      limit, the daily or a group's budget, a step's budget, an account's plan limit) or interrupted is the person's to
-     resume or continue, and the chat's call is refused (`person_only`).
+     resume or continue, and the chat's call is refused (`person_only`). A proposed resume the person applies is
+     checked again: a run that stopped at a limit or was interrupted since is refused, not resumed.
    - A message (`send_message`) reaches an agent that waits for an answer or works, or waits for one, as the task's
      composer sends it, and goes directly under *Let the Orchestrator answer agents*. A message to a run none of
      whose agents waits or works moves the run: it follows a run ready for review up, continues a failed run or one
      that waits for a decision, resumes a paused one, continues an interrupted one, waits for a raised limit, or runs
      an ended task again. Moving a run is the person's: such a message is always a proposal card the person applies,
-     naming what sending it does, whatever the switch says.
+     naming what sending it does, whatever the switch says. A message keeps what sending it did when it was checked
+     (the composer's action, `send_message`'s `action`); sent directly or applied, it goes only as that, and is refused
+     (`changed_since_proposed`) once the run's state would make it do something else.
    - The chat follows the ends of its project's runs as it follows the agents' waits: when a task's latest run
      succeeds (ready to merge), fails, stops for a decision (a step used up its retries, broke again, or waits
      unverified or unchanged), stops at a limit (its token budget or time limit, the daily or a group's budget, a
@@ -99,12 +103,16 @@ person can click.
      `pause_run`, `resume_run` (of a run a pause stopped), `release_queue` and every publication only propose,
      whatever *Let the Orchestrator merge runs*, *publish drafts* and auto mode say; the person applies the card. This
      holds by the tools (the turn's tools know the turn started by itself), not by the prompt. Answering an agent's
-     question and a message to an agent that waits or works stay direct under *answer agents*.
+     question and a message to an agent that waits or works stay direct under *answer agents*. Not covered:
+     `create_task` and `update_task` still save a task's details directly in such a turn, budgets and time limits of
+     its future runs among them; they reach no run until a start, which is proposed.
    - No turn starts for a wait or an end the chat's own doing led to (`raised_by_own`), so the chat never takes up its
      own doing in a loop: the newest entry about the run, before a wait of the run, is its answer, message,
      continuation or resume of the run (applied or done itself, the resume matched by run); for an end, also its own
-     start of the run or its message that ran the task again. A run that succeeded is the chat's own only when its
-     message moved the run (a follow-up, a continuation, a resume) or ran the task again; an answer or a continuation
+     start of the run, or the run its message that ran the task again started (kept on the action when the person
+     applied it, so a later run of the task a person starts gets its turn). A run that succeeded is the chat's own only
+     when its message moved the run (a follow-up, a continuation, a resume) or its message started it; an answer or a
+     continuation
      does not count there, since a success turn only tells the person and proposes. Each wait or end starts one turn
      at most.
    - **Never from the chat:** answering approvals, deciding plans, widening permissions, secret values and deleting

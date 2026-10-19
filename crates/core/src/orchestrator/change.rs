@@ -66,6 +66,10 @@ pub enum Change {
     now: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     then: Option<MessageThen>,
+    /// What sending it does in the run's state when it was checked (`send_message`'s `action`): it is sent only as
+    /// that, and refused once the run moved on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sent_as: Option<String>,
   },
   /// Pause run `run`, `#number`, at its next checkpoint.
   Pause { run: RunId, number: u32 },

@@ -20,7 +20,7 @@ use orchester_core::{
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
   revision::Revision,
   run::{Answerer, Run},
-  store::{ResourceStore, TaskStore},
+  store::{ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -39,6 +39,7 @@ use crate::{
   },
   display,
   messages::Message,
+  tasks::detail::run_store_error,
 };
 
 /// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers, sends or
@@ -151,17 +152,53 @@ pub(super) async fn apply(
       let (_, arguments) = tool_arguments(scope, change);
       continue_for_orchestrator(services, arguments, by).await
     }
-    // The tool checks the run's state again where it pauses, resumes or releases.
-    Change::Pause { .. } | Change::Resume { .. } | Change::Release { .. } => {
+    // A run that stopped at a limit or was interrupted since stays the person's to resume.
+    Change::Resume { run, .. } => {
+      blocking(move || {
+        let run = find_run(&ProjectDb::open(&root)?, &run.to_string())?;
+        control::resumable(&run, control::RESUME_STOPPED)
+      })
+      .await?;
+      let (tool, arguments) = tool_arguments(scope, change);
+      app_tool((services, translate), tool, arguments).await
+    }
+    // A run that ended since has nothing to pause; the tool checks the rest again where it pauses.
+    Change::Pause { run, .. } => {
+      blocking(move || control::pausable(&find_run(&ProjectDb::open(&root)?, &run.to_string())?)).await?;
+      let (tool, arguments) = tool_arguments(scope, change);
+      app_tool((services, translate), tool, arguments).await
+    }
+    // The tool checks the held starts again where it releases them.
+    Change::Release { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
       app_tool((services, translate), tool, arguments).await
     }
     // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
+    // A message goes only as what it was checked or proposed as.
     Change::Answer { .. } | Change::Message { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
-      answer_for_orchestrator(services, translate, tool, arguments, by).await
+      let expected = match &change.change {
+        Change::Message { sent_as, .. } => sent_as.as_deref(),
+        _ => None,
+      };
+      answer_for_orchestrator(services, translate, tool, arguments, (by, expected)).await
     }
   }
+}
+
+/// The run that a message to run `old` that ran its task again started: the task's latest run, once it is another.
+/// Blocks on SQLite.
+pub(super) fn started_again(db: &ProjectDb, old: RunId) -> Result<Option<RunId>, StoreError> {
+  let Some(run) = db.run(old).map_err(run_store_error)? else {
+    return Ok(None);
+  };
+  let latest = db
+    .runs_of_task(run.task())
+    .map_err(run_store_error)?
+    .pop()
+    .and_then(Result::ok)
+    .map(|latest| latest.id());
+  Ok(latest.filter(|latest| *latest != old))
 }
 
 /// The tool that carries out `change` in `scope`, and its arguments: the chat's project and what the change acts on,

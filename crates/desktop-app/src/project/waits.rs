@@ -14,14 +14,13 @@ use lurq::app::{
   ctx::{Ctx, StreamEmitter},
   i18n::I18n,
 };
-use orchester_core::id::RunId;
 use orchester_workspace::{
   background,
   messages::{self, Message},
   orchestrator::{
     send::{self, SendError},
     tools::ChatScope,
-    waits::{self, Followed, MergeChecks, WaitTurn},
+    waits::{self, Followed, MergeChecks, SucceededAt, WaitTurn},
   },
   runner::Runners,
   workspace::{OpenProject, OrchestratorConsent},
@@ -32,9 +31,10 @@ use crate::services::Services;
 /// One follower keeps waits at a time, so two that overlap never both open a conversation for the same new wait.
 static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// The runs of each project, by its folder, that git found merged outside Orchester or with nothing to merge: a run
-/// that ended so stays so, and git is not asked about it again.
-static QUIET: LazyLock<parking_lot::Mutex<HashMap<PathBuf, HashSet<RunId>>>> = LazyLock::new(Default::default);
+/// The runs of each project, by its folder, that git found merged outside Orchester or with nothing to merge, each by
+/// the event it succeeded with: a run that succeeded so stays so until it works again, and git is not asked about it
+/// again.
+static QUIET: LazyLock<parking_lot::Mutex<HashMap<PathBuf, HashSet<SucceededAt>>>> = LazyLock::new(Default::default);
 
 /// Follows `open`'s waits again whenever its run `states` or its conversations change. Renders nothing.
 pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
