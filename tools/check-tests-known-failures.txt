@@ -11,7 +11,6 @@
 # The orchester-desktop crate is frozen and not listed: its tests run only when a branch changes it.
 
 # Flaky: failed in a whole-binary run under load, passed twice alone with its name filter.
-orchester-app lifecycle lifecycle_quit_now_while_agents_save_ends_them_and_the_next_starts_offer_their_runs_until_continued # flaky: timed out waiting for the interrupted runs offered
 orchester-app orchestrator links::orchestrator_reply_links_go_in_the_app_and_show_the_web_and_unknown_routes_as_they_are # flaky: timed out waiting for the answer
 
 # Run no test on purpose: (none).

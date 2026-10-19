@@ -1,18 +1,16 @@
-//! The desktop's runner handling against the real `orchester-runner` program.
+//! The desktop's runner handling against the real `orchester-runner` program, which the tests build themselves
+//! (`support/runner_programs.rs`).
 
-use std::{
-  fs,
-  path::{Path, PathBuf},
-  process::Command,
-  time::Duration,
-};
+#[path = "support/runner_programs.rs"]
+mod runner_programs;
+
+use std::{fs, path::Path, time::Duration};
 
 use orchester_core::id::{IdempotencyKey, TaskId};
 use orchester_ipc::{Rejection, SessionEnd::Clean};
 use orchester_store::SessionEnd;
 use orchester_workspace::{
   activity::Activity,
-  app_paths::runner_beside,
   close::{CloseKind, session_end},
   runner::{
     ForgetRefusal, QUIET_STOP_TIMEOUT, RequestError, RunRequestError, RunnerStatus, Runners, ShutdownOutcome,
@@ -20,26 +18,11 @@ use orchester_workspace::{
   },
   workspace::OpenProject,
 };
+use runner_programs::programs;
 use tempfile::TempDir;
 use tokio::{runtime::Handle, sync::watch, time::timeout};
 
 const PATIENCE: Duration = Duration::from_secs(20);
-
-/// Cargo exposes `CARGO_BIN_EXE_*` only for binaries of the tested package, so the runner is
-/// built into this profile's directory, where `cargo run` also puts `orchester.exe`.
-fn runner_program() -> PathBuf {
-  let status = Command::new(env!("CARGO"))
-    .args(["build", "--quiet", "-p", "orchester-runner"])
-    .status()
-    .expect("run cargo");
-  assert!(status.success(), "cargo build -p orchester-runner: {status}");
-  let test_exe = std::env::current_exe().expect("test executable path");
-  let profile_dir = test_exe
-    .parent()
-    .and_then(Path::parent)
-    .expect("test executables live in <target>/<profile>/deps");
-  runner_beside(&profile_dir.join("orchester.exe"))
-}
 
 /// `root` as an open project named Kontur.
 fn open(root: &Path) -> OpenProject {
@@ -82,7 +65,7 @@ async fn wait_for(
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_goes_online_and_stops_gracefully() {
   let project = project();
-  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
   let mut updates = runners.subscribe();
 
   runners.show(Some(&open(project.path())));
@@ -147,7 +130,7 @@ async fn runner_process_answers_start_run_requests() {
     orchester_core::name::Name::new("Kontur").expect("name"),
   );
   drop(orchester_store::ProjectDb::create(repo.path(), project).expect("create project"));
-  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
   let (key, task) = (IdempotencyKey::generate(), TaskId::generate());
   assert_eq!(
     runners.start_run(key, task).await,
@@ -167,7 +150,7 @@ async fn runner_process_answers_start_run_requests() {
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_keeps_the_previous_project_running_in_the_background() {
   let (first, second) = (project(), project());
-  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
   let mut updates = runners.subscribe();
   runners.show(Some(&open(first.path())));
   wait_for(&mut updates, first.path(), |state| *state == RunnerState::Online).await;
@@ -191,7 +174,7 @@ async fn runner_process_keeps_the_previous_project_running_in_the_background() {
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_of_a_project_another_app_runs_fails_until_that_app_closes() {
   let project = project();
-  let program = runner_program();
+  let program = programs().runner.clone();
   let this_app = Runners::new(program.clone(), Handle::current(), Activity::new(), Clean);
   let other_app = Runners::new(program, Handle::current(), Activity::new(), Clean);
   let mut other_updates = other_app.subscribe();
@@ -245,7 +228,7 @@ fn orchester_runner_lock_held(project: &Path) -> bool {
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_forget_if_idle_waits_for_a_known_idle_runner() {
   let project = project();
-  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
   let mut updates = runners.subscribe();
   runners.show(Some(&open(project.path())));
   assert_eq!(
@@ -296,7 +279,7 @@ async fn online_and_reported(runners: &Runners, updates: &mut watch::Receiver<Ru
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_forget_if_idle_answers_every_asker_of_one_question() {
   let project = project();
-  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
   let mut updates = runners.subscribe();
   runners.show(Some(&open(project.path())));
   online_and_reported(&runners, &mut updates, project.path()).await;
@@ -315,7 +298,7 @@ async fn runner_process_forget_if_idle_answers_every_asker_of_one_question() {
 #[tokio::test(flavor = "multi_thread")]
 async fn runner_process_forget_if_idle_starts_no_runner_for_a_removed_project_a_tab_shows() {
   let project = project();
-  let runners = Runners::new(runner_program(), Handle::current(), Activity::new(), Clean);
+  let runners = Runners::new(programs().runner.clone(), Handle::current(), Activity::new(), Clean);
   let mut updates = runners.subscribe();
   let shown = open(project.path());
   runners.keep_open(std::slice::from_ref(&shown));

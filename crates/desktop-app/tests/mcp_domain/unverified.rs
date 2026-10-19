@@ -61,7 +61,7 @@ fn domain_window_input_cannot_accept_an_unverified_step() {
   let (folder, seeded) = Served::seed("decisions", None);
   let (key, run) = unverified_run(&seeded);
   // The real runner, so that the decision's buttons take presses (without one they are unavailable).
-  let (runner, _) = super::live::programs();
+  let runner = super::runner_programs::programs().runner.clone();
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",

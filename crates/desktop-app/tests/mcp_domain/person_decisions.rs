@@ -22,7 +22,8 @@ impl Fixture {
     if title == "Add serde to the webhook payloads" {
       return Self::approval(view);
     }
-    let (runner, fake) = super::live::programs();
+    let programs = super::runner_programs::programs();
+    let (runner, fake) = (programs.runner.clone(), programs.fake_codex.clone());
     let (folder, seeded) = Served::seed(scenario, Some(fake));
     let key = seeded
       .tasks
