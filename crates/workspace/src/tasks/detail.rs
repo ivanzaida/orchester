@@ -480,11 +480,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     first_run,
     group_hold,
     approvals: RunApprovals::read(db, &run)?,
-    waiting_questions: db
-      .questions(run.id())?
-      .into_iter()
-      .filter(AskedQuestions::waits)
-      .collect(),
+    waiting_questions: waiting_questions(db, &run)?,
     base_notices: db.run_base_notices(run.id())?,
     accounts: db.invocation_accounts(run.id())?,
     index: IndexUses::read(db, &invocations)?,
@@ -501,6 +497,16 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     steps,
     run,
   })
+}
+
+/// `run`'s agents' questions with suggested answers that wait for the person.
+fn waiting_questions(db: &ProjectDb, run: &Run) -> Result<Vec<AskedQuestions>, StoreError> {
+  Ok(
+    db.questions(run.id())?
+      .into_iter()
+      .filter(AskedQuestions::waits)
+      .collect(),
+  )
 }
 
 /// The transcript of `run` as stored.

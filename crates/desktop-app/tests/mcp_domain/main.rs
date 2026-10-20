@@ -8,6 +8,7 @@ mod accounts;
 mod accounts_window;
 mod api_providers;
 mod automation_permissions;
+mod base_moved;
 mod basics;
 mod cloud_accounts;
 mod connections_window;

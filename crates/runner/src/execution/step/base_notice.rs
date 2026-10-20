@@ -4,22 +4,19 @@
 //! continued after a pause, a limit, a restart or a follow-up — and an agent of a writing step that finishes its turn
 //! while one is pending does not end its step but continues its session to read it, as for people's messages. A
 //! read-only or command step never takes it: it waits for the run's next writing step, as it does in a paused,
-//! waiting or stopped run until the run goes on.
+//! waiting or stopped run until the run goes on. While the project's switch is off, none is delivered.
 
 use orchester_core::{
-  base_move::BaseNotice,
-  id::StepExecutionId,
-  permission::RepositoryAccess,
-  run::Invocation,
-  time::Timestamp,
+  base_move::BaseNotice, id::StepExecutionId, permission::RepositoryAccess, run::Invocation, time::Timestamp,
 };
 
 use super::super::run::{ExecutionError, RunTask};
 
 impl RunTask {
-  /// The notice `execution`'s agent takes now: the run's pending one, past its window, when the step writes.
+  /// The notice `execution`'s agent takes now: the run's pending one, past its window, when the step writes and the
+  /// project tells its working agents when the base branch moves.
   pub(super) fn notice_for(&self, execution: StepExecutionId) -> Result<Option<BaseNotice>, ExecutionError> {
-    if !self.writes(execution) {
+    if !self.writes(execution) || !self.db.tells_base_moves()? {
       return Ok(None);
     }
     let notice = self.db.pending_base_notice(self.run.id())?;

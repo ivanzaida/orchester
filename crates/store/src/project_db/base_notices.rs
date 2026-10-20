@@ -35,7 +35,7 @@ struct Body {
 impl ProjectDb {
   /// Where `branch` was last seen, and when the move that put it there began; `None` before it was first seen.
   pub fn base_head(&self, branch: &BranchName) -> Result<Option<BaseHead>, StoreError> {
-    let row: Option<(String, i64)> = self
+    let row: Option<(String, Option<i64>)> = self
       .connection
       .query_row(
         "SELECT head, moved_at FROM base_heads WHERE branch = ?1",
@@ -47,7 +47,7 @@ impl ProjectDb {
       .map(|(head, moved_at)| {
         Ok(BaseHead {
           head: parse("base head", &head)?,
-          moved_at: Timestamp::from_unix_millis(moved_at),
+          moved_at: moved_at.map(Timestamp::from_unix_millis),
         })
       })
       .transpose()
@@ -58,7 +58,11 @@ impl ProjectDb {
     self.connection.execute(
       "INSERT INTO base_heads (branch, head, moved_at) VALUES (?1, ?2, ?3) \
        ON CONFLICT (branch) DO UPDATE SET head = excluded.head, moved_at = excluded.moved_at",
-      params![branch.as_str(), head.head.as_str(), head.moved_at.unix_millis()],
+      params![
+        branch.as_str(),
+        head.head.as_str(),
+        head.moved_at.map(Timestamp::unix_millis)
+      ],
     )?;
     Ok(())
   }
@@ -163,9 +167,7 @@ impl ProjectDb {
   fn notices_where(&self, column: &str, value: &str) -> Result<Vec<BaseNotice>, StoreError> {
     let sql = format!("SELECT {COLUMNS} FROM base_notices WHERE {column} = ?1 ORDER BY noticed_at, id");
     let mut statement = self.connection.prepare(&sql)?;
-    let rows = statement
-      .query_map([value], read_row)?
-      .collect::<Result<Vec<_>, _>>()?;
+    let rows = statement.query_map([value], read_row)?.collect::<Result<Vec<_>, _>>()?;
     rows.into_iter().map(notice_of).collect()
   }
 }

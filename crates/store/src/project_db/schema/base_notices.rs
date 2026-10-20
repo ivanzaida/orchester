@@ -3,11 +3,11 @@
 
 pub(super) const MIGRATION: &str = r"
 -- Where each base branch of the project's runs was last seen in the user's checkout, and when the move that put it
--- there began: moves within two minutes of that are one. Desktop-written.
+-- there began (NULL before a move was seen): moves within two minutes of that are one. Desktop-written.
 CREATE TABLE base_heads (
   branch TEXT PRIMARY KEY,
   head TEXT NOT NULL CHECK (length(head) = 40),
-  moved_at INTEGER NOT NULL
+  moved_at INTEGER
 ) STRICT;
 
 -- Notices to runs that their base branch moved to `revision`, which their branch lacks: what landed, as JSON, and

@@ -6,8 +6,8 @@
 mod accepted;
 mod answer;
 mod app_server;
-mod base_notice;
 mod approval;
+mod base_notice;
 mod checks;
 mod claude_approval;
 mod cli_version;

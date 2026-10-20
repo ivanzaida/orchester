@@ -1,4 +1,5 @@
-//! General (tLCm1, tQFZQ): project identity, GitHub, repository agent files and auto mode.
+//! General (tLCm1, tQFZQ): project identity, GitHub, repository agent files, telling working agents when the base
+//! branch moves (ORC-54, no frame of its own: laid out as the agent files' switch row) and auto mode.
 mod auto_mode;
 mod github;
 use lurq::{
@@ -71,6 +72,7 @@ impl Component for General {
     let identity = identity(ctx, &props);
     let github = github::section(ctx, &props, &settings, &save, self.revision.get());
     let files = agent_files(ctx, &props, &settings, &save);
+    let base = base_notices(ctx, &props, &settings, &save);
     let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
       "settings-auto-mode",
       auto_mode::Props {
@@ -88,9 +90,45 @@ impl Component for General {
         .child(identity)
         .child(github)
         .child(files)
+        .child(base)
         .child(auto),
     )
   }
+}
+/// *Tell working agents when the base branch moves* (ORC-54), laid out as the repository agent files' switch row.
+fn base_notices(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &work::Save) -> Element {
+  let on = settings.base_notices;
+  let start = work::start(save, props.project.open.repo_root.clone(), Change::BaseNotices(!on));
+  let toggle = Toggle::new(
+    "settings-base-notices",
+    ToggleKind::Switch,
+    on,
+    ctx.t(if on {
+      "project_settings.baseMovedOn"
+    } else {
+      "project_settings.baseMovedOff"
+    }),
+  );
+  let toggle = if save.state().get().is_pending() {
+    toggle
+  } else {
+    toggle.on_change(move |_| start())
+  };
+  let control = Column::new().width(Dimension::Px(page::CONTROL_WIDTH)).child(toggle);
+  let row = page::row(
+    ctx,
+    "settings-base-moved",
+    ("project_settings.baseMoved", "project_settings.baseMovedDetail"),
+    control.into(),
+    Place::Last,
+  );
+  section(
+    "settings-base-branch",
+    &ctx.t("project_settings.baseMovedSection"),
+    None,
+    vec![row],
+  )
+  .into()
 }
 fn locked(ctx: &mut Ctx, id: &str, label: &str, value: &str) -> Element {
   FieldInput::new(id.to_owned(), ctx.t(label), Signal::new(value.to_owned()))

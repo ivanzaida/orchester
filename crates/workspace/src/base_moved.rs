@@ -10,9 +10,10 @@
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
-  base_move::{BaseHead, BaseNotice, NoticeDelivery, Observed, landed_tasks},
+  base_move::{BaseHead, BaseNotice, NoticeDelivery, Observed, deliver_after, landed_tasks},
   id::NoticeId,
   integration::{GitError, branch_head, drift},
+  revision::Revision,
   run::{BranchName, Run, RunStatus},
   store::{MergeStore, RunStore, TaskStore, WorktreeStore},
   task::Task,
@@ -46,10 +47,13 @@ pub fn after_merge(root: &Path, programs: &Programs) {
   }
 }
 
+/// A base branch, and the unfinished runs on it with their tasks.
+type OnBase<'a> = (BranchName, Vec<(Run, &'a Task)>);
+
 fn observe(root: &Path, programs: &Programs, now: Timestamp) -> Result<usize, StoreError> {
   let mut db = ProjectDb::open(root)?;
   let tasks = db.tasks()?;
-  let mut by_base: BTreeMap<String, (BranchName, Vec<(Run, &Task)>)> = BTreeMap::new();
+  let mut by_base: BTreeMap<String, OnBase> = BTreeMap::new();
   for task in &tasks {
     let Some(run) = unfinished_run(&db, task)? else {
       continue;
@@ -93,24 +97,37 @@ enum Unread {
   Git(GitError),
 }
 
-/// Where `base` is now, when that is a move since it was seen last; recorded either way.
+/// Where `base` is now and when the move that put it there began, when that is a move since it was seen last;
+/// recorded either way.
 fn moved(
   db: &mut ProjectDb,
   (root, programs): (&Path, &Programs),
   base: &BranchName,
   now: Timestamp,
-) -> Result<Option<BaseHead>, Unread> {
+) -> Result<Option<Moved>, Unread> {
   let Some(head) = branch_head(&programs.runner(), Path::new(GIT), (root, base)).map_err(Unread::Git)? else {
     return Ok(None);
   };
   let seen = db.base_head(base).map_err(Unread::Store)?;
-  let (head, moved) = match BaseHead::observe(seen.as_ref(), head, now) {
+  let (seen, moved) = match BaseHead::observe(seen.as_ref(), head, now) {
     Observed::Unchanged => return Ok(None),
-    Observed::First(head) => (head, false),
-    Observed::Moved(head) => (head, true),
+    Observed::First(head) => (head, None),
+    Observed::Moved { head, moved_at } => {
+      let moved = Moved {
+        head: head.head.clone(),
+        moved_at,
+      };
+      (head, Some(moved))
+    }
   };
-  db.save_base_head(base, &head).map_err(Unread::Store)?;
-  Ok(moved.then_some(head))
+  db.save_base_head(base, &seen).map_err(Unread::Store)?;
+  Ok(moved)
+}
+
+/// A move of a base branch: where it is now, and when the move began.
+struct Moved {
+  head: Revision,
+  moved_at: Timestamp,
 }
 
 /// `task`'s latest run while it is unfinished: it may still go on (it works, waits, paused, was interrupted, or
@@ -135,7 +152,7 @@ fn left_behind_notice(
   db: &mut ProjectDb,
   (root, programs): (&Path, &Programs),
   (run, task, tasks): (&Run, &Task, &[Task]),
-  (base, moved): (&BranchName, &BaseHead),
+  (base, moved): (&BranchName, &Moved),
   now: Timestamp,
 ) -> Result<bool, StoreError> {
   if run.status() == &RunStatus::Succeeded && delivery::of_run(programs, root, run) != Delivery::Waiting {
@@ -164,7 +181,7 @@ fn left_behind_notice(
     commits: drift.commits,
     overlapping: drift.overlapping,
     noticed_at: now,
-    deliver_after: moved.deliver_after(),
+    deliver_after: deliver_after(moved.moved_at),
     delivery: NoticeDelivery::Pending,
   };
   db.queue_base_notice(&notice)?;

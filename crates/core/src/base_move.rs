@@ -17,11 +17,12 @@ use crate::{
 /// How long after a base branch's first move further moves count as the same one: two minutes.
 pub const COALESCE_MILLIS: i64 = 2 * 60 * 1000;
 
-/// Where a base branch's head was last seen, and when the move that put it there began.
+/// Where a base branch's head was last seen, and when the move that put it there began; `None` before a move was
+/// seen: the branch's first sighting starts no window.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BaseHead {
   pub head: Revision,
-  pub moved_at: Timestamp,
+  pub moved_at: Option<Timestamp>,
 }
 
 /// What seeing a base branch at a head tells.
@@ -31,30 +32,36 @@ pub enum Observed {
   Unchanged,
   /// It was never seen before: there is no move to tell, only where it is from now on.
   First(BaseHead),
-  /// It moved; within the window of the move before, it is that move still.
-  Moved(BaseHead),
+  /// It moved, in a move that began at `moved_at`: within the window of the move before, it is that move still.
+  Moved { head: BaseHead, moved_at: Timestamp },
 }
 
 impl BaseHead {
   /// What seeing the branch at `head` at `now` tells, after it was seen as `previous`.
   pub fn observe(previous: Option<&Self>, head: Revision, now: Timestamp) -> Observed {
-    match previous {
-      None => Observed::First(Self { head, moved_at: now }),
-      Some(seen) if seen.head == head => Observed::Unchanged,
-      Some(seen) if now.unix_millis().saturating_sub(seen.moved_at.unix_millis()) < COALESCE_MILLIS => {
-        Observed::Moved(Self {
-          head,
-          moved_at: seen.moved_at,
-        })
-      }
-      Some(_) => Observed::Moved(Self { head, moved_at: now }),
+    let Some(seen) = previous else {
+      return Observed::First(Self { head, moved_at: None });
+    };
+    if seen.head == head {
+      return Observed::Unchanged;
+    }
+    let moved_at = seen
+      .moved_at
+      .filter(|began| now.unix_millis().saturating_sub(began.unix_millis()) < COALESCE_MILLIS)
+      .unwrap_or(now);
+    Observed::Moved {
+      head: Self {
+        head,
+        moved_at: Some(moved_at),
+      },
+      moved_at,
     }
   }
+}
 
-  /// When the notices of this move may reach the agents: once the window of the move has passed.
-  pub const fn deliver_after(&self) -> Timestamp {
-    Timestamp::from_unix_millis(self.moved_at.unix_millis().saturating_add(COALESCE_MILLIS))
-  }
+/// When the notices of a move that began at `moved_at` may reach the agents: once its window has passed.
+pub const fn deliver_after(moved_at: Timestamp) -> Timestamp {
+  Timestamp::from_unix_millis(moved_at.unix_millis().saturating_add(COALESCE_MILLIS))
 }
 
 /// A commit that landed on the base branch and that a run's branch does not have.

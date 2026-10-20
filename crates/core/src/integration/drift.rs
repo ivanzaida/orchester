@@ -5,12 +5,7 @@
 use std::{collections::BTreeSet, path::Path};
 
 use super::{GitError, git::Git};
-use crate::{
-  base_move::LandedCommit,
-  command::CommandRunner,
-  revision::Revision,
-  run::BranchName,
-};
+use crate::{base_move::LandedCommit, command::CommandRunner, revision::Revision, run::BranchName};
 
 /// The most commits a notice lists; the newest come first.
 pub const MAX_LANDED: usize = 50;
@@ -78,7 +73,14 @@ pub fn drift(
 /// The files that differ between `from` and `to`.
 fn changed<R: CommandRunner>(git: &Git<'_, R>, from: &str, to: &str) -> Result<BTreeSet<String>, GitError> {
   let listed = git.stdout(&["-c", "core.quotepath=false", "diff", "--name-only", from, to])?;
-  Ok(listed.lines().map(str::trim).filter(|path| !path.is_empty()).map(str::to_owned).collect())
+  Ok(
+    listed
+      .lines()
+      .map(str::trim)
+      .filter(|path| !path.is_empty())
+      .map(str::to_owned)
+      .collect(),
+  )
 }
 
 fn revision(sha: &str) -> Result<Revision, GitError> {

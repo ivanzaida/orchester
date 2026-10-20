@@ -51,6 +51,8 @@ pub enum Change {
   },
   Files(bool),
   Index(bool),
+  /// *Tell working agents when the base branch moves*.
+  BaseNotices(bool),
   Auto {
     base: AutoModeSettings,
     asked: AutoModeSettings,
@@ -80,7 +82,7 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
           Change::Limits { .. } => Outside::Limits,
           Change::Auto { .. } | Change::Revoke(_) => Outside::AutoMode,
           Change::Index(_) => Outside::CodeIndex,
-          Change::Files(_) => Outside::ProjectSettings,
+          Change::Files(_) | Change::BaseNotices(_) => Outside::ProjectSettings,
           Change::UseAccount(_) => Outside::Connections,
         };
         match change {
@@ -89,6 +91,9 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
           }
           Change::Files(on) => {
             project_settings::save_agent_files_in(&root, on).map_err(|e| messages::store_error(&e))?
+          }
+          Change::BaseNotices(on) => {
+            project_settings::save_base_notices_in(&root, on).map_err(|e| messages::store_error(&e))?
           }
           Change::Index(on) => code_index::save_setting_in(
             &root,

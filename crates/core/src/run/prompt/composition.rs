@@ -4,8 +4,8 @@ use std::{fmt::Write as _, ops::Range};
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, ResultDelivery, base_moved,
-  code_index, finish::push_result, memory::push_memory, retry,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, ResultDelivery, base_moved, code_index,
+  finish::push_result, memory::push_memory, retry,
 };
 use crate::{
   conversation::Message,
