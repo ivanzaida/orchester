@@ -351,7 +351,7 @@ fn propose_memory(seeded: &Seeded) {
 }
 
 #[test]
-fn needs_you_panel_lists_memory_records_with_their_review_unavailable() {
+fn needs_you_panel_opens_the_memory_page_on_the_records_waiting_for_approval() {
   let (mut window, seeded) = seeded_with("tasks", propose_memory);
   open(&mut window);
   assert_eq!(text(&mut window, "needs-you-count"), "7", "the records are one item");
@@ -364,18 +364,24 @@ fn needs_you_panel_lists_memory_records_with_their_review_unavailable() {
   );
   assert_eq!(text(&mut window, &format!("{item}-task")), "Project memory");
   assert_eq!(text(&mut window, &format!("{item}-action")), "Review records");
-  assert_eq!(
-    text(&mut window, &format!("{item}-reason-text")),
-    "Reviewing memory records isn't built in this app yet."
+  assert!(
+    window.tree.get_element_by_id(&format!("{item}-reason")).is_none(),
+    "the review is built: no reason why not"
   );
-  let before = window.navigation().route_now();
   click(&mut window, &format!("{item}-action"));
   assert_eq!(
     window.navigation().route_now(),
-    before,
-    "an unavailable action goes nowhere"
+    Route::Project(seeded.project, ProjectPage::Memory)
   );
-  assert!(window.texts("needs-you-panel").is_some(), "and leaves the panel open");
+  window.until("the panel to close", |window| window.texts("needs-you-panel").is_none());
+  window.until("the records waiting for approval", |window| {
+    window.texts("memory-queue-count").is_some()
+  });
+  assert_eq!(text(&mut window, "memory-queue-count"), "2");
+  let queue = window.texts("memory-queue").expect("the queue");
+  for record in ["Webhooks retry three times.", "Docs live in docs/."] {
+    assert!(queue.iter().any(|said| said == record), "{record:?} in {queue:?}");
+  }
 }
 
 #[test]

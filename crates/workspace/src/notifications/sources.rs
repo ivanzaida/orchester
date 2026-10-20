@@ -166,7 +166,7 @@ fn waiting(project: &Project, tasks: &ProjectTasks, item: &WaitingItem) -> Optio
   let target = match (&task, NeedItem::of(tasks, item.clone()).decided()) {
     (Some(task), Decided::Card(_) | Decided::Conversation) => task_target(project, task, TaskPage::Conversation, None),
     (Some(task), Decided::Summary(card)) => task_target(project, task, TaskPage::Summary, card),
-    (_, Decided::Unavailable(_)) | (None, _) => Target::Runner(project.id),
+    (_, Decided::Unavailable(_) | Decided::Memory) | (None, _) => Target::Runner(project.id),
   };
   Some(Event {
     key: key.into(),
