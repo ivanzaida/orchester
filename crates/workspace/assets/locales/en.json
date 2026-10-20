@@ -219,7 +219,6 @@
         "reviewRecords": "Review records"
       },
       "unavailable": {
-        "memory": "Reviewing memory records isn't built in this app yet.",
         "task": "Its task can't be read, so there is nothing to open."
       }
     }

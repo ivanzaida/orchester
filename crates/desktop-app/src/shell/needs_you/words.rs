@@ -31,8 +31,8 @@ pub(super) fn kind(ctx: &Ctx, item: &NeedItem) -> (Icon, Arc<str>) {
   (glyph, message_text(ctx, &item.kind.label()))
 }
 
-/// The item's action: *Review* and *Answer* open it in place; the others open its task, except *Review
-/// records*, which is unavailable until memory review is built.
+/// The item's action: *Review* and *Answer* open it in place; the others open its task, and *Review records* the
+/// project's Memory page.
 pub(super) fn action(ctx: &Ctx, item: &NeedItem) -> Arc<str> {
   message_text(ctx, &item.kind.action())
 }
