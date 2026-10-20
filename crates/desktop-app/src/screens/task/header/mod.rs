@@ -218,8 +218,8 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   confirm_for(ctx, &runs, run)
 }
 
-/// Summary, Details, Conversation and Changes with the count of the files it lists, then Artifacts and
-/// Memory, which are not built yet.
+/// The tabs in [`TaskTab::ALL`]'s order: Details, Conversation, Changes with the count of the files it lists,
+/// Local integration and Summary, then Artifacts and Memory, which are not built yet.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let changes_reads = super::changes::ChangesReads::of(ctx);
@@ -245,11 +245,11 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let count = super::changes_count(ctx, &props.task);
   let changes = super::changes::tab_label(ctx, &changes, count);
   let tabs = vec![
-    tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     tab(TaskTab::Details, ctx.t(TaskTab::Details.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
     tab(TaskTab::LocalIntegration, ctx.t(TaskTab::LocalIntegration.title_key())),
+    tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     PageTab::unavailable(
       "task-tab-artifacts",
       ctx.t("task.tabs.artifacts"),

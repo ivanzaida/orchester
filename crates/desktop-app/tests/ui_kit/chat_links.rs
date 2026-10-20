@@ -30,7 +30,7 @@ fn references(text: &str, project: ProjectId) -> String {
 #[test]
 fn chat_links_make_task_keys_and_routes_written_as_text_links() {
   let project = ProjectId::generate();
-  let task = |key: &str| format!("orchester:/project/{project}/tasks/{key}/summary");
+  let task = |key: &str| format!("orchester:/project/{project}/tasks/{key}/details");
   let path = format!("/project/{project}/tasks/KON-2/changes?file=src%2Flib.rs");
   assert_eq!(
     references("KON-1 is done; KON-2, then KON-3.", project),
@@ -67,10 +67,10 @@ fn chat_links_make_a_code_span_of_one_task_key_or_route_a_link() {
   );
   assert_eq!(
     references(&format!("See `` {path} `` and `KON-1`."), project),
-    format!("See [{words}]({destination}) and [KON\\-1](orchester:/project/{project}/tasks/KON-1/summary)."),
+    format!("See [{words}]({destination}) and [KON\\-1](orchester:/project/{project}/tasks/KON-1/details)."),
     "the spaces around what a span holds and the number of its backticks do not count"
   );
-  let key = format!(r"[KON\-1](orchester:/project/{project}/tasks/KON-1/summary)");
+  let key = format!(r"[KON\-1](orchester:/project/{project}/tasks/KON-1/details)");
   assert_eq!(
     references("Done!`KON-1` and Done!KON-1", project),
     format!(r"Done\!{key} and Done\!{key}"),

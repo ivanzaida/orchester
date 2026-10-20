@@ -6,25 +6,26 @@ use super::{
 const FILE: &str = "file";
 const FROM: &str = "from";
 
-/// A tab of a task's page, in the design's order (`Page tabs` `L9OIIZ` in `lUXff`, Details after Summary in
-/// `vShIt`); Summary is the one it opens on.
+/// A tab of a task's page, in the page's order (ORC-51): Details first, the one a task opens on, then
+/// Conversation, Changes, Local integration while it is shown, and Summary last. The design (`Page tabs`
+/// `L9OIIZ` in `lUXff`, `vShIt`) still draws Summary first.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskTab {
   #[default]
-  Summary,
   Details,
   Conversation,
   Changes,
   LocalIntegration,
+  Summary,
 }
 
 impl TaskTab {
   pub const ALL: [Self; 5] = [
-    Self::Summary,
     Self::Details,
     Self::Conversation,
     Self::Changes,
     Self::LocalIntegration,
+    Self::Summary,
   ];
 
   /// The tab's name: the last segment of its path, and its name in the app's MCP tools.
@@ -54,15 +55,16 @@ impl TaskTab {
   }
 }
 
-/// What a task's page shows: a tab, and on Changes the file chosen in its list, if one is.
+/// What a task's page shows: a tab, and on Changes the file chosen in its list, if one is. The default is the
+/// tab a task opens on, Details.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskView {
   #[default]
-  Summary,
   Details,
   Conversation,
   Changes(Option<ChangedFile>),
   LocalIntegration,
+  Summary,
 }
 
 impl TaskView {
@@ -106,10 +108,11 @@ impl TaskView {
   }
 
   /// The view the segment after a task's path names, its tab, with its file from the query on Changes. A path
-  /// without the tab, as links are written by hand (`/tasks/ORC-24`), is the Summary; the app writes the tab.
+  /// without the tab, as links are written by hand (`/tasks/ORC-24`), is the tab a task opens on, Details; the
+  /// app writes the tab.
   pub(super) fn parse(segments: &[&str], params: &mut Params) -> Result<Self, RouteError> {
     let name = match segments {
-      [] => return Ok(Self::Summary),
+      [] => return Ok(Self::default()),
       [name] => name,
       _ => return Err(RouteError::NoScreen),
     };

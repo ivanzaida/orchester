@@ -1,4 +1,4 @@
-//! Where the Overview's actions lead: a tab is the route's, a row and a run open their task's Summary, a
+//! Where the Overview's actions lead: a tab is the route's, a row opens its task's Details and a run its Summary, a
 //! *Needs you* card opens its task where it is decided, pointing at its decision card as the Needs you panel
 //! does, *View all tasks* the Tasks list and New task its form. Import resources and reviewing memory records
 //! are not built, and a request whose task cannot be read has nothing to open: they stay locked and go
@@ -51,7 +51,8 @@ fn overview_rows_runs_and_cards_open_their_task() {
   let key = row.trim_start_matches("overview-row-").to_owned();
   assert_eq!(
     seeded.window.navigation().route_now(),
-    task(&seeded, &key, TaskTab::Summary)
+    task(&seeded, &key, TaskTab::Details),
+    "a row opens its task on the tab a task opens on"
   );
 
   seeded.go(OverviewTab::Running);

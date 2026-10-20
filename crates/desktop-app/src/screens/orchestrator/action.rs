@@ -27,7 +27,7 @@ use orchester_workspace::display;
 
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
+  routes::{ProjectPage, Route, TaskList, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -293,7 +293,7 @@ pub(super) fn open_task(ctx: &mut Ctx, id: &str, project: ProjectId, task: Optio
   let key: TaskKey = task?.parse().ok()?;
   let navigation = Navigation::of(ctx);
   let label = ctx.t_args("orchestrator.action.openTask", [("task", key.to_string().as_str())]);
-  let route = Route::Project(project, ProjectPage::Task(key, TaskView::of(TaskTab::Summary)));
+  let route = Route::Project(project, ProjectPage::Task(key, TaskView::default()));
   Some(
     Row::new()
       .child(

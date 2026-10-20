@@ -110,7 +110,7 @@ async fn get_skill(services: &Services, args: InSkill) -> Result<Value, ToolErro
           "task": &*used.task,
           "version": used.version.get(),
           "step": used.step.as_deref(),
-          "link": wire::task_link(project, &used.task, TaskPage::Summary),
+          "link": wire::task_link(project, &used.task, TaskPage::Details),
         })
       })
       .collect();

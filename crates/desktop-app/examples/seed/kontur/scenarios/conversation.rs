@@ -139,7 +139,7 @@ fn register_atlas(kontur: &Kontur) -> Result<ProjectId, SeedError> {
 /// to `task` (`(key, title)`) of `project`, an in-app link, a link into `atlas`, a pull request on the web, and
 /// addresses the chat does not follow.
 fn links((project, atlas): (ProjectId, ProjectId), (key, title): (&str, &str)) -> String {
-  let task = format!("orchester:/project/{project}/tasks/{key}/summary");
+  let task = format!("orchester:/project/{project}/tasks/{key}/details");
   format!(
     "The retry budget is in; here is where {key} stands.\n\n\
      - Task: [{key} · {title}]({task}) — returned by Review, back on Implement\n\
@@ -149,7 +149,7 @@ fn links((project, atlas): (ProjectId, ProjectId), (key, title): (&str, &str)) -
      — 1.2M tokens over 2 runs\n\
      - Pull request: [#412 Local integration](https://github.com/kontur/kontur/pull/412) — 2 of 5 checks running\n\n\
      Review's notes are in [{key} › Conversation](orchester:/project/{project}/tasks/{key}/conversation); Atlas \
-     reads the same log in [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/summary). \
+     reads the same log in [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/details). \
      [See the runbook](file:///H:/projects/kontur/docs/runbook.md) or the \
      [Status page](http://status.kontur.local)."
   )

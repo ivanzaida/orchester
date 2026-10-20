@@ -1,6 +1,6 @@
 //! One row of the task table (`Task list row` `XEQuo`): the task's key, its title with its first two tags
 //! and how many more, its pipeline and priority, its workflow status over its run's status, and what it
-//! needs or where it stands. A press opens the task's Summary. The task a Create just added is tinted and
+//! needs or where it stands. A press opens the task on its Details. The task a Create just added is tinted and
 //! carries the New badge (`Row · KON-37` in `t3oAOi`). Selection is not built yet (D4), so the row has no
 //! checkbox.
 
@@ -22,7 +22,7 @@ use orchester_workspace::tasks::list::{PipelineLabel, TaskRow};
 use super::{readiness, table};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{ProjectPage, Route, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     chip::{BadgeTone, TagChip, badge},
@@ -63,7 +63,7 @@ impl Component for TaskListRow {
     let navigation = Navigation::of(ctx);
     let task: TaskKey = key.parse().expect("a task's key reads back as a task key");
     // A task kept Not shared has an address of its own: a shared task may have its key (`R4elt`).
-    let view = TaskView::of(TaskTab::Summary);
+    let view = TaskView::default();
     let page = if row.not_shared {
       ProjectPage::KeptTask(task, view)
     } else {
