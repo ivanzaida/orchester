@@ -4,9 +4,12 @@
 //! sends the client back to `initialize` on 2025-11-25.
 
 use lurq::app::App;
-use orchester_app::{i18n, mcp::chat::ChatServers};
+use orchester_app::{i18n, mcp::chat::ChatServers, startup::Launch};
 use orchester_core::id::{ChatId, ChatMessageId, ProjectId};
-use orchester_workspace::orchestrator::tools::ChatScope;
+use orchester_workspace::{
+  app_mcp,
+  orchestrator::tools::{ChatScope, TOOLS},
+};
 use serde_json::{Value, json};
 
 use super::{Endpoint, Served, http::post, support::Data};
@@ -82,10 +85,9 @@ fn clients_on_2025_11_25_list_the_tools() {
   assert!(names.iter().any(|name| name == "app_state"), "{names:?}");
 }
 
-#[test]
-fn the_chat_server_declines_the_newer_revision_and_lists_its_tools_on_2025_11_25() {
-  let data = Data::new();
-  let launch = data.launch();
+/// The server of a turn of the Orchestrator chat on `launch`'s session, in `data`'s project folder, as its agent
+/// reaches it; it serves while the returned servers live.
+fn chat_endpoint(data: &Data, launch: &Launch) -> (Endpoint, ChatServers) {
   let services = launch.services().expect("the session starts");
   let app = App::new();
   i18n::install(&app).expect("bundled locales load");
@@ -109,7 +111,47 @@ fn the_chat_server_declines_the_newer_revision_and_lists_its_tools_on_2025_11_25
     port,
     bearer: format!("Bearer {}", tools.token.expose()),
   };
+  (endpoint, servers)
+}
+
+#[test]
+fn the_chat_server_declines_the_newer_revision_and_lists_its_tools_on_2025_11_25() {
+  let data = Data::new();
+  let launch = data.launch();
+  let (endpoint, _servers) = chat_endpoint(&data, &launch);
   assert_falls_back_to_initialize(&endpoint);
   let names = endpoint.tool_names(&endpoint.session_on("2025-11-25"));
   assert!(names.iter().any(|name| name == "list_tasks"), "{names:?}");
+}
+
+/// What the chat's agent is served over the wire is every name of `TOOLS` the app has a tool for, `continue_run`
+/// among them, and nothing else.
+#[test]
+fn the_chat_server_lists_every_chat_tool_the_app_has() {
+  let data = Data::new();
+  let launch = data.launch();
+  let (endpoint, _servers) = chat_endpoint(&data, &launch);
+  let mut served = endpoint.tool_names(&endpoint.session_on("2025-11-25"));
+  let app: Vec<String> = app_mcp::listed()
+    .into_iter()
+    .chain(app_mcp::setup::listed())
+    .map(|tool| tool.name.to_string())
+    .collect();
+  let mut expected: Vec<String> = TOOLS
+    .iter()
+    .filter(|name| app.iter().any(|tool| tool == *name))
+    .map(|name| (*name).to_owned())
+    .collect();
+  served.sort();
+  expected.sort();
+  assert_eq!(served, expected, "the chat's tools/list");
+  for name in [
+    "continue_run",
+    "merge_run",
+    "hold_queue",
+    "release_queue",
+    "publish_pipeline",
+  ] {
+    assert!(served.iter().any(|tool| tool == name), "{name} is served: {served:?}");
+  }
 }
