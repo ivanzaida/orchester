@@ -1,0 +1,338 @@
+{
+  "memory": {
+    "title": "Memory",
+    "description": "What {{project}}'s agents remember across tasks. Only active records reach agents; records they propose wait here for you.",
+    "newRecord": "New record",
+    "settings": "Memory settings",
+    "settingsLink": "Change in Project settings › Memory ↗",
+    "settingsUnbuilt": "Project settings › Memory isn't built yet: the saving rules and limits can't be changed in this version.",
+    "reading": "Reading memory…",
+    "retry": "Try again",
+    "loadFailed": "Memory couldn't be read",
+    "loadFailedBody": "{{reason}} Nothing was changed; agents keep working with what their prompts already hold.",
+    "records": "Records",
+    "recordsCount": "{{count}} {{status}}",
+    "recordsLeftOut": "{{count}} · {{unreadable}} left out",
+    "order": "Grouped by type · pinned first",
+    "latestHandoff": "Latest · given to every agent",
+    "separator": " · ",
+    "date": "{{month}} {{day}}",
+    "step": "{{number}} {{step}}",
+    "thousands": "{{value}}k",
+    "groupSeparator": ",",
+    "kind": {
+      "fact": "Fact",
+      "decision": "Decision",
+      "observation": "Observation",
+      "artifact": "Artifact",
+      "handoff": "Handoff",
+      "todo": "To do",
+      "warning": "Warning",
+      "summary": "Summary"
+    },
+    "kindLower": {
+      "fact": "fact",
+      "decision": "decision",
+      "observation": "observation",
+      "artifact": "artifact",
+      "handoff": "handoff",
+      "todo": "to do",
+      "warning": "warning",
+      "summary": "summary"
+    },
+    "kindPlural": {
+      "fact": "Facts",
+      "decision": "Decisions",
+      "observation": "Observations",
+      "artifact": "Artifacts",
+      "handoff": "Handoffs",
+      "todo": "To do",
+      "warning": "Warnings",
+      "summary": "Summaries"
+    },
+    "importance": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High"
+    },
+    "confidence": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high"
+    },
+    "confidenceTitle": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "status": {
+      "active": "Active",
+      "pinned": "Pinned",
+      "superseded": "Superseded",
+      "deprecated": "Deprecated",
+      "rejected": "Rejected",
+      "withdrawn": "Withdrawn"
+    },
+    "group": {
+      "waiting": "WAITING FOR YOUR APPROVAL"
+    },
+    "scope": {
+      "project": "Project",
+      "task": "Task {{task}}"
+    },
+    "meta": {
+      "you": "You",
+      "youLower": "you",
+      "run": "Run {{run}}",
+      "attempt": "attempt {{attempt}}",
+      "edited": "edited by you {{time}}",
+      "superseded": "superseded at {{time}}",
+      "deprecated": "deprecated by you {{time}}",
+      "rejected": "rejected by you {{time}} · never given",
+      "withdrawn": "replaced by its newer proposal before anyone decided",
+      "confidence": "confidence {{confidence}}"
+    },
+    "handoff": {
+      "completed": "Completed",
+      "decisions": "Decisions",
+      "openQuestions": "Open questions",
+      "nextAgent": "Next agent should know",
+      "showEarlierOne": "Show 1 earlier handoff",
+      "showEarlier": "Show {{count}} earlier handoffs",
+      "hideEarlier": "Hide earlier handoffs",
+      "stepAttempt": "{{step}} attempt {{attempt}}"
+    },
+    "history": {
+      "one": "Supersedes 1 earlier version",
+      "other": "Supersedes {{count}} earlier versions"
+    },
+    "actions": {
+      "edit": "Edit",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "deprecate": "Deprecate",
+      "restore": "Restore",
+      "delete": "Delete",
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "proposal": {
+      "waiting": "Waits for your approval",
+      "note": "Agents don't receive it until you approve.",
+      "supersedes": "Supersedes 1 active record by {{author}}",
+      "supersedesKeyed": "Supersedes 1 active record · {{key}} by {{author}}"
+    },
+    "toolbar": {
+      "search": "Search text, keys and tags…",
+      "clearSearch": "Clear search",
+      "counts": "{{active}} active · {{waiting}} waiting",
+      "notGiven": "{{active}} active · {{count}} not given",
+      "ofKind": "{{found}} of {{count}} {{kind}}"
+    },
+    "filters": {
+      "chosen": "{{filter}} · {{value}}",
+      "type": {
+        "name": "Type",
+        "all": "All types"
+      },
+      "status": {
+        "name": "Status",
+        "activeAndWaiting": "Active and waiting",
+        "active": "Active",
+        "waiting": "Waiting",
+        "deprecated": "Deprecated",
+        "superseded": "Superseded",
+        "rejected": "Rejected",
+        "withdrawn": "Withdrawn",
+        "all": "All"
+      },
+      "author": {
+        "name": "Author",
+        "any": "Any author",
+        "agents": "Agents",
+        "people": "People"
+      },
+      "tag": {
+        "name": "Tag",
+        "any": "Any tag"
+      }
+    },
+    "noMatch": {
+      "search": "No records match “{{query}}”",
+      "kindSearch": "No {{kind}} match “{{query}}”",
+      "filters": "No records match these filters",
+      "lexical": "Search finds words and parts of words in the text, keys and tags of records. It doesn't know synonyms, so try another word.",
+      "otherTypesOne": "1 record of another type matches.",
+      "otherTypes": "{{count}} records of other types match.",
+      "otherStatusesOne": "1 record with another status matches.",
+      "otherStatuses": "{{count}} records with other statuses match.",
+      "showAllTypes": "Show all types",
+      "showAllStatuses": "Show all statuses"
+    },
+    "editor": {
+      "reviewTitle": "Review proposed {{kind}}",
+      "editTitle": "Edit {{kind}}",
+      "newTitle": "New record",
+      "newSubtitle": "A record you write for {{project}}'s agents",
+      "proposedBy": "proposed by {{agent}}",
+      "editedByYou": "Edited by you",
+      "close": "Close the editor",
+      "type": "Type",
+      "key": "Key · optional",
+      "importance": "Importance",
+      "text": "Text",
+      "tags": "Tags",
+      "addTag": "Add a tag…",
+      "removeTag": "Remove {{tag}}",
+      "saveTo": "Save to",
+      "saveToTask": "This task · {{task}}",
+      "saveToProject": "Project · {{project}}",
+      "saveToHint": "A record a person writes is active at once.",
+      "pinned": "Pinned · always give it to agents",
+      "pinnedHint": "Pinned records reach every invocation of their memory before any match, within the record and token limits.",
+      "replaces": "Approving replaces an active {{kind}}",
+      "replacesKeyed": "Approving replaces the active {{kind}} {{key}}",
+      "replacesText": "It becomes superseded and stops reaching agents; its history stays with this record.",
+      "source": "Source",
+      "sourceStep": "Written in {{step}}",
+      "sourceEvent": "1 event in {{step}}",
+      "sourceEvents": "{{count}} events in {{step}}",
+      "sourceLink": "Show in Conversation ↗",
+      "confidence": "Agent's confidence",
+      "confidenceValue": "{{confidence}} · set by {{agent}}; people don't change it",
+      "author": "Author",
+      "authorKept": "your edit keeps the author and adds edited by you",
+      "versions": "Versions",
+      "versionsNone": "No earlier version",
+      "versionsOne": "1 earlier version",
+      "versionsOther": "{{count}} earlier versions",
+      "rejectNote": "Rejected proposals are kept and never given.",
+      "approveNote": "Your edits are saved with the approval.",
+      "saveNote": "Changes reach agents from their next invocation.",
+      "cancel": "Cancel",
+      "save": "Save record",
+      "delete": "Delete…"
+    },
+    "delete": {
+      "title": "Delete this record?",
+      "givenNone": "It stops reaching agents from their next invocation; no invocation was given it.",
+      "givenOne": "It stops reaching agents from their next invocation, and the invocation that was given it shows Deleted record.",
+      "givenOther": "It stops reaching agents from their next invocation, and the {{count}} invocations that were given it show Deleted record.",
+      "givenUnknown": "It stops reaching agents from their next invocation, and invocations that were given it show Deleted record.",
+      "earlierNone": "It has no earlier versions.",
+      "earlierOne": "Its 1 earlier version is deleted with it.",
+      "earlierOther": "Its {{count}} earlier versions are deleted with it.",
+      "final": "This can't be undone.",
+      "givenToOne": "given to 1 invocation",
+      "givenTo": "given to {{count}} invocations",
+      "deprecateHint": "To stop giving it to agents but keep it and its history, deprecate it instead.",
+      "deprecateInstead": "Deprecate instead",
+      "confirm": "Delete record"
+    },
+    "unreadable": {
+      "one": "1 record couldn't be read and is left out",
+      "other": "{{count}} records couldn't be read and are left out",
+      "body": "They are missing from this list, from search and from what agents get. The project database keeps their rows as they are."
+    },
+    "empty": {
+      "title": "No project memory yet",
+      "body": "Agents propose what matters beyond one task: which database {{project}} uses, how API errors are shaped, a test that is flaky on Windows. Records they propose wait here for you; a record you write is active at once.",
+      "savingBoth": "Project and task memory save after approval · {{records}} records, {{tokens}} tokens per agent",
+      "savingNeither": "Project and task memory save automatically · {{records}} records, {{tokens}} tokens per agent",
+      "savingProject": "Project memory saves after approval, task memory automatically · {{records}} records, {{tokens}} tokens per agent",
+      "savingTask": "Task memory saves after approval, project memory automatically · {{records}} records, {{tokens}} tokens per agent"
+    },
+    "queue": {
+      "title": "Waiting for approval",
+      "note": "Agents get a record from their next invocation after you approve it.",
+      "none": "Nothing waiting for approval",
+      "noneBody": "Records agents propose for {{project}} and its tasks wait here until you approve or reject them."
+    },
+    "panel": {
+      "title": "Project memory",
+      "name": "{{project}} · shared by every task",
+      "records": "Records",
+      "inAll": "{{count}} in all",
+      "active": "Active",
+      "activeValue": "{{count}} · given to agents",
+      "waiting": "Waiting for approval",
+      "waitingValue": "{{count}} · {{project}} project, {{task}} task",
+      "deprecated": "Deprecated",
+      "superseded": "Superseded versions",
+      "rejected": "Rejected",
+      "saving": "Saving agents' records",
+      "projectMemory": "Project memory",
+      "taskMemory": "Task memory",
+      "automatic": "Automatically",
+      "afterApproval": "After approval",
+      "limits": "Given to each agent",
+      "recordsLimit": "Records",
+      "tokensLimit": "Tokens",
+      "atMost": "At most {{count}}",
+      "givenNote": "Agents get active records only: their task's latest handoff, pinned records, decisions and warnings, then the best matches for their step.",
+      "peopleNote": "Agents propose and supersede records. Only people approve, edit, deprecate or delete them."
+    },
+    "inspector": {
+      "author": "Author",
+      "agent": "{{agent}} · agent",
+      "person": "You · person",
+      "transcript": "Transcript",
+      "entries": "{{count}} entries",
+      "confidence": "Confidence",
+      "confidenceValue": "{{confidence}} · set by {{agent}}",
+      "showEntries": "Show the entries in {{task}}'s Conversation ↗",
+      "byYou": "By you · {{time}}",
+      "history": "History",
+      "edited": "You edited it · {{time}}",
+      "version": "v{{version}} · superseded {{time}} by this record",
+      "given": "Given to agents",
+      "givenReading": "Reading the invocations…",
+      "givenNone": "No invocation was given it yet.",
+      "invocationsOne": "1 invocation",
+      "invocations": "{{count}} invocations",
+      "tokens": "≈ {{tokens}} tokens",
+      "showAll": "Show all {{count}} invocations",
+      "showFewer": "Show the latest only",
+      "deprecated": "Agents no longer get it. It keeps its history and can be restored.",
+      "deprecatedKeyed": "Agents no longer get it. It keeps its history and can be restored while its key {{key}} is free.",
+      "rejected": "It was never given to agents. A rejected proposal is never restored; if it turns out true, an agent proposes it again or you write a new record."
+    },
+    "reason": {
+      "handoff": "latest handoff",
+      "pinned": "pinned",
+      "decision": "decision",
+      "warning": "warning",
+      "match": "match"
+    },
+    "next": {
+      "title": "Next agent receives",
+      "chosen": "Chosen the way the next prompt is built.",
+      "chosenFor": "Chosen the way {{agent}}'s next prompt is built.",
+      "records": "Records",
+      "tokens": "Tokens",
+      "of": "{{used}} of {{limit}}",
+      "tokensOf": "≈ {{used}} of {{limit}}",
+      "latestHandoff": "Latest handoff",
+      "pinned": "Pinned",
+      "decisionsAndWarnings": "Decisions and warnings",
+      "bestMatches": "Best matches",
+      "recordLimitOne": "The record limit left out 1 lower-ranked match.",
+      "recordLimit": "The record limit left out {{count}} lower-ranked matches.",
+      "tokenLimitOne": "The token limit left out 1 lower-ranked match.",
+      "tokenLimit": "The token limit left out {{count}} lower-ranked matches.",
+      "nothing": "Nothing to give yet: the next prompt has no Task memory part. No project record matches this task.",
+      "none": "No agent step of this task works or waits to start, so nothing is chosen for one.",
+      "unreadable": "Can't show what the next agent receives until task memory can be read.",
+      "automatic": "Save automatically",
+      "afterApproval": "Save after approval",
+      "footnote": "Ranked by matching words, importance, recency, role and confidence. Waiting proposals are never given."
+    },
+    "task": {
+      "emptyTitle": "No memory for this task yet",
+      "emptyBody": "Agents keep a handoff when a step passes or fails, with the decisions it made; you can write records too.",
+      "emptyWorking": "{{step}} is working: its handoff appears here when the step ends.",
+      "loadFailed": "Couldn't read the memory of {{task}}",
+      "loadFailedBody": "{{reason}} Nothing was changed; agents keep working with what their prompts already hold."
+    }
+  }
+}

@@ -98,6 +98,13 @@ fn instructions_icons_match_bundled_font_names() {
     (Icon::Braces, "braces"),
     (Icon::CalendarClock, "calendar-clock"),
     (Icon::Replace, "replace"),
+    (Icon::ArchiveRestore, "archive-restore"),
+    (Icon::ChevronsUp, "chevrons-up"),
+    (Icon::Inbox, "inbox"),
+    (Icon::PackageOpen, "package-open"),
+    (Icon::PinOff, "pin-off"),
+    (Icon::RotateCw, "rotate-cw"),
+    (Icon::Signpost, "signpost"),
   ] {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }

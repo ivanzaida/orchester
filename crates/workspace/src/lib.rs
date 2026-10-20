@@ -28,6 +28,7 @@ pub mod import;
 mod inspect;
 pub mod instructions;
 pub mod links;
+pub mod memory;
 pub mod messages;
 pub mod orchestrator;
 pub mod pipelines;

@@ -177,6 +177,7 @@ fn seed_names_every_scenario_once() {
       "tasks",
       "tasks-memory",
       "memory-only",
+      "memory",
       "task-states",
       "conversation",
       "changes",

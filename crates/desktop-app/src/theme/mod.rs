@@ -26,6 +26,7 @@ pub mod instructions;
 mod lifecycle;
 mod local_integration;
 mod markdown;
+mod memory;
 mod metrics;
 mod needs_you;
 mod orchester;
@@ -69,6 +70,7 @@ pub use self::{
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   markdown::blank_line_between_blocks,
+  memory::{MemorySpacing, MemoryText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing},
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
@@ -135,6 +137,7 @@ pub fn install(app: &mut App, mode: Mode) {
   orchestrator::install(theme);
   needs_you::install(theme);
   usage::install(theme);
+  memory::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

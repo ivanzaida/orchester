@@ -65,6 +65,7 @@ const BUILT: &[Screen] = &[
   Screen::EditTask,
   Screen::Files,
   Screen::Instructions,
+  Screen::Memory,
   Screen::NewConnection,
   Screen::NewTask,
   Screen::Orchestrator,

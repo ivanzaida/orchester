@@ -1,7 +1,7 @@
 //! The task page's header (`Task header` `x8Dmfa` in `lUXff`): the breadcrumb, the title with its
 //! actions (`actions`), the status and run line, the frame's notices, Run again's and the latest run's
-//! *Remove worktree* confirmations in place, and the page tabs (`Page tabs` `L9OIIZ`), Artifacts and
-//! Memory locked (`Smb4t`). It is the same component on every tab, so a request under way or an open
+//! *Remove worktree* confirmations in place, and the page tabs (`Page tabs` `L9OIIZ`; Artifacts and Memory last,
+//! `ogMzT` in `a0PLO`). It is the same component on every tab, so a request under way or an open
 //! confirmation stays as the tabs switch.
 
 mod actions;
@@ -37,7 +37,7 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
-    tabs::{PageTab, page_tabs},
+    tabs::{PageTab, counted, page_tabs},
   },
 };
 
@@ -218,8 +218,8 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   confirm_for(ctx, &runs, run)
 }
 
-/// Summary, Details, Conversation and Changes with the count of the files it lists, then Artifacts and
-/// Memory, which are not built yet.
+/// Summary, Details, Conversation and Changes with the count of the files it lists, then Artifacts and Memory
+/// with the count of the task's active records.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let changes_reads = super::changes::ChangesReads::of(ctx);
@@ -234,7 +234,12 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     Arc::new(move |at| {
       let view = match tab {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
-        TaskTab::Summary | TaskTab::Details | TaskTab::Conversation | TaskTab::LocalIntegration => TaskView::of(tab),
+        TaskTab::Summary
+        | TaskTab::Details
+        | TaskTab::Conversation
+        | TaskTab::LocalIntegration
+        | TaskTab::Artifacts
+        | TaskTab::Memory => TaskView::of(tab),
       };
       navigation.open(Route::Project(project, ProjectPage::task(key.clone(), view, kept)), at);
     })
@@ -244,22 +249,19 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let changes = ctx.t(TaskTab::Changes.title_key());
   let count = super::changes_count(ctx, &props.task);
   let changes = super::changes::tab_label(ctx, &changes, count);
+  let memory = ctx.t(TaskTab::Memory.title_key());
+  let memory = match super::memory_count(ctx, &props.task) {
+    Some(active) if active > 0 => counted(ctx, &memory, active),
+    _ => memory,
+  };
   let tabs = vec![
     tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     tab(TaskTab::Details, ctx.t(TaskTab::Details.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
     tab(TaskTab::LocalIntegration, ctx.t(TaskTab::LocalIntegration.title_key())),
-    PageTab::unavailable(
-      "task-tab-artifacts",
-      ctx.t("task.tabs.artifacts"),
-      ctx.t("task.tabs.artifactsReason"),
-    ),
-    PageTab::unavailable(
-      "task-tab-memory",
-      ctx.t("task.tabs.memory"),
-      ctx.t("task.tabs.memoryReason"),
-    ),
+    tab(TaskTab::Artifacts, ctx.t(TaskTab::Artifacts.title_key())),
+    tab(TaskTab::Memory, memory),
   ];
   let tabs = if props.tab == TaskTab::LocalIntegration {
     tabs.into_iter().take(5).collect()

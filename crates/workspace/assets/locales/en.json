@@ -1716,5 +1716,19 @@
         "group": "New starts of {{task}}'s group are held already: there is nothing to hold. Nothing was changed."
       }
     }
+  },
+  "memory": {
+    "errors": {
+      "blankText": "Write what the record says.",
+      "keyTooLong": "A key is at most {{max}} characters.",
+      "keyOneLine": "A key is one line.",
+      "tag": "A tag is one word without spaces, at most {{max}} characters.",
+      "secret": "The record holds the value of secret {{secret}}, so it wasn't saved. Leave the value out; agents can be given the secret by name.",
+      "keychain": "The value of secret {{secret}} couldn't be read to keep it out of memory, so the record wasn't saved.",
+      "changedMeanwhile": "The record changed since this page read it, so nothing was saved. Look at it again and decide on what it says now.",
+      "gone": "The record no longer exists.",
+      "keyTaken": "Another active record of this memory has that key. Choose another key, or edit that record instead.",
+      "restoreKeyInUse": "Can't restore: {{key}} already names an active record. Deprecate that one first."
+    }
   }
 }
