@@ -18,7 +18,7 @@ lurq keeps subsystems behind features. Enable what the app actually uses:
 | `resources` | Async local/remote resource loading |
 | `i18n` | Translation resources and `ctx.t(...)` |
 | `devtools` | Component metadata, signal inspection, profiler, DevTools window |
-| `clipboard` | Copy/cut/paste in text inputs and selectable text |
+| `clipboard` | Copy/cut/paste in text inputs and selectable text; clipboard images and files (`read_clipboard`) |
 | `tokio` | Run futures off the UI thread (see below) |
 
 **On Windows, enable `dx12` even when rendering with wgpu.** The winit shell's
