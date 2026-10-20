@@ -1,7 +1,8 @@
 //! The loader (`loader-circle`) turns while it is shown: [`icon`](super::icon::icon) gives every loader
 //! icon this turn, so running work never looks stuck. lurq plays the turn and asks for frames only while
 //! a turning node is in the window's tree, so a window without a loader on screen stays idle. The turn
-//! steps through [`LOADER_STEPS`] poses, and lurq draws a frame only when the pose changes.
+//! steps through [`LOADER_STEPS`] poses a [`LOADER_TURN`], 24 poses 15° apart in a second, and lurq draws
+//! a frame only when the pose changes: 24 frames a second while a loader is shown.
 
 use std::f32::consts::TAU;
 
