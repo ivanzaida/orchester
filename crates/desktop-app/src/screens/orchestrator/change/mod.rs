@@ -6,7 +6,7 @@
 //! person applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays
 //! open to automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
 
-mod answer;
+pub(in crate::screens) mod answer;
 mod continuation;
 mod control;
 mod facts;
@@ -326,14 +326,17 @@ fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Ro
       .into_iter()
       .collect(),
     Some(Change::Cancel { .. }) if view.phase().waits() => Vec::new(),
+    // A release names a task only for its group: the task opens on its Details.
     Some(Change::Release { .. }) if matches!(view.phase(), Phase::Refused(_)) => {
       let queue = (
         Icon::ArrowUpRight,
         ctx.t("orchestrator.action.openQueue"),
         super::action::queue_route(project),
       );
-      task_open(TaskTab::Summary).into_iter().chain([queue]).collect()
+      task_open(TaskTab::default()).into_iter().chain([queue]).collect()
     }
+    Some(Change::Release { .. }) => task_open(TaskTab::default()).into_iter().collect(),
+    // Every other change is to a run of the task, which its Summary shows.
     _ => task_open(TaskTab::Summary).into_iter().collect(),
   }
 }

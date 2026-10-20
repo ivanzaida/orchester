@@ -37,7 +37,7 @@ use super::Served;
 
 /// What the seed's agent asks in "Sync contacts with HubSpot" (`shapes::QUESTION`).
 const ASKED: &str = "Should a contact that exists in both keep the HubSpot owner or ours?";
-const ASKING: &str = "Sync contacts with HubSpot";
+pub(super) const ASKING: &str = "Sync contacts with HubSpot";
 const READY: &str = "Show the signed-in account";
 const PLANNING: &str = "Plan the GitHub app permissions";
 
@@ -120,7 +120,7 @@ pub(super) fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
     .collect()
 }
 
-fn allow(served: &Served, consent: OrchestratorConsent) {
+pub(super) fn allow(served: &Served, consent: OrchestratorConsent) {
   served
     .services()
     .workspace

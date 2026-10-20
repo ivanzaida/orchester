@@ -47,6 +47,7 @@ impl DevtoolsInspectable for Changed {}
 pub(super) type ChangeAction = FutureAction<Change, Changed, Message>;
 pub(super) type CheckAction = FutureAction<Vec<AgentAccountId>, (), Message>;
 pub(super) type SignInAction = FutureAction<AgentAccountId, (), Message>;
+pub(super) type PlanCheckAction = FutureAction<AgentAccountId, (), Message>;
 /// The folder the system's picker gave for an account, if it gave one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ChosenFolder(pub Option<(AgentAccountId, PathBuf)>);
@@ -57,6 +58,16 @@ pub(super) type ChooseAction = FutureAction<AgentAccountId, ChosenFolder, Messag
 pub(super) fn choose_folder(ctx: &mut Ctx) -> ChooseAction {
   ctx.future_action(|account: AgentAccountId| async move {
     background::run(move || ChosenFolder(rfd::FileDialog::new().pick_folder().map(|folder| (account, folder)))).await
+  })
+}
+
+/// *Check now* of a Claude Code account's plan limits: the smallest turn its CLI runs, which spends a few tokens of
+/// the account's plan (`orchester_workspace::plan_limits::reads`). Only a person's press starts it.
+pub(super) fn plan_check(ctx: &mut Ctx) -> PlanCheckAction {
+  let reads = Services::of(ctx).plan_reads;
+  ctx.future_action(move |account: AgentAccountId| {
+    let reads = reads.clone();
+    async move { background::run(move || reads.check_now(account)).await? }
   })
 }
 

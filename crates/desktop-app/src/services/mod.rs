@@ -18,6 +18,7 @@ use orchester_workspace::{
   activity::Activity,
   clock::Clock,
   close::CloseFlow,
+  plan_limits::reads::PlanReads,
   recovery::Recovery,
   runner::Runners,
   secrets::Vault,
@@ -77,6 +78,9 @@ pub struct Services {
   /// The editor *Resolve in editor* opens a run's worktree in, found as the session starts; `None` where there is
   /// none.
   pub editor: Option<Editor>,
+  /// The reads of the accounts' plan limits outside runs; they read only once the app's own window started them
+  /// (`Launch::read_plan_limits`), never in a test or a QA copy.
+  pub plan_reads: PlanReads,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -107,6 +111,7 @@ impl Services {
     Self {
       close: CloseFlow::new(runners.clone(), jobs.clone(), runtime.clone()),
       recovery,
+      plan_reads: PlanReads::new(workspace.clone(), runners.clone()),
       runners,
       cloud: Cloud::new(workspace.clone(), vault.clone(), servers.clone()),
       links: Links::from_env(),
@@ -155,6 +160,13 @@ impl Services {
 
 /// The session's background tasks; dropping it ends them.
 pub struct Background(Vec<JoinHandle<()>>);
+
+impl Background {
+  /// Ends `task` with the others.
+  pub fn hold(&mut self, task: JoinHandle<()>) {
+    self.0.push(task);
+  }
+}
 
 impl Drop for Background {
   fn drop(&mut self) {

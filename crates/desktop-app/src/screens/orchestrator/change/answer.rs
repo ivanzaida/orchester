@@ -100,8 +100,9 @@ pub(super) fn message(ctx: &Ctx, view: &View, (number, text, then): (u32, &str, 
   }
 }
 
-/// What a waiting message card says it does, and its action's words: as `then` moves the run, or a plain message.
-const fn moving(then: Option<MessageThen>) -> (&'static str, &'static str) {
+/// What a waiting message card says it does, and its action's words: as `then` moves the run, or a plain message. The
+/// task's conversation names a waiting message proposal's action with the same words.
+pub(in crate::screens) const fn moving(then: Option<MessageThen>) -> (&'static str, &'static str) {
   match then {
     None => (
       "orchestrator.change.message.effectWaits",

@@ -24,6 +24,7 @@ mod data;
 mod links;
 mod proposals;
 mod refused;
+mod resolve;
 #[path = "../../tests/support/signed_in.rs"]
 mod signed_in;
 
@@ -94,10 +95,13 @@ enum State {
   /// `ExRt1` `gOzsF`: messages that move a run, proposed and applied, among them one that ran a task again
   /// ([`applied`]).
   MessagesApplied,
+  /// `sXEjJ`: a run sent back to resolve its conflicts, proposed by the chat with a long note and waiting for the
+  /// person ([`resolve`]).
+  Resolve,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 18] = [
+  const ALL: [(&'static str, Self); 19] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -116,6 +120,7 @@ impl State {
     ("continue-applied", Self::ContinueApplied),
     ("proposals", Self::Proposals),
     ("messages-applied", Self::MessagesApplied),
+    ("resolve", Self::Resolve),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -197,7 +202,7 @@ fn route(prepared: &data::Prepared, state: State, chat: Option<ChatId>) -> Route
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
     State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
-    State::Continue | State::ContinueApplied | State::Proposals | State::MessagesApplied => {
+    State::Continue | State::ContinueApplied | State::Proposals | State::MessagesApplied | State::Resolve => {
       ProjectPage::Orchestrator(OrchestratorChat::Latest)
     }
   };
@@ -220,6 +225,7 @@ fn seeded_chat(
     )?,
     State::Proposals => proposals::conversation(prepared, i18n)?,
     State::MessagesApplied => applied::conversation(runtime, (services, i18n.clone()), prepared)?,
+    State::Resolve => resolve::conversation(prepared)?,
     _ => return Ok(None),
   }))
 }

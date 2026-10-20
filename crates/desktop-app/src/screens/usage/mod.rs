@@ -51,12 +51,12 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{time::Timestamp, usage::Measure};
+use orchester_core::{connection::plan_limits::ReadingSource, time::Timestamp, usage::Measure};
 use orchester_workspace::usage::{Dashboard, UsageQuery};
 
 pub use self::place::{Place, Requery};
 use self::toolbar::{ToolbarProps, UsageToolbar};
-use crate::{project::ShownProject, theme::UsageSpacing};
+use crate::{project::ShownProject, services::plan_limits, theme::UsageSpacing};
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, query: &UsageQuery) -> Element {
   let key = format!("usage-{}", project.open.project.id());
@@ -126,10 +126,13 @@ impl Component for UsageScreen {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let UsageProps { place, query } = ctx.props::<UsageProps>().clone();
-    // Again whenever the runs change, a threshold is saved or Retry is pressed.
-    let deps = (place.changes(), self.saved.get(), self.retry.get());
+    // Again whenever the runs change, a read of an account's plan limits lands, a threshold is saved or Retry is
+    // pressed.
+    let deps = (place.changes(), last_read(ctx), self.saved.get(), self.retry.get());
     let since = Dashboard::since(&query, Timestamp::now());
     let loaded = read::read(ctx, place.root(), since, deps);
+    // While the page is shown the accounts' plan limits are read, at once and every few minutes.
+    let shown = plan_limits::shown(ctx, "usage-plan-limits-shown");
     let name = place.name();
     let built = read::build(ctx, (name.clone(), query.clone()), loaded.data.clone());
     let dashboard = built.data.clone().flatten().map(|built| built.0);
@@ -160,6 +163,7 @@ impl Component for UsageScreen {
       })
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
+      .child(shown)
       .child(toolbar)
       .child(
         ScrollVertical::new(
@@ -181,6 +185,16 @@ impl Component for UsageScreen {
         .flex(1.0),
       )
   }
+}
+
+/// When the newest read of an account's plan limits outside a run was: the history is read again once one lands.
+fn last_read(ctx: &mut Ctx) -> Option<Timestamp> {
+  let readings = plan_limits::readings(ctx);
+  readings
+    .all()
+    .filter(|reading| reading.account_id().and_then(|account| readings.source_of(account)) == Some(ReadingSource::Read))
+    .map(|reading| reading.at)
+    .max()
 }
 
 impl UsageScreen {

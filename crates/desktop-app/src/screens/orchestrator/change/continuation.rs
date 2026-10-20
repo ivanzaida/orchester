@@ -136,12 +136,14 @@ pub(super) fn rows(
         ctx.t("orchestrator.change.facts.conflicts"),
         vec![Part::Value(files.join(&separator).into())],
       ));
-      // The conflict's own words always lead what the agent reads; the chat's note follows them.
-      let mut parts = vec![Part::Value(
-        ctx.t_args("orchestrator.change.facts.conflictNote", [("branch", base.as_str())]),
-      )];
-      parts.extend(note.as_deref().map(|note| Part::Value(note.into())));
-      rows.push((ctx.t("orchestrator.change.facts.note"), parts));
+      // The conflict's own words always lead what the agent reads; the chat's note follows them in the same
+      // paragraph. Two wrapping values side by side would squeeze each other to a letter a line.
+      let conflict = ctx.t_args("orchestrator.change.facts.conflictNote", [("branch", base.as_str())]);
+      let words = match note.as_deref().map(str::trim).filter(|note| !note.is_empty()) {
+        Some(note) => Arc::from(format!("{conflict} {note}")),
+        None => conflict,
+      };
+      rows.push((ctx.t("orchestrator.change.facts.note"), vec![Part::Value(words)]));
     }
   }
   rows

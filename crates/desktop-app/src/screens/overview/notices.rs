@@ -81,22 +81,29 @@ pub(super) fn tasks(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectTasks) -> 
   let shown: Vec<Element> = notices
     .iter()
     .map(|notice| {
-      // A task can be both blocked and unreadable: the kind keeps their ids apart.
-      let (glyph, label, kind) = match notice.kind {
+      // A task can be both blocked and unreadable: the kind keeps their ids apart. A blocked task opens on its
+      // Details, which name what it waits for; one whose run cannot be read on its Summary, which shows its runs.
+      let (glyph, label, kind, tab) = match notice.kind {
         NoticeKind::Blocked => (
           Icon::OctagonPause,
           ctx.t_args("overview.notices.open", [("task", &*notice.key)]),
           "blocked",
+          TaskTab::default(),
         ),
         // `circle-help`, as the design draws it (`pS4Z3` in `Bq82T`).
-        NoticeKind::Unreadable => (Icon::CircleHelp, ctx.t("overview.notices.openTask"), "unreadable"),
+        NoticeKind::Unreadable => (
+          Icon::CircleHelp,
+          ctx.t("overview.notices.openTask"),
+          "unreadable",
+          TaskTab::Summary,
+        ),
       };
       let id = format!("overview-notice-{}-{kind}", notice.key);
       let open = ActionButton::new(format!("{id}-open"), ButtonKind::Secondary, label).opens(open_task(
         ctx,
         project,
         &notice.key,
-        TaskTab::Summary,
+        tab,
       ));
       Notice::new(id, NoticeTone::Info, message_text(ctx, &notice.title))
         .icon(glyph)

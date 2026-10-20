@@ -5,11 +5,13 @@
 mod across;
 mod approvals;
 mod auto_mode;
+mod base_moved;
 mod continue_run;
 mod conversation;
 mod limits;
 mod message_waits;
 mod messages;
+mod orchestrated;
 mod pipeline_copy;
 mod plan_read;
 mod plans;
@@ -32,6 +34,7 @@ mod worktree;
 
 use std::sync::Arc;
 
+use orchester_core::id::ChatId;
 use rmcp::{
   handler::server::common::schema_for_type,
   model::{JsonObject, Tool, ToolAnnotations},
@@ -71,20 +74,29 @@ impl Translate {
 }
 
 /// Who sends an answer or a message to a run's agents: a client of the app's MCP server, or the project's
-/// Orchestrator chat, whose answers the task's conversation names as the chat's.
+/// Orchestrator chat of a conversation, whose answers the task's conversation names as the chat's, with the
+/// conversation it wrote them in and how they went out: sent by the chat itself, or applied by the person.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SentBy {
   Client,
-  Orchestrator,
-  /// A native, person-only acceptance of a proposed answer.
-  Person,
+  Orchestrator(ChatId),
+  /// A native, person-only acceptance of a proposed answer of the chat's conversation.
+  Person(ChatId),
 }
 
 impl SentBy {
   const fn answerer(self) -> orchester_core::run::Answerer {
     match self {
-      Self::Person => orchester_core::run::Answerer::Person,
-      Self::Client | Self::Orchestrator => orchester_core::run::Answerer::Automation,
+      Self::Person(_) => orchester_core::run::Answerer::Person,
+      Self::Client | Self::Orchestrator(_) => orchester_core::run::Answerer::Automation,
+    }
+  }
+
+  /// The Orchestrator chat's conversation that wrote it; `None` for a client's.
+  const fn chat(self) -> Option<ChatId> {
+    match self {
+      Self::Client => None,
+      Self::Orchestrator(chat) | Self::Person(chat) => Some(chat),
     }
   }
 }
@@ -113,7 +125,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, whose Summary lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
@@ -145,7 +157,10 @@ const SPECS: &[Spec] = &[
                   or automation through this server). merge says whether its work was merged, as its task's Summary \
                   tells it: merged by orchester (with the recorded merge) or outside (git proves its base branch \
                   holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
-                  The run's link is its task's page; the waiting approvals, \
+                  base_moved lists Orchester's notices that the run's base branch moved (kind base_moved): the \
+                  branch and revision, the tasks and commits that landed, the files both sides changed, and its \
+                  state (waits_for_writing_step, kept_until_run_goes_on, waits_for_follow_up, or delivered with the \
+                  agent and step that read it). The run's link is its task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
@@ -164,7 +179,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_conversation",
-    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
+    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision), how a decision went on with a run that stopped (run_continued: returned, returned_with_note or restarted, to which step, the note, the attempt; its author the person, automation or the orchestrator), Orchester's notices that the base branch moved (kind base_moved: branch, revision, tasks and commits that landed, overlapping_files, state and delivered_to) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
     schema: schema_for_type::<conversation::GetConversation>,
     read_only: true,
   },
@@ -395,19 +410,21 @@ async fn dispatch_answers(
   }
 }
 
-/// Calls `answer_question` or `send_message` (`name`) with `arguments` for the project's Orchestrator chat: as
-/// automation, named the chat's in the task's conversation, and refused where it would decide a waiting plan.
+/// Calls `answer_question` or `send_message` (`name`) with `arguments` for the project's Orchestrator chat of
+/// conversation `chat`, decided `by`: named the chat's in the task's conversation, with where it came from and how it
+/// went out (sent by the chat as automation, or applied by the person), and refused where it would decide a waiting
+/// plan.
 pub async fn answer_for_orchestrator(
   services: &Services,
   translate: &Translate,
   name: &str,
   arguments: JsonObject,
-  (by, expected): (orchester_core::run::Answerer, Option<&str>),
+  (chat, by, expected): (ChatId, orchester_core::run::Answerer, Option<&str>),
 ) -> Result<Value, ToolError> {
   let arguments = Value::Object(arguments);
   let by = match by {
-    orchester_core::run::Answerer::Person => SentBy::Person,
-    orchester_core::run::Answerer::Automation => SentBy::Orchestrator,
+    orchester_core::run::Answerer::Person => SentBy::Person(chat),
+    orchester_core::run::Answerer::Automation => SentBy::Orchestrator(chat),
   };
   match name {
     "answer_question" => questions::answer_question(services, parse(arguments)?, by).await,

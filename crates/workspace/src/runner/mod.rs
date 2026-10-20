@@ -334,6 +334,17 @@ impl Runners {
     self.inner.shared.counters(root).changes.subscribe()
   }
 
+  /// Tells the readers of [`Self::changes_of`] that the desktop queued notices that project `root`'s base branch
+  /// moved (`crate::base_moved`): the runs' timelines read them again. A run's state did not change.
+  pub fn base_notices_queued(&self, root: &Path) {
+    self
+      .inner
+      .shared
+      .counters(root)
+      .changes
+      .send_modify(|revision| *revision += 1);
+  }
+
   /// Counts a change as project `root`'s runner reports it: a run's state (`true`), which moves its transcript
   /// on too, or its transcript alone. For tests of what follows the counts, which run no runner.
   #[cfg(feature = "test-support")]
@@ -347,15 +358,18 @@ impl Runners {
     counters.changes.send_modify(|revision| *revision += 1);
   }
 
-  /// Hands `reading` on as a project's runner would. For tests of what shows plan limits, which run no runner.
-  #[cfg(feature = "test-support")]
-  #[doc(hidden)]
-  pub fn observe_plan_limits_for_test(&self, reading: orchester_core::connection::plan_limits::LimitReading) {
+  /// Hands `reading`, from `source`, on to what shows the session's plan limits, as a project's runner hands on what
+  /// a turn reported: a read outside a run ([`crate::plan_limits::reads`]) is a reading like a turn's.
+  pub fn observe_plan_limits(
+    &self,
+    reading: orchester_core::connection::plan_limits::LimitReading,
+    source: orchester_core::connection::plan_limits::ReadingSource,
+  ) {
     self
       .inner
       .shared
       .limits
-      .send_if_modified(|readings| readings.observe(reading));
+      .send_if_modified(|readings| readings.observe_from(reading, source));
   }
 
   /// Changes whenever any runner reports that a run changed.

@@ -4,6 +4,7 @@ mod always_allow;
 mod approval_rules;
 mod auto_mode;
 mod automatic_status;
+mod base_notices;
 mod blobs;
 mod chat_decisions;
 mod checks;
@@ -24,6 +25,7 @@ mod merges;
 mod messages;
 mod native;
 mod orchestrator;
+mod orchestrator_sent;
 mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
@@ -79,6 +81,7 @@ pub use self::{
   approval_rules::DecisionCounts,
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
+  chat_decisions::KeptAction,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_waits::KeptWait,

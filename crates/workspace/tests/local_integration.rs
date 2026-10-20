@@ -22,6 +22,8 @@ mod merged_in;
 mod merged_outside;
 #[path = "local_integration/metadata.rs"]
 mod metadata;
+#[path = "local_integration/moved_base.rs"]
+mod moved_base;
 #[path = "local_integration/privacy.rs"]
 mod privacy;
 #[path = "local_integration/rebase.rs"]

@@ -292,6 +292,7 @@ fn weekly(
       blocked: None,
     },
     source: None,
+    origin: orchester_core::connection::plan_limits::ReadingSource::Turn,
   }
 }
 

@@ -65,7 +65,7 @@ fn domain_window_input_cannot_accept_an_unverified_step() {
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",
-    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key }),
+    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
   served.until("Accept with the runner online", |served| {
     served.shows("task-accept-step") && !served.shows("task-retry-offline")

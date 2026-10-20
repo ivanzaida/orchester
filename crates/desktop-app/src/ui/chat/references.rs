@@ -1,6 +1,6 @@
 //! What an agent writes that names a place in the app, made a link the chat follows as any `orchester:` link
 //! (`links`): a task key of the chat's project that exists (`ORC-38`), and an app route path of a place in a project
-//! (`/project/<id>/tasks/ORC-38/summary`, the `link` every Orchester MCP tool returns). In plain text every such
+//! (`/project/<id>/tasks/ORC-38/details`, the `link` every Orchester MCP tool returns). In plain text every such
 //! place counts; a code span counts when all it holds, but for the spaces around it, is one such key or path, as an
 //! agent may put a place it names in backticks. Nothing else counts: not a key or path inside a longer code span, a
 //! code block, math, HTML, or a link's words. An unknown key, a route outside a project or one the app does not know
@@ -243,7 +243,7 @@ fn task_key(
   task_route(key, project, exists).map(|route| (end, route))
 }
 
-/// The route of the task of `project` with `key`, when it is one of its tasks.
+/// The route of the task of `project` with `key`, on the tab a task opens on, when it is one of its tasks.
 fn task_route(key: TaskKey, project: ProjectId, exists: &dyn Fn(&TaskKey) -> bool) -> Option<Route> {
-  exists(&key).then_some(Route::Project(project, ProjectPage::Task(key, TaskView::Summary)))
+  exists(&key).then_some(Route::Project(project, ProjectPage::Task(key, TaskView::default())))
 }

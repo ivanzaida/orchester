@@ -6,7 +6,8 @@
 //! told it waits. The person applies it through the same tool any client of the app calls, as their own decision (what
 //! it widens is theirs to decide, as in the window), or dismisses it ([`super::proposal::decide`]); a draft saved again
 //! or published meanwhile, or a run with a newer checkpoint, is refused and needs a fresh proposal. An answer or a
-//! message is sent as the chat's, recorded as automation's.
+//! message is sent as the chat's, recorded as automation's when the chat sends it itself and as the person's when they
+//! apply it (ORC-45).
 
 mod answer;
 mod continuation;
@@ -98,7 +99,8 @@ pub(super) async fn widens(scope: &ChatScope, change: &ProposedChange) -> Result
 /// Applies `change`, proposed in `scope`, through the tool that carries it out, as the person's own decision:
 /// refused as for any client but for what widens what agents may do, which the person decided when it is exactly
 /// what they were shown (`shown`); refused when what it names changed since it was proposed. A merge merges only the
-/// commit that was proposed.
+/// commit that was proposed. An answer or a message is the chat's, decided `by`: sent by the chat itself as
+/// automation, or applied by the person.
 pub(super) async fn apply(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
@@ -181,7 +183,7 @@ pub(super) async fn apply(
     } => send_as_checked((services, translate), scope, change, (number, sent_as.as_deref(), by)).await,
     Change::Answer { .. } => {
       let (tool, arguments) = tool_arguments(scope, change);
-      answer_for_orchestrator(services, translate, tool, arguments, (by, None)).await
+      answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, None)).await
     }
   }
 }
@@ -327,7 +329,7 @@ async fn send_as_checked(
     return Err(message_changed(number));
   };
   let (tool, arguments) = tool_arguments(scope, change);
-  answer_for_orchestrator(services, translate, tool, arguments, (by, Some(expected)))
+  answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, Some(expected)))
     .await
     .map_err(|error| match error {
       ToolError::Refused { code, .. } if code == CHANGED_SINCE_PROPOSED && by == Answerer::Person => {

@@ -156,8 +156,11 @@ fn press_element(window: &mut Window, id: &str) {
   window.pass();
 }
 
+/// The switch of *Let the Orchestrator continue interrupted runs*, the section's last.
+const CONTINUE: &str = "settings-continue-interrupted";
+
 /// The Orchestrator's switches: each one's element id, its title, and the consent it saves.
-const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 3] = [
+const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 4] = [
   (
     PUBLISH,
     "Let the Orchestrator publish drafts",
@@ -173,10 +176,15 @@ const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 3] = [
     "Let the Orchestrator merge runs",
     OrchestratorConsent::MergeRuns,
   ),
+  (
+    CONTINUE,
+    "Let the Orchestrator continue interrupted runs",
+    OrchestratorConsent::ContinueInterrupted,
+  ),
 ];
 
 #[test]
-fn settings_only_a_person_lets_the_orchestrator_publish_answer_or_merge() {
+fn settings_only_a_person_lets_the_orchestrator_publish_answer_merge_or_continue() {
   use lurq::app::events::with_synthetic_input;
   let mut window = Window::open();
   let workspace = window.launch.workspace().expect("session").clone();
@@ -252,10 +260,10 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   window.tree.resize(1440, 600);
   window.navigation().go(Route::Settings);
   window.until("the last switch", |window| {
-    window.tree.get_element_by_id("settings-merge-runs").is_some()
+    window.tree.get_element_by_id(CONTINUE).is_some()
   });
   assert!(
-    bottom(&mut window, "settings-merge-runs") > 600.0,
+    bottom(&mut window, CONTINUE) > 600.0,
     "below the window's height before scrolling"
   );
   let bounds = window
@@ -268,8 +276,5 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   window.tree.scroll(x, y, 0.0, -2000.0, ScrollPhase::Scroll);
   window.pass();
   window.pass();
-  assert!(
-    bottom(&mut window, "settings-merge-runs") <= 600.0,
-    "scrolled into the window"
-  );
+  assert!(bottom(&mut window, CONTINUE) <= 600.0, "scrolled into the window");
 }

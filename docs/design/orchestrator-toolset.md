@@ -1,7 +1,9 @@
 # The Orchestrator's toolset
 
 Status: decided by the person on 2026-10-15; decision 5 and the waits changed by the person on 2026-10-17 (ORC-42);
-continuing a stopped run and the ends of runs added to decision 5 on 2026-10-19 (proposed, conservative; see there).
+continuing a stopped run and the ends of runs added to decision 5 on 2026-10-19 (proposed, conservative; see there);
+continuing interrupted runs behind *Let the Orchestrator continue interrupted runs* decided by the person on
+2026-10-20 (ORC-53).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -61,9 +63,10 @@ person can click.
      (below). It is always a proposal card the person applies or dismisses, showing the run, the step it stopped at
      and why, the choice and the note.
      Applying is the person's own decision, recorded as theirs, exactly as the task's Summary decides it; it is
-     refused when the run went on since it was proposed (a newer attempt). No switch lets the chat continue a run
-     itself: none of the person's switches was given for it (*answer agents* is about what agents asked, *merge runs*
-     about merging), and a retry spends more of the budget and overrides the retries the pipeline allows, which the
+     refused when the run went on since it was proposed (a newer attempt). No switch lets the chat continue such a
+     run itself: none of the person's switches was given for it (*answer agents* is about what agents asked, *merge
+     runs* about merging, *continue interrupted runs* about runs a crash, the runner or *Quit now* interrupted), and a
+     retry spends more of the budget and overrides the retries the pipeline allows, which the
      pipeline left to a person. `raise_limits`, `raise_step_budget`, `resume` and `accept` stay the person's and are
      refused (`person_only`). Where `continue_run` returns a run that ended (succeeded or failed) to an earlier agent
      step (ORC-44), the chat may propose that `return_to` too, under the same rules; a turn a failure started may
@@ -80,10 +83,21 @@ person can click.
      run (`integration_running`), and as a return is refused (`run_merged`, `worktree_removed`, `worktree_in_merge`,
      `run_not_ended`). A proposal is refused (`changed_since_proposed`) once the run went on, or its merge no longer
      stands at the conflicts it was proposed for (resolved, merged or returned from the task page).
-   - The chat resumes only a run a pause stopped (`resume_run`). A run stopped at a limit (its token budget or time
-     limit, the daily or a group's budget, a step's budget, an account's plan limit) or interrupted is the person's to
-     resume or continue, and the chat's call is refused (`person_only`). A proposed resume the person applies is
-     checked again: a run that stopped at a limit or was interrupted since is refused, not resumed.
+   - The chat resumes a run a pause stopped (`resume_run`). It continues a run interrupted for a reason that is
+     neither a person's choice nor a limit — a crash, the runner going away, or *Quit now* — only behind the
+     person-only switch *Let the Orchestrator continue interrupted runs* (Settings › What automation may do; off until
+     a person turns it on, synthetic input cannot flip it; decided by the person on 2026-10-20, ORC-53). With it on,
+     `resume_run` continues such a run from its last checkpoint through the same path as the task page's *Continue*
+     (`runners.continue_run_in`), and the continuation is kept in the conversation as the chat's own action. With it
+     off, the call is refused (`person_only`) as before; it never becomes a proposal, since the person chose a
+     switch. Whatever the switch says, the person's are, and refused (`person_only`): a run stopped at a limit (its
+     token budget or time limit, the daily or a group's budget, a step's budget, an account's plan limit), a run the
+     person canceled, a run the runner could not record or carry on, and an interrupted run whose worktree is gone. A
+     proposed resume the person applies is checked again: a run that stopped at a limit or was interrupted since is
+     refused, not resumed. The start-up recovery (`docs/architecture/storage.md`) keeps offering the interrupted runs;
+     the runner continues a run once (one continuation at a time, only while it is interrupted), so the chat's
+     continuation and the recovery's *Continue all* never both continue it: the later one is told the run is not
+     interrupted any more.
    - A message (`send_message`) reaches an agent that waits for an answer or works, or waits for one, as the task's
      composer sends it, and goes directly under *Let the Orchestrator answer agents*. A message to a run none of
      whose agents waits or works moves the run: it follows a run ready for review up, continues a failed run or one
@@ -113,9 +127,16 @@ person can click.
      a decision the turn reads the run, tells the person what happened and the choices, and may propose a retry or a
      return (`continue_run`). For a failure, a limit or an interruption the turn reads the run and tells the person
      what happened and the choices they have on the task's Summary, which are theirs. Such a turn starts, resumes,
-     cancels and merges nothing itself.
+     cancels and merges nothing itself, with one exception (ORC-53): with *Let the Orchestrator continue interrupted
+     runs* on too, the turn of an interrupted run's end the chat may continue (a crash; the runner going away and
+     *Quit now* are no followed ends) continues that run once with `resume_run`, from its last checkpoint, and tells
+     the person. Only the run whose end started the turn, and never in a loop: a run interrupted again within 10
+     minutes of the interruption before is left to the person, its turn told why and `resume_run` refused
+     (`interrupted_again`); a run the chat continued that is interrupted again starts no turn (`raised_by_own`). Each
+     turn's wait keeps what it may do (`continuing`), and the tool checks it again when it is called.
    - In a turn a wait or an end started by itself nobody asked for anything, so `merge_run`, `run_task`,
-     `pause_run`, `resume_run` (of a run a pause stopped), `release_queue` and every publication only propose,
+     `pause_run`, `resume_run` (of a run a pause stopped, or an interrupted run but the one above), `release_queue` and
+     every publication only propose, or for an interrupted run are refused (`person_only`),
      whatever *Let the Orchestrator merge runs*, *publish drafts* and auto mode say; the person applies the card. This
      holds by the tools (the turn's tools know the turn started by itself), not by the prompt. A release there is
      refused before it is proposed when nothing is held (`nothing_held`), only a person's hold is (`person_only`) or
@@ -150,7 +171,7 @@ project.
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
 | Tasks | `list_tasks`, `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing) | — |
-| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; only a run a pause stopped; both, and `release_queue`, only proposed in a turn Orchester started) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
+| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; a run a pause stopped, and with *Let the Orchestrator continue interrupted runs* a run a crash, the runner going away or *Quit now* interrupted, from its last checkpoint; never a run at a limit, canceled, failed by the runner or without its worktree; both, and `release_queue`, only proposed in a turn Orchester started, but for the interrupted run whose end started the turn, continued once under both that switch and *answer agents*) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*; a message that moves a run is always proposed) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |

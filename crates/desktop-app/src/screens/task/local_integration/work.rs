@@ -13,7 +13,7 @@ use orchester_core::{
   integration::local::{CheckedResult, LocalConflict, LocalError, LocalPath, Placement, Resolution},
 };
 use orchester_workspace::{
-  background,
+  background, base_moved,
   tasks::local_integration::{IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview},
 };
 
@@ -147,7 +147,7 @@ pub fn action(ctx: &mut Ctx) -> Work {
       let jobs = services.jobs.of(task.project.open.project.id()).of(run);
       let open = task.project.open.clone();
       let feed = task.project.feed.clone();
-      let vault = services.vault.clone();
+      let (vault, programs) = (services.vault.clone(), services.programs.clone());
       let result = background::run(move || {
         let _working = jobs
           .local_work(&open, &task.key)
@@ -179,6 +179,10 @@ pub fn action(ctx: &mut Ctx) -> Work {
         let outcome = execute(&mut session, request.action, vault.get()).map_err(problem)?;
         if request.stop.load(Ordering::Acquire) {
           session.pause().map_err(problem)?;
+        }
+        // The run's merge moved its base branch: the runs still at work on it are told (ORC-54).
+        if session.operation().merged().is_some() {
+          base_moved::after_merge(&open.repo_root, &programs);
         }
         Ok(outcome)
       })

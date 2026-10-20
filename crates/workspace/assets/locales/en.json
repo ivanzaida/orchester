@@ -1634,6 +1634,19 @@
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
+    },
+    "planCheck": {
+      "off": "This copy of Orchester doesn't read plan limits on its own, so nothing ran.",
+      "notClaude": "Check now runs for Claude Code accounts. Codex accounts are read on their own.",
+      "busy": "A check of this account is already running.",
+      "unavailable": "This account can't run Claude Code on this computer now, so it can't be checked.",
+      "notSignedIn": "Nobody is signed in to this account. Sign in, then check again.",
+      "cliMissing": "Claude Code isn't on the PATH. Install it, then check again.",
+      "noLimits": "Claude Code answered without plan limits. An API key has none to report.",
+      "noAnswer": "Claude Code ended without answering. The log has what it printed.",
+      "timedOut": "Claude Code didn't answer in time, so the check stopped.",
+      "refused": "Claude Code refused the check: {{reason}}",
+      "failed": "Claude Code couldn't run. The log has the system's reason."
     }
   },
   "orchestrator": {
@@ -1698,6 +1711,10 @@
       "messageWaits": "Nothing is sent yet: your message to the agents of run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would send and why.",
       "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card.",
       "resumePersonOnly": "Run #{{run}} stopped at a limit or was interrupted: resuming or continuing it is the person's, on the task's Summary. Tell them what stopped it and what you recommend.",
+      "resumeCanceled": "Run #{{run}} was canceled: running the task again is the person's, on the task's Summary. Tell them what you recommend.",
+      "continueRunnerFailed": "Run #{{run}} was interrupted because the runner could not record or carry it on: continuing it is the person's, on the task's Summary, once they know why. Tell them what stopped it.",
+      "continueWorktreeGone": "Run #{{run}} was interrupted and its worktree is gone, so it cannot continue: running the task again is the person's, on the task's Summary.",
+      "continueAgain": "Run #{{run}} was interrupted again within {{minutes}} minutes of the time before, so it is left to the person, on the task's Summary. Tell them it keeps being interrupted and what you recommend.",
       "pauseWaits": "Run #{{run}} goes on: pausing it waits for the person, who applies or dismisses it in the conversation. Tell them why you would pause it.",
       "resumeWaits": "Run #{{run}} stays paused: resuming it waits for the person, who applies or dismisses it in the conversation. Tell them why you would resume it.",
       "releaseWaits": "New starts stay held: releasing them waits for the person, who applies or dismisses it in the conversation. Tell them why you would release them.",

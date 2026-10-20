@@ -92,8 +92,8 @@ pub(super) fn read(ctx: &mut Ctx, root: &Path, chat: OrchestratorChat) -> Reads 
   }
 }
 
-/// How often the project's conversations changed.
-fn revision(ctx: &mut Ctx, runners: &Runners, root: &Path) -> u64 {
+/// How often the project's conversations changed; a task's conversation reads the chat's proposals again by it too.
+pub(in crate::screens) fn revision(ctx: &mut Ctx, runners: &Runners, root: &Path) -> u64 {
   let count = ctx.stream(
     (runners.clone(), root.to_path_buf()),
     |(runners, root), emitter: StreamEmitter<u64, ()>| async move {

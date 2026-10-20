@@ -6,6 +6,7 @@ use thiserror::Error;
 use super::{Answer, AnswerError, GivenAnswer, Question};
 use crate::{
   id::{InvocationId, MessageId, RunId, StepExecutionId},
+  orchestrator::FromOrchestrator,
   run::Answerer,
   time::Timestamp,
 };
@@ -151,8 +152,9 @@ pub struct AskedQuestions {
   /// The person's message the answers reached a step-end question's agent in; the card shows them, so
   /// the message is not shown again.
   pub message: Option<MessageId>,
-  /// The project's Orchestrator chat gave its answers (recorded as automation's): the card names it.
-  pub by_orchestrator: bool,
+  /// The project's Orchestrator chat gave its answers, from the conversation and in the way this says (the way is who
+  /// answered, [`QuestionState::Answered`]): the card names it.
+  pub orchestrator: Option<FromOrchestrator>,
 }
 
 impl AskedQuestions {

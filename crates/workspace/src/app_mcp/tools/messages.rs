@@ -91,7 +91,7 @@ pub async fn send_message(
     )?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
-      if by != SentBy::Person && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
+      if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
         kind.require(&reading.workspace)?;
       }
     }
@@ -101,11 +101,11 @@ pub async fn send_message(
   let run = prepared.run().expect("the run named is the task's latest");
   let way = way_of(&prepared.mode, args.timing);
   if let ComposerMode::PlanChanges { .. } = prepared.mode {
-    if by == SentBy::Orchestrator {
+    if let SentBy::Orchestrator(_) = by {
       return Err(plan_person_only());
     }
     let workspace = services.workspace.clone();
-    if by != SentBy::Person {
+    if !matches!(by, SentBy::Person(_)) {
       blocking(move || crate::decisions::DecisionKind::Plan.require(&workspace)).await?;
     }
     let command = plan_changes(&prepared, &args.text, (by.answerer(), None)).map_err(refusal)?;
@@ -119,9 +119,9 @@ pub async fn send_message(
   let key = IdempotencyKey::generate();
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then) = blocking(move || {
-    let stored = match by {
-      SentBy::Client | SentBy::Person => store_answer_in(&root, &prepared, (key, way), &text, by.answerer()),
-      SentBy::Orchestrator => store_by_orchestrator_in(&root, &prepared, (key, way), &text),
+    let stored = match by.chat() {
+      None => store_answer_in(&root, &prepared, (key, way), &text, by.answerer()),
+      Some(chat) => store_by_orchestrator_in(&root, &prepared, (key, way), (&text, chat, by.answerer())),
     };
     let (then, _) = stored.map_err(refusal)?;
     Ok((prepared, then))

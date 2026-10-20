@@ -2,7 +2,8 @@
 //! fullest window each of its accounts used, as its CLI last reported. The bar names an account only when the
 //! project uses more than one of a CLI (*Claude · Work 42% · Personal 8% · Codex 65%*); an account at its limit says
 //! so and when it resets, in `danger`, the others stay as they are. A click opens what each account reported: its
-//! windows, who is signed in and the plan.
+//! windows, who is signed in, the plan, and how old the reading is and whether a turn reported it or Orchester read
+//! it (not drawn in the design yet). While it is open the accounts are read every few minutes.
 
 use lurq::{
   app::{
@@ -17,7 +18,7 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountCli, AgentAccount},
-  connection::plan_limits::LimitState,
+  connection::plan_limits::{LimitState, ReadingSource},
   time::Timestamp,
 };
 
@@ -26,9 +27,11 @@ use super::{
   item::{glyph, label, pressed},
 };
 use crate::{
+  services::plan_limits as plan_reads,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     icon::Icon,
+    message::message_text,
     plan_window::{PlanWindow, plan_window, share, when},
     popover::{bar_popover, popover_panel},
     pressable::Press,
@@ -119,9 +122,17 @@ impl Component for PlanLimitsItem {
     } else {
       Element::new()
     };
-    Row::new()
-      .child(item)
-      .child(bar_popover(ctx, (&self.item, &props.bar), self.open.clone(), panel))
+    // While the hint is open the accounts are read, at once and every few minutes.
+    let shown = self
+      .open
+      .get()
+      .then(|| plan_reads::shown(ctx, "status-plan-limits-shown"));
+    Row::new().child(item).with_children(shown).child(bar_popover(
+      ctx,
+      (&self.item, &props.bar),
+      self.open.clone(),
+      panel,
+    ))
   }
 }
 
@@ -228,6 +239,17 @@ fn panel(ctx: &Ctx, limits: &[AccountLimits], now: Timestamp) -> Element {
     .into()
 }
 
+/// How old the account's reading is and where it came from (*as of 2 min ago · read*): nothing is estimated between
+/// readings, so the age says how current the windows are.
+fn as_of(ctx: &Ctx, limits: &AccountLimits, now: Timestamp) -> String {
+  let ago = message_text(ctx, &orchester_workspace::display::ago(now, limits.reading.at)).to_string();
+  let key = match limits.source {
+    ReadingSource::Read => "shell.status.planLimits.asOf.read",
+    ReadingSource::Turn => "shell.status.planLimits.asOf.turn",
+  };
+  ctx.t_args(key, [("ago", ago)]).to_string()
+}
+
 fn account_block(ctx: &Ctx, limits: &AccountLimits, now: Timestamp) -> Element {
   let account = &limits.account;
   let title = ctx.t_args(
@@ -256,6 +278,11 @@ fn account_block(ctx: &Ctx, limits: &AccountLimits, now: Timestamp) -> Element {
         .align_items(Alignment::Center)
         .child(Text::new(&title).variant(ExtraTypography::NoteStrong.role()))
         .child(Text::new(&who.join(" · ")).variant(ExtraTypography::Note.role())),
+    )
+    .child(
+      Text::new(&as_of(ctx, limits, now))
+        .id(format!("status-plan-limits-as-of-{}", account.id()))
+        .variant(ExtraTypography::Note.role()),
     );
   for window in limits
     .reading
