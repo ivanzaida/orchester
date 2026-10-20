@@ -70,7 +70,10 @@ such an app made. Any other gets `403 mfa_required`. Every code but the setup co
 identity token for this server with the claim (`identity_token` and `key_set` beside the code), verified against the
 pinned root: `403 mfa_required` without it, `403 mfa_unverifiable` while no root is pinned. A join token that accepts an
 invite by email needs the claim as well. Invites made before are still delivered as they were (only new ones are held
-to it), and accepting any of them needs it.
+to it), and accepting any of them needs it. A sign-in answers its session's `mfa`. The server checks identities
+offline and never asks the cloud, so turning two-factor authentication on in Orchester Cloud changes no sign-in made
+before: the admin says so on *Invite by email* and offers *Sign in again*, which ends this sign-in and starts the
+cloud's in one step.
 
 Invites by email (`delivery: "cloud"`, open 7 days) answer with `signed`: the invite signed with the server's key, for
 the server admin to carry to Orchester Cloud. One person sends at most 30 invites by email in 24 hours (`429` with
@@ -80,6 +83,14 @@ the invitee's app ([cloud-api.md](cloud-api.md#rate-limits)). Invites list witho
 those that ended in the last 30 days and their `state`, `ended_at` and `ended_by`) and are revoked with
 `DELETE /invites/{id}`, which answers `{ revocation }`: for an invite by email, the revocation the server signed for the
 cloud. An ended invite forgets its email.
+
+An invite by email is not made twice (schema 6): an address with an open invite of the same kind to the same project
+(or to the server) answers `409 invite_open` with that invite's `invite` and `sent_at`, until it is revoked, accepted or
+expires; an address whose account is a member of the project already, or for an invite to the server has an account
+here that the invite would not make an admin, answers `409 already_member`. The check runs in the transaction that
+makes the invite, so two quick submits make one. The server knows an account's address only as an HMAC of the email
+its cloud identity last verified, kept at each cloud join and admin sign-in (`users.email_tag`): an account that has
+not joined or signed in through the cloud since schema 6 is not recognised yet. Codes are tied to no address.
 
 Device tokens are `orc_` and 64 hex characters, stored as SHA-256, and expire after 90 days without use. A device signs
 itself out with `DELETE /auth/sessions/current`; an admin lists every joined computer with `GET /admin/sessions`,
@@ -124,6 +135,41 @@ The server itself never reaches the cloud: it neither fetches key sets nor sends
 connection out is to its own public address, with `proxy_certificate = "auto"`). The server
 admin's own server side delivers invites and revocations to the cloud when the host has the internet, or the
 inviter's browser does; apps and cloud sign-ins to the admin carry newer key sets.
+
+**When the admin can't reach Orchester Cloud.** *Invite by email* then offers *Send through this browser*, and its
+title says what failed: *can't reach* (the cloud's name does not resolve, no route, or a redirect), *doesn't trust
+Orchester Cloud's certificate*, *refused the connection*, or *didn't answer in time* (8 seconds). The admin's log
+(`docker compose logs admin`) has one line each time, with the address it called and the error's code and words, never
+the invite: `orchester-admin: cannot reach Orchester Cloud at https://orchester-cloud.lurq.dev: unreachable (EAI_AGAIN:
+getaddrinfo EAI_AGAIN orchester-cloud.lurq.dev)`. What to do:
+
+- **`compose.traefik.yaml`: by design.** Its admin is only on the stack's internal network, which has no route out and
+  no outside DNS (`EAI_AGAIN` or `ENOTFOUND` in the log), so the browser carries every invite. To let the admin send
+  them itself, give it a network of its own with a route out, which nothing else joins; the private API listener stays
+  on `backend` only:
+
+  ```yaml
+  services:
+    admin:
+      networks:
+        backend:
+          ipv4_address: ${ORCHESTER_SUBNET_PREFIX:-172.29.0}.4
+        egress: {}
+  networks:
+    egress: {}
+  ```
+
+- **`tls`**: something between the host and the cloud presents its own certificate (a TLS-inspecting proxy or
+  firewall). The admin's Node trusts its own bundled authorities, not the host's: give it that proxy's authority with
+  `NODE_EXTRA_CA_CERTS=/path/in/the/container/ca.pem` (mounted into the container).
+- **`refused` or `timeout`**: a firewall on the host or the network drops or rejects outgoing HTTPS; allow port 443 to
+  the cloud's address from the admin's container.
+- **`unreachable` on the other compose files**: check the host's DNS from the container
+  (`docker compose exec admin node -e "fetch('https://orchester-cloud.lurq.dev/api/v1/server').then(r => console.log(r.status), e => console.log(e.cause ?? e))"`),
+  and that `ORCHESTER_ADMIN_CLOUD_URL` is the cloud's public address.
+
+Neither the server nor the cloud needs a change for this; a changed compose file takes effect with
+`docker compose up -d`.
 
 ## Projects
 

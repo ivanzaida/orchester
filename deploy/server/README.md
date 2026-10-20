@@ -185,7 +185,9 @@ redirects plain HTTP to HTTPS.
    setup code.
 
 Only the server joins Traefik's network. Its own network is internal, so the admin has no route out: invites by email
-are carried to Orchester Cloud by the inviter's browser instead of the admin. The server reads Traefik's certificate
+are carried to Orchester Cloud by the inviter's browser instead of the admin (*Send through this browser*). To let the
+admin send them itself, give it a network with a route out of its own ([docs/server-hosting.md](../../docs/server-hosting.md),
+"When the admin can't reach Orchester Cloud"). The server reads Traefik's certificate
 (`auto`) at `https://<ORCHESTER_HOST>` through Traefik's network, which has a route out: the host must reach its own
 public name (hairpin NAT). If it cannot, and Traefik's HTTPS entry point listens on 443 in its container, give the
 server `extra_hosts: ["<ORCHESTER_HOST>:<TRAEFIK_ADDRESS>"]`, or set the fingerprint instead. The server's log says

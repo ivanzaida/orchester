@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import type { Device, Person, Project, ServerInfo, User } from "@/lib/model";
+import type { Device, Person, Project, ServerInfo, TwoFactorStanding, User } from "@/lib/model";
 import type { ApiResult, CallOptions } from "@/lib/server/api";
 import { ServerUnavailableError, sessionEnded } from "@/lib/server/failures";
 import type { Place } from "@/lib/server/place";
@@ -12,13 +12,15 @@ import { managedProjects } from "@/lib/server/team/projects";
 import { anonymous, session } from "@/lib/server/visitor";
 
 /**
- * Everything the signed-in admin pages share, read once per request: the server, the person, how they signed in,
- * and the lists the navigation counts. Owners who are not admins get no people or devices.
+ * Everything the signed-in admin pages share, read once per request: the server, the person, how they signed in and
+ * whether that sign-in may make invites, and the lists the navigation counts. Owners who are not admins get no people
+ * or devices.
  */
 export interface AdminContext {
   readonly server: ServerInfo;
   readonly me: User;
   readonly via: SignedInWith;
+  readonly twoFactor: TwoFactorStanding;
   readonly options: CallOptions;
   readonly place: Place;
   readonly projects: readonly Project[];
@@ -70,7 +72,16 @@ export const loadAdmin = cache(async (): Promise<AdminContext> => {
   const [user, projects] = await Promise.all([me(options), managedProjects(options)]);
   const person = value(user);
   const lists = await adminLists(options, person.admin);
-  return { server, me: person, via: current.via, options, place: options.place, projects: value(projects), ...lists };
+  return {
+    server,
+    me: person,
+    via: current.via,
+    twoFactor: current.twoFactor,
+    options,
+    place: options.place,
+    projects: value(projects),
+    ...lists,
+  };
 });
 
 /** The project a page address names by its slug, among those this person manages. */

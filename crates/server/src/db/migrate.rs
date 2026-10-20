@@ -1,5 +1,6 @@
 //! Forward-only migrations of `orchester-server.db`: 1 (S1a accounts), 2 (S1b sharing), 3 (API 3: no passwords,
-//! codes, invites, the cloud link, projects by slug), 4 (the server admin), 5 (two-factor sessions).
+//! codes, invites, the cloud link, projects by slug), 4 (the server admin), 5 (two-factor sessions), 6 (email tags of
+//! accounts, against repeated invites).
 
 use orchester_core::{name::Name, repository::RepositoryIdentity, resource::Slug};
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
@@ -29,7 +30,7 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
     transaction.execute_batch(include_str!("schema.sql"))?;
     1
   };
-  if !(1..=5).contains(&version) {
+  if !(1..=6).contains(&version) {
     return Err(ServerError::Configuration("unsupported server database schema"));
   }
   if version == 1 {
@@ -45,6 +46,9 @@ fn migrate_unchecked(connection: &mut Connection, now: i64) -> Result<(), Server
   }
   if version < 5 {
     transaction.execute_batch(include_str!("two_factor.sql"))?;
+  }
+  if version < 6 {
+    transaction.execute_batch(include_str!("email_tags.sql"))?;
   }
   ServerKeys::own_id(&transaction)?;
   free_reserved_slugs(&transaction)?;

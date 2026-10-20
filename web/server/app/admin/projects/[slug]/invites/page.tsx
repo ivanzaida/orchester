@@ -37,7 +37,7 @@ export default async function InvitesPage({ params }: Params) {
     <AdminShell context={context} area="projects" project>
       <ProjectHead project={project} tab="invites" members={value(memberList).length} />
       <ProjectInvites csrf={csrf} server={server.name} project={{ id: project.id, name: project.name, address: project.address }}
-        reach={emailReach(server)}
+        reach={emailReach(server, context.twoFactor, `/admin/projects/${encodeURIComponent(project.slug)}/invites`)}
         checkCode={server.certificate?.checkCode ?? null} />
       <InviteList id="invites" title={t("invites.listTitle")} description={t("invites.listText")} invites={value(inviteList)}
         empty={{ title: t("invites.emptyTitle"), text: t("invites.emptyText", { project: project.name }) }}

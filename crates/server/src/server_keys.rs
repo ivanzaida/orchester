@@ -99,6 +99,13 @@ impl ServerKeys {
   pub fn code_matches(&self, code: &str, tag: &[u8]) -> bool {
     hmac::verify(&self.code_key, code.as_bytes(), tag).is_ok()
   }
+
+  /// The HMAC an account keeps of its verified email (lowercased), never the email itself. The prefix keeps it apart
+  /// from a code's: no code holds a NUL.
+  pub fn email_tag(&self, email: &str) -> Vec<u8> {
+    let message = format!("email\0{}", email.to_ascii_lowercase());
+    hmac::sign(&self.code_key, message.as_bytes()).as_ref().to_vec()
+  }
 }
 
 /// Random bytes from the operating system.

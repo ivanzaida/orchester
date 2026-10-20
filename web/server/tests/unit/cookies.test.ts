@@ -12,8 +12,9 @@ import {
   cookieOptions,
   crossSiteCookieOptions,
 } from "@/lib/server/cookie-options";
-import { deriveKey } from "@/lib/server/seal";
+import { deriveKey, seal } from "@/lib/server/seal";
 import {
+  isAdminPage,
   openSession,
   openSetup,
   openTrip,
@@ -21,8 +22,10 @@ import {
   sealSession,
   sealSetup,
   sealTrip,
+  signedInStanding,
   signNothing,
   tripMatches,
+  type AdminSession,
   type Trip,
 } from "@/lib/server/session";
 
@@ -59,7 +62,7 @@ describe("cookie options", () => {
 });
 
 describe("session cookie", () => {
-  const session = { token: "adm_secret_token_value", via: "cloud" as const };
+  const session: AdminSession = { token: "adm_secret_token_value", via: "cloud", twoFactor: "without" };
 
   it("holds the token sealed, never in the clear, with how the person signed in", () => {
     const value = sealSession(sessionKey, session, NOW);
@@ -77,6 +80,21 @@ describe("session cookie", () => {
     expect(openSession(sessionKey, undefined, NOW)).toBeNull();
     expect(openSession(sessionKey, "short", NOW)).toBeNull();
   });
+
+  it("reads a sign-in from before it kept its two-factor standing as unknown", () => {
+    const older = seal(sessionKey, JSON.stringify({ token: "adm_old", via: "cloud", expires: NOW + 60_000 }));
+    expect(openSession(sessionKey, older, NOW)).toEqual({ token: "adm_old", via: "cloud", twoFactor: "unknown" });
+  });
+});
+
+describe("two-factor standing of a new sign-in", () => {
+  it("is on with the server's mfa, and off only when signing in again came back without it", () => {
+    expect(signedInStanding(true, false)).toBe("on");
+    expect(signedInStanding(true, true)).toBe("on");
+    expect(signedInStanding(false, false)).toBe("without");
+    expect(signedInStanding(false, true)).toBe("off");
+    expect(signedInStanding(null, true)).toBe("unknown");
+  });
 });
 
 describe("setup cookie", () => {
@@ -90,8 +108,14 @@ describe("setup cookie", () => {
 });
 
 describe("trip cookie", () => {
-  const admin: Trip = { state: "s-1", purpose: "admin", back: "signin", session: null };
-  const link: Trip = { state: "s-2", purpose: "link", back: "setup", session: { token: "adm_link_token", via: "code" } };
+  const admin: Trip = { state: "s-1", purpose: "admin", back: "signin", session: null, page: null };
+  const link: Trip = {
+    state: "s-2",
+    purpose: "link",
+    back: "setup",
+    session: { token: "adm_link_token", via: "code", twoFactor: "on" },
+    page: null,
+  };
 
   it("reads back its state, purpose and where it goes back, for 10 minutes", () => {
     expect(openTrip(stateKey, sealTrip(stateKey, admin, NOW), NOW + 1000)).toEqual(admin);
@@ -104,6 +128,17 @@ describe("trip cookie", () => {
     expect(Buffer.from(value, "base64url").toString("latin1")).not.toContain("adm_link_token");
     expect(openTrip(stateKey, value, NOW)).toEqual(link);
     expect(openTrip(sessionKey, value, NOW)).toBeNull();
+  });
+
+  it("brings *Sign in again* back to an admin page of its own, and nowhere else", () => {
+    const again: Trip = { ...admin, page: "/admin/projects/orchester/invites" };
+    expect(openTrip(stateKey, sealTrip(stateKey, again, NOW), NOW)).toEqual(again);
+    for (const page of ["https://evil.example/admin", "//evil.example", "/admin/../x", "/admin?x=1", "/elsewhere"]) {
+      expect(openTrip(stateKey, sealTrip(stateKey, { ...admin, page }, NOW), NOW)?.page).toBeNull();
+    }
+    expect(isAdminPage("/admin")).toBe(true);
+    expect(isAdminPage("/admin/people")).toBe(true);
+    expect(isAdminPage("/admin//people")).toBe(false);
   });
 
   it("matches only its own state", () => {

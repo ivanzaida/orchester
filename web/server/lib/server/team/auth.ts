@@ -52,12 +52,15 @@ export function checkSetupCode(code: string, options: CallOptions): Promise<ApiR
 export interface Joined {
   readonly token: string;
   readonly user: User;
+  /** The session signed in with two-factor authentication, so it may make invites; `null` from a server before it. */
+  readonly mfa: boolean | null;
 }
 
 function readJoined(json: unknown): Joined | null {
   const token = record(json)?.token;
   const user = field(json, "user", readUser);
-  return text(token) && user !== null ? { token, user } : null;
+  const mfa = record(record(json)?.session)?.mfa;
+  return text(token) && user !== null ? { token, user, mfa: typeof mfa === "boolean" ? mfa : null } : null;
 }
 
 export interface CodeSignIn {

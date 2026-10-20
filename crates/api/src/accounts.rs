@@ -119,6 +119,10 @@ pub struct Session {
   pub last_used_at: i64,
   pub current: bool,
   pub via: JoinedVia,
+  /// It was issued for a cloud identity that signed in with two-factor authentication, or for a pairing code such a
+  /// device made: only such a token makes invites. A server from before it leaves it out.
+  #[serde(default)]
+  pub mfa: bool,
 }
 
 /// A password change: Orchester Cloud's `POST /auth/password` (team servers have no passwords since API 3).

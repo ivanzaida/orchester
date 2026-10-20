@@ -100,6 +100,19 @@ describe("the team server's API", () => {
     const revoked = await revokeInvite(made.ok ? made.value.invite.id : "", options);
     expect(revoked).toEqual({ ok: true, value: { revocation: null } });
   });
+
+  it("reads a repeated invite by email as a refusal with when the open one was sent", async () => {
+    const options = await signedIn();
+    const input = { kind: "server" as const, delivery: "cloud" as const, admin: false, email: "twice@example.com" };
+    const first = await createInvite(input, options);
+    const again = await createInvite(input, options);
+    expect(again).toEqual({
+      ok: false,
+      error: { kind: "refused", status: 409, code: "invite_open", sentAt: first.ok ? first.value.invite.createdAt : -1 },
+    });
+    const member = await createInvite({ ...input, email: "member.bob@example.com" }, options);
+    expect(member).toEqual({ ok: false, error: { kind: "refused", status: 409, code: "already_member" } });
+  });
 });
 
 describe("ids in API paths", () => {

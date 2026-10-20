@@ -28,6 +28,8 @@ export type ServerErrorCode =
   | "nothing_to_manage"
   | "approval_required"
   | "mfa_required"
+  | "invite_open"
+  | "already_member"
   | "rate_limited"
   | "conflict"
   | "internal";
@@ -35,12 +37,22 @@ export type ServerErrorCode =
 const CODES = new Set<string>([
   "bad_request", "unauthorized", "forbidden", "not_found", "invalid", "username_taken", "last_admin", "last_owner",
   "no_such_user", "invalid_identity", "not_invited", "cloud_off", "key_set_stale", "invalid_code", "too_many_codes",
-  "slug_taken", "nothing_to_manage", "approval_required", "mfa_required", "rate_limited", "conflict", "internal",
+  "slug_taken", "nothing_to_manage", "approval_required", "mfa_required", "invite_open", "already_member",
+  "rate_limited", "conflict", "internal",
 ]);
 
 export type ApiFailure =
-  /** The server answered with its error body. `retryAfter` (seconds) comes with `rate_limited`. */
-  | { readonly kind: "refused"; readonly status: number; readonly code: ServerErrorCode; readonly retryAfter?: number }
+  /**
+   * The server answered with its error body. `retryAfter` (seconds) comes with `rate_limited`; `sentAt` (milliseconds)
+   * with `invite_open`: when the open invite it names was sent.
+   */
+  | {
+      readonly kind: "refused";
+      readonly status: number;
+      readonly code: ServerErrorCode;
+      readonly retryAfter?: number;
+      readonly sentAt?: number;
+    }
   /** No answer: the server is down, unreachable or too slow. */
   | { readonly kind: "unreachable" }
   /** An answer this client does not understand: a status or body the contract does not have. */
@@ -83,7 +95,7 @@ function retryAfter(response: Response): number | undefined {
 async function failure(response: Response): Promise<ApiFailure> {
   // A body that is not JSON has no error code, which makes the answer `unexpected` below.
   const body: unknown = await response.json().catch(() => null);
-  const code = (body as { error?: unknown } | null)?.error;
+  const { error: code, sent_at: sentAt } = (body ?? {}) as { error?: unknown; sent_at?: unknown };
   if (typeof code !== "string" || !CODES.has(code)) {
     return { kind: "unexpected", status: response.status };
   }
@@ -93,6 +105,7 @@ async function failure(response: Response): Promise<ApiFailure> {
     status: response.status,
     code: code as ServerErrorCode,
     ...(seconds === undefined ? {} : { retryAfter: seconds }),
+    ...(typeof sentAt === "number" && Number.isFinite(sentAt) ? { sentAt } : {}),
   };
 }
 

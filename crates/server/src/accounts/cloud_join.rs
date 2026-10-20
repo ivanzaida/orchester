@@ -9,7 +9,7 @@ use orchester_api::{
   cloud::TokenPurpose,
 };
 use orchester_core::id::ApprovalId;
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 
 use super::{Server, admin_sign_in};
 use crate::{
@@ -20,6 +20,7 @@ use crate::{
   error::ServerError,
   invites,
   rate_limit::JoinKind,
+  server_keys::ServerKeys,
 };
 
 /// What a cloud join came to.
@@ -54,15 +55,18 @@ impl Server {
           input.key_set.as_deref(),
           now,
         )?;
-        if input.kind == DeviceKind::AdminWeb {
+        let joined = if input.kind == DeviceKind::AdminWeb {
           claims.require(Some(TokenPurpose::Admin))?;
-          return admin_sign_in::with_cloud(db, &input, &claims, address, now).map(CloudJoined::Joined);
-        }
-        claims.require(None)?;
-        if let Some(caller) = caller {
-          return link_caller(db, &caller, &claims, now).map(CloudJoined::Linked);
-        }
-        join(db, &input, &claims, address, now)
+          admin_sign_in::with_cloud(db, &input, &claims, address, now).map(CloudJoined::Joined)?
+        } else {
+          claims.require(None)?;
+          match caller {
+            Some(caller) => link_caller(db, &caller, &claims, now).map(CloudJoined::Linked)?,
+            None => join(db, &input, &claims, address, now)?,
+          }
+        };
+        remember_email(db, &state.keys, &claims)?;
+        Ok(joined)
       })
       .await;
     match result {
@@ -269,6 +273,16 @@ fn invited_account(db: &Connection, invite: &invites::Stored, claims: &Claims, n
     None,
     now,
   )
+}
+
+/// Keeps the HMAC of the verified email of the account linked to the token's identity, so that an invite by email to
+/// someone who has an account, or is a member, is refused (`invites::create`).
+fn remember_email(db: &Connection, keys: &ServerKeys, claims: &Claims) -> Result<(), ServerError> {
+  db.execute(
+    "UPDATE users SET email_tag=?1 WHERE cloud_subject=?2",
+    params![keys.email_tag(&claims.email), claims.sub],
+  )?;
+  Ok(())
 }
 
 /// Links the caller's account, which has no cloud identity yet, to the token's.

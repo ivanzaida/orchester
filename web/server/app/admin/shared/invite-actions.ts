@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
-import type { Role } from "@/lib/model";
+import type { CloudCause, Role } from "@/lib/model";
 import { actor, failed, isMessage } from "@/lib/server/act";
 import type { ApiFailure, CallOptions } from "@/lib/server/api";
-import { deliverInvite, deliverRevocation } from "@/lib/server/cloud";
+import { deliverInvite, deliverRevocation, type Delivery } from "@/lib/server/cloud";
 import { waitMessage } from "@/lib/server/failures";
+import { repeatedError } from "@/lib/server/repeated";
 import { createInvite, revokeInvite, type NewInvite } from "@/lib/server/team/invites";
 import { emailError, normalizeEmail } from "@/lib/validation";
 
@@ -56,15 +57,31 @@ export type EmailState =
       readonly view: "form";
       readonly answer: number;
       readonly email: string;
+      /** Under the email field: what was wrong with it, or why the server would not send it (it repeats an invite). */
       readonly error?: Message;
       readonly limited?: Message;
       /** The server sends invites by email only for a sign-in through Orchester Cloud with two-factor authentication. */
       readonly mfa?: true;
     }
   | { readonly view: "sent"; readonly answer: number; readonly email: string; readonly expiresAt: number; readonly admin: boolean }
-  /** This host could not reach the cloud: the page offers to send the signed invite from the browser. */
-  | { readonly view: "browser"; readonly answer: number; readonly email: string; readonly signed: string }
+  /** This host could not reach the cloud, for `cause`: the page offers to send the signed invite from the browser. */
+  | { readonly view: "browser"; readonly answer: number; readonly email: string; readonly signed: string; readonly cause: CloudCause }
   | { readonly view: "refused"; readonly answer: number; readonly email: string };
+
+/** What became of an invite the server made and signed, once this admin tried to deliver it to the cloud. */
+function delivered(delivery: Delivery, made: { email: string; answer: number; signed: string }, invite: { expiresAt: number; admin: boolean }): EmailState {
+  const { email, answer, signed } = made;
+  switch (delivery.kind) {
+    case "delivered":
+      return { view: "sent", answer, email, expiresAt: invite.expiresAt, admin: invite.admin };
+    case "unreachable":
+      return { view: "browser", answer, email, signed, cause: delivery.cause };
+    case "no_cloud":
+      return { view: "browser", answer, email, signed, cause: "unreachable" };
+    case "declined":
+      return { view: "refused", answer, email };
+  }
+}
 
 async function made(options: CallOptions, form: FormData, email: string, answer: number): Promise<EmailState> {
   const target = scope(form);
@@ -76,20 +93,20 @@ async function made(options: CallOptions, form: FormData, email: string, answer:
     return { view: "form", answer, email, mfa: true };
   }
   if (!result.ok) {
+    const repeated = repeatedError(result.error, email, target.kind);
+    if (repeated !== null) {
+      return { view: "form", answer, email, error: repeated };
+    }
     const limit = result.error.kind === "refused" && result.error.code === "rate_limited";
     const said = refusal(result.error) ?? (await failed(result.error));
     return limit ? { view: "form", answer, email, limited: said } : { view: "form", answer, email, error: said };
   }
   const { invite, signed } = result.value;
   revalidatePath("/admin", "layout");
-  const delivery = signed === null ? "refused" : await deliverInvite(signed);
-  if (delivery === "delivered") {
-    return { view: "sent", answer, email, expiresAt: invite.expiresAt, admin: invite.admin };
+  if (signed === null) {
+    return { view: "refused", answer, email };
   }
-  if ((delivery === "unreachable" || delivery === "no_cloud") && signed !== null) {
-    return { view: "browser", answer, email, signed };
-  }
-  return { view: "refused", answer, email };
+  return delivered(await deliverInvite(signed), { email, answer, signed }, invite);
 }
 
 /** *Send invite*: the server makes and signs the invite, then this admin delivers it to Orchester Cloud. */
@@ -168,5 +185,5 @@ export async function revokeInviteAction(_: RevokeState, form: FormData): Promis
   if (revocation === null) {
     return { revoked: "told" };
   }
-  return { revoked: (await deliverRevocation(id, revocation)) === "delivered" ? "told" : "later" };
+  return { revoked: (await deliverRevocation(id, revocation)).kind === "delivered" ? "told" : "later" };
 }

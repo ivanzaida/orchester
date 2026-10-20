@@ -12,10 +12,21 @@ import { TextField } from "@/components/fields";
 import { CsrfField, Hidden } from "@/components/hidden";
 import { Say } from "@/components/say";
 import { Phrase } from "@/components/when";
-import { t } from "@/lib/i18n";
-import type { EmailReach } from "@/lib/model";
+import { t, type MessageKey } from "@/lib/i18n";
+import type { CloudCause, EmailReach } from "@/lib/model";
+import { twoFactorNotice } from "@/lib/two-factor";
 
 import styles from "./invites.module.css";
+
+/** *… can't reach Orchester Cloud*, by what went wrong, so whoever runs the host knows where to look. */
+const BROWSER_TITLES: Readonly<Record<CloudCause, MessageKey>> = {
+  unreachable: "invites.browserTitle",
+  tls: "invites.browserTls",
+  refused: "invites.browserRefused",
+  timeout: "invites.browserTimeout",
+};
+
+type Ready = Extract<EmailReach, { kind: "ready" }>;
 
 export interface EmailInviteProps {
   readonly csrf: string;
@@ -51,7 +62,7 @@ function Answer({ state, props }: { state: EmailState; props: EmailInviteProps }
       </form>
     );
     return (
-      <Callout tone="warning" icon="wifi-off" title={t("invites.browserTitle", { server: props.server })}
+      <Callout tone="warning" icon="wifi-off" title={t(BROWSER_TITLES[state.cause], { server: props.server })}
         body={t("invites.browserText", { email: state.email })} action={send} />
     );
   }
@@ -61,25 +72,52 @@ function Answer({ state, props }: { state: EmailState; props: EmailInviteProps }
   if (state.view === "form" && state.limited !== undefined) {
     return <Callout tone="danger" icon="circle-alert" role="alert" title={t("invites.limitTitle")} body={<Say message={state.limited} />} />;
   }
-  if (state.view === "form" && state.mfa === true && props.reach.kind === "ready") {
-    return <TwoFactorNeeded cloud={props.reach.cloud} />;
+  if (state.view === "form" && props.reach.kind === "ready") {
+    return <TwoFactorNeeded reach={props.reach} csrf={props.csrf} refused={state.mfa === true} />;
   }
   return null;
 }
 
+/** Ends this sign-in and starts Orchester Cloud's in one step, back to this page (`/admin/trip`, `purpose=again`). */
+function SignInAgain({ csrf, page }: { csrf: string; page: string }) {
+  return (
+    <form action="/admin/trip" method="post">
+      <CsrfField token={csrf} />
+      <Hidden name="purpose" value="again" />
+      <Hidden name="page" value={page} />
+      <Submit kind="primary" row icon="log-in" label={t("invites.mfaAgain")} busyLabel={t("invites.mfaAgainBusy")} />
+    </form>
+  );
+}
+
 /**
- * The server sends invites by email only for an admin signed in through Orchester Cloud with two-factor authentication
- * (`403 mfa_required`): where to turn it on, and that this admin is then signed in to again.
+ * The server sends invites by email only for an admin signed in with two-factor authentication (`403 mfa_required`),
+ * shown as soon as the page knows this sign-in was made without it. Turned on since, it takes a new sign-in: *Sign in
+ * again*. Where to turn it on is offered only once a sign-in again came back without it. `refused`: the server just
+ * answered `mfa_required`.
  */
-function TwoFactorNeeded({ cloud }: { cloud: string }) {
-  const open = (
-    <ButtonLink href={`${cloud}/account#security`} kind="secondary" row icon="shield">
-      {t("invites.mfaOpen")}
-    </ButtonLink>
+function TwoFactorNeeded({ reach, csrf, refused }: { reach: Ready; csrf: string; refused: boolean }) {
+  const notice = twoFactorNotice(reach.twoFactor, refused);
+  if (notice === "none") {
+    return null;
+  }
+  if (notice === "again") {
+    return (
+      <Callout tone="warning" icon="shield-alert" role={refused ? "alert" : "status"} title={t("invites.mfaAgainTitle")}
+        body={t("invites.mfaAgainText")} action={<SignInAgain csrf={csrf} page={reach.page} />} />
+    );
+  }
+  const actions = (
+    <>
+      <ButtonLink href={`${reach.cloud}/account#security`} kind="secondary" row icon="shield">
+        {t("invites.mfaOpen")}
+      </ButtonLink>
+      <SignInAgain csrf={csrf} page={reach.page} />
+    </>
   );
   return (
-    <Callout tone="warning" icon="shield-alert" role="alert" title={t("invites.mfaTitle")} body={t("invites.mfaText")}
-      action={open} />
+    <Callout tone="warning" icon="shield-alert" role={refused ? "alert" : "status"} title={t("invites.mfaTitle")}
+      body={t("invites.mfaText")} action={actions} />
   );
 }
 

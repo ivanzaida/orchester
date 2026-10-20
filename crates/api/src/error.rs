@@ -63,6 +63,9 @@ pub enum ErrorCode {
   /// API 3: a code that makes an account, entered with a cloud identity that an account here is linked to already:
   /// that person has an account on the server, and joins with it rather than with a second one.
   AccountExists,
+  /// API 3: an invite by email to an address that has an open one to the same project (or to the server) already.
+  /// The error names that invite and when it was sent ([`SharingErrorDetails::Invite`]); revoking it lets a new one go.
+  InviteOpen,
   RateLimited,
   Internal,
 }
@@ -109,6 +112,11 @@ pub enum SharingErrorDetails {
   },
   Missing {
     missing: Vec<String>,
+  },
+  /// The open invite an invite by email would repeat; `sent_at` in milliseconds since the Unix epoch.
+  Invite {
+    invite: orchester_core::id::InviteId,
+    sent_at: i64,
   },
 }
 
