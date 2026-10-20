@@ -853,6 +853,30 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-62 · Loader spinner turns at 24 frames a second instead of 12 · branch `orchester/orc-62-run-1` (implemented
+2026-10-20; pipeline Check and Review follow). `LOADER_STEPS` is 24 with `LOADER_TURN` kept at 1 s: 24 poses 15° apart,
+still stepped (`JumpEnd`) on lurq's one in-phase clock for every loader of every window, and a window without a loader
+in its tree asks for no frame.
+- **Turn rate.** The person saw about 12 turns a second. Sampled headless against lurq's animation clock for 1.25 s
+  (`tests/ui_kit/loader.rs`), every loader shows the pose the clock gives: 12 poses 30° apart in one turn a second
+  before, 24 poses 15° apart in one turn a second after. lurq 0.49's step easing, keyframes and decomposed rotation
+  compute one turn a second, so no lurq fault was found; the pixels a running app draws were not sampled.
+- **A/B on this machine** (2026-10-20): two release builds of `ui_gallery` with lurq's `perf_profile`, 12 and 24 steps,
+  side by side on its Actions page (a loading button), over the same 30 s: CPU 1.750 s (5.83 % of one core) with 12
+  steps, 1.734 s (5.77 %) with 24. Frames per second were not counted: `call_run_app` refuses the gallery copies, and
+  `start_qa_app` runs one QA copy at a time, built without `perf_profile` (the `tasks` seed shows no loader on the
+  Tasks list either: its running runs read as interrupted without a live runner). The person watched the copies, saw
+  the 24-step loader turn faster and accepted it. **Open:** equal CPU for 12 and 24 steps is unexplained without frame
+  counts.
+- **What a frame redraws.** The whole window: while a loader turns, each frame skips lurq's layout fast path and runs
+  the layout update (the nodes' layout caches stay valid, since a transform changes no size), resolves every quad of
+  the window and presents the whole surface; lurq 0.49 has no damage regions.
+- **Hidden windows.** A minimised window gets no frames and keeps its clock (`FramePacing::request_frame`), as does a
+  window macOS reports occluded. On Windows a window that is covered or off-screen but not minimised keeps turning,
+  since winit reports no occlusion there.
+- Tests: `cargo test -p orchester-app --test ui_kit -- loader buttons blocks labels`, `--test status_bar -- activity
+  server items`.
+
 ORC-55 · Plan limits read on their own, not only when an agent turn reports them · branch `orchester/orc-55-run-1`
 (implemented 2026-10-20; pipeline Check and an independent design Verify still follow). Codex accounts are read through
 App Server's `account/rateLimits/read` outside runs, per account (its CLI and `CODEX_HOME`), with no thread, turn or
