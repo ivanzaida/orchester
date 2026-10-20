@@ -7,8 +7,8 @@ const FILE: &str = "file";
 const FROM: &str = "from";
 
 /// A tab of a task's page, in the page's order (ORC-51): Details first, the one a task opens on, then
-/// Conversation, Changes, Local integration while it is shown, and Summary last. The design (`Page tabs`
-/// `L9OIIZ` in `lUXff`, `vShIt`) still draws Summary first.
+/// Conversation, Changes, Local integration while it is shown, Summary, and Artifacts and Memory last (`ogMzT`
+/// in `a0PLO`). The design (`Page tabs` `L9OIIZ` in `lUXff`, `vShIt`) still draws Summary first.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum TaskTab {
   #[default]
@@ -17,15 +17,19 @@ pub enum TaskTab {
   Changes,
   LocalIntegration,
   Summary,
+  Artifacts,
+  Memory,
 }
 
 impl TaskTab {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 7] = [
     Self::Details,
     Self::Conversation,
     Self::Changes,
     Self::LocalIntegration,
     Self::Summary,
+    Self::Artifacts,
+    Self::Memory,
   ];
 
   /// The tab's name: the last segment of its path, and its name in the app's MCP tools.
@@ -36,6 +40,8 @@ impl TaskTab {
       Self::Conversation => "conversation",
       Self::Changes => "changes",
       Self::LocalIntegration => "local-integration",
+      Self::Artifacts => "artifacts",
+      Self::Memory => "memory",
     }
   }
 
@@ -51,6 +57,8 @@ impl TaskTab {
       Self::Conversation => "task.tabs.conversation",
       Self::Changes => "task.tabs.changes",
       Self::LocalIntegration => "local_integration.title",
+      Self::Artifacts => "task.tabs.artifacts",
+      Self::Memory => "task.tabs.memory",
     }
   }
 }
@@ -65,6 +73,8 @@ pub enum TaskView {
   Changes(Option<ChangedFile>),
   LocalIntegration,
   Summary,
+  Artifacts,
+  Memory,
 }
 
 impl TaskView {
@@ -76,6 +86,8 @@ impl TaskView {
       TaskTab::Conversation => Self::Conversation,
       TaskTab::Changes => Self::Changes(None),
       TaskTab::LocalIntegration => Self::LocalIntegration,
+      TaskTab::Artifacts => Self::Artifacts,
+      TaskTab::Memory => Self::Memory,
     }
   }
 
@@ -86,13 +98,17 @@ impl TaskView {
       Self::Conversation => TaskTab::Conversation,
       Self::Changes(_) => TaskTab::Changes,
       Self::LocalIntegration => TaskTab::LocalIntegration,
+      Self::Artifacts => TaskTab::Artifacts,
+      Self::Memory => TaskTab::Memory,
     }
   }
 
   pub const fn file(&self) -> Option<&ChangedFile> {
     match self {
       Self::Changes(file) => file.as_ref(),
-      Self::Summary | Self::Details | Self::Conversation | Self::LocalIntegration => None,
+      Self::Summary | Self::Details | Self::Conversation | Self::LocalIntegration | Self::Artifacts | Self::Memory => {
+        None
+      }
     }
   }
 

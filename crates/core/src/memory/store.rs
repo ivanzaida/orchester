@@ -2,7 +2,10 @@
 //! indexes); a server will implement it with a store of its own.
 
 use super::{Delivery, InjectionReason, Memory, MemoryChanges, MemoryQuery, MemorySettings, MemoryStatus};
-use crate::id::{InvocationId, MemoryId, TaskId};
+use crate::{
+  id::{InvocationId, MemoryId, RunId, StepExecutionId, TaskId},
+  time::Timestamp,
+};
 
 /// Which scopes a listing covers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,6 +51,19 @@ pub struct InjectedMemory {
   pub memory: MemoryId,
   pub reason: InjectionReason,
   /// Its estimated tokens ([`super::estimated_tokens`]) as given, or as it would have been.
+  pub tokens: u32,
+  pub delivery: Delivery,
+}
+
+/// An invocation whose prompt was given a record: which, in which run and step execution, when it
+/// started, why it got the record and its estimated tokens there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GivenMemory {
+  pub invocation: InvocationId,
+  pub run: RunId,
+  pub execution: StepExecutionId,
+  pub started_at: Timestamp,
+  pub reason: InjectionReason,
   pub tokens: u32,
   pub delivery: Delivery,
 }
@@ -113,4 +129,7 @@ pub trait MemoryStore {
 
   /// What `invocation`'s prompt was given, in prompt order; empty when it got nothing.
   fn injected_memory(&self, invocation: InvocationId) -> Result<Vec<InjectedMemory>, Self::Error>;
+
+  /// The invocations whose prompts were given record `memory` (whole or cut to fit), latest first.
+  fn given_memory(&self, memory: MemoryId) -> Result<Vec<GivenMemory>, Self::Error>;
 }

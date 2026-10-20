@@ -126,16 +126,7 @@ impl EmptyState {
     } else {
       GLYPH_TILE
     };
-    Row::new()
-      .width(Dimension::Px(tile_size))
-      .height(Dimension::Px(tile_size))
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .rounded(ExtraRadius::Tile.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(icon(self.glyph, IconSize::Xl, PaletteColor::TextSecondary))
-      .id(format!("{}-glyph", self.id))
+    sized_tile(&self.id, self.glyph, tile_size)
   }
   /// An action in the row under the explanation.
   pub fn action(mut self, action: impl Into<Element>) -> Self {
@@ -227,6 +218,24 @@ impl From<EmptyState> for Element {
       .with_children(empty.more)
       .into()
   }
+}
+
+/// An empty state's glyph tile (`q4tTW`), for a state laid out on its own (`X0l2I6` in Project memory).
+pub fn glyph_tile(id: &str, glyph: Icon) -> Row {
+  sized_tile(id, glyph, GLYPH_TILE)
+}
+
+fn sized_tile(id: &str, glyph: Icon, size: f32) -> Row {
+  Row::new()
+    .width(Dimension::Px(size))
+    .height(Dimension::Px(size))
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .rounded(ExtraRadius::Tile.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary))
+    .id(format!("{id}-glyph"))
 }
 
 /// The turning loader and `what` is being read, centered in the room it was going to fill.

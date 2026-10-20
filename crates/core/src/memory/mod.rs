@@ -37,7 +37,7 @@ pub use self::{
   screen::{ContainsSecret, ScreenUnavailable, ScreenedContent, SecretScreen},
   selection::{Delivery, LeftOut, Recalled, RecalledMemory},
   settings::{MemoryLimits, MemoryLimitsError, MemorySettings, WritePolicy},
-  store::{InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter, UnreadableMemory},
+  store::{GivenMemory, InjectedMemory, MemoryFilter, MemoryMatch, MemoryStore, ScopeFilter, UnreadableMemory},
 };
 use crate::{
   id::{ResourceId, RunId, StepExecutionId, TaskId},

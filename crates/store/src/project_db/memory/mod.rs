@@ -11,8 +11,8 @@ mod search;
 use orchester_core::{
   id::{InvocationId, MemoryId, TaskId},
   memory::{
-    InjectedMemory, Memory, MemoryChanges, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery, MemorySettings,
-    MemoryStatus, MemoryStore, ScopeFilter, UnreadableMemory, WritePolicy,
+    GivenMemory, InjectedMemory, Memory, MemoryChanges, MemoryFilter, MemoryLimits, MemoryMatch, MemoryQuery,
+    MemorySettings, MemoryStatus, MemoryStore, ScopeFilter, UnreadableMemory, WritePolicy,
   },
 };
 use rusqlite::{Connection, OptionalExtension, params};
@@ -251,5 +251,9 @@ impl MemoryStore for ProjectDb {
 
   fn injected_memory(&self, invocation: InvocationId) -> Result<Vec<InjectedMemory>, StoreError> {
     injected::load(&self.connection, invocation)
+  }
+
+  fn given_memory(&self, memory: MemoryId) -> Result<Vec<GivenMemory>, StoreError> {
+    injected::given(&self.connection, memory)
   }
 }

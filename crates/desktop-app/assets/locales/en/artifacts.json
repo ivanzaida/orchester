@@ -1,0 +1,11 @@
+{
+  "artifacts": {
+    "run": "Run",
+    "runNumber": "Run {{run}}",
+    "latestRun": "Run {{run}} · latest",
+    "none": "0 artifacts",
+    "empty": "No artifacts yet",
+    "emptyRun": "No artifacts in Run {{run}}",
+    "emptyBody": "Artifacts are files a run keeps beside its branch: reports and notes its agents save, test results and logs its tool steps leave. Runs don't keep artifacts yet in this version of Orchester, so no run of this task has any."
+  }
+}

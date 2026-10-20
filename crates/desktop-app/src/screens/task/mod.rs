@@ -11,6 +11,7 @@
 //! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
+mod artifacts;
 pub(crate) mod cards;
 pub(crate) mod changes;
 mod context;
@@ -18,6 +19,7 @@ mod conversation;
 mod details;
 mod header;
 mod local_integration;
+mod memory;
 mod orchestrated;
 mod read;
 mod sharing;
@@ -371,6 +373,8 @@ impl Component for TaskFrame {
       TaskTab::Conversation => conversation_tab(ctx, &task),
       TaskTab::Changes => changes_tab(ctx, &task),
       TaskTab::LocalIntegration => local_integration::tab(ctx, &task),
+      TaskTab::Artifacts => artifacts::tab(ctx, &task),
+      TaskTab::Memory => memory::tab(ctx, &task),
     };
     Column::new()
       .id("task-frame")
@@ -418,4 +422,10 @@ fn changes_tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
 /// files are not known); `None` while it is not known: the label is the tab's name alone.
 pub fn changes_count(ctx: &mut Ctx, _task: &TaskContext) -> Option<FileCount> {
   changes::count(ctx)
+}
+
+/// How many active records the task's memory has, for the Memory tab's label (`Memory 10`); `None` while it is
+/// read.
+pub fn memory_count(ctx: &mut Ctx, task: &TaskContext) -> Option<usize> {
+  memory::active_count(ctx, task)
 }

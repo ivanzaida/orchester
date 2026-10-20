@@ -289,13 +289,23 @@ fn a_tasks_tabs_share_one_router_pattern_and_its_forms_keep_their_own() {
       TaskTab::Changes,
       TaskTab::LocalIntegration,
       TaskTab::Summary,
+      TaskTab::Artifacts,
+      TaskTab::Memory,
     ],
-    "Details first, Summary last"
+    "Details first, Summary after the run's tabs, Artifacts and Memory last"
   );
   let names = TaskTab::ALL.map(TaskTab::name);
   assert_eq!(
     names,
-    ["details", "conversation", "changes", "local-integration", "summary"],
+    [
+      "details",
+      "conversation",
+      "changes",
+      "local-integration",
+      "summary",
+      "artifacts",
+      "memory"
+    ],
     "each tab keeps its name, so links naming one still open it"
   );
 }

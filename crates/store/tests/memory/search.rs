@@ -132,6 +132,41 @@ fn memory_injected_into_an_invocation_is_recorded_in_order() {
 }
 
 #[test]
+fn memory_given_lists_the_invocations_that_got_a_record_latest_first() {
+  let (_repo, mut db, run, execution) = started_run();
+  let record = MemoryId::generate();
+  let entry = |delivery| InjectedMemory {
+    memory: record,
+    reason: InjectionReason::Pinned,
+    tokens: 31,
+    delivery,
+  };
+  let earlier = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let later = db
+    .start_invocation(run.id(), execution, &model(), at(20))
+    .expect("invocation");
+  let left_out = db
+    .start_invocation(run.id(), execution, &model(), at(30))
+    .expect("invocation");
+  db.save_injected_memory(earlier.id, &[entry(Delivery::Given)])
+    .expect("save");
+  db.save_injected_memory(later.id, &[entry(Delivery::Truncated)])
+    .expect("save");
+  db.save_injected_memory(left_out.id, &[entry(Delivery::OverRecordLimit)])
+    .expect("save");
+  let given = db.given_memory(record).expect("read");
+  let invocations: Vec<InvocationId> = given.iter().map(|given| given.invocation).collect();
+  assert_eq!(invocations, [later.id, earlier.id], "a record left out was not given");
+  assert_eq!(
+    (given[0].run, given[0].execution, given[0].started_at, given[0].tokens),
+    (run.id(), execution, at(20), 31)
+  );
+  assert!(db.given_memory(MemoryId::generate()).expect("read").is_empty());
+}
+
+#[test]
 fn memory_the_next_invocation_gets_what_recall_chooses_within_the_setting() {
   let (_repo, mut db, run, _) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");

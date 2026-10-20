@@ -6,9 +6,7 @@
       "details": "Details",
       "changes": "Changes",
       "artifacts": "Artifacts",
-      "artifactsReason": "Artifacts are planned · not available yet",
-      "memory": "Memory",
-      "memoryReason": "Memory is planned · not available yet"
+      "memory": "Memory"
     },
     "listSeparator": ", ",
     "page": {

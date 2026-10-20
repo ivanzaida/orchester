@@ -49,6 +49,11 @@ macro_rules! markers {
     impl $inspect for crate::instructions::form::Target {}
     impl $inspect for crate::instructions::preview::PreviewCatalog {}
     impl $inspect for crate::instructions::preview::PreviewChoice {}
+    impl $inspect for crate::memory::draft::RecordDraft {}
+    impl $inspect for crate::memory::listing::Filters {}
+    impl $inspect for crate::memory::read::GivenTo {}
+    impl $inspect for crate::memory::read::ProjectMemory {}
+    impl $inspect for crate::memory::read::TaskMemory {}
     impl $inspect for crate::messages::Message {}
     impl $inspect for crate::orchestrator::chat::ChatView {}
     impl $inspect for crate::orchestrator::chat::History {}
