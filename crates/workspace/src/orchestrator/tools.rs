@@ -107,7 +107,8 @@ pub(super) const RUN_TASK: &str = "run_task";
 pub(super) const CANCEL_RUN: &str = "cancel_run";
 /// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
 pub(in crate::orchestrator) const MERGE_RUN: &str = "merge_run";
-/// The tool whose calls always wait for the person, and only for a retry or a return to an earlier step.
+/// The tool whose calls always wait for the person, and only for a retry, a return to an earlier step or an agent's
+/// resolution of a merge's conflicts.
 pub(super) const CONTINUE_RUN: &str = "continue_run";
 /// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
 pub(super) const ANSWER_QUESTION: &str = "answer_question";
@@ -173,7 +174,9 @@ const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the mer
   the person asked you in this chat to merge. Either way the merge keeps the \
   rules below: only a task's latest run that succeeded, and only when the main checkout needs no local integration; \
   a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to the person on \
-  the Local integration page.";
+  the Local integration page. When merge_failed names conflicting files, the next step is to propose continue_run \
+  with resolve_conflicts, which sends the run back to an agent that may write to resolve them; or the person \
+  resolves them on the Local integration page.";
 
 /// What the agent reads first of `resume_run`.
 const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped, and in a turn Orchester started by \
@@ -193,11 +196,13 @@ const RELEASE_REFUSED: &str = "In a turn Orchester started by itself a release i
   new starts are held already (already_held): nothing was changed.";
 
 /// What the agent reads first of `continue_run`.
-const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
-  retries, broke again, or waits unverified or unchanged, and return_to also for a run that ended where it offers \
-  it: it checks the choice as below and proposes it to the person, who applies or dismisses it in the \
-  conversation; no switch lets you continue a run yourself. raise_limits, raise_step_budget, resume and accept are \
-  the person's and refused here (person_only). Give return_to a note that tells the agent what to do differently.";
+const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry, return_to and resolve_conflicts: allow_retry \
+  and return_to for a run whose step used up its retries, broke again, or waits unverified or unchanged, and \
+  return_to also for a run that ended where it offers it; resolve_conflicts for a run whose merge stopped at \
+  conflicts (merge_failed), with an optional step whose agent may write and an optional note. It checks the choice \
+  as below and proposes it to the person, who applies or dismisses it in the conversation; no switch lets you \
+  continue a run yourself. raise_limits, raise_step_budget, resume and accept are the person's and refused here \
+  (person_only). Give return_to a note that tells the agent what to do differently.";
 
 /// What the agent reads first of `answer_question` and `send_message`.
 const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \
@@ -372,7 +377,7 @@ async fn switched(
   if !allows(services, consent).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }
-  let (change, task) = change::subject((scope, services.programs()), name, arguments).await?;
+  let (change, task) = change::subject((scope, services), name, arguments).await?;
   // A message that moves a run none of whose agents waits or works is the person's to send.
   if change.change.moves_run() {
     return Ok(proposed(translate, change, task));
@@ -459,7 +464,7 @@ async fn propose_change(
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let (change, task) = change::subject((scope, services.programs()), name, arguments).await?;
+  let (change, task) = change::subject((scope, services), name, arguments).await?;
   Ok(proposed(translate, change, task))
 }
 
@@ -487,7 +492,7 @@ async fn publish(
   if !allows(services, OrchestratorConsent::PublishDrafts).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }
-  let (change, _) = change::subject((scope, services.programs()), name, arguments).await?;
+  let (change, _) = change::subject((scope, services), name, arguments).await?;
   if !change::widens(scope, &change).await?.is_empty() && !changes_permissions(services).await? {
     return propose_change((services, translate), scope, name, arguments).await;
   }

@@ -128,6 +128,17 @@ pub enum ContinueChoice {
     to: Option<StepName>,
     note: String,
   },
+  /// *Ask an agent to resolve*: the work of a run whose merge into `base` stopped at conflicts in `files` goes back to
+  /// the writing step `step` (its key), `to` as people read it, with the conflict's note and `note` after it.
+  ResolveConflicts {
+    step: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    to: Option<StepName>,
+    base: String,
+    files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+  },
 }
 
 /// What a message to a run none of whose agents waits or works does to it, as the task's composer sends it.
