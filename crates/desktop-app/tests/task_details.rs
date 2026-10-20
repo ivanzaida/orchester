@@ -331,7 +331,9 @@ fn details_a_task_opens_on_its_details_its_tabs_from_details_to_summary() {
     page.project,
     ProjectPage::Task(key.parse().expect("a task key"), TaskView::Summary),
   );
-  page.window.until("the Summary", |window| window.navigation().route_now() == summary);
+  page
+    .window
+    .until("the Summary", |window| window.navigation().route_now() == summary);
 }
 
 #[test]

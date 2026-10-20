@@ -169,7 +169,11 @@ fn domain_reads_existing_results_carry_links_the_router_opens() {
   let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
   assert_eq!(link_of(&task), format!("{page}/details"), "a task opens on its Details");
   for run in list(&task, "runs") {
-    assert_eq!(link_of(run), format!("{page}/summary"), "a run opens the Summary: {run}");
+    assert_eq!(
+      link_of(run),
+      format!("{page}/summary"),
+      "a run opens the Summary: {run}"
+    );
   }
   let profiles = served.ok("list_profiles", &kontur);
   let role = list(&profiles, "profiles")[0]["role"].clone();
