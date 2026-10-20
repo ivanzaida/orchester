@@ -7,8 +7,10 @@
 //!
 //! The design draws the sidebar only where everything fits. In a window too short for it, the switcher
 //! stays at the top and All projects, Settings and Project settings at the bottom, and what lies between
-//! (the screens and the runs under way) scrolls, the thumb in the sidebar's right padding.
+//! (the screens and the runs under way) scrolls, the thumb in the sidebar's right padding, with a hairline
+//! at an edge where it cuts rows (`edges`).
 
+mod edges;
 pub mod running;
 pub mod switcher;
 
@@ -25,6 +27,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 
 use self::{
+  edges::Watch,
   running::{Running, RunningProps, under_way},
   switcher::{Switcher, SwitcherProps},
 };
@@ -39,13 +42,19 @@ use crate::{
 /// `Sidebar` width.
 const SIDEBAR_WIDTH: f32 = 240.0;
 
-pub struct Sidebar;
+pub struct Sidebar {
+  edges: Watch,
+}
 
 impl Component for Sidebar {
   type Props = ();
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self { edges: Watch::new(ctx) }
+  }
+
+  fn after_layout(&self) {
+    self.edges.after_layout();
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -55,6 +64,7 @@ impl Component for Sidebar {
     let selected = route.as_ref().map(Route::nav_screen);
     let project = navigation.tabs().active().sidebar_project();
     let switcher = ctx.mount_keyed::<Switcher>("project-switcher", SwitcherProps { project });
+    let edges = self.edges.edges();
     let mut screens = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::horizontal(SpacingSize::Md))
@@ -69,8 +79,6 @@ impl Component for Sidebar {
         counts: &counts,
       };
       screens = screens
-        // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
-        .child(Column::new().padding(Padding::new().top(SpacingSize::Sm)))
         .child(items.group(ctx, &Screen::PROJECT_MAIN))
         .child(section_label(&ctx.t("shell.nav.configure")))
         .child(items.group(ctx, &Screen::CONFIGURE))
@@ -95,14 +103,19 @@ impl Component for Sidebar {
       )
       .spacing(ExtraSpacing::Tight.role())
       .child(pinned(switcher))
+      // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
+      .with_children(project.map(|_| pinned(edges.top())))
       // The room the design leaves empty (`Spacer`) between the screens and the bottom group.
       .child(
         ScrollVertical::new(screens)
+          .with_scroll_state(self.edges.scroll())
           .id("sidebar-scroll")
           .width(Dimension::Pct(100.0))
           .flex(1.0)
-          .min_height(Dimension::Px(0.0)),
+          .min_height(Dimension::Px(0.0))
+          .on_scroll(self.edges.on_scroll()),
       )
+      .with_children(self.edges.bottom(edges).map(pinned))
       .child(pinned(bottom))
   }
 }
