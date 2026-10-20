@@ -24,7 +24,7 @@ pub struct Loaded {
   pub pending: Arc<Vec<PendingToolApproval>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
   pub questions: Arc<Vec<AskedQuestions>>,
-  /// The Orchestrator chat's actions that answer the run's agents or send them a message.
+  /// The Orchestrator chat's actions that answer the run's agents, send them a message or continue the run.
   pub orchestrated: Arc<Vec<KeptAction>>,
 }
 

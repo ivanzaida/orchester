@@ -32,7 +32,7 @@ use orchester_workspace::{
   tasks::{
     conversation::{
       Conversation, PanelState,
-      orchestrator::{message_offer, proposals},
+      orchestrator::{continued, message_offer, proposals},
     },
     detail::RunView,
     timeline::{
@@ -150,7 +150,7 @@ impl ConversationTab {
       }
       Err(None) => return (states::loading(ctx, run), None),
     };
-    let items = items::build(&Sources {
+    let mut items = items::build(&Sources {
       run,
       entries: &loaded.entries,
       conversation,
@@ -159,6 +159,7 @@ impl ConversationTab {
       questions: &loaded.questions,
       merge: task.detail.merge.as_ref(),
     });
+    continued(&mut items, &loaded.orchestrated);
     let open = |key: &str, default: bool| self.toggles.is_open(key, default);
     let shown = timeline::without_usage(view::shown(&items, &Choice::default(), &open, &plain::rendered));
     // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)

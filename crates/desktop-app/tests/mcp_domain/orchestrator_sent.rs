@@ -80,13 +80,13 @@ fn decide(served: &mut Served, scope: &ChatScope, seq: i64, decision: Decision) 
 }
 
 /// The entries `get_conversation` gives of the task keyed `key`.
-fn entries(served: &mut Served, key: &str) -> Vec<Value> {
+pub(super) fn entries(served: &mut Served, key: &str) -> Vec<Value> {
   let read = served.ok("get_conversation", &json!({ "project": "Kontur", "task": key }));
   read["entries"].as_array().expect("entries").clone()
 }
 
 /// The task keyed `key`'s Conversation, open in the window.
-fn open_conversation(served: &mut Served, project: orchester_core::id::ProjectId, key: &str) {
+pub(super) fn open_conversation(served: &mut Served, project: orchester_core::id::ProjectId, key: &str) {
   let key: TaskKey = key.parse().expect("a task key");
   let navigation = served.link.navigation().expect("the window attached its navigation");
   navigation.go(Route::Project(

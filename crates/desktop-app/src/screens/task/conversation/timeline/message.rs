@@ -105,16 +105,38 @@ fn orchestrator_message(
   (project, entry, from): (ProjectId, &Entry, FromOrchestrator),
   delivery: Element,
 ) -> Column {
+  orchestrator_row(
+    ctx,
+    id,
+    (project, from),
+    (Some(&entry.body), Some(entry.at)),
+    Some(delivery),
+  )
+}
+
+/// The Orchestrator's row `id`: its avatar and name with the time `at`, what it wrote (`said`), how that went out with
+/// the way back to the chat's conversation, and `after` under them.
+fn orchestrator_row(
+  ctx: &mut Ctx,
+  id: &str,
+  (project, from): (ProjectId, FromOrchestrator),
+  (said, at): (Option<&str>, Option<Timestamp>),
+  after: Option<Element>,
+) -> Column {
   let name = ctx.t("conversation.byOrchestrator");
-  let time = display::clock(entry.at);
-  let said = Text::new(&entry.body)
-    .id(format!("{id}-text"))
-    .variant(TypographyStyle::Body)
-    .selectable(true)
-    .width(Dimension::Pct(100.0));
-  let body: Vec<Element> = std::iter::once(said.into())
+  let time = at.map(display::clock).unwrap_or_default();
+  let said = said.map(|said| {
+    Text::new(said)
+      .id(format!("{id}-text"))
+      .variant(TypographyStyle::Body)
+      .selectable(true)
+      .width(Dimension::Pct(100.0))
+      .into()
+  });
+  let body: Vec<Element> = said
+    .into_iter()
     .chain(sent_line(ctx, id, (project, from)))
-    .chain(std::iter::once(delivery))
+    .chain(after)
     .collect();
   Column::new()
     .id(id.to_owned())
@@ -141,6 +163,19 @@ pub(super) fn person_note(
     return person_side_message(id, (&author, note, at), None).into();
   }
   bubble(ctx, id, (note, at), None).into()
+}
+
+/// How the Orchestrator chat went on with the run (ORC-45): its row, with the note the work returned with when there
+/// is one, never the person's bubble.
+pub(super) fn orchestrator_note(
+  ctx: &mut Ctx,
+  id: &str,
+  (project, from): (ProjectId, FromOrchestrator),
+  (note, at): (Option<&Arc<str>>, Option<Timestamp>),
+) -> Element {
+  orchestrator_row(ctx, id, (project, from), (note.map(|note| &**note), at), None)
+    .describe("by_orchestrator", "true")
+    .into()
 }
 
 /// The name `describe` reports a delivery by, for tests and QA.

@@ -1,7 +1,8 @@
 //! Decisions on the Orchestrator chat's proposals (`orchester_core::orchestrator::ChatAction`): a dismissal settles a
 //! proposal that waits; a person's start or apply first claims it, then settles it once carried out; and the claims
 //! no settlement followed are found again. Each change is one transaction, so two decisions never both take a
-//! proposal. A run's task conversation reads the answers and messages the chat proposed or sent its agents (ORC-45).
+//! proposal. A run's task conversation reads the answers, messages and decisions on how the run goes on that the chat
+//! proposed or sent its agents (ORC-45).
 
 use orchester_core::{
   id::{ChatId, RunId},
@@ -26,13 +27,13 @@ pub struct KeptAction {
 }
 
 impl ProjectDb {
-  /// The actions of every conversation that answer an agent of `run` or send its agents a message, whatever became
-  /// of them, in the order they were kept.
+  /// The actions of every conversation that answer an agent of `run`, send its agents a message or decide how the run
+  /// goes on after it stopped (`continue_run`), whatever became of them, in the order they were kept.
   pub fn run_answer_actions(&self, run: RunId) -> Result<Vec<KeptAction>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT chat_id, seq, at, body FROM orchestrator_entries
        WHERE kind = 'action' AND json_extract(body, '$.change.change.run') = ?1
-         AND json_extract(body, '$.change.change.kind') IN ('answer', 'message')
+         AND json_extract(body, '$.change.change.kind') IN ('answer', 'message', 'continue')
        ORDER BY seq",
     )?;
     let rows = statement

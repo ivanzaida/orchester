@@ -1,7 +1,9 @@
 //! What the project's Orchestrator chat wrote to a run's agents, as a task's conversation shows it (ORC-45). A message
 //! or an answer it wrote is its own, never the person's: it names the chat's conversation it came from and how it went
 //! out, sent by the chat while the person's switch let it, or proposed by the chat and applied by the person
-//! ([`orchester_core::orchestrator::FromOrchestrator`]). An answer or a message it proposed and no one applied yet
+//! ([`orchester_core::orchestrator::FromOrchestrator`]). So is a decision on how a run that stopped goes on
+//! (`continue_run`: one more retry, a return with a note, a return to resolve conflicts): the return or restart it
+//! started is the chat's ([`continued`]). An answer or a message it proposed and no one applied yet
 //! waits for the person in the conversation too, with the same proposal behind it in the chat: applying or dismissing
 //! it in either place decides both ([`crate::orchestrator::proposal::decide`]). One applying would refuse now is
 //! stale: a message the run would no longer take as it was checked (`send_message`'s own check), or an answer to a
@@ -13,7 +15,7 @@ use std::sync::Arc;
 use orchester_core::{
   id::{ChatId, RunId},
   orchestrator::{
-    ActionOutcome,
+    ActionOutcome, FromOrchestrator, SentWay,
     change::{Change, MessageThen},
   },
   question::AskedQuestions,
@@ -27,7 +29,10 @@ use super::{
 };
 use crate::{
   app_mcp::{SendTiming, sent_as},
-  tasks::detail::TaskDetail,
+  tasks::{
+    detail::TaskDetail,
+    timeline::{Item, ItemKind},
+  },
 };
 
 /// What a proposal would send.
@@ -130,6 +135,32 @@ pub fn proposals(
 pub fn waiting_answer<'a>(proposals: &'a [Proposal], request: &str) -> Option<&'a Proposal> {
   proposals.iter().find(|proposal| {
     proposal.waits() && matches!(&proposal.proposed, Proposed::Answer { request: asked, .. } if &**asked == request)
+  })
+}
+
+/// Names as the Orchestrator's each return or restart among `items` that a decision of the chat on how the run goes on
+/// started (`continue_run`, among `kept`): a decision carried out, by the chat itself or applied by the person, on the
+/// attempt the run stopped in starts the next one. A proposal no one applied, or one refused, started nothing.
+pub fn continued(items: &mut [Item], kept: &[KeptAction]) {
+  for item in items {
+    if let ItemKind::Mark(mark) = &mut item.kind {
+      mark.orchestrator = continuation(kept, mark.attempt);
+    }
+  }
+}
+
+/// The chat's decision among `kept` that started attempt `attempt`, with its conversation and how it went out.
+fn continuation(kept: &[KeptAction], attempt: u32) -> Option<FromOrchestrator> {
+  kept.iter().rev().find_map(|kept| {
+    let Change::Continue { attempt: stopped, .. } = kept.action.change.as_ref()?.change else {
+      return None;
+    };
+    let way = match kept.action.outcome {
+      ActionOutcome::Applied => SentWay::AppliedByPerson,
+      ActionOutcome::Done => SentWay::Direct,
+      _ => return None,
+    };
+    (stopped.checked_add(1) == Some(attempt)).then(|| FromOrchestrator::new(kept.chat, way))
   })
 }
 

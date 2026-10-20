@@ -211,7 +211,11 @@
       "restartedByAutomation": "Automation restarted {{step}} · it stopped without a result · attempt {{attempt}} · {{time}}",
       "returnedWithNoteByAutomation": "Automation returned the work to {{step}} · attempt {{attempt}} · {{time}}",
       "returnedToResolve": "You returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}",
-      "returnedToResolveByAutomation": "Automation returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}"
+      "returnedToResolveByAutomation": "Automation returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}",
+      "returnedByOrchestrator": "{{failed}} failed; the Orchestrator returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "restartedByOrchestrator": "The Orchestrator restarted {{step}} · it stopped without a result · attempt {{attempt}} · {{time}}",
+      "returnedWithNoteByOrchestrator": "The Orchestrator returned the work to {{step}} · attempt {{attempt}} · {{time}}",
+      "returnedToResolveByOrchestrator": "The Orchestrator returned the work to {{step}} to resolve the conflicts with {{branch}} · attempt {{attempt}} · {{time}}"
     },
     "mcp": {
       "disabled": "The server is turned off in Connections.",

@@ -484,6 +484,7 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
     kind: MarkKind::Restarted {
       step: "Implement".into(),
     },
+    orchestrator: None,
   };
   items.insert(3, item("mark-2", implement, ItemKind::Mark(mark)));
   for show in [Show::All, Show::Messages, Show::Tools] {

@@ -1,10 +1,11 @@
 //! `get_conversation`: a task's conversation as its Conversation tab shows it for its latest run (ORC-42): what the
 //! person and the Orchestrator chat wrote to the agents, what the agents wrote, their questions (in the conversation,
-//! and with suggested answers), their plans and how each was decided, and how each step ended; oldest first, newest
-//! last, a page at a time. Each entry names who wrote it (for the Orchestrator chat, how it went out: sent by the chat
-//! or applied by the person, ORC-45), its step and run, when, and the link to its card; after the newest page's
-//! entries, the answers and messages the chat proposed that no one applied. It reads what the Conversation tab reads,
-//! stored with secrets already redacted; tool calls and approvals are left to their own tools.
+//! and with suggested answers), their plans and how each was decided, how a decision went on with a run that stopped
+//! (a return or a restart), and how each step ended; oldest first, newest last, a page at a time. Each entry names who
+//! wrote or decided it (for the Orchestrator chat, how it went out: sent by the chat or applied by the person,
+//! ORC-45), its step and run, when, and the link to its card; after the newest page's entries, the answers and
+//! messages the chat proposed that no one applied. It reads what the Conversation tab reads, stored with secrets
+//! already redacted; tool calls and approvals are left to their own tools.
 
 use orchester_core::{
   question::{AskedQuestions, QuestionState},
@@ -25,13 +26,14 @@ use crate::{
   tasks::{
     conversation::{
       Author, Entry as MessageEntry, EntryState,
-      orchestrator::{Proposal, message_offer, proposals},
+      orchestrator::{Proposal, continued, message_offer, proposals},
       outgoing::conversation_of,
     },
     detail::{RunView, TaskDetail},
     timeline::{
-      self, Item, ItemKind, RunEnd, Sources,
+      self, Item, ItemKind, Mark, RunEnd, Sources,
       load::{requests_in, transcript_in},
+      mark::MarkKind,
     },
   },
 };
@@ -119,7 +121,7 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<
   let requests = requests_in(root, run.id())?;
   let offered = message_offer(detail, run.id());
   let proposed = proposals(&requests.orchestrated, (offered.as_ref(), &requests.questions));
-  let items = timeline::build(&Sources {
+  let mut items = timeline::build(&Sources {
     run,
     entries: &transcript,
     conversation: &conversation,
@@ -128,6 +130,7 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<
     questions: &requests.questions,
     merge: detail.merge.as_ref(),
   });
+  continued(&mut items, &requests.orchestrated);
   Ok((items, proposed))
 }
 
@@ -177,6 +180,9 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
       json!({ "passed": card.passed, "summary": card.reported.as_deref() }),
     ),
     ItemKind::End(end) => ("run_end", Value::Null, None, json!({ "end": run_end(end) })),
+    ItemKind::Mark(mark) if mark.by.is_some() || mark.orchestrator.is_some() => {
+      ("run_continued", decider(mark), step_of(), continued_body(mark))
+    }
     ItemKind::Step(_) | ItemKind::Mark(_) | ItemKind::Approval(_) | ItemKind::Tools(_) | ItemKind::Problem(_) => {
       return None;
     }
@@ -216,6 +222,33 @@ fn sender(message: &MessageEntry) -> Value {
       author
     }
   }
+}
+
+/// Who decided how the run went on in `mark`: the Orchestrator chat, with how its decision went out (sent by it, or
+/// applied by the person), else the person or automation.
+fn decider(mark: &Mark) -> Value {
+  match (mark.orchestrator, mark.by) {
+    (Some(from), _) => orchestrated::author(from),
+    (None, Some(Answerer::Automation)) => json!({ "kind": "automation" }),
+    (None, _) => json!({ "kind": "person" }),
+  }
+}
+
+/// How a decision went on with the run in `mark`: the work returned (with the note for its agent, or to resolve the
+/// conflicts with a branch) or a step restarted, to which step, and the attempt it started.
+fn continued_body(mark: &Mark) -> Value {
+  let (how, to, note, resolving) = match &mark.kind {
+    MarkKind::Returned { to, .. } => ("returned", to, None, None),
+    MarkKind::Restarted { step } => ("restarted", step, None, None),
+    MarkKind::ReturnedWithNote { to, note, resolving } => ("returned_with_note", to, Some(note), resolving.as_ref()),
+  };
+  json!({
+    "continued": how,
+    "to": &**to,
+    "note": note.map(|note| &**note),
+    "resolving": resolving.map(|branch| &**branch),
+    "attempt": mark.attempt,
+  })
 }
 
 /// A message's text and where it stands.
