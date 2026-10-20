@@ -6,7 +6,7 @@ use orchester_core::{
 };
 
 use crate::{
-  fixture::task,
+  fixture::{Config, key, task},
   prompt::{Prompt, builder, step_with},
 };
 
@@ -121,4 +121,71 @@ fn outcome_prompt_schema_describes_attention_without_changing_the_wire_format() 
   assert!(description.contains("required checks pass"));
   assert!(description.contains("negative verdict or unresolved blocking or major findings is failed"));
   assert!(description.contains("corrections by an earlier step"));
+}
+
+#[test]
+fn outcome_prompt_unverified_is_only_for_this_steps_own_checks_and_names_the_later_steps() {
+  let prompt = Prompt::new(builder("Role."), step_with("Step."), task("Brief.", &[]));
+  let started = prompt
+    .input(&[], &[], true)
+    .assemble(InjectionEvent::Start)
+    .expect("prompt");
+  let expected = contract(&started.text);
+  for rule in [
+    "Use `unverified` only for checks this step itself is asked to do and could not",
+    "A check that a later step of this run's pipeline does",
+    "is not unverified here: leave it to that step, name it in your summary as left to that step, and do not list \
+     it in `unverified`",
+    "Mismatches you did find still require `failed`",
+    // Implement of Feature delivery comes before checks, review and pr, in pipeline order.
+    "The steps after this one in this run's pipeline: checks (`checks`), review (`review`), pr (`pr`).",
+  ] {
+    assert!(expected.contains(rule), "missing rule: {rule}\n{expected}");
+  }
+  let resumed = prompt
+    .input(&[], &[], true)
+    .assemble(InjectionEvent::Resume)
+    .expect("prompt");
+  assert_eq!(contract(&resumed.text), expected);
+  // A preview has no run, so it names no steps.
+  let preview = prompt.input(&[], &[], false).compose(InjectionEvent::Start);
+  assert!(
+    !preview.text().contains("The steps after this one"),
+    "{}",
+    preview.text()
+  );
+}
+
+#[test]
+fn outcome_prompt_the_last_step_is_told_its_checks_are_its_own() {
+  let pr = Config::feature_delivery()
+    .pipeline_version
+    .body()
+    .step(&key("pr"))
+    .expect("step")
+    .clone();
+  let prompt = Prompt::new(builder("Role."), pr, task("Brief.", &[]));
+  let text = prompt
+    .input(&[], &[], true)
+    .assemble(InjectionEvent::Start)
+    .expect("prompt")
+    .text;
+  assert!(
+    contract(&text).contains("No step of this run's pipeline comes after this one"),
+    "{text}"
+  );
+}
+
+#[test]
+fn outcome_prompt_schema_keeps_later_steps_checks_out_of_unverified() {
+  let schema: serde_json::Value = serde_json::from_str(STEP_RESULT_SCHEMA).expect("valid schema");
+  let outcome = schema["properties"]["outcome"]["description"]
+    .as_str()
+    .expect("guidance");
+  assert!(outcome.contains("some of what this step itself must check could not be checked"));
+  assert!(outcome.contains("A check a later step of the pipeline does is not unverified"));
+  let list = schema["properties"]["unverified"]["description"]
+    .as_str()
+    .expect("guidance");
+  assert!(list.contains("never a check a later step does"));
 }

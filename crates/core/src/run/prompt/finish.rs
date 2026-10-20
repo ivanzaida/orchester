@@ -26,11 +26,15 @@ const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete
                                    are unchanged, and state that limit. Preserve earlier evidence without \
                                    relabeling it as evidence for a new build. If fresh verification needs an \
                                    action from the person that lets you go on now, request it with `question`.\n\
-                                   Use `unverified` when you checked what you could but some checks cannot be \
-                                   done with what this step has (a state no fixture reaches, an app, tool or \
-                                   fixture you cannot use): list each in `unverified` with what it is and why. \
-                                   It goes to the person and sends nothing back to an earlier step. Mismatches \
-                                   you did find still require `failed`.\n\
+                                   Use `unverified` only for checks this step itself is asked to do and could \
+                                   not, with what it has (a state no fixture reaches, an app, tool or fixture \
+                                   you cannot use): list each in `unverified` with what it is and why. It goes \
+                                   to the person and sends nothing back to an earlier step. A check that a later \
+                                   step of this run's pipeline does (its tests, a check script, a review or a \
+                                   design verification) is not unverified here: leave it to that step, name it \
+                                   in your summary as left to that step, and do not list it in `unverified`; \
+                                   when nothing else is unchecked, that is `done`. Mismatches you did find \
+                                   still require `failed`.\n\
                                    Use `question` when progress needs the person's decision, permission, access, \
                                    or clarification. This includes a proposed command outside the sandbox, an \
                                    unavailable capability, or conflicting requirements that the person can \
@@ -65,7 +69,41 @@ pub(super) fn push_result(text: &mut String, input: &PromptInput<'_>, delivery: 
     ResultDelivery::Tool => RESULT_AS_TOOL,
   };
   push_block(text, &format!("{how}\n{RESULT_INSTRUCTIONS}"));
+  push_later_steps(text, input);
   if input.step.approval_gate {
     push_block(text, GATED_RESULT_INSTRUCTIONS);
+  }
+}
+
+/// Which steps of the run's pinned pipeline come after this one (those that depend on it, directly or not), in
+/// pipeline order, so the agent leaves their checks to them; nothing without a run (a preview).
+fn push_later_steps(text: &mut String, input: &PromptInput<'_>) {
+  let Some(context) = input.run else {
+    return;
+  };
+  let pipeline = context.run.snapshot();
+  let key = &input.step.key;
+  let after = pipeline.downstream_of(key);
+  let later: Vec<String> = pipeline
+    .body()
+    .steps()
+    .iter()
+    .filter(|step| &step.key != key && after.contains(&step.key))
+    .map(|step| format!("{} (`{}`)", step.name.as_str(), step.key))
+    .collect();
+  if later.is_empty() {
+    push_block(
+      text,
+      "No step of this run's pipeline comes after this one: the checks this step is asked for are its own.",
+    );
+  } else {
+    push_block(
+      text,
+      &format!(
+        "The steps after this one in this run's pipeline: {}. What they check is theirs: name it in your summary, \
+         not in `unverified`.",
+        later.join(", ")
+      ),
+    );
   }
 }

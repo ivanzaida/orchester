@@ -36,7 +36,7 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
     "outcome":{
       "type":"string",
       "enum":["done","failed","unverified","question"],
-      "description":"done: current step complete and required checks pass. A completed review or verification with a negative verdict or unresolved blocking or major findings is failed, even if its report is complete. unverified: the step ran, but some of what it must check could not be checked (a state it could not reach, an app, tool or fixture it could not use); list each in unverified with why. It is no verdict on the work: the person decides, and nothing returns to an earlier step. Mismatches it did find make the step failed, not unverified. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, including checks requiring corrections by an earlier step, or failure that no decision or action by the person would let the step resolve. Incomplete work or a permission request alone is not failed."
+      "description":"done: current step complete and required checks pass. A completed review or verification with a negative verdict or unresolved blocking or major findings is failed, even if its report is complete. unverified: the step ran, but some of what this step itself must check could not be checked (a state it could not reach, an app, tool or fixture it could not use); list each in unverified with why. A check a later step of the pipeline does is not unverified: name it in the summary as left to that step. It is no verdict on the work: the person decides, and nothing returns to an earlier step. Mismatches it did find make the step failed, not unverified. question: waiting for the person's decision, permission, access, or clarification; resumes the same session after their answer. failed: failure handled by the pipeline, including checks requiring corrections by an earlier step, or failure that no decision or action by the person would let the step resolve. Incomplete work or a permission request alone is not failed."
     },
     "summary":{
       "type":"string",
@@ -53,7 +53,7 @@ pub const STEP_RESULT_SCHEMA: &str = r#"{
         "required":["check","reason"],
         "additionalProperties":false
       },
-      "description":"For unverified: each check that could not be done, with why; null otherwise."
+      "description":"For unverified: each check this step had to do and could not, with why; never a check a later step does; null otherwise."
     },
     "completed":{
       "type":["array","null"],
