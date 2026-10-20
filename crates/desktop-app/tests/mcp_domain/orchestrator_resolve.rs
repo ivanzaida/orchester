@@ -227,7 +227,7 @@ fn chat_resolution_applied_returns_the_work_as_ask_an_agent_does_as_the_persons(
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",
-    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key }),
+    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
   served.until("the task page", |served| served.shows("task-merge"));
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
