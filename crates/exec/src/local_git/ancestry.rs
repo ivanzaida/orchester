@@ -33,11 +33,13 @@ impl LocalGit {
     }
   }
 
+  /// The commits reachable from `source` and not from `base`, oldest first: when `source` merged `base` in, its
+  /// commits from before that merge too (ORC-67).
   pub fn commits_after(&self, base: &str, source: &str) -> Result<Vec<String>, LocalGitError> {
     validate_object(base)?;
     validate_object(source)?;
     let excluded = format!("^{base}");
-    let text = self.text(&["rev-list", "--ancestry-path", "--reverse", source, &excluded])?;
+    let text = self.text(&["rev-list", "--reverse", source, &excluded])?;
     let commits = text.lines().map(str::to_owned).collect::<Vec<_>>();
     if commits.len() > 1024 {
       return Err(super::LocalError::Unsupported.into());
