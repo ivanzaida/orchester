@@ -23,7 +23,6 @@ use orchester_core::{
   store::{ResourceStore, TaskStore},
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -44,7 +43,7 @@ use crate::{
 /// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers, sends or
 /// continues, and the key of the task it names; a refusal when there is nothing to change.
 pub(super) async fn subject(
-  (scope, programs): (&ChatScope, &Programs),
+  (scope, services): (&ChatScope, &Services),
   name: &str,
   arguments: &JsonObject,
 ) -> Result<(ProposedChange, Option<String>), ToolError> {
@@ -70,8 +69,9 @@ pub(super) async fn subject(
       blocking(move || answer::message_change(&root, sending)).await?
     }
     (None, CONTINUE_RUN) => {
-      let (arguments, programs) = (arguments.clone(), programs.clone());
-      blocking(move || continuation::continue_change((&root, &programs), &arguments)).await?
+      let (arguments, programs) = (arguments.clone(), services.programs().clone());
+      let jobs = services.jobs().of(scope.project);
+      blocking(move || continuation::continue_change((&root, &programs, &jobs), &arguments)).await?
     }
     (None, control::PAUSE_RUN | control::RESUME_RUN | control::RELEASE_QUEUE) => {
       let (name, arguments) = (name.to_owned(), arguments.clone());
@@ -141,14 +141,20 @@ pub(super) async fn apply(
       };
       let expected = Revision::new(&checkpoint).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
       blocking(move || unchanged_run(&root, (run, number), Some(&checkpoint))).await?;
-      merge_proposed(services, translate, (project, run.to_string()), expected).await
+      let merged = merge_proposed(services, translate, (project, run.to_string()), expected).await;
+      merged.map_err(|error| merge_failed_next(services, scope, (run, number), error))
     }
     // The tool checks again that the choice is offered where it continues the run, decided by `by`: a person who
     // applied the proposal decides as themselves.
     Change::Continue {
-      run, number, attempt, ..
+      run,
+      number,
+      attempt,
+      ref choice,
+      ..
     } => {
-      blocking(move || continuation::unchanged(&root, (&run.to_string(), number), attempt)).await?;
+      let (jobs, choice) = (services.jobs().of(scope.project), choice.clone());
+      blocking(move || continuation::unchanged((&root, &jobs), (&run.to_string(), number), (attempt, &choice))).await?;
       let (_, arguments) = tool_arguments(scope, change);
       continue_for_orchestrator(services, arguments, by).await
     }
@@ -348,6 +354,33 @@ fn no_checkpoint(number: u32) -> ToolError {
     "no_checkpoint",
     vec![Message::new("orchestrator.proposal.noCheckpoint").with("run", number.to_string())],
   )
+}
+
+/// A merge of run `run` (`#number`) the chat asked for that was refused as `merge_failed` names what comes next: a
+/// conflict the chat may propose an agent resolves (`continue_run`'s `resolve_conflicts`), else Local integration.
+/// Any other refusal is as the tool gave it.
+fn merge_failed_next(
+  services: &Services,
+  scope: &ChatScope,
+  (run, number): (RunId, u32),
+  error: ToolError,
+) -> ToolError {
+  let ToolError::Refused { code, mut reasons } = error else {
+    return error;
+  };
+  if code != "merge_failed" {
+    return ToolError::Refused { code, reasons };
+  }
+  let conflicts = services.jobs().of(scope.project).of(run).state().conflicts;
+  let next = if conflicts.is_empty() {
+    Message::new("orchestrator.tools.mergeFailedNext").with("run", number.to_string())
+  } else {
+    Message::new("orchestrator.tools.mergeConflictsNext")
+      .with("run", number.to_string())
+      .with("files", conflicts.join(", "))
+  };
+  reasons.push(next);
+  ToolError::Refused { code, reasons }
 }
 
 /// Refused unless run `run` (`#number`) still holds what its last checkpoint `proposed` held.

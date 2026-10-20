@@ -40,6 +40,22 @@ fn return_work_the_conflict_note_names_no_file() {
 }
 
 #[test]
+fn return_work_the_conflict_note_takes_the_callers_note_after_its_own_words() {
+  let main = BranchName::new("main").expect("a branch");
+  let page = return_work::conflict_note(&main);
+  let note = return_work::conflict_note_with(&main, Some("  Keep both retry settings.  "));
+  assert!(note.as_str().starts_with(page.as_str()), "{}", note.as_str());
+  assert!(
+    note.as_str().ends_with("\n\nKeep both retry settings."),
+    "{}",
+    note.as_str()
+  );
+  for empty in [None, Some(""), Some("   ")] {
+    assert_eq!(return_work::conflict_note_with(&main, empty), page, "{empty:?}");
+  }
+}
+
+#[test]
 fn return_work_while_the_step_resolves_the_run_row_says_when_and_with_what() {
   let mut fixture = support::Fixture::new();
   let task = fixture.task("Add login", support::at(10));

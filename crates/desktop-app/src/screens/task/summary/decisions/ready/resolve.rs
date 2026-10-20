@@ -16,11 +16,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  id::RunId,
-  resource::StepKey,
-  run::{Answerer, MergeConflicts},
-};
+use orchester_core::{id::RunId, resource::StepKey, run::Answerer};
 use orchester_ipc::Command;
 use orchester_workspace::{
   decisions::DecisionKind,
@@ -231,7 +227,12 @@ impl Offer<'_> {
         .iter()
         .any(|step| step.key == *key)
     });
-    let (Some(step), Some(base)) = (chosen, self.run.run.base_branch()) else {
+    // The same return `continue_run`'s `resolve_conflicts` sends, with no note of its own.
+    let returned = |by| {
+      let step = chosen.clone()?;
+      return_work::resolve_command(self.run, step, (self.conflicts, None), by)
+    };
+    let (Some(person), Some(automation)) = (returned(Answerer::Person), returned(Answerer::Automation)) else {
       return button.disabled();
     };
     if pending.is_some() {
@@ -241,20 +242,6 @@ impl Offer<'_> {
     if self.worktree.is_none() || self.task.jobs.run(self.run.id()).busy() {
       return button.disabled();
     }
-    let conflicts = MergeConflicts {
-      base: base.clone(),
-      files: self.conflicts.to_vec(),
-    };
-    let note = return_work::conflict_note(base);
-    let (person, automation) = (
-      return_work::command(
-        self.run,
-        step.clone(),
-        (note.clone(), Some(conflicts.clone())),
-        Answerer::Person,
-      ),
-      return_work::command(self.run, step, (note, Some(conflicts)), Answerer::Automation),
-    );
     let (action, asked) = (self.action.clone(), self.asked.clone());
     let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
     button.on_click(move || {
