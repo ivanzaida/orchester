@@ -31,6 +31,13 @@ shape; consult this file for the traps.
 delete, cut, undo, redo); `event.value.get()` is the pre-edit text. Committing from
 `value.get()` silently drops the last character typed.
 
+Paste (lurq 0.49): `on_paste(|PasteEvent| …)` on the input or an ancestor runs **before** the
+text is inserted; `prevent_default()` keeps it out (take an image or files from
+`event.content()` instead). A **synthetic** paste shortcut (an MCP client's `Ctrl+V`, a
+`SyntheticInput::key_down`) never reads the OS clipboard and inserts nothing: a test or an
+agent pastes with `SyntheticInput::paste(ClipboardContent::text(…))` or the MCP `paste`
+action, and a test that presses a person's `Ctrl+V` installs `Tree::set_clipboard_reader`.
+
 ## Keyboard
 
 Keyboard events hit **every node from the root**, and `on_key_down` runs *before* the
@@ -92,6 +99,14 @@ per-build row tints and a live windowing stats panel.
   `on_drag_end`.
 - The runtime suppresses the synthesized click after a drag that moved more than a few
   pixels; a stationary press still clicks.
+- Files dragged in from Explorer or Finder (lurq 0.49) are a separate path:
+  `on_file_drag_enter` / `on_file_drag_over` / `on_file_drag_leave` / `on_file_drop` on the
+  element under the pointer (enter, over and drop bubble), `.drag_over(|style| …)` while it
+  hovers, `event.refuse()` to turn it away. Headless: `SyntheticInput::file_drag_enter`,
+  `file_drag_over`, `file_drop`, `file_drag_leave` with `DraggedPaths::from_paths`.
+- An `Image` built from runtime bytes or a file (`Image::from_bytes`, `from_file`, lurq 0.49)
+  decodes off the UI thread: give it a `.placeholder(…)` and an `.error_view(…)`, and cap it
+  with `.downscale_to(…)`; headless tests wait with `lurq::images::wait_for_decoded_images`.
 
 ## Text rendering
 
