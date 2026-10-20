@@ -1,12 +1,15 @@
 use std::path::PathBuf;
 
 use lurq::{
-  app::{component::Component, ctx::Ctx},
+  app::{
+    component::Component,
+    ctx::{Ctx, StreamEmitter},
+  },
   components::Column,
   node::Element,
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::{background, messages, workspace::OpenProject};
+use orchester_workspace::{background, messages, runner::Runners, workspace::OpenProject};
 use parking_lot::Mutex;
 
 use super::{
@@ -18,8 +21,10 @@ use crate::{navigation::Navigation, services::Services};
 
 /// Follows the projects the tabs show: opens each one once ([`ProjectLoader`]), keeps the runner of
 /// every open one running and shows the active tab's project's (`Runners::keep_open`, `Runners::show`),
-/// and forgets what the projects no tab shows any more could not be opened as. Renders the loaders,
-/// which render nothing.
+/// and forgets what the projects no tab shows any more could not be opened as. An open project whose
+/// last tab closed is followed on while its runner lingers with work, so what its runs come to still
+/// reaches the notifications and the badge ([`Projects::followed`]). Renders the loaders, which render
+/// nothing.
 pub struct ProjectsHost {
   /// The projects the runners were last told about: kept open, and shown.
   told: Mutex<Option<(Vec<PathBuf>, Option<PathBuf>)>>,
@@ -35,6 +40,7 @@ impl Component for ProjectsHost {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let tabs = Navigation::of(ctx).tabs();
     let projects = Projects::of(ctx);
+    let services = Services::of(ctx);
     let mut shown: Vec<ProjectId> = Vec::new();
     for project in tabs.tabs().iter().filter_map(|tab| tab.route().project()) {
       if !shown.contains(&project) {
@@ -48,8 +54,20 @@ impl Component for ProjectsHost {
       .filter_map(|project| projects.state(*project)?.open().cloned())
       .collect();
     let shown_open = open.iter().find(|open| Some(open.project.id()) == active);
-    self.tell_runners(&Services::of(ctx), &open, shown_open);
-    shown.iter().fold(Column::new(), |loaders, &project| {
+    self.tell_runners(&services, &open, shown_open);
+    let _work = work_changes(ctx, &services.runners);
+    let mut followed = shown;
+    let mut lingering: Vec<ProjectId> = projects
+      .open_all()
+      .into_iter()
+      .filter(|open| services.runners.status_of(&open.repo_root).is_some())
+      .map(|open| open.project.id())
+      .filter(|project| !followed.contains(project))
+      .collect();
+    lingering.sort_unstable();
+    followed.extend(lingering);
+    projects.set_followed(followed.clone());
+    followed.iter().fold(Column::new(), |loaders, &project| {
       let props = LoaderProps {
         project,
         active: Some(project) == active,
@@ -57,6 +75,21 @@ impl Component for ProjectsHost {
       loaders.child(ctx.mount_keyed::<ProjectLoader>(&format!("project-{project}"), props))
     })
   }
+}
+
+/// The runners' work revision; reading it renders the host again whenever a runner reports, starts or stops, so
+/// a project whose lingering runner stopped is followed no more.
+fn work_changes(ctx: &mut Ctx, runners: &Runners) -> u64 {
+  let changes = ctx.stream(runners.clone(), |runners, emitter: StreamEmitter<u64, ()>| async move {
+    let mut updates = runners.work_changes();
+    loop {
+      let revision = *updates.borrow_and_update();
+      if !emitter.emit(revision) || updates.changed().await.is_err() {
+        return;
+      }
+    }
+  });
+  changes.state().get().data.unwrap_or(0)
 }
 
 impl ProjectsHost {

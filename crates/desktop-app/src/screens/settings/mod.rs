@@ -7,6 +7,7 @@
 
 mod accounts;
 mod automation;
+mod notifications;
 pub mod orchester;
 mod page;
 mod server;
@@ -157,8 +158,8 @@ impl SettingsScreen {
   }
 }
 
-/// *Orchester MCP server* and *What automation may do*, scrolling under the header: the switches sit below the
-/// server's section, out of a window's height.
+/// *Orchester MCP server*, *What automation may do* and *Notifications*, scrolling under the header: the switches sit
+/// below the server's section, out of a window's height.
 fn automation(ctx: &mut Ctx) -> Element {
   let form = Column::new()
     .id("settings-form")
@@ -166,7 +167,8 @@ fn automation(ctx: &mut Ctx) -> Element {
     .padding_top(SpacingSize::Sm)
     .spacing(SpacingSize::Xl)
     .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
-    .child(automation::section(ctx));
+    .child(automation::section(ctx))
+    .child(ctx.mount_keyed::<notifications::NotificationsSection>("notifications", ()));
   ScrollVertical::new(form)
     .id("settings-automation-scroll")
     .width(Dimension::Pct(100.0))

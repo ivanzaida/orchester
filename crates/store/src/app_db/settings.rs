@@ -5,11 +5,17 @@
 //! may control its window through its MCP server (the build decides until it is set), whether
 //! automation may widen what agents may do through Orchester's MCP server (off until a person turns it on
 //! in the window), the installed app's own MCP server: whether it listens, on which port, and the id of
-//! this installation that names its token in the keychain, and whether the Orchestrator chat publishes drafts,
+//! this installation that names its token in the keychain, whether the Orchestrator chat publishes drafts,
 //! answers agents, merges runs and continues interrupted runs itself (each off until a person turns it on in the
-//! window).
+//! window), and which OS notifications the app shows.
 
-use orchester_core::{app_mcp::McpPort, appearance::ThemeSetting, id::InstallationId, usage::limits::WarningThreshold};
+use orchester_core::{
+  app_mcp::McpPort,
+  appearance::ThemeSetting,
+  id::InstallationId,
+  notification::{NotificationSettings, QuietHours},
+  usage::limits::WarningThreshold,
+};
 use rusqlite::params;
 
 use super::AppDb;
@@ -74,7 +80,69 @@ ALTER TABLE app_settings ADD COLUMN orchestrator_continues_interrupted INTEGER N
   CHECK (orchestrator_continues_interrupted IN (0, 1));
 ";
 
+pub(super) const NOTIFICATIONS_MIGRATION: &str = r"
+-- OS notifications (ORC-56, docs/design/orchester-workspace.md, Notifications): Needs you and Stopped on, Finished
+-- and info off, sound on, no quiet hours (both ends NULL) until a person changes them; quiet hours in minutes after
+-- local midnight.
+ALTER TABLE app_settings ADD COLUMN notify_needs_you INTEGER NOT NULL DEFAULT 1 CHECK (notify_needs_you IN (0, 1));
+ALTER TABLE app_settings ADD COLUMN notify_stopped INTEGER NOT NULL DEFAULT 1 CHECK (notify_stopped IN (0, 1));
+ALTER TABLE app_settings ADD COLUMN notify_finished INTEGER NOT NULL DEFAULT 0 CHECK (notify_finished IN (0, 1));
+ALTER TABLE app_settings ADD COLUMN notify_sound INTEGER NOT NULL DEFAULT 1 CHECK (notify_sound IN (0, 1));
+ALTER TABLE app_settings ADD COLUMN quiet_start INTEGER CHECK (quiet_start BETWEEN 0 AND 1439);
+ALTER TABLE app_settings ADD COLUMN quiet_end INTEGER CHECK (quiet_end BETWEEN 0 AND 1439);
+";
+
 impl AppDb {
+  /// Which OS notifications the app shows ([`NotificationSettings::default`] until a person changes them).
+  pub fn notification_settings(&self) -> Result<NotificationSettings, StoreError> {
+    let (needs_you, stopped, finished, sound, start, end): (bool, bool, bool, bool, Option<u16>, Option<u16>) =
+      self.connection.query_row(
+        "SELECT notify_needs_you, notify_stopped, notify_finished, notify_sound, quiet_start, quiet_end
+         FROM app_settings WHERE id = 1",
+        [],
+        |row| {
+          Ok((
+            row.get(0)?,
+            row.get(1)?,
+            row.get(2)?,
+            row.get(3)?,
+            row.get(4)?,
+            row.get(5)?,
+          ))
+        },
+      )?;
+    let quiet = match (start, end) {
+      (Some(start), Some(end)) => {
+        Some(QuietHours::new(start, end).map_err(|_| corrupt("quiet hours", format!("{start}-{end}")))?)
+      }
+      (None, None) => None,
+      (start, end) => return Err(corrupt("quiet hours", format!("{start:?}-{end:?}"))),
+    };
+    Ok(NotificationSettings {
+      needs_you,
+      stopped,
+      finished,
+      quiet,
+      sound,
+    })
+  }
+
+  pub fn set_notification_settings(&mut self, settings: NotificationSettings) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET notify_needs_you = ?1, notify_stopped = ?2, notify_finished = ?3, notify_sound = ?4,
+         quiet_start = ?5, quiet_end = ?6
+       WHERE id = 1",
+      params![
+        settings.needs_you,
+        settings.stopped,
+        settings.finished,
+        settings.sound,
+        settings.quiet.map(QuietHours::start),
+        settings.quiet.map(QuietHours::end),
+      ],
+    )?;
+    Ok(())
+  }
   /// Whether automation may answer waiting tool requests (*Let automation answer approvals*).
   pub fn automation_answers_approvals(&self) -> Result<bool, StoreError> {
     Ok(self.connection.query_row(

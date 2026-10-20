@@ -17,6 +17,7 @@ pub mod i18n;
 pub mod lifecycle;
 pub mod mcp;
 pub mod navigation;
+pub mod notifications;
 pub mod project;
 pub mod root;
 pub mod routes;

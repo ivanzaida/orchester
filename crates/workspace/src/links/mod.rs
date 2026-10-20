@@ -75,6 +75,8 @@ pub enum TaskPage {
   Changes,
   /// Where the task stands, with its runs: for a link to a run or a decision on one.
   Summary,
+  /// Merging the latest run's work beside the person's uncommitted work, where a merge that stopped carries on.
+  LocalIntegration,
 }
 
 impl TaskPage {
@@ -85,6 +87,7 @@ impl TaskPage {
       Self::Conversation => "conversation",
       Self::Changes => "changes",
       Self::Summary => "summary",
+      Self::LocalIntegration => "local-integration",
     }
   }
 }

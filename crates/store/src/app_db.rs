@@ -75,6 +75,7 @@ CREATE TABLE ui_state (
   settings::ORCHESTRATOR_ANSWERS_MERGES_MIGRATION,
   settings::ORCHESTRATOR_CONTINUES_MIGRATION,
   plan_reads::MIGRATION,
+  settings::NOTIFICATIONS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

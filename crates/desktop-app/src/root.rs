@@ -34,6 +34,7 @@ use crate::{
     input::{FirstKeys, window_input},
     tabs::TabSet,
   },
+  notifications::{Chosen, NotificationPrefs, NotificationsHost},
   project::{Landing, Projects, ProjectsHost},
   routes,
   screens::gate::{GateProps, SignInGate},
@@ -136,6 +137,8 @@ struct SessionWindow {
   links: ChatLinks,
   /// Whose tabs the window shows.
   account_tabs: AccountTabs,
+  /// The person's notification settings, read by the notifications' host and changed in Settings.
+  notifications: NotificationPrefs,
 }
 
 impl Component for SessionWindow {
@@ -167,6 +170,7 @@ impl Component for SessionWindow {
       needs_you: PanelOpen::new(ctx.signal(false)),
       focus: ctx.signal(None),
       first_keys: FirstKeys::default(),
+      notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
     }
   }
 
@@ -182,6 +186,7 @@ impl Component for SessionWindow {
     ctx.provide(self.projects.clone());
     ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
+    ctx.provide(self.notifications.clone());
     let sign_in = follow_sign_in(ctx, &services.cloud);
     if let Some(account) = sign_in.account() {
       self.account_tabs.follow(account, &self.navigation, &self.projects);
@@ -189,6 +194,10 @@ impl Component for SessionWindow {
     let phase = lifecycle::phase(ctx, &services.close);
     let closing = phase.holds_window();
     let projects = ctx.mount_keyed::<ProjectsHost>("projects", ());
+    // Behind the sign-in gate nothing of the projects is told, on the screen or in a notification.
+    let notifications = sign_in
+      .is_signed_in()
+      .then(|| ctx.mount_keyed::<NotificationsHost>("notifications", ()));
     let screen = match &sign_in {
       SignIn::SignedIn { .. } => Router::mount(ctx, self.router.clone()),
       SignIn::SignedOut { since, .. } => gate_screen(ctx, &sign_in, *since),
@@ -210,6 +219,7 @@ impl Component for SessionWindow {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .child(projects)
+      .with_children(notifications)
       .child(framed);
     // Behind the gate no shortcut opens a tab or a screen.
     window_input(

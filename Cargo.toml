@@ -195,6 +195,25 @@ url = "2"
 # prompt (`orchester_core::connection::claude_approval`); v7 ids carry a timestamp, not only random bits.
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 win32job = "2"
+# `orchester-app`'s OS notifications on Windows (ORC-56): toasts are WinRT (`Windows.UI.Notifications`), which
+# windows-sys does not cover, and the taskbar's overlay badge is a COM interface (`ITaskbarList3`). Already built at
+# this version for lurq's renderer, so it adds no crate; only its features grow.
+windows = { version = "0.62", features = [
+  "Data_Xml_Dom",
+  "Foundation",
+  "UI_Notifications",
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Com",
+  "Win32_System_Registry",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+# `orchester-app`'s OS notifications and Dock badge on macOS (ORC-56): UserNotifications and AppKit through the
+# Objective-C runtime, and the blocks their completion handlers take. Already built for winit, so they add no crate.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+block2 = "0.6"
 # Windows Credential Manager store of the keyring crates, for `orchester-vault`. Without the
 # `search` feature: nothing searches credentials, and it would pull in regex.
 windows-native-keyring-store = { version = "1.1", default-features = false }

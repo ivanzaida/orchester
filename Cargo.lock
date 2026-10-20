@@ -3350,12 +3350,15 @@ name = "orchester-app"
 version = "0.1.1"
 dependencies = [
  "axum",
+ "block2 0.6.2",
  "chrono",
  "embed-resource",
  "hyper",
  "hyper-util",
  "image",
  "lurq 0.49.0",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
  "orchester-api",
  "orchester-core",
  "orchester-exec",
@@ -3380,6 +3383,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
  "zeroize",
 ]

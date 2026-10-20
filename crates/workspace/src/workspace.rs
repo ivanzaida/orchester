@@ -21,6 +21,7 @@ use orchester_core::{
   app_mcp::McpPort,
   appearance::ThemeSetting,
   id::{CloudAccountId, InstallationId, ProjectId},
+  notification::NotificationSettings,
   project::Project,
   time::Timestamp,
   usage::limits::WarningThreshold,
@@ -398,6 +399,15 @@ impl Workspace {
 
   pub fn set_theme(&self, theme: ThemeSetting) -> Result<(), StoreError> {
     self.db.lock().set_theme(theme)
+  }
+
+  /// Which OS notifications `orchester-app` shows ([`NotificationSettings::default`] until changed).
+  pub fn notification_settings(&self) -> Result<NotificationSettings, StoreError> {
+    self.db.lock().notification_settings()
+  }
+
+  pub fn set_notification_settings(&self, settings: NotificationSettings) -> Result<(), StoreError> {
+    self.db.lock().set_notification_settings(settings)
   }
 
   /// Whether agents may control `orchester-app`'s window through its MCP server; `None` until it is

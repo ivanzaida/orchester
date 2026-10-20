@@ -95,6 +95,8 @@ pub struct LatestRun {
   pub updated_at: Timestamp,
   /// Stopped by the project's daily budget rather than its own limit.
   pub daily_budget: bool,
+  /// The limit it stopped at, while it waits at one.
+  pub limit: Option<RunLimit>,
   /// The token budget it stopped at, when its own token limit stopped it.
   pub token_limit: Option<u64>,
   /// Running, with a pause requested: it pauses at its next checkpoint.
@@ -147,6 +149,10 @@ impl LatestRun {
       number: run.number(),
       updated_at,
       daily_budget: run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::DailyBudget)),
+      limit: match run.status() {
+        RunStatus::Paused(PauseReason::LimitReached(limit)) => Some(*limit),
+        _ => None,
+      },
       token_limit: (run.status() == &RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)))
         .then(|| run.budget().map(TokenBudget::get))
         .flatten(),

@@ -262,7 +262,7 @@ impl Component for ConsentRow {
 }
 
 /// The row of switch `id`: its title and description, and the switch at its end, over its line (`Form row` `XaNIz`).
-fn row(id: &str, (title, description): (&str, &str), switch: Toggle) -> Row {
+pub(super) fn row(id: &str, (title, description): (&str, &str), switch: Toggle) -> Row {
   Row::new()
     .id(format!("{id}-row"))
     .width(Dimension::Pct(100.0))
@@ -328,7 +328,7 @@ fn problem(ctx: &Ctx, consent: Consent, (read, save): (&Option<Message>, &Option
 }
 
 /// A form section's title over its line.
-fn section_title(title: &str) -> Row {
+pub(super) fn section_title(title: &str) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding_bottom(SettingsSpacing::SectionTitle.role())

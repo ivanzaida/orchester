@@ -30,6 +30,7 @@ mod inspect;
 pub mod instructions;
 pub mod links;
 pub mod messages;
+pub mod notifications;
 pub mod orchestrator;
 pub mod pipelines;
 pub mod plan_limits;

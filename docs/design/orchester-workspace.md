@@ -553,7 +553,8 @@ that is not measured.
 | Version | `v0.1.0` | application version | Non-interactive; tooltip with build info |
 
 Not included on purpose: a notifications counter (the Overview top bar already has a bell, and a
-notification centre is not designed), the project name (the sidebar and breadcrumb show it), and
+notification centre is not designed; the OS notifies instead, see [Notifications](#notifications)), the project
+name (the sidebar and breadcrumb show it), and
 per-run progress percentages (runs report steps, not percentages). Background operations that
 the activity item can name, each with a real start and end: creating a worktree, publishing a
 pipeline/profile/instruction/tool version, checking a connection or CLI (*Checking Codex CLI…*),
@@ -649,6 +650,78 @@ activity text truncates with an ellipsis; its tooltip holds the full text.
 
 Proposed copy namespace: `statusBar.*` (`statusBar.runner.*`, `statusBar.activity.*`,
 `statusBar.operations.*`). Fixture values (times, counts, amounts, v0.1.0) are illustrative.
+
+## Notifications
+
+OS notifications for what needs the person, what stopped and what finished (ORC-56, agreed with the person on
+2026-10-20 in the Orchestrator chat). They exist because a person who is not looking at the window misses agents that
+wait for them, and those runs sit idle holding agent slots. There is no notification centre in the app: the system's
+own one keeps them.
+
+**One decision place.** `orchester_workspace::notifications` decides which notification shows (kind, group, project,
+task, the place a click opens, a batch key that coalesces). It reads only what the app already follows: what waits
+for the person exactly as every *Needs you* counts it (`ProjectTasks::waiting`, the same items the Needs you panel
+lists, opening where the panel decides them), how the tasks' latest runs ended as the Orchestrator follows run ends
+(`docs/design/orchestrator-toolset.md`, decision 5: merged in Orchester or outside it as git tells, failed), the
+project's runner, its merges, the Orchestrator's proposals that wait, and the accounts' plan readings. Never a second
+count. `orchester-app` feeds it and shows what it decides (`crates/desktop-app/src/notifications`).
+
+**Cases**, in three groups, each a switch:
+
+| Group (default) | Cases |
+| --- | --- |
+| *Needs you* (on) | an agent's tool or command approval waits; an agent asks a question, or a step waits for a message; a plan waits for a decision; a run waits for a decision (retries used up, broke again, unverified, unchanged) |
+| *Stopped* (on) | a run stopped at a limit (its token budget or time limit, the daily or a group's budget, a step's budget, an account's plan limit); a run interrupted (crash, runner failure), unless the Orchestrator continued it first; the project's runner offline after its reconnects, or not started; a merge that stopped at conflicts or continues in Local integration |
+| *Finished and info* (off) | a run ready to merge; a run merged (by the person, including a merge proposed by the Orchestrator that the person applied, or outside as git tells); a run failed with no route left; an account's plan window at 90 % or reset; an Orchestrator proposal waiting for the person; the daily report (ORC-47) once it exists |
+
+The Orchestrator's own direct actions (its answers, continuations, merges it carries out in its chat) are in its chat
+and give no notification of their own; a base-branch move (ORC-54) gives none. A merge is the chat's own when its
+conversation records it as an action the chat carried out itself (`merge_run`, done, not applied by a person). The
+project's memory records waiting for approval count in *Needs you* but are no notification case. Tool approvals have no
+time-out today, so a notification carries no countdown.
+
+**Rules.**
+
+- *Projects*: every project the app has open, that is with a runner attached: one a tab shows, and one whose last tab
+  closed while its runner lingers with work (see "Tabs" › "Runners"), until that runner stops. Each notification names
+  its project, a plan limit its account. The badge counts the same projects.
+- *Only when useful*: a notification shows only while the window is not focused, or the place it opens is not what
+  the active tab shows (for the runner: no tab of that project is active). Otherwise it is dropped, not delayed.
+- *Once*: an event shows once, when it is new; what already stood when the app started or a project opened shows
+  nothing. An event that stops standing before it showed (the person or the Orchestrator dealt with it) never shows; one
+  that stops and comes back is new. An interruption waits 30 s before it shows, so a run the Orchestrator continues by
+  itself (ORC-53) gives none; so does a merge, so the chat's record of a merge it carried out, read a moment after the
+  run reads merged, drops it. The proposals are read with the conversations, apart from the tasks: those waiting when
+  the conversations are first read show nothing, also when that first reading failed and a later one works.
+- *Coalesce*: a group's first event shows at once; the group's further events within 30 s of its last notification
+  wait and show together as one (*3 things need you* · *Kontur · ORC-18, ORC-55 and 1 more*). The runs one daily or
+  group budget stopped on one day are one notification (*The daily budget stopped 4 runs*), and later stops of the
+  same batch give none while it stands.
+- *Click opens* the exact place, by the same route paths as the domain tools' `link`: the task's Conversation for an
+  approval, a question or a message (where its card is), the task's Summary pointing at its decision card for a plan, a
+  limit or a decision, the Summary for an end, Local integration for a merge that continues there, the project's
+  Overview (whose status bar shows the runner) for the runner, the Orchestrator conversation for a proposal, Settings ›
+  Accounts for a plan limit. It selects the tab that shows the place, or opens a new one, and brings the window to the
+  front.
+- *Actions*: only open. No Approve, Merge or Answer in a notification: decisions stay where their context is.
+- *Content*: what is needed in a few words as the title; the project, the task's key and title, and the step as the
+  body. Never a command, its arguments, a path, a file's contents, a message's text or a secret: it shows on a locked
+  screen.
+- *Badge*: the taskbar button (Windows, an overlay disc with the count, `9+` past nine) or the Dock icon (macOS) shows
+  the *Needs you* count of every open project, cleared as items are handled. Quiet hours and the switches do not
+  change it.
+- *Settings* (app-wide, Settings › Automation › *Notifications*, switch rows like the page's others): *Needs you*,
+  *Stopped*, *Finished and info*, *Sound*, and *Quiet hours* with a start and end (22:00–08:00 when turned on): no OS
+  notifications then, the badge still updates. No design frame exists yet for this section, nor for the toast and the
+  badge: frames needed are the section's rows (with quiet hours on, and the *this build shows none* note), and the
+  taskbar overlay.
+
+**Platforms.** Windows shows toasts under the app's AppUserModelID (`Orchester.App`, registered for the person under
+`HKCU\Software\Classes\AppUserModelId`), heard while the app runs; a toast clicked after the app closed opens nothing
+(that needs a COM activator, not built). macOS uses UserNotifications, which asks for permission on first use and
+serves only an app bundle (`Orchester App.app`); a program run outside one shows none and logs why. Only the installed
+app notifies: a development build or a QA copy stays silent unless started with `ORCHESTER_APP_NOTIFICATIONS=1` (then
+under its own id), so QA runs never notify the person. Behind the sign-in gate nothing notifies.
 
 ## Focus
 

@@ -11,6 +11,7 @@
 
 mod accounts;
 pub mod agents;
+pub mod badge;
 mod cards;
 mod chat_links;
 mod code;
