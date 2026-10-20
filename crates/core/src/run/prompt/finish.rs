@@ -26,15 +26,14 @@ const RESULT_INSTRUCTIONS: &str = "Use `done` when your current step is complete
                                    are unchanged, and state that limit. Preserve earlier evidence without \
                                    relabeling it as evidence for a new build. If fresh verification needs an \
                                    action from the person that lets you go on now, request it with `question`.\n\
-                                   Use `unverified` only for checks this step itself is asked to do and could \
-                                   not, with what it has (a state no fixture reaches, an app, tool or fixture \
-                                   you cannot use): list each in `unverified` with what it is and why. It goes \
-                                   to the person and sends nothing back to an earlier step. A check that a later \
-                                   step of this run's pipeline does (its tests, a check script, a review or a \
-                                   design verification) is not unverified here: leave it to that step, name it \
-                                   in your summary as left to that step, and do not list it in `unverified`; \
-                                   when nothing else is unchecked, that is `done`. Mismatches you did find \
-                                   still require `failed`.\n\
+                                   A check this step's own instructions require is this step's, even if a \
+                                   later step may run it again: when you could not do it with what this step \
+                                   has (a state no fixture reaches, an app, tool or fixture you cannot use), \
+                                   use `unverified` and list it with what it is and why. It goes to the person \
+                                   and sends nothing back to an earlier step. Mismatches you did find still \
+                                   require `failed`. Only a check this step was not asked to do may be left to a \
+                                   later step, and only to one whose instructions show it does that check: name \
+                                   that step in your summary, and do not list the check in `unverified`.\n\
                                    Use `question` when progress needs the person's decision, permission, access, \
                                    or clarification. This includes a proposed command outside the sandbox, an \
                                    unavailable capability, or conflicting requirements that the person can \
@@ -75,8 +74,12 @@ pub(super) fn push_result(text: &mut String, input: &PromptInput<'_>, delivery: 
   }
 }
 
-/// Which steps of the run's pinned pipeline come after this one (those that depend on it, directly or not), in
-/// pipeline order, so the agent leaves their checks to them; nothing without a run (a preview).
+/// The most characters of a later step's instructions the list shows.
+const LEAD_CHARS: usize = 160;
+
+/// The steps of the run's pinned pipeline this one precedes (those that depend on it, directly or not), in pipeline
+/// order, each with the start of its instructions, so a check is left only to a step that shows it does it; nothing
+/// without a run (a preview).
 fn push_later_steps(text: &mut String, input: &PromptInput<'_>) {
   let Some(context) = input.run else {
     return;
@@ -89,21 +92,46 @@ fn push_later_steps(text: &mut String, input: &PromptInput<'_>) {
     .steps()
     .iter()
     .filter(|step| &step.key != key && after.contains(&step.key))
-    .map(|step| format!("{} (`{}`)", step.name.as_str(), step.key))
+    .map(|step| {
+      let lead = lead(step.instructions.as_str()).unwrap_or_else(|| "(no instructions)".to_owned());
+      format!("- {} (`{}`): {lead}", step.name.as_str(), step.key)
+    })
     .collect();
   if later.is_empty() {
     push_block(
       text,
-      "No step of this run's pipeline comes after this one: the checks this step is asked for are its own.",
+      "No step of this run's pipeline comes after this one: no check can be left to a later step.",
     );
-  } else {
-    push_block(
-      text,
-      &format!(
-        "The steps after this one in this run's pipeline: {}. What they check is theirs: name it in your summary, \
-         not in `unverified`.",
-        later.join(", ")
-      ),
-    );
+    return;
   }
+  push_block(
+    text,
+    &format!(
+      "The steps after this one in this run's pipeline, each with the start of its instructions:\n{}\n\
+       Leave a check to one of them only when this step was not asked to do it and that step's instructions show it \
+       does it. A check this step was asked to do stays this step's, whatever a later step does.",
+      later.join("\n")
+    ),
+  );
+}
+
+/// The first sentence of `instructions`, past blank lines and Markdown headings, cut to [`LEAD_CHARS`]; `None` when
+/// they say nothing.
+fn lead(instructions: &str) -> Option<String> {
+  let line = instructions
+    .lines()
+    .map(str::trim)
+    .find(|line| !line.is_empty() && !line.starts_with('#'))?;
+  let end = line
+    .char_indices()
+    .find(|&(at, mark)| {
+      matches!(mark, '.' | '!' | '?') && line[at + mark.len_utf8()..].starts_with(char::is_whitespace)
+    })
+    .map_or(line.len(), |(at, mark)| at + mark.len_utf8());
+  let sentence = &line[..end];
+  if sentence.chars().count() <= LEAD_CHARS {
+    return Some(sentence.to_owned());
+  }
+  let cut: String = sentence.chars().take(LEAD_CHARS).collect();
+  Some(format!("{}…", cut.trim_end()))
 }
