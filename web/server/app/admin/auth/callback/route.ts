@@ -6,7 +6,7 @@ import type { ApiFailure } from "@/lib/server/api";
 import { backPath, withOutcome } from "@/lib/server/authorize";
 import { browserDevice } from "@/lib/server/device";
 import { namedIn } from "@/lib/server/identity";
-import { tripMatches, type Trip } from "@/lib/server/session";
+import { signedInStanding, tripMatches, type Trip } from "@/lib/server/session";
 import { signInWithCloud } from "@/lib/server/team/auth";
 import { changeCloud } from "@/lib/server/team/settings";
 import { anonymous, endSession, endTrip, setNothingFlow, startSession, trip } from "@/lib/server/visitor";
@@ -38,14 +38,16 @@ function signInOutcome(failure: ApiFailure): string {
   return failure.kind === "refused" && SIGN_IN_REFUSALS.has(failure.code) ? failure.code : "unavailable";
 }
 
-async function finishSignIn(request: Request, form: FormData): Promise<NextResponse> {
+/** Signs in with the cloud's identity token; *Sign in again* goes back to the page it started on. */
+async function finishSignIn(request: Request, form: FormData, started: Trip): Promise<NextResponse> {
   const identityToken = field(form, "identity_token");
   const keySet = field(form, "key_set");
   const device = browserDevice((await headers()).get("user-agent"));
   const result = await signInWithCloud({ identityToken, keySet: keySet === "" ? null : keySet, device }, await anonymous());
   if (result.ok) {
-    await startSession({ token: result.value.token, via: "cloud" });
-    return to(request, "/admin");
+    const twoFactor = signedInStanding(result.value.mfa, started.page !== null);
+    await startSession({ token: result.value.token, via: "cloud", twoFactor });
+    return to(request, started.page ?? "/admin");
   }
   if (result.error.kind === "refused" && result.error.code === "nothing_to_manage") {
     await setNothingFlow(namedIn(identityToken));
@@ -90,7 +92,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return to(request, withOutcome(backPath(started.purpose, started.back), started.purpose === "link" ? "link" : "failed", "trip"));
   }
   await endTrip();
-  return started.purpose === "admin" ? finishSignIn(request, form) : finishLink(request, form, started);
+  return started.purpose === "admin" ? finishSignIn(request, form, started) : finishLink(request, form, started);
 }
 
 /** The callback is only ever posted to; a bare visit starts over at sign-in. */

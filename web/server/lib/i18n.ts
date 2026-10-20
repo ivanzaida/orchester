@@ -14,12 +14,14 @@ export type MessageKey = MessageKeys<typeof en>;
 
 /**
  * A text to show later, possibly in a client component: its key and its values. `at` (milliseconds since the epoch)
- * fills the `{{time}}` placeholder with a clock time in the reader's own time zone.
+ * fills the `{{time}}` placeholder with a clock time in the reader's own time zone, `when` the `{{when}}` placeholder
+ * with a date and a time (*Oct 20, 20:01*).
  */
 export interface Message {
   readonly key: MessageKey;
   readonly params?: MessageParams;
   readonly at?: number;
+  readonly when?: number;
 }
 
 const translator = createTranslator<typeof LOCALES, MessageKey>(LOCALES, DEFAULT_LOCALE);

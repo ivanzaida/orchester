@@ -22,6 +22,10 @@ fn s1b_every_sharing_error_detail_round_trips_on_the_client() {
     ("not_queueable", json!({"missing":["brief","criteria"]})),
     ("not_queueable", json!({"missing":[],"reason":"not_draft"})),
     ("organization", json!({"reason":"tag_not_found"})),
+    (
+      "invite_open",
+      json!({"invite":orchester_core::id::InviteId::generate(),"sent_at":1_792_000_000_000_i64}),
+    ),
   ];
   for (code, details) in cases {
     round_trip(code, details);

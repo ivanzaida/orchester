@@ -142,8 +142,22 @@ export interface CloudLink {
   readonly linkedBy: UserRef | null;
 }
 
-/** Where an email invite can go: Orchester Cloud is configured here and the server is linked to it, or why not. */
+/**
+ * Whether this browser's sign-in may make invites, which needs two-factor authentication (`403 mfa_required`): `on`,
+ * it signed in with it; `without`, it signed in without it, though the account may have turned it on since; `off`, a
+ * sign-in again through Orchester Cloud came back without it just now, so the account has none to use; `unknown`, a
+ * sign-in from before the admin kept it.
+ */
+export type TwoFactorStanding = "on" | "without" | "off" | "unknown";
+
+/**
+ * Where an email invite can go: Orchester Cloud is configured here and the server is linked to it, or why not. Ready,
+ * it says whether this sign-in may send it, and which page *Sign in again* comes back to.
+ */
 export type EmailReach =
-  | { readonly kind: "ready"; readonly cloud: string }
+  | { readonly kind: "ready"; readonly cloud: string; readonly twoFactor: TwoFactorStanding; readonly page: string }
   | { readonly kind: "no_cloud" }
   | { readonly kind: "unlinked" };
+
+/** Why this host could not reach Orchester Cloud: no way there (DNS, no route), its certificate, a refusal, no answer. */
+export type CloudCause = "unreachable" | "tls" | "refused" | "timeout";

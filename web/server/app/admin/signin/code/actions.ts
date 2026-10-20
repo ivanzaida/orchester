@@ -7,6 +7,7 @@ import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import { failureMessage } from "@/lib/server/failures";
 import { browserDevice } from "@/lib/server/device";
+import { signedInStanding } from "@/lib/server/session";
 import { signInWithCode } from "@/lib/server/team/auth";
 import { anonymous, formIsGenuine, setNothingFlow, startSession } from "@/lib/server/visitor";
 import { codeError } from "@/lib/validation";
@@ -42,7 +43,7 @@ export async function signInCodeAction(previous: CodeState, form: FormData): Pro
   const device = browserDevice((await headers()).get("user-agent"));
   const result = await signInWithCode({ code, device }, await anonymous());
   if (result.ok) {
-    await startSession({ token: result.value.token, via: "code" });
+    await startSession({ token: result.value.token, via: "code", twoFactor: signedInStanding(result.value.mfa, false) });
     redirect("/admin");
   }
   const failure = result.error;

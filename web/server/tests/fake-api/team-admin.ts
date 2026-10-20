@@ -79,6 +79,21 @@ function invites(world: World, request: Request, query: URLSearchParams): Answer
   return ok({ invites: list.map((i) => inviteJson(world.state, i)) });
 }
 
+/** An invite by email that repeats an open one is refused, naming it (`invite_open`); one to a member too. */
+function repeated(world: World, body: Request["body"]): Answer | null {
+  const { kind, delivery, email, project } = body;
+  if (delivery !== "cloud" || typeof email !== "string") {
+    return null;
+  }
+  const scope = typeof project === "string" ? project : null;
+  const open = world.state.invites.find((i) => i.state === "open" && i.delivery === "cloud" && i.email === email
+    && i.kind === kind && i.project === scope);
+  if (open !== undefined) {
+    return { status: 409, body: { error: "invite_open", message: "fake", invite: open.id, sent_at: open.created_at } };
+  }
+  return email.startsWith("member") ? refuse(409, "already_member") : null;
+}
+
 function newInvite(world: World, request: Request, me: string): Answer {
   const { kind, delivery, email, project, role, user } = request.body;
   if (typeof email === "string" && email.startsWith("limit")) {
@@ -87,6 +102,10 @@ function newInvite(world: World, request: Request, me: string): Answer {
   // The server makes invites only for a sign-in with two-factor authentication (`mfa_required`).
   if (world.state.no_mfa === true || (typeof email === "string" && email.startsWith("no-mfa"))) {
     return refuse(403, "mfa_required");
+  }
+  const refused = repeated(world, request.body);
+  if (refused !== null) {
+    return refused;
   }
   if (kind === "account" && world.state.users.find((u) => u.id === user)?.admin === true) {
     return refuse(403, "forbidden");

@@ -25,13 +25,13 @@ impl Server {
     let now = self.now();
     self.inner.db.read(move |db| {
       let auth = db::checked(db, &auth, now, false)?;
-      let mut query = db.prepare("SELECT id,device,created_at,last_used_at,via FROM sessions WHERE user_id=?1 AND kind='app' AND revoked_at IS NULL AND last_used_at>?2 ORDER BY created_at,id")?;
+      let mut query = db.prepare("SELECT id,device,created_at,last_used_at,via,mfa FROM sessions WHERE user_id=?1 AND kind='app' AND revoked_at IS NULL AND last_used_at>?2 ORDER BY created_at,id")?;
       let rows = query.query_map(params![auth.user.id.to_string(), now - DEVICE_IDLE_MS], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, String>(4)?))
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)?, row.get::<_, i64>(3)?, row.get::<_, String>(4)?, row.get::<_, bool>(5)?))
       })?.collect::<Result<Vec<_>, _>>()?;
-      rows.into_iter().map(|(id, device, created_at, last_used_at, via)| {
+      rows.into_iter().map(|(id, device, created_at, last_used_at, via, mfa)| {
         let id = id.parse().map_err(|_| ServerError::StoredData)?;
-        Ok(Session { id, device, created_at, last_used_at, current: id == auth.session, via: db::parse_via(&via)? })
+        Ok(Session { id, device, created_at, last_used_at, current: id == auth.session, via: db::parse_via(&via)?, mfa })
       }).collect()
     }).await
   }

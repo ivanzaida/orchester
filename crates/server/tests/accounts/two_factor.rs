@@ -74,6 +74,8 @@ async fn two_factor_invites_are_made_only_from_a_two_factor_sign_in() {
     .await
     .expect("account code");
   let with_code = admin_with_code(&server, &account_code).await;
+  // The admin reads from its sign-in whether invites will go: the session says how it signed in.
+  assert!(!without.session.mfa && !with_code.session.mfa);
   for token in [&without.token, &with_code.token] {
     for body in [&by_email, &by_code] {
       refused(&send(&server, token, body).await, 403, ErrorCode::MfaRequired);
@@ -81,7 +83,14 @@ async fn two_factor_invites_are_made_only_from_a_two_factor_sign_in() {
   }
   let malformed = send(&server, &without.token, &json!({"kind":"server","delivery":"cloud"})).await;
   assert_eq!(malformed.status, 422, "what an invite may be is checked first");
+  // Turning two-factor authentication on in the cloud changes no session here: only signing in again with it does.
   let with = admin_browser(&server, cloud.two_factor_admin_token(&identity, server.seconds())).await;
+  assert!(with.session.mfa);
+  refused(
+    &send(&server, &without.token, &by_email).await,
+    403,
+    ErrorCode::MfaRequired,
+  );
   let sent = send(&server, &with.token, &by_email).await;
   assert_eq!(sent.status, 201);
   let sent: InviteCreated = sent.json();

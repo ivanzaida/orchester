@@ -7,6 +7,7 @@ import { field } from "@/lib/form";
 import { message, type Message } from "@/lib/i18n";
 import { browserDevice } from "@/lib/server/device";
 import { failureMessage } from "@/lib/server/failures";
+import { signedInStanding } from "@/lib/server/session";
 import { signInWithCode } from "@/lib/server/team/auth";
 import { updateSettings } from "@/lib/server/team/settings";
 import { anonymous, forgetSetupCode, formIsGenuine, setupCode, startSession } from "@/lib/server/visitor";
@@ -69,7 +70,7 @@ export async function accountAction(previous: AccountState, form: FormData): Pro
     return { attempt, values, errors: {}, error: failureMessage(failure, Date.now()) };
   }
   await forgetSetupCode();
-  await startSession({ token: result.value.token, via: "code" });
+  await startSession({ token: result.value.token, via: "code", twoFactor: signedInStanding(result.value.mfa, false) });
   const named = await updateSettings({ name: values.serverName }, { ...(await anonymous()), token: result.value.token });
   redirect(named.ok ? "/admin/setup/cloud" : "/admin/setup/cloud?name=unsaved");
 }

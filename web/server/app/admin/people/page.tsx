@@ -38,7 +38,7 @@ export default async function PeoplePage() {
   return (
     <AdminShell context={context} area="people">
       <PageHead title={t("people.title")} description={t("people.description", { server: server.name })} />
-      <ServerInvite csrf={csrf} server={server.name} reach={emailReach(server)} address={own}
+      <ServerInvite csrf={csrf} server={server.name} reach={emailReach(server, context.twoFactor, "/admin/people")} address={own}
         checkCode={server.certificate?.checkCode ?? null} />
       <InviteList id="server-invites" invites={serverInvites} empty={null} csrf={csrf} server={server.name} now={Date.now()} />
       <Section id="accounts" title={t("people.accounts")} meta={count}>

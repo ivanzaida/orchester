@@ -1,3 +1,4 @@
+import type { TwoFactorStanding } from "@/lib/model";
 import { HANDOFF_SECONDS, NOTHING_SECONDS, SESSION_SECONDS, SETUP_SECONDS, STATE_SECONDS } from "@/lib/server/cookie-options";
 import { open, sameText, seal, sign, verify } from "@/lib/server/seal";
 
@@ -13,6 +14,41 @@ export type SignedInWith = "cloud" | "code";
 export interface AdminSession {
   readonly token: string;
   readonly via: SignedInWith;
+  /** What the server said of this sign-in's two-factor authentication when it signed in; it never changes after. */
+  readonly twoFactor: TwoFactorStanding;
+}
+
+const STANDINGS = new Set<unknown>(["on", "without", "off", "unknown"]);
+
+/**
+ * What a new sign-in's session says (`session.mfa` of the server's answer; `null` from a server before it). `again`:
+ * the sign-in was *Sign in again* through Orchester Cloud, so one without it means the account has none to use now.
+ */
+export function signedInStanding(mfa: boolean | null, again: boolean): TwoFactorStanding {
+  if (mfa === null) {
+    return "unknown";
+  }
+  if (mfa) {
+    return "on";
+  }
+  return again ? "off" : "without";
+}
+
+function standing(value: unknown): TwoFactorStanding {
+  return STANDINGS.has(value) ? (value as TwoFactorStanding) : "unknown";
+}
+
+/**
+ * The admin's own pages *Sign in again* may come back to: a path under `/admin`, of plain segments, nothing else (no
+ * other origin, no `//`, no `..`, no query).
+ */
+export function isAdminPage(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= 200 &&
+    /^\/admin(\/[A-Za-z0-9._~-]+)*$/.test(value) &&
+    !value.split("/").some((segment) => segment === "." || segment === "..")
+  );
 }
 
 function parse(text: string | null): Record<string, unknown> | null {
@@ -44,13 +80,17 @@ export function sealSession(key: Buffer, session: AdminSession, now: number): st
   return seal(key, JSON.stringify({ ...session, expires: now + SESSION_SECONDS * 1000 }));
 }
 
-export function openSession(key: Buffer, value: string | undefined, now: number): AdminSession | null {
-  const session = sealed(key, value, now);
-  const via = session?.via;
-  if (typeof session?.token !== "string" || (via !== "cloud" && via !== "code")) {
+/** A session as a cookie holds it; one from before the admin kept its two-factor standing reads as `unknown`. */
+function readSession(value: unknown): AdminSession | null {
+  const { token, via, twoFactor } = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
+  if (typeof token !== "string" || (via !== "cloud" && via !== "code")) {
     return null;
   }
-  return { token: session.token, via };
+  return { token, via, twoFactor: standing(twoFactor) };
+}
+
+export function openSession(key: Buffer, value: string | undefined, now: number): AdminSession | null {
+  return readSession(sealed(key, value, now));
 }
 
 /** The setup code between setup steps 1 and 2 (15 minutes). It is never put in a page, a URL or a log. */
@@ -77,6 +117,8 @@ export interface Trip {
   readonly back: TripBack;
   /** The admin session that started a link, to finish it with. */
   readonly session: AdminSession | null;
+  /** *Sign in again*: the admin page it started on and comes back to; `null` for any other trip. */
+  readonly page: string | null;
 }
 
 const PURPOSES = new Set<unknown>(["admin", "link"]);
@@ -91,11 +133,7 @@ export function sealTrip(key: Buffer, trip: Trip, now: number): string {
 }
 
 function tripSession(value: unknown): AdminSession | null | undefined {
-  if (value === null) {
-    return null;
-  }
-  const { token, via } = (typeof value === "object" ? value : {}) as Record<string, unknown>;
-  return typeof token === "string" && (via === "cloud" || via === "code") ? { token, via } : undefined;
+  return value === null ? null : (readSession(value) ?? undefined);
 }
 
 export function openTrip(key: Buffer, value: string | undefined, now: number): Trip | null {
@@ -104,7 +142,9 @@ export function openTrip(key: Buffer, value: string | undefined, now: number): T
   if (typeof trip?.state !== "string" || !PURPOSES.has(trip.purpose) || !BACKS.has(trip.back) || session === undefined) {
     return null;
   }
-  return { state: trip.state, purpose: trip.purpose as TripPurpose, back: trip.back as TripBack, session };
+  // A trip cookie from before *Sign in again* has no page: it is any other trip.
+  const page = isAdminPage(trip.page) ? trip.page : null;
+  return { state: trip.state, purpose: trip.purpose as TripPurpose, back: trip.back as TripBack, session, page };
 }
 
 /**

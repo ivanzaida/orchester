@@ -208,6 +208,10 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
       StatusCode::CONFLICT,
       "This Orchester Cloud identity has an account on this server already",
     ),
+    ErrorCode::InviteOpen => (
+      StatusCode::CONFLICT,
+      "This address has an open invite already: revoke it to send a new one",
+    ),
     ErrorCode::NothingToManage => (StatusCode::FORBIDDEN, "The account is not an admin and owns no project"),
     ErrorCode::KeySetStale => (
       StatusCode::CONFLICT,

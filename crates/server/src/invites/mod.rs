@@ -1,6 +1,7 @@
 //! Invites (`docs/architecture/server.md`, "Invites"): to the server, to one project with a role, or for an existing
 //! account, delivered by email through Orchester Cloud or as a code. An invite's email is kept only while it is open.
 
+mod repeated;
 mod rows;
 mod signed;
 
@@ -37,7 +38,8 @@ pub(crate) struct Listing {
 
 /// A new invite by `actor`'s device token, by email or with a code: it needs a token issued for a cloud identity that
 /// signed in with two-factor authentication, or a browser signed in with a pairing code such a token made
-/// (`403 mfa_required`), checked after who may make it. Invites already made are delivered as before.
+/// (`403 mfa_required`), checked after who may make it. Invites already made are delivered as before. An invite by
+/// email that repeats an open one, or would give its address nothing, is refused (`repeated`).
 pub(crate) fn create(
   db: &Connection,
   keys: &ServerKeys,
@@ -50,6 +52,10 @@ pub(crate) fn create(
   check(db, actor, input)?;
   if !session.mfa {
     return Err(ErrorCode::MfaRequired.into());
+  }
+  let email = input.email.as_deref().map(str::to_ascii_lowercase);
+  if let Some(email) = &email {
+    repeated::refuse(db, keys, input, email, now)?;
   }
   if input.delivery == InviteDelivery::Cloud {
     daily_limit(db, actor.id, now)?;
@@ -64,7 +70,6 @@ pub(crate) fn create(
     InviteDelivery::Cloud => now + CLOUD_LIFETIME_MS,
     InviteDelivery::Code => now + code_kind.lifetime_ms(),
   };
-  let email = input.email.as_deref().map(str::to_ascii_lowercase);
   db.execute(
     "INSERT INTO invites(id,kind,delivery,email,project,role,user_id,admin,made_by,expires_at,created_at)
       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",

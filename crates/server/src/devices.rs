@@ -44,6 +44,7 @@ pub(crate) fn issue(
     last_used_at: now,
     current: true,
     via,
+    mfa,
   };
   db::insert_session(
     db,

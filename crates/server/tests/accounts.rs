@@ -44,6 +44,8 @@ mod proxies;
 mod proxy_certificate;
 #[path = "accounts/proxy_connections.rs"]
 mod proxy_connections;
+#[path = "accounts/repeated_invites.rs"]
+mod repeated_invites;
 #[path = "accounts/requests.rs"]
 mod requests;
 #[path = "accounts/security.rs"]

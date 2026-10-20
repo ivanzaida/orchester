@@ -678,7 +678,8 @@ need; a desktop that needs 3 says *update the server* to a server that reports 2
 ```text
 User        { id, username, display_name, admin: bool, disabled: bool, cloud: bool }   // API 3: cloud linked
 UserRef     { id, display_name }
-Session     { id, device, created_at, last_used_at, current: bool, via: "cloud"|"code"|"before_3" } // a device token
+Session     { id, device, created_at, last_used_at, current: bool, via: "cloud"|"code"|"before_3",
+              mfa: bool }                                                  // a device token; mfa: it may make invites
 Invite      { id, kind: "server"|"project"|"account", email|null, project|null, role|null, user|null,
               by: UserRef, delivery: "cloud"|"code", expires_at }                                       // API 3
 Project     { id, slug, address, key, name, remote_hint|null, role: "owner"|"member"|null, next_number } // API 3: slug, address, remote_hint (was remote)
@@ -745,7 +746,7 @@ changes; the rest is built (S1a, S1b).
 | `DELETE /auth/sessions/current` | user | | `204` | | |
 | `DELETE /auth/sessions/{id}` | user (own sessions) | | `204` | `404` | |
 | ~~`POST /auth/password`~~ | | | | | removed in 3 (row 46) |
-| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403` (also an account invite naming an admin), `409 already_member`, `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
+| `POST /invites` | admin (server, account), owner (project) | `{ kind, email?, project?, role?, user?, delivery }` | `201 { invite, code? }` (a code only for `delivery: code`, shown once), `signed?` (the signed invite for the server admin's page to carry through the browser when the server cannot reach the cloud) | `403` (also an account invite naming an admin), `403 mfa_required`, `409 invite_open { invite, sent_at }` (the address has an open invite of the same kind to the same project or the server), `409 already_member` (its account, known by the email its cloud identity last verified, has what the invite gives), `409 too_many_codes`, `422 invalid` | new in 3 (row 43) |
 | `GET /invites` | admin (all), owner (their projects') | | `{ invites: [Invite] }`, open only, never a code | | new in 3 |
 | `DELETE /invites/{id}` | the inviter, owner, admin | | `204`; the cloud is told | `404` | new in 3 |
 | `GET /server/cloud`, `PATCH /server/cloud` | admin | `{ accepting?, link?, unlink?, pin? }` | `{ cloud }` | `422 invalid` | new in 3 (rows 47, 62) |
