@@ -123,7 +123,11 @@ fn base_moved_the_notice_names_the_revision_what_landed_the_overlaps_and_how_to_
   assert!(text.contains("- bbbbbbbbbb Merge ORC-7 run #3"), "{text}");
   assert!(text.contains("- `src/login.rs`"), "{text}");
   assert!(
-    text.contains("`git merge main`; never `git stash`, never rebase a shared branch"),
+    text.contains("`git commit --allow-empty -m \"checkpoint before merging main\"`), then `git merge --no-ff main`"),
+    "a checkpoint first, then a merge that never fast-forwards: {text}"
+  );
+  assert!(
+    text.contains("never `git stash`, never rebase a shared branch"),
     "{text}"
   );
   assert!(

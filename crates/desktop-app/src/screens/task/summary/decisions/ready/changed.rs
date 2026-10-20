@@ -1,5 +1,6 @@
 //! What the run changed and what verified it, side by side (`Columns` `fwsep`). *What changed* (`Z5Kagi`):
-//! the files of its diff from its base to its latest checkpoint with their added and removed lines
+//! the files of its diff from where its own work starts (its base, or the newer commit of its base branch its branch
+//! took in) to its latest checkpoint with their added and removed lines
 //! (`Changed file row` `dAwTi`), the first few of them and *Open in Changes*. *Verification* (`Jkat7`):
 //! the commit its work ended at and the steps that passed after its work was first committed, each with
 //! what it reported (`Check` `KBTiJ`).
@@ -24,7 +25,7 @@ use orchester_workspace::{
   background, display,
   messages::Message,
   tasks::{
-    changes::{Checkpointed, checkpointed_in},
+    changes::{Checkpointed, RunRange, run_changes_in},
     detail::{RunView, StepView},
   },
 };
@@ -53,26 +54,19 @@ pub struct Read(Checkpointed);
 
 impl lurq::app::component::DevtoolsInspectable for Read {}
 
-/// The run's checkpointed changes, read off the UI thread once per base and checkpoint; `None` while
-/// they are read.
+/// The run's checkpointed changes from where its own work starts, read off the UI thread once per base and
+/// checkpoint; `None` while they are read.
 pub fn read(ctx: &mut Ctx, task: &TaskContext) -> Option<Result<Checkpointed, Message>> {
   let programs = Services::of(ctx).programs;
-  let run = task.detail.run.as_ref();
-  let base = run.map(|run| run.run.base().clone());
-  let head = run.and_then(|run| {
-    run
-      .run
-      .last_checkpoint()
-      .map(|checkpoint| checkpoint.revision().clone())
-  });
-  let deps = (task.project.open.repo_root.clone(), base, head);
-  let load = ctx.future(deps, move |(root, base, head)| {
+  let range = task.detail.run.as_ref().map(|run| RunRange::of(&run.run));
+  let deps = (task.project.open.repo_root.clone(), range);
+  let load = ctx.future(deps, move |(root, range)| {
     let programs = programs.clone();
     async move {
-      let Some(base) = base else {
+      let Some(range) = range else {
         return Ok(Read(Checkpointed::NoCheckpoint));
       };
-      background::run(move || checkpointed_in(&root, &programs, &base, head.as_ref()))
+      background::run(move || run_changes_in(&root, &programs, &range))
         .await?
         .map(Read)
         .map_err(|error| {

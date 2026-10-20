@@ -4,6 +4,7 @@
 
 mod cleanup;
 mod forgotten;
+mod fork;
 mod merge;
 mod merge_beside;
 mod merge_guards;

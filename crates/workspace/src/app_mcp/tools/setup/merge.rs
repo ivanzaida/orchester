@@ -33,7 +33,7 @@ use crate::{
   links::{Link, TaskPage},
   messages::Message,
   tasks::{
-    changes::{ChangesError, Checkpointed, NotCheckpointed, RunStage, checkpointed_in, not_checkpointed_in},
+    changes::{ChangesError, Checkpointed, NotCheckpointed, RunRange, RunStage, not_checkpointed_in, run_changes_in},
     delivery::{self, Delivery},
     detail::run_store_error,
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
@@ -55,9 +55,7 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
       Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
       Err(_) => None,
     };
-    let head = run.last_checkpoint().map(|checkpoint| checkpoint.revision().clone());
-    let checkpointed =
-      checkpointed_in(&open.repo_root, &services.programs, run.base(), head.as_ref()).map_err(unreadable)?;
+    let checkpointed = run_changes_in(&open.repo_root, &services.programs, &RunRange::of(&run)).map_err(unreadable)?;
     let stage = RunStage::of(run.status());
     let worktree = not_checkpointed_in(&open.repo_root, &services.programs, (run.id(), stage)).map_err(unreadable)?;
     Ok(json!({
