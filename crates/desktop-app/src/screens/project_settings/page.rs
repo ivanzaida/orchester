@@ -1,13 +1,14 @@
-//! The 720-wide header and scrolled form (rsQ7o, ZZRcn, tqYNS).
+//! Project settings' tabs in the page they share with Settings (`ui::settings_page`), a tab's form under them, and
+//! the pages a tab opens of its own (rsQ7o, ZZRcn, tqYNS), centred [`WIDTH`] wide.
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Spacer, Text},
+  components::{Column, Row, ScrollVertical, Text},
   core::Signal,
   layout::{Alignment, layout_kind::ScrollState},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use super::{Status, Tab};
@@ -20,21 +21,16 @@ use crate::{
     form_section::{Label, Place, side_row},
     icon::{Icon, icon},
     notice::{Notice, NoticeTone},
+    settings_page::{SettingsPage, form_scroll, form_scroll_with},
     tabs::{PageTab, page_tabs},
   },
 };
 pub const WIDTH: f32 = 720.0;
 pub const CONTROL_WIDTH: f32 = 300.0;
 
-pub fn header(ctx: &mut Ctx, (project, tab): (&ShownProject, Tab), status: &Signal<Status>) -> Element {
+/// Project settings on `tab`, showing `body`, with the save state at the right of the title (`Save state` `uTF2N`).
+pub fn settings(ctx: &mut Ctx, (project, tab): (&ShownProject, Tab), status: &Signal<Status>, body: Element) -> Element {
   let save_status = save_status(ctx, status);
-  let title = Row::new()
-    .width(Dimension::Pct(100.0))
-    .align_items(Alignment::Center)
-    .spacing(SpacingSize::Md)
-    .child(Text::new(&ctx.t("project_settings.title")).variant(TypographyStyle::Heading))
-    .child(Spacer::new().flex(1.0))
-    .child(save_status);
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
   let tab_for = |ctx: &Ctx, choice: Tab| {
@@ -70,27 +66,17 @@ pub fn header(ctx: &mut Ctx, (project, tab): (&ShownProject, Tab), status: &Sign
     .collect::<Vec<_>>();
   let tabs = page_tabs(ctx, "project-settings-tabs", tabs);
   let name = project.open.project.name().as_str();
-  let content = Column::new()
-    .width(Dimension::Px(WIDTH))
-    .spacing(SpacingSize::Xs)
-    .child(title)
-    .child(Text::new(&ctx.t_args(tab.description(), [("project", name)])).variant(ExtraTypography::Prose.role()));
-  Column::new()
-    .id("project-settings-head")
-    .width(Dimension::Pct(100.0))
-    .align_items(Alignment::Center)
-    .padding(
-      Padding::new()
-        .top(TaskFormSpacing::PageTop.role())
-        .left(SpacingSize::Xl)
-        .right(SpacingSize::Xl),
-    )
-    .spacing(crate::theme::ExtraSpacing::SettingsHead.role())
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(content)
-    .child(Column::new().width(Dimension::Px(WIDTH)).child(tabs))
-    .into()
+  SettingsPage::new(
+    "screen-project_settings",
+    ctx.t("project_settings.title"),
+    ctx.t_args(tab.description(), [("project", name)]),
+  )
+  .action(Some(save_status.into()))
+  .tabs(tabs)
+  .body(body)
+  .into()
 }
+/// A page a tab opens of its own: its `header` over its `content`.
 pub fn screen(header: Element, content: Element) -> Element {
   Column::new()
     .id("screen-project_settings")
@@ -100,17 +86,23 @@ pub fn screen(header: Element, content: Element) -> Element {
     .child(content)
     .into()
 }
+/// A tab's form, scrolling under the tabs.
 pub fn scroll(content: impl Into<Element>) -> Element {
+  form_scroll(SCROLL, content).into()
+}
+/// [`scroll`] kept by `state`, which the tab moves.
+pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element {
+  form_scroll_with(SCROLL, content, state).into()
+}
+/// A page of its own's content, centred [`WIDTH`] wide under its [`screen`] header.
+pub fn page_scroll(content: impl Into<Element>) -> Element {
   scroller(content, WIDTH).into()
 }
-/// [`scroll`] kept by `state`, which the page moves.
-pub fn scroll_with(content: impl Into<Element>, state: &ScrollState) -> Element {
-  scroller(content, WIDTH).with_scroll_state(state.clone()).into()
-}
-/// [`scroll`] with its content `width` wide, for a page with a table (the join review, `AiCwO`).
+/// [`page_scroll`] with its content `width` wide, for a page with a table (the join review, `AiCwO`).
 pub fn scroll_wide(content: impl Into<Element>, width: f32) -> Element {
   scroller(content, width).into()
 }
+const SCROLL: &str = "project-settings-scroll";
 fn scroller(content: impl Into<Element>, width: f32) -> ScrollVertical {
   ScrollVertical::new(
     Column::new()

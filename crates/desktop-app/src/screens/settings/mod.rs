@@ -20,7 +20,7 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::{Column, ScrollVertical},
+  components::Column,
   core::Signal,
   node::{Element, dimension::Dimension},
 };
@@ -33,9 +33,9 @@ use orchester_workspace::{
 use crate::{
   routes::{AccountsView, OrchesterPanel, OrchesterView, Screen},
   services::Services,
-  theme::SettingsSpacing,
   ui::{
     message::message_text,
+    settings_page::form_scroll,
     state::{load_error, loading},
   },
 };
@@ -45,9 +45,6 @@ use crate::{
 struct Listed(Arc<Vec<AgentAccount>>);
 
 impl DevtoolsInspectable for Listed {}
-
-/// The form's width (`Form` `dpkR7`).
-const FORM_WIDTH: f32 = 720.0;
 
 /// The open tab of Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,16 +127,7 @@ impl Component for SettingsScreen {
         _ => loading("settings-accounts-loading", &ctx.t("accounts.reading")).into(),
       },
     };
-    Column::new()
-      .id(format!("screen-{}", Screen::Settings.name()))
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .padding_top(SettingsSpacing::PanelTop.role())
-      .padding_horizontal(SettingsSpacing::PanelSide.role())
-      .padding_bottom(SpacingSize::Lg)
-      .spacing(SpacingSize::Lg)
-      .child(page::header(ctx, tab, count))
-      .child(body)
+    page::page(ctx, tab, count, body)
   }
 }
 
@@ -162,17 +150,10 @@ impl SettingsScreen {
 /// below the server's section, out of a window's height.
 fn automation(ctx: &mut Ctx) -> Element {
   let form = Column::new()
-    .id("settings-form")
-    .width(Dimension::Px(FORM_WIDTH))
-    .padding_top(SpacingSize::Sm)
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xl)
     .child(ctx.mount_keyed::<server::ServerSection>("mcp-server", ()))
     .child(automation::section(ctx))
     .child(ctx.mount_keyed::<notifications::NotificationsSection>("notifications", ()));
-  ScrollVertical::new(form)
-    .id("settings-automation-scroll")
-    .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .min_height(Dimension::Px(0.0))
-    .into()
+  form_scroll("settings-automation-scroll", form).into()
 }

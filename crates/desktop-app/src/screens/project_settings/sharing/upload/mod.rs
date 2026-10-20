@@ -199,7 +199,7 @@ impl Component for UploadPage {
       .child(parts::discovery(ctx, &props.upload, (&self.write, &self.person)))
       .child(super::link::sends(ctx))
       .child(page::icon_note("sharing-upload-nothing-yet", Icon::Info, &nothing_yet));
-    page::screen(header, page::scroll(content))
+    page::screen(header, page::page_scroll(content))
   }
 }
 
