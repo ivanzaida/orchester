@@ -670,23 +670,27 @@ count. `orchester-app` feeds it and shows what it decides (`crates/desktop-app/s
 | --- | --- |
 | *Needs you* (on) | an agent's tool or command approval waits; an agent asks a question, or a step waits for a message; a plan waits for a decision; a run waits for a decision (retries used up, broke again, unverified, unchanged) |
 | *Stopped* (on) | a run stopped at a limit (its token budget or time limit, the daily or a group's budget, a step's budget, an account's plan limit); a run interrupted (crash, runner failure), unless the Orchestrator continued it first; the project's runner offline after its reconnects, or not started; a merge that stopped at conflicts or continues in Local integration |
-| *Finished and info* (off) | a run ready to merge; a run merged (by the person, the Orchestrator, or outside as git tells); a run failed with no route left; an account's plan window at 90 % or reset; an Orchestrator proposal waiting for the person; the daily report (ORC-47) once it exists |
+| *Finished and info* (off) | a run ready to merge; a run merged (by the person, including a merge proposed by the Orchestrator that the person applied, or outside as git tells); a run failed with no route left; an account's plan window at 90 % or reset; an Orchestrator proposal waiting for the person; the daily report (ORC-47) once it exists |
 
 The Orchestrator's own direct actions (its answers, continuations, merges it carries out in its chat) are in its chat
-and give no notification of their own; a base-branch move (ORC-54) gives none. The project's memory records waiting
-for approval count in *Needs you* but are no notification case. Tool approvals have no time-out today, so a
-notification carries no countdown.
+and give no notification of their own; a base-branch move (ORC-54) gives none. A merge is the chat's own when its
+conversation records it as an action the chat carried out itself (`merge_run`, done, not applied by a person). The
+project's memory records waiting for approval count in *Needs you* but are no notification case. Tool approvals have no
+time-out today, so a notification carries no countdown.
 
 **Rules.**
 
-- *Projects*: every project the window has open (a tab shows it and it opened); each notification names its project,
-  a plan limit its account.
+- *Projects*: every project the app has open, that is with a runner attached: one a tab shows, and one whose last tab
+  closed while its runner lingers with work (see "Tabs" › "Runners"), until that runner stops. Each notification names
+  its project, a plan limit its account. The badge counts the same projects.
 - *Only when useful*: a notification shows only while the window is not focused, or the place it opens is not what
   the active tab shows (for the runner: no tab of that project is active). Otherwise it is dropped, not delayed.
 - *Once*: an event shows once, when it is new; what already stood when the app started or a project opened shows
   nothing. An event that stops standing before it showed (the person or the Orchestrator dealt with it) never shows; one
   that stops and comes back is new. An interruption waits 30 s before it shows, so a run the Orchestrator continues by
-  itself (ORC-53) gives none.
+  itself (ORC-53) gives none; so does a merge, so the chat's record of a merge it carried out, read a moment after the
+  run reads merged, drops it. The proposals are read with the conversations, apart from the tasks: those waiting when
+  the conversations are first read show nothing, also when that first reading failed and a later one works.
 - *Coalesce*: a group's first event shows at once; the group's further events within 30 s of its last notification
   wait and show together as one (*3 things need you* · *Kontur · ORC-18, ORC-55 and 1 more*). The runs one daily or
   group budget stopped on one day are one notification (*The daily budget stopped 4 runs*), and later stops of the

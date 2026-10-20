@@ -15,7 +15,7 @@ use windows::{
       DeleteObject, DrawTextW, FF_SWISS, FW_BOLD, GdiFlush, HDC, HGDIOBJ, OUT_DEFAULT_PRECIS, SelectObject, SetBkMode,
       SetTextColor, TRANSPARENT,
     },
-    System::Com::{CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx},
+    System::Com::{CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize},
     UI::{
       Shell::{ITaskbarList3, TaskbarList},
       WindowsAndMessaging::{CreateIconIndirect, DestroyIcon, GetSystemMetrics, HICON, ICONINFO, SM_CXSMICON},
@@ -28,15 +28,14 @@ use super::super::OsError;
 use crate::{system_icon, theme::badge};
 
 /// Shows `count` over the taskbar button of each of the app's windows, described as `label`; removes it at 0.
-pub fn set(count: usize, label: &str) -> Result<(), OsError> {
+/// `false` while the app has no window with a taskbar button yet.
+pub fn set(count: usize, label: &str) -> Result<bool, OsError> {
   let windows = system_icon::windows_with_icon();
   if windows.is_empty() {
-    return Ok(());
+    return Ok(false);
   }
-  // COM is set up on the UI thread already (winit's drag and drop); a second call in the same mode only counts
-  // again, and one in another mode changes nothing. Either way the taskbar below says whether it answers.
-  // SAFETY: no pointers; called on the UI thread, which owns its apartment.
-  let _apartment = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+  // Declared before the taskbar, so the taskbar is released before the apartment's count is given back.
+  let _apartment = Apartment::enter();
   // SAFETY: a class id and an interface the system provides, created in this process.
   let taskbar: ITaskbarList3 = unsafe { CoCreateInstance(&TaskbarList, None, CLSCTX_INPROC_SERVER) }?;
   // SAFETY: the interface was just created.
@@ -48,7 +47,32 @@ pub fn set(count: usize, label: &str) -> Result<(), OsError> {
     // SAFETY: `window` is a window of this thread, enumerated just now; the taskbar copies the icon.
     unsafe { taskbar.SetOverlayIcon(HWND(window), handle, &description) }?;
   }
-  Ok(())
+  Ok(true)
+}
+
+/// The UI thread's COM apartment while the badge is set: entered once more, and left again when dropped. COM is set
+/// up on the UI thread already (winit's drag and drop), so entering it in the same mode only counts again and is
+/// given back on drop; one in another mode enters nothing and gives nothing back. Either way the taskbar says
+/// whether it answers.
+struct Apartment {
+  entered: bool,
+}
+
+impl Apartment {
+  fn enter() -> Self {
+    // SAFETY: no pointers; called on the UI thread, which owns its apartment.
+    let entered = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_ok();
+    Self { entered }
+  }
+}
+
+impl Drop for Apartment {
+  fn drop(&mut self) {
+    if self.entered {
+      // SAFETY: pairs the successful `CoInitializeEx` of `enter`, on the same thread.
+      unsafe { CoUninitialize() };
+    }
+  }
 }
 
 /// An icon this module drew, destroyed when it is dropped.

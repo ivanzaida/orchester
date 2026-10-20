@@ -70,10 +70,11 @@ pub struct ProjectReading<'a> {
   /// Its runner; `None` while it has none in this session.
   pub runner: Option<&'a RunnerState>,
   pub merges: &'a [MergeStop],
-  pub proposals: &'a [WaitingProposal],
+  /// The runs its Orchestrator chat merged by itself ([`super::ChatReading::merged`]): their merge is no event.
+  pub chat_merges: &'a [RunId],
 }
 
-/// Every event standing in `project` as `reading` holds it.
+/// Every event standing in `project` as `reading` holds it, but its Orchestrator proposals ([`of_proposals`]).
 pub fn of_project(project: &Project, reading: &ProjectReading) -> Vec<Event> {
   let mut events: Vec<Event> = reading
     .tasks
@@ -81,7 +82,7 @@ pub fn of_project(project: &Project, reading: &ProjectReading) -> Vec<Event> {
     .iter()
     .filter_map(|item| waiting(project, reading.tasks, item))
     .collect();
-  events.extend(ended(project, reading.tasks));
+  events.extend(ended(project, reading.tasks, reading.chat_merges));
   events.extend(reading.runner.and_then(|state| runner(project, state)));
   events.extend(
     reading
@@ -89,16 +90,24 @@ pub fn of_project(project: &Project, reading: &ProjectReading) -> Vec<Event> {
       .iter()
       .filter_map(|stop| merge(project, reading.tasks, *stop)),
   );
-  events.extend(reading.proposals.iter().map(|proposal| Event {
-    key: format!("proposal:{}:{}", proposal.chat, proposal.seq).into(),
-    batch: None,
-    kind: Kind::Proposal,
-    origin: origin(project),
-    task: None,
-    step: None,
-    target: Target::Orchestrator(project.id, proposal.chat),
-  }));
   events
+}
+
+/// The events of `project`'s Orchestrator proposals that wait for the person. They are read with its conversations,
+/// apart from its tasks, so they are observed in a scope of their own (`Scope::Chats`).
+pub fn of_proposals(project: &Project, proposals: &[WaitingProposal]) -> Vec<Event> {
+  proposals
+    .iter()
+    .map(|proposal| Event {
+      key: format!("proposal:{}:{}", proposal.chat, proposal.seq).into(),
+      batch: None,
+      kind: Kind::Proposal,
+      origin: origin(project),
+      task: None,
+      step: None,
+      target: Target::Orchestrator(project.id, proposal.chat),
+    })
+    .collect()
 }
 
 fn origin(project: &Project) -> Origin {
@@ -209,8 +218,9 @@ fn batch(project: &Project, kind: &Kind, since: Timestamp) -> Option<Arc<str>> {
   Some(format!("limit:{shared}:{}:{day}", project.id).into())
 }
 
-/// The ends of the tasks' latest runs that are no wait: merged, in Orchester or outside it, and failed.
-fn ended(project: &Project, tasks: &ProjectTasks) -> Vec<Event> {
+/// The ends of the tasks' latest runs that are no wait: merged, by a person in Orchester or outside it, and failed.
+/// A merge the Orchestrator's chat carried out itself, one of `chat_merges`, is its own action and no event.
+fn ended(project: &Project, tasks: &ProjectTasks, chat_merges: &[RunId]) -> Vec<Event> {
   tasks
     .tasks
     .iter()
@@ -219,6 +229,7 @@ fn ended(project: &Project, tasks: &ProjectTasks) -> Vec<Event> {
         return None;
       };
       let (kind, name) = match latest.phase {
+        TaskPhase::Merged if chat_merges.contains(&latest.id) => return None,
         TaskPhase::Merged => (Kind::Merged, "merged"),
         TaskPhase::Failed => (Kind::Failed, "failed"),
         _ => return None,

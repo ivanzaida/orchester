@@ -2,14 +2,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::{id::ProjectId, name::Name};
-use orchester_workspace::tasks::integration_jobs::ProjectJobs;
+use orchester_workspace::{tasks::integration_jobs::ProjectJobs, workspace::OpenProject};
 use parking_lot::Mutex;
 
 use super::{ProjectFeed, ProjectState};
 
-/// What the window knows of the projects its tabs show: each one's state once it has been resolved
-/// (`None` while it is being opened), and the feed of each one that opened. Clones share them; reading a
-/// state in a render re-renders it when the states change.
+/// What the window knows of the projects its tabs show, and of those it still follows after their last tab
+/// closed: each one's state once it has been resolved (`None` while it is being opened), and the feed of
+/// each one that opened. Clones share them; reading a state in a render re-renders it when the states change.
 #[derive(Clone)]
 pub struct Projects {
   states: Signal<KnownStates>,
@@ -20,6 +20,8 @@ pub struct Projects {
   feeds: Arc<Mutex<HashMap<ProjectId, ProjectFeed>>>,
   /// The session's merge and removal operations, which each project's feed follows.
   jobs: ProjectJobs,
+  /// The projects whose feeds are kept current ([`Projects::followed`]).
+  followed: Signal<Followed>,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -32,6 +34,12 @@ impl lurq::app::component::DevtoolsInspectable for Attempts {}
 struct KnownStates(Arc<HashMap<ProjectId, ProjectState>>);
 
 impl lurq::app::component::DevtoolsInspectable for KnownStates {}
+
+/// The projects followed, in the order the host mounts their loaders.
+#[derive(Clone, Default, PartialEq)]
+struct Followed(Arc<Vec<ProjectId>>);
+
+impl lurq::app::component::DevtoolsInspectable for Followed {}
 
 impl PartialEq for Projects {
   fn eq(&self, other: &Self) -> bool {
@@ -52,7 +60,29 @@ impl Projects {
       rounds: Signal::new(0),
       feeds: Arc::default(),
       jobs,
+      followed: Signal::new(Followed::default()),
     }
+  }
+
+  /// The projects whose feeds the window keeps current: those its tabs show, and those an open project's runner
+  /// still works for after its last tab closed (`Runners::keep_open`). Reading it in a render re-renders it when they
+  /// change.
+  pub fn followed(&self) -> Arc<Vec<ProjectId>> {
+    self.followed.get().0
+  }
+
+  /// Records the projects followed; their readers render only when they changed.
+  pub(super) fn set_followed(&self, followed: Vec<ProjectId>) {
+    if *self.followed.get_untracked().0 != followed {
+      self.followed.set(Followed(Arc::new(followed)));
+    }
+  }
+
+  /// Every project known to be open, whether a tab shows it or not.
+  pub(super) fn open_all(&self) -> Vec<OpenProject> {
+    self
+      .states
+      .with(|known| known.0.values().filter_map(|state| state.open().cloned()).collect())
   }
 
   /// The projects the window provides to everything it mounts.

@@ -1,11 +1,12 @@
-//! The Orchestrator's proposals that wait for the person (`orchestrator::proposal`): a start or a change its agent
-//! proposed that no decision took yet.
+//! What the project's Orchestrator conversations hold for the notifications: the proposals that wait for the person
+//! (`orchestrator::proposal`), a start or a change its agent proposed that no decision took yet; and the runs the
+//! chat merged itself, which its conversation tells and no OS notification does.
 
 use std::path::Path;
 
 use orchester_core::{
-  id::ChatId,
-  orchestrator::{ChatEntry, EntryKind},
+  id::{ChatId, RunId},
+  orchestrator::{ActionOutcome, ChatAction, ChatEntry, EntryKind, change::Change},
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -16,22 +17,43 @@ pub struct WaitingProposal {
   pub seq: i64,
 }
 
-/// The proposals of every conversation of the project at `root` that wait for the person. Blocks on SQLite.
-pub fn waiting_proposals_in(root: &Path) -> Result<Vec<WaitingProposal>, StoreError> {
+/// What every conversation of a project holds for the notifications.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ChatReading {
+  pub proposals: Vec<WaitingProposal>,
+  /// The runs the chat merged by itself (`merge_run`, carried out without a person's *Apply*).
+  pub merged: Vec<RunId>,
+}
+
+/// What the conversations of the project at `root` hold. Blocks on SQLite.
+pub fn chats_in(root: &Path) -> Result<ChatReading, StoreError> {
   let db = ProjectDb::open(root)?;
-  let mut waiting = Vec::new();
+  let mut reading = ChatReading::default();
   for listing in db.chats()? {
     let chat = listing.chat.id();
-    waiting.extend(
-      db.chat_entries(chat)?
-        .iter()
-        .filter(|entry| waits(entry))
-        .map(|entry| WaitingProposal { chat, seq: entry.seq }),
-    );
+    for entry in db.chat_entries(chat)? {
+      if waits(&entry) {
+        reading.proposals.push(WaitingProposal { chat, seq: entry.seq });
+      }
+      if let EntryKind::Action(action) = &entry.kind {
+        reading.merged.extend(merged_by_chat(action));
+      }
+    }
   }
-  Ok(waiting)
+  Ok(reading)
 }
 
 fn waits(entry: &ChatEntry) -> bool {
   matches!(&entry.kind, EntryKind::Action(action) if action.waits())
+}
+
+/// The run `action` merged, when the chat carried the merge out itself; one a person applied is theirs.
+pub fn merged_by_chat(action: &ChatAction) -> Option<RunId> {
+  if !matches!(action.outcome, ActionOutcome::Done) {
+    return None;
+  }
+  match action.change.as_deref().map(|change| &change.change) {
+    Some(Change::Merge { run, .. }) => Some(*run),
+    _ => None,
+  }
 }

@@ -56,6 +56,8 @@ struct Kept {
   projects: Vec<ProjectId>,
   /// The count on the icon now.
   badge: Option<usize>,
+  /// The count the system last refused to put on the icon.
+  refused: Option<usize>,
   /// The notifications shown last, by the route their click opens.
   shown: VecDeque<(String, Target)>,
   /// Whether the stored settings were taken.
@@ -104,7 +106,7 @@ impl Component for NotificationsHost {
     }
     let _clicked = self.clicks.count();
     let _read = self.link.readings();
-    let readers = self.readers(ctx, &navigation);
+    let readers = self.readers(ctx);
     self.read_accounts(ctx);
     self.show_due(ctx, &navigation, settings);
     self.badge(ctx);
@@ -143,16 +145,12 @@ impl NotificationsHost {
     }
   }
 
-  /// A reader per project the tabs show that is open; the notifier forgets the others.
-  fn readers(&self, ctx: &mut Ctx, navigation: &Navigation) -> Vec<Element> {
+  /// A reader per open project the window follows: one a tab shows, or whose runner still works after its last tab
+  /// closed ([`Projects::followed`]); the notifier forgets the others.
+  fn readers(&self, ctx: &mut Ctx) -> Vec<Element> {
     let projects = Projects::of(ctx);
-    let mut shown: Vec<ProjectId> = Vec::new();
-    for project in navigation.tabs().tabs().iter().filter_map(|tab| tab.route().project()) {
-      if !shown.contains(&project) {
-        shown.push(project);
-      }
-    }
-    let open: Vec<_> = shown
+    let open: Vec<_> = projects
+      .followed()
       .iter()
       .filter_map(|project| projects.state(*project)?.open().cloned())
       .collect();
@@ -234,7 +232,9 @@ impl NotificationsHost {
     }
   }
 
-  /// Puts what *Needs you* counts in every open project on the app's icon, when it changed.
+  /// Puts what *Needs you* counts in every open project on the app's icon, until the icon shows it. A count the
+  /// system refused, or that had no window to go on yet, is tried again at the next render; a refusal is logged
+  /// once per count.
   fn badge(&self, ctx: &Ctx) {
     let count = self.link.badge();
     let mut kept = self.kept.lock();
@@ -247,11 +247,16 @@ impl NotificationsHost {
       "shell.notifications.badge.other"
     };
     let label = ctx.t_args(key, [("count", count.to_string())]);
-    // Tried once per count: a refusal is logged, and the next count tries again.
-    if let Err(error) = os::badge(count, &label) {
-      tracing::warn!(%error, "the app's icon does not show what needs you");
+    match os::badge(count, &label) {
+      Ok(true) => kept.badge = Some(count),
+      Ok(false) => {}
+      Err(error) => {
+        if kept.refused != Some(count) {
+          tracing::warn!(%error, "the app's icon does not show what needs you");
+          kept.refused = Some(count);
+        }
+      }
     }
-    kept.badge = Some(count);
   }
 
   /// Opens the place of a clicked notification: in the tab that shows it, else in a new tab, pointing at its

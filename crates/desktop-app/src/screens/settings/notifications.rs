@@ -20,6 +20,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
 };
+use parking_lot::Mutex;
 
 use super::automation::{row, section_title};
 use crate::{
@@ -48,6 +49,8 @@ pub struct NotificationsSection {
   /// The quiet hours' start and end as chosen, `HH:MM`.
   start: Signal<String>,
   end: Signal<String>,
+  /// The quiet hours' start and end the selects were last set to or took; `None` while quiet hours are off.
+  seen: Mutex<Option<(u16, u16)>>,
 }
 
 impl Component for NotificationsSection {
@@ -58,6 +61,7 @@ impl Component for NotificationsSection {
     Self {
       start: ctx.signal(clock(quiet.start())),
       end: ctx.signal(clock(quiet.end())),
+      seen: Mutex::new(None),
     }
   }
 
@@ -115,22 +119,33 @@ impl Component for NotificationsSection {
 }
 
 impl NotificationsSection {
-  /// Takes the quiet hours' times as chosen, once they are two different times; seeds them when quiet hours are
-  /// turned on.
+  /// Takes the quiet hours' times the person chose, once they are two different times. Quiet hours that come from
+  /// elsewhere (the stored settings read after the section opened, or turned on with their default times) are only
+  /// shown in the selects, and nothing is saved for them.
   fn follow_times(&self, prefs: &NotificationPrefs, save: &SaveAction, settings: NotificationSettings) {
+    let chosen = (minute(&self.start.get()), minute(&self.end.get()));
+    let mut seen = self.seen.lock();
     let Some(quiet) = settings.quiet else {
+      *seen = None;
       return;
     };
-    let chosen = (minute(&self.start.get()), minute(&self.end.get()));
+    let stored = (quiet.start(), quiet.end());
+    if *seen != Some(stored) {
+      *seen = Some(stored);
+      show(&self.start, clock(stored.0));
+      show(&self.end, clock(stored.1));
+      return;
+    }
     let (Some(start), Some(end)) = chosen else {
       return;
     };
-    if (start, end) == (quiet.start(), quiet.end()) {
+    if (start, end) == stored {
       return;
     }
     let Ok(hours) = QuietHours::new(start, end) else {
       return;
     };
+    *seen = Some((start, end));
     let next = NotificationSettings {
       quiet: Some(hours),
       ..settings
@@ -240,6 +255,13 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 /// `minute` of the day as `HH:MM`.
 fn clock(minute: u16) -> String {
   format!("{:02}:{:02}", minute / 60, minute % 60)
+}
+
+/// Sets a select's `value` to `time`, unless it shows it already.
+fn show(value: &Signal<String>, time: String) {
+  if value.get_untracked() != time {
+    value.set(time);
+  }
 }
 
 /// The minute of the day `HH:MM` names.

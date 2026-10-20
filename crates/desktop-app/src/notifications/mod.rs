@@ -90,11 +90,16 @@ impl NotifierLink {
     }))
   }
 
-  /// Takes a project's reading, `needs_you` the count its *Needs you* shows, and tells the host.
-  fn read_project(&self, project: ProjectId, events: Vec<Event>, needs_you: usize) {
+  /// Takes a project's reading, its own events and its proposals' (`None` while they cannot be read), `needs_you` the
+  /// count its *Needs you* shows, and tells the host.
+  fn read_project(&self, project: ProjectId, (events, proposals): (Vec<Event>, Option<Vec<Event>>), needs_you: usize) {
     {
       let mut notifier = self.0.notifier.lock();
-      notifier.observe(Scope::Project(project), events, Timestamp::now());
+      let now = Timestamp::now();
+      notifier.observe(Scope::Project(project), events, now);
+      if let Some(proposals) = proposals {
+        notifier.observe(Scope::Chats(project), proposals, now);
+      }
       notifier.set_needs_you(project, needs_you);
     }
     self.0.readings.update(|count| *count += 1);
@@ -109,6 +114,7 @@ impl NotifierLink {
       .observe(Scope::Accounts, events, Timestamp::now());
   }
 
+  /// Forgets a project the app no longer has open.
   fn forget(&self, project: ProjectId) {
     self.0.notifier.lock().forget(Scope::Project(project));
   }

@@ -2,7 +2,8 @@
 //! `docs/design/orchester-workspace.md`, "Notifications"). Its events come from what the app already follows for every
 //! open project: what waits for the person, as every *Needs you* counts it ([`ProjectTasks::waiting`]), how the
 //! latest runs ended, as the Orchestrator follows run ends (`docs/design/orchestrator-toolset.md`, decision 5), the
-//! project's runner, its merges, the Orchestrator's proposals, and the accounts' plan limits ([`sources`]). The
+//! project's runner, its merges, the Orchestrator's proposals, and the accounts' plan limits ([`sources`]). What the
+//! Orchestrator did itself, such as a merge its chat carried out, is told in its chat and gives no event. The
 //! [`Notifier`] turns them into notifications: each event once, only while it still stands, only for a group switched
 //! on and outside quiet hours, only when the window is not focused or the place the notification opens is not on
 //! screen, and the events of a group within [`COALESCE`] of each other as one notification. The taskbar's or Dock's
@@ -28,7 +29,7 @@ use orchester_core::{
 
 pub use self::{
   notifier::{Notifier, Scope, View},
-  proposals::{WaitingProposal, waiting_proposals_in},
+  proposals::{ChatReading, WaitingProposal, chats_in, merged_by_chat},
   words::Notification,
 };
 use crate::{

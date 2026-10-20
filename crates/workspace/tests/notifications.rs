@@ -1,8 +1,9 @@
-//! Which OS notifications the app shows (ORC-56): the events read off what *Needs you* counts, the latest runs'
-//! ends, the runner, the merges, the proposals and the plan limits; and the notifier's rules: once per event and
-//! not for what stood at the first reading, a group's events within 30 s as one, nothing while the window shows the
-//! place, in quiet hours or for a group switched off, a shared budget's stops as one, and words that never carry a
-//! command.
+//! Which OS notifications the app shows (ORC-56): the events read off what *Needs you* counts (each tool request,
+//! question, plan, decision and limit), the latest runs' ends (merged by a person or outside, not by the
+//! Orchestrator's chat; failed), the runner, the merges that stopped, the proposals and the plan limits; and the
+//! notifier's rules: once per event and not for what stood at the first reading, a group's events within 30 s as one,
+//! nothing while the window shows the place, in quiet hours or for a group switched off, a shared budget's stops as
+//! one, an interruption and a merge held 30 s, and words that never carry a command or a message's text.
 
 mod support;
 
@@ -13,11 +14,19 @@ use orchester_core::{
     AgentProvider,
     plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, PlanReadings},
   },
+  conversation::{AgentMessage, Message, MessageBody},
   id::{ChatId, ProjectId},
+  integration::{MergeKind, RunMerge},
   memory::MemoryStore,
+  orchestrator::{
+    ActionOutcome, ChatAction,
+    change::{Change, ProposedChange},
+  },
+  question::{Question, QuestionOption, QuestionRequest, QuestionTurn},
   resource::ModelId,
-  run::{InterruptCause, PendingToolApproval, RunLimit, StepFailure, WaitReason},
-  store::ActivityStore,
+  revision::Revision,
+  run::{BranchName, InterruptCause, PendingToolApproval, Run, RunLimit, StepFailure, WaitReason},
+  store::{ActivityStore, ConversationStore, MergeStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -25,7 +34,7 @@ use orchester_workspace::{
   links::TaskPage,
   notifications::{
     COALESCE, Event, EventTask, Kind, LimitKind, Notification, NotificationGroup, NotificationSettings, Notifier,
-    Origin, QuietHours, Scope, Target, View, WaitingProposal,
+    Origin, QuietHours, Scope, Target, View, WaitingProposal, merged_by_chat,
     sources::{self, MergeStop, Project, ProjectReading},
   },
   runner::state::{RunnerFailure, RunnerState},
@@ -45,9 +54,13 @@ fn events_of(project: &Project, tasks: &ProjectTasks) -> Vec<Event> {
     tasks,
     runner: None,
     merges: &[],
-    proposals: &[],
+    chat_merges: &[],
   };
   sources::of_project(project, &reading)
+}
+
+fn kinds(events: &[Event]) -> Vec<&Kind> {
+  events.iter().map(|event| &event.kind).collect()
 }
 
 fn load(fixture: &Fixture) -> ProjectTasks {
@@ -159,7 +172,7 @@ fn notifications_never_carry_a_command_its_arguments_or_a_path() {
 }
 
 #[test]
-fn notifications_read_limits_decisions_ready_merged_and_failed_runs_but_not_memory() {
+fn notifications_read_a_limit_a_decision_ready_and_failed_runs_but_not_memory() {
   let mut fixture = Fixture::new();
   let limited = fixture.task("Index the repo", at(10));
   let mut run = fixture.started_run(limited, at(20));
@@ -229,16 +242,20 @@ fn notifications_batch_the_runs_the_daily_budget_stopped_on_one_day() {
 }
 
 #[test]
-fn notifications_read_the_runner_merges_and_proposals() {
+fn notifications_read_the_runner_and_the_merges_that_stopped() {
   let tasks = waiting_project();
   let project = project();
   let ready = tasks.phases.values().find_map(|latest| latest.run()).expect("a run");
-  let merges = [MergeStop {
-    run: ready.id,
-    conflicts: true,
-  }];
-  let chat = ChatId::generate();
-  let proposals = [WaitingProposal { chat, seq: 4 }];
+  let merges = [
+    MergeStop {
+      run: ready.id,
+      conflicts: true,
+    },
+    MergeStop {
+      run: ready.id,
+      conflicts: false,
+    },
+  ];
   let not_started = RunnerState::Failed {
     cause: RunnerFailure::StartFailed,
     attempts: 0,
@@ -247,24 +264,33 @@ fn notifications_read_the_runner_merges_and_proposals() {
     tasks: &tasks,
     runner: Some(&not_started),
     merges: &merges,
-    proposals: &proposals,
+    chat_merges: &[],
   };
   let events = sources::of_project(&project, &reading);
-  let kinds: Vec<&Kind> = events.iter().map(|event| &event.kind).collect();
-  assert!(kinds.contains(&&Kind::RunnerNotStarted));
-  assert!(kinds.contains(&&Kind::MergeConflicts));
-  let proposal = events
-    .iter()
-    .find(|event| event.kind == Kind::Proposal)
-    .expect("proposal");
-  assert_eq!(
-    proposal.target.path(),
-    format!("/project/{}/orchestrator?chat={chat}", project.id)
+  let found = |kind: Kind| events.iter().find(|event| event.kind == kind).expect("the event");
+  let conflicts = found(Kind::MergeConflicts);
+  assert!(matches!(
+    conflicts.target,
+    Target::Task {
+      page: TaskPage::Summary,
+      ..
+    }
+  ));
+  let local = found(Kind::LocalIntegration);
+  assert_eq!(local.group(), NotificationGroup::Stopped);
+  assert!(
+    matches!(
+      local.target,
+      Target::Task {
+        page: TaskPage::LocalIntegration,
+        ..
+      }
+    ),
+    "a merge Local integration carries on opens its page: {:?}",
+    local.target
   );
-  let runner = events
-    .iter()
-    .find(|event| event.kind == Kind::RunnerNotStarted)
-    .expect("runner");
+  assert_ne!(conflicts.key, local.key);
+  let runner = found(Kind::RunnerNotStarted);
   assert_eq!(runner.target.path(), format!("/project/{}", project.id));
 
   let offline = RunnerState::Failed {
@@ -284,7 +310,7 @@ fn notifications_read_the_runner_merges_and_proposals() {
       tasks: &tasks,
       runner: Some(&state),
       merges: &[],
-      proposals: &[],
+      chat_merges: &[],
     };
     let runner = sources::of_project(&project, &reading)
       .into_iter()
@@ -292,6 +318,41 @@ fn notifications_read_the_runner_merges_and_proposals() {
       .map(|event| event.kind);
     assert_eq!(runner, expected, "{state:?}");
   }
+}
+
+#[test]
+fn notifications_read_proposals_in_their_own_scope() {
+  let project = project();
+  let chat = ChatId::generate();
+  let waiting = [WaitingProposal { chat, seq: 4 }];
+  let proposals = sources::of_proposals(&project, &waiting);
+  assert_eq!(kinds(&proposals), [&Kind::Proposal]);
+  assert_eq!(proposals[0].group(), NotificationGroup::Finished);
+  assert_eq!(
+    proposals[0].target.path(),
+    format!("/project/{}/orchestrator?chat={chat}", project.id)
+  );
+
+  // The project was read while its conversations could not be: once they are, what waited all along is no news.
+  let finished = NotificationSettings::default().with(NotificationGroup::Finished, true);
+  let mut notifier = Notifier::default();
+  notifier.observe(Scope::Project(project.id), Vec::new(), at(0));
+  notifier.observe(Scope::Chats(project.id), proposals.clone(), at(1));
+  assert!(notifier.due(&view(at(1), false, &finished)).is_empty());
+  let more = sources::of_proposals(&project, &[waiting[0], WaitingProposal { chat, seq: 9 }]);
+  notifier.observe(Scope::Chats(project.id), more, at(2));
+  assert_eq!(notifier.due(&view(at(2), false, &finished)).len(), 1, "a new one is");
+  notifier.observe(Scope::Chats(project.id), proposals, at(3));
+  notifier.forget(Scope::Project(project.id));
+  notifier.observe(
+    Scope::Chats(project.id),
+    sources::of_proposals(&project, &[WaitingProposal { chat, seq: 12 }]),
+    at(100_000),
+  );
+  assert!(
+    notifier.due(&view(at(100_000), false, &finished)).is_empty(),
+    "forgetting a project forgets its conversations: their next reading is a first one"
+  );
 }
 
 fn reading(percent: f64, resets: i64) -> LimitReading {
@@ -534,4 +595,311 @@ fn notifier_drops_what_was_handled_and_holds_an_interruption() {
   let shown: Vec<Notification> = notifier.due(&view(at(130_000), false, &settings));
   assert_eq!(shown.len(), 1, "told once it stood 30 s");
   assert_eq!(shown[0].group, NotificationGroup::Stopped);
+}
+
+#[test]
+fn notifier_holds_a_merge_so_the_chats_record_of_its_own_can_drop_it() {
+  let project = ProjectId::generate();
+  let scope = Scope::Project(project);
+  let finished = NotificationSettings::default().with(NotificationGroup::Finished, true);
+  let mut notifier = Notifier::default();
+  notifier.observe(scope, Vec::new(), at(0));
+  let merged = event(project, "merged:1", Kind::Merged, 3);
+  notifier.observe(scope, vec![merged.clone()], at(1_000));
+  assert!(notifier.due(&view(at(1_000), false, &finished)).is_empty(), "held");
+  notifier.observe(scope, Vec::new(), at(5_000));
+  assert!(
+    notifier.due(&view(at(40_000), false, &finished)).is_empty(),
+    "the chat's record came: the Orchestrator merged it"
+  );
+  notifier.observe(scope, vec![merged], at(50_000));
+  let shown = notifier.due(&view(at(80_000), false, &finished));
+  assert_eq!(shown.len(), 1, "a person's merge is told once it stood 30 s");
+  assert_eq!(shown[0].title.key, "notifications.title.merged");
+}
+
+/// A run of a new task titled `title`, started at `now`.
+fn started(fixture: &mut Fixture, title: &str, now: i64) -> Run {
+  let task = fixture.task(title, at(now));
+  fixture.started_run(task, at(now + 1))
+}
+
+fn first_execution(run: &Run) -> orchester_core::id::StepExecutionId {
+  run.current_attempt().expect("attempt").executions()[0].id()
+}
+
+#[test]
+fn notifications_read_a_merge_by_a_person_or_outside_but_not_the_orchestrators() {
+  let mut fixture = Fixture::new();
+  let mut merged = started(&mut fixture, "Add sign-out", 10);
+  fixture.succeed(&mut merged, at(20));
+  let receipt = RunMerge {
+    run: merged.id(),
+    into: BranchName::new("main").expect("a branch"),
+    revision: Revision::new(&"b".repeat(40)).expect("a revision"),
+    kind: MergeKind::FastForward,
+    merged_at: at(30),
+  };
+  fixture.db.save_run_merge(&receipt).expect("record the merge");
+  let tasks = load(&fixture);
+  let project = project();
+
+  let events = events_of(&project, &tasks);
+  assert_eq!(kinds(&events), [&Kind::Merged]);
+  assert_eq!(events[0].group(), NotificationGroup::Finished);
+  assert!(matches!(
+    events[0].target,
+    Target::Task {
+      page: TaskPage::Summary,
+      ..
+    }
+  ));
+
+  let chat_merges = [merged.id()];
+  let reading = ProjectReading {
+    tasks: &tasks,
+    runner: None,
+    merges: &[],
+    chat_merges: &chat_merges,
+  };
+  assert!(
+    sources::of_project(&project, &reading).is_empty(),
+    "a merge the chat carried out is told in the chat"
+  );
+}
+
+#[test]
+fn notifications_take_only_a_merge_the_chat_carried_out_itself_for_the_orchestrators() {
+  let mut fixture = Fixture::new();
+  let run = started(&mut fixture, "Add sign-out", 10);
+  let merge = |outcome: ActionOutcome, change: Change| ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: "Add sign-out".to_owned(),
+      change,
+    })),
+    ..ChatAction::new("merge_run", Some("ORC-1".to_owned()), outcome)
+  };
+  let merging = Change::Merge {
+    run: run.id(),
+    number: 1,
+    checkpoint: None,
+    into: None,
+  };
+  assert_eq!(
+    merged_by_chat(&merge(ActionOutcome::Done, merging.clone())),
+    Some(run.id())
+  );
+  assert_eq!(
+    merged_by_chat(&merge(ActionOutcome::Applied, merging.clone())),
+    None,
+    "a merge a person applied is theirs"
+  );
+  assert_eq!(merged_by_chat(&merge(ActionOutcome::Waits, merging)), None);
+  let cancel = Change::Cancel {
+    run: run.id(),
+    number: 1,
+  };
+  assert_eq!(merged_by_chat(&merge(ActionOutcome::Done, cancel)), None);
+}
+
+#[test]
+fn notifications_read_an_agents_question_and_a_question_with_answers_without_their_text() {
+  let mut fixture = Fixture::new();
+  let mut asking = started(&mut fixture, "Add login", 10);
+  let execution = first_execution(&asking);
+  let invocation = fixture
+    .db
+    .start_invocation(asking.id(), execution, &ModelId::new("gpt-5.5").expect("model"), at(21))
+    .expect("invocation")
+    .id;
+  let events = asking.wait_step(execution, WaitReason::Message, at(22)).expect("waits");
+  fixture.record(&asking, &events);
+  let question = Message::from_agent(
+    asking.task(),
+    asking.id(),
+    (execution, invocation),
+    AgentMessage::Question,
+    MessageBody::new("Keep email sign-in?").expect("a message"),
+    at(22),
+  );
+  fixture.db.add_agent_message(&question).expect("stored");
+
+  let choosing = started(&mut fixture, "Place the docs button", 30);
+  let execution = first_execution(&choosing);
+  let invocation = fixture
+    .db
+    .start_invocation(
+      choosing.id(),
+      execution,
+      &ModelId::new("gpt-5.5").expect("model"),
+      at(41),
+    )
+    .expect("invocation")
+    .id;
+  let options = vec![
+    QuestionOption::new("Top bar", None),
+    QuestionOption::new("Sidebar", None),
+  ];
+  let asked = QuestionRequest::new(
+    "ask-1".to_owned(),
+    (choosing.id(), execution, invocation),
+    "Designer".to_owned(),
+    vec![Question::new("Where should the docs button go?", None, options, false).expect("a question")],
+    (at(42), QuestionTurn::InTurn),
+  )
+  .expect("a request");
+  fixture.db.ask_questions(&asked).expect("the question waits");
+
+  let project = project();
+  let events = events_of(&project, &load(&fixture));
+  assert_eq!(
+    kinds(&events),
+    [
+      &Kind::Question {
+        agent: "Builder".into()
+      },
+      &Kind::Question {
+        agent: "Designer".into()
+      },
+    ]
+  );
+  assert!(events.iter().all(|event| event.group() == NotificationGroup::NeedsYou));
+  for event in &events {
+    assert!(
+      matches!(
+        event.target,
+        Target::Task {
+          page: TaskPage::Conversation,
+          ..
+        }
+      ),
+      "a question opens its card in the conversation: {:?}",
+      event.target
+    );
+  }
+  assert_ne!(events[0].key, events[1].key);
+
+  let mut notifier = Notifier::default();
+  notifier.observe(Scope::Project(project.id), Vec::new(), at(0));
+  notifier.observe(Scope::Project(project.id), events, at(1));
+  let shown = notifier.due(&view(at(1), false, &NotificationSettings::default()));
+  let words = format!("{shown:?}");
+  for text in ["Keep email", "docs button go", "Top bar"] {
+    assert!(!words.contains(text), "{text} is not shown: {words}");
+  }
+}
+
+#[test]
+fn notifications_read_each_decision_a_run_waits_for() {
+  let mut fixture = Fixture::new();
+  let mut unchanged = started(&mut fixture, "Check again", 10);
+  let execution = first_execution(&unchanged);
+  let events = unchanged
+    .fail_step(execution, StepFailure::Unchanged, at(20))
+    .expect("waits for the person");
+  fixture.record(&unchanged, &events);
+
+  let mut broke = started(&mut fixture, "Break twice", 30);
+  let execution = first_execution(&broke);
+  let events = broke
+    .fail_step(execution, StepFailure::AgentFailed, at(40))
+    .expect("restarts");
+  fixture.record(&broke, &events);
+  let execution = first_execution(&broke);
+  let events = broke.start_step(execution, at(41)).expect("starts again");
+  fixture.record(&broke, &events);
+  let events = broke
+    .fail_step(execution, StepFailure::AgentFailed, at(42))
+    .expect("waits for the person");
+  fixture.record(&broke, &events);
+
+  let events = events_of(&project(), &load(&fixture));
+  assert_eq!(
+    kinds(&events),
+    [
+      &Kind::Decision(DecisionWhy::Unchanged),
+      &Kind::Decision(DecisionWhy::BrokeAgain),
+    ]
+  );
+  for event in &events {
+    assert_eq!(event.group(), NotificationGroup::NeedsYou);
+    assert!(
+      matches!(
+        event.target,
+        Target::Task {
+          page: TaskPage::Summary,
+          card: Some(SummaryCard::Retries),
+          ..
+        }
+      ),
+      "a decision opens its card on the Summary: {:?}",
+      event.target
+    );
+  }
+}
+
+#[test]
+fn notifications_read_each_limit_a_run_stops_at() {
+  let mut fixture = Fixture::new();
+  let mut stop = |title: &str, now: i64, limit: fn(&Run) -> RunLimit| {
+    let mut run = started(&mut fixture, title, now);
+    let events = run.stop_at_limit(limit(&run), at(now + 2)).expect("stopped");
+    fixture.record(&run, &events);
+  };
+  stop("Time", 10, |_| RunLimit::Time);
+  stop("Step", 20, |run| RunLimit::StepBudget {
+    execution: first_execution(run),
+  });
+  stop("Plan", 30, |run| RunLimit::PlanLimit {
+    execution: first_execution(run),
+  });
+  let events = events_of(&project(), &load(&fixture));
+  assert_eq!(
+    kinds(&events),
+    [
+      &Kind::Limit(Some(LimitKind::Time)),
+      &Kind::Limit(Some(LimitKind::StepBudget)),
+      &Kind::Limit(Some(LimitKind::PlanLimit)),
+    ]
+  );
+  assert!(
+    events
+      .iter()
+      .all(|event| event.group() == NotificationGroup::Stopped && event.batch.is_none()),
+    "a run's own limit is no batch"
+  );
+}
+
+#[test]
+fn notifications_batch_the_runs_a_groups_budget_stopped() {
+  let mut fixture = Fixture::new();
+  for (title, now) in [("One", 10), ("Two", 20)] {
+    let mut run = started(&mut fixture, title, now);
+    let events = run.stop_at_limit(RunLimit::GroupBudget, at(now + 2)).expect("stopped");
+    fixture.record(&run, &events);
+  }
+  let project = project();
+  let events = events_of(&project, &load(&fixture));
+  assert_eq!(kinds(&events), [&Kind::Limit(Some(LimitKind::GroupBudget)); 2]);
+  assert!(events[0].batch.is_some() && events[0].batch == events[1].batch);
+  let mut notifier = Notifier::default();
+  notifier.observe(Scope::Project(project.id), Vec::new(), at(0));
+  notifier.observe(Scope::Project(project.id), events, at(1));
+  let shown = notifier.due(&view(at(1), false, &NotificationSettings::default()));
+  assert_eq!(shown.len(), 1, "one notification for the batch");
+  assert_eq!(shown[0].title.key, "notifications.title.limit.groupMany");
+  assert_eq!(shown[0].title.args, [("count", "2".to_owned())]);
+}
+
+#[test]
+fn notifications_read_a_plan_limit_reached() {
+  let name = |_: &LimitReading| -> Arc<str> { "Work".into() };
+  let window = LimitWindow::new(300, None, Some(at(10_000)), LimitState::Reached, false).expect("window");
+  let mut reached = reading(0.0, 10_000);
+  reached.limits.windows = vec![window];
+  let mut readings = PlanReadings::default();
+  readings.observe(reached);
+  let events = sources::of_plan_limits(&readings, at(2_000), name);
+  assert_eq!(kinds(&events), [&Kind::PlanLimitNear { percent: 100 }]);
+  assert_eq!(events[0].group(), NotificationGroup::Finished);
 }

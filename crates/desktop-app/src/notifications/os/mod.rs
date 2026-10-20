@@ -136,15 +136,15 @@ pub fn show(shown: &Shown) -> Result<(), OsError> {
   }
 }
 
-/// Shows `count` on the app's icon, none for 0; `label` says it in words where the system reads it out. Runs on the
-/// UI thread.
-pub fn badge(count: usize, label: &str) -> Result<(), OsError> {
+/// Shows `count` on the app's icon, none for 0; `label` says it in words where the system reads it out. `false` when
+/// there is no icon to put it on yet (Windows, before the window has its taskbar button). Runs on the UI thread.
+pub fn badge(count: usize, label: &str) -> Result<bool, OsError> {
   #[cfg(windows)]
   return windows::badge::set(count, label);
   #[cfg(target_os = "macos")]
   {
     let _unused = label;
-    macos::badge(count)
+    macos::badge(count).map(|()| true)
   }
   #[cfg(not(any(windows, target_os = "macos")))]
   {

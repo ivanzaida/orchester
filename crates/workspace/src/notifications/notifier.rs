@@ -10,10 +10,12 @@ use orchester_core::{id::ProjectId, time::Timestamp};
 
 use super::{COALESCE, Event, Kind, NotificationGroup, NotificationSettings, Target, words::Notification};
 
-/// Whose events one reading holds: one project's, or the agent accounts' plan limits, which every project shares.
+/// Whose events one reading holds: one project's, its Orchestrator conversations' proposals, which are read apart
+/// from it, or the agent accounts' plan limits, which every project shares.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Scope {
   Project(ProjectId),
+  Chats(ProjectId),
   Accounts,
 }
 
@@ -45,8 +47,9 @@ struct Pending {
 /// person or the Orchestrator dealt with it), when its group is switched off or the hours are quiet, and when the
 /// window has the focus and shows the place it opens. A group's first event shows at once; those that come within
 /// [`COALESCE`] of it wait for its end and show as one. An interruption waits [`COALESCE`] in any case: the
-/// Orchestrator may continue the run by itself (ORC-53), and then there is nothing to tell. The badge counts what
-/// *Needs you* counts in each open project.
+/// Orchestrator may continue the run by itself (ORC-53), and then there is nothing to tell. So does a merge: its
+/// chat's record of a merge it carried out itself may be read after the run reads merged, and then the merge stops
+/// being an event. The badge counts what *Needs you* counts in each open project.
 #[derive(Default)]
 pub struct Notifier {
   /// The keys of each scope's events at its last reading, each with its batch.
@@ -83,13 +86,17 @@ impl Notifier {
     self.keep_standing_batches();
   }
 
-  /// Forgets `scope`: a project no tab shows any more.
+  /// Forgets `scope`: a project the app no longer has open, with its conversations' scope.
   pub fn forget(&mut self, scope: Scope) {
-    self.standing.remove(&scope);
-    self.pending.retain(|pending| pending.scope != scope);
+    let mut gone = vec![scope];
     if let Scope::Project(project) = scope {
       self.needs_you.remove(&project);
+      gone.push(Scope::Chats(project));
     }
+    for scope in &gone {
+      self.standing.remove(scope);
+    }
+    self.pending.retain(|pending| !gone.contains(&pending.scope));
     self.keep_standing_batches();
   }
 
@@ -185,9 +192,9 @@ impl Notifier {
   }
 }
 
-/// How long `pending` is held before it may show, from when it was read: an interruption [`COALESCE`].
+/// How long `pending` is held before it may show, from when it was read: an interruption or a merge [`COALESCE`].
 fn held(pending: &Pending) -> Option<Duration> {
-  (pending.event.kind == Kind::Interrupted).then_some(COALESCE)
+  matches!(pending.event.kind, Kind::Interrupted | Kind::Merged).then_some(COALESCE)
 }
 
 /// Whether `pending` was held long enough at `now`.
