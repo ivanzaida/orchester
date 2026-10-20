@@ -1,7 +1,7 @@
 //! One task in the Overview's list (`Overview row` `XirGV`): its title with its first two tags, its key,
 //! workflow status and where it stands under them, its run's status with the step it is at, and its
-//! priority's icon; 10 over and under it and 14 at its sides, on a `border` line. A press opens the task's
-//! Summary; rows are pointer-only. After the tasks, a line that is no task's (`Row · project memory`
+//! priority's icon; 10 over and under it and 14 at its sides, on a `border` line. A press opens the task on its
+//! Details; rows are pointer-only. After the tasks, a line that is no task's (`Row · project memory`
 //! `S9Zgf`): what waits, what it is about and its action.
 
 use lurq::{
@@ -98,7 +98,7 @@ pub(super) fn project_row(ctx: &Ctx, row: &ProjectRow) -> Row {
 
 pub(super) fn row(ctx: &mut Ctx, project: ProjectId, row: &TaskRow) -> Button {
   let key = &row.key;
-  let open = open_task(ctx, project, key, TaskTab::Summary);
+  let open = open_task(ctx, project, key, TaskTab::default());
   let (priority, ..) = priority_look(row.organization.priority());
   opening(open)
     .id(format!("overview-row-{key}"))

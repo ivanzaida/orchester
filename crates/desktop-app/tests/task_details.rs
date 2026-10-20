@@ -1,5 +1,6 @@
 //! A task's Details and its Summary before the first run, headless on the QA seed's `task-states` and `tasks`
-//! scenarios: Details shows the whole title, description and every criterion of a task in each state, unscored;
+//! scenarios: a task opened without a tab opens on Details, the first of its tabs, Summary the last; Details
+//! shows the whole title, description and every criterion of a task in each state, unscored;
 //! the version picker offers only the versions kept, falls back honestly for an older task, keeps its choice as
 //! the tabs switch and the task is read again, and shows the run's setup apart from the task's organization; in a
 //! 960 window the side sections go under the requirements. Before the first run the Summary says there are no
@@ -305,6 +306,32 @@ fn details_the_picker_switches_versions_and_keeps_its_choice() {
   });
   assert_eq!(page.select("task-details-source").1, vec!["Current task".to_owned()]);
   assert_shows(&mut page, &edited, "read again");
+}
+
+#[test]
+fn details_a_task_opens_on_its_details_its_tabs_from_details_to_summary() {
+  let mut page = Page::seeded("task-states");
+  let key = page.key("failed");
+  let route = Route::parse(&format!("/project/{}/tasks/{key}", page.project)).expect("a task's page");
+  page.window.navigation().go(route);
+  page.window.until("the Details", |window| {
+    window.texts("task-details-requirements").is_some()
+  });
+  let tabs = page.window.texts("task-tabs").expect("the page tabs");
+  let at = |label: &str| {
+    tabs
+      .iter()
+      .position(|text| text.starts_with(label))
+      .unwrap_or_else(|| panic!("{label} in {tabs:?}"))
+  };
+  let order = ["Details", "Conversation", "Changes", "Local integration", "Summary"].map(at);
+  assert!(order.is_sorted(), "Details first, Summary last: {tabs:?}");
+  page.window.press("task-tab-summary");
+  let summary = Route::Project(
+    page.project,
+    ProjectPage::Task(key.parse().expect("a task key"), TaskView::Summary),
+  );
+  page.window.until("the Summary", |window| window.navigation().route_now() == summary);
 }
 
 #[test]
