@@ -73,7 +73,8 @@ impl Component for ItemRow {
       .padding(if reviewing {
         Padding::symmetric(crate::theme::ExtraSpacing::Loose.role(), SpacingSize::Sm)
       } else {
-        Padding::horizontal(crate::theme::skills::cell_spacing())
+        // A one-line source keeps TJ0Cb's 34; a wrapped name keeps room above and below.
+        Padding::symmetric(crate::theme::skills::cell_spacing(), SpacingSize::Sm)
       });
     if !reviewing {
       // The last line leaves its divider to the found footer's (`idRGH` over `WYErT`).
@@ -114,17 +115,18 @@ pub fn listed(
 ) -> Element {
   let count = items.len();
   let last = items.last().map(|(index, _)| *index);
-  let height = if selected.is_some() {
-    ROW_HEIGHT * count.min(SHOWN_ROWS) as f32
+  let list = VirtualizedList::new(ctx, items);
+  let list = if selected.is_some() {
+    list.height(Dimension::Px(ROW_HEIGHT * count.min(SHOWN_ROWS) as f32))
   } else if count > SHOWN_ROWS {
-    FOUND_ROW_HEIGHT * SHOWN_ROWS as f32 - DIVIDER
+    // Found rows grow when a name wraps: the list follows them up to six one-line rows, then scrolls.
+    list.max_height(Dimension::Px(FOUND_ROW_HEIGHT * SHOWN_ROWS as f32 - DIVIDER))
   } else {
-    FOUND_ROW_HEIGHT * count as f32
+    list
   };
-  VirtualizedList::new(ctx, items)
+  list
     .list_key(key)
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(height))
     .mount_keyed::<ItemRow, _, _, _>(
       |(_, i)| i.source.clone(),
       move |(index, item)| Props {

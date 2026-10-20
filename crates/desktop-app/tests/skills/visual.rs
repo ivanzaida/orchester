@@ -153,9 +153,16 @@ fn skills_visual_found_header_footer_insets_and_pointer_row() {
   let long = bounds(&mut s, "skill-source-3");
   let row = bounds(&mut s, "skill-source-row-3");
   assert!(s.text("skill-source-3").contains("long-supported-repository-name"));
+  assert!(long.height > 20.0, "long source wraps: {long:?}");
   assert!(
-    row.y + row.height >= long.y + long.height - 0.1,
-    "row holds the wrapped source"
+    long.y - row.y >= 7.9 && row.y + row.height - long.y - long.height >= 7.9,
+    "wrapped source keeps room above and below (TJ0Cb): {long:?} in {row:?}"
+  );
+  let first = bounds(&mut s, "skill-source-row-0");
+  assert!((first.height - 34.0).abs() < 0.1, "one-line row stays 34: {first:?}");
+  assert!(
+    footer.y >= row.y + row.height - 0.1,
+    "the list grows with the wrapped row instead of cutting it: {row:?} / {footer:?}"
   );
 }
 
