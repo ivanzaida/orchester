@@ -105,6 +105,27 @@ fn orchestrator_tools_say_which_interrupted_runs_resume_run_continues() {
 }
 
 #[test]
+fn orchestrator_tools_say_continue_run_is_proposed_and_resolves_conflicts() {
+  let continued = listed()
+    .into_iter()
+    .find(|tool| tool.name == "continue_run")
+    .and_then(|tool| tool.description.map(|told| told.into_owned()))
+    .expect("continue_run is listed with a description");
+  for part in [
+    "only allow_retry, return_to and resolve_conflicts",
+    "a run whose merge stopped at conflicts (merge_failed)",
+    "proposes it to the person",
+    "no switch lets you continue a run yourself",
+    "raise_limits, raise_step_budget, resume and accept are the person's",
+    "person_only",
+    "merge_not_conflicted",
+    "step_cannot_write",
+  ] {
+    assert!(continued.contains(part), "continue_run says {part}: {continued}");
+  }
+}
+
+#[test]
 fn orchestrator_tools_say_what_waits_for_the_person() {
   let tools = listed();
   let description = |name: &str| {
@@ -124,6 +145,7 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
     "only for a run the person asked you in this chat to merge",
     "needs_decision",
     "Local integration page",
+    "propose continue_run with resolve_conflicts",
   ] {
     assert!(merge.contains(part), "merge_run says {part}: {merge}");
   }
@@ -147,16 +169,8 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
   }
   assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
   let resume = description("resume_run");
-  assert!(resume.contains("resumes a run a pause stopped"), "{resume}");
-  let continued = description("continue_run");
-  for part in [
-    "only allow_retry and return_to",
-    "proposes it to the person",
-    "no switch lets you continue a run yourself",
-    "raise_limits, raise_step_budget, resume and accept are the person's",
-    "person_only",
-  ] {
-    assert!(continued.contains(part), "continue_run says {part}: {continued}");
+  for part in ["resumes a run a pause stopped", "interrupted", "person_only"] {
+    assert!(resume.contains(part), "resume_run says {part}: {resume}");
   }
   for name in ["answer_question", "send_message"] {
     let told = description(name);

@@ -192,8 +192,7 @@
         "other": "{{count}} waiting tasks held"
       },
       "checked": "Same action as Pause scheduling in the queue, checked against your permissions in {{project}}.",
-      "resume": "Resume new starts",
-      "openQueue": "Open queue"
+      "resume": "Resume new starts"
     },
     "proposal": {
       "title": "Start {{task}} on {{pipeline}}?",
@@ -464,6 +463,9 @@
         "note": "Note",
         "choiceRetry": "Allow 1 retry & continue",
         "choiceReturn": "Return to {{step}}",
+        "choiceResolve": "Ask {{step}}'s agent to resolve the conflicts with {{branch}}",
+        "conflicts": "Conflicting files",
+        "conflictNote": "Merge {{branch}} in, resolve the conflicts keeping both sides' intent, and commit the merge.",
         "decision": "waits for your decision · {{tokens}} tokens",
         "why": {
           "retries": "used up its {{count}} retries",
@@ -497,17 +499,22 @@
       "continue": {
         "waitsRetry": "Allow 1 retry of run #{{run}} of {{task}}?",
         "waitsReturn": "Return run #{{run}} of {{task}} to {{step}}?",
+        "waitsResolve": "Send run #{{run}} of {{task}} back to {{step}} to resolve its conflicts with {{branch}}?",
         "doneRetry": "Allowed 1 retry of run #{{run}} of {{task}}",
         "doneReturn": "Returned run #{{run}} of {{task}} to {{step}}",
+        "doneResolve": "Sent run #{{run}} of {{task}} back to {{step}} to resolve its conflicts with {{branch}}",
         "dismissed": "Continuing run #{{run}} of {{task}} · dismissed",
         "refused": "Continuing run #{{run}} of {{task}} · not done",
         "byYou": "Continued by you · {{time}}",
         "effectWaitsRetry": "Nothing changed yet. Allow retry runs the stopped step once more, as the task's Summary does.",
         "effectWaitsReturn": "Nothing changed yet. Return sends the work back to {{step}}, with the note for its agent, as the task's Summary does.",
+        "effectWaitsResolve": "Nothing changed yet. Its agent at {{step}} merges {{branch}} in and resolves the conflicting files, as the task's Ask an agent to resolve does; the steps after it run again.",
         "effectApplied": "The run went on at {{time}}, as the task's Summary continues it.",
         "effectDismissed": "You dismissed it. The run still waits for your decision on its Summary.",
+        "effectDismissedResolve": "You dismissed it. The conflicts still wait on the task's Summary.",
         "acceptRetry": "Allow retry",
-        "acceptReturn": "Return to {{step}}"
+        "acceptReturn": "Return to {{step}}",
+        "acceptResolve": "Send to {{step}}"
       },
       "pause": {
         "waits": "Pause run #{{run}} of {{task}}?",

@@ -6,15 +6,16 @@
 //! step with a note (02.B); one whose step could not check everything, or was not run again on an
 //! unchanged revision, also has its step accepted as it is. A run that ended, succeeded or failed, has its work
 //! returned to one of its agent steps with a note (the project task ORC-44 · Return a finished run to an earlier step;
-//! [`return_work`]). Every value is the caller's: nothing raises a limit by itself. While unfinished blocking tasks
-//! hold the task, nothing continues, as on the page.
+//! [`return_work`]); one whose last merge stopped at conflicts has them resolved by a writing step's agent, as the
+//! task page's *Ask an agent to resolve* does ([`return_work::resolve_command`]). Every value is the caller's: nothing
+//! raises a limit by itself. While unfinished blocking tasks hold the task, nothing continues, as on the page.
 
 use std::path::Path;
 
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
-  run::{Answerer, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
+  run::{Answerer, MergeConflicts, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -37,6 +38,7 @@ use crate::{
   sharing::project::WorkClaim,
   tasks::{
     detail::{RunView, TaskDetail},
+    integration_jobs::{IntegrationJobs, JobState},
     raise::{self, Raise},
     resolve, return_work,
     run::control_message,
@@ -96,6 +98,19 @@ pub enum Choice {
   /// revision: accept the step as it is; the steps after it run. It passes the step in a person's place: refused
   /// as automation_not_allowed unless a person turned on Let automation answer approvals, and recorded as automation's.
   Accept,
+  /// For a run whose last merge into its base branch stopped at conflicts (merge_run's merge_failed, the task page's
+  /// Not merged into main): Ask an agent to resolve. Its work returns to `step` (its key or name; left out, the step
+  /// that implemented what conflicts, else the last one), which must be a step whose agent may write in the worktree,
+  /// with a note to merge the base branch in and resolve the conflicts, `note` after it, and the conflicting files as
+  /// data. Refused as merge_not_conflicted unless the run's last merge in this app stopped at conflicts,
+  /// step_cannot_write for a step that may not write, no_writing_step when none may, integration_running while git
+  /// works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge, run_not_ended).
+  ResolveConflicts {
+    #[serde(default)]
+    step: Option<String>,
+    #[serde(default)]
+    note: Option<String>,
+  },
 }
 
 /// What the runner is asked.
@@ -113,16 +128,18 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// person's (the Orchestrator chat's proposal a person applied) is recorded as theirs and needs none.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
   let reading = services.clone();
+  let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {
     let decides = matches!(
       args.choice,
-      Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept
+      Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept | Choice::ResolveConflicts { .. }
     );
     if decides && by == Answerer::Automation {
       crate::decisions::DecisionKind::Stuck.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
-    let (run, request) = request(&project.repo_root, &args, (&reading.programs, by))?;
+    let jobs = reading.jobs.of(project.project.id());
+    let (run, request) = request(&project.repo_root, &args, (&reading.programs, &jobs, by))?;
     Ok((project, run, request))
   })
   .await?;
@@ -142,6 +159,10 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
     claim.release(servers).await;
   }
   result.map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
+  if resolves {
+    // As after *Ask an agent to resolve*: the merge that failed no longer stands for the run that works again.
+    services.jobs.of(project.project.id()).of(run.id).forget_merge_failure();
+  }
   status_now(&project, run.id).await
 }
 
@@ -151,17 +172,25 @@ struct Named {
   task: TaskId,
 }
 
-/// Checks continuing the run `args` names in the project at `root` as the tool checks it, and changes nothing: the
-/// run, and the step a return goes back to; a refusal when its task page would not offer the choice now. `programs`
-/// read the worktree of a run that ended. Blocks on SQLite and git.
+/// What [`offered`] found the tool would do: the run, the step a return goes back to, and the conflicts a return to
+/// resolve them carries.
+pub(crate) struct Offered {
+  pub run: RunId,
+  pub target: Option<StepKey>,
+  pub conflicts: Option<MergeConflicts>,
+}
+
+/// Checks continuing the run `args` names in the project at `root` as the tool checks it, and changes nothing; a
+/// refusal when its task page would not offer the choice now. `programs` read the worktree of a run that ended;
+/// `jobs`, the project's merges, say which run's last merge stopped at conflicts. Blocks on SQLite and git.
 pub(crate) fn offered(
   root: &Path,
   args: &ContinueRun,
-  programs: &Programs,
-) -> Result<(RunId, Option<StepKey>), ToolError> {
+  (programs, jobs): (&Programs, &IntegrationJobs),
+) -> Result<Offered, ToolError> {
   // Who would decide does not change what is offered.
-  let (named, request) = request(root, args, (programs, Answerer::Person))?;
-  let target = match request {
+  let (named, request) = request(root, args, (programs, jobs, Answerer::Person))?;
+  let (target, conflicts) = match request {
     Request::Command(
       Command::DecideStuckRunAs {
         decision: StuckDecision::ReturnTo { step, .. },
@@ -170,20 +199,25 @@ pub(crate) fn offered(
       | Command::DecideStuckRun {
         decision: StuckDecision::ReturnTo { step, .. },
         ..
-      }
-      | Command::ReturnRun(WorkReturn { step, .. }),
-    ) => Some(step),
-    Request::Command(_) | Request::Resume => None,
+      },
+    ) => (Some(step), None),
+    Request::Command(Command::ReturnRun(WorkReturn { step, conflicts, .. })) => (Some(step), conflicts),
+    Request::Command(_) | Request::Resume => (None, None),
   };
-  Ok((named.id, target))
+  Ok(Offered {
+    run: named.id,
+    target,
+    conflicts,
+  })
 }
 
 /// The run `args` names in the project at `root` and what continuing it asks of the runner, decided by `by`; a
-/// refusal when its task page would not offer the choice now. `programs` read the worktree of a run that ended.
+/// refusal when its task page would not offer the choice now. `programs` read the worktree of a run that ended;
+/// `jobs` hold what the run's last merge stopped at.
 fn request(
   root: &Path,
   args: &ContinueRun,
-  (programs, by): (&Programs, Answerer),
+  (programs, jobs, by): (&Programs, &IntegrationJobs, Answerer),
 ) -> Result<(Named, Request), ToolError> {
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &args.run)?;
@@ -207,6 +241,10 @@ fn request(
     task: run.task(),
   };
   let request = match (view.run.status(), &args.choice) {
+    (_, Choice::ResolveConflicts { step, note }) => {
+      let asked = (step.as_deref(), note.as_deref());
+      resolve_conflicts((root, programs, jobs), (&detail, view), asked, (by, &number))?
+    }
     (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => at_limit(view, (*limit, choice), &number)?,
     (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRunAs {
       run: run.id(),
@@ -313,6 +351,67 @@ fn return_target(view: &RunView, (step, note): (&str, &str), number: &str) -> Re
     .ok_or_else(|| refused("step_not_offered", "appMcp.errors.returnStepNotOffered", number))?;
   let note = ReviewNote::new(note).map_err(|error| ToolError::InvalidArguments(error.to_string()))?;
   Ok((target, note))
+}
+
+/// *Ask an agent to resolve* on `detail`'s latest run `view`, whose last merge into its base branch stopped at
+/// conflicts as `jobs` hold it: its work returned to the writing step `step` names (by key or name; the implementing
+/// one when it names none) with the conflict's note, `note` after it, and the conflicting files as data, decided by
+/// `by`; refused as the task page would not offer it. `programs` read the run's worktree.
+fn resolve_conflicts(
+  (root, programs, jobs): (&Path, &Programs, &IntegrationJobs),
+  (detail, view): (&TaskDetail, &RunView),
+  (step, note): (Option<&str>, Option<&str>),
+  (by, number): (Answerer, &str),
+) -> Result<Request, ToolError> {
+  if !view.run.can_return_ended() {
+    let refusal = return_work::ReturnRefusal::NotEnded;
+    return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
+  }
+  let worktree = resolve::read(programs, root, (view.id(), false))
+    .map_err(|message| ToolError::refused("worktree_unreadable", vec![message]))?;
+  if let Some(refusal) = return_work::refusal(detail, view, &worktree) {
+    return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
+  }
+  let job = jobs.of(view.id()).state();
+  if job.busy() {
+    return Err(ToolError::refused(
+      "integration_running",
+      vec![Message::new("appMcp.errors.integrationRunning")],
+    ));
+  }
+  if !matches!(job.merge, JobState::Failed(_)) || job.conflicts.is_empty() {
+    return Err(refused(
+      "merge_not_conflicted",
+      "appMcp.errors.mergeNotConflicted",
+      number,
+    ));
+  }
+  let no_writing_step = || refused("no_writing_step", "appMcp.errors.noWritingStep", number);
+  let writing = return_work::writing_targets(view);
+  let target = match step {
+    None => return_work::implementing_step(view).ok_or_else(no_writing_step)?,
+    Some(named) => {
+      let lowered = named.to_lowercase();
+      let shown = view
+        .steps
+        .iter()
+        .find(|shown| shown.key.as_str() == named || shown.name.to_lowercase() == lowered)
+        .ok_or_else(|| refused("step_not_offered", "appMcp.errors.returnStepNotOffered", number))?;
+      if writing.is_empty() {
+        return Err(no_writing_step());
+      }
+      if !writing.iter().any(|step| step.key == shown.key) {
+        return Err(ToolError::refused(
+          "step_cannot_write",
+          vec![Message::new("appMcp.errors.stepCannotWrite").with("step", shown.name.to_string())],
+        ));
+      }
+      shown.key.clone()
+    }
+  };
+  let command = return_work::resolve_command(view, target, (&job.conflicts, note), by)
+    .ok_or_else(|| ToolError::refused("no_base_branch", vec![Message::new("appMcp.errors.noBaseBranch")]))?;
+  Ok(Request::Command(command))
 }
 
 fn refused(code: &str, key: &'static str, run: &str) -> ToolError {

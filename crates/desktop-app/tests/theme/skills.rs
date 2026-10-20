@@ -17,3 +17,46 @@ fn skills_import_roles_follow_the_live_design() {
     );
   }
 }
+
+/// WMT1W's found sources: header title `Lqx9K`, count `NYVFc`, footer explanation `NaIBV`.
+#[test]
+fn skills_found_roles_follow_the_live_design() {
+  let app = themed(Mode::Dark);
+  let theme = app.theme();
+  let palette = theme.palette();
+  for (role, size, line, weight, color) in [
+    (
+      theme::skills::found_title(),
+      12.5,
+      1.3,
+      FontWeight::SemiBold,
+      palette.text_primary,
+    ),
+    (
+      theme::skills::found_count(),
+      12.0,
+      1.3,
+      FontWeight::Normal,
+      palette.text_muted,
+    ),
+    (
+      theme::skills::found_note(),
+      11.5,
+      1.45,
+      FontWeight::Normal,
+      palette.text_muted,
+    ),
+  ] {
+    let style = theme.typography_style(role);
+    assert_eq!(
+      (
+        style.font_size,
+        style.line_height,
+        style.weight,
+        &*style.font_family,
+        style.color
+      ),
+      (size, line, weight, "Geist", color)
+    );
+  }
+}

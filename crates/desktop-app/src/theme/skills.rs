@@ -17,6 +17,18 @@ pub fn import_path() -> TypographyStyle {
 pub fn library_lead() -> TypographyStyle {
   TypographyStyle::extra("skills_library_lead")
 }
+/// WMT1W/Lqx9K: 12.5/600 title of the repository's found sources.
+pub fn found_title() -> TypographyStyle {
+  TypographyStyle::extra("skills_found_title")
+}
+/// WMT1W/NYVFc: 12 `text_muted` count beside that title.
+pub fn found_count() -> TypographyStyle {
+  TypographyStyle::extra("skills_found_count")
+}
+/// WMT1W/NaIBV: 11.5 `text_muted`, 1.45, the explanation in the found footer.
+pub fn found_note() -> TypographyStyle {
+  TypographyStyle::extra("skills_found_note")
+}
 pub fn source_line() -> SpacingSize {
   SpacingSize::extra("skills_source_line")
 }
@@ -117,6 +129,28 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
     (
       Arc::from(name),
       if mono { super::typography::mono(style) } else { style },
+    )
+  })
+  .chain(found(palette))
+}
+/// WMT1W's found sources (`cyNh6`): its header's title and count, its footer's explanation.
+fn found(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
+  [
+    (
+      "skills_found_title",
+      12.5,
+      FontWeight::SemiBold,
+      1.3,
+      palette.text_primary,
+    ),
+    ("skills_found_count", 12.0, FontWeight::Normal, 1.3, palette.text_muted),
+    ("skills_found_note", 11.5, FontWeight::Normal, 1.45, palette.text_muted),
+  ]
+  .into_iter()
+  .map(|(name, size, weight, line, color)| {
+    (
+      Arc::from(name),
+      super::typography::style(size, weight, line, 0.0, color),
     )
   })
 }

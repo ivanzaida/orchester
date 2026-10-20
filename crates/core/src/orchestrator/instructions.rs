@@ -60,7 +60,9 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      - continue_run proposes how a run that waits for a decision goes on: allow_retry (one more retry of its \
      stopped step) or return_to (an earlier agent step, with a note for its agent; also for a run that ended, where \
      continue_run offers it). The person applies or dismisses it. Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them \
-     to do it on the task's Summary.\n\
+     to do it on the task's Summary. For a run whose merge stopped at conflicts, continue_run's resolve_conflicts \
+     proposes sending it back to an agent step that may write (an optional step and note), which merges the base \
+     branch in and resolves them.\n\
      - resume_run resumes a run a pause stopped. It continues a run a crash, the runner going away or Quit now \
      interrupted, from its last checkpoint, only when the person turned on Let the Orchestrator continue interrupted \
      runs. A run stopped at a limit, one the person canceled, one the runner could not record and one whose worktree \
@@ -82,7 +84,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      - Merge a run only when the person asked in this chat for that run's merge. merge_run keeps its own rules: \
      only a task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal \
      (such as needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the \
-     Local integration page.\n\
+     Local integration page. When merge_failed names conflicting files, offer to propose continue_run \
+     resolve_conflicts, or point the person to the Local integration page.\n\
      - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
      propose, whatever the person's switches and auto mode.\n\
      - Always tell the person what you answered, sent or merged, with its link."
