@@ -374941,7 +374941,7 @@
           },
           "clip": true,
           "width": 1440,
-          "height": 900,
+          "height": 970,
           "fill": "$surface_base",
           "cornerRadius": 8,
           "stroke": "$border_strong",
@@ -375961,6 +375961,58 @@
                                           ]
                                         }
                                       }
+                                    },
+                                    {
+                                      "id": "yoQKh",
+                                      "type": "ref",
+                                      "ref": "XaNIz",
+                                      "name": "Row · QA apps at once",
+                                      "width": "fill_container",
+                                      "alignItems": "start",
+                                      "strokeWidth": 0,
+                                      "descendants": {
+                                        "kzoud": {
+                                          "content": "QA apps at once"
+                                        },
+                                        "cMgvm": {
+                                          "content": "QA copies of the app that this project's runs may have open together, to check their work in the window. Each one is a full build of the app, so more of them load the computer more. A run that wants one while all are open waits until one closes.",
+                                          "lineHeight": 1.45
+                                        },
+                                        "g8P1v": {
+                                          "type": "frame",
+                                          "id": "rFWIh",
+                                          "name": "Control",
+                                          "width": 300,
+                                          "layout": "vertical",
+                                          "gap": 6,
+                                          "children": [
+                                            {
+                                              "id": "IxLT0",
+                                              "type": "ref",
+                                              "ref": "UQFos",
+                                              "name": "Limit field",
+                                              "width": "fill_container",
+                                              "alignItems": "start",
+                                              "descendants": {
+                                                "eesXH": {
+                                                  "width": "fill_container"
+                                                },
+                                                "u7Y3m": {
+                                                  "content": "2",
+                                                  "fill": "$text_primary",
+                                                  "fontFamily": "$font_mono"
+                                                },
+                                                "l2nYV": {
+                                                  "content": "apps"
+                                                },
+                                                "Aqupm": {
+                                                  "content": "1 to 16 · default 2"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      }
                                     }
                                   ]
                                 },
@@ -375983,7 +376035,7 @@
                                       "width": "fill_container"
                                     },
                                     "xPTrL": {
-                                      "content": "Runs already started keep their budget and time limit. Agents working at once applies at once.",
+                                      "content": "Runs already started keep their budget and time limit. Agents working at once applies at once. QA apps at once applies to the next QA app a run starts: lowering it closes no open app.",
                                       "textGrowth": "fixed-width",
                                       "width": "fill_container",
                                       "lineHeight": 1.45
@@ -376194,7 +376246,7 @@
           "type": "frame",
           "id": "iZS4K",
           "x": 0,
-          "y": 10138,
+          "y": 10208,
           "name": "Project settings · Limits · states · dark",
           "theme": {
             "mode": "dark",
@@ -376856,7 +376908,7 @@
                       "id": "i7fmO",
                       "name": "Caption",
                       "fill": "$text_muted",
-                      "content": "Daily budget emptied · agents out of range",
+                      "content": "Daily budget emptied · agents out of range · QA apps at once · proposed copy",
                       "fontFamily": "$font_sans",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -377195,6 +377247,58 @@
                                       "fontWeight": "normal"
                                     }
                                   ]
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "id": "kt74F",
+                          "type": "ref",
+                          "ref": "XaNIz",
+                          "name": "Row · QA apps at once",
+                          "width": "fill_container",
+                          "alignItems": "start",
+                          "strokeWidth": 0,
+                          "descendants": {
+                            "kzoud": {
+                              "content": "QA apps at once"
+                            },
+                            "cMgvm": {
+                              "content": "QA copies of the app that this project's runs may have open together, to check their work in the window. Each one is a full build of the app, so more of them load the computer more. A run that wants one while all are open waits until one closes.",
+                              "lineHeight": 1.45
+                            },
+                            "g8P1v": {
+                              "type": "frame",
+                              "id": "a5cro",
+                              "name": "Control",
+                              "width": 300,
+                              "layout": "vertical",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "id": "C5B0Vi",
+                                  "type": "ref",
+                                  "ref": "UQFos",
+                                  "name": "Limit field",
+                                  "width": "fill_container",
+                                  "alignItems": "start",
+                                  "descendants": {
+                                    "eesXH": {
+                                      "width": "fill_container"
+                                    },
+                                    "u7Y3m": {
+                                      "content": "2",
+                                      "fill": "$text_primary",
+                                      "fontFamily": "$font_mono"
+                                    },
+                                    "l2nYV": {
+                                      "content": "apps"
+                                    },
+                                    "Aqupm": {
+                                      "content": "1 to 16 · default 2"
+                                    }
+                                  }
                                 }
                               ]
                             }
@@ -377927,7 +378031,7 @@
           "type": "text",
           "id": "KpNRj",
           "x": 0,
-          "y": 10106,
+          "y": 10176,
           "name": "Label · Project settings · Limits · states · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Limits · states · dark",
@@ -377939,7 +378043,7 @@
           "type": "frame",
           "id": "O8o0l",
           "x": 0,
-          "y": 11635,
+          "y": 11817,
           "name": "Project settings · Environment · dark",
           "theme": {
             "mode": "dark",
@@ -379105,7 +379209,7 @@
           "type": "text",
           "id": "r6ECxt",
           "x": 0,
-          "y": 11603,
+          "y": 11785,
           "name": "Label · Project settings · Environment · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Environment · dark",
@@ -379117,7 +379221,7 @@
           "type": "frame",
           "id": "ryH1J",
           "x": 0,
-          "y": 12695,
+          "y": 12877,
           "name": "Project settings · Environment · states · dark",
           "theme": {
             "mode": "dark",
@@ -380262,7 +380366,7 @@
           "type": "text",
           "id": "D2Ko7K",
           "x": 0,
-          "y": 12663,
+          "y": 12845,
           "name": "Label · Project settings · Environment · states · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Environment · states · dark",
@@ -380274,7 +380378,7 @@
           "type": "frame",
           "id": "nx22q",
           "x": 0,
-          "y": 13767,
+          "y": 13949,
           "name": "Project settings · Memory · dark",
           "theme": {
             "mode": "dark",
@@ -381522,7 +381626,7 @@
           "type": "text",
           "id": "gFT19",
           "x": 0,
-          "y": 13735,
+          "y": 13917,
           "name": "Label · Project settings · Memory · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Memory · dark",
@@ -381534,7 +381638,7 @@
           "type": "frame",
           "id": "j4wZ48",
           "x": 0,
-          "y": 14827,
+          "y": 15009,
           "name": "Project settings · Memory · states · dark",
           "theme": {
             "mode": "dark",
@@ -382099,7 +382203,7 @@
           "type": "text",
           "id": "l6PRvo",
           "x": 0,
-          "y": 14795,
+          "y": 14977,
           "name": "Label · Project settings · Memory · states · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Memory · states · dark",
@@ -386387,7 +386491,7 @@
           "type": "frame",
           "id": "CHSKS",
           "x": 0,
-          "y": 15830,
+          "y": 16012,
           "name": "Project settings · Sharing · local only · dark",
           "theme": {
             "mode": "dark",
@@ -387748,7 +387852,7 @@
           "type": "text",
           "id": "PR4fZ",
           "x": 0,
-          "y": 15798,
+          "y": 15980,
           "name": "Label · Project settings · Sharing · local only · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · local only · dark",
@@ -387760,7 +387864,7 @@
           "type": "frame",
           "id": "KSnOW",
           "x": 0,
-          "y": 16890,
+          "y": 17072,
           "name": "Project settings · Sharing · Share on Kontur team · page · dark",
           "theme": {
             "mode": "dark",
@@ -389178,7 +389282,7 @@
           "type": "text",
           "id": "oolGi",
           "x": 0,
-          "y": 16858,
+          "y": 17040,
           "name": "Label · Project settings · Sharing · Share on Kontur team · page · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · Share on Kontur team · page · dark",
@@ -389190,7 +389294,7 @@
           "type": "frame",
           "id": "zRz47",
           "x": 0,
-          "y": 17950,
+          "y": 18132,
           "name": "Project settings · Sharing · shared · owner · full page · dark",
           "theme": {
             "mode": "dark",
@@ -390834,7 +390938,7 @@
           "type": "text",
           "id": "E1rmm",
           "x": 0,
-          "y": 17918,
+          "y": 18100,
           "name": "Label · Project settings · Sharing · shared · owner · full page · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · shared · owner · full page · dark",
@@ -390846,7 +390950,7 @@
           "type": "frame",
           "id": "woioY",
           "x": 0,
-          "y": 19118,
+          "y": 19300,
           "name": "Project settings · Sharing · members, Make local and refusals · dark",
           "theme": {
             "mode": "dark",
@@ -394277,7 +394381,7 @@
           "type": "text",
           "id": "rjnGO",
           "x": 0,
-          "y": 19086,
+          "y": 19268,
           "name": "Label · Project settings · Sharing · members, Make local and refusals · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · members, Make local and refusals · dark",
@@ -394289,7 +394393,7 @@
           "type": "frame",
           "id": "AiCwO",
           "x": 0,
-          "y": 21372,
+          "y": 21554,
           "name": "Project settings · Sharing · Join KTR · review page · dark",
           "theme": {
             "mode": "dark",
@@ -395781,7 +395885,7 @@
           "type": "text",
           "id": "E35WpD",
           "x": 0,
-          "y": 21340,
+          "y": 21522,
           "name": "Label · Project settings · Sharing · Join KTR · review page · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · Join KTR · review page · dark",
@@ -395793,7 +395897,7 @@
           "type": "frame",
           "id": "oOGMT",
           "x": 0,
-          "y": 22445,
+          "y": 22627,
           "name": "Project settings · Sharing · repository states and joining · dark",
           "theme": {
             "mode": "dark",
@@ -397807,7 +397911,7 @@
           "type": "text",
           "id": "c5KTE",
           "x": 0,
-          "y": 22413,
+          "y": 22595,
           "name": "Label · Project settings · Sharing · repository states and joining · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · repository states and joining · dark",
@@ -397819,7 +397923,7 @@
           "type": "text",
           "id": "omjlb",
           "x": 0,
-          "y": 23964,
+          "y": 24146,
           "name": "Label · Project settings · Sharing · linked · members read-only · owner · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · linked · members read-only · owner · dark",
@@ -397831,7 +397935,7 @@
           "type": "frame",
           "id": "L5o9Xy",
           "x": 0,
-          "y": 23996,
+          "y": 24178,
           "name": "Project settings · Sharing · linked · members read-only · owner · dark",
           "theme": {
             "mode": "dark",
@@ -399534,7 +399638,7 @@
           "type": "text",
           "id": "X6wfSZ",
           "x": 0,
-          "y": 25304,
+          "y": 25486,
           "name": "Label · Project settings · Sharing · not linked · link to a server project · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · not linked · link to a server project · dark",
@@ -399546,7 +399650,7 @@
           "type": "frame",
           "id": "bWD9q",
           "x": 0,
-          "y": 25336,
+          "y": 25518,
           "name": "Project settings · Sharing · not linked · link to a server project · dark",
           "theme": {
             "mode": "dark",
@@ -401256,7 +401360,7 @@
           "type": "text",
           "id": "Wr0mJ",
           "x": 0,
-          "y": 26704,
+          "y": 26886,
           "name": "Label · Project settings · Sharing · linking and members · states · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · linking and members · states · dark",
@@ -401268,7 +401372,7 @@
           "type": "frame",
           "id": "N9NFio",
           "x": 0,
-          "y": 26736,
+          "y": 26918,
           "name": "Project settings · Sharing · linking and members · states · dark",
           "theme": {
             "mode": "dark",
@@ -402746,7 +402850,7 @@
           "type": "text",
           "id": "IT0el",
           "x": 0,
-          "y": 28364,
+          "y": 28546,
           "name": "Label · Project settings · Sharing · Join Kontur on Kontur team · review with server and configuration · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · Join Kontur on Kontur team · review with server and configuration · dark",
@@ -402758,7 +402862,7 @@
           "type": "frame",
           "id": "P7L3Ry",
           "x": 0,
-          "y": 28396,
+          "y": 28578,
           "name": "Project settings · Sharing · Join Kontur on Kontur team · review with server and configuration · dark",
           "theme": {
             "mode": "dark",
@@ -405064,7 +405168,7 @@
           "type": "text",
           "id": "qUTQg",
           "x": 0,
-          "y": 30024,
+          "y": 30206,
           "name": "Label · Project settings · Sharing · Join · invite accepted · choose the checkout · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · Join · invite accepted · choose the checkout · dark",
@@ -405076,7 +405180,7 @@
           "type": "frame",
           "id": "xeFRB",
           "x": 0,
-          "y": 30056,
+          "y": 30238,
           "name": "Project settings · Sharing · Join · invite accepted · choose the checkout · dark",
           "theme": {
             "mode": "dark",
@@ -406142,7 +406246,7 @@
           "type": "text",
           "id": "N20Ery",
           "x": 0,
-          "y": 31084,
+          "y": 31266,
           "name": "Label · Project settings · Sharing · Joining · invites and approval · states · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · Joining · invites and approval · states · dark",
@@ -406154,7 +406258,7 @@
           "type": "frame",
           "id": "jUMAF",
           "x": 0,
-          "y": 31116,
+          "y": 31298,
           "name": "Project settings · Sharing · Joining · invites and approval · states · dark",
           "theme": {
             "mode": "dark",
@@ -407802,7 +407906,7 @@
           "type": "frame",
           "id": "xLeTJ",
           "x": 0,
-          "y": 32328,
+          "y": 32510,
           "name": "Project settings · Sharing · no longer a member · dark",
           "theme": {
             "mode": "dark",
@@ -409491,7 +409595,7 @@
           "type": "text",
           "id": "tD6pK",
           "x": 0,
-          "y": 32296,
+          "y": 32478,
           "name": "Label · Project settings · Sharing · no longer a member · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · no longer a member · dark",
@@ -409503,7 +409607,7 @@
           "type": "frame",
           "id": "d8oDsO",
           "x": 0,
-          "y": 33788,
+          "y": 33970,
           "name": "Project settings · Sharing · Join · choose the checkout · states · dark",
           "theme": {
             "mode": "dark",
@@ -410789,13 +410893,37 @@
           "type": "text",
           "id": "l0O8H0",
           "x": 0,
-          "y": 33756,
+          "y": 33938,
           "name": "Label · Project settings · Sharing · Join · choose the checkout · states · dark",
           "fill": "#8A8A92",
           "content": "Project settings · Sharing · Join · choose the checkout · states · dark",
           "fontFamily": "$font_sans",
           "fontSize": 16,
           "fontWeight": "500"
+        },
+        {
+          "type": "text",
+          "id": "S0n40",
+          "x": 245,
+          "y": 9049,
+          "name": "Caption · Limits · QA apps at once · proposed copy",
+          "fill": "#8A8A92",
+          "content": "Proposed copy: QA apps at once (label, detail, 2 apps, range 1 to 16 · default 2) and its sentence in Changes apply to new runs",
+          "fontFamily": "$font_sans",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "A68UQ",
+          "x": 303,
+          "y": 10179,
+          "name": "Caption · Limits states · QA apps at once · proposed copy",
+          "fill": "#8A8A92",
+          "content": "Proposed copy: QA apps at once (label, detail, 2 apps, range 1 to 16 · default 2)",
+          "fontFamily": "$font_sans",
+          "fontSize": 12,
+          "fontWeight": "normal"
         }
       ]
     },
