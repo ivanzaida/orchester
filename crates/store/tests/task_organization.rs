@@ -239,7 +239,7 @@ fn organization_invalid_form_save_and_bulk_cancel_leave_content_unchanged() {
       task.revision(),
       details,
       (task.organization(), &canceled),
-      at(30)
+      (ChangeActor::Person, at(30))
     )
     .is_err()
   );
@@ -520,13 +520,18 @@ fn organization_form_save_keeps_the_status_set_meanwhile() {
   details.pipeline = Some(orchester_core::id::ResourceId::generate());
   // Orchester's change raised the revision the form read: the save is a conflict, and the form
   // sends again on the current revision.
-  let Ok(TaskUpdate::Conflict { current }) =
-    db.update_organized_task(task.id(), task.revision(), details.clone(), (&loaded, &loaded), at(20))
-  else {
+  let by = ChangeActor::Person;
+  let Ok(TaskUpdate::Conflict { current }) = db.update_organized_task(
+    task.id(),
+    task.revision(),
+    details.clone(),
+    (&loaded, &loaded),
+    (by, at(20)),
+  ) else {
     panic!("Orchester changed the task after the form read it");
   };
   let saved = db
-    .update_organized_task(task.id(), current.revision(), details, (&loaded, &loaded), at(20))
+    .update_organized_task(task.id(), current.revision(), details, (&loaded, &loaded), (by, at(20)))
     .expect("save")
     .saved()
     .expect("saved on the current revision");
@@ -540,7 +545,7 @@ fn organization_form_save_keeps_the_status_set_meanwhile() {
       saved.revision(),
       saved.details().clone(),
       (&loaded, &edited),
-      at(21),
+      (by, at(21)),
     )
     .expect("save")
     .saved()
