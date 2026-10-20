@@ -26,6 +26,7 @@ use orchester_workspace::{
   display,
   tasks::timeline::{
     RunEnd, StepHead,
+    base_moved::{BaseMovedMark, NoticeState},
     mark::{Mark, MarkKind},
   },
 };
@@ -371,6 +372,43 @@ fn labelled(ctx: &Ctx, timeline: &Timeline, name: &Arc<str>) -> Arc<str> {
     .as_ref()
     .and_then(|run| run.steps.iter().find(|step| step.name == *name))
     .map_or_else(|| name.clone(), |step| step_label(ctx, step.number, &step.name))
+}
+
+/// Orchester's notice that the base branch moved (ORC-54): "master moved to 1a2b3c4 · 2 tasks landed · merge
+/// requested · told Builder at 16:31".
+pub(super) fn base_moved(ctx: &Ctx, key: &str, mark: &BaseMovedMark) -> Element {
+  let notice = &mark.notice;
+  let state = match &mark.state {
+    NoticeState::WritingStep => ctx.t("conversation.baseMoved.writingStep"),
+    NoticeState::RunGoesOn => ctx.t("conversation.baseMoved.runGoesOn"),
+    NoticeState::FollowUp => ctx.t("conversation.baseMoved.followUp"),
+    NoticeState::Delivered { agent, step } => {
+      let time = notice.delivered().map(|(_, at)| display::clock(at)).unwrap_or_default();
+      let agent = if agent.is_empty() { step } else { agent };
+      ctx.t_args(
+        "conversation.baseMoved.delivered",
+        [("agent", &**agent), ("time", time.as_str())],
+      )
+    }
+  };
+  let (what, count) = if notice.tasks.is_empty() {
+    ("commits", notice.commits.len())
+  } else {
+    ("tasks", notice.tasks.len())
+  };
+  let form = if count == 1 { "one" } else { "other" };
+  let revision = notice.revision.as_str().get(..7).unwrap_or_default();
+  let count = count.to_string();
+  let text = ctx.t_args(
+    &format!("conversation.baseMoved.{what}.{form}"),
+    [
+      ("branch", notice.branch.as_str()),
+      ("revision", revision),
+      ("count", count.as_str()),
+      ("state", &*state),
+    ],
+  );
+  event(format!("conversation-{key}"), Icon::GitBranch, &text, None)
 }
 
 /// The run's end.

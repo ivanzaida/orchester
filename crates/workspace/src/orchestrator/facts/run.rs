@@ -15,7 +15,7 @@ use super::{RunFacts, Stands};
 use crate::{
   display::short_revision,
   tasks::{
-    changes::{Checkpointed, checkpointed_in},
+    changes::{Checkpointed, RunRange, run_changes_in},
     delivery::{self, Delivery},
     detail::run_store_error,
     run_times::finished_at,
@@ -85,11 +85,10 @@ fn stands(db: &ProjectDb, (root, programs): (&Path, &Programs), run: &Run) -> Re
   })
 }
 
-/// Files, lines added and removed by `run`'s last checkpoint over its base. Not shown when git cannot read them:
-/// the task's Changes tab, which the card links to, says why.
+/// Files, lines added and removed by `run`'s last checkpoint over where its own work starts. Not shown when git
+/// cannot read them: the task's Changes tab, which the card links to, says why.
 fn changes(root: &Path, programs: &Programs, run: &Run) -> Option<(usize, u64, u64)> {
-  let head = run.last_checkpoint().map(|checkpoint| checkpoint.revision().clone());
-  match checkpointed_in(root, programs, run.base(), head.as_ref()) {
+  match run_changes_in(root, programs, &RunRange::of(run)) {
     Ok(Checkpointed::Read { changes, .. }) => Some((
       changes.diff.files().len(),
       u64::from(changes.diff.additions()),

@@ -74,13 +74,13 @@ fn tasks_a_row_shows_its_key_title_tags_pipeline_priority_and_workflow() {
 }
 
 #[test]
-fn tasks_a_row_opens_the_task_s_summary_and_new_task_opens_the_form() {
+fn tasks_a_row_opens_the_task_s_details_and_new_task_opens_the_form() {
   let mut seeded = Seeded::tasks("tasks", TaskList::default());
   seeded.click("task-row-KON-9");
-  let summary = ProjectPage::Task("KON-9".parse().expect("a task key"), TaskView::of(TaskTab::Summary));
+  let details = ProjectPage::Task("KON-9".parse().expect("a task key"), TaskView::of(TaskTab::Details));
   assert_eq!(
     seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, summary)
+    Route::Project(seeded.project, details)
   );
   seeded.go(TaskList::default());
   seeded.click("tasks-new-task");

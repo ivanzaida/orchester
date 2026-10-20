@@ -4,6 +4,7 @@ mod always_allow;
 mod approval_rules;
 mod auto_mode;
 mod automatic_status;
+mod base_notices;
 mod blobs;
 mod chat_decisions;
 mod checks;

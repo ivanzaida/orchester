@@ -13,8 +13,9 @@ use orchester_core::{
   resource::{InjectionEvent, Instruction, Step},
   revision::Revision,
   run::{
-    AssembledPrompt, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, PinnedVersion,
-    PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext, StepOutput,
+    AssembledPrompt, BaseMoved, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion,
+    PinnedVersion, PipelineInfo, Plan, PlanRevision, PromptAssemblyError, PromptInput, ReturnedWork, Run, RunContext,
+    StepOutput,
   },
   store::{ActivityStore, ResourceStore, RunStore},
 };
@@ -108,6 +109,10 @@ impl RunTask {
           messages: &continuation.messages,
         },
       ),
+      base_moved: continuation.notice.as_ref().map(|notice| BaseMoved {
+        notice,
+        after_turn: matches!(continuation.occasion, Occasion::AfterTurn),
+      }),
       memory,
       retry: self.returned(retry.as_ref(), execution),
       working,

@@ -334,6 +334,17 @@ impl Runners {
     self.inner.shared.counters(root).changes.subscribe()
   }
 
+  /// Tells the readers of [`Self::changes_of`] that the desktop queued notices that project `root`'s base branch
+  /// moved (`crate::base_moved`): the runs' timelines read them again. A run's state did not change.
+  pub fn base_notices_queued(&self, root: &Path) {
+    self
+      .inner
+      .shared
+      .counters(root)
+      .changes
+      .send_modify(|revision| *revision += 1);
+  }
+
   /// Counts a change as project `root`'s runner reports it: a run's state (`true`), which moves its transcript
   /// on too, or its transcript alone. For tests of what follows the counts, which run no runner.
   #[cfg(feature = "test-support")]

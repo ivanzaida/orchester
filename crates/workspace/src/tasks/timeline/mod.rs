@@ -5,9 +5,11 @@
 //! record a person's decision (question, plan, tool approval) and its problems on their own; its
 //! result closes it. A tool request Orchester answered itself as it came (the profile's permissions, a
 //! rule of the run, auto-approval) is no card: its call's entry in the tool group carries the mark. An attempt that
-//! returned or restarted the work starts with its mark ([`mark`]). Messages that wait for a step follow, and a run that
+//! returned or restarted the work starts with its mark ([`mark`]). Orchester's notices that the base branch moved sit
+//! in the step that read them ([`base_moved`]). Messages and notices that wait for a step follow, and a run that
 //! ended closes with its end. What is shown of it is [`view`]'s.
 
+pub mod base_moved;
 pub mod group;
 pub mod load;
 pub mod mark;
@@ -80,6 +82,8 @@ pub enum ItemKind {
   /// A transcript entry that is never grouped: a denied command, an error, a runner problem.
   Problem(Entry),
   Result(ResultCard),
+  /// Orchester told the run that its base branch moved ([`base_moved`]).
+  BaseMoved(base_moved::BaseMovedMark),
   /// The run ended.
   End(RunEnd),
 }
@@ -214,6 +218,7 @@ pub fn build(sources: &Sources<'_>) -> Vec<Item> {
     .filter(|entry| entry.execution.is_none() && !answers.contains(&entry.id))
     .map(|entry| message_item(entry, None))
     .collect();
+  waiting.extend(base_moved::items(run, None));
   waiting.sort_by_key(|item| item.at);
   items.extend(waiting);
   items.extend(run_end(run, sources.merge));
@@ -282,6 +287,7 @@ fn execution_items(sources: &Sources<'_>, execution: StepExecutionId) -> Vec<Ite
       .map(|plan| plan_item(run, plan, (&agent, &name))),
   );
   between.extend(approval_items(sources, execution, &name));
+  between.extend(base_moved::items(run, Some(execution)));
   let mut items = interleaved(sources.entries, execution, (&agent, &name), between);
   items.extend(result_item(run, sources.entries, execution));
   items

@@ -71,4 +71,17 @@ impl ProjectDb {
       })
       .collect()
   }
+
+  /// When `run` was interrupted, oldest first: a run interrupted again soon after is not continued by the
+  /// Orchestrator in a loop (`orchester_core::orchestrator::Continuing`).
+  pub fn run_interruptions(&self, run: RunId) -> Result<Vec<Timestamp>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT at FROM run_events WHERE run_id = ?1 AND kind = 'interrupted' ORDER BY sequence")?;
+    let times = statement
+      .query_map(params![run.to_string()], |row| row.get::<_, i64>(0))?
+      .map(|at| at.map(Timestamp::from_unix_millis))
+      .collect::<Result<Vec<_>, _>>()?;
+    Ok(times)
+  }
 }

@@ -377,7 +377,7 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
   screen.go(OrchestratorChat::New);
   screen.send(&format!(
     "The notes are in [KON-1 notes](orchester:{conversation}); Atlas runs \
-     [ATL-9 import](orchester:/project/{atlas}/tasks/ATL-9/summary); see [PR 42]({PULL_REQUEST})."
+     [ATL-9 import](orchester:/project/{atlas}/tasks/ATL-9/details); see [PR 42]({PULL_REQUEST})."
   ));
   answer(&mut screen, "Noted: The notes");
 

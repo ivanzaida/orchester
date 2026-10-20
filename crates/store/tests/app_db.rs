@@ -235,6 +235,27 @@ fn orchestrator_answers_agents_and_merges_runs_only_once_a_person_turned_each_on
 }
 
 #[test]
+fn orchestrator_continues_interrupted_runs_only_once_a_person_turned_it_on() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert!(
+    !db.orchestrator_continues_interrupted().expect("read"),
+    "off until turned on"
+  );
+  db.set_orchestrator_continues_interrupted(true).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(db.orchestrator_continues_interrupted().expect("read"));
+  assert!(
+    !db.orchestrator_answers_agents().expect("read") && !db.orchestrator_merges_runs().expect("read"),
+    "a setting of its own"
+  );
+  db.set_orchestrator_continues_interrupted(false).expect("store");
+  assert!(!db.orchestrator_continues_interrupted().expect("read"));
+}
+
+#[test]
 fn ui_state_removes_a_key_and_lists_keys_by_prefix() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let mut db = AppDb::open(&dir.path().join("orchester.db")).expect("open");

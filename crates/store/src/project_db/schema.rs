@@ -8,6 +8,7 @@ mod api_providers;
 mod approval_choices;
 mod auto_mode;
 mod automation_answers;
+mod base_notices;
 mod code_index;
 mod command_approvals;
 mod conversation;

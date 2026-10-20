@@ -29,9 +29,14 @@
 //! A new session of an attempt a failure sent back reads that failure in its task part ([`retry`]):
 //! the step the work returned to, why it came back; the step that failed, its own earlier result.
 //!
+//! An invocation that delivers a notice that the run's base branch moved ([`BaseMoved`]) reads it like people's
+//! messages: in a new session's task part, first in a resumed one; every writing agent's *Files and commands* part
+//! says how to merge the base safely ([`MERGE_SAFELY`]).
+//!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
 
+mod base_moved;
 mod code_index;
 mod composition;
 mod finish;
@@ -46,6 +51,7 @@ use std::num::NonZeroU32;
 use thiserror::Error;
 
 pub use self::{
+  base_moved::{BaseMoved, MERGE_SAFELY, notice_text},
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
   native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport, ReturnedWork},
@@ -214,6 +220,8 @@ pub struct PromptInput<'a> {
   pub revision: Option<PlanRevision<'a>>,
   /// People's messages this invocation delivers, if any.
   pub messages: Option<DeliveredMessages<'a>>,
+  /// The notice that the run's base branch moved this invocation delivers, if any.
+  pub base_moved: Option<BaseMoved<'a>>,
   /// The task and project memory recalled for this invocation, in prompt order.
   pub memory: &'a [RecalledMemory],
   /// Why the work came back to this step: the failure that sent it back, when this execution's attempt is a retry

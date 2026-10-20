@@ -100,7 +100,7 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
           "phase": row.phase.map(wire::phase),
           "detail": translate.text(&row.detail),
           "created_at": wire::time(row.created_at),
-          "link": task_link(project, &row.key, TaskPage::Summary),
+          "link": task_link(project, &row.key, TaskPage::Details),
         })
       })
       .collect()
@@ -127,7 +127,8 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
   })
   .await?;
   let task = &detail.task;
-  let link = Link::Task(project, task.key().clone(), TaskPage::Summary).path();
+  let link = Link::Task(project, task.key().clone(), TaskPage::Details).path();
+  let summary = Link::Task(project, task.key().clone(), TaskPage::Summary).path();
   let tag_names: Vec<&str> = tags
     .iter()
     .filter(|tag| task.organization().tags().contains(&tag.id()))
@@ -136,7 +137,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
   let runs: Vec<Value> = detail
     .history
     .iter()
-    .map(|record| run_record(record, worktrees.get(&record.id).copied(), translate, &link))
+    .map(|record| run_record(record, worktrees.get(&record.id).copied(), translate, &summary))
     .collect();
   Ok(json!({
     "key": task.key().to_string(),

@@ -68,7 +68,7 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",
-    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key }),
+    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
   served.until("Merge into main", |served| served.shows("task-merge"));
   served.click_by_person("task-merge");
@@ -142,7 +142,7 @@ fn domain_window_input_merges_into_the_worktree_but_starts_no_editor_a_person_di
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
   served.ok(
     "navigate",
-    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key }),
+    &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),
   );
   served.until("Merge into main", |served| served.shows("task-merge"));
   served.click_by_person("task-merge");

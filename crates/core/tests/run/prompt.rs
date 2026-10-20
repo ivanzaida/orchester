@@ -113,6 +113,7 @@ impl Prompt {
       dependencies,
       revision: None,
       messages: None,
+      base_moved: None,
       memory: &[],
       retry: None,
       working: None,

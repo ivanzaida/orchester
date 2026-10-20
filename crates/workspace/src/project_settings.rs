@@ -38,6 +38,8 @@ pub struct Settings {
   pub connections: Vec<Connection>,
   /// The project's active approval rules, oldest first (*Approve for every run of this project*).
   pub approval_rules: Vec<ProjectRule>,
+  /// *Tell working agents when the base branch moves* (`crate::base_moved`); on until a person turns it off.
+  pub base_notices: bool,
 }
 
 pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
@@ -54,7 +56,14 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
       .into_iter()
       .filter(ProjectRule::is_active)
       .collect(),
+    base_notices: db.tells_base_moves()?,
   })
+}
+
+/// Turns *Tell working agents when the base branch moves* on or off. While it is off, moves queue no notice and the
+/// runner delivers none of those still pending.
+pub fn save_base_notices_in(root: &Path, on: bool) -> Result<(), StoreError> {
+  ProjectDb::open(root)?.save_tells_base_moves(on)
 }
 
 /// Revokes the project's approval rule `rule`: the requests it answered ask again from the next one on. A rule

@@ -1,5 +1,6 @@
 //! The run's changes as the task page reads them, once for both the Changes tab and the count on its
-//! label, so the two cannot disagree: the diff from the run's base to its latest checkpoint, read again
+//! label, so the two cannot disagree: the diff from where the run's own work starts (its base, or the newer commit
+//! of its base branch its branch took in) to its latest checkpoint, read again
 //! when it records a new one, and what its worktree holds beyond that, read again after a checkpoint,
 //! when the run ends, when the tab opens or closes and, while an agent works and the page is on screen,
 //! every few seconds. What was read for one run is never shown for another, and a read again after a
@@ -16,7 +17,9 @@ use orchester_workspace::{
   background,
   messages::Message,
   tasks::{
-    changes::{Checkpointed, NotCheckpointed, Refresh, RunStage, checkpointed_in, listed_files, not_checkpointed_in},
+    changes::{
+      Checkpointed, NotCheckpointed, Refresh, RunRange, RunStage, listed_files, not_checkpointed_in, run_changes_in,
+    },
     detail::{RunView, TaskDetail},
   },
 };
@@ -214,21 +217,16 @@ impl ChangesReads {
 
   fn checkpointed(&self, ctx: &mut Ctx, repo_root: &Path, run: Option<&RunView>, retry: u64) -> CheckpointedRead {
     let programs = Services::of(ctx).programs;
-    let range = run.map(|run| {
-      let head = run
-        .run
-        .last_checkpoint()
-        .map(|checkpoint| checkpoint.revision().clone());
-      (run.id(), run.run.base().clone(), head)
-    });
+    let range = run.map(|run| RunRange::of(&run.run));
     let deps = (repo_root.to_path_buf(), range, retry);
     let load = ctx.future(deps, move |(repo_root, range, _)| {
       let programs = programs.clone();
       async move {
-        let Some((run, base, head)) = range else {
+        let Some(range) = range else {
           return Ok::<_, ()>(None);
         };
-        let read = background::run(move || checkpointed_in(&repo_root, &programs, &base, head.as_ref()))
+        let run = range.run;
+        let read = background::run(move || run_changes_in(&repo_root, &programs, &range))
           .await
           .and_then(|read| {
             read.map_err(|error| {

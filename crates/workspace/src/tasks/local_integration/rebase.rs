@@ -1,12 +1,17 @@
 //! The base and the last checkpoint external evidence reads a run's commits from: the ones it
 //! recorded, unless git proves its branch was rebased onto a newer commit of the target since
-//! (`orchester_core::integration::local::RunRebase`), or merged a newer commit of the target into it (*Resolve in
-//! editor*, or an agent the work was returned to). A rebase or merge proven now is recorded; one recorded before
-//! stands while its base is still below the branch tip, e.g. once the reflog that proved it expired, unless a proof
-//! now has a newer base.
+//! (`orchester_core::integration::local::RunRebase`), merged a newer commit of the target into it (*Resolve in
+//! editor*, or an agent the work was returned to), or took commits of the target in another way, a fast-forward onto
+//! it included (ORC-60, `orchester_core::integration::fork_point`): its own work starts above them. A rebase
+//! or merge proven now is recorded; one recorded before stands while its base is still below the branch tip, e.g.
+//! once the reflog that proved it expired, unless a proof now has a newer base.
 
 use orchester_core::{
-  integration::local::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase},
+  integration::{
+    Ancestry, RunFork, fork_point,
+    local::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase},
+    parse_log,
+  },
   revision::Revision,
   run::{BranchName, Run},
   time::Timestamp,
@@ -38,12 +43,102 @@ pub(super) fn effective(
     merged_in(db, main, (run, stored.as_ref()), (tip, target))?,
   )?;
   let rebase = newer(main, stored.clone(), proven)?;
+  let rebase = past(main, rebase, forked(db, main, run, (tip, target))?)?;
   if let Some(rebase) = &rebase
     && !stored.as_ref().is_some_and(|stored| stored.same_as(rebase))
   {
     ProjectDb::open(main.root())?.save_run_rebase(rebase)?;
   }
   Ok(recorded(run, rebase.as_ref(), last.as_ref()))
+}
+
+/// The base `run`'s branch at `tip` took in from the target at `target` (`orchester_core::integration::fork_point`):
+/// a fast-forward onto it, or the newest commit both share, with no commit of the run's own below it. A base recorded
+/// before is weighed by `effective` itself.
+fn forked(
+  db: &ProjectDb,
+  main: &LocalGit,
+  run: &Run,
+  (tip, target): (&str, &str),
+) -> Result<Option<RunRebase>, IntegrationError> {
+  let checkpoints = db.checkpoint_revisions(run.id())?;
+  let fork = RunFork {
+    branch: run.branch(),
+    base: run.base().as_str(),
+    head: tip,
+    target,
+    checkpoints: &checkpoints,
+    proven: None,
+  };
+  let Some(onto) = fork_point(&Checkout(main), &fork)? else {
+    return Ok(None);
+  };
+  // `fork_point` proved all of these.
+  let evidence = RebaseEvidence {
+    onto: Revision::new(&onto).map_err(|_| IntegrationError::from(LocalGitError::Data))?,
+    newer_than_base: true,
+    under_tip_and_target: true,
+    own_work_below: false,
+    checkpoint: None,
+  };
+  Ok(RunRebase::proven(run.id(), evidence, Timestamp::now()))
+}
+
+/// `forked` in place of `rebase` when its base is newer. A checkpoint the rebase rewrote into the branch tip is
+/// still held there, so it is kept.
+fn past(
+  main: &LocalGit,
+  rebase: Option<RunRebase>,
+  forked: Option<RunRebase>,
+) -> Result<Option<RunRebase>, IntegrationError> {
+  let (rebase, forked) = match (rebase, forked) {
+    (rebase, None) => return Ok(rebase),
+    (None, forked) => return Ok(forked),
+    (Some(rebase), Some(forked)) => (rebase, forked),
+  };
+  if rebase.base() == forked.base() || !main.is_ancestor(rebase.base().as_str(), forked.base().as_str())? {
+    return Ok(Some(rebase));
+  }
+  Ok(Some(RunRebase::restore(
+    forked.run(),
+    forked.base().clone(),
+    rebase.checkpoint().cloned(),
+    forked.recorded_at(),
+  )))
+}
+
+/// The main checkout's git, as `fork_point` asks it.
+struct Checkout<'a>(&'a LocalGit);
+
+impl Ancestry for Checkout<'_> {
+  type Error = IntegrationError;
+
+  fn is_ancestor(&self, ancestor: &str, descendant: &str) -> Result<bool, IntegrationError> {
+    Ok(self.0.is_ancestor(ancestor, descendant)?)
+  }
+
+  fn merge_base(&self, one: &str, other: &str) -> Result<Option<String>, IntegrationError> {
+    match self.0.text(&["merge-base", one, other]) {
+      Ok(commit) => Ok(Some(commit).filter(|commit| !commit.is_empty())),
+      // Git exits with 1 for commits that share no ancestor.
+      Err(LocalGitError::Refused) => Ok(None),
+      Err(error) => Err(error.into()),
+    }
+  }
+
+  fn commits_between(&self, from: &str, to: &str) -> Result<Vec<String>, IntegrationError> {
+    let excluded = format!("^{from}");
+    let listed = self.0.text(&["rev-list", to, &excluded])?;
+    Ok(listed.lines().map(str::to_owned).collect())
+  }
+
+  fn branch_log(&self, branch: &BranchName) -> Result<Vec<(String, String)>, IntegrationError> {
+    let reference = format!("refs/heads/{branch}");
+    let listed = self
+      .0
+      .text(&["reflog", "show", "--format=%H%x09%gs", &reference, "--"])?;
+    Ok(parse_log(&listed))
+  }
 }
 
 fn recorded(run: &Run, rebase: Option<&RunRebase>, last: Option<&Revision>) -> (String, Option<String>) {
