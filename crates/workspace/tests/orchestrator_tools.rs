@@ -86,6 +86,25 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
 }
 
 #[test]
+fn orchestrator_tools_say_which_interrupted_runs_resume_run_continues() {
+  let resume = listed()
+    .into_iter()
+    .find(|tool| tool.name == "resume_run")
+    .and_then(|tool| tool.description.map(|told| told.into_owned()))
+    .expect("resume_run is listed with a description");
+  for part in [
+    "a crash, the runner going away or Quit now",
+    "Let the Orchestrator continue interrupted runs",
+    "interrupted_again",
+    "one the person canceled",
+    "whose worktree is gone",
+    "person_only",
+  ] {
+    assert!(resume.contains(part), "resume_run says {part}: {resume}");
+  }
+}
+
+#[test]
 fn orchestrator_tools_say_what_waits_for_the_person() {
   let tools = listed();
   let description = |name: &str| {
@@ -128,9 +147,7 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
   }
   assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
   let resume = description("resume_run");
-  for part in ["resumes only a run a pause stopped", "interrupted", "person_only"] {
-    assert!(resume.contains(part), "resume_run says {part}: {resume}");
-  }
+  assert!(resume.contains("resumes a run a pause stopped"), "{resume}");
   let continued = description("continue_run");
   for part in [
     "only allow_retry and return_to",

@@ -561,6 +561,8 @@
       "noticed": "{{time}}",
       "effectReadyAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator tells you it is ready, and merges it only if you asked it to here.",
       "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads the run and tells you what happened and the choices you have.",
+      "effectContinuing": "Let the Orchestrator continue interrupted runs is on too, so the Orchestrator continues the run once from its last checkpoint and tells you.",
+      "effectInterruptedAgain": "It was interrupted again within 10 minutes of the time before, so the Orchestrator leaves it to you and tells you what happened and the choices you have.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
       "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you.",

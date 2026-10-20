@@ -6,8 +6,9 @@
 //! chat's project by its id, never by a name. Publishing a draft, canceling, merging a run, answering an agent's
 //! question, sending a run's agents a message and deciding how a stopped run goes on wait for the person
 //! ([`super::change`]) unless the person's switch lets the chat do it itself (publishing, merging, answering; never
-//! canceling or continuing), and so does starting a run unless auto mode is on for the project ([`super::proposal`]).
-//! What the agent changed, or tried to, is kept in its conversation as an action.
+//! canceling or deciding how a stopped run goes on), and so does starting a run unless auto mode is on for the project
+//! ([`super::proposal`]). An interrupted run is continued only under the person's switch ([`super::guard`]). What the
+//! agent changed, or tried to, is kept in its conversation as an action.
 
 use std::path::PathBuf;
 
@@ -176,10 +177,14 @@ const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the mer
   the Local integration page.";
 
 /// What the agent reads first of `resume_run`.
-const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped, and in a turn Orchester started by \
-  itself it only proposes that. A run stopped at a limit (its budget or time limit, the daily or a group's budget, a \
-  step's budget, an account's plan limit) or interrupted is the person's to resume or continue on the task's \
-  Summary, and is refused here (person_only).";
+const RESUME_PAUSED: &str = "In this chat it resumes a run a pause stopped, and in a turn Orchester started by itself \
+  it only proposes that. It continues a run that a crash, the runner going away or Quit now interrupted, from its \
+  last checkpoint, only when the person turned on Let the Orchestrator continue interrupted runs; in a turn Orchester \
+  started by itself then only the run whose interruption started the turn, once, and not when it was interrupted \
+  again within 10 minutes of the time before (interrupted_again). A run stopped at a limit (its budget or time limit, \
+  the daily or a group's budget, a step's budget, an account's plan limit), one the person canceled, one the runner \
+  could not record and one whose worktree is gone are the person's on the task's Summary, and are refused here \
+  (person_only), as is an interrupted run while that switch is off.";
 
 /// What the agent reads first of `pause_run` and `release_queue`.
 const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its message begins with [Orchester]) it \
@@ -434,13 +439,21 @@ async fn start(
   })
 }
 
-/// `resume_run`: refused for a run that is the person's to resume ([`guard::resumable`]); the run it resumed is kept.
+/// `resume_run`: proposed, done or refused as [`guard::resume_as`] tells; done, it resumes the run or continues an
+/// interrupted one from its last checkpoint through the same tool as the task page's controls, and the run is kept.
 async fn resume(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let run = guard::resumable(scope, arguments).await?;
+  let switches = guard::ResumeSwitches {
+    continues: allows(services, OrchestratorConsent::ContinueInterrupted).await?,
+    answers: allows(services, OrchestratorConsent::AnswerAgents).await?,
+  };
+  let run = match guard::resume_as(scope, arguments, switches).await? {
+    guard::Resume::Propose => return propose_change((services, translate), scope, RESUME_RUN, arguments).await,
+    guard::Resume::Now(run) => run,
+  };
   let result = app_tool((services, translate), RESUME_RUN, arguments.clone()).await;
   let resumed = result.is_ok().then_some(run);
   Ok(Acted {

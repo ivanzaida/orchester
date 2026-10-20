@@ -10,6 +10,7 @@ pub mod change;
 pub mod chat;
 pub mod instructions;
 pub mod proposal;
+pub mod resume;
 pub mod settings;
 pub mod wait;
 
@@ -18,6 +19,7 @@ pub use self::{
     ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, HeldWork, SessionChange,
     TurnFailure, TurnState, WaitTurn,
   },
+  resume::{ChatResume, Continuing, PersonsStop},
   settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
 };

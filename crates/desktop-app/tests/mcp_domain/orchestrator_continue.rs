@@ -95,8 +95,12 @@ fn chat_continue_is_a_proposal_the_person_dismisses() {
     run.status()
   );
   let scope = chat(&served, &mut db);
-  // No switch lets the chat continue a run itself.
-  for consent in [OrchestratorConsent::AnswerAgents, OrchestratorConsent::MergeRuns] {
+  // No switch lets the chat decide how a run that waits for a decision goes on, not even continuing interrupted runs.
+  for consent in [
+    OrchestratorConsent::AnswerAgents,
+    OrchestratorConsent::MergeRuns,
+    OrchestratorConsent::ContinueInterrupted,
+  ] {
     served
       .services()
       .workspace
