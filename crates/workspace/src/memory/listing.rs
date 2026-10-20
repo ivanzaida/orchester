@@ -46,6 +46,23 @@ impl StatusFilter {
       Self::All => true,
     }
   }
+
+  /// The filter that shows records of `status` only.
+  pub const fn only(status: MemoryStatus) -> Self {
+    match status {
+      MemoryStatus::Active => Self::Active,
+      MemoryStatus::Proposed => Self::Waiting,
+      MemoryStatus::Deprecated => Self::Deprecated,
+      MemoryStatus::Superseded => Self::Superseded,
+      MemoryStatus::Rejected => Self::Rejected,
+      MemoryStatus::Withdrawn => Self::Withdrawn,
+    }
+  }
+
+  /// Whether it shows one status only, which a listing can name (*No active records match*).
+  pub const fn single(self) -> bool {
+    !matches!(self, Self::ActiveAndWaiting | Self::All)
+  }
 }
 
 /// Whose records a listing shows (the *Author* filter).
@@ -197,6 +214,25 @@ pub fn found_elsewhere(records: &[Memory], filters: &Filters) -> usize {
     .count()
 }
 
+/// The records `filters` would show under every status that the chosen status hides: how many, and the one status
+/// they share when they all have the same (*1 match among deprecated records*, with *Show deprecated*).
+pub fn found_in_other_statuses(records: &[Memory], filters: &Filters) -> (usize, Option<StatusFilter>) {
+  let every_status = Filters {
+    status: StatusFilter::All,
+    ..filters.clone()
+  };
+  let found: Vec<MemoryStatus> = records
+    .iter()
+    .filter(|memory| every_status.shows(memory) && !filters.status.shows(memory.status()))
+    .map(Memory::status)
+    .collect();
+  let shared = found
+    .first()
+    .filter(|first| found.iter().all(|status| status == *first))
+    .map(|status| StatusFilter::only(*status));
+  (found.len(), shared)
+}
+
 /// How many records of one type there are under the listing's other filters but the search: the
 /// *0 of 3 decisions* beside a search that found none.
 pub fn of_kind(records: &[Memory], filters: &Filters) -> usize {
@@ -204,7 +240,23 @@ pub fn of_kind(records: &[Memory], filters: &Filters) -> usize {
     search: String::new(),
     ..filters.clone()
   };
-  records.iter().filter(|memory| unsearched.shows(memory)).count()
+  shown(records, &unsearched)
+}
+
+/// How many records `filters` show: the *0* of *0 of 3 decisions*.
+pub fn shown(records: &[Memory], filters: &Filters) -> usize {
+  records.iter().filter(|memory| filters.shows(memory)).count()
+}
+
+/// Whether record `id` is among `records` and `filters` show it.
+pub fn lists(records: &[Memory], filters: &Filters, id: MemoryId) -> bool {
+  records.iter().any(|memory| memory.id() == id && filters.shows(memory))
+}
+
+/// How many records the *Status* filter alone shows, whatever else narrows the listing: the project page's
+/// *10 active*.
+pub fn of_status(records: &[Memory], status: StatusFilter) -> usize {
+  records.iter().filter(|memory| status.shows(memory.status())).count()
 }
 
 /// The records of a scope by status, as a toolbar and the project's panel count them.

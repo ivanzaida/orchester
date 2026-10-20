@@ -51,7 +51,22 @@ pub struct Done(pub Write);
 
 impl DevtoolsInspectable for Done {}
 
-pub type Action = FutureAction<Start, Done, Message>;
+/// Why a change was not kept, and whether the records the screen showed are out of date.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Failed {
+  pub message: Message,
+  pub stale: bool,
+}
+
+impl DevtoolsInspectable for Failed {}
+
+impl From<Message> for Failed {
+  fn from(message: Message) -> Self {
+    Self { message, stale: false }
+  }
+}
+
+pub type Action = FutureAction<Start, Done, Failed>;
 
 pub fn action(ctx: &mut Ctx) -> Action {
   ctx.future_action(move |start: Start| async move {
@@ -64,9 +79,13 @@ pub fn action(ctx: &mut Ctx) -> Action {
         }
         Write::Delete(id, revision) => delete_in(&start.repo, (id, revision)),
       };
-      result.map_err(|failure| failure.message())
+      result.map_err(|failure| Failed {
+        message: failure.message(),
+        stale: failure.stale(),
+      })
     })
     .await
+    .map_err(Failed::from)
     .and_then(|result| result)
     .map(|()| Done(write))
   })

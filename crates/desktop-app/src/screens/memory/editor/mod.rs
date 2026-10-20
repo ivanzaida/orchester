@@ -36,10 +36,8 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::field_error,
     icon::{Icon, icon},
     icon_button::IconButton,
-    message::message_text,
   },
 };
 
@@ -246,15 +244,14 @@ impl RecordEditor {
       .child(Text::new(&note).variant(TypographyStyle::Caption))
       .child(cancel)
       .child(primary);
-    let mut footer = Column::new()
+    Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
       .spacing(SpacingSize::Sm)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border));
-    if let Some(failed) = state.failure_for(record) {
-      footer = footer.child(field_error(&format!("{id}-error"), &message_text(ctx, &failed)));
-    }
-    footer.child(row).into()
+      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .with_children(state.failure_note(ctx, id, record))
+      .child(row)
+      .into()
   }
 
   /// *Reject* on a proposal; *Deprecate* and *Delete…* on an active record.

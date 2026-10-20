@@ -97,10 +97,13 @@ pub enum MemorySpacing {
   TextIndent,
   /// 20: the sides of the task's record list (`sglU2`).
   ListSide,
+  /// 40: why a row's change did nothing, in line with the row's text past its 12 side, 16 glyph and 12 gap
+  /// (`gQodn` in `rKIl1`).
+  RowText,
 }
 
 impl MemorySpacing {
-  pub const ALL: [Self; 3] = [Self::Groups, Self::TextIndent, Self::ListSide];
+  pub const ALL: [Self; 4] = [Self::Groups, Self::TextIndent, Self::ListSide, Self::RowText];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -111,6 +114,7 @@ impl MemorySpacing {
       Self::Groups => "memory_groups",
       Self::TextIndent => "memory_text_indent",
       Self::ListSide => "memory_list_side",
+      Self::RowText => "memory_row_text",
     }
   }
 
@@ -119,6 +123,7 @@ impl MemorySpacing {
       Self::Groups => 18.0,
       Self::TextIndent => 28.0,
       Self::ListSide => 20.0,
+      Self::RowText => 40.0,
     }
   }
 }

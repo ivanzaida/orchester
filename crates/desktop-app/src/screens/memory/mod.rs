@@ -10,6 +10,7 @@
 mod delete;
 mod editor;
 mod list;
+mod no_match;
 mod opened;
 mod page;
 mod panel;
@@ -36,7 +37,8 @@ use orchester_workspace::{
 
 use self::state::Made;
 pub(crate) use self::{
-  list::{ListInput, groups, new_record, no_match, row_failure},
+  list::{ListInput, groups, new_record, row_failure},
+  no_match::no_match,
   page::unreadable,
   parts::{group_heading, unbuilt_link},
   toolbar::{FilterBar, FiltersProps},

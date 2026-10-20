@@ -249,7 +249,7 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Element {
   if memory.records.is_empty() {
     return list.child(empty(ctx, state, memory)).into();
   }
-  list = list.with_children(memory_ui::row_failure(ctx, state));
+  list = list.with_children(memory_ui::row_failure(ctx, state, &memory.records));
   let groups = memory_ui::groups(
     ctx,
     state,
@@ -273,7 +273,7 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Element {
 fn count(ctx: &Ctx, memory: &TaskMemory, filters: &Filters) -> Arc<str> {
   let counts = memory.counts();
   if let Some(kind) = filters.kind.filter(|_| !filters.search.trim().is_empty()) {
-    let found = memory.records.iter().filter(|record| filters.shows(record)).count();
+    let found = listing::shown(&memory.records, filters);
     return ctx.t_args(
       "memory.toolbar.ofKind",
       [
@@ -319,13 +319,14 @@ fn empty(ctx: &Ctx, state: &MemoryState, memory: &TaskMemory) -> Element {
     .into()
 }
 
-/// How many active records task `task` has, for the Memory tab's label; `None` until it is read.
+/// How many active records task `task` has, for the Memory tab's label; `None` until it is read, and once a
+/// reading failed (the count read before may be out of date).
 pub fn active_count(ctx: &mut Ctx, task: &TaskContext) -> Option<usize> {
   let feed = &task.project.feed;
   let again = feed.revision.get() + feed.states.get();
   let hold = Services::of(ctx).hold;
   let id: TaskId = task.detail.task.id();
-  ctx
+  let counted = ctx
     .future(
       (task.project.open.repo_root.clone(), id, again),
       move |(repo, id, _)| {
@@ -339,6 +340,9 @@ pub fn active_count(ctx: &mut Ctx, task: &TaskContext) -> Option<usize> {
       },
     )
     .state()
-    .get()
-    .data
+    .get();
+  if counted.is_rejected() {
+    return None;
+  }
+  counted.data
 }

@@ -5,10 +5,10 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
 use orchester_core::{
-  id::{MemoryId, ProjectId},
+  id::{MemoryId, ProjectId, SecretId},
   memory::{Memory, MemoryFilter, MemoryStore, ScopeFilter},
-  secret::{SecretValue, SecretVault, VaultError, VaultKey},
-  store::TaskStore,
+  secret::{Environment, NewSecret, Secret, SecretKind, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
+  store::{SecretStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -47,6 +47,7 @@ pub struct Page {
   pub window: Window,
   pub project: ProjectId,
   pub repo: PathBuf,
+  vault: Arc<MemoryVault>,
 }
 
 impl Page {
@@ -64,8 +65,9 @@ impl Page {
     let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
     let launch = data.launch();
     let mut start = launch.start();
+    let vault = Arc::new(MemoryVault::default());
     if let orchester_app::root::Start::Ready(ready) = &mut start {
-      ready.services.vault = Vault::with(Arc::new(MemoryVault::default()));
+      ready.services.vault = Vault::with(vault.clone());
     }
     let mut window = Window::of_start(data, launch, start);
     // Tall enough that every record of the seed is laid out within the window, so a test can point at it.
@@ -74,7 +76,41 @@ impl Page {
       window,
       project: seeded.project,
       repo: seeded.repo,
+      vault,
     }
+  }
+
+  /// Changes the project database with `sql` the way an edit outside Orchester would, `id` its `?1`; how many rows
+  /// it changed.
+  pub fn edit_outside(&self, sql: &str, id: Option<MemoryId>) -> usize {
+    let raw = rusqlite::Connection::open(self.repo.join(".orchester").join("orchester.db")).expect("the database");
+    match id {
+      Some(id) => raw.execute(sql, [id.to_string()]),
+      None => raw.execute(sql, []),
+    }
+    .expect("the edit")
+  }
+
+  /// A secret of the project named `name`, its `value` in the keychain the window reads.
+  pub fn secret(&self, name: &str, value: &str) {
+    let mut db = self.db();
+    let secret = Secret::new(
+      SecretId::generate(),
+      NewSecret {
+        name: SecretName::new(name).expect("a secret name"),
+        kind: SecretKind::AccessToken,
+        environment: Environment::Staging,
+      },
+      Timestamp::now(),
+    );
+    db.create_secret(&secret).expect("the secret");
+    self
+      .vault
+      .store(
+        &secret.vault_key(db.project().id()),
+        &SecretValue::new(value.to_owned()).expect("a value"),
+      )
+      .expect("stored");
   }
 
   /// Opens the Memory tab of task `key` and waits until its records are read.

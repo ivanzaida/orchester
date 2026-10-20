@@ -8,6 +8,7 @@
     "settingsUnbuilt": "Project settings › Memory isn't built yet: the saving rules and limits can't be changed in this version.",
     "reading": "Reading memory…",
     "retry": "Try again",
+    "personOnly": "Only a person changes memory here: input from an MCP client is refused, as what records say reaches every later agent. Clients can still read this page.",
     "loadFailed": "Memory couldn't be read",
     "loadFailedBody": "{{reason}} Nothing was changed; agents keep working with what their prompts already hold.",
     "records": "Records",
@@ -159,15 +160,20 @@
     },
     "noMatch": {
       "search": "No records match “{{query}}”",
+      "statusSearch": "No {{status}} records match “{{query}}”",
       "kindSearch": "No {{kind}} match “{{query}}”",
       "filters": "No records match these filters",
       "lexical": "Search finds words and parts of words in the text, keys and tags of records. It doesn't know synonyms, so try another word.",
+      "lexicalShort": "Search finds words and parts of words, not other wording with the same meaning.",
       "otherTypesOne": "1 record of another type matches.",
       "otherTypes": "{{count}} records of other types match.",
       "otherStatusesOne": "1 record with another status matches.",
       "otherStatuses": "{{count}} records with other statuses match.",
+      "amongOne": "1 match among {{status}} records",
+      "among": "{{count}} matches among {{status}} records",
       "showAllTypes": "Show all types",
-      "showAllStatuses": "Show all statuses"
+      "showAllStatuses": "Show all statuses",
+      "showStatus": "Show {{status}}"
     },
     "editor": {
       "reviewTitle": "Review proposed {{kind}}",

@@ -198,6 +198,45 @@ fn memory_search_finds_parts_of_words_in_text_keys_and_tags_and_counts_other_typ
 }
 
 #[test]
+fn memory_a_search_says_which_other_status_holds_its_matches() {
+  let project = MemoryScope::Project;
+  let active = person(project, MemoryKind::Fact, "CI checks run on every pull request.", 1);
+  let mut runner = person(project, MemoryKind::Fact, "CI runs on kontur-ci-01.", 2);
+  runner.deprecate(at(3)).expect("deprecate");
+  let mut old = person(project, MemoryKind::Fact, "CI used kontur-ci-00.", 4);
+  old.deprecate(at(5)).expect("deprecate");
+  let records = vec![active, runner, old];
+  let searched = Filters {
+    search: "kontur".to_owned(),
+    ..Filters::project()
+  };
+  assert_eq!(listing::shown(&records, &searched), 0);
+  assert_eq!(
+    listing::found_in_other_statuses(&records, &searched),
+    (2, Some(StatusFilter::Deprecated))
+  );
+  let deprecated = Filters {
+    status: StatusFilter::Deprecated,
+    search: "pull request".to_owned(),
+    ..Filters::default()
+  };
+  assert_eq!(
+    listing::found_in_other_statuses(&records, &deprecated),
+    (1, Some(StatusFilter::Active))
+  );
+  let every = Filters {
+    status: StatusFilter::All,
+    search: "nothing like it".to_owned(),
+    ..Filters::default()
+  };
+  assert_eq!(listing::found_in_other_statuses(&records, &every), (0, None));
+  assert_eq!(listing::of_status(&records, StatusFilter::Active), 1);
+  assert!(listing::lists(&records, &Filters::project(), records[0].id()));
+  assert!(!listing::lists(&records, &Filters::project(), records[1].id()));
+  assert!(StatusFilter::Active.single() && !StatusFilter::All.single());
+}
+
+#[test]
 fn memory_approving_with_edits_supersedes_the_record_it_replaces() {
   let mut fixture = Fixture::new();
   let task = fixture.task("Webhooks", at(1));
@@ -273,10 +312,10 @@ fn memory_changes_refuse_a_record_changed_since_it_was_read() {
   change_in(fixture.repo.path(), &vault, at_read, Change::Pin(true)).expect("pinned");
   let stale = change_in(fixture.repo.path(), &vault, at_read, Change::Deprecate);
   assert!(matches!(stale, Err(MemoryFailure::ChangedMeanwhile)));
-  assert_eq!(
-    stale.expect_err("refused").message().key,
-    "memory.errors.changedMeanwhile"
-  );
+  let refused = stale.expect_err("refused");
+  assert_eq!(refused.message().key, "memory.errors.changedMeanwhile");
+  assert!(refused.stale(), "the screen reads the record again");
+  assert!(!MemoryFailure::Draft(orchester_workspace::memory::draft::DraftProblem::BlankText).stale());
   let now = stored(&fixture, record.id());
   assert!(now.is_pinned());
   change_in(

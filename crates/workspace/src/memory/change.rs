@@ -71,6 +71,12 @@ impl MemoryFailure {
       Self::Store(error) => messages::store_error(error),
     }
   }
+
+  /// Whether the records the screen showed are out of date: it reads them again, so what it shows next is
+  /// what is stored.
+  pub const fn stale(&self) -> bool {
+    matches!(self, Self::ChangedMeanwhile | Self::Gone | Self::KeyInUse(_))
+  }
 }
 
 /// A change of one record, as the person asked for it on what the screen showed.

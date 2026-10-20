@@ -94,6 +94,7 @@ fn memory_theme_group_label_tracking_and_spacing_resolve_the_design() {
     (MemorySpacing::Groups, 18.0),
     (MemorySpacing::TextIndent, 28.0),
     (MemorySpacing::ListSide, 20.0),
+    (MemorySpacing::RowText, 40.0),
   ] {
     assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{role:?}");
   }

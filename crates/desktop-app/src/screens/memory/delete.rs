@@ -100,9 +100,7 @@ impl Component for DeleteConfirm {
     if let Err(Some(reason)) = &given {
       confirm = confirm.child(field_error(&format!("{id}-given-error"), &message_text(ctx, reason)));
     }
-    if let Some(failed) = state.failure_for(Some(memory.id())) {
-      confirm = confirm.child(field_error(&format!("{id}-error"), &message_text(ctx, &failed)));
-    }
+    confirm = confirm.with_children(state.failure_note(ctx, &id, Some(memory.id())));
     confirm.child(actions(ctx, &state, memory, &id))
   }
 }

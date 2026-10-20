@@ -290,9 +290,9 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &ProjectMemory) -> Elemen
   };
   let groups = list::groups(ctx, state, input);
   let mut list = Column::new().id("memory-records").width(Dimension::Pct(100.0));
-  list = list.with_children(list::row_failure(ctx, state));
+  list = list.with_children(list::row_failure(ctx, state, &shown));
   list = if groups.is_empty() {
-    list.child(list::no_match(ctx, state, &shown, &filters))
+    list.child(super::no_match(ctx, state, &shown, &filters))
   } else {
     list.with_children(groups)
   };
@@ -307,14 +307,7 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &ProjectMemory) -> Elemen
 
 /// How many records the status filter shows (*10 active*, *2 deprecated*), and how many were left out unread.
 fn count(ctx: &Ctx, records: &[orchester_core::memory::Memory], filters: &Filters, unreadable: usize) -> Arc<str> {
-  let unsearched = Filters {
-    kind: None,
-    author: orchester_workspace::memory::listing::AuthorFilter::Any,
-    tag: None,
-    search: String::new(),
-    ..filters.clone()
-  };
-  let shown = records.iter().filter(|record| unsearched.shows(record)).count();
+  let shown = listing::of_status(records, filters.status);
   let counted = ctx.t_args(
     "memory.recordsCount",
     [

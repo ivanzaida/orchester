@@ -26,9 +26,7 @@ use crate::{
   theme::{ExtraRadius, ExtraTypography, MemorySpacing},
   ui::{
     button::{ActionButton, ButtonKind},
-    field::field_error,
     icon::Icon,
-    message::message_text,
   },
 };
 
@@ -187,7 +185,7 @@ fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, (id, queue): (&s
   if !queue {
     row = row.child(Text::new(&ctx.t("memory.proposal.note")).variant(TypographyStyle::Caption));
   }
-  let mut column = Column::new()
+  Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(
@@ -196,9 +194,7 @@ fn actions(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, (id, queue): (&s
         .child(reject)
         .child(edit)
         .child(approve),
-    );
-  if let Some(failed) = state.failure_for(Some(record)) {
-    column = column.child(field_error(&format!("{id}-error"), &message_text(ctx, &failed)));
-  }
-  column.into()
+    )
+    .with_children(state.failure_note(ctx, id, Some(record)))
+    .into()
 }

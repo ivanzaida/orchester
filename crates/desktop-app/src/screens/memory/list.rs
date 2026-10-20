@@ -33,7 +33,7 @@ use super::{
   words,
 };
 use crate::{
-  theme::{IconSize, MemorySpacing},
+  theme::{ExtraSpacing, IconSize, MemorySpacing},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -150,7 +150,35 @@ fn entry(
     selected: !input.task_tab && state.chosen() == Some(memory.id()),
     selectable: !input.task_tab,
   };
-  ctx.mount_keyed::<RecordRow>(&format!("memory-row-{}", memory.id()), props)
+  let row = ctx.mount_keyed::<RecordRow>(&format!("memory-row-{}", memory.id()), props);
+  let Some(note) = row_note(ctx, state, memory.id()) else {
+    return row;
+  };
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(row)
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .padding(
+          Padding::new()
+            .top(ExtraSpacing::Tight.role())
+            .right(SpacingSize::Md)
+            .bottom(SpacingSize::Sm)
+            .left(MemorySpacing::RowText.role()),
+        )
+        .child(note),
+    )
+    .into()
+}
+
+/// Why the last change of `record`, asked for from its row or the inspector, did nothing, under its row (`gQodn` in
+/// `rKIl1`); `None` while something is open in a record's place, which says it there.
+fn row_note(ctx: &Ctx, state: &MemoryState, record: MemoryId) -> Option<Row> {
+  if state.opened.get() != Opened::Nothing {
+    return None;
+  }
+  state.failure_note(ctx, &format!("memory-record-{record}"), Some(record))
 }
 
 /// The earlier versions of `memory`, newest first, as its history shows them.
@@ -227,95 +255,17 @@ pub fn new_record(ctx: &mut Ctx, state: &MemoryState) -> Option<Element> {
   Some(ctx.mount_keyed::<RecordEditor>("memory-editor-new", props))
 }
 
-/// Why a change made from a row failed, while nothing is open in its place.
-pub fn row_failure(ctx: &Ctx, state: &MemoryState) -> Option<Element> {
+/// Why a change of a record the list does not show did nothing (it is gone, or the filters hide it now), above the
+/// list while nothing is open in a record's place; a listed record says it under its row.
+pub fn row_failure(ctx: &Ctx, state: &MemoryState, records: &[Memory]) -> Option<Element> {
   if state.opened.get() != Opened::Nothing {
     return None;
   }
   let Some(Some(record)) = state.asked() else {
     return None;
   };
-  let failed = state.failure_for(Some(record))?;
-  Some(crate::ui::field::field_error("memory-change-error", &crate::ui::message::message_text(ctx, &failed)).into())
-}
-
-/// What the list says when its filters show nothing (`a24wV8`, `z4t51u`): that nothing matches, how search works,
-/// what matches among other types or statuses with a way to show them, and *Clear search*.
-pub fn no_match(ctx: &Ctx, state: &MemoryState, records: &[Memory], filters: &Filters) -> Element {
-  let query = filters.search.trim();
-  let title = match (query.is_empty(), filters.kind) {
-    (false, Some(kind)) => ctx.t_args(
-      "memory.noMatch.kindSearch",
-      [
-        ("kind", words::kind_plural(ctx, kind).to_string()),
-        ("query", query.to_owned()),
-      ],
-    ),
-    (false, None) => ctx.t_args("memory.noMatch.search", [("query", query)]),
-    (true, _) => ctx.t("memory.noMatch.filters"),
-  };
-  let elsewhere = listing::found_elsewhere(records, filters);
-  let all_statuses = Filters {
-    status: listing::StatusFilter::All,
-    ..filters.clone()
-  };
-  let other_statuses = records.iter().filter(|memory| all_statuses.shows(memory)).count();
-  let mut explanation = vec![ctx.t("memory.noMatch.lexical").to_string()];
-  let mut actions: Vec<Element> = Vec::new();
-  if elsewhere > 0 {
-    explanation.push(match elsewhere {
-      1 => ctx.t("memory.noMatch.otherTypesOne").to_string(),
-      count => ctx
-        .t_args("memory.noMatch.otherTypes", [("count", count.to_string())])
-        .to_string(),
-    });
-    let show = state.filters.clone();
-    actions.push(
-      crate::ui::button::ActionButton::new(
-        "memory-show-all-types",
-        crate::ui::button::ButtonKind::Secondary,
-        ctx.t("memory.noMatch.showAllTypes"),
-      )
-      .icon(Icon::List)
-      .on_click(move || show.update(|filters| filters.kind = None))
-      .into(),
-    );
-  } else if other_statuses > 0 && filters.status != listing::StatusFilter::All {
-    explanation.push(match other_statuses {
-      1 => ctx.t("memory.noMatch.otherStatusesOne").to_string(),
-      count => ctx
-        .t_args("memory.noMatch.otherStatuses", [("count", count.to_string())])
-        .to_string(),
-    });
-    let show = state.filters.clone();
-    actions.push(
-      crate::ui::button::ActionButton::new(
-        "memory-show-all-statuses",
-        crate::ui::button::ButtonKind::Secondary,
-        ctx.t("memory.noMatch.showAllStatuses"),
-      )
-      .icon(Icon::List)
-      .on_click(move || show.update(|filters| filters.status = listing::StatusFilter::All))
-      .into(),
-    );
+  if listing::lists(records, &state.filters.get(), record) {
+    return None;
   }
-  if !query.is_empty() {
-    let search = state.search.clone();
-    actions.push(
-      crate::ui::button::ActionButton::new(
-        "memory-clear-search",
-        crate::ui::button::ButtonKind::Ghost,
-        ctx.t("memory.toolbar.clearSearch"),
-      )
-      .icon(Icon::X)
-      .on_click(move || search.set(String::new()))
-      .into(),
-    );
-  }
-  let mut empty =
-    crate::ui::state::EmptyState::new("memory-no-match", Icon::SearchX, title, explanation.join(" ")).unframed();
-  for action in actions {
-    empty = empty.action(action);
-  }
-  empty.into()
+  Some(state.failure_note(ctx, "memory-change", Some(record))?.into())
 }
