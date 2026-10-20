@@ -4,13 +4,16 @@
 //! editor*, or an agent the work was returned to), or took commits of the target in another way, a fast-forward onto
 //! it included (ORC-60, `orchester_core::integration::fork_point`): its own work starts above them. A rebase
 //! or merge proven now is recorded; one recorded before stands while its base is still below the branch tip, e.g.
-//! once the reflog that proved it expired, unless a proof now has a newer base.
+//! once the reflog that proved it expired, unless a proof now has a newer base. A branch tip its agent committed
+//! above the last checkpoint stands for it ([`continues`]).
+
+use std::collections::HashSet;
 
 use orchester_core::{
   integration::{
     Ancestry, RunFork, fork_point,
     local::{RebaseEvidence, RebaseStore, RebasedCheckpoint, RunRebase},
-    parse_log,
+    made_on_branch, parse_log,
   },
   revision::Revision,
   run::{BranchName, Run},
@@ -49,7 +52,37 @@ pub(super) fn effective(
   {
     ProjectDb::open(main.root())?.save_run_rebase(rebase)?;
   }
-  Ok(recorded(run, rebase.as_ref(), last.as_ref()))
+  let (base, checkpoint) = recorded(run, rebase.as_ref(), last.as_ref());
+  match checkpoint {
+    Some(checkpoint) if checkpoint != tip && continues(main, run.branch(), (&checkpoint, tip, target))? => {
+      Ok((base, Some(tip.to_owned())))
+    }
+    checkpoint => Ok((base, checkpoint)),
+  }
+}
+
+/// Whether `branch`, at `tip`, continues the run's last checkpoint `checkpoint`: the tip is above it, and every commit
+/// between them the target at `target` does not hold was made on the branch, as its reflog shows. An agent that
+/// commits on the run's branch itself, as one told to merge the target in does (ORC-54), records no checkpoint
+/// (ORC-67): its commits are the run's work all the same, and the tip stands for the checkpoint.
+fn continues(
+  main: &LocalGit,
+  branch: &BranchName,
+  (checkpoint, tip, target): (&str, &str, &str),
+) -> Result<bool, IntegrationError> {
+  if !present(main, checkpoint)? || !main.is_ancestor(checkpoint, tip)? {
+    return Ok(false);
+  }
+  let made: HashSet<String> = Checkout(main)
+    .branch_log(branch)?
+    .into_iter()
+    .filter(|(_, subject)| made_on_branch(subject))
+    .map(|(commit, _)| commit)
+    .collect();
+  let checkpoint = format!("^{checkpoint}");
+  let target = format!("^{target}");
+  let above = main.text(&["rev-list", tip, &checkpoint, &target])?;
+  Ok(above.lines().all(|commit| made.contains(commit)))
 }
 
 /// The base `run`'s branch at `tip` took in from the target at `target` (`orchester_core::integration::fork_point`):

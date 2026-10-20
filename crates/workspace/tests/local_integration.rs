@@ -2,6 +2,8 @@
 mod abort;
 #[path = "local_integration/authority.rs"]
 mod authority;
+#[path = "local_integration/base_merged.rs"]
+mod base_merged;
 #[path = "local_integration/cleanup_edits.rs"]
 mod cleanup_edits;
 #[path = "local_integration/direct_merge.rs"]
