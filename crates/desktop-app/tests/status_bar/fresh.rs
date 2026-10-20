@@ -1,13 +1,13 @@
 //! The bar in the real window follows the accounts and the project's connections: an account renamed is read
 //! again, and a connection moved to it shows its plan limits at once, without the project being opened again. Its
-//! readings are handed on as a runner would (`Runners::observe_plan_limits_for_test`).
+//! readings are handed on as a runner would (`Runners::observe_plan_limits`).
 
 use orchester_app::routes::{ProjectPage, Route, TaskList};
 use orchester_core::{
   account::{AccountCli, AccountFolder, AgentAccount},
   connection::{
     AgentProvider, ConnectionKind,
-    plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits},
+    plan_limits::{LimitReading, LimitState, LimitWindow, PlanLimits, ReadingSource},
   },
   id::AgentAccountId,
   name::Name,
@@ -67,7 +67,7 @@ fn status_plan_limits_follow_the_accounts_and_the_connections() {
     .go(Route::Project(seeded.project, ProjectPage::Tasks(TaskList::default())));
   services
     .runners
-    .observe_plan_limits_for_test(reading(default.id(), 12.0));
+    .observe_plan_limits(reading(default.id(), 12.0), ReadingSource::Turn);
   window.until("Default's limits", |window| window.text("status-bar").contains("12%"));
 
   // An account the window was not told of (added to the database, as a test only can: the workspace refuses a
@@ -91,7 +91,7 @@ fn status_plan_limits_follow_the_accounts_and_the_connections() {
   window.until("the accounts read again", |_| reads.total() > 0);
   services
     .runners
-    .observe_plan_limits_for_test(reading(client.id(), 77.0));
+    .observe_plan_limits(reading(client.id(), 77.0), ReadingSource::Turn);
   let codex = ProjectDb::open(&repo)
     .expect("the project's database")
     .connections()

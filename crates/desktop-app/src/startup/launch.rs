@@ -155,6 +155,15 @@ impl Launch {
     self
   }
 
+  /// Starts reading the accounts' plan limits outside runs (`orchester_workspace::plan_limits::reads`), until the
+  /// session ends. Only the app's own window does: a test or a QA copy would read the person's real accounts.
+  pub fn read_plan_limits(&mut self) {
+    if let Some(running) = &mut self.running {
+      let reads = running.services.plan_reads.clone();
+      running.background.hold(running.services.runtime.spawn(reads.run()));
+    }
+  }
+
   /// Where the session opens; `None` without a session.
   pub fn landing(&self) -> Option<&Landing> {
     match &self.start {

@@ -2,7 +2,8 @@
 //! pending and decided, read apart. The requests are read again after each read of the transcript, so
 //! they are never older than it, and as soon as the project's waiting requests change, so a decision
 //! reaches the chat as it reaches the dialog and the status bar, while the transcript, much longer,
-//! follows the run's output. Blocks on SQLite, so the UI calls it off the UI thread.
+//! follows the run's output. The answers and messages the Orchestrator chat proposed or sent the run's agents are
+//! read with the requests. Blocks on SQLite, so the UI calls it off the UI thread.
 
 use std::{path::Path, sync::Arc};
 
@@ -12,7 +13,7 @@ use orchester_core::{
   run::{DecidedToolApproval, PendingToolApproval},
   store::ActivityStore,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{KeptAction, ProjectDb, StoreError};
 
 use crate::tasks::transcript::{Entry, entries};
 
@@ -23,6 +24,8 @@ pub struct Loaded {
   pub pending: Arc<Vec<PendingToolApproval>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
   pub questions: Arc<Vec<AskedQuestions>>,
+  /// The Orchestrator chat's actions that answer the run's agents, send them a message or continue the run.
+  pub orchestrated: Arc<Vec<KeptAction>>,
 }
 
 /// A run's tool requests and its agents' questions with suggested answers, as read.
@@ -31,6 +34,7 @@ pub struct Requests {
   pub pending: Arc<Vec<PendingToolApproval>>,
   pub decided: Arc<Vec<DecidedToolApproval>>,
   pub questions: Arc<Vec<AskedQuestions>>,
+  pub orchestrated: Arc<Vec<KeptAction>>,
 }
 
 impl Loaded {
@@ -41,6 +45,7 @@ impl Loaded {
       pending: requests.pending,
       decided: requests.decided,
       questions: requests.questions,
+      orchestrated: requests.orchestrated,
     }
   }
 }
@@ -51,12 +56,13 @@ pub fn transcript_in(repo_root: &Path, run: RunId) -> Result<Arc<Vec<Entry>>, St
   Ok(Arc::new(entries(&db.activity(run, 0)?)))
 }
 
-/// Reads `run`'s tool requests.
+/// Reads `run`'s tool requests, and what the Orchestrator chat proposed or sent its agents.
 pub fn requests_in(repo_root: &Path, run: RunId) -> Result<Requests, StoreError> {
   let db = ProjectDb::open(repo_root)?;
   Ok(Requests {
     pending: Arc::new(db.pending_tool_approvals(run)?),
     decided: Arc::new(db.decided_tool_approvals(run)?),
     questions: Arc::new(db.questions(run)?),
+    orchestrated: Arc::new(db.run_answer_actions(run)?),
   })
 }

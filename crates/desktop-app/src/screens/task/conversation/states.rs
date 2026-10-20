@@ -17,7 +17,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::run::{RunStatus, TaskPhase};
+use orchester_core::{
+  id::ProjectId,
+  run::{RunStatus, TaskPhase},
+};
 use orchester_workspace::{
   messages::Message,
   tasks::{
@@ -207,9 +210,13 @@ pub(super) fn nothing_yet(ctx: &Ctx, run: &RunView) -> Element {
   )
 }
 
-/// A task without a run that can be shown: its latest run cannot be read, or it has none yet, with the
+/// A task of `project` without a run that can be shown: its latest run cannot be read, or it has none yet, with the
 /// messages that wait for its run to start.
-pub(super) fn without_run(ctx: &mut Ctx, detail: &TaskDetail, conversation: &Conversation) -> Element {
+pub(super) fn without_run(
+  ctx: &mut Ctx,
+  (project, detail): (ProjectId, &TaskDetail),
+  conversation: &Conversation,
+) -> Element {
   if let Some(unreadable) = &detail.latest_unreadable {
     let title = message_text(ctx, &unreadable.title());
     let text = ctx.t("conversation.unreadable");
@@ -243,7 +250,7 @@ pub(super) fn without_run(ctx: &mut Ctx, detail: &TaskDetail, conversation: &Con
   let messages: Vec<Element> = conversation
     .entries
     .iter()
-    .map(|entry| person_message(ctx, entry))
+    .map(|entry| person_message(ctx, (project, entry)))
     .collect();
   Column::new()
     .id("conversation-waiting")

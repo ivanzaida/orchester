@@ -403,6 +403,7 @@ fn usage_limit_table_lists_the_seven_newest_readings_where_use_moved() {
           blocked: None,
         },
         source: None,
+        origin: orchester_core::connection::plan_limits::ReadingSource::Turn,
       }
     })
     .collect();

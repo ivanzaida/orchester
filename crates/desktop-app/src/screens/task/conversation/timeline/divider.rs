@@ -31,7 +31,10 @@ use orchester_workspace::{
   },
 };
 
-use super::{Timeline, message::person_note};
+use super::{
+  Timeline,
+  message::{orchestrator_note, person_note},
+};
 use crate::{
   theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
@@ -286,24 +289,25 @@ fn list(ctx: &Ctx, labels: &[Arc<str>]) -> String {
 }
 
 /// A return or restart: what returned the work, to which step, in which attempt; a person's note is their
-/// message under it.
+/// message under it. One the Orchestrator chat decided has the Orchestrator's row under it instead, with its note.
 pub(super) fn mark(ctx: &mut Ctx, timeline: &Timeline, mark: &Mark) -> Element {
   let (glyph, text) = mark_line(ctx, timeline, mark);
   let line = event(format!("conversation-mark-{}", mark.attempt), glyph, &text, None);
-  let MarkKind::ReturnedWithNote { note, .. } = &mark.kind else {
-    return line;
+  let note = match &mark.kind {
+    MarkKind::ReturnedWithNote { note, .. } => Some(note),
+    MarkKind::Returned { .. } | MarkKind::Restarted { .. } => None,
+  };
+  let id = format!("conversation-mark-note-{}", mark.attempt);
+  let under = match (mark.orchestrator, note) {
+    (Some(from), note) => orchestrator_note(ctx, &id, (timeline.project, from), (note, mark.at)),
+    (None, Some(note)) => person_note(ctx, &id, note, mark.at, mark.by),
+    (None, None) => return line,
   };
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .child(line)
-    .child(person_note(
-      ctx,
-      &format!("conversation-mark-note-{}", mark.attempt),
-      note,
-      mark.at,
-      mark.by,
-    ))
+    .child(under)
     .into()
 }
 
@@ -312,9 +316,13 @@ fn mark_line(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> (Icon, Arc<str>) {
   let time = mark.at.map(display::clock).unwrap_or_default();
   let attempt = mark.attempt.to_string();
   let labelled = |ctx: &Ctx, name: &Arc<str>| labelled(ctx, timeline, name);
+  let orchestrator = mark.orchestrator.is_some();
+  let automation = mark.by == Some(orchester_core::run::Answerer::Automation);
   match &mark.kind {
     MarkKind::Returned { to, failed, .. } => {
-      let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
+      let key = if orchestrator {
+        "conversation.mark.returnedByOrchestrator"
+      } else if automation {
         "conversation.mark.returnedByAutomation"
       } else if mark.by_person {
         "conversation.mark.returnedByYou"
@@ -330,7 +338,9 @@ fn mark_line(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> (Icon, Arc<str>) {
       (Icon::CornerDownLeft, ctx.t_args(key, args))
     }
     MarkKind::Restarted { step } => {
-      let key = if mark.by == Some(orchester_core::run::Answerer::Automation) {
+      let key = if orchestrator {
+        "conversation.mark.restartedByOrchestrator"
+      } else if automation {
         "conversation.mark.restartedByAutomation"
       } else if mark.by_person {
         "conversation.mark.restartedByYou"
@@ -345,12 +355,13 @@ fn mark_line(ctx: &Ctx, timeline: &Timeline, mark: &Mark) -> (Icon, Arc<str>) {
       (Icon::RotateCcw, ctx.t_args(key, args))
     }
     MarkKind::ReturnedWithNote { to, resolving, .. } => {
-      let automation = mark.by == Some(orchester_core::run::Answerer::Automation);
-      let key = match (resolving, automation) {
-        (Some(_), true) => "conversation.mark.returnedToResolveByAutomation",
-        (Some(_), false) => "conversation.mark.returnedToResolve",
-        (None, true) => "conversation.mark.returnedWithNoteByAutomation",
-        (None, false) => "conversation.mark.returnedWithNote",
+      let key = match (resolving, orchestrator, automation) {
+        (Some(_), true, _) => "conversation.mark.returnedToResolveByOrchestrator",
+        (Some(_), false, true) => "conversation.mark.returnedToResolveByAutomation",
+        (Some(_), false, false) => "conversation.mark.returnedToResolve",
+        (None, true, _) => "conversation.mark.returnedWithNoteByOrchestrator",
+        (None, false, true) => "conversation.mark.returnedWithNoteByAutomation",
+        (None, false, false) => "conversation.mark.returnedWithNote",
       };
       let args = [
         ("step", &*labelled(ctx, to)),

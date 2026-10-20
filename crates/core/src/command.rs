@@ -282,3 +282,12 @@ impl<R: CommandRunner + ?Sized> CommandRunner for &R {
     (**self).run(command)
   }
 }
+
+/// Runs a program that answers requests on its standard output while its input stays open: a line protocol such as
+/// Codex App Server's, which stops at the end of its input without answering what it was still working on.
+pub trait LineExchange {
+  /// Starts `command`, writes its [`Command::stdin`] and keeps the input open, and reads its standard output line by
+  /// line until `done` says the answer is in; then closes the input and ends the program. The lines read, in order;
+  /// a program that ends first leaves the answer out of them.
+  fn exchange(&self, command: &Command, done: &mut dyn FnMut(&str) -> bool) -> Result<Vec<String>, CommandError>;
+}

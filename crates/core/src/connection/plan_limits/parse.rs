@@ -67,6 +67,17 @@ pub fn codex_limits(value: &Value) -> Option<PlanLimits> {
   })
 }
 
+/// The result of Codex App Server's `account/rateLimits/read` (`GetAccountRateLimitsResponse`), read as
+/// [`codex_limits`] reads an update: the plan's bucket of `rateLimitsByLimitId` when App Server names buckets,
+/// otherwise its single-bucket `rateLimits`. `None` when neither holds a snapshot of the plan.
+pub fn codex_read_limits(result: &Value) -> Option<PlanLimits> {
+  let by_bucket = result
+    .get("rateLimitsByLimitId")
+    .and_then(|buckets| buckets.get(CODEX_PLAN_BUCKET))
+    .filter(|snapshot| !snapshot.is_null());
+  by_bucket.or_else(|| result.get("rateLimits")).and_then(codex_limits)
+}
+
 /// App Server's `RateLimitReachedType` names why turns are refused, not a window.
 fn codex_block(reason: &str) -> LimitBlock {
   match reason {

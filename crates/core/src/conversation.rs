@@ -26,7 +26,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-  id::{InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ChatId, InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
+  orchestrator::FromOrchestrator,
   resource::StepKey,
   run::{EventSequence, Run, StepStatus, WaitReason},
   time::Timestamp,
@@ -221,6 +222,8 @@ pub struct Message {
   /// A message on the person's side that the project's Orchestrator chat wrote and sent
   /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's.
   by_orchestrator: bool,
+  /// The chat's conversation it came from (ORC-45); `None` for one kept before it was recorded.
+  orchestrator_chat: Option<ChatId>,
   by_automation: bool,
 }
 
@@ -246,6 +249,7 @@ impl Message {
       recovery_after: None,
       timing: Timing::AfterTurn,
       by_orchestrator: false,
+      orchestrator_chat: None,
       by_automation: false,
     }
   }
@@ -273,6 +277,7 @@ impl Message {
       recovery_after: None,
       timing: Timing::AfterTurn,
       by_orchestrator: false,
+      orchestrator_chat: None,
       by_automation: false,
     }
   }
@@ -303,6 +308,7 @@ impl Message {
       recovery_after: None,
       timing: Timing::AfterTurn,
       by_orchestrator: false,
+      orchestrator_chat: None,
       by_automation: false,
     })
   }
@@ -346,6 +352,15 @@ impl Message {
     self.by_orchestrator
   }
 
+  /// The conversation it came from and how it went out, when the project's Orchestrator chat wrote it: sent by the
+  /// chat itself when automation decided it, applied by the person otherwise ([`Self::answerer`]).
+  pub const fn from_orchestrator(&self) -> Option<FromOrchestrator> {
+    match self.answerer() {
+      Some(by) if self.by_orchestrator => Some(FromOrchestrator::of(self.orchestrator_chat, by)),
+      _ => None,
+    }
+  }
+
   /// Who wrote a message on the person's side, including an answer or a continuation.
   pub const fn answerer(&self) -> Option<crate::run::Answerer> {
     match self.sender {
@@ -373,13 +388,20 @@ impl Message {
     Ok(self)
   }
 
-  /// A message on the person's side that the Orchestrator chat wrote and sent; an agent's never is.
-  pub fn sent_by_orchestrator(mut self) -> Result<Self, MessageError> {
+  /// A message on the person's side that the Orchestrator chat wrote in conversation `chat` and sent itself, as
+  /// automation; an agent's never is.
+  pub fn sent_by_orchestrator(self, chat: Option<ChatId>) -> Result<Self, MessageError> {
+    self.written_by_orchestrator(chat)?.sent_by_automation()
+  }
+
+  /// A message on the person's side that the Orchestrator chat wrote in conversation `chat`, whoever decided to send
+  /// it: the person who applied its proposal, or automation ([`Self::sent_by_automation`]).
+  pub fn written_by_orchestrator(mut self, chat: Option<ChatId>) -> Result<Self, MessageError> {
     if !matches!(self.sender, Sender::Person { .. }) {
       return Err(MessageError::NotFromAPerson);
     }
     self.by_orchestrator = true;
-    self.by_automation = true;
+    self.orchestrator_chat = chat;
     Ok(self)
   }
 

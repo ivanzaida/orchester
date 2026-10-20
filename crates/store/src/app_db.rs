@@ -2,13 +2,15 @@
 //! detect that the previous run of Orchester ended abnormally, whose each project is ([`owners`]), the state of the
 //! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
 //! is ([`server_owners`]), the application's own settings ([`settings`]), among them the Usage dashboard's warning
-//! threshold, and the person's agent CLI accounts ([`accounts`]).
+//! threshold, the person's agent CLI accounts ([`accounts`]) and the plan limits read of them outside runs
+//! ([`plan_reads`]).
 
 mod accounts;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
 mod owners;
+mod plan_reads;
 mod server_owners;
 mod servers;
 mod settings;
@@ -72,6 +74,7 @@ CREATE TABLE ui_state (
   cloud_joins::NEEDS_CODE_MIGRATION,
   settings::ORCHESTRATOR_ANSWERS_MERGES_MIGRATION,
   settings::ORCHESTRATOR_CONTINUES_MIGRATION,
+  plan_reads::MIGRATION,
   settings::NOTIFICATIONS_MIGRATION,
 ];
 

@@ -1,8 +1,11 @@
 //! `get_conversation`: a task's conversation as its Conversation tab shows it for its latest run (ORC-42): what the
 //! person and the Orchestrator chat wrote to the agents, what the agents wrote, their questions (in the conversation,
-//! and with suggested answers), their plans and how each was decided, Orchester's notices that the base branch moved
-//! (ORC-54) and how each step ended; oldest first, newest last, a page at a time. Each entry names who wrote it, its
-//! step and run, when, and the link to its card. It reads what the Conversation tab reads, stored with secrets
+//! and with suggested answers), their plans and how each was decided, how a decision went on with a run that stopped
+//! (a return or a restart), Orchester's notices that the base branch moved (ORC-54) and how each step ended; oldest
+//! first, newest last, a page at a time. Each entry names who wrote or decided it (for the Orchestrator chat, how it
+//! went out: sent by the chat or applied by the person, ORC-45), its step and run, when, and the link to its card;
+//! after the newest page's entries, the answers and messages the chat proposed that no one applied. It reads what the
+//! Conversation tab reads, stored with secrets
 //! already redacted; tool calls and approvals are left to their own tools.
 
 use orchester_core::{
@@ -14,7 +17,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{base_moved, plans, questions, tasks::find_task, wire};
+use super::{base_moved, orchestrated, plans, questions, tasks::find_task, wire};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -22,11 +25,16 @@ use crate::{
   },
   links::{Link, TaskPage},
   tasks::{
-    conversation::{Author, Entry as MessageEntry, EntryState, outgoing::conversation_of},
+    conversation::{
+      Author, Entry as MessageEntry, EntryState,
+      orchestrator::{Proposal, continued, message_offer, proposals},
+      outgoing::conversation_of,
+    },
     detail::{RunView, TaskDetail},
     timeline::{
-      self, Item, ItemKind, RunEnd, Sources,
+      self, Item, ItemKind, Mark, RunEnd, Sources,
       load::{requests_in, transcript_in},
+      mark::MarkKind,
     },
   },
 };
@@ -59,7 +67,7 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
     let task = find_task(&ProjectDb::open(&root)?, &args.task)?;
     let detail = TaskDetail::load_in(&root, task.id())?;
     let link = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
-    let items = items(&root, &detail)?;
+    let (items, proposed) = items(&root, &detail)?;
     let end = match &args.before {
       Some(cursor) => items
         .iter()
@@ -70,10 +78,18 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
     let limit = args.limit.unwrap_or(PAGE).clamp(1, MOST);
     let start = end.saturating_sub(limit);
     let run = detail.run.as_ref();
-    let entries: Vec<Value> = items[start..end]
+    let mut entries: Vec<Value> = items[start..end]
       .iter()
       .filter_map(|item| entry(item, run, &link))
       .collect();
+    if let (None, Some(run)) = (&args.before, run) {
+      let number = (run.id(), run.run.number().get());
+      entries.extend(
+        proposed
+          .iter()
+          .map(|proposal| orchestrated::proposal(proposal, number, &link)),
+      );
+    }
     Ok(json!({
       "task": { "key": task.key().to_string(), "title": task.details().title.as_str() },
       "run": run.map(|run| json!({ "id": run.id().to_string(), "number": run.run.number().get() })),
@@ -85,26 +101,28 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
   .await
 }
 
-/// The latest run's timeline as the Conversation tab builds it; without a run, the messages that wait for one.
-fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<Vec<Item>, ToolError> {
+/// The latest run's timeline as the Conversation tab builds it, and the answers and messages the Orchestrator chat
+/// proposed for the run; without a run, the messages that wait for one.
+fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<Proposal>), ToolError> {
   let conversation = conversation_of(detail, false);
   let Some(run) = &detail.run else {
-    return Ok(
-      conversation
-        .entries
-        .iter()
-        .map(|entry| Item {
-          key: format!("message-{}", entry.id).into(),
-          execution: None,
-          at: entry.at,
-          kind: ItemKind::Message(entry.clone()),
-        })
-        .collect(),
-    );
+    let waiting = conversation
+      .entries
+      .iter()
+      .map(|entry| Item {
+        key: format!("message-{}", entry.id).into(),
+        execution: None,
+        at: entry.at,
+        kind: ItemKind::Message(entry.clone()),
+      })
+      .collect();
+    return Ok((waiting, Vec::new()));
   };
   let transcript = transcript_in(root, run.id())?;
   let requests = requests_in(root, run.id())?;
-  Ok(timeline::build(&Sources {
+  let offered = message_offer(detail, run.id());
+  let proposed = proposals(&requests.orchestrated, (offered.as_ref(), &requests.questions));
+  let mut items = timeline::build(&Sources {
     run,
     entries: &transcript,
     conversation: &conversation,
@@ -112,7 +130,9 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<Vec<Item>, ToolE
     decided: &requests.decided,
     questions: &requests.questions,
     merge: detail.merge.as_ref(),
-  }))
+  });
+  continued(&mut items, &requests.orchestrated);
+  Ok((items, proposed))
 }
 
 /// `item` as the tool gives it; `None` for what other tools give (steps, tool calls, approvals, problems).
@@ -161,6 +181,9 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
       json!({ "passed": card.passed, "summary": card.reported.as_deref() }),
     ),
     ItemKind::End(end) => ("run_end", Value::Null, None, json!({ "end": run_end(end) })),
+    ItemKind::Mark(mark) if mark.by.is_some() || mark.orchestrator.is_some() => {
+      ("run_continued", decider(mark), step_of(), continued_body(mark))
+    }
     ItemKind::BaseMoved(mark) => (
       "base_moved",
       json!({ "kind": "orchester" }),
@@ -190,20 +213,49 @@ fn agent_author(agent: &str) -> Value {
   json!({ "kind": "agent", "name": agent })
 }
 
-/// Who wrote a message: an agent, the person, or the Orchestrator chat on the person's side; and whom to.
+/// Who wrote a message: an agent, the person, automation, or the Orchestrator chat on the person's side, with how it
+/// went out and the chat's conversation it came from; and whom to.
 fn sender(message: &MessageEntry) -> Value {
-  let on_person_side = if message.by_orchestrator {
-    "orchestrator"
-  } else if message.by_automation {
-    "automation"
-  } else {
-    "person"
+  let mut author = match message.orchestrator {
+    Some(from) => orchestrated::author(from),
+    None if message.by_automation => json!({ "kind": "automation" }),
+    None => json!({ "kind": "person" }),
   };
   match &message.author {
     Author::Agent(agent) => agent_author(agent),
-    Author::You => json!({ "kind": on_person_side }),
-    Author::YouTo(agent) => json!({ "kind": on_person_side, "to": &**agent }),
+    Author::You => author,
+    Author::YouTo(agent) => {
+      author["to"] = json!(&**agent);
+      author
+    }
   }
+}
+
+/// Who decided how the run went on in `mark`: the Orchestrator chat, with how its decision went out (sent by it, or
+/// applied by the person), else the person or automation.
+fn decider(mark: &Mark) -> Value {
+  match (mark.orchestrator, mark.by) {
+    (Some(from), _) => orchestrated::author(from),
+    (None, Some(Answerer::Automation)) => json!({ "kind": "automation" }),
+    (None, _) => json!({ "kind": "person" }),
+  }
+}
+
+/// How a decision went on with the run in `mark`: the work returned (with the note for its agent, or to resolve the
+/// conflicts with a branch) or a step restarted, to which step, and the attempt it started.
+fn continued_body(mark: &Mark) -> Value {
+  let (how, to, note, resolving) = match &mark.kind {
+    MarkKind::Returned { to, .. } => ("returned", to, None, None),
+    MarkKind::Restarted { step } => ("restarted", step, None, None),
+    MarkKind::ReturnedWithNote { to, note, resolving } => ("returned_with_note", to, Some(note), resolving.as_ref()),
+  };
+  json!({
+    "continued": how,
+    "to": &**to,
+    "note": note.map(|note| &**note),
+    "resolving": resolving.map(|branch| &**branch),
+    "attempt": mark.attempt,
+  })
 }
 
 /// A message's text and where it stands.
@@ -218,7 +270,8 @@ fn message_body(message: &MessageEntry) -> Value {
   json!({ "text": &*message.body, "state": state })
 }
 
-/// A question with suggested answers: its questions and options, where it stands, and who answered it.
+/// A question with suggested answers: its questions and options, where it stands, and who answered it; for the
+/// Orchestrator chat, how its answer went out (`answered_by_orchestrator`).
 fn choice_body(asked: &AskedQuestions) -> Value {
   let mut body = questions::shown(asked);
   let (state, answers, by) = match &asked.state {
@@ -229,9 +282,10 @@ fn choice_body(asked: &AskedQuestions) -> Value {
         .iter()
         .map(|answer| json!({ "choices": answer.choices(), "text": answer.text() }))
         .collect();
+      // The chat's answer is the Orchestrator's, whether it sent it or the person applied it.
       let by = match by {
+        _ if asked.orchestrator.is_some() => "orchestrator",
         Answerer::Person => "person",
-        Answerer::Automation if asked.by_orchestrator => "orchestrator",
         Answerer::Automation => "automation",
       };
       ("answered", json!(given), json!(by))
@@ -240,6 +294,7 @@ fn choice_body(asked: &AskedQuestions) -> Value {
   body["state"] = json!(state);
   body["answers"] = answers;
   body["answered_by"] = by;
+  body["answered_by_orchestrator"] = json!(asked.orchestrator.filter(|_| !asked.waits()).map(orchestrated::author));
   body
 }
 

@@ -2,7 +2,8 @@
 //! questions of a run, a project or every project, and `answer_question`, which
 //! answers one as the card in the task conversation does: through the runner, which gives the answer to
 //! the asking agent. The answer is checked first, with the card's own rules: only the question's options,
-//! one answer to a single-choice question, never an empty one.
+//! one answer to a single-choice question, never an empty one. A waiting question lists the answer the Orchestrator
+//! chat proposed for it, while that waits for a person (ORC-45).
 
 use orchester_core::{
   id::ProjectId,
@@ -18,6 +19,7 @@ use super::{
   SentBy, Translate,
   across::{across, needs_project, oldest_first},
   message_waits::project_message_waits,
+  orchestrated,
   runs::find_run,
   wire,
 };
@@ -29,6 +31,7 @@ use crate::{
   links::TaskPage,
   messages::Message,
   tasks::{
+    conversation::orchestrator::{Proposal, proposals, waiting_answer},
     question::{Answering, answer_error},
     run::control_message,
   },
@@ -65,11 +68,13 @@ pub struct ListQuestions {
   pub run: Option<String>,
 }
 
-/// A waiting question with its run's number and its task's key, while the run can be read.
+/// A waiting question with its run's number and its task's key, while the run can be read, and the answer the
+/// Orchestrator chat proposed for it (`null` when there is none).
 struct Asked {
   asked: AskedQuestions,
   run: Option<u32>,
   task: Option<String>,
+  proposed: Value,
 }
 
 pub async fn list_questions(
@@ -88,7 +93,7 @@ pub async fn list_questions(
       let asked = waiting
         .filter(|asked| run.as_ref().is_none_or(|run| asked.request.run() == run.id()))
         .map(|asked| with_run(db, asked))
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
       let messages = project_message_waits(db, open.project.id(), run.as_ref())?;
       Ok((asked, messages))
     })
@@ -105,28 +110,35 @@ pub async fn list_questions(
   }))
 }
 
-/// `asked` with its run's number and task. A run or task that cannot be read leaves them out and the question is
-/// still listed: `get_run` names why its run cannot be read.
-fn with_run(db: &ProjectDb, asked: AskedQuestions) -> Asked {
+/// `asked` with its run's number and task, and the answer the Orchestrator chat proposed for it. A run or task that
+/// cannot be read leaves them out and the question is still listed: `get_run` names why its run cannot be read.
+fn with_run(db: &ProjectDb, asked: AskedQuestions) -> Result<Asked, ToolError> {
+  let kept = db.run_answer_actions(asked.request.run())?;
+  // Only the answer is read: what a message would meet does not matter here.
+  let proposed = proposals(&kept, (None, std::slice::from_ref(&asked)));
+  let proposed = orchestrated::proposed_answer(waiting_answer(&proposed, asked.request.id()));
   let Ok(Some(run)) = db.run(asked.request.run()) else {
-    return Asked {
+    return Ok(Asked {
       asked,
       run: None,
       task: None,
-    };
+      proposed,
+    });
   };
   let task = match db.task(run.task()) {
     Ok(task) => task.map(|task| task.key().to_string()),
     Err(_) => None,
   };
-  Asked {
+  Ok(Asked {
     asked,
     run: Some(run.number().get()),
     task,
-  }
+    proposed,
+  })
 }
 
-/// A waiting question of `project` as `list_questions` lists it, with its run, its task and the link to its card.
+/// A waiting question of `project` as `list_questions` lists it, with its run, its task, the link to its card and
+/// the answer the Orchestrator chat proposed for it, if any.
 fn listed(asked: &Asked, project: ProjectId) -> Value {
   let mut value = shown(&asked.asked);
   value["run"] = json!({ "id": asked.asked.request.run().to_string(), "number": asked.run });
@@ -137,18 +149,20 @@ fn listed(asked: &Asked, project: ProjectId) -> Value {
       .as_deref()
       .and_then(|key| wire::task_link(project, key, TaskPage::Conversation))
   );
+  value["proposed_answer"] = asked.proposed.clone();
   value
 }
 
-/// The run's questions that wait for an answer, each with its options and `link`, the task's Conversation
-/// where their cards are.
-pub fn waiting(questions: &[AskedQuestions], link: &str) -> Vec<Value> {
+/// The run's questions that wait for an answer, each with its options, the answer the Orchestrator chat proposed for
+/// it among `proposed`, if any, and `link`, the task's Conversation where their cards are.
+pub fn waiting(questions: &[AskedQuestions], (proposed, link): (&[Proposal], &str)) -> Vec<Value> {
   questions
     .iter()
     .filter(|asked| asked.waits())
     .map(|asked| {
       let mut shown = shown(asked);
       shown["link"] = json!(link);
+      shown["proposed_answer"] = orchestrated::proposed_answer(waiting_answer(proposed, asked.request.id()));
       shown
     })
     .collect()
@@ -183,7 +197,8 @@ fn question(question: &Question) -> Value {
   })
 }
 
-/// `answer_question`, as automation; `by` the Orchestrator chat, the card names the chat once the runner recorded it.
+/// `answer_question`, as automation; `by` the Orchestrator chat, the card names the chat once the runner recorded it,
+/// sent by the chat itself or applied by the person.
 pub async fn answer_question(services: &Services, args: AnswerQuestion, by: SentBy) -> Result<Value, ToolError> {
   let reading = services.clone();
   let AnswerQuestion {
@@ -194,7 +209,7 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
     text,
   } = args;
   let (project, asked) = blocking(move || {
-    if by != SentBy::Person {
+    if !matches!(by, SentBy::Person(_)) {
       crate::decisions::DecisionKind::Question.require(&reading.workspace)?;
     }
     let project = reading.project(&project)?;
@@ -216,14 +231,15 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
     .control_run_in(&project, answering.command(by.answerer()))
     .await
     .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
-  if by == SentBy::Orchestrator {
+  if let Some(chat) = by.chat() {
     let (root, run, request) = (
       project.repo_root.clone(),
       asked.request.run(),
       asked.request.id().to_owned(),
     );
     // The answer reached the agent; only the card's words depend on the mark, so a mark not kept is logged.
-    let marked = blocking(move || Ok(ProjectDb::open(&root)?.mark_answered_by_orchestrator(run, &request)?)).await;
+    let marked =
+      blocking(move || Ok(ProjectDb::open(&root)?.mark_answered_by_orchestrator((run, &request), chat)?)).await;
     if let Err(error) = marked {
       tracing::warn!(?error, "cannot name the Orchestrator on the answer it gave");
     }

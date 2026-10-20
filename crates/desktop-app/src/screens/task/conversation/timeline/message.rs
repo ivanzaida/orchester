@@ -5,20 +5,23 @@
 //! and the time, the message as written in a bubble that hugs it up to 80 % of the chat (`own_message` in a
 //! `border` stroke, radius 10, 8 by 12 inside) and its delivery line (a 12 icon and 11 `text_muted`, 5 apart):
 //! sending now, queued and until when, delivered mid-turn or at the end of a turn (`check-check` in `success`), or
-//! not delivered, kept, with the composer's actions under it (`composer::undelivered`).
+//! not delivered, kept, with the composer's actions under it (`composer::undelivered`). One the project's
+//! Orchestrator chat sent (ORC-45) is the Orchestrator's row, as an agent's is drawn, with how it went out.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::Column,
+  components::{Column, Text},
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
   conversation::{Arrival, Undelivered},
+  id::ProjectId,
+  orchestrator::FromOrchestrator,
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -29,7 +32,7 @@ use orchester_workspace::{
   },
 };
 
-use super::{Timeline, chips};
+use super::{super::super::orchestrated::sent_line, Timeline, chips};
 pub(crate) use crate::ui::chat::links;
 use crate::ui::{
   chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
@@ -70,27 +73,81 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
     .into()
 }
 
-/// A person's message (`mr4lC`) at the right: *You* (or the Orchestrator, for one the project's Orchestrator chat
-/// sent), its time, the bubble and its delivery line.
-pub(in super::super) fn person_message(ctx: &mut Ctx, entry: &Entry) -> Element {
+/// A person's message (`mr4lC`) at the right: *You* (or *Automation*, for one automation wrote), its time, the bubble
+/// and its delivery line. One the project's Orchestrator chat sent is the Orchestrator's instead
+/// ([`orchestrator_message`]).
+pub(in super::super) fn person_message(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry)) -> Element {
   let (glyph, color, words) = delivery(ctx, &entry.state);
   let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
   let undelivered = super::super::composer::undelivered(ctx, entry);
   let id = format!("conversation-message-{}", entry.id);
-  let message = if entry.by_orchestrator {
-    let author = ctx.t("conversation.byOrchestrator");
-    person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
-  } else if entry.by_automation {
-    let author = ctx.t("conversation.byAutomation");
-    person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
-  } else {
-    bubble(ctx, &id, (&entry.body, Some(entry.at)), Some(delivery))
+  let message = match entry.orchestrator {
+    Some(from) => orchestrator_message(ctx, &id, (project, entry, from), delivery),
+    None if entry.by_automation => {
+      let author = ctx.t("conversation.byAutomation");
+      person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
+    }
+    None => bubble(ctx, &id, (&entry.body, Some(entry.at)), Some(delivery)),
   };
   message
     .with_children(undelivered)
     .describe("delivery", delivery_name(&entry.state))
-    .describe("by_orchestrator", entry.by_orchestrator.to_string())
+    .describe("by_orchestrator", entry.orchestrator.is_some().to_string())
     .into()
+}
+
+/// A message the project's Orchestrator chat sent the run's agents, at the chat's side as its rows are, never in the
+/// person's bubble: the Orchestrator's `waypoints` avatar and name with the time, the message as it was sent, how it
+/// went out with the way back to the chat's conversation ([`sent_line`]), and its delivery line as the person's.
+fn orchestrator_message(
+  ctx: &mut Ctx,
+  id: &str,
+  (project, entry, from): (ProjectId, &Entry, FromOrchestrator),
+  delivery: Element,
+) -> Column {
+  orchestrator_row(
+    ctx,
+    id,
+    (project, from),
+    (Some(&entry.body), Some(entry.at)),
+    Some(delivery),
+  )
+}
+
+/// The Orchestrator's row `id`: its avatar and name with the time `at`, what it wrote (`said`), how that went out with
+/// the way back to the chat's conversation, and `after` under them.
+fn orchestrator_row(
+  ctx: &mut Ctx,
+  id: &str,
+  (project, from): (ProjectId, FromOrchestrator),
+  (said, at): (Option<&str>, Option<Timestamp>),
+  after: Option<Element>,
+) -> Column {
+  let name = ctx.t("conversation.byOrchestrator");
+  let time = at.map(display::clock).unwrap_or_default();
+  let said = said.map(|said| {
+    Text::new(said)
+      .id(format!("{id}-text"))
+      .variant(TypographyStyle::Body)
+      .selectable(true)
+      .width(Dimension::Pct(100.0))
+      .into()
+  });
+  let body: Vec<Element> = said
+    .into_iter()
+    .chain(sent_line(ctx, id, (project, from)))
+    .chain(after)
+    .collect();
+  Column::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Xs)
+    .child(chat_row(
+      format!("{id}-row"),
+      Avatar::Orchestrator,
+      (&name, &time),
+      body,
+    ))
 }
 
 /// A note the person returned the work with, as their message, without a delivery line.
@@ -106,6 +163,19 @@ pub(super) fn person_note(
     return person_side_message(id, (&author, note, at), None).into();
   }
   bubble(ctx, id, (note, at), None).into()
+}
+
+/// How the Orchestrator chat went on with the run (ORC-45): its row, with the note the work returned with when there
+/// is one, never the person's bubble.
+pub(super) fn orchestrator_note(
+  ctx: &mut Ctx,
+  id: &str,
+  (project, from): (ProjectId, FromOrchestrator),
+  (note, at): (Option<&Arc<str>>, Option<Timestamp>),
+) -> Element {
+  orchestrator_row(ctx, id, (project, from), (note.map(|note| &**note), at), None)
+    .describe("by_orchestrator", "true")
+    .into()
 }
 
 /// The name `describe` reports a delivery by, for tests and QA.

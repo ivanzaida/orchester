@@ -143,7 +143,14 @@ const SPECS: &[Spec] = &[
                   sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_supported, not_checked), \
                   whether Orchester created its folder or the person brought it, and the account it shares a \
                   sign-in with, if any, and its link in Settings › Accounts. No email and no folder are listed. \
-                  Adding, renaming and removing accounts \
+                  plan_limits is the account's latest plan limits reading as its CLI gave it, or null when none is \
+                  known: source (turn: an agent turn reported it; read: Orchester read it outside a run), \
+                  observed_at (ms since the epoch) and age_seconds, state (normal, near, reached), plan, blocked \
+                  (why the CLI refuses turns: window, credits, workspace, other; null when it does not), and each \
+                  window by minutes (300 five-hour, 10080 weekly) with used_percent, resets_at and \
+                  reset_since_reading (true when its reset has passed since: its use now is unknown, never \
+                  estimated). Codex accounts are read on their own; Claude Code accounts only by a turn or the \
+                  person's Check now. Adding, renaming and removing accounts \
                   and signing them in are done by a person in the window.",
     schema: schema_for_type::<accounts::NoArguments>,
     read_only: true,

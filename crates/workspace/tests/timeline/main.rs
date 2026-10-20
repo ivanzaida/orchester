@@ -357,7 +357,7 @@ fn sent_now(execution: StepExecutionId, at: Timestamp) -> Item {
       },
       execution: Some(execution),
       sent_now: true,
-      by_orchestrator: false,
+      orchestrator: None,
       by_automation: false,
     }),
   }
@@ -484,6 +484,7 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
     kind: MarkKind::Restarted {
       step: "Implement".into(),
     },
+    orchestrator: None,
   };
   items.insert(3, item("mark-2", implement, ItemKind::Mark(mark)));
   for show in [Show::All, Show::Messages, Show::Tools] {
@@ -529,7 +530,7 @@ fn timeline_search_finds_a_question_with_its_step() {
         state: EntryState::Question { open: true },
         execution: Some(execution),
         sent_now: false,
-        by_orchestrator: false,
+        orchestrator: None,
         by_automation: false,
       },
       step: Some("Implement".into()),

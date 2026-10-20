@@ -25,6 +25,7 @@ mod merges;
 mod messages;
 mod native;
 mod orchestrator;
+mod orchestrator_sent;
 mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
@@ -80,6 +81,7 @@ pub use self::{
   approval_rules::DecisionCounts,
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
+  chat_decisions::KeptAction,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_waits::KeptWait,

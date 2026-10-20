@@ -221,7 +221,9 @@
       "reported": "Reported {{time}}",
       "resetsAt": "Resets {{time}}",
       "from": "From {{project}} · {{run}}",
-      "source": "{{project}} · {{run}}"
+      "fromRead": "Read by Orchester outside a run",
+      "source": "{{project}} · {{run}}",
+      "sourceRead": "Read by Orchester"
     },
     "threshold": {
       "title": "Warning threshold",

@@ -164,7 +164,7 @@ pub fn elsewhere(db: &mut ProjectDb) -> Result<ChatId, Box<dyn Error>> {
 }
 
 /// The latest run of each of the seed's tasks that has one, with the task's key.
-fn latest_runs(db: &ProjectDb) -> Result<Vec<(Run, String)>, Box<dyn Error>> {
+pub(super) fn latest_runs(db: &ProjectDb) -> Result<Vec<(Run, String)>, Box<dyn Error>> {
   let mut runs = Vec::new();
   for task in db.tasks()? {
     if let Some(Ok(run)) = db.runs_of_task(task.id())?.pop() {
@@ -175,7 +175,7 @@ fn latest_runs(db: &ProjectDb) -> Result<Vec<(Run, String)>, Box<dyn Error>> {
 }
 
 /// The first of `runs` that succeeded and was not merged: ready for review.
-fn pick_ready<'a>(db: &ProjectDb, runs: &'a [(Run, String)]) -> Result<&'a (Run, String), Box<dyn Error>> {
+pub(super) fn pick_ready<'a>(db: &ProjectDb, runs: &'a [(Run, String)]) -> Result<&'a (Run, String), Box<dyn Error>> {
   for found in runs {
     if *found.0.status() == RunStatus::Succeeded && db.run_merge(found.0.id())?.is_none() {
       return Ok(found);

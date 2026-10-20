@@ -852,6 +852,25 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-55 · Plan limits read on their own, not only when an agent turn reports them · branch `orchester/orc-55-run-1`
+(implemented 2026-10-20; pipeline Check and an independent design Verify still follow). Codex accounts are read through
+App Server's `account/rateLimits/read` outside runs, per account (its CLI and `CODEX_HOME`), with no thread, turn or
+token (`plan_limits::read`, `orchester_exec`'s `LineExchange`: App Server ends at the end of its input without
+answering). Claude Code 2.1.296 has no turn-free read; the person chose an explicit, costed *Check now* per Claude
+account (a one-word Haiku turn, isolated like auto mode's reviewer), never automatic. Reads happen at start, on an
+account change, when the status bar's hint or the Usage page opens, once after a known reset and every 5 minutes only
+while one is shown, backing off after failures (`plan_limits::schedule`); only the app's own window starts the reader,
+never a test or QA copy. A reading keeps its time and source (`ReadingSource`), reads are kept 90 days in
+`orchester.db` (`plan_limit_reads`) beside the turns' reports; the hint says *as of 2 min ago · read* / *· from a
+turn*, the account details *read …* / *reported … · from a turn*, the Usage table and tooltip *Read by Orchester*;
+`list_accounts` returns each account's latest reading with source, `observed_at` and `age_seconds`. Docs:
+`docs/design/agent-accounts.md` (*Plan limits read on their own*), `docs/design/orchester-workspace.md` (*Data
+sources*). Tests: `cargo test -p orchester-core --test plan_limit_reads plan_limit_reads`, `-p orchester-store --test
+plan_reads plan_reads`, `-p orchester-exec --test exchange exchange`, `-p orchester-workspace --test plan_reads
+plan_reads`, `-p orchester-app --test status_bar plan_limits`, `--test mcp_domain domain_accounts`, `--test
+settings_accounts settings_accounts_check_now`. Not drawn in `orchester2.pen` yet: the hint's age line, *Check now*
+and its error.
+
 ORC-31 · Person-only decisions refuse synthetic input everywhere · branch `orchester/orc-31-run-2`
 (implemented 2026-10-18 in run 1, carried onto master in run 2; pipeline Check and independent design Verify still follow).
 A shared workspace policy requires the approvals consent for approvals, questions, plans and stuck/retry/accept

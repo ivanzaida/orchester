@@ -97,9 +97,11 @@ keyring-core = "1"
 # while the window is minimized;
 # 0.48: in-phase keyframes on one process clock (every loader steps together), a tall row's reveal ends at its top
 # (the chat scrolls away from a long reply), selection from the painted layout;
+# 0.49: a synthetic paste shortcut (an MCP client's Ctrl+V) no longer reads the person's clipboard; a paste event
+# before insertion, clipboard images and files, file drops on elements and runtime-decoded images, unused yet;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.48.0", default-features = false }
+lurq = { version = "0.49.0", default-features = false }
 # The deprecated app retains its existing create/render hook contract until it is replaced.
 lurq_legacy = { package = "lurq", version = "0.42.0", default-features = false }
 # Orchester Cloud's confirmation and reset emails through the person's SMTP relay, with TLS through the workspace's

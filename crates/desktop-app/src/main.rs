@@ -21,12 +21,14 @@ fn main() {
   let runtime = Runtime::new().expect("the OS provides threads for the background runtime");
   // Started before the window exists: the data folder's lock, the session, the runners' client and
   // where the window opens, or why there is no session.
-  let launch = Launch::begin(runtime.handle(), log);
+  let mut launch = Launch::begin(runtime.handle(), log);
   // Only this window moves a removed account's folder to the person's Recycle Bin / Trash; tests and QA copies have
   // a trash of their own.
   if let Some(workspace) = launch.workspace() {
     workspace.use_trash(std::sync::Arc::new(orchester_workspace::accounts::trash::SystemTrash));
   }
+  // Only this window reads the accounts' plan limits on its own; tests and QA copies never read a real account.
+  launch.read_plan_limits();
   window::open(&runtime, &launch, position);
   // The window has closed and its server stopped: then the runners stop and the session records its end.
   clipboard::clear_at_exit();

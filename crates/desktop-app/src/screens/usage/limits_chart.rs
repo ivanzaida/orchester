@@ -16,7 +16,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, plan_limits::ReadingSource},
   id::AgentAccountId,
   time::Timestamp,
   usage::{
@@ -389,15 +389,17 @@ fn tip(ctx: &Ctx, dashboard: &Dashboard, plot: &LimitPlot, hovered: Hovered) -> 
           None,
         )
       }));
-      let source = point.source.as_ref().map(|source| {
-        ctx.t_args(
+      let source = match (&point.source, point.origin) {
+        (_, ReadingSource::Read) => Some(ctx.t("usage.limits.fromRead")),
+        (Some(source), ReadingSource::Turn) => Some(ctx.t_args(
           "usage.limits.from",
           [
             ("project", &*source.project),
             ("run", &*words::run_label(ctx, &source.task_key, source.run.get())),
           ],
-        )
-      });
+        )),
+        (None, ReadingSource::Turn) => None,
+      };
       let title = ctx.t_args(
         "usage.limits.windowTitle",
         [(

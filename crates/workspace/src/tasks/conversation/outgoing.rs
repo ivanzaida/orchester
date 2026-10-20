@@ -11,7 +11,7 @@ use std::path::Path;
 
 use orchester_core::{
   conversation::{Message, Recipient, Timing},
-  id::{IdempotencyKey, MessageId, RunId, TaskId},
+  id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
   integration::Leftovers,
   run::{Answerer, PlanDecision, PlanVersion, ReviewNote},
 };
@@ -273,18 +273,19 @@ pub fn store_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, false, Answerer::Person))
+  store_as(root, prepared, (key, way), (text, None, Answerer::Person))
 }
 
-/// [`store_in`] for the project's Orchestrator chat, which wrote `text` on the person's side: the conversation names
-/// it as the chat's.
+/// [`store_in`] for the project's Orchestrator chat of conversation `chat`, which wrote `text` on the person's side:
+/// the conversation names it as the chat's, sent by the chat itself when `by` is automation, applied by the person
+/// otherwise.
 pub fn store_by_orchestrator_in(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  text: &str,
+  (text, chat, by): (&str, ChatId, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, true, Answerer::Automation))
+  store_as(root, prepared, (key, way), (text, Some(chat), by))
 }
 
 /// Stores a window or MCP client's message with the decider captured before yielding.
@@ -295,14 +296,14 @@ pub fn store_answer_in(
   text: &str,
   by: Answerer,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, key_way, (text, false, by))
+  store_as(root, prepared, key_way, (text, None, by))
 }
 
 fn store_as(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  (text, by_orchestrator, by): (&str, bool, Answerer),
+  (text, by_orchestrator, by): (&str, Option<ChatId>, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
   let then = match way {
     Way::Primary => prepared.mode.then(),

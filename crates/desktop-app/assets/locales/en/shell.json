@@ -195,7 +195,11 @@
         "resets": "resets {{time}}",
         "today": "today, {{time}}",
         "day": "{{month}} {{day}}, {{time}}",
-        "note": "Limits are per account and shared by every project that uses it. Claude windows are as of the last run on the account."
+        "asOf": {
+          "read": "as of {{ago}} · read",
+          "turn": "as of {{ago}} · from a turn"
+        },
+        "note": "Limits are per account and shared by every project that uses it. Codex accounts are read every few minutes while this is open; Claude windows are as of the last run or Check now on the account."
       },
       "server": {
         "connected": "{{server}}",

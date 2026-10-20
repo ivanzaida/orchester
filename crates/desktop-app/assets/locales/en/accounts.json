@@ -112,15 +112,18 @@
     },
     "planLimits": {
       "title": "Plan limits",
-      "meta": "reported {{time}}",
-      "none": "No limits reported yet: {{program}} reports them while a run works on this account.",
+      "metaTurn": "reported {{time}} · from a turn",
+      "metaRead": "read {{time}}",
+      "none": "No limits reported yet: {{program}} reports them while a run works on this account, or when you check now.",
+      "noneCodex": "No limits read yet: Orchester reads them from {{program}} on its own once someone is signed in.",
+      "checkNow": "Check now",
       "fiveHour": "5-hour",
       "weekly": "Weekly",
       "window": "{{hours}}-hour",
       "resets": "resets {{time}}",
       "reached": "limit reached · resets {{time}}",
-      "noteClaude": "Claude Code reports limits only while it runs, so they are as of the last run on this account. Use outside Orchester shows up with the next report.",
-      "noteCodex": "Codex reports limits while it runs, so they are as of the last run on this account. Use outside Orchester shows up with the next report."
+      "noteClaude": "Claude Code reports limits only while it runs, so they are as of the last run or check on this account. Check now runs the smallest turn Claude Code can, a one-word answer on Haiku, which spends a few tokens of this account's plan; Orchester never checks on its own.",
+      "noteCodex": "Orchester reads Codex's limits on its own, without a turn or tokens: when the app starts, when this account changes, after a reset, and every few minutes while the status bar's plan limits or the Usage page are open."
     },
     "runsGet": {
       "title": "What runs on this account get",

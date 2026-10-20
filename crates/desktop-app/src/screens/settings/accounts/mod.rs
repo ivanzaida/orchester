@@ -69,6 +69,21 @@ impl DevtoolsInspectable for Ids {}
 struct Opened(Option<(AgentAccountId, Timestamp)>);
 impl DevtoolsInspectable for Opened {}
 
+/// The account the last *Check now* ran for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PlanChecked(Option<AgentAccountId>);
+impl DevtoolsInspectable for PlanChecked {}
+
+/// Where an account's *Check now* stands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum PlanCheck {
+  /// Not run for it, or it gave a reading.
+  Idle,
+  Running,
+  /// It gave no reading, and why.
+  Failed(Message),
+}
+
 /// What the parts of the tab show.
 #[derive(Clone)]
 struct Parts {
@@ -106,6 +121,9 @@ struct Work {
   pub check: CheckAction,
   pub sign_in: SignInAction,
   pub choose: work::ChooseAction,
+  /// *Check now* of a Claude Code account's plan limits, and the account it ran for last.
+  plan_check: work::PlanCheckAction,
+  plan_checked: Signal<PlanChecked>,
   /// The account whose sign-in terminal opened last, and when.
   opened: Signal<Opened>,
   checking: Signal<Ids>,
@@ -119,6 +137,25 @@ impl Work {
   pub fn check_again(&self, accounts: Vec<AgentAccountId>) {
     self.checking.set(Ids(accounts.clone()));
     self.check.run(accounts);
+  }
+
+  /// Runs *Check now* for `account`.
+  pub fn check_plan(&self, account: AgentAccountId) {
+    self.plan_checked.set(PlanChecked(Some(account)));
+    self.plan_check.run(account);
+  }
+
+  /// Where `account`'s *Check now* stands.
+  pub fn plan_check_of(&self, account: AgentAccountId) -> PlanCheck {
+    if self.plan_checked.get().0 != Some(account) {
+      return PlanCheck::Idle;
+    }
+    let state = self.plan_check.state().get();
+    match (state.is_pending(), state.error) {
+      (true, _) => PlanCheck::Running,
+      (false, Some(error)) => PlanCheck::Failed(error),
+      (false, None) => PlanCheck::Idle,
+    }
   }
 
   /// When the sign-in terminal of `account` opened, if it is the last one opened.
@@ -174,6 +211,8 @@ impl Component for AccountsTab {
       check: work::check(ctx),
       sign_in: work::sign_in(ctx),
       choose: work::choose_folder(ctx),
+      plan_check: work::plan_check(ctx),
+      plan_checked: ctx.signal(PlanChecked::default()),
       opened: ctx.signal(Opened::default()),
       checking: ctx.signal(Ids::default()),
       draft: add::Draft::new(ctx),
