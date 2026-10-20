@@ -67,85 +67,34 @@ impl Component for NotificationsSection {
     let save = save_action(ctx);
     let failed = save.state().get().error;
     self.follow_times(&prefs, &save, settings);
-    let switch = |ctx: &Ctx,
-                  (id, title, on): (&str, &str, bool),
-                  change: fn(NotificationSettings, bool) -> NotificationSettings| {
-      let (prefs, save) = (prefs.clone(), save.clone());
-      Toggle::new(id, ToggleKind::Switch, on, ctx.t(title))
-        .hide_label()
-        .on_change(move |chosen| {
-          let next = change(prefs.get_now(), chosen);
-          prefs.set(next);
-          save.run(next);
-        })
-    };
-    let group = |ctx: &Ctx, (key, group): (&str, NotificationGroup)| {
-      let id = format!("settings-notify-{key}");
-      let title = format!("settings.notifications.{key}.title");
-      let on = settings.shows(group);
-      let toggle = switch(
-        ctx,
-        (&id, &title, on),
-        match group {
-          NotificationGroup::NeedsYou => |settings, on| settings.with(NotificationGroup::NeedsYou, on),
-          NotificationGroup::Stopped => |settings, on| settings.with(NotificationGroup::Stopped, on),
-          NotificationGroup::Finished => |settings, on| settings.with(NotificationGroup::Finished, on),
-        },
-      );
-      let words = (
-        ctx.t(&title),
-        ctx.t(&format!("settings.notifications.{key}.description")),
-      );
-      Element::from(row(&id, (&words.0, &words.1), toggle))
-    };
+    let switch = |ctx: &Ctx, (key, on): (&str, bool), change| switch_row(ctx, (&prefs, &save), (key, on), change);
     let mut rows: Vec<Element> = vec![
-      group(ctx, ("needsYou", NotificationGroup::NeedsYou)),
-      group(ctx, ("stopped", NotificationGroup::Stopped)),
-      group(ctx, ("finished", NotificationGroup::Finished)),
-    ];
-    let sound = switch(
-      ctx,
-      (
-        "settings-notify-sound",
-        "settings.notifications.sound.title",
-        settings.sound,
+      switch(
+        ctx,
+        ("needsYou", settings.shows(NotificationGroup::NeedsYou)),
+        |settings, on| settings.with(NotificationGroup::NeedsYou, on),
       ),
-      |settings, on| NotificationSettings { sound: on, ..settings },
-    );
-    rows.push(
-      row(
-        "settings-notify-sound",
-        (
-          &ctx.t("settings.notifications.sound.title"),
-          &ctx.t("settings.notifications.sound.description"),
-        ),
-        sound,
-      )
-      .into(),
-    );
-    let quiet = switch(
-      ctx,
-      (
-        "settings-notify-quiet",
-        "settings.notifications.quiet.title",
-        settings.quiet.is_some(),
+      switch(
+        ctx,
+        ("stopped", settings.shows(NotificationGroup::Stopped)),
+        |settings, on| settings.with(NotificationGroup::Stopped, on),
       ),
-      |settings, on| NotificationSettings {
-        quiet: on.then(QuietHours::default),
+      switch(
+        ctx,
+        ("finished", settings.shows(NotificationGroup::Finished)),
+        |settings, on| settings.with(NotificationGroup::Finished, on),
+      ),
+      switch(ctx, ("sound", settings.sound), |settings, on| NotificationSettings {
+        sound: on,
         ..settings
-      },
-    );
-    rows.push(
-      row(
-        "settings-notify-quiet",
-        (
-          &ctx.t("settings.notifications.quiet.title"),
-          &ctx.t("settings.notifications.quiet.description"),
-        ),
-        quiet,
-      )
-      .into(),
-    );
+      }),
+      switch(ctx, ("quiet", settings.quiet.is_some()), |settings, on| {
+        NotificationSettings {
+          quiet: on.then(QuietHours::default),
+          ..settings
+        }
+      }),
+    ];
     if settings.quiet.is_some() {
       rows.push(self.times(ctx));
     }
@@ -238,6 +187,28 @@ impl NotificationsSection {
 
 /// The width of a time's select (`22:00` and its chevron).
 const TIME_WIDTH: f32 = 112.0;
+
+/// The row `settings-notify-{key}` with its switch, titled and described by `settings.notifications.{key}.*`; turning
+/// the switch shows the settings `change` makes at once and saves them.
+fn switch_row(
+  ctx: &Ctx,
+  (prefs, save): (&NotificationPrefs, &SaveAction),
+  (key, on): (&str, bool),
+  change: fn(NotificationSettings, bool) -> NotificationSettings,
+) -> Element {
+  let id = format!("settings-notify-{key}");
+  let title = ctx.t(&format!("settings.notifications.{key}.title"));
+  let description = ctx.t(&format!("settings.notifications.{key}.description"));
+  let (prefs, save) = (prefs.clone(), save.clone());
+  let toggle = Toggle::new(id.as_str(), ToggleKind::Switch, on, title.clone())
+    .hide_label()
+    .on_change(move |chosen| {
+      let next = change(prefs.get_now(), chosen);
+      prefs.set(next);
+      save.run(next);
+    });
+  row(&id, (&title, &description), toggle).into()
+}
 
 /// What a build that shows no OS notifications says over the rows.
 fn delivery_note(ctx: &Ctx) -> Option<Row> {
