@@ -4,6 +4,10 @@
 //! records wait for approval. The project is the tab's (`Tab::sidebar_project`): on the app's Settings the
 //! one the tab was in last, with Settings selected; a tab that has been in no project shows only the
 //! switcher and the bottom group. All projects and Add project have no sidebar.
+//!
+//! The design draws the sidebar only where everything fits. In a window too short for it, the switcher
+//! stays at the top and All projects, Settings and Project settings at the bottom, and what lies between
+//! (the screens and the runs under way) scrolls, the thumb in the sidebar's right padding.
 
 pub mod running;
 pub mod switcher;
@@ -14,7 +18,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, ScrollVertical, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -51,17 +55,10 @@ impl Component for Sidebar {
     let selected = route.as_ref().map(Route::nav_screen);
     let project = navigation.tabs().active().sidebar_project();
     let switcher = ctx.mount_keyed::<Switcher>("project-switcher", SwitcherProps { project });
-    let mut sidebar = Column::new()
-      .id("sidebar")
-      .width(Dimension::Px(SIDEBAR_WIDTH))
-      .height(Dimension::Pct(100.0))
-      .padding(
-        Padding::horizontal(SpacingSize::Md)
-          .top(ExtraSpacing::Snug.role())
-          .bottom(ExtraSpacing::Loose.role()),
-      )
-      .spacing(ExtraSpacing::Tight.role())
-      .child(switcher);
+    let mut screens = Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::horizontal(SpacingSize::Md))
+      .spacing(ExtraSpacing::Tight.role());
     let mut bottom = vec![Screen::AllProjects, Screen::Settings];
     if let Some(project) = project {
       let counts = counts(ctx, project);
@@ -71,7 +68,7 @@ impl Component for Sidebar {
         navigation: &navigation,
         counts: &counts,
       };
-      sidebar = sidebar
+      screens = screens
         // `Gap` (`Eo8Zf`): 8 between the switcher and the screens, with the sidebar's gap on each side.
         .child(Column::new().padding(Padding::new().top(SpacingSize::Sm)))
         .child(items.group(ctx, &Screen::PROJECT_MAIN))
@@ -86,8 +83,36 @@ impl Component for Sidebar {
       navigation: &navigation,
       counts: &[],
     };
-    sidebar.child(Column::new().flex(1.0)).child(items.group(ctx, &bottom))
+    let bottom = items.group(ctx, &bottom);
+    Column::new()
+      .id("sidebar")
+      .width(Dimension::Px(SIDEBAR_WIDTH))
+      .height(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(ExtraSpacing::Snug.role())
+          .bottom(ExtraSpacing::Loose.role()),
+      )
+      .spacing(ExtraSpacing::Tight.role())
+      .child(pinned(switcher))
+      // The room the design leaves empty (`Spacer`) between the screens and the bottom group.
+      .child(
+        ScrollVertical::new(screens)
+          .id("sidebar-scroll")
+          .width(Dimension::Pct(100.0))
+          .flex(1.0)
+          .min_height(Dimension::Px(0.0)),
+      )
+      .child(pinned(bottom))
   }
+}
+
+/// `child` inside the sidebar's side padding, outside its scrolling part.
+fn pinned(child: impl Into<Element>) -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::horizontal(SpacingSize::Md))
+    .child(child)
 }
 
 /// The counts beside the project's screens: how many tasks `project` has, a dash while they are read,
