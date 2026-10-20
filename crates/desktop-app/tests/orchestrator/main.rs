@@ -8,6 +8,7 @@
 
 mod changes;
 mod chat;
+mod continuation;
 mod decisions;
 mod drafts;
 mod harness;
