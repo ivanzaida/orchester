@@ -1,7 +1,7 @@
-//! What a record list says when its filters show nothing (`a24wV8`, `z4t51u`): that nothing matches, how search
-//! works, what matches among other types or statuses with a way to show them, and *Clear search*. The project's page
-//! names the status it lists (*No active records match “oauth refresh”*) and, when the other matches share one
-//! status, that status with a way to show it (*1 match among deprecated records*, *Show deprecated*).
+//! What a record list says when its filters show nothing (`n3lxin` in `fQ33n`, `z4t51u`): that nothing matches,
+//! how search works, what matches among other types or statuses with a way to show them, and *Clear search*. The
+//! project's page names the status it lists (*No active records match “oauth refresh”*) and, when the other matches
+//! share one status, that status with a way to show it (*1 match among deprecated records*, *Show deprecated*).
 
 use std::sync::Arc;
 
@@ -9,11 +9,10 @@ use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::memory::Memory;
 use orchester_workspace::memory::listing::{self, Filters, StatusFilter};
 
-use super::{state::MemoryState, words};
+use super::{centered::Centered, state::MemoryState, words};
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   icon::Icon,
-  state::EmptyState,
 };
 
 pub fn no_match(ctx: &Ctx, state: &MemoryState, records: &[Memory], filters: &Filters) -> Element {
@@ -28,7 +27,7 @@ pub fn no_match(ctx: &Ctx, state: &MemoryState, records: &[Memory], filters: &Fi
     Some(more) => format!("{lexical} {more}"),
     None => lexical.to_string(),
   };
-  let mut empty = EmptyState::new("memory-no-match", Icon::SearchX, title(ctx, page, filters), explanation).unframed();
+  let mut empty = Centered::new("memory-no-match", Icon::SearchX, title(ctx, page, filters), explanation).page(page);
   if let Some(note) = elsewhere.note {
     empty = empty.note(note);
   }

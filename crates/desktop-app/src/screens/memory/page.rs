@@ -221,6 +221,7 @@ fn queue(ctx: &mut Ctx, state: &MemoryState, memory: &ProjectMemory) -> Element 
     records: &scope,
     origins: &memory.origins,
     with_task: true,
+    project: Some(memory),
   };
   let mut queue = Column::new()
     .id("memory-queue")

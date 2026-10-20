@@ -216,6 +216,19 @@ fn memory_task_tab_writes_a_new_record_to_the_task() {
 }
 
 #[test]
+fn memory_task_tab_says_a_proposal_waits_at_its_top_right() {
+  let mut page = kon_12();
+  let id = page.record("Retry budget is per endpoint").id();
+  let text = page.bounds(&format!("memory-proposal-{id}-text"));
+  let waiting = page.bounds(&format!("memory-proposal-{id}-waiting"));
+  assert!(
+    waiting.x >= text.x + text.width,
+    "the text stops short of the status: {text:?} {waiting:?}"
+  );
+  assert!(waiting.y <= text.y, "the status is on the row's first line");
+}
+
+#[test]
 fn memory_task_tab_search_and_filters_say_what_matches() {
   let mut page = kon_12();
   page.window.set("memory-search", "oauth refresh");
@@ -224,6 +237,13 @@ fn memory_task_tab_search_and_filters_say_what_matches() {
     page
       .text("memory-no-match")
       .starts_with("No records match “oauth refresh”")
+  );
+  let (title, list) = (page.bounds("memory-no-match-title"), page.bounds("memory-list"));
+  let middle = title.x + title.width / 2.0 - (list.x + list.width / 2.0);
+  assert!(middle.abs() < 2.0, "centered across the list: {title:?} in {list:?}");
+  assert!(
+    title.y > list.y + list.height / 4.0,
+    "in the middle of the list, not at its top: {title:?} in {list:?}"
   );
   page.window.set("memory-search", "");
   page.until("the list again", |window| window.texts("memory-no-match").is_none());

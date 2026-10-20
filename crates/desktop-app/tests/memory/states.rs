@@ -15,11 +15,12 @@ const TWO_LINE_KEY: &str = "UPDATE memories SET key = 'two' || char(10) || 'line
 #[test]
 fn memory_task_tab_says_it_couldnt_read_and_tries_again() {
   let mut page = Page::seeded("memory");
-  page.edit_outside("ALTER TABLE memories RENAME TO memories_away", None);
+  // The task's page counts the project's waiting proposals from `memories`; only the tab reads the settings.
+  page.edit_outside("ALTER TABLE memory_settings RENAME TO memory_settings_away", None);
   page.task_memory("KON-12");
   let failed = page.text("memory-load-error");
   assert!(failed.starts_with("Couldn't read the memory of KON-12"), "{failed}");
-  page.edit_outside("ALTER TABLE memories_away RENAME TO memories", None);
+  page.edit_outside("ALTER TABLE memory_settings_away RENAME TO memory_settings", None);
   page.press_until("memory-retry", "the memory read again", |window| {
     window.texts("memory-load-error").is_none() && window.texts("memory-count").is_some()
   });

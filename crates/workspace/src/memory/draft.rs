@@ -57,6 +57,34 @@ impl RecordDraft {
     *self != Self::of(memory)
   }
 
+  /// What the draft changes of what `memory` says, in the order the editor shows the fields.
+  pub fn edits_of(&self, memory: &Memory) -> Vec<DraftEdit> {
+    let was = Self::of(memory);
+    let mut edits = Vec::new();
+    if self.kind != was.kind {
+      edits.push(DraftEdit::Kind {
+        from: was.kind,
+        to: self.kind,
+      });
+    }
+    if self.key.trim() != was.key {
+      edits.push(DraftEdit::Key);
+    }
+    if self.importance != was.importance {
+      edits.push(DraftEdit::Importance {
+        from: was.importance,
+        to: self.importance,
+      });
+    }
+    if self.text.trim() != was.text.trim() {
+      edits.push(DraftEdit::Text);
+    }
+    if self.tags != was.tags {
+      edits.push(DraftEdit::Tags);
+    }
+    edits
+  }
+
   /// `tag` added, as a record keeps tags (lowercase, each once); why not when it is no tag.
   pub fn with_tag(&self, tag: &str) -> Result<Self, DraftProblem> {
     let tags = Tags::new([tag]).map_err(|_| DraftProblem::Tag)?;
@@ -68,6 +96,16 @@ impl RecordDraft {
     }
     Ok(draft)
   }
+}
+
+/// One thing a person changed of a record in its editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DraftEdit {
+  Kind { from: MemoryKind, to: MemoryKind },
+  Key,
+  Importance { from: Importance, to: Importance },
+  Text,
+  Tags,
 }
 
 /// Why a draft is not a record's content yet.

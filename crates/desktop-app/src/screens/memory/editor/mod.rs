@@ -6,6 +6,7 @@
 //! record, active at once, to this task or the project. One component for the three: mode is a prop.
 
 mod fields;
+mod replaces;
 
 use std::sync::Arc;
 
@@ -59,8 +60,8 @@ pub struct EditorProps {
   pub memory: Option<Memory>,
   /// Who and where, under the title (`cEtf8`).
   pub subtitle: Arc<str>,
-  /// The active record approving the proposal replaces, with its meta line.
-  pub replaced: Option<(Memory, Arc<str>)>,
+  /// The active record approving the proposal replaces.
+  pub replaced: Option<Replaced>,
   /// The facts under the fields: their labels and values (`OVIEu`).
   pub facts: Arc<[(Arc<str>, Arc<str>)]>,
   /// The task whose conversation *Show in Conversation ↗* under the first fact opens, when the record came from one.
@@ -68,6 +69,18 @@ pub struct EditorProps {
 }
 
 impl DevtoolsInspectable for EditorProps {}
+
+/// The active record approving a proposal replaces (`i09ZK` in `t0jt2k`, `nbYtu` in `kq8Am`).
+#[derive(Clone, PartialEq)]
+pub struct Replaced {
+  pub memory: Memory,
+  /// Who wrote it where and when.
+  pub meta: Arc<str>,
+  /// The agent that proposed the record reviewed.
+  pub proposer: Option<Arc<str>>,
+  /// How many invocations were given it, where the page read it (the project's page).
+  pub given: Option<usize>,
+}
 
 /// A record's type as a select holds it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -226,7 +239,17 @@ impl RecordEditor {
       .align_items(Alignment::Center);
     row = row.with_children(self.secondary(ctx, state, props, id).into_iter().map(&held));
     if props.mode == EditorMode::Review {
-      row = row.child(Text::new(&ctx.t("memory.editor.rejectNote")).variant(TypographyStyle::Caption));
+      // The project's page keeps the note short, so the footer fits its narrower column (`uEOgZ` in `kq8Am`).
+      let note = ctx.t(if state.task.is_none() {
+        "memory.editor.rejectNoteShort"
+      } else {
+        "memory.editor.rejectNote"
+      });
+      row = row.child(
+        Text::new(&note)
+          .id(format!("{id}-reject-note"))
+          .variant(TypographyStyle::Caption),
+      );
     }
     let note = ctx.t(match props.mode {
       EditorMode::Review => "memory.editor.approveNote",

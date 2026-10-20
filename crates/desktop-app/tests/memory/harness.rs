@@ -171,6 +171,16 @@ impl Page {
     self.db().memory(id).expect("the record reads")
   }
 
+  /// Where the element `id` is laid out.
+  pub fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+  }
+
   /// The id of task `key`.
   pub fn task(&self, key: &str) -> orchester_core::id::TaskId {
     self

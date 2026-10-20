@@ -35,10 +35,12 @@ pub enum MemoryText {
   Lead,
   /// 14/600 `text_primary`: the title of the project's panel or of a record's inspector (`wJDd2`, `jIMDn`).
   PanelTitle,
+  /// 12 `text_secondary`, 1.5: what a task's empty or no-match state explains, centered (`M22vg`, `QtSG5`).
+  StateText,
 }
 
 impl MemoryText {
-  pub const ALL: [Self; 9] = [
+  pub const ALL: [Self; 10] = [
     Self::GroupLabel,
     Self::GroupCount,
     Self::Flag,
@@ -48,6 +50,7 @@ impl MemoryText {
     Self::Scope,
     Self::Lead,
     Self::PanelTitle,
+    Self::StateText,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -65,6 +68,7 @@ impl MemoryText {
       Self::Scope => "memory_scope",
       Self::Lead => "memory_lead",
       Self::PanelTitle => "memory_panel_title",
+      Self::StateText => "memory_state_text",
     }
   }
 
@@ -85,6 +89,7 @@ impl MemoryText {
       Self::Scope => style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::PanelTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::StateText => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
     }
   }
 }
@@ -100,10 +105,18 @@ pub enum MemorySpacing {
   /// 40: why a row's change did nothing, in line with the row's text past its 12 side, 16 glyph and 12 gap
   /// (`gQodn` in `rKIl1`).
   RowText,
+  /// 36: above the project page's *No active records match* (`X0l2I6` in `z4t51u`).
+  StateTop,
 }
 
 impl MemorySpacing {
-  pub const ALL: [Self; 4] = [Self::Groups, Self::TextIndent, Self::ListSide, Self::RowText];
+  pub const ALL: [Self; 5] = [
+    Self::Groups,
+    Self::TextIndent,
+    Self::ListSide,
+    Self::RowText,
+    Self::StateTop,
+  ];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -115,6 +128,7 @@ impl MemorySpacing {
       Self::TextIndent => "memory_text_indent",
       Self::ListSide => "memory_list_side",
       Self::RowText => "memory_row_text",
+      Self::StateTop => "memory_state_top",
     }
   }
 
@@ -124,6 +138,7 @@ impl MemorySpacing {
       Self::TextIndent => 28.0,
       Self::ListSide => 20.0,
       Self::RowText => 40.0,
+      Self::StateTop => 36.0,
     }
   }
 }

@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::memory::{Memory, MemoryAuthor, MemoryScope, MemoryStatus};
-use orchester_workspace::memory::{listing, origin::Origins};
+use orchester_workspace::memory::{listing, origin::Origins, read::ProjectMemory};
 
 use super::{
   delete::DeleteProps,
-  editor::{EditorMode, EditorProps},
+  editor::{EditorMode, EditorProps, Replaced},
   words,
 };
 
@@ -20,6 +20,8 @@ pub struct Among<'a> {
   pub origins: &'a Origins,
   /// The meta line names the task an agent worked on.
   pub with_task: bool,
+  /// The project's memory as its page read it, which knows how many invocations were given a replaced record.
+  pub project: Option<&'a ProjectMemory>,
 }
 
 /// The editor of `memory` in `mode`.
@@ -27,7 +29,12 @@ pub fn editor(ctx: &Ctx, memory: &Memory, mode: EditorMode, among: Among<'_>) ->
   let replaced = (mode == EditorMode::Review)
     .then(|| replaced(memory, among.records))
     .flatten()
-    .map(|old| (old.clone(), words::meta(ctx, old, among.origins, among.with_task)));
+    .map(|old| Replaced {
+      memory: old.clone(),
+      meta: words::meta(ctx, old, among.origins, among.with_task),
+      proposer: among.origins.written(memory).and_then(|place| place.agent),
+      given: among.project.and_then(|project| project.given_count(old.id())),
+    });
   let facts = match mode {
     EditorMode::Review => review_facts(ctx, memory, among.origins),
     EditorMode::Edit => edit_facts(ctx, memory, among),

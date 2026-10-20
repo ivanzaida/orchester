@@ -1,6 +1,7 @@
 //! The Memory screens with no record (`tasks` scenario): the task's tab says what agents keep and which step works
-//! (`Empty · no records yet` `e8oWP4`), with no search or filters; the project's page shows its empty state
-//! (`Empty project memory` `T10K7`) without a queue; and a task's Artifacts tab says runs keep no artifacts yet.
+//! (`Empty · no records yet` `e8oWP4`), with no toolbar, as its own *New record* stands in the state; the project's
+//! page shows its empty state (`Empty project memory` `T10K7`) without a queue; and a task's Artifacts tab says runs
+//! keep no artifacts yet.
 
 use super::harness::Page;
 
@@ -11,10 +12,17 @@ fn memory_empty_task_tab_says_what_agents_keep() {
   let empty = page.text("memory-empty");
   assert!(empty.starts_with("No memory for this task yet"), "{empty}");
   assert!(empty.contains("03 Implement is working"), "{empty}");
-  assert!(!page.has("memory-search"), "nothing to search");
-  assert_eq!(page.text("memory-count"), "0 active · 0 waiting");
+  assert!(
+    !page.has("memory-toolbar"),
+    "no toolbar while there is nothing to search or count"
+  );
+  assert!(page.has("memory-empty-new"));
   assert_eq!(page.text("task-tab-memory"), "Memory");
   assert!(page.text("memory-next").contains("Nothing to give yet"));
+  page.window.press("memory-empty-new");
+  page.until("the new record's editor", |window| {
+    window.texts("memory-editor-new").is_some()
+  });
 }
 
 #[test]

@@ -56,6 +56,7 @@ impl<'a> ListInput<'a> {
       records: self.records,
       origins: self.origins,
       with_task: !self.task_tab,
+      project: None,
     }
   }
 }

@@ -32,7 +32,7 @@ use orchester_workspace::{
 use super::TaskContext;
 use crate::{
   screens::memory::{
-    self as memory_ui, FilterBar, FiltersProps, ListInput,
+    self as memory_ui, Centered, FilterBar, FiltersProps, ListInput,
     state::{Made, MemoryState, OfTask, Opened, Shared},
     words,
   },
@@ -87,27 +87,44 @@ impl Component for TaskMemoryTab {
     ctx.provide(state.clone());
     let read = read(ctx, &props.task, self.retries.get());
     let filters = state.filters.get();
-    // The search and filters show once there are records to search; the count once they are read.
+    // The search and filters show once there are records to search; the count once they are read. With no record
+    // yet the empty state has *New record* itself, so the toolbar is left out (`e8oWP4`).
     let (searchable, counted) = match &read {
       Read::Ready(memory) => (!memory.records.is_empty(), Some(count(ctx, memory, &filters))),
       Read::Failed(_) => (true, None),
       Read::Reading => (false, None),
     };
-    let toolbar = toolbar(ctx, &state, searchable, counted);
+    let toolbar = (searchable || counted.is_none()).then(|| toolbar(ctx, &state, searchable, counted));
     let (list, side) = match read {
-      Read::Reading => (loading("memory-loading", &ctx.t("memory.reading")).into(), None),
-      Read::Failed(reason) => (self.failed(ctx, &state, &reason), Some(next::panel(ctx, None))),
+      Read::Reading => (
+        Shown::Scrolls(loading("memory-loading", &ctx.t("memory.reading")).into()),
+        None,
+      ),
+      Read::Failed(reason) => (
+        Shown::Scrolls(self.failed(ctx, &state, &reason)),
+        Some(next::panel(ctx, None)),
+      ),
       Read::Ready(memory) => {
         let side = next::panel(ctx, Some(&memory));
         (records(ctx, &state, &memory), Some(side))
       }
+    };
+    // A state in place of records stands in the middle of the list's room (`n3lxin`), which a scroll view's
+    // content can't fill.
+    let list = match list {
+      Shown::Scrolls(list) => ScrollVertical::new(list)
+        .id("task-memory-scroll")
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Pct(100.0))
+        .into(),
+      Shown::Fills(list) => list,
     };
     Column::new()
       .id("task-memory")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
-      .child(toolbar)
+      .with_children(toolbar)
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -118,12 +135,7 @@ impl Component for TaskMemoryTab {
               .flex(1.0)
               .min_width(Dimension::Px(0.0))
               .height(Dimension::Pct(100.0))
-              .child(
-                ScrollVertical::new(list)
-                  .id("task-memory-scroll")
-                  .width(Dimension::Pct(100.0))
-                  .height(Dimension::Pct(100.0)),
-              ),
+              .child(list),
           )
           .with_children(side),
       )
@@ -200,6 +212,12 @@ fn list_frame() -> Column {
     .spacing(MemorySpacing::Groups.role())
 }
 
+/// The list as the tab lays it out: in a scroll view, or filling its room while a state stands alone in it.
+enum Shown {
+  Scrolls(Element),
+  Fills(Element),
+}
+
 /// The toolbar (`yFMam`): the search and the filters while there are records to search, the count, and *New
 /// record*.
 fn toolbar(ctx: &mut Ctx, state: &MemoryState, searchable: bool, counted: Option<Arc<str>>) -> Element {
@@ -238,18 +256,24 @@ fn toolbar(ctx: &mut Ctx, state: &MemoryState, searchable: bool, counted: Option
     .into()
 }
 
-/// The task's records, or what the tab says while it has none (`sglU2`, `e8oWP4`).
-fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Element {
+/// The task's records, or what the tab says while it has none (`sglU2`, `e8oWP4`) or none match (`fQ33n`).
+fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Shown {
   let filters = state.filters.get();
-  let mut list = list_frame();
-  list = list.with_children(memory_ui::new_record(ctx, state));
+  let mut above: Vec<Element> = memory_ui::new_record(ctx, state).into_iter().collect();
   if memory.unreadable > 0 {
-    list = list.child(memory_ui::unreadable(ctx, memory.unreadable));
+    above.push(memory_ui::unreadable(ctx, memory.unreadable));
   }
+  let alone = |above: Vec<Element>, state_view: Element| {
+    if above.is_empty() {
+      Shown::Fills(list_frame().height(Dimension::Pct(100.0)).child(state_view).into())
+    } else {
+      Shown::Scrolls(list_frame().with_children(above).child(state_view).into())
+    }
+  };
   if memory.records.is_empty() {
-    return list.child(empty(ctx, state, memory)).into();
+    return alone(above, empty(ctx, state, memory));
   }
-  list = list.with_children(memory_ui::row_failure(ctx, state, &memory.records));
+  above.extend(memory_ui::row_failure(ctx, state, &memory.records));
   let groups = memory_ui::groups(
     ctx,
     state,
@@ -261,11 +285,9 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Element {
     },
   );
   if groups.is_empty() {
-    return list
-      .child(memory_ui::no_match(ctx, state, &memory.records, &filters))
-      .into();
+    return alone(above, memory_ui::no_match(ctx, state, &memory.records, &filters));
   }
-  list.with_children(groups).into()
+  Shown::Scrolls(list_frame().with_children(above).with_children(groups).into())
 }
 
 /// *10 active · 1 waiting*; *10 active · 4 not given* while every status shows; *0 of 3 decisions* while a type is
@@ -309,8 +331,7 @@ fn empty(ctx: &Ctx, state: &MemoryState, memory: &TaskMemory) -> Element {
     body = format!("{body} {}", ctx.t_args("memory.task.emptyWorking", [("step", &*step)]));
   }
   let open = state.clone();
-  EmptyState::new("memory-empty", Icon::Brain, ctx.t("memory.task.emptyTitle"), body)
-    .unframed()
+  Centered::new("memory-empty", Icon::Brain, ctx.t("memory.task.emptyTitle"), body)
     .action(
       ActionButton::new("memory-empty-new", ButtonKind::Secondary, ctx.t("memory.newRecord"))
         .icon(Icon::Plus)

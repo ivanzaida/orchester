@@ -18,11 +18,10 @@ use orchester_workspace::memory::{draft::SaveTo, listing::KIND_ORDER};
 use super::{EditorMode, EditorProps, ImportanceChoice, KindChoice, RecordEditor, SaveToChoice};
 use crate::{
   screens::memory::{parts, state::MemoryState, words},
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize, MemoryText},
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography},
   ui::{
     chip::TagChip,
     field::{FieldInput, SelectField, field, field_error},
-    icon::{Icon, icon},
     message::message_text,
     toggle::{Toggle, ToggleKind},
   },
@@ -62,11 +61,13 @@ impl RecordEditor {
     if props.mode == EditorMode::New && state.task.is_some() {
       fields = fields.child(self.save_to_field(ctx, state, id));
     }
-    if let Some((replaced, meta)) = &props.replaced {
-      fields = fields.child(replaces(ctx, replaced, meta, id));
+    if let Some(replaced) = &props.replaced {
+      let page = state.task.is_none();
+      fields = fields.child(self.replaces(ctx, (replaced, props.memory.as_ref()), (id, page)));
     }
     if props.mode != EditorMode::Review {
-      fields = fields.child(self.pin_field(ctx, id));
+      let of_task = state.task.is_some() && self.save_to.get().0 == SaveTo::Task;
+      fields = fields.child(self.pin_field(ctx, id, of_task));
     }
     if !props.facts.is_empty() {
       fields = fields.child(facts(ctx, state, props, id));
@@ -228,10 +229,16 @@ impl RecordEditor {
       .into()
   }
 
-  /// *Pinned · always give it to agents* with its switch (`PyiL4`).
-  fn pin_field(&self, ctx: &Ctx, id: &str) -> Element {
+  /// *Pinned · always give it to agents* with its switch (`PyiL4`), and whose invocations a pinned record reaches:
+  /// this task's when it is saved to the task (`z2JrY`), else the project's.
+  fn pin_field(&self, ctx: &Ctx, id: &str, of_task: bool) -> Element {
     let pinned = self.pinned.clone();
     let title = ctx.t("memory.editor.pinned");
+    let hint = ctx.t(if of_task {
+      "memory.editor.pinnedHint"
+    } else {
+      "memory.editor.pinnedHintProject"
+    });
     Row::new()
       .id(format!("{id}-pin-field"))
       .width(Dimension::Pct(100.0))
@@ -253,54 +260,10 @@ impl RecordEditor {
           .flex(1.0)
           .spacing(ExtraSpacing::Tight.role())
           .child(Text::new(&title).variant(TypographyStyle::Label))
-          .child(Text::new(&ctx.t("memory.editor.pinnedHint")).variant(TypographyStyle::Caption)),
+          .child(Text::new(&hint).variant(TypographyStyle::Caption)),
       )
       .into()
   }
-}
-
-/// *Approving replaces the active decision key*, what that does, and the record it replaces (`i09ZK`).
-fn replaces(ctx: &Ctx, replaced: &orchester_core::memory::Memory, meta: &str, id: &str) -> Element {
-  let kind = words::kind_lower(ctx, replaced.content().kind());
-  let title = match replaced.content().key() {
-    Some(key) => ctx.t_args("memory.editor.replacesKeyed", [("kind", &*kind), ("key", key.as_str())]),
-    None => ctx.t_args("memory.editor.replaces", [("kind", &*kind)]),
-  };
-  let old = words::join(ctx, &[replaced.content().text().to_owned(), meta.to_owned()]);
-  Column::new()
-    .id(format!("{id}-replaces"))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Snug.role())
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(crate::theme::ExtraRadius::Tile.role())
-    .child(
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(Icon::Replace, IconSize::Base, PaletteColor::TextSecondary))
-        .child(Text::new(&title).variant(TypographyStyle::Label)),
-    )
-    .child(Text::new(&ctx.t("memory.editor.replacesText")).variant(MemoryText::NoticeText.role()))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .left(ExtraSpacing::Loose.role())
-            .top(ExtraSpacing::Tight.role())
-            .bottom(ExtraSpacing::Tight.role()),
-        )
-        .border_left(Border::inside(BorderSize::Md, PaletteColor::BorderStrong))
-        .child(
-          Text::new(&old)
-            .flex(1.0)
-            .variant(MemoryText::NoticeText.role())
-            .color(PaletteColor::TextMuted),
-        ),
-    )
-    .into()
 }
 
 /// The facts the person does not change, a label and its value each (`OVIEu`, `EMaJF`); the source's
@@ -320,10 +283,16 @@ fn facts(ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> E
     if index == 0
       && let Some(task) = &props.source_task
     {
+      // The project's page lists every task's proposals, so its link names the task (`I7UAFO` in `kq8Am`).
+      let words = if state.task.is_none() {
+        ctx.t_args("memory.editor.sourceLinkTask", [("task", task.to_string())])
+      } else {
+        ctx.t("memory.editor.sourceLink")
+      };
       values = values.child(parts::conversation_link(
         ctx,
         (state.project_id, task),
-        (&format!("{id}-source-link"), &ctx.t("memory.editor.sourceLink")),
+        (&format!("{id}-source-link"), &words),
       ));
     }
     facts = facts.child(

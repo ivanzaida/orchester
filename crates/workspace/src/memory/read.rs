@@ -77,6 +77,8 @@ pub struct ProjectMemory {
   pub waiting: Vec<Memory>,
   /// The records the waiting proposals would replace, of whichever scope.
   pub replaced: Vec<Memory>,
+  /// How many invocations were given each record of `replaced` (*given to 22 invocations*).
+  pub replaced_given: Vec<(MemoryId, usize)>,
   pub origins: Origins,
   pub settings: MemorySettings,
   pub unreadable: usize,
@@ -94,6 +96,10 @@ impl ProjectMemory {
     for named in waiting.iter().filter_map(Memory::supersedes) {
       replaced.extend(db.memory(named)?);
     }
+    let mut replaced_given = Vec::with_capacity(replaced.len());
+    for memory in &replaced {
+      replaced_given.push((memory.id(), db.given_memory(memory.id())?.len()));
+    }
     let mut named = records.clone();
     named.extend(waiting.iter().cloned());
     named.extend(replaced.iter().cloned());
@@ -102,9 +108,19 @@ impl ProjectMemory {
       records,
       waiting,
       replaced,
+      replaced_given,
       settings: db.memory_settings()?,
       unreadable: db.unreadable_memories()?.len(),
     })
+  }
+
+  /// How many invocations were given `memory`, a record a waiting proposal would replace.
+  pub fn given_count(&self, memory: MemoryId) -> Option<usize> {
+    self
+      .replaced_given
+      .iter()
+      .find(|(id, _)| *id == memory)
+      .map(|(_, count)| *count)
   }
 
   /// The project's records by status, with every proposal as waiting.

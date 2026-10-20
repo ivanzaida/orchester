@@ -19,7 +19,7 @@ use orchester_core::{
 };
 use orchester_workspace::memory::{
   change::{Change, MemoryFailure, change_in, create_in, delete_in},
-  draft::RecordDraft,
+  draft::{DraftEdit, RecordDraft},
   handoff::{HandoffList, HandoffParts},
   listing::{self, AuthorFilter, Counts, Filters, Group, StatusFilter},
   next::next_agent,
@@ -277,8 +277,19 @@ fn memory_approving_with_edits_supersedes_the_record_it_replaces() {
     .expect("store");
   let vault = MemoryVault::default();
   let mut draft = RecordDraft::of(&proposal);
+  assert!(draft.edits_of(&proposal).is_empty(), "nothing edited yet");
   draft.text = "A budget per endpoint, at most 10.".to_owned();
   draft.importance = Importance::High;
+  assert_eq!(
+    draft.edits_of(&proposal),
+    [
+      DraftEdit::Importance {
+        from: proposal.content().importance(),
+        to: Importance::High
+      },
+      DraftEdit::Text
+    ]
+  );
   change_in(
     fixture.repo.path(),
     &vault,

@@ -7,6 +7,7 @@
 //! the project and its tasks in one queue; then *Records*, the project's own, searched and filtered and grouped by
 //! type; at the right the *Project memory* panel, or the inspector of the record a press chose.
 
+mod centered;
 mod delete;
 mod editor;
 mod list;
@@ -37,6 +38,7 @@ use orchester_workspace::{
 
 use self::state::Made;
 pub(crate) use self::{
+  centered::Centered,
   list::{ListInput, groups, new_record, row_failure},
   no_match::no_match,
   page::unreadable,

@@ -85,13 +85,14 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
         .with_children(parts::tags(&id, memory)),
     );
   body = body.with_children(supersedes(ctx, memory, records, origins, &id));
-  if !queue {
-    body = body.child(parts::status(
+  // `Waiting` (`V6r5PT`) sits at the row's top right, beside the body, so the text stops short of it.
+  let waiting = (!queue).then(|| {
+    parts::status(
       &format!("{id}-waiting"),
       (Icon::Hand, ctx.t("memory.proposal.waiting")),
       PaletteColor::Warning,
-    ));
-  }
+    )
+  });
   Column::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
@@ -108,7 +109,8 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Md)
         .child(parts::glyph(words::glyph(memory.content().kind())))
-        .child(body),
+        .child(body)
+        .with_children(waiting),
     )
     .child(actions(ctx, &state, memory, (&id, queue)))
     .into()

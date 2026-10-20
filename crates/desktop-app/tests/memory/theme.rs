@@ -1,4 +1,4 @@
-//! The Memory screens' type and spacing roles (`J1utD`, `CJvK7`, `Q0BAI`, `sglU2`, `xY2Uj`).
+//! The Memory screens' type and spacing roles (`J1utD`, `CJvK7`, `Q0BAI`, `sglU2`, `xY2Uj`, `n3lxin`, `X0l2I6`).
 
 use lurq::{
   app::{App, theme::PaletteColor},
@@ -69,6 +69,13 @@ fn memory_theme_roles_resolve_the_design() {
       "Geist",
       PaletteColor::TextPrimary,
     ),
+    (
+      MemoryText::StateText,
+      12.0,
+      FontWeight::Normal,
+      "Geist",
+      PaletteColor::TextSecondary,
+    ),
   ];
   for (role, size, weight, family, color) in expected {
     let style = theme.typography_style(role.role());
@@ -95,6 +102,7 @@ fn memory_theme_group_label_tracking_and_spacing_resolve_the_design() {
     (MemorySpacing::TextIndent, 28.0),
     (MemorySpacing::ListSide, 20.0),
     (MemorySpacing::RowText, 40.0),
+    (MemorySpacing::StateTop, 36.0),
   ] {
     assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{role:?}");
   }

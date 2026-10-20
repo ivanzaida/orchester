@@ -65,6 +65,65 @@ fn memory_project_page_approves_from_the_queue() {
 }
 
 #[test]
+fn memory_project_page_reviews_a_proposal_as_a_diff_of_the_active_record() {
+  let mut page = project();
+  let typed = page.record("API handlers return typed errors");
+  let old = page.record("Handlers map domain errors");
+  page.window.press(&format!("memory-proposal-{}-edit", typed.id()));
+  let editor = format!("memory-editor-{}", typed.id());
+  page.until("the review", |window| window.texts(&editor).is_some());
+  assert_eq!(
+    page.text(&format!("{editor}-removed-text")),
+    old.content().text(),
+    "the active text on the removed line"
+  );
+  let was = page.text(&format!("{editor}-removed-meta"));
+  assert!(was.starts_with("Active · Reviewer"), "{was}");
+  assert!(was.contains("given to "), "{was}");
+  assert_eq!(page.text(&format!("{editor}-added-text")), typed.content().text());
+  let proposed = page.text(&format!("{editor}-added-meta"));
+  assert!(proposed.starts_with("Proposed by "), "{proposed}");
+  assert!(!proposed.contains("edited by you"), "{proposed}");
+  page
+    .window
+    .set(&format!("{editor}-text"), "API handlers return typed errors.");
+  assert_eq!(
+    page.text(&format!("{editor}-added-text")),
+    "API handlers return typed errors."
+  );
+  assert!(
+    page
+      .text(&format!("{editor}-added-meta"))
+      .ends_with("edited by you: the text")
+  );
+  assert_eq!(
+    page.text(&format!("{editor}-reject-note")),
+    "Kept, never given or restored."
+  );
+  let link = page.text(&format!("{editor}-source-link"));
+  assert!(
+    link.starts_with("Show in KON-") && link.ends_with("'s Conversation ↗"),
+    "{link}"
+  );
+  let (approve, frame) = (page.bounds(&format!("{editor}-save")), page.bounds(&editor));
+  assert!(
+    approve.x + approve.width <= frame.x + frame.width,
+    "Approve fits in the footer: {approve:?} in {frame:?}"
+  );
+}
+
+#[test]
+fn memory_project_page_says_no_records_match_in_the_middle_of_the_list() {
+  let mut page = project();
+  page.window.set("memory-search", "kontur-ci-01");
+  page.until("no match", |window| window.texts("memory-no-match").is_some());
+  assert!(page.has("memory-no-match-glyph"));
+  let (title, list) = (page.bounds("memory-no-match-title"), page.bounds("memory-records"));
+  let middle = title.x + title.width / 2.0 - (list.x + list.width / 2.0);
+  assert!(middle.abs() < 2.0, "centered: {title:?} in {list:?}");
+}
+
+#[test]
 fn memory_project_page_inspects_a_chosen_record_and_deprecates_it() {
   let mut page = project();
   let engine = page.record("Kontur keeps its data in SQLite").id();
