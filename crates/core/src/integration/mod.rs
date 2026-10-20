@@ -7,6 +7,7 @@
 //! person did not confirm discarding.
 
 mod cleanup;
+mod drift;
 mod forgotten;
 mod git;
 pub mod local;
@@ -24,6 +25,7 @@ pub use self::{
     Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, WORKTREES_DIR,
     WorktreeOwner, clean_up, leftovers, leftovers_of, parse_worktree_list,
   },
+  drift::{Drift, MAX_LANDED, branch_head, drift},
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   merge::{MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_at},
   merged::{Branches, Delivered, RunWork},

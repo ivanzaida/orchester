@@ -297,6 +297,7 @@ impl Resolved<'_> {
       dependencies: &[],
       revision: None,
       messages: None,
+      base_moved: None,
       // Memory is recalled for an invocation as it starts, from the records of that moment.
       memory: &[],
       retry: None,

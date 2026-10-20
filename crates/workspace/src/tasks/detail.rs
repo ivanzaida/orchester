@@ -115,6 +115,8 @@ pub struct RunView {
   pub approvals: RunApprovals,
   /// Its agents' questions with suggested answers that wait for the person.
   pub waiting_questions: Vec<AskedQuestions>,
+  /// The notices that its base branch moved, oldest first (`orchester_core::base_move`).
+  pub base_notices: Vec<orchester_core::base_move::BaseNotice>,
 }
 
 impl RunView {
@@ -483,6 +485,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
       .into_iter()
       .filter(AskedQuestions::waits)
       .collect(),
+    base_notices: db.run_base_notices(run.id())?,
     accounts: db.invocation_accounts(run.id())?,
     index: IndexUses::read(db, &invocations)?,
     invocations,

@@ -4,8 +4,8 @@ use std::{fmt::Write as _, ops::Range};
 
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
-  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, ResultDelivery, code_index,
-  finish::push_result, memory::push_memory, retry,
+  MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, ResultDelivery, base_moved,
+  code_index, finish::push_result, memory::push_memory, retry,
 };
 use crate::{
   conversation::Message,
@@ -249,6 +249,7 @@ fn task_section(input: &PromptInput<'_>, delivery: ResultDelivery) -> PromptSect
   if let Some(delivered) = input.messages {
     push_task_messages(&mut text, delivered);
   }
+  base_moved::push_task(&mut text, input.base_moved);
   if let Some(working) = input.working {
     text.push_str("\n# Files and commands\n");
     push_block(&mut text, &working.text());
@@ -265,8 +266,8 @@ fn task_section(input: &PromptInput<'_>, delivery: ResultDelivery) -> PromptSect
   }
 }
 
-/// What a resumed session reads first: the reviewer's note, the messages it delivers, or the continue
-/// prompt, then the code index.
+/// What a resumed session reads first: the reviewer's note, the messages it delivers, the notice that the base
+/// branch moved, or the continue prompt, then the code index.
 fn push_resume_opening(text: &mut String, input: &PromptInput<'_>) {
   match input.revision {
     Some(revision) => {
@@ -283,10 +284,17 @@ fn push_resume_opening(text: &mut String, input: &PromptInput<'_>) {
         push_messages(text, delivered.messages);
       }
     }
-    None => match input.messages {
-      Some(delivered) => push_resumed_messages(text, delivered),
-      None => text.push_str(CONTINUE_PROMPT),
+    None => match (input.messages, input.base_moved) {
+      (Some(delivered), _) => push_resumed_messages(text, delivered),
+      (None, Some(moved)) => base_moved::push_resumed(text, moved),
+      (None, None) => text.push_str(CONTINUE_PROMPT),
     },
+  }
+  if let Some(moved) = input.base_moved
+    && (input.revision.is_some() || input.messages.is_some())
+  {
+    text.push('\n');
+    push_block(text, &base_moved::notice_text(moved.notice));
   }
   code_index::push(text, input.code_index);
 }

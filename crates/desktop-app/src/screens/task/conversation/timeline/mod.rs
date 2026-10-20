@@ -310,6 +310,7 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     }
     ItemKind::Problem(entry) => entry::problem_row(ctx, timeline, &item.key, entry),
     ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark),
+    ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
     ItemKind::Result(card) => result::card(ctx, timeline, card),
     ItemKind::End(end) => divider::end(ctx, timeline, end, item.at),
     // An agent's message, a step and a tool group are rows of their own (`Row::Agent`, `Row::Step`).

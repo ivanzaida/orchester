@@ -85,7 +85,7 @@ impl RunTask {
   }
 
   /// The agent step `execution` executes, the profile version that runs it and its model.
-  pub(super) fn agent_step(
+  pub(in super::super) fn agent_step(
     &self,
     execution: StepExecutionId,
   ) -> Result<(&Step, &PinnedVersion, &ModelId), RunnerProblem> {

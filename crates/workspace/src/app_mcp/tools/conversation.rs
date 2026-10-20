@@ -1,9 +1,9 @@
 //! `get_conversation`: a task's conversation as its Conversation tab shows it for its latest run (ORC-42): what the
 //! person and the Orchestrator chat wrote to the agents, what the agents wrote, their questions (in the conversation,
-//! and with suggested answers), their plans and how each was decided, and how each step ended; oldest first, newest
-//! last, a page at a time. Each entry names who wrote it, its step and run, when, and the link to its card. It reads
-//! what the Conversation tab reads, stored with secrets already redacted; tool calls and approvals are left to their
-//! own tools.
+//! and with suggested answers), their plans and how each was decided, Orchester's notices that the base branch moved
+//! (ORC-54) and how each step ended; oldest first, newest last, a page at a time. Each entry names who wrote it, its
+//! step and run, when, and the link to its card. It reads what the Conversation tab reads, stored with secrets
+//! already redacted; tool calls and approvals are left to their own tools.
 
 use orchester_core::{
   question::{AskedQuestions, QuestionState},
@@ -14,7 +14,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{plans, questions, tasks::find_task, wire};
+use super::{base_moved, plans, questions, tasks::find_task, wire};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -161,6 +161,12 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
       json!({ "passed": card.passed, "summary": card.reported.as_deref() }),
     ),
     ItemKind::End(end) => ("run_end", Value::Null, None, json!({ "end": run_end(end) })),
+    ItemKind::BaseMoved(mark) => (
+      "base_moved",
+      json!({ "kind": "orchester" }),
+      step_of(),
+      base_moved::shown(mark),
+    ),
     ItemKind::Step(_) | ItemKind::Mark(_) | ItemKind::Approval(_) | ItemKind::Tools(_) | ItemKind::Problem(_) => {
       return None;
     }

@@ -6,6 +6,7 @@
 mod accepted;
 mod answer;
 mod app_server;
+mod base_notice;
 mod approval;
 mod checks;
 mod claude_approval;
@@ -76,6 +77,8 @@ pub(super) struct Continuation {
   /// People's messages queued for the agent, oldest first: the invocation delivers them.
   pub(super) messages: Vec<Message>,
   pub(super) occasion: Occasion,
+  /// The notice that the run's base branch moved, which the invocation delivers ([`base_notice`]).
+  pub(super) notice: Option<orchester_core::base_move::BaseNotice>,
 }
 
 /// Why an invocation delivers people's messages now ([`MessageOccasion`], owning the question).
@@ -253,6 +256,7 @@ impl RunTask {
     let workspace = Workspace::of(&self.root, &self.run, &self.worktree, execution, start);
     let mut continuation = self.begin_step(execution)?;
     self.keep_session_on_its_account(execution, &mut continuation)?;
+    continuation.notice = self.notice_for(execution)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db
@@ -301,7 +305,7 @@ impl RunTask {
         return Ok(true);
       }
     };
-    // Messages that never reached a started agent stay queued.
+    // Messages and a notice that never reached a started agent stay queued.
     let arrival = continuation.occasion.arrival();
     self.deliver(
       execution,
@@ -309,6 +313,7 @@ impl RunTask {
       std::mem::take(&mut continuation.messages),
       arrival,
     )?;
+    self.deliver_notice(execution, &invocation, continuation.notice.take())?;
     let agent = (start.permissions, start.secrets, (start.agent, start.account));
     self.spawn(execution, invocation, (driven, agent), (workspace, judged))?;
     Ok(true)
@@ -486,6 +491,7 @@ impl RunTask {
         } else {
           Occasion::FollowUp
         },
+        notice: None,
       });
     }
     let last = self.last_invocation(execution)?;
@@ -507,6 +513,7 @@ impl RunTask {
       session: last.and_then(|invocation| invocation.session),
       messages,
       occasion,
+      notice: None,
     })
   }
 

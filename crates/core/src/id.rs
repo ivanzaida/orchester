@@ -151,6 +151,10 @@ define_id!(
   MemoryId
 );
 define_id!(
+  /// One notice to a run that its base branch moved (`crate::base_move`).
+  NoticeId
+);
+define_id!(
   /// One native agent conversation: the items of one step execution, shared by its invocations.
   ConversationId
 );

@@ -3,7 +3,7 @@
 //! (`crate::orchester_tools`, served to both CLIs) never ask where they are offered, while a shell edit, a
 //! `cd` prefix or a chain of commands does not match the allowed commands one by one and waits for a person.
 //! Each CLI is told the tools by the names it sees. Each sentence names only what the step's CLI and permissions have:
-//! a read-only step is not told to edit.
+//! a read-only step is not told to edit, nor how to merge its base branch when that moves (ORC-54).
 
 use crate::{
   connection::AgentProvider,
@@ -105,7 +105,8 @@ impl WorkingTools {
       }
       Commands::Sandboxed => "Commands already run in the task's worktree: never start one with `cd`.",
     };
-    [files, commands, self.processes()]
+    let merge = if self.edits { super::MERGE_SAFELY } else { "" };
+    [files, commands, merge, self.processes()]
       .into_iter()
       .filter(|line| !line.is_empty())
       .collect::<Vec<_>>()
