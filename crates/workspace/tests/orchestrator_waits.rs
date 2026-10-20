@@ -28,7 +28,7 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::waits::{Followed, MergeChecks, check_merges_in, follow_in};
+use orchester_workspace::orchestrator::waits::{Followed, MergeChecks, Switches, check_merges_in, follow_in};
 use support::{Fixture, at};
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
@@ -93,11 +93,15 @@ fn project(fixture: &Fixture) -> ProjectId {
   fixture.db.project().id()
 }
 
-/// Follows the waits with the project's runner attached.
+/// Follows the waits with the project's runner attached, *Let the Orchestrator answer agents* on when `answers`.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-  follow_in((root, project(fixture), &programs), &checks, (answers, true)).expect("followed")
+  let switches = Switches {
+    answers,
+    continues: false,
+  };
+  follow_in((root, project(fixture), &programs), &checks, (switches, true)).expect("followed")
 }
 
 /// The waits of the project's latest conversation, with their turns.
@@ -306,10 +310,14 @@ fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
   ready(&mut fixture);
   let mut run = working(&mut fixture);
   ask(&mut fixture, &mut run);
+  let answering = Switches {
+    answers: true,
+    continues: false,
+  };
   let detached = follow_in(
     (fixture.repo.path(), project(&fixture), &Programs::processes()),
     &MergeChecks::default(),
-    (true, false),
+    (answering, false),
   )
   .expect("followed");
   assert_eq!(

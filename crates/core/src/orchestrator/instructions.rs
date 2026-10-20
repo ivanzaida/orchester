@@ -2,7 +2,10 @@
 //! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, or the end
 //! of a task's run, started by itself ([`wait_prompt`]).
 
-use super::wait::{AgentWait, RunEnd, StopReason, WaitKind};
+use super::{
+  resume::{AGAIN_WITHIN, Continuing},
+  wait::{AgentWait, RunEnd, StopReason, WaitKind},
+};
 use crate::{id::ProjectId, run::RunLimit};
 
 /// The name the Orchestrator's agent knows Orchester's domain tools by (`mcp__orchester__<tool>`).
@@ -60,6 +63,10 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      to do it on the task's Summary. For a run whose merge stopped at conflicts, continue_run's resolve_conflicts \
      proposes sending it back to an agent step that may write (an optional step and note), which merges the base \
      branch in and resolves them.\n\
+     - resume_run resumes a run a pause stopped. It continues a run a crash, the runner going away or Quit now \
+     interrupted, from its last checkpoint, only when the person turned on Let the Orchestrator continue interrupted \
+     runs. A run stopped at a limit, one the person canceled, one the runner could not record and one whose worktree \
+     is gone are the person's.\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
@@ -116,7 +123,8 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
 /// The prompt of the Orchestrator turn the end of `wait`'s run (`end`) started by itself: how it ended and what to do.
 /// A run that succeeded is told to the person, and its merge only proposed (a turn nobody asked for proposes every
 /// merge); a run that waits for a decision, or failed, is read and explained, and its retry or return may be
-/// proposed; any other end is read and explained with the choices the person has, which are the person's.
+/// proposed; an interruption the person lets the Orchestrator continue is continued once, unless it came again soon;
+/// any other end is read and explained with the choices the person has, which are the person's.
 fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   let at = wait
     .step
@@ -131,12 +139,17 @@ fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
       why_words(why)
     ),
     RunEnd::Limit { limit } => format!("stopped at {}{at}", limit_words(limit)),
+    RunEnd::Interrupted if wait.continuing.is_some() => "was interrupted".to_owned(),
     RunEnd::Interrupted => "was interrupted and goes on only when a person continues it".to_owned(),
   };
   let others = match wait.others {
     0 => String::new(),
     1 => " The same limit stopped 1 more run of the project at once.".to_owned(),
     count => format!(" The same limit stopped {count} more runs of the project at once."),
+  };
+  let todo = match (end, wait.continuing) {
+    (RunEnd::Interrupted, Some(continuing)) => continuing_todo(continuing),
+    _ => end_todo(end).to_owned(),
   };
   format!(
     "[Orchester] Run #{number} of {task} ({title}) {what}; its summary: {link}.{others}\n\
@@ -146,8 +159,25 @@ fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
     task = wait.task,
     title = wait.title,
     link = wait.link,
-    todo = end_todo(end),
   )
+}
+
+/// What the turn of an interrupted run's end does while the person lets the Orchestrator continue interrupted runs.
+fn continuing_todo(continuing: Continuing) -> String {
+  match continuing {
+    Continuing::Continues => "The person also turned on Let the Orchestrator continue interrupted runs: continue this \
+       run once with resume_run, from its last checkpoint, then tell the person you continued it, with the link. If \
+       resume_run refuses, tell the person why in its words and the choices they have on the task's Summary. Start, \
+       cancel, merge or continue nothing else."
+      .to_owned(),
+    Continuing::InterruptedAgain => format!(
+      "The person turned on Let the Orchestrator continue interrupted runs, but this run was interrupted again within \
+       {minutes} minutes of the time before, so it is left to the person: do not continue it. Read the run first \
+       (get_run, get_conversation), then tell the person it was interrupted twice in a short time and the choices \
+       they have on the task's Summary, with the link. Start, resume, cancel, continue or merge nothing.",
+      minutes = AGAIN_WITHIN.as_secs() / 60,
+    ),
+  }
 }
 
 /// What the turn of `end` is to do.

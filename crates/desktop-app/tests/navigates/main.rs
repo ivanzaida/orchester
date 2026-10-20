@@ -50,7 +50,7 @@ fn a_task_row_opens_its_task_by_browser_rules() {
   seeded.window.navigation().go(tasks_list(&seeded));
   seeded.until("the task rows", |seeded| !seeded.ids("task-row-").is_empty());
   let row = seeded.ids("task-row-").first().cloned().expect("a task row");
-  let place = task(&seeded, row.trim_start_matches("task-row-"), TaskTab::Summary);
+  let place = task(&seeded, row.trim_start_matches("task-row-"), TaskTab::Details);
   control_opens_by_browser_rules(&mut seeded.window, &row, &place);
 }
 

@@ -388,7 +388,7 @@ fn seed_conversation_records_a_long_transcript_with_a_mid_turn_message() {
   ));
   let links = activity.iter().any(|entry| {
     matches!(&entry.event, AgentEvent::Message { text } if text.contains("- Task: [KON-12")
-      && text.contains("/tasks/ATL-9/summary") && text.contains("file:///"))
+      && text.contains("/tasks/ATL-9/details") && text.contains("file:///"))
   });
   assert!(links, "a message with a labelled link list and a link into Atlas");
   let messages = db.messages(run.task()).expect("messages");

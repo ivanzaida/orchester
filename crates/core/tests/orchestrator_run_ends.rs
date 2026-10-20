@@ -35,6 +35,7 @@ fn ended(run: RunId, end: RunEnd) -> AgentWait {
     link: "/project/p/tasks/KON-12/summary".to_owned(),
     own: false,
     automatic: false,
+    continuing: None,
   }
 }
 
@@ -341,6 +342,8 @@ fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
     "continue_run proposes how a run that waits for a decision goes on: allow_retry",
     "return_to (an earlier agent step, with a note for its agent; also for a run that ended",
     "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's",
+    "only when the person turned on Let the Orchestrator continue interrupted runs",
+    "one whose worktree is gone are the person's",
     "In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
      propose",
   ] {

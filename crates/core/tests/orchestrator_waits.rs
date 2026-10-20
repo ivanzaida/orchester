@@ -29,6 +29,7 @@ fn wait(run: RunId, kind: WaitKind) -> AgentWait {
     link: "/project/p/tasks/KON-12/conversation".to_owned(),
     own: false,
     automatic: false,
+    continuing: None,
   }
 }
 

@@ -67,21 +67,24 @@ pub enum Link {
 /// The tab of a task's page a link opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TaskPage {
-  /// What the task is and where it stands, with its runs.
-  Summary,
+  /// The task itself, its description and acceptance criteria: the tab a task opens on, for a link to the task.
+  Details,
   /// The agents' conversation, with the cards of what waits for a person: approvals, questions, plans.
   Conversation,
   /// What the task's latest run changed.
   Changes,
+  /// Where the task stands, with its runs: for a link to a run or a decision on one.
+  Summary,
 }
 
 impl TaskPage {
   /// The tab's segment, as the router names it.
   pub const fn name(self) -> &'static str {
     match self {
-      Self::Summary => "summary",
+      Self::Details => "details",
       Self::Conversation => "conversation",
       Self::Changes => "changes",
+      Self::Summary => "summary",
     }
   }
 }

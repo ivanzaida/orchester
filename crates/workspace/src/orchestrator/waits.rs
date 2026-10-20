@@ -8,9 +8,10 @@
 //! Orchestrator turn by itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
-//! while the wait still waits, and only once the project's runner attached. The app attaches the runner when
-//! [`follow_in`] says a turn is pending, and asks it for the turns [`follow_in`] gives, with the chat's tools served
-//! for them.
+//! while the wait still waits, and only once the project's runner attached. With *Let the Orchestrator continue
+//! interrupted runs* on too, the turn of an interrupted run's end continues the run, unless it was interrupted again
+//! soon. The app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns
+//! [`follow_in`] gives, with the chat's tools served for them.
 
 use std::{collections::HashSet, path::Path};
 
@@ -18,12 +19,12 @@ use orchester_core::{
   conversation::{Message as TaskMessage, Sender},
   id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
   orchestrator::{
-    AgentWait, Chat, ChatEntry, WaitKind,
+    AgentWait, Chat, ChatEntry, ChatResume, Continuing, RunEnd, WaitKind,
     wait::{dealt_with, raised_by_own},
   },
   question::AskedQuestions,
   run::Plan,
-  store::{ConversationStore, RunStore, TaskStore},
+  store::{ConversationStore, RunStore, TaskStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
@@ -38,7 +39,10 @@ use super::{
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
-  tasks::detail::{RunView, run_store_error, run_view},
+  tasks::{
+    changes::run_worktree,
+    detail::{RunView, run_store_error, run_view},
+  },
 };
 
 /// An Orchestrator turn a wait started by itself, which the runner is to answer.
@@ -58,10 +62,20 @@ pub struct Followed {
   pub pending: bool,
 }
 
+/// The person's switches the follower reads, as they are now.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Switches {
+  /// *Let the Orchestrator answer agents*: a wait starts an Orchestrator turn by itself.
+  pub answers: bool,
+  /// *Let the Orchestrator continue interrupted runs*: with `answers`, the turn an interrupted run's end starts
+  /// continues the run ([`orchester_core::orchestrator::Continuing`]).
+  pub continues: bool,
+}
+
 /// Keeps each new wait of the agents of project `project` at `root` in its conversation, and gives the oldest wait,
 /// of any conversation, that starts a turn by itself and has none its turn while no turn of its conversation thinks.
-/// `answers`: whether *Let the Orchestrator answer agents* is on now; a wait kept while it was on starts no turn once
-/// it is off, nor while the Orchestrator has nothing published to run on (the runner could not take the turn).
+/// `switches`: the person's switches now; a wait kept while *answer agents* was on starts no turn once it is off, nor
+/// while the Orchestrator has nothing published to run on (the runner could not take the turn).
 /// `attached`: whether the project's runner has attached. A runner that attaches ends the turns still thinking as
 /// interrupted, so a turn starts only once it is there: without it the turn stays `pending`, for the app to attach the
 /// runner and follow again. `checks` tell the runs that succeeded which are merged outside Orchester or have nothing
@@ -70,16 +84,16 @@ pub struct Followed {
 pub fn follow_in(
   (root, project, programs): (&Path, ProjectId, &Programs),
   checks: &MergeChecks,
-  (answers, attached): (bool, bool),
+  (switches, attached): (Switches, bool),
 ) -> Result<Followed, Message> {
-  let ready = answers && OrchestratorSetup::load_in(root)?.readiness().is_ready();
+  let ready = switches.answers && OrchestratorSetup::load_in(root)?.readiness().is_ready();
   let reading = Reading {
     project,
     root,
     programs,
     checks,
   };
-  follow(&reading, (answers, ready), attached).map_err(|error| messages::store_error(&error))
+  follow(&reading, (switches, ready), attached).map_err(|error| messages::store_error(&error))
 }
 
 /// What git tells, in one reading of the branches, of the runs of the project at `root` that succeeded and that
@@ -113,7 +127,7 @@ fn settled(db: &ProjectDb) -> Result<(HashSet<String>, HashSet<String>), StoreEr
   Ok((db.kept_wait_keys()?, pending))
 }
 
-fn follow(reading: &Reading, (answers, ready): (bool, bool), attached: bool) -> Result<Followed, StoreError> {
+fn follow(reading: &Reading, (switches, ready): (Switches, bool), attached: bool) -> Result<Followed, StoreError> {
   let mut db = ProjectDb::open(reading.root)?;
   let (kept, pending) = settled(&db)?;
   let mut now = current_waits(&db, reading.project)?;
@@ -121,7 +135,7 @@ fn follow(reading: &Reading, (answers, ready): (bool, bool), attached: bool) -> 
     kept.contains(key) && !pending.contains(key)
   })?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
-  let kept = keep_new(&mut db, &new, answers)?;
+  let kept = keep_new((&mut db, reading.root), &new, switches)?;
   let followed = Followed {
     kept,
     ..Followed::default()
@@ -146,9 +160,13 @@ fn follow(reading: &Reading, (answers, ready): (bool, bool), attached: bool) -> 
 
 /// Keeps each of the `new` waits in the conversation that last dealt with its task ([`dealt_with`]), else in the
 /// project's latest conversation, or in one the first such wait opens while the project has none; each starts a turn
-/// by itself when `answers` and the Orchestrator's own answer, given in any conversation, did not raise it. Whether
-/// it kept one.
-fn keep_new(db: &mut ProjectDb, new: &[&(String, AgentWait)], answers: bool) -> Result<bool, StoreError> {
+/// by itself when *answer agents* is on and the Orchestrator's own answer, given in any conversation, did not raise
+/// it, and such a turn of an interrupted run's end continues the run as [`continuing`] tells. Whether it kept one.
+fn keep_new(
+  (db, root): (&mut ProjectDb, &Path),
+  new: &[&(String, AgentWait)],
+  switches: Switches,
+) -> Result<bool, StoreError> {
   if new.is_empty() {
     return Ok(false);
   }
@@ -162,9 +180,16 @@ fn keep_new(db: &mut ProjectDb, new: &[&(String, AgentWait)], answers: bool) -> 
   let mut kept_any = false;
   for (key, wait) in new {
     let own = raised_by_own(&entries, wait);
+    let automatic = switches.answers && !own;
+    let continuing = if automatic && switches.continues {
+      continuing((db, root), wait)?
+    } else {
+      None
+    };
     let kept = AgentWait {
       own,
-      automatic: answers && !own,
+      automatic,
+      continuing,
       ..wait.clone()
     };
     let about = conversations
@@ -178,6 +203,24 @@ fn keep_new(db: &mut ProjectDb, new: &[&(String, AgentWait)], answers: bool) -> 
     kept_any |= db.keep_agent_wait(chat, (key, &kept), Timestamp::now())?;
   }
   Ok(kept_any)
+}
+
+/// What the turn `wait` starts does about its run while the person lets the Orchestrator continue interrupted runs:
+/// for an interrupted run's end the chat may continue (a crash, the runner going away or *Quit now*, its worktree
+/// there), it continues the run, or leaves it to the person when it was interrupted again soon; `None` for any other
+/// wait, which the switch does not touch.
+fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Option<Continuing>, StoreError> {
+  if wait.kind != WaitKind::Ended(RunEnd::Interrupted) {
+    return Ok(None);
+  }
+  let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
+    return Ok(None);
+  };
+  let present = db.worktree_removal(run.id())?.is_none() && run_worktree(root, run.id()).is_dir();
+  Ok(match ChatResume::of(run.status(), present) {
+    ChatResume::Interrupted(_) => Some(Continuing::after(&db.run_interruptions(run.id())?)),
+    ChatResume::Paused | ChatResume::PersonOnly(_) | ChatResume::Other => None,
+  })
 }
 
 /// The waits of every conversation that start a turn by themselves, have none and still wait (their keys among
@@ -312,6 +355,7 @@ impl Waiting<'_> {
       others: 0,
       own: false,
       automatic: false,
+      continuing: None,
     }
   }
 }

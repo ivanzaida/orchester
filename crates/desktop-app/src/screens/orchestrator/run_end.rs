@@ -17,7 +17,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{AgentWait, RunEnd},
+  orchestrator::{AgentWait, Continuing, RunEnd},
   project::TaskKey,
   run::RunLimit,
   time::Timestamp,
@@ -121,15 +121,17 @@ const fn title(end: RunEnd, (named, more): (bool, bool)) -> &'static str {
 }
 
 /// What happens with `end` of `wait`'s run: the Orchestrator takes it up by itself (in the turn it `turned`, or after
-/// the turn under way), the Orchestrator's own decision on the run led to it so it waits for the person, or the
-/// person's switch is off.
+/// the turn under way; an interruption it continues once, or leaves to the person when it came again soon), the
+/// Orchestrator's own decision on the run led to it so it waits for the person, or the person's switch is off.
 const fn effect(wait: &AgentWait, end: RunEnd, turned: bool) -> &'static str {
-  match (end, wait.automatic, turned) {
-    (RunEnd::Succeeded, true, true) => "orchestrator.end.effectReadyAnswering",
-    (_, true, true) => "orchestrator.end.effectAnswering",
-    (_, true, false) => "orchestrator.end.effectQueued",
-    (_, false, _) if wait.own => "orchestrator.end.effectOwn",
-    (_, false, _) => "orchestrator.end.effectWaits",
+  match (end, wait.automatic, turned, wait.continuing) {
+    (RunEnd::Succeeded, true, true, _) => "orchestrator.end.effectReadyAnswering",
+    (RunEnd::Interrupted, true, true, Some(Continuing::Continues)) => "orchestrator.end.effectContinuing",
+    (RunEnd::Interrupted, true, true, Some(Continuing::InterruptedAgain)) => "orchestrator.end.effectInterruptedAgain",
+    (_, true, true, _) => "orchestrator.end.effectAnswering",
+    (_, true, false, _) => "orchestrator.end.effectQueued",
+    (_, false, ..) if wait.own => "orchestrator.end.effectOwn",
+    (_, false, ..) => "orchestrator.end.effectWaits",
   }
 }
 
