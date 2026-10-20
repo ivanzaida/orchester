@@ -3,7 +3,7 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Text, VirtualizedList},
   node::{Element, dimension::Dimension, padding::Padding},
@@ -204,10 +204,14 @@ fn empty(ctx: &mut Ctx, p: &PageProps) -> Column {
     .min_height(Dimension::Px(if found { 0.0 } else { EMPTY_HEIGHT }))
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Md)
+    .spacing(if found { SpacingSize::Lg } else { SpacingSize::Md })
     .padding(ExtraSpacing::Roomy.role())
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .rounded(crate::theme::ExtraRadius::Tile.role())
+    .rounded(if found {
+      RadiusSize::Lg
+    } else {
+      crate::theme::ExtraRadius::Tile.role()
+    })
     .child(marker(Icon::GraduationCap, 36.0))
     .child(
       Column::new()
@@ -218,8 +222,13 @@ fn empty(ctx: &mut Ctx, p: &PageProps) -> Column {
             "skills.emptyTitle",
             [("project", p.project.open.project.name().as_str())],
           ))
+          .id("skills-empty-title")
           .width(Dimension::Pct(100.0))
-          .variant(ExtraTypography::Strong.role()),
+          .variant(if found {
+            TypographyStyle::Title
+          } else {
+            ExtraTypography::Strong.role()
+          }),
         )
         .child(
           Text::new(&ctx.t_args(
@@ -230,8 +239,13 @@ fn empty(ctx: &mut Ctx, p: &PageProps) -> Column {
             },
             [("project", p.project.open.project.name().as_str())],
           ))
+          .id("skills-empty-detail")
           .width(Dimension::Pct(100.0))
-          .variant(TypographyStyle::Description),
+          .variant(if found {
+            ExtraTypography::Lead.role()
+          } else {
+            TypographyStyle::Description
+          }),
         ),
     );
   if found {
