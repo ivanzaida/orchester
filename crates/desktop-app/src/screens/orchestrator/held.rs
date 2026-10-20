@@ -32,7 +32,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList},
   services::Services,
-  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::TagChip,
@@ -109,7 +109,7 @@ impl Component for HeldCard {
       .child(
         Text::new(&title)
           .id(format!("{id}-title"))
-          .variant(ConversationText::ResultTitle.role())
+          .variant(OrchestratorText::CardTitle.role())
           // The title takes the free room, so its box is never narrower than its words.
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
@@ -189,7 +189,7 @@ impl HeldCard {
     let open = ActionButton::new(
       format!("{id}-open"),
       ButtonKind::Ghost,
-      ctx.t("orchestrator.held.openQueue"),
+      ctx.t("orchestrator.action.openQueue"),
     )
     .icon(Icon::ArrowUpRight)
     .opens(navigation.to(route));

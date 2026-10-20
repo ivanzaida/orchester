@@ -52,7 +52,7 @@ pub enum OrchestratorText {
   /// 12.5 `text_secondary`, 1.5: what a labelled link adds after it (`XosQ1` in `w262B`).
   LinkDetail,
   /// 12.5/600 `text_primary`, 1.5: the title of a proposal, wait or run end card (`Title` in `gQKlW`, `J9n4q4`,
-  /// `ExRt1`).
+  /// `ExRt1`), and of an action or held card (`urjoH` in `B14RxE`, `vY6v1` in `Fbk90`).
   CardTitle,
 }
 
