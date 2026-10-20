@@ -34,6 +34,7 @@
 
 mod code_index;
 mod composition;
+mod finish;
 mod memory;
 mod native;
 mod retry;

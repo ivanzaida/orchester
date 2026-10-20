@@ -192,8 +192,7 @@
         "other": "{{count}} waiting tasks held"
       },
       "checked": "Same action as Pause scheduling in the queue, checked against your permissions in {{project}}.",
-      "resume": "Resume new starts",
-      "openQueue": "Open queue"
+      "resume": "Resume new starts"
     },
     "proposal": {
       "title": "Start {{task}} on {{pipeline}}?",
