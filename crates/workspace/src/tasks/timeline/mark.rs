@@ -1,6 +1,6 @@
 //! Returns and restarts (02.B7 `zyusO`): an attempt that a failure's route returned to an earlier
-//! step, that restarted a step which broke, or that a person returned with a note, starts with a
-//! mark of its own before the header of the step it starts from. It is never part of a tool group.
+//! step, that restarted a step which broke, or that a person returned with a note (also after the run ended), starts
+//! with a mark of its own before the header of the step it starts from. It is never part of a tool group.
 
 use std::sync::Arc;
 
@@ -29,7 +29,12 @@ pub enum MarkKind {
   /// `step` broke and starts again as a fresh session.
   Restarted { step: Arc<str> },
   /// A person returned the work to `to` with `note`.
-  ReturnedWithNote { to: Arc<str>, note: Arc<str> },
+  /// `resolving`: the branch whose merge's conflicts the work of the ended run was returned to resolve.
+  ReturnedWithNote {
+    to: Arc<str>,
+    note: Arc<str>,
+    resolving: Option<Arc<str>>,
+  },
 }
 
 /// A return or restart before the header of the step its attempt starts from.
@@ -38,6 +43,7 @@ pub struct Mark {
   pub attempt: u32,
   pub at: Option<Timestamp>,
   pub by_person: bool,
+  pub by: Option<orchester_core::run::Answerer>,
   pub kind: MarkKind,
 }
 
@@ -73,6 +79,16 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
     AttemptReason::Returned { return_to, note, .. } => MarkKind::ReturnedWithNote {
       to: name(return_to),
       note: note.as_str().into(),
+      resolving: None,
+    },
+    AttemptReason::ReturnedAfterEnd {
+      return_to,
+      note,
+      conflicts,
+    } => MarkKind::ReturnedWithNote {
+      to: name(return_to),
+      note: note.as_str().into(),
+      resolving: conflicts.as_ref().map(|conflicts| conflicts.base.as_str().into()),
     },
     // An accepted step passed in the attempt before: what runs after it starts no return of its own.
     AttemptReason::Initial
@@ -84,6 +100,7 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
     attempt: attempt.number().get(),
     at: start.map(|start| start.at),
     by_person: start.is_some_and(|start| start.by_person),
+    by: start.and_then(|start| start.by),
     kind,
   })
 }

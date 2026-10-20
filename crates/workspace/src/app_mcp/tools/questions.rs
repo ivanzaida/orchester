@@ -8,7 +8,6 @@
 use orchester_core::{
   id::ProjectId,
   question::{AnswerError, AskedQuestions, GivenAnswer, Question, QuestionTurn},
-  run::Answerer,
   store::{RunStore, TaskStore},
 };
 use orchester_store::ProjectDb;
@@ -115,7 +114,8 @@ pub async fn list_questions(
 /// cannot be read leaves them out and the question is still listed: `get_run` names why its run cannot be read.
 fn with_run(db: &ProjectDb, asked: AskedQuestions) -> Result<Asked, ToolError> {
   let kept = db.run_answer_actions(asked.request.run())?;
-  let proposed = proposals(&kept, (true, std::slice::from_ref(&asked)));
+  // Only the answer is read: what a message would meet does not matter here.
+  let proposed = proposals(&kept, (None, std::slice::from_ref(&asked)));
   let proposed = orchestrated::proposed_answer(waiting_answer(&proposed, asked.request.id()));
   let Ok(Some(run)) = db.run(asked.request.run()) else {
     return Ok(Asked {
@@ -197,7 +197,8 @@ fn question(question: &Question) -> Value {
   })
 }
 
-/// `answer_question`, as automation; `by` the Orchestrator chat, the card names the chat once the runner recorded it.
+/// `answer_question`, as automation; `by` the Orchestrator chat, the card names the chat once the runner recorded it,
+/// sent by the chat itself or applied by the person.
 pub async fn answer_question(services: &Services, args: AnswerQuestion, by: SentBy) -> Result<Value, ToolError> {
   let reading = services.clone();
   let AnswerQuestion {
@@ -208,6 +209,9 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
     text,
   } = args;
   let (project, asked) = blocking(move || {
+    if !matches!(by, SentBy::Person(_)) {
+      crate::decisions::DecisionKind::Question.require(&reading.workspace)?;
+    }
     let project = reading.project(&project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let run = find_run(&db, &run)?;
@@ -224,10 +228,10 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
   };
   services
     .runners
-    .control_run_in(&project, answering.command(Answerer::Automation))
+    .control_run_in(&project, answering.command(by.answerer()))
     .await
     .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
-  if let SentBy::Orchestrator(from) = by {
+  if let Some(chat) = by.chat() {
     let (root, run, request) = (
       project.repo_root.clone(),
       asked.request.run(),
@@ -235,7 +239,7 @@ pub async fn answer_question(services: &Services, args: AnswerQuestion, by: Sent
     );
     // The answer reached the agent; only the card's words depend on the mark, so a mark not kept is logged.
     let marked =
-      blocking(move || Ok(ProjectDb::open(&root)?.mark_answered_by_orchestrator((run, &request), from)?)).await;
+      blocking(move || Ok(ProjectDb::open(&root)?.mark_answered_by_orchestrator((run, &request), chat)?)).await;
     if let Err(error) = marked {
       tracing::warn!(?error, "cannot name the Orchestrator on the answer it gave");
     }

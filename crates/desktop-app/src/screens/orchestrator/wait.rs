@@ -1,9 +1,9 @@
-//! A wait of an agent of the project in the Orchestrator's conversation (`docs/design/orchestrator-toolset.md`,
-//! "Decisions" 5): in the action card's frame (`Action card` `nQIhx`), its head with what the agent waits for, the
-//! task and the run, and at its end *Waits* and when it was noticed; what happens with it (the Orchestrator reads and
-//! answers it by itself while *Let the Orchestrator answer agents* is on, else it waits for the person); and *Open*
-//! its card on the task's Conversation. No Pencil frame draws it yet: it keeps to the action card's look, with the
-//! waiting state of a proposal.
+//! A wait of an agent of the project in the Orchestrator's conversation (`Orchestrator · agent waits · states`
+//! `hW2fQ`, `docs/design/orchestrator-toolset.md`, "Decisions" 5): in the action card's frame (`Action card` `nQIhx`),
+//! its head with what the agent waits for, the task and the run, and at its end *Waits* and when it was noticed; what
+//! happens with it (the Orchestrator reads and answers it by itself while *Let the Orchestrator answer agents* is on,
+//! else it waits for the person); and *Open* its card on the task's Conversation. The end of a task's run is a wait of
+//! its own kind, with its own card ([`super::run_end`]).
 
 use lurq::{
   app::{
@@ -41,13 +41,23 @@ pub(super) fn card(
 ) -> Element {
   let run = wait.number.to_string();
   let named = wait.agent.as_deref().or(wait.step.as_deref());
-  let (glyph, title) = match (wait.kind, named) {
-    (WaitKind::Question, Some(agent)) => (Icon::MessageCircleQuestion, ("orchestrator.wait.question", agent)),
-    (WaitKind::Question, None) => (Icon::MessageCircleQuestion, ("orchestrator.wait.questionAnyone", "")),
-    (WaitKind::Message, Some(agent)) => (Icon::MessageSquare, ("orchestrator.wait.message", agent)),
-    (WaitKind::Message, None) => (Icon::MessageSquare, ("orchestrator.wait.messageAnyone", "")),
-    (WaitKind::Plan, Some(agent)) => (Icon::ScrollText, ("orchestrator.wait.plan", agent)),
-    (WaitKind::Plan, None) => (Icon::ScrollText, ("orchestrator.wait.planAnyone", "")),
+  let (glyph, title, kind) = match (wait.kind, named) {
+    (WaitKind::Question, Some(agent)) => (
+      Icon::MessageCircleQuestion,
+      ("orchestrator.wait.question", agent),
+      "question",
+    ),
+    (WaitKind::Question, None) => (
+      Icon::MessageCircleQuestion,
+      ("orchestrator.wait.questionAnyone", ""),
+      "question",
+    ),
+    (WaitKind::Message, Some(agent)) => (Icon::MessageSquare, ("orchestrator.wait.message", agent), "message"),
+    (WaitKind::Message, None) => (Icon::MessageSquare, ("orchestrator.wait.messageAnyone", ""), "message"),
+    (WaitKind::Plan, Some(agent)) => (Icon::ScrollText, ("orchestrator.wait.plan", agent), "plan"),
+    (WaitKind::Plan, None) => (Icon::ScrollText, ("orchestrator.wait.planAnyone", ""), "plan"),
+    // A run's end has a card of its own, in the same frame.
+    (WaitKind::Ended(end), _) => return super::run_end::card(ctx, id, (wait, end, at, turned), project),
   };
   let title = ctx.t_args(
     title.0,
@@ -60,7 +70,7 @@ pub(super) fn card(
     words: ctx.t_args("orchestrator.wait.noticed", [("time", time.as_str())]),
   };
   let effect = ctx.t(effect(wait, turned));
-  card::frame(id, kind_name(wait.kind))
+  card::frame(id, kind)
     .describe("automatic", wait.automatic.to_string())
     .child(card::head(id, (glyph, &title), None, state))
     .child(
@@ -101,13 +111,4 @@ fn open_card(ctx: &mut Ctx, id: &str, project: ProjectId, task: &str) -> Option<
       )
       .into(),
   )
-}
-
-/// The name tools read of a wait's kind.
-const fn kind_name(kind: WaitKind) -> &'static str {
-  match kind {
-    WaitKind::Question => "question",
-    WaitKind::Message => "message",
-    WaitKind::Plan => "plan",
-  }
 }

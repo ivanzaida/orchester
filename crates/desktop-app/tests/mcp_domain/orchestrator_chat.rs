@@ -73,6 +73,7 @@ pub(super) fn chat(served: &Served, db: &mut ProjectDb) -> ChatScope {
     name: "Kontur".to_owned(),
     root: open.repo_root.clone(),
     chat: chat.id(),
+    on_its_own: false,
   }
 }
 
@@ -233,6 +234,13 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   ));
 
   allow(&served, OrchestratorConsent::AnswerAgents);
+  let refused = chat_call(&mut served, &scope, "send_message", answer.clone()).expect_err("decision consent required");
+  assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("decision consent");
   let sent = chat_call(&mut served, &scope, "send_message", answer).expect("sent at once");
   assert_eq!(
     sent["action"], "answer",
@@ -242,7 +250,7 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   let last = messages.last().expect("the answer");
   assert_eq!(last.body().as_str(), "Keep the HubSpot owner.");
   assert!(last.by_orchestrator(), "the task's conversation names the Orchestrator");
-  assert_eq!(actions(&db, &scope)[1].outcome, ActionOutcome::Done);
+  assert_eq!(actions(&db, &scope)[2].outcome, ActionOutcome::Done);
 }
 
 #[test]
@@ -274,7 +282,17 @@ fn chat_action_naming_a_run_by_its_number_deals_with_its_next_wait() {
   let kept: Vec<Option<String>> = actions(&db, &dealt).into_iter().map(|action| action.task).collect();
   assert_eq!(kept, [Some(task.key().to_string())], "the run's task, by its key");
   let newer = chat(&served, &mut db);
-  // The run's wait the window kept when it opened the project, as its next one is.
+  // The run's wait the window keeps once it followed the opened project, as its next one is: waited for, as the
+  // window follows on its own time.
+  let kept_wait = |db: &ProjectDb| {
+    db.chats().expect("History").iter().any(|listing| {
+      db.chat_entries(listing.chat.id())
+        .expect("entries")
+        .iter()
+        .any(|entry| matches!(&entry.kind, EntryKind::Wait { wait, .. } if wait.run == run.id()))
+    })
+  };
+  served.until("the run's wait kept", |_| kept_wait(&db));
   let mut entries = Vec::new();
   for listing in db.chats().expect("History") {
     let id = listing.chat.id();
@@ -357,6 +375,14 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
   ));
 
   allow(&served, OrchestratorConsent::AnswerAgents);
+  let refused =
+    chat_call(&mut served, &scope, "answer_question", answer.clone()).expect_err("global consent is required too");
+  assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("decision consent");
   // Sent at once, to the runner: this session has none, so it is refused there, never proposed.
   let refused = chat_call(&mut served, &scope, "answer_question", answer).expect_err("no runner answers here");
   assert!(
@@ -364,7 +390,7 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     "{refused:?}"
   );
   assert!(matches!(
-    &actions(&db, &scope)[2],
+    &actions(&db, &scope)[3],
     ChatAction { outcome: ActionOutcome::Refused { code, .. }, change: Some(_), .. } if code == "runner_unavailable"
   ));
 }

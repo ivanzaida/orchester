@@ -34,8 +34,8 @@ Environment variables, project MCP servers, tabs, and the installed stable build
 3. Agent profiles: **Implement** (Codex, workspace write, network per the capability table) and **Review** (a different
    profile, read-only), so the reviewer is never the author.
 4. Pipeline *Orchester change*:
-   Implement → command `powershell -File tools/check.ps1` → command with the task's filtered `cargo test` lines →
-   Review → Ready for review.
+   Implement → command `powershell -File tools/check.ps1 -Tests changed` (the check and the tests of the changed
+   crates, `docs/stable-build.md`) → Review → Ready for review.
    Set the Implement **step** to *Can write* as well as the profile: a new agent step starts *Read-only* and can narrow a
    write profile. Keep Review read-only.
 5. Environment: nothing for builds. Cargo builds into each worktree's own git-ignored `target/`, which goes away
@@ -59,6 +59,21 @@ it is*, *Run … again*, the return with a note and *Stop* (the `decisions` seed
 **Open:** design verification of the waits-unverified Summary (no Pencil frame of its own yet: it reuses `DVuXu`'s
 parts); the deprecated desktop shows the state but offers no *Accept*; the runner's macOS side is not cross-checked
 (its C dependencies need a macOS toolchain); the QA slot count is fixed at one.
+
+### D3 · Resolve a merge's conflicts, and return a finished run to a step · branch `claude/conflict-actions` (implemented 2026-10-19, waiting for review and design verification)
+
+*Not merged into main* after a conflict offers, beside *Local integration*, *Resolve in editor* and *Ask an agent to
+resolve* (Pencil `fvCVT`). *Resolve in editor* merges the base branch into the run's own worktree, recorded as the
+run's resolution so the run neither continues nor merges meanwhile, and opens it in the editor `ORCHESTER_EDITOR`
+names, else VS Code's `code`, else the folder; the index decides what is resolved, a binary or deleted-on-one-side file
+waits for the person to keep a side, *Continue* commits the merge (git then proves the merged-in base for the merge into
+main), *Abort* puts the worktree back. *Ask an agent to resolve* returns the run to a writing step with a note and the
+conflicting files as data. The core of the project task *ORC-44 · Return a finished run to an earlier step*: a
+succeeded or failed run is reopened from an executed agent step with a note (`continue_run` `return_to` takes ended
+runs too); refused for a merged run, a gone worktree, a merge in the worktree and a run at work.
+**Open:** returning a failed run from the task page (only `continue_run` does today); a follow-up turn whose step
+reports failed does not route the run back yet; the design-verification of boards 1–9 of `fvCVT`, and a frame for
+files that wait for a side to be kept.
 
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
@@ -836,6 +851,30 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-31 · Person-only decisions refuse synthetic input everywhere · branch `orchester/orc-31-run-2`
+(implemented 2026-10-18 in run 1, carried onto master in run 2; pipeline Check and independent design Verify still follow).
+A shared workspace policy requires the approvals consent for approvals, questions, plans and stuck/retry/accept
+choices, independently of permission-setup consent. The window and domain tools use it; synthetic decisions record
+automation, native decisions record the person. Plan/retry/return/stop/accept audit events and persisted free-text
+answers retain their decider, and conversation captions name automation. Native acceptance of an Orchestrator
+proposal retains the person's identity. The frozen deprecated desktop is unchanged; its legacy IPC entry remains.
+Filtered core replay, storage, IPC, shared-policy and headless control tests cover the change. The new headless
+`mcp_domain person_decisions` group covers every changed control and all four domain tools, including refusal,
+consented automation and native authorship. `tools/check.ps1` is delegated to this run's Check step. macOS is not
+cross-checked on this machine (no macOS SDK/C cross-compiler); no new target-specific code was added. Verify the
+plan bar (`G5378f`), composer (`QQ2ZM`), retry card (`j7DjNG`), conversation cards (`YhiGC`) and Needs you (`HQ6Y1`).
+Accept/unverified still has no dedicated Pencil frame (D2); the verifier must report that limitation explicitly.
+
+Review corrections (2026-10-18): outgoing consent follows the message's actual effect on waiting agents,
+including Send after leaving a question's composer context. Attributed retry/return/stop/accept commands carry
+the displayed run event sequence (IPC 28); a different wait rejects them before any transition or Accept revision
+check. A failed task reread replaces retained controls with the existing load-error surface until fresh data
+succeeds, including during retries. Regressions cover the leave/send path, retained-data read failures and
+decisions from a previous wait. The failed-reread surface and Accept still need the verifier to identify missing
+design frames explicitly. Sending an undelivered message again (*Send after this turn* and its variants) follows the
+same rule: when the resent message would answer a free-text question its agent waits on, an MCP client's press needs
+the approvals consent, and an automation resend is recorded as automation's message (`send_after_turn_as`).
 
 Command classifier: compound lines and dependency sources · branch `claude/command-classifier` (2026-10-14).
 From the analysis of 16 runs (106 of the person's 134 approvals were Claude Code's compound lines read as Unknown).

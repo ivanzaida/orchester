@@ -3,7 +3,8 @@
 //! a model it is too old for (`Claude Code 2.1.89 can't run …`); the profiles that run on it; and in the
 //! footer what its status means, the sign-in command to run in a terminal, Test connection and Edit
 //! connection. A native connection (`cC6TI`) says that native agents are not available yet and shows its
-//! endpoint, key and models, its test and editing unavailable.
+//! endpoint, key and models, its test and editing unavailable. A CLI on an API provider shows the provider
+//! ([`super::provider`]) instead of an account.
 
 use std::sync::Arc;
 
@@ -18,7 +19,7 @@ use orchester_core::connection::{
 use orchester_exec::launch::{Launch, Via};
 use orchester_workspace::{connections::data::sign_in_command, display};
 
-use super::{Actions, Inspecting, Parts, check_button, footer, header, last_checked, shown, used_by};
+use super::{Actions, Inspecting, Parts, check_button, footer, footer_action, header, last_checked, shown, used_by};
 use crate::{
   screens::connections::words::{agent_glyph, checked_version, connection_status, provider_key},
   theme::{ExtraSpacing, ExtraTypography},
@@ -81,6 +82,9 @@ fn cli(
   inspecting: &Inspecting<'_>,
   actions: &Actions,
 ) -> Parts {
+  if let Some(api) = connection.api_provider() {
+    return super::provider::parts(ctx, (connection, api), (header, used), inspecting, actions);
+  }
   let mut body: Vec<Element> = too_old(ctx, connection).into_iter().collect();
   body.push(properties(ctx, connection, inspecting).into());
   body.push(super::super::account::inspector_rows(
@@ -96,9 +100,12 @@ fn cli(
     .of_connection(connection.account(), connection.provider());
   // Edit connection chooses the connection's account (`M42rM`); its name and program are not edited here yet.
   let (edit, id) = (actions.edit.clone(), connection.id());
-  let edit = ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
-    .icon(Icon::Pencil)
-    .opens(edit(id));
+  let edit = footer_action(
+    inspecting,
+    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")),
+    Icon::Pencil,
+  )
+  .opens(edit(id));
   // On no account: a check would run the CLI on Default's folder and say nothing of this connection; Edit connection
   // chooses one.
   if connection.account() == &orchester_core::connection::ConnectionAccount::Unassigned {
@@ -117,7 +124,8 @@ fn cli(
   // Signed out on one of the person's accounts: the fix is in Settings › Accounts, not a command here (`M42rM`).
   if let Some(account) = account.filter(|_| status == ConnectionStatus::SignInRequired) {
     let sentence = signed_out_sentence(ctx, account);
-    let buttons = vec![open_in_settings(ctx, account).into(), edit.into()];
+    let open = footer_action(inspecting, open_in_settings(ctx, account), Icon::ArrowUpRight);
+    let buttons = vec![open.into(), edit.into()];
     return Parts {
       header,
       body,
@@ -141,7 +149,12 @@ fn cli(
       .render(ctx)
     });
   let buttons = vec![
-    check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions).into(),
+    footer_action(
+      inspecting,
+      check_button(inspecting, ("connection-test", ctx.t("connections.test")), actions),
+      Icon::PlugZap,
+    )
+    .into(),
     edit.into(),
   ];
   let more = command.into_iter().collect();
@@ -154,7 +167,11 @@ fn cli(
   }
 }
 
-fn properties(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>) -> lurq::components::Column {
+pub(super) fn properties(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  inspecting: &Inspecting<'_>,
+) -> lurq::components::Column {
   let status = connection.status_with(&inspecting.listed.secrets);
   let mut rows = vec![property(
     "connection-provider",
@@ -193,12 +210,24 @@ fn properties(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'
     &ctx.t("connections.thisComputer"),
     PropertyValue::Plain,
   ));
+  let authentication = match connection.api_provider() {
+    Some(_) => "connections.apiProvider.authentication",
+    None => "connections.cliLogin",
+  };
   rows.push(property(
     "connection-authentication",
     &ctx.t("connections.property.authentication"),
-    &ctx.t("connections.cliLogin"),
+    &ctx.t(authentication),
     PropertyValue::Plain,
   ));
+  if connection.api_provider().is_some() {
+    rows.push(property(
+      "connection-plan-limits",
+      &ctx.t("connections.account.planLimits"),
+      &ctx.t("connections.apiProvider.planLimits"),
+      PropertyValue::Muted,
+    ));
+  }
   let (checked, kind) = last_checked(ctx, inspecting.now, connection.last_check().map(|check| check.at));
   rows.push(property(
     "connection-checked",
@@ -265,7 +294,12 @@ fn too_old(ctx: &Ctx, connection: &AgentConnection) -> Option<Element> {
 
 /// The models the last check listed, a model the CLI is too old for marked, where the list came from, and
 /// Refresh models.
-fn models(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, actions: &Actions) -> Element {
+pub(super) fn models(
+  ctx: &Ctx,
+  connection: &AgentConnection,
+  inspecting: &Inspecting<'_>,
+  actions: &Actions,
+) -> Element {
   let chips = Row::new()
     .id("connection-models")
     .width(Dimension::Pct(100.0))
@@ -281,10 +315,13 @@ fn models(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, 
           );
           badge(&id, BadgeTone::Warning, &word).into()
         }
+        // An API provider's model ids are typed: shown as written, in Geist Mono (`y2qhJ`).
+        None if connection.api_provider().is_some() => TagChip::new(id, model.id().as_str()).mono().into(),
         None => TagChip::new(id, model.id().as_str()).into(),
       }
     }));
   let note = match connection.catalog().map(|catalog| catalog.source()) {
+    _ if connection.api_provider().is_some() => "connections.modelSource.apiProvider",
     _ if connection.models().is_empty() && connection.last_check().is_some_and(|check| check.result.is_verified()) => {
       "connections.noModelsListed"
     }
@@ -307,7 +344,8 @@ fn models(ctx: &Ctx, connection: &AgentConnection, inspecting: &Inspecting<'_>, 
     ))
     .with_children((!connection.models().is_empty()).then_some(chips))
     .child(Text::new(&ctx.t(note)).variant(ExtraTypography::Note.role()))
-    .child(Row::new().child(refresh))
+    // An API provider's models are typed in Edit connection; a check of the CLI lists none of them.
+    .with_children(connection.api_provider().is_none().then(|| Row::new().child(refresh)))
     .into()
 }
 
@@ -333,14 +371,20 @@ fn native(
   let models = native_models(ctx, api);
   let reason: Arc<str> = ctx.t("connections.native.testUnavailable");
   let buttons = vec![
-    ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test"))
-      .icon(Icon::PlugZap)
-      .unavailable(reason.clone())
-      .into(),
-    ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit"))
-      .icon(Icon::Pencil)
-      .unavailable(reason.clone())
-      .into(),
+    footer_action(
+      inspecting,
+      ActionButton::new("connection-test", ButtonKind::Secondary, ctx.t("connections.test")),
+      Icon::PlugZap,
+    )
+    .unavailable(reason.clone())
+    .into(),
+    footer_action(
+      inspecting,
+      ActionButton::new("connection-edit", ButtonKind::Secondary, ctx.t("connections.edit")),
+      Icon::Pencil,
+    )
+    .unavailable(reason.clone())
+    .into(),
   ];
   Parts {
     header,
@@ -511,7 +555,6 @@ fn open_in_settings(ctx: &mut Ctx, account: &orchester_core::account::AgentAccou
     ButtonKind::Secondary,
     ctx.t_args("connections.account.openInSettings", [("account", name.as_str())]),
   )
-  .icon(Icon::ArrowUpRight)
   .bounded_label()
   .opens(
     navigation.to(crate::routes::Route::Accounts(crate::routes::AccountsView::of(

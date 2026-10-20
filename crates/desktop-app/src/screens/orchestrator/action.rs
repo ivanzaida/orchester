@@ -3,7 +3,8 @@
 //! what was done (12.5/600), and at its end whether it was done (`circle-check` in `success`, *Confirmed* and when)
 //! or refused (`ban`, *Refused* and when); what it did, or the tool's own reason it refused (13/1.5); that it was
 //! checked like the same action in the app (a 12 `shield-check` and 11.5 `text_muted`); and *Open* the task it
-//! names.
+//! names, and for a refused hold or release of new starts *Open queue*, as every refused card keeps a link (`PBrHr`,
+//! `lWl6U`, `v7qn7` in `ExRt1`).
 
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -26,7 +27,7 @@ use orchester_workspace::display;
 
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
+  routes::{ProjectPage, Route, TaskList, TaskTab, TaskView},
   theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -131,9 +132,10 @@ pub(super) fn card(
       Text::new(&title)
         .id(format!("{id}-title"))
         .variant(ConversationText::ResultTitle.role())
-        .flex_shrink(1.0),
+        // The title takes the free room, so its box is never narrower than its words.
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
     )
-    .child(Spacer::new().flex(1.0))
     .child(
       Row::new()
         .id(format!("{id}-state"))
@@ -165,6 +167,16 @@ pub(super) fn card(
       )
   });
   let open = open_task(ctx, id, project, action.task.as_deref());
+  let refused_queue = matches!(action.tool.as_str(), "hold_queue" | "release_queue")
+    && matches!(action.outcome, ActionOutcome::Refused { .. });
+  let queue = refused_queue.then(|| open_queue(ctx, id, project));
+  let links = (open.is_some() || queue.is_some()).then(|| {
+    Row::new()
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .with_children(open)
+      .with_children(queue)
+  });
   Column::new()
     .id(id.to_owned())
     .describe("outcome", outcome_name(&action.outcome))
@@ -182,8 +194,26 @@ pub(super) fn card(
         .width(Dimension::Pct(100.0))
     }))
     .with_children(checked)
-    .with_children(open)
+    .with_children(links)
     .into()
+}
+
+/// Tasks, where new starts of project `project` are held and released.
+pub(super) fn queue_route(project: ProjectId) -> Route {
+  Route::Project(project, ProjectPage::Tasks(TaskList::default()))
+}
+
+/// *Open queue* of card `id`, in project `project`.
+fn open_queue(ctx: &mut Ctx, id: &str, project: ProjectId) -> Element {
+  let navigation = Navigation::of(ctx);
+  ActionButton::new(
+    format!("{id}-queue"),
+    ButtonKind::Ghost,
+    ctx.t("orchestrator.action.openQueue"),
+  )
+  .icon(Icon::ArrowUpRight)
+  .opens(navigation.to(queue_route(project)))
+  .into()
 }
 
 /// What the card of `action`, taken at `at`, says and shows.

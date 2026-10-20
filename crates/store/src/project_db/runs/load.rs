@@ -178,7 +178,8 @@ fn load_permissions(connection: &Connection, run: &str) -> Result<BTreeMap<Resou
 
 fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, StoreError> {
   let mut statement = connection.prepare(
-    "SELECT id, number, reason, failed_step, return_to, note, status FROM attempts WHERE run_id = ?1 ORDER BY number",
+    "SELECT id, number, reason, failed_step, return_to, note, status, conflicts FROM attempts WHERE run_id = ?1 \
+     ORDER BY number",
   )?;
   type AttemptColumns = (
     String,
@@ -188,6 +189,7 @@ fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, Sto
     Option<String>,
     Option<String>,
     String,
+    Option<String>,
   );
   let rows = statement
     .query_map([run], |row| {
@@ -199,29 +201,33 @@ fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, Sto
         row.get(4)?,
         row.get(5)?,
         row.get(6)?,
+        row.get(7)?,
       ))
     })?
     .collect::<Result<Vec<AttemptColumns>, _>>()?;
   rows
     .into_iter()
-    .map(|(id, number, reason, failed_step, return_to, note, status)| {
-      let number = u32::try_from(number)
-        .ok()
-        .and_then(NonZeroU32::new)
-        .ok_or_else(|| corrupt("attempt number", number))?;
-      Ok(Attempt::new(
-        parse("attempt id", &id)?,
-        number,
-        parse_attempt_reason(&AttemptReasonColumns {
-          reason: &reason,
-          failed_step: failed_step.as_deref(),
-          return_to: return_to.as_deref(),
-          note: note.as_deref(),
-        })?,
-        parse_attempt_status(&status)?,
-        load_executions(connection, &id)?,
-      ))
-    })
+    .map(
+      |(id, number, reason, failed_step, return_to, note, status, conflicts)| {
+        let number = u32::try_from(number)
+          .ok()
+          .and_then(NonZeroU32::new)
+          .ok_or_else(|| corrupt("attempt number", number))?;
+        Ok(Attempt::new(
+          parse("attempt id", &id)?,
+          number,
+          parse_attempt_reason(&AttemptReasonColumns {
+            reason: &reason,
+            failed_step: failed_step.as_deref(),
+            return_to: return_to.as_deref(),
+            note: note.as_deref(),
+            conflicts: conflicts.as_deref(),
+          })?,
+          parse_attempt_status(&status)?,
+          load_executions(connection, &id)?,
+        ))
+      },
+    )
     .collect()
 }
 
@@ -265,7 +271,7 @@ fn load_executions(connection: &Connection, attempt: &str) -> Result<Vec<StepExe
     .collect()
 }
 
-fn sequence_value(sequence: i64) -> Result<EventSequence, StoreError> {
+pub(in crate::project_db) fn sequence_value(sequence: i64) -> Result<EventSequence, StoreError> {
   u64::try_from(sequence)
     .ok()
     .and_then(NonZeroU64::new)

@@ -113,6 +113,7 @@ impl Fixture {
       permissions: Some(&permissions),
       push: PushFacts::default(),
       escalation: false,
+      build_output: &[],
     };
     review_hold(&ApprovalSubject::of(&approval, &self.scope), &rules)
   }

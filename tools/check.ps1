@@ -1,16 +1,29 @@
 # Repository quality gate: formatting, clippy with warnings denied, the 600-line file limit and the web checks.
 # Run from anywhere: powershell -File tools/check.ps1
 #
+# With `-Tests changed` it also runs the tests of the crates the branch changed and of the crates that depend on them
+# (tools/check-tests.ps1, which explains the choice), as the pipelines' Check step does; `-Tests all` runs every
+# crate's tests. `-Base <revision>` and `-TestTimeoutSeconds <n>` go to it. Without -Tests no test runs, so the check
+# agents run by hand stays fast. When clippy fails, the tests are skipped: they would not build. A rustfmt failure
+# alone does not skip them, so one return to the agent carries both.
+#
 # Clippy runs in two parts on purpose: the workspace without orchester-cloud, then orchester-cloud. A single
 # `cargo clippy --workspace --all-features` stays red. actix-web (the cloud's HTTP server) turns on tracing's `log`
 # feature, which Cargo then turns on for every crate in the same build. The larger expansion of each tracing macro
 # pushes 19 existing functions over clippy's cognitive-complexity limit. Do not "fix" those functions for it; they
 # pass in every build that ships them (docs/cloud-hosting.md, "Clippy runs in two parts, on purpose").
+param(
+    [ValidateSet("changed", "all")]
+    [string] $Tests = "",
+    [string] $Base = "",
+    [int] $TestTimeoutSeconds = 0
+)
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $maxLines = 599
 $failed = $false
+$clippyFailed = $false
 
 Push-Location $repositoryRoot
 try {
@@ -37,10 +50,11 @@ try {
     # tracing event there. Built apart, each side is checked with the features it really has.
     Write-Output "== clippy"
     cargo clippy --workspace --exclude orchester-cloud --all-targets --all-features -- -D warnings
-    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    if ($LASTEXITCODE -ne 0) { $clippyFailed = $true }
     Write-Output "== clippy orchester-cloud"
     cargo clippy -p orchester-cloud --all-targets --all-features -- -D warnings
-    if ($LASTEXITCODE -ne 0) { $failed = $true }
+    if ($LASTEXITCODE -ne 0) { $clippyFailed = $true }
+    if ($clippyFailed) { $failed = $true }
 
     Write-Output "== file size (max $maxLines lines)"
     $oversized = Get-ChildItem -Path (Join-Path $repositoryRoot "crates") -Recurse -Filter *.rs -File |
@@ -66,9 +80,11 @@ try {
         @{ Rule = "hardcoded user-facing text"; Pattern = '\b(Text|Button)::new\(\s*"|\.(placeholder|with_title|tooltip|label)\(\s*"' },
         @{ Rule = "numeric spacing/radius/border"; Pattern = '\.(padding\w*|spacing|gap|rounded|corner_radius\w*|border\w*)\(\s*-?[0-9]' }
     )
-    $uiRoots = @("crates\desktop\src", "crates\desktop-app\src") | ForEach-Object { Join-Path $repositoryRoot $_ }
+    $uiRoots = @("desktop", "desktop-app") | ForEach-Object {
+        [System.IO.Path]::Combine($repositoryRoot, "crates", $_, "src")
+    }
     $violations = $uiRoots | ForEach-Object {
-        $themeRoot = Join-Path $_ "theme"
+        $themeRoot = [System.IO.Path]::Combine($_, "theme")
         Get-ChildItem -Path $_ -Recurse -Filter *.rs -File |
             Where-Object { -not $_.FullName.StartsWith($themeRoot) }
     } |
@@ -102,6 +118,24 @@ try {
     }
     else {
         Write-Output "web: skipped, Node (node) is not on PATH; the web checks did not run"
+    }
+
+    if ($Tests -and $clippyFailed) {
+        Write-Output "== tests ($Tests): skipped, clippy failed above; the tests run once it passes"
+    }
+    elseif ($Tests) {
+        Write-Output "== tests ($Tests)"
+        $testArguments = @{ Scope = $Tests }
+        if ($Base) { $testArguments.Base = $Base }
+        if ($TestTimeoutSeconds -gt 0) { $testArguments.TestTimeoutSeconds = $TestTimeoutSeconds }
+        try {
+            & (Join-Path $PSScriptRoot "check-tests.ps1") @testArguments
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+        }
+        catch {
+            Write-Output "tests: could not run: $_"
+            $failed = $true
+        }
     }
 }
 finally {

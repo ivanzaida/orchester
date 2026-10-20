@@ -62,6 +62,8 @@ pub enum Action {
   Restore,
   FinishRestore,
   Reconcile,
+  /// Records the merge Git proves was made without Orchester as the record's own.
+  RecordMergedOutside,
   Abort,
   Cleanup {
     /// The restored files the person changed since and saw listed, which cleanup leaves as they are.
@@ -239,6 +241,7 @@ fn execute(
     Action::Restore => session.restore()?,
     Action::FinishRestore => session.finish_restore()?,
     Action::Reconcile => session.reconcile()?,
+    Action::RecordMergedOutside => session.record_merged_outside()?,
     Action::Abort => {
       session.abort_task()?;
       return Ok(Outcome::Aborted);

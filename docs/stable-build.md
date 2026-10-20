@@ -209,6 +209,15 @@ install, a network command) is refused (`person_only`, with the reason), as are 
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
 automation* or *denied by automation*, and the run's Approvals count them apart from yours.
 
+**Decision consent in the new app.** The window and domain tools use `orchester_workspace::decisions::DecisionKind`.
+*Let automation answer approvals* covers approval answers, question answers, every plan decision (including
+requesting changes), and retry, return, stop and Accept decisions on a waiting run. It does not require
+*Let automation change agent permissions*: that separate grant still governs permission setup. Without decision
+consent, synthetic window input and the corresponding domain tools refuse the decision. With consent, they record
+automation as the decider; a person's own press records the person. Approval answers retain their existing restrictions
+on approving risky requests or granting wider approval. Free-text answers and continuations keep their sender too.
+A native acceptance of an Orchestrator proposal is the person's decision; automatic answers still require consent.
+
 **The new app's MCP server.** `orchester-app` runs one MCP server of its own instead of two. It listens on
 `127.0.0.1` only and needs a bearer token on every request; where it listens and where its token is kept depend on
 how the app was started (below). It hosts lurq's window tools, the app's
@@ -416,16 +425,41 @@ agents you would let run code that way. For example, a *Check* step that runs `t
 when the check fails, with *Let automation change agent permissions* on:
 
 ```text
-save_tool_draft     {"project": "Orchester", "name": "Check", "description": "Runs tools/check.ps1.",
+save_tool_draft     {"project": "Orchester", "name": "Check",
+                     "description": "Runs tools/check.ps1 with the tests of the changed crates.",
                      "program": "powershell",
-                     "arguments": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/check.ps1"],
-                     "timeout_secs": 3600}
+                     "arguments": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/check.ps1",
+                                   "-Tests", "changed"],
+                     "timeout_secs": 10800}
 publish_tool        {"project": "Orchester", "tool": "Check"}
 save_pipeline_draft {"project": "Orchester", "pipeline": "Orchester change", "steps": [...the steps it has...,
                      {"key": "check", "name": "Check", "tool": "Check", "runs_after": ["implement"],
                       "on_failure": {"return_to": "implement", "retries": 2}}]}
 publish_pipeline    {"project": "Orchester", "pipeline": "Orchester change"}
 ```
+
+`-Tests changed` makes the check run tests as well (`tools/check-tests.ps1`): every test binary of the crates the
+branch changed since it left `master` (committed or not), and of the workspace crates that depend on them, one
+`cargo test -p <crate> --test <binary>` after the other. orchester-app counts as depending on orchester-runner and
+orchester-cloud too, as its tests start their programs, so a change in the runner, the agent or the cloud runs the
+orchester-app tests as well. A file outside the crates counts for the crates whose sources include it
+(`include_str!`), for example `docs/cloud-hosting.md` for orchester-cloud. Without `-Tests` `tools/check.ps1` runs
+no test, so the check agents run by hand stays fast; when clippy fails the tests are skipped, as they would not
+build. A failing test listed in `tools/check-tests-known-failures.txt` (each with its reason) is reported and does
+not fail the step; any other failing test fails it, as do a binary that fails without naming a test, one that runs
+longer than 30 minutes (`-TestTimeoutSeconds`; it is ended with the processes it started), one that runs no test
+without being listed there with `(none)`, and tests that do not build. The step's output names each new failure
+with what the test printed; the full output of every binary is in the worktree's `.tmp/check-tests/<run>/`.
+
+The base is the merge base with `master` (or `origin/master`, whichever is newer); `-Base <revision>` names another.
+A tool step cannot pass its run's base, so a run based on another branch tests the crates changed since `master`:
+more than needed, never fewer. Measured on the person's Windows machine with `CARGO_BUILD_JOBS=4` (2026-10-19): a
+change in `crates/desktop-app` alone adds about 40 minutes (5 to build when *Implement* built its tests already, 12
+from cold, then 36 to run its 67 test binaries), one in `crates/runner` about 50 (its own 10 and orchester-app's),
+and one in `crates/core`, which every crate depends on, about 2 hours; hence the timeout of 3 hours. The tests build
+with line tables only, as full debug information gave each orchester-app test binary a PDB of about 900 MB; even so
+the orchester-app tests take about 35 GB of the worktree's `target/`. On macOS the program is `pwsh` with the same
+arguments.
 
 Today only this switch is protected from window input. Person-only actions in editors still to come (a
 profile's or a pipeline's Publish, approvals) must likewise refuse synthetic input from MCP clients; lurq
@@ -448,10 +482,19 @@ before `push`, `HEAD` only while the run's branch is checked out, `origin` still
 the run started, nothing else in the line changing git's configuration, remotes or folder); every Codex
 escalation; anything outside the step's
 permissions (a write in a read-only step, the network or an install while it is off, a write outside the
-worktree and its writable folders); Orchester's `run_project_tool`; and a request longer than a review
+worktree and its writable folders); Orchester's `run_check` and `start_qa_app`; and a request longer than a review
 reads whole (8,000 characters; it is never cut) all ask the person. A part Orchester cannot read to the
 end (an unknown program, a script) goes to the reviewer, which is told so, except in a step whose
 network is off or that only reads.
+In a read-only step a Cargo build, check, test, clippy, doc or bench that writes only its build output (a
+target directory in a writable folder outside the worktree, or one in the worktree that git ignores and
+tracks nothing in) is no write and goes to the reviewer (2026-10-18); `cargo fmt`, `fix`, `add`, `install`,
+`publish`, aliases (`b`, `c`, `t`), what after `--` may write (`--logfile`, `--emit`, `-o`), `--manifest-path` and a
+target directory elsewhere still ask. The person accepted (2026-10-18) that such a build runs the worktree's
+build scripts, macros, tests and repository Cargo settings under the reviewer's approval alone. *Approve for every run of this
+project* on a `start_qa_app` card keeps a rule of the project, by the QA script's git blob, which answers the
+tool in every run until the script changes or the rule is revoked in Project settings › Auto mode; only a
+person makes it.
 A reviewer that fails, takes longer than 60 seconds or
 answers with something unreadable asks the person too. The reviewer is any agent connection of the
 project with a model of it and an effort, chosen in Project settings › General › Auto mode (the same model

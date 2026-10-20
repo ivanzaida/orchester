@@ -20,6 +20,7 @@ use orchester_workspace::{
     approvals::ShownApproval,
     delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
+    return_work,
     run::worktree_failure_message,
   },
 };
@@ -149,6 +150,9 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
   if let Some(said) = waiting(ctx, run) {
     return said;
   }
+  if let Some(said) = resolving(ctx, run) {
+    return said;
+  }
   let attempt = run
     .run
     .current_attempt()
@@ -166,6 +170,30 @@ fn running(ctx: &Ctx, run: &RunView) -> Said {
   };
   let body = ctx.t_args("summary.notice.runningBody", args);
   Said::new(NoticeTone::Info, Icon::LoaderCircle, (title, body)).in_conversation()
+}
+
+/// The step the run's work was returned to, to resolve a merge's conflicts, while it works on them (board 5 of
+/// `fvCVT`, `Upu2A`): "Returned to Implement to resolve the conflicts with main".
+fn resolving(ctx: &Ctx, run: &RunView) -> Option<Said> {
+  let (step, conflict) = return_work::resolving_conflicts(&run.run)?;
+  let view = run.steps.iter().find(|view| view.key == *step);
+  let (step, agent) = step_words(ctx, view);
+  let branch = conflict.base.as_str();
+  let files = conflict.files.join(", ");
+  let title = ctx.t_args(
+    "summary.notice.returnedResolvingTitle",
+    [("step", step.as_str()), ("branch", branch)],
+  );
+  let body = ctx.t_args(
+    "summary.notice.returnedResolvingBody",
+    [
+      ("agent", agent.as_str()),
+      ("branch", branch),
+      ("files", files.as_str()),
+      ("step", step.as_str()),
+    ],
+  );
+  Some(Said::new(NoticeTone::Info, Icon::CornerDownLeft, (title, body)))
 }
 
 /// A step that waits for the person's answer to a question or for their decision on its plan.

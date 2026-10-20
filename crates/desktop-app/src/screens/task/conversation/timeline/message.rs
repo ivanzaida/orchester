@@ -35,7 +35,7 @@ use orchester_workspace::{
 use super::{super::super::orchestrated::sent_line, Timeline, chips};
 pub(crate) use crate::ui::chat::links;
 use crate::ui::{
-  chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble},
+  chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
   icon::Icon,
 };
 
@@ -73,8 +73,9 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
     .into()
 }
 
-/// A person's message (`mr4lC`) at the right: *You*, its time, the bubble and its delivery line. One the project's
-/// Orchestrator chat sent is the Orchestrator's instead ([`orchestrator_message`]).
+/// A person's message (`mr4lC`) at the right: *You* (or *Automation*, for one automation wrote), its time, the bubble
+/// and its delivery line. One the project's Orchestrator chat sent is the Orchestrator's instead
+/// ([`orchestrator_message`]).
 pub(in super::super) fn person_message(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry)) -> Element {
   let (glyph, color, words) = delivery(ctx, &entry.state);
   let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
@@ -82,6 +83,10 @@ pub(in super::super) fn person_message(ctx: &mut Ctx, (project, entry): (Project
   let id = format!("conversation-message-{}", entry.id);
   let message = match entry.orchestrator {
     Some(from) => orchestrator_message(ctx, &id, (project, entry, from), delivery),
+    None if entry.by_automation => {
+      let author = ctx.t("conversation.byAutomation");
+      person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
+    }
     None => bubble(ctx, &id, (&entry.body, Some(entry.at)), Some(delivery)),
   };
   message
@@ -124,7 +129,17 @@ fn orchestrator_message(
 }
 
 /// A note the person returned the work with, as their message, without a delivery line.
-pub(super) fn person_note(ctx: &mut Ctx, id: &str, note: &Arc<str>, at: Option<Timestamp>) -> Element {
+pub(super) fn person_note(
+  ctx: &mut Ctx,
+  id: &str,
+  note: &Arc<str>,
+  at: Option<Timestamp>,
+  by: Option<orchester_core::run::Answerer>,
+) -> Element {
+  if by == Some(orchester_core::run::Answerer::Automation) {
+    let author = ctx.t("conversation.byAutomation");
+    return person_side_message(id, (&author, note, at), None).into();
+  }
   bubble(ctx, id, (note, at), None).into()
 }
 

@@ -3,7 +3,10 @@
 
 use orchester_core::{
   id::{InvocationId, RunId},
-  run::{CommandShell, DecidedBy, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ToolApprovalDecision},
+  run::{
+    CommandShell, DecidedBy, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ProjectScope,
+    ToolApprovalDecision,
+  },
   time::Timestamp,
 };
 use rusqlite::params;
@@ -57,6 +60,7 @@ impl ProjectDb {
         ))
       })?
       .collect::<Result<Vec<_>, _>>()?;
+    let project_rules = self.project_approval_rules()?;
     rows
       .into_iter()
       .map(|(stored, state, decided_at, decided_by, review)| {
@@ -66,15 +70,24 @@ impl ProjectDb {
           "interrupted" => None,
           other => return Err(corrupt("tool approval state", other)),
         };
+        let request = stored.into_pending()?;
+        let decided_by = decided_by
+          .as_deref()
+          .map(|decided_by| parse::<DecidedBy>("approval answer", decided_by))
+          .transpose()?;
+        let for_project = decided_by == Some(DecidedBy::PersonSimilar)
+          && ProjectScope::of_request(&request).is_some_and(|scope| {
+            project_rules
+              .iter()
+              .any(|rule| rule.made_in == run && rule.made_by == request.id && rule.scope == scope)
+          });
         Ok(DecidedToolApproval {
-          request: stored.into_pending()?,
+          request,
           decision,
-          decided_by: decided_by
-            .as_deref()
-            .map(|decided_by| parse::<DecidedBy>("approval answer", decided_by))
-            .transpose()?,
+          decided_by,
           decided_at: Timestamp::from_unix_millis(decided_at),
           review: super::auto_mode::decode_review(review)?,
+          for_project,
         })
       })
       .collect()

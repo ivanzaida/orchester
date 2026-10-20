@@ -7,10 +7,7 @@
 //! That only a person takes the start or applies the change is the window's to enforce: synthetic input never
 //! reaches [`decide`].
 
-use orchester_core::{
-  orchestrator::{ActionOutcome, SentWay},
-  time::Timestamp,
-};
+use orchester_core::{id::RunId, orchestrator::ActionOutcome, time::Timestamp};
 use orchester_store::ProjectDb;
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
@@ -98,7 +95,8 @@ pub async fn decide(
         (services, translate),
         scope,
         &proposed,
-        (&widens, SentWay::AppliedByPerson),
+        &widens,
+        orchester_core::run::Answerer::Person,
       )
       .await,
       ActionOutcome::Applied,
@@ -108,16 +106,28 @@ pub async fn decide(
       ActionOutcome::Applied,
     ),
   };
-  let outcome = match carried {
-    Ok(_) => applied,
-    Err(error) => refusal(&error, translate),
+  // A message that ran the task again keeps the run it started, which the chat's own doing then names.
+  let (outcome, started) = match carried {
+    Ok(told) => (applied, started_run(&told)),
+    Err(error) => (refusal(&error, translate), None),
   };
   let root = scope.root.clone();
-  background::run(move || ProjectDb::open(&root)?.finish_chat_action((chat, seq), outcome, Timestamp::now()))
-    .await?
-    .map_err(|error| store_error(&error))?;
+  background::run(move || {
+    ProjectDb::open(&root)?.finish_chat_action((chat, seq), (outcome, started), Timestamp::now())
+  })
+  .await?
+  .map_err(|error| store_error(&error))?;
   runners.chat_changed(&scope.root);
   Ok(())
+}
+
+/// The run `send_message` told it ran the task again with (`started_run`); `None` for any other result.
+fn started_run(told: &Value) -> Option<RunId> {
+  told
+    .pointer("/started_run/id")
+    .and_then(Value::as_str)
+    // Written by send_message from a run's id: one that does not read back is no run, and keeps no start.
+    .and_then(|id| id.parse().ok())
 }
 
 /// The proposal no longer waits: another decision took it, or it was settled.

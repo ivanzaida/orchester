@@ -1,49 +1,51 @@
-//! Publishing a draft, canceling a run, merging one, answering an agent's question and sending a run's agents a
-//! message wait for the person when the Orchestrator's agent asks for them (`docs/design/orchestrator-toolset.md`,
-//! "Decisions" 3 to 5), unless the person's switch lets the chat do it itself: *Let the Orchestrator publish drafts*,
-//! *merge runs* or *answer agents*. The agent's call checks what it names and changes nothing: the conversation keeps
-//! the proposed change and the agent is told it waits. The person applies it through the same tool any client of the
-//! app calls, as their own decision (what it widens is theirs to decide, as in the window), or dismisses it
-//! ([`super::proposal::decide`]); a draft saved again or published meanwhile, or a run with a newer checkpoint, is
-//! refused and needs a fresh proposal. An answer or a message is sent as the chat's, recorded as automation's.
+//! Publishing a draft, canceling a run, merging one, answering an agent's question, sending a run's agents a message
+//! and deciding how a run that waits for a person goes on wait for the person when the Orchestrator's agent asks for
+//! them (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5), unless the person's switch lets the chat do it
+//! itself: *Let the Orchestrator publish drafts*, *merge runs* or *answer agents* (none lets it continue a run). The
+//! agent's call checks what it names and changes nothing: the conversation keeps the proposed change and the agent is
+//! told it waits. The person applies it through the same tool any client of the app calls, as their own decision (what
+//! it widens is theirs to decide, as in the window), or dismisses it ([`super::proposal::decide`]); a draft saved again
+//! or published meanwhile, or a run with a newer checkpoint, is refused and needs a fresh proposal. An answer or a
+//! message is sent as the chat's, recorded as automation's when the chat sends it itself and as the person's when they
+//! apply it (ORC-45).
 
 mod answer;
+mod continuation;
+pub(super) mod control;
 
 use std::path::Path;
 
 use orchester_core::{
   id::{ResourceId, RunId},
-  orchestrator::{
-    FromOrchestrator, SentWay,
-    change::{Change, ProposedChange, Publishing},
-  },
+  orchestrator::change::{Change, ProposedChange, Publishing},
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
   revision::Revision,
-  run::Run,
+  run::{Answerer, Run},
   store::{ResourceStore, TaskStore},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
 use super::{
-  tools::{ANSWER_QUESTION, CANCEL_RUN, ChatScope, MERGE_RUN, SEND_MESSAGE, app_tool},
+  tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, SEND_MESSAGE, app_tool},
   widening,
 };
 use crate::{
   app_mcp::{
-    Missing, PersonDecision, Services, ToolError, Translate, answer_for_orchestrator, blocking, find_run,
-    setup::merge_proposed,
+    Missing, PersonDecision, Services, ToolError, Translate, answer_for_orchestrator, blocking,
+    continue_for_orchestrator, find_run, setup::merge_proposed,
   },
   display,
   messages::Message,
 };
 
-/// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers or sends,
-/// and the key of the task it names; a refusal when there is nothing to change.
+/// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers, sends or
+/// continues, and the key of the task it names; a refusal when there is nothing to change.
 pub(super) async fn subject(
-  scope: &ChatScope,
+  (scope, programs): (&ChatScope, &Programs),
   name: &str,
   arguments: &JsonObject,
 ) -> Result<(ProposedChange, Option<String>), ToolError> {
@@ -68,6 +70,15 @@ pub(super) async fn subject(
       let sending = answer::Sending::of(arguments)?;
       blocking(move || answer::message_change(&root, sending)).await?
     }
+    (None, CONTINUE_RUN) => {
+      let (arguments, programs) = (arguments.clone(), programs.clone());
+      blocking(move || continuation::continue_change((&root, &programs), &arguments)).await?
+    }
+    (None, control::PAUSE_RUN | control::RESUME_RUN | control::RELEASE_QUEUE) => {
+      let (name, arguments) = (name.to_owned(), arguments.clone());
+      let project = scope.name.clone();
+      blocking(move || control::control_change((&root, &project), &name, &arguments)).await?
+    }
     (None, _) => {
       let (named, cancel) = (text("run")?, name == CANCEL_RUN);
       blocking(move || run_change(&root, cancel, &named)).await?
@@ -88,12 +99,14 @@ pub(super) async fn widens(scope: &ChatScope, change: &ProposedChange) -> Result
 /// Applies `change`, proposed in `scope`, through the tool that carries it out, as the person's own decision:
 /// refused as for any client but for what widens what agents may do, which the person decided when it is exactly
 /// what they were shown (`shown`); refused when what it names changed since it was proposed. A merge merges only the
-/// commit that was proposed. An answer or a message goes out `way`: sent by the chat itself, or applied by the person.
+/// commit that was proposed. An answer or a message is the chat's, decided `by`: sent by the chat itself as
+/// automation, or applied by the person.
 pub(super) async fn apply(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   change: &ProposedChange,
-  (shown, way): (&[Message], SentWay),
+  shown: &[Message],
+  by: Answerer,
 ) -> Result<Value, ToolError> {
   let root = scope.root.clone();
   let project = scope.project.to_string();
@@ -132,13 +145,65 @@ pub(super) async fn apply(
       blocking(move || unchanged_run(&root, (run, number), Some(&checkpoint))).await?;
       merge_proposed(services, translate, (project, run.to_string()), expected).await
     }
-    // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
-    Change::Answer { .. } | Change::Message { .. } => {
+    // The tool checks again that the choice is offered where it continues the run, decided by `by`: a person who
+    // applied the proposal decides as themselves.
+    Change::Continue {
+      run, number, attempt, ..
+    } => {
+      blocking(move || continuation::unchanged(&root, (&run.to_string(), number), attempt)).await?;
+      let (_, arguments) = tool_arguments(scope, change);
+      continue_for_orchestrator(services, arguments, by).await
+    }
+    // A run that stopped at a limit or was interrupted since stays the person's to resume.
+    Change::Resume { run, .. } => {
+      blocking(move || {
+        let run = find_run(&ProjectDb::open(&root)?, &run.to_string())?;
+        control::resumable(&run, control::ToldTo::Applied)
+      })
+      .await?;
       let (tool, arguments) = tool_arguments(scope, change);
-      let from = FromOrchestrator::new(scope.chat, way);
-      answer_for_orchestrator((services, translate), (tool, arguments), from).await
+      app_tool((services, translate), tool, arguments).await
+    }
+    // A run that ended since has nothing to pause; the tool checks the rest again where it pauses.
+    Change::Pause { run, .. } => {
+      blocking(move || control::pausable(&find_run(&ProjectDb::open(&root)?, &run.to_string())?)).await?;
+      let (tool, arguments) = tool_arguments(scope, change);
+      app_tool((services, translate), tool, arguments).await
+    }
+    Change::Release { ref task } => release((services, translate), scope, change, task.as_deref()).await,
+    // The tool checks the question, or the run's state, again where it sends: one answered or changed since is refused.
+    Change::Message {
+      number, ref sent_as, ..
+    } => send_as_checked((services, translate), scope, change, (number, sent_as.as_deref(), by)).await,
+    Change::Answer { .. } => {
+      let (tool, arguments) = tool_arguments(scope, change);
+      answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, None)).await
     }
   }
+}
+
+/// Applies the release `change` of new starts in `scope`, in the group of task `task` (its key) or the whole project.
+/// New starts let go on since, or held by a person, leave nothing for the chat's release to do; so do new starts let go
+/// on between this check and the release, which the tool answers as unchanged.
+async fn release(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  change: &ProposedChange,
+  task: Option<&str>,
+) -> Result<Value, ToolError> {
+  let (root, project, named) = (scope.root.clone(), scope.name.clone(), task.map(str::to_owned));
+  blocking(move || {
+    let place = control::Place {
+      project: &project,
+      task: named.as_deref(),
+    };
+    control::releasable(&ProjectDb::open(&root)?, place, control::ToldTo::Applied)
+  })
+  .await?;
+  let (tool, arguments) = tool_arguments(scope, change);
+  let told = app_tool((services, translate), tool, arguments).await?;
+  let applied = control::QueueCall::Release(control::ToldTo::Applied);
+  control::queue_changed(told, applied, (scope, task)).await
 }
 
 /// The tool that carries out `change` in `scope`, and its arguments: the chat's project and what the change acts on,
@@ -150,11 +215,18 @@ pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'s
     Change::Merge { run, .. } => (MERGE_RUN, "run", run.to_string()),
     Change::Answer { run, .. } => (ANSWER_QUESTION, "run", run.to_string()),
     Change::Message { run, .. } => (SEND_MESSAGE, "run", run.to_string()),
+    Change::Continue { run, .. } => (CONTINUE_RUN, "run", run.to_string()),
+    Change::Pause { run, .. } => (control::PAUSE_RUN, "run", run.to_string()),
+    Change::Resume { run, .. } => (control::RESUME_RUN, "run", run.to_string()),
+    Change::Release { task } => return control::release_arguments(scope.project, task.as_deref()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
   arguments.insert(argument.to_owned(), Value::String(named));
   answer::words(&change.change, &mut arguments);
+  if let Change::Continue { choice, .. } = &change.change {
+    continuation::words(choice, &mut arguments);
+  }
   (tool, arguments)
 }
 
@@ -238,6 +310,40 @@ fn unchanged_draft(
   Err(ToolError::refused("changed_since_proposed", vec![reason]))
 }
 
+/// Sends the message `change` (to run `#number`) only as what it was checked or proposed as (`sent_as`); one kept
+/// before that was known is refused, for a fresh proposal. A card the person applied (`by`) names the change in its own
+/// words; the chat's agent reads the tool's.
+async fn send_as_checked(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  change: &ProposedChange,
+  (number, sent_as, by): (u32, Option<&str>, Answerer),
+) -> Result<Value, ToolError> {
+  let Some(expected) = sent_as else {
+    return Err(message_changed(number));
+  };
+  let (tool, arguments) = tool_arguments(scope, change);
+  answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, Some(expected)))
+    .await
+    .map_err(|error| match error {
+      ToolError::Refused { code, .. } if code == CHANGED_SINCE_PROPOSED && by == Answerer::Person => {
+        message_changed(number)
+      }
+      other => other,
+    })
+}
+
+/// The code of a refusal of what changed since it was checked or proposed.
+const CHANGED_SINCE_PROPOSED: &str = "changed_since_proposed";
+
+/// A message to run `#number` that would no longer do what its card says.
+fn message_changed(number: u32) -> ToolError {
+  ToolError::refused(
+    CHANGED_SINCE_PROPOSED,
+    vec![Message::new("orchestrator.proposal.messageChanged").with("run", number.to_string())],
+  )
+}
+
 /// A merge of run `#number`, which has no checkpoint: nothing of its work is committed.
 fn no_checkpoint(number: u32) -> ToolError {
   ToolError::refused(
@@ -293,9 +399,27 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
       Message::new("orchestrator.tools.answerWaits").with("run", number.to_string()),
       json!({ "answer": { "run": number, "task": subject, "question": request, "choices": choices, "text": text } }),
     ),
-    Change::Message { number, text, .. } => (
+    Change::Message { number, text, then, .. } => (
       Message::new("orchestrator.tools.messageWaits").with("run", number.to_string()),
-      json!({ "message": { "run": number, "task": subject, "text": text } }),
+      json!({ "message": { "run": number, "task": subject, "text": text, "then": then } }),
+    ),
+    Change::Pause { number, .. } => (
+      Message::new("orchestrator.tools.pauseWaits").with("run", number.to_string()),
+      json!({ "pause": { "run": number, "task": subject } }),
+    ),
+    Change::Resume { number, .. } => (
+      Message::new("orchestrator.tools.resumeWaits").with("run", number.to_string()),
+      json!({ "resume": { "run": number, "task": subject } }),
+    ),
+    Change::Release { task } => (
+      Message::new("orchestrator.tools.releaseWaits"),
+      json!({ "release": { "task": task } }),
+    ),
+    Change::Continue {
+      number, step, choice, ..
+    } => (
+      Message::new("orchestrator.tools.continueWaits").with("run", number.to_string()),
+      json!({ "continue": { "run": number, "task": subject, "step": step, "choice": choice } }),
     ),
   };
   json!({

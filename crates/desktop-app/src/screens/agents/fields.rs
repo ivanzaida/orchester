@@ -164,6 +164,9 @@ impl Fields {
     );
     let connection = self.connection_select(ctx, listed);
     let (model, effort) = self.selects(ctx, listed);
+    // A connection on an API provider offers the models typed for it and no effort (`NNYyh`).
+    let on_provider = self.connection(listed).is_some_and(|c| c.api_provider().is_some());
+    let (model_hint, effort_hint) = hints(on_provider);
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xl)
@@ -198,19 +201,24 @@ impl Fields {
             false,
           ),
           form_section::side_row(
-            label(ctx, "agent-model", "agents.model", "agents.modelHint"),
+            label(ctx, "agent-model", "agents.model", model_hint),
             model,
             Place::Within,
             false,
           ),
           self.model_notice(ctx, listed),
           form_section::side_row(
-            label(ctx, "agent-effort", "agents.effort", "agents.effortHint"),
+            label(ctx, "agent-effort", "agents.effort", effort_hint),
             effort,
             Place::Last,
             false,
           ),
-          words::note(&ctx.t("agents.assignmentNote")).into(),
+          crate::ui::inspector::note(
+            "agent-assignment-note",
+            crate::ui::icon::Icon::Pin,
+            &ctx.t("agents.assignmentNote"),
+          )
+          .into(),
           Column::new()
             .with_children(
               self
@@ -321,6 +329,7 @@ impl Fields {
           separator: false,
           warning,
           trigger: None,
+          unavailable: None,
         }
       })
       .collect();
@@ -332,6 +341,8 @@ impl Fields {
       choices,
       width: CONTROL_WIDTH,
       icon_in_field: false,
+      placeholder: None,
+      mono: false,
     }
     .render(ctx)
   }
@@ -355,6 +366,7 @@ impl Fields {
       separator: false,
       warning: false,
       trigger: None,
+      unavailable: None,
     };
     let mut models: Vec<_> = connection
       .into_iter()
@@ -373,6 +385,7 @@ impl Fields {
       separator: true,
       warning: false,
       trigger: None,
+      unavailable: None,
     });
     let model = ChoiceField {
       id: "agent-model".into(),
@@ -382,6 +395,8 @@ impl Fields {
       open: self.model_open.clone(),
       width: CONTROL_WIDTH,
       icon_in_field: false,
+      placeholder: None,
+      mono: true,
     }
     .render(ctx);
     let mut model = Column::new()
@@ -400,6 +415,24 @@ impl Fields {
       icon::Icon,
     };
     let connection = self.connection(listed);
+    // The models of an API provider are not known to Orchester: any effort its CLI takes may be typed (`NNYyh`).
+    if let Some(cli) = connection.filter(|c| c.api_provider().is_some()).map(|c| c.provider()) {
+      let mut field = FieldInput::new("agent-effort", ctx.t("agents.effort"), self.effort.clone())
+        .placeholder(ctx.t("agents.providerDefaultEffort"))
+        .mono()
+        .width(Dimension::Px(CONTROL_WIDTH));
+      let typed = self.effort.get();
+      if !typed.trim().is_empty()
+        && let Err(error) = orchester_core::connection::provider_effort(cli, &typed)
+      {
+        let key = match error {
+          orchester_core::connection::ProviderEffortError::NotOneWord => "agents.effortOneWord",
+          orchester_core::connection::ProviderEffortError::NotClaudeLevel => "agents.effortClaudeLevel",
+        };
+        field = field.error(ctx.t(key));
+      }
+      return field.render(ctx);
+    }
     let mut efforts = vec![Choice {
       value: String::new(),
       label: ctx.t("agents.defaultEffort"),
@@ -408,6 +441,7 @@ impl Fields {
       separator: false,
       warning: false,
       trigger: None,
+      unavailable: None,
     }];
     if let Some(c) = connection
       && let Ok(id) = orchester_core::resource::ModelId::new(&self.model_value())
@@ -427,6 +461,7 @@ impl Fields {
           separator: false,
           warning: false,
           trigger: None,
+          unavailable: None,
         }
       }));
     }
@@ -438,10 +473,22 @@ impl Fields {
       open: self.effort_open.clone(),
       width: CONTROL_WIDTH,
       icon_in_field: false,
+      placeholder: None,
+      mono: false,
     }
     .render(ctx)
   }
 }
+/// What the model and effort rows say under their names: on an API provider its typed models and an effort of any
+/// value (`NNYyh`).
+const fn hints(on_provider: bool) -> (&'static str, &'static str) {
+  if on_provider {
+    ("agents.modelHintApiProvider", "agents.effortHintApiProvider")
+  } else {
+    ("agents.modelHint", "agents.effortHint")
+  }
+}
+
 pub fn label(ctx: &Ctx, id: &str, title: &str, hint: &str) -> Label {
   Label::new(id, ctx.t(title)).description(ctx.t(hint))
 }
@@ -455,6 +502,10 @@ fn connection_detail(
   readings: &orchester_core::connection::plan_limits::PlanReadings,
 ) -> (String, bool) {
   use crate::services::accounts::{DetailPlace, account_name, identity_detail, short_state};
+  if let Some(provider) = connection.api_provider() {
+    let text = ctx.t_args("agents.connectionApiProvider", [("host", provider.base_url().host())]);
+    return (text.to_string(), false);
+  }
   let (Some(cli), Some(account)) = (
     orchester_core::account::AccountCli::of(connection.provider()),
     accounts.of_connection(connection.account(), connection.provider()),

@@ -18,10 +18,7 @@ use super::{questions, wire};
 use crate::{
   app_mcp::error::ToolError,
   tasks::{
-    conversation::{
-      orchestrator::{Proposal, ProposalState, Proposed, proposals},
-      outgoing::conversation_of,
-    },
+    conversation::orchestrator::{Proposal, ProposalState, Proposed, message_offer, proposals},
     detail::TaskDetail,
   },
 };
@@ -56,14 +53,13 @@ pub(super) fn awaiting(
 }
 
 /// The answers and messages the chat proposed for `run` of `task` in the project at `root`, whatever became of them
-/// but sent; `questions` are the run's. A message is stale once the run is not the task's latest or no agent of it
-/// reads one any more. Blocks on SQLite.
+/// but sent; `questions` are the run's. A message is stale once the run would no longer take it as it was checked.
+/// Blocks on SQLite.
 fn of_run(root: &Path, (task, run): (TaskId, RunId), questions: &[AskedQuestions]) -> Result<Vec<Proposal>, ToolError> {
   let detail = TaskDetail::load_in(root, task)?;
-  let takes_messages = detail.run.as_ref().is_some_and(|latest| latest.id() == run)
-    && conversation_of(&detail, false).state.takes_messages();
+  let offered = message_offer(&detail, run);
   let kept = ProjectDb::open(root)?.run_answer_actions(run)?;
-  Ok(proposals(&kept, (takes_messages, questions)))
+  Ok(proposals(&kept, (offered.as_ref(), questions)))
 }
 
 /// `proposal`, of run `#number` (`run`): where it stands, what it would send and the chat's conversation that holds
@@ -102,7 +98,7 @@ pub(super) fn proposed_answer(waiting: Option<&Proposal>) -> Value {
 
 fn proposed(proposed: &Proposed) -> Value {
   match proposed {
-    Proposed::Message { text } => json!({ "message": { "text": &**text } }),
+    Proposed::Message { text, then } => json!({ "message": { "text": &**text, "then": then } }),
     Proposed::Answer { request, choices, text } => {
       let choices: Vec<&str> = choices.iter().map(|choice| &**choice).collect();
       json!({ "answer": { "question": &**request, "choices": choices, "text": text.as_deref() } })

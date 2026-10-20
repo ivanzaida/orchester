@@ -64,7 +64,6 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
   for name in [
     "decide_approval",
     "decide_plan",
-    "continue_run",
     "set_run_auto_mode",
     "set_auto_mode",
     "remove_worktree",
@@ -76,6 +75,7 @@ fn orchestrator_tools_leave_what_a_person_decides_out() {
     "update_project_limits",
     "add_cli_connection",
     "set_connection_account",
+    "set_api_provider",
     "add_mcp_server",
     "update_mcp_server",
     "remove_mcp_server",
@@ -108,6 +108,39 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
   ] {
     assert!(merge.contains(part), "merge_run says {part}: {merge}");
   }
+  for name in ["run_task", "merge_run"] {
+    let told = description(name);
+    assert!(
+      told.contains("never in a turn Orchester started by itself: there it only proposes"),
+      "{name}: {told}"
+    );
+  }
+  assert!(
+    description("send_message").contains("is always proposed: moving a run is the person's"),
+    "a message that moves a run waits for the person"
+  );
+  for name in ["pause_run", "release_queue"] {
+    let told = description(name);
+    assert!(
+      told.contains("In a turn Orchester started by itself") && told.contains("only proposes"),
+      "{name}: {told}"
+    );
+  }
+  assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
+  let resume = description("resume_run");
+  for part in ["resumes only a run a pause stopped", "interrupted", "person_only"] {
+    assert!(resume.contains(part), "resume_run says {part}: {resume}");
+  }
+  let continued = description("continue_run");
+  for part in [
+    "only allow_retry and return_to",
+    "proposes it to the person",
+    "no switch lets you continue a run yourself",
+    "raise_limits, raise_step_budget, resume and accept are the person's",
+    "person_only",
+  ] {
+    assert!(continued.contains(part), "continue_run says {part}: {continued}");
+  }
   for name in ["answer_question", "send_message"] {
     let told = description(name);
     for part in [
@@ -131,6 +164,32 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
         kind.tool()
       );
     }
+  }
+}
+
+#[test]
+fn orchestrator_tools_say_which_releases_are_refused_before_they_are_proposed() {
+  let description = |name: &str| {
+    listed()
+      .into_iter()
+      .find(|tool| tool.name == name)
+      .and_then(|tool| tool.description.map(|told| told.into_owned()))
+      .unwrap_or_else(|| panic!("{name} is listed with a description"))
+  };
+  let pause = description("pause_run");
+  assert!(
+    !pause.contains("release"),
+    "pause_run says nothing of releases: {pause}"
+  );
+  let release = description("release_queue");
+  for part in [
+    "refused before it is proposed",
+    "not_in_group",
+    "nothing_held",
+    "person_only",
+    "already_held",
+  ] {
+    assert!(release.contains(part), "release_queue says {part}: {release}");
   }
 }
 

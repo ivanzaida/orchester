@@ -25,6 +25,7 @@ mod progress;
 mod prompt;
 mod recovery;
 mod result;
+mod return_ended;
 pub mod review;
 mod schedule;
 mod snapshot;
@@ -44,9 +45,9 @@ pub use self::{
   again::{RunAgainBlock, RunAgainInput, can_run_again_after, holds_task, run_again},
   answer::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
-    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, RuleScope, SimilarUnavailable, ToolDecision, ToolReach,
-    UnknownAnswer, allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict,
-    codex_denial, denial_message, listing, permitted,
+    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, ProjectRule, ProjectRuleId, ProjectScope, RuleScope,
+    SimilarUnavailable, ToolDecision, ToolReach, UnknownAnswer, allowing_command, allowing_tool, always_prefixes,
+    answering, answering_in_project, auto_approves, auto_verdict, codex_denial, denial_message, listing, permitted,
   },
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
@@ -67,14 +68,14 @@ pub use self::{
     AssembledPrompt, CONTINUE_PROMPT, CodeIndexPrompt, Composition, DeliveredMessages, DependencyOutput,
     ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt, MessageOccasion,
     NativePrompt, NativeSetting, PipelineInfo, PlanRevision, ProfileInfo, PromptAssemblyError, PromptInput, PromptPart,
-    PromptSection, PromptSource, ResultDelivery, RetryReport, RunContext, SkillListing, WorkingTools,
+    PromptSection, PromptSource, ResultDelivery, RetryReport, ReturnedWork, RunContext, SkillListing, WorkingTools,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
   state::{NewRun, Run, StoredRun},
   status::{
-    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, PauseReason, RunFailure, RunLimit, RunStatus,
-    StepFailure, StepStatus, Stuck, WaitReason,
+    AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, MergeConflicts, PauseReason, RunFailure, RunLimit,
+    RunStatus, StepFailure, StepStatus, Stuck, WaitReason,
   },
   stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
   tool_approval::{

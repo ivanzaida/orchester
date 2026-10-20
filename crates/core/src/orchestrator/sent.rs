@@ -1,9 +1,9 @@
 //! What the project's Orchestrator chat wrote on the person's side of a task's conversation (ORC-45): a message to a
 //! run's agents or the answer to a question, the conversation it came from and how it went out, sent by the chat
-//! itself while the person's switch let it, or proposed by it and applied by the person. A proposal is applied only
-//! by a person: automation never takes the decision ([`super::change`]).
+//! itself while the person's switch let it, or proposed by it and applied by the person. How it went out is who
+//! decided it ([`Answerer`]): automation when the chat sent it, the person when they applied its proposal.
 
-use crate::id::ChatId;
+use crate::{id::ChatId, run::Answerer};
 
 /// How something the Orchestrator chat wrote went out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,24 +15,25 @@ pub enum SentWay {
 }
 
 impl SentWay {
-  /// The word the database and the domain tools keep.
+  /// The way of what `by` decided: the person applied a proposal, automation sent it.
+  pub const fn of(by: Answerer) -> Self {
+    match by {
+      Answerer::Automation => Self::Direct,
+      Answerer::Person => Self::AppliedByPerson,
+    }
+  }
+
+  /// The word the domain tools report.
   pub const fn word(self) -> &'static str {
     match self {
       Self::Direct => "direct",
       Self::AppliedByPerson => "applied_by_person",
     }
   }
-
-  /// The way `word` names; `None` for a word it never writes.
-  pub fn of_word(word: &str) -> Option<Self> {
-    [Self::Direct, Self::AppliedByPerson]
-      .into_iter()
-      .find(|way| way.word() == word)
-  }
 }
 
-/// A message or an answer the Orchestrator chat wrote: its conversation and how it went out, each `None` for one
-/// kept before they were recorded.
+/// A message or an answer the Orchestrator chat wrote: its conversation and how it went out, both `None` for one
+/// kept before its conversation was recorded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FromOrchestrator {
   pub chat: Option<ChatId>,
@@ -45,6 +46,14 @@ impl FromOrchestrator {
     Self {
       chat: Some(chat),
       way: Some(way),
+    }
+  }
+
+  /// Written in conversation `chat` (`None` before it was kept) and decided by `by`.
+  pub const fn of(chat: Option<ChatId>, by: Answerer) -> Self {
+    match chat {
+      Some(chat) => Self::new(chat, SentWay::of(by)),
+      None => Self { chat: None, way: None },
     }
   }
 }

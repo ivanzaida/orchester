@@ -74,6 +74,7 @@ pub(super) fn decide(screen: &Orchestrator, decision: Decision) -> Result<(), Me
     name: "Kontur".to_owned(),
     root: screen.root.clone(),
     chat,
+    on_its_own: false,
   };
   let s = screen.window.launch.services().expect("launched services");
   let services = app_mcp::Services::new(

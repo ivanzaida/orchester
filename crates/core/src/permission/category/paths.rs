@@ -5,10 +5,15 @@
 
 use std::path::{Component, Path, PathBuf, Prefix};
 
-use super::{glob, toolchains::Toolchains};
+use super::{
+  build_output::{CargoEnvironment, variable},
+  glob,
+  toolchains::Toolchains,
+};
 use crate::{
   native::scope::protected,
   permission::canonical::{existing, normalize},
+  resource::CommandEnvironment,
 };
 
 /// Files directly in the home folder that hold credentials besides its dot files (`_netrc` is
@@ -39,6 +44,8 @@ pub struct CommandScope {
   temp: Option<PathBuf>,
   /// The Cargo and rustup homes, whose dependency sources are read like the worktree.
   toolchains: Toolchains,
+  /// What the agent's environment tells Cargo ([`Self::with_project_environment`]).
+  cargo: CargoEnvironment,
 }
 
 impl CommandScope {
@@ -54,6 +61,7 @@ impl CommandScope {
       profile: home.map(Path::to_path_buf),
       temp: temp.map(resolved),
       toolchains: Toolchains::default(),
+      cargo: CargoEnvironment::default(),
     };
     scope.add_home(home);
     scope
@@ -92,6 +100,28 @@ impl CommandScope {
     self
   }
 
+  /// This scope for a shell whose environment names Cargo's target directory `folder` (`CARGO_TARGET_DIR`, else
+  /// `CARGO_BUILD_TARGET_DIR`), as written: a Cargo build writes there unless it names another
+  /// ([`super::build_output`]).
+  #[must_use]
+  pub fn with_cargo_target_dir(mut self, folder: &Path) -> Self {
+    self.cargo.target = Some(folder.to_path_buf());
+    self
+  }
+
+  /// This scope for an agent whose environment adds the project's `environment` (Project settings › Environment) to
+  /// the host's cleaned one, as the runner starts it: the variables Cargo reads are the project's, as the host's are
+  /// not passed on. Its `CARGO_TARGET_DIR`, else its `CARGO_BUILD_TARGET_DIR`, names the target directory, as Cargo
+  /// takes them, its `CARGO_HOME` and `RUSTUP_HOME` are homes too, and its aliases may stand in for a subcommand
+  /// ([`super::build_output::CargoEnvironment`]).
+  #[must_use]
+  pub fn with_project_environment(self, environment: &CommandEnvironment) -> Self {
+    let folder = |name: &str| variable(environment, name).map(Path::new);
+    let mut scope = self.with_toolchain_homes(folder("CARGO_HOME"), folder("RUSTUP_HOME"));
+    scope.cargo = CargoEnvironment::of(environment);
+    scope
+  }
+
   /// The scope of the host's user: their home folder and the system's temporary folder, for a shell
   /// with the host's `HOME`, `USERPROFILE`, `CARGO_HOME` and `RUSTUP_HOME`, which the agent's CLI inherits.
   pub fn on_host(worktree: &Path, writable: &[PathBuf]) -> Self {
@@ -100,6 +130,16 @@ impl CommandScope {
     Self::new(worktree, writable, home.as_deref(), Some(&std::env::temp_dir()))
       .with_shell_homes(variable("HOME").as_deref(), variable("USERPROFILE").as_deref())
       .with_toolchain_homes(variable("CARGO_HOME").as_deref(), variable("RUSTUP_HOME").as_deref())
+  }
+
+  /// What the agent's environment tells Cargo.
+  pub(super) const fn cargo(&self) -> &CargoEnvironment {
+    &self.cargo
+  }
+
+  /// The Cargo homes, resolved, whose `config.toml` Cargo reads.
+  pub(super) fn cargo_homes(&self) -> &[PathBuf] {
+    self.toolchains.cargo_homes()
   }
 
   /// The value of the shell's `HOME` or `USERPROFILE` (`name`); `None` for another name or when unset.

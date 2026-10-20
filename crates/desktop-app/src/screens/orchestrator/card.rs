@@ -1,7 +1,8 @@
 //! What the Orchestrator's proposal and action cards share (`Action card` `nQIhx`, the proposals of `b55NqO`,
 //! `UKgrR`, `Ee2JE`): the raised frame, radius 10, 12 over and under and 14 at its sides, its parts 10 apart; the
-//! head with a 14 icon, the title (12.5/600), a chip and, at its end, the state's 12 icon and words; a note in 11.5
-//! beside its 12 icon; and the person's decision on a proposal, taken off the event loop.
+//! head with a 14 icon, the title (12.5/600, line height 1.5), a chip right after it and, at its end, the state's 12
+//! icon and words; a note in 11.5 beside its 12 icon; and the person's decision on a proposal, taken off the event
+//! loop.
 
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use lurq::{
     i18n::I18n,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -27,7 +28,7 @@ use orchester_workspace::{
 use crate::{
   mcp::domain,
   services::Services,
-  theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::icon::{Icon, icon},
 };
 
@@ -53,23 +54,33 @@ pub(super) struct State {
 
 /// The head of card `id`: its icon and title, a chip after the title, and its state at the end.
 pub(super) fn head(id: &str, (glyph, title): (Icon, &str), chip: Option<Element>, state: State) -> Row {
+  // One line, as every card's head: a title too long for it ends in an ellipsis. The title, or the title with the chip
+  // right after it, takes the free room, so the title is never squeezed against the state at the end: a box sized by
+  // an earlier, narrower layout would cut words that fit. The chip's free room is after it (`fIukg` in `Ee2JE`).
+  let title = Text::new(title)
+    .id(format!("{id}-title"))
+    .variant(OrchestratorText::CardTitle.role())
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .min_width(Dimension::Px(0.0));
+  let titled: Element = match chip {
+    Some(chip) => Row::new()
+      .id(format!("{id}-titled"))
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .child(title.flex_shrink(1.0))
+      .child(chip)
+      .into(),
+    None => title.flex(1.0).into(),
+  };
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
-    .child(
-      // One line, as every card's head: a title too long for it ends in an ellipsis.
-      Text::new(title)
-        .id(format!("{id}-title"))
-        .variant(ConversationText::ResultTitle.role())
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .with_children(chip)
-    .child(Spacer::new().flex(1.0))
+    .child(titled)
     .child(
       Row::new()
         .id(format!("{id}-state"))

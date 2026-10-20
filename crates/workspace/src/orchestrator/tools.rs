@@ -4,17 +4,17 @@
 //! approvals and plan decisions stay with people and runs start through the scheduling checks. It reads every
 //! project; a change that names another project is refused before it reaches the tool, and a change is given the
 //! chat's project by its id, never by a name. Publishing a draft, canceling, merging a run, answering an agent's
-//! question and sending a run's agents a message wait for the person ([`super::change`]) unless the person's switch
-//! lets the chat do it itself (publishing, merging, answering; never canceling), and so does starting a run unless
-//! auto mode is on for the project ([`super::proposal`]). What the agent changed, or tried to, is kept in its
-//! conversation as an action.
+//! question, sending a run's agents a message and deciding how a stopped run goes on wait for the person
+//! ([`super::change`]) unless the person's switch lets the chat do it itself (publishing, merging, answering; never
+//! canceling or continuing), and so does starting a run unless auto mode is on for the project ([`super::proposal`]).
+//! What the agent changed, or tried to, is kept in its conversation as an action.
 
 use std::path::PathBuf;
 
 use orchester_core::{
   id::{ChatId, ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, ChatAction, SentWay,
+    ActionOutcome, ChatAction,
     change::{ProposedChange, Publishing},
   },
 };
@@ -23,7 +23,12 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
-  blocked, change, duplicate,
+  blocked,
+  change::{
+    self,
+    control::{self, PAUSE_RUN, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
+  },
+  duplicate, guard,
   keep::{self, HOLD_QUEUE, Named},
   proposal,
 };
@@ -37,10 +42,10 @@ use crate::{
 /// The tools of the chat, by name: reading every project's work, setup and tasks' conversations, task drafts and
 /// drafts of what agents run on, pausing and resuming a run, holding and releasing new starts, and what waits for the
 /// person or the person's switch: starting a run, publishing a draft, canceling and merging a run, answering an
-/// agent's question and sending a run's agents a message. Approvals, plan decisions, project setup, connections,
-/// MCP servers, the environment and what removes work are not among them. A name whose tool the app does not have
-/// (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 52] = [
+/// agent's question, sending a run's agents a message and continuing a run that waits for a person's decision.
+/// Approvals, plan decisions, project setup, connections, MCP servers, the environment and what removes work are not
+/// among them. A name whose tool the app does not have (yet) is not listed ([`listed`]).
+pub const TOOLS: [&str; 53] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -56,6 +61,7 @@ pub const TOOLS: [&str; 52] = [
   "resume_run",
   "cancel_run",
   "merge_run",
+  "continue_run",
   "answer_question",
   "send_message",
   "list_approvals",
@@ -100,7 +106,9 @@ pub(super) const RUN_TASK: &str = "run_task";
 /// The tool whose calls always wait for the person.
 pub(super) const CANCEL_RUN: &str = "cancel_run";
 /// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
-pub(super) const MERGE_RUN: &str = "merge_run";
+pub(in crate::orchestrator) const MERGE_RUN: &str = "merge_run";
+/// The tool whose calls always wait for the person, and only for a retry or a return to an earlier step.
+pub(super) const CONTINUE_RUN: &str = "continue_run";
 /// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
 pub(super) const ANSWER_QUESTION: &str = "answer_question";
 pub(super) const SEND_MESSAGE: &str = "send_message";
@@ -131,6 +139,10 @@ fn in_chat(tool: &Tool) -> Option<String> {
     DUPLICATE_PIPELINE => DUPLICATE_AS_DRAFT,
     CANCEL_RUN => PROPOSE_CHANGE,
     MERGE_RUN => PROPOSE_MERGE,
+    RESUME_RUN => RESUME_PAUSED,
+    PAUSE_RUN => PROPOSE_ON_ITS_OWN,
+    RELEASE_QUEUE => return Some(format!("{PROPOSE_ON_ITS_OWN} {RELEASE_REFUSED} {own}")),
+    CONTINUE_RUN => PROPOSE_CONTINUE,
     ANSWER_QUESTION | SEND_MESSAGE => PROPOSE_ANSWER,
     _ if Publishing::of_tool(name).is_some() => PROPOSE_PUBLISH,
     _ => return None,
@@ -142,7 +154,8 @@ fn in_chat(tool: &Tool) -> Option<String> {
 const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that the task could run now (a draft is \
   queued and started, a queued task starts, an ended one runs again) and starts nothing. The person starts or \
   dismisses it in the conversation. When auto mode is on for the project (get_auto_mode's new_runs), it starts the \
-  run instead, through the same checks, and answers with the run. Refusals name why.";
+  run instead, through the same checks, and answers with the run, but never in a turn Orchester started by itself: \
+  there it only proposes. Refusals name why.";
 
 /// What the agent reads first of `duplicate_pipeline`.
 const DUPLICATE_AS_DRAFT: &str = "In this chat it saves the copy as a draft, and its first version is published as \
@@ -156,23 +169,49 @@ const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks 
 /// What the agent reads first of `merge_run`.
 const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the merge to the person, who applies or \
   dismisses it in the conversation, unless the person turned on Let the Orchestrator merge runs in Settings: then it \
-  merges at once. Call it only for a run the person asked you in this chat to merge. Either way the merge keeps the \
+  merges at once, but never in a turn Orchester started by itself: there it only proposes. Call it only for a run \
+  the person asked you in this chat to merge. Either way the merge keeps the \
   rules below: only a task's latest run that succeeded, and only when the main checkout needs no local integration; \
   a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to the person on \
   the Local integration page.";
 
+/// What the agent reads first of `resume_run`.
+const RESUME_PAUSED: &str = "In this chat it resumes only a run a pause stopped, and in a turn Orchester started by \
+  itself it only proposes that. A run stopped at a limit (its budget or time limit, the daily or a group's budget, a \
+  step's budget, an account's plan limit) or interrupted is the person's to resume or continue on the task's \
+  Summary, and is refused here (person_only).";
+
+/// What the agent reads first of `pause_run` and `release_queue`.
+const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its message begins with [Orchester]) it \
+  only proposes this to the person, who applies or dismisses it in the conversation; otherwise it is done as \
+  follows.";
+
+/// What the agent reads of `release_queue` after [`PROPOSE_ON_ITS_OWN`]: which holds and releases are refused.
+const RELEASE_REFUSED: &str = "In a turn Orchester started by itself a release is refused before it is proposed when \
+  its task is in no reviewed group (not_in_group), nothing is held there (nothing_held) or only a person's hold is \
+  (person_only). In any turn a release where nothing is held is refused (nothing_held), and so is hold_queue where \
+  new starts are held already (already_held): nothing was changed.";
+
+/// What the agent reads first of `continue_run`.
+const PROPOSE_CONTINUE: &str = "In this chat it takes only allow_retry and return_to, for a run whose step used up its \
+  retries, broke again, or waits unverified or unchanged, and return_to also for a run that ended where it offers \
+  it: it checks the choice as below and proposes it to the person, who applies or dismisses it in the \
+  conversation; no switch lets you continue a run yourself. raise_limits, raise_step_budget, resume and accept are \
+  the person's and refused here (person_only). Give return_to a note that tells the agent what to do differently.";
+
 /// What the agent reads first of `answer_question` and `send_message`.
 const PROPOSE_ANSWER: &str = "In this chat it checks the answer and proposes it to the person, who applies or \
   dismisses it in the conversation, unless the person turned on Let the Orchestrator answer agents in Settings: then \
-  it is sent at once. Either way it is recorded as automation's and the task's conversation names you as its \
-  sender. A message that would decide the plan a run waits on is refused (plan_decision_person_only): plan \
-  decisions are the person's. It is done as follows.";
+  it is sent at once. Either way it is recorded as automation's and the task's conversation names you as its sender. \
+  A message to a run none of whose agents waits or works, which would follow it up, continue or resume it, or run \
+  the task again, is always proposed: moving a run is the person's. A message that would decide the plan a run waits \
+  on is refused (plan_decision_person_only): plan decisions are the person's. It is done as follows.";
 
 /// What the agent reads first of a tool that publishes a draft.
 const PROPOSE_PUBLISH: &str = "In this chat it proposes the publication to the person, who applies or dismisses it \
   in the conversation, unless the person turned on Let the Orchestrator publish drafts in Settings: then it \
-  publishes at once. Either way it is done as follows, and what widens what agents may do still needs Let \
-  automation change agent permissions.";
+  publishes at once, but never in a turn Orchester started by itself: there it only proposes. Either way it is done \
+  as follows, and what widens what agents may do still needs Let automation change agent permissions.";
 
 /// Whose tools they are: the project's, for one conversation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,6 +221,8 @@ pub struct ChatScope {
   pub name: String,
   pub root: PathBuf,
   pub chat: ChatId,
+  /// A wait or a run's end started the turn by itself: nobody asked for anything in it ([`super::guard`]).
+  pub on_its_own: bool,
 }
 
 /// Calls the chat's tool `name` with `arguments` in `scope`; a change it made, proposed or refused is kept in the
@@ -229,6 +270,7 @@ pub(super) async fn act_and_keep(
   let action = ChatAction {
     change: kept.change.map(Box::new),
     started: kept.started,
+    resumed: kept.resumed,
     auto_mode: kept.auto_mode,
     ..ChatAction::new(name, None, outcome)
   };
@@ -261,6 +303,7 @@ struct Kept {
   task: Option<String>,
   change: Option<ProposedChange>,
   started: Option<RunId>,
+  resumed: Option<RunId>,
   auto_mode: bool,
 }
 
@@ -272,8 +315,10 @@ async fn act(
   arguments: &JsonObject,
 ) -> Acted {
   let acted = match name {
+    // In a turn nobody asked for, what would change how runs go on or what agents run on is only proposed.
+    _ if guard::proposed_on_its_own(scope, name) => propose_change((services, translate), scope, name, arguments).await,
     RUN_TASK => start((services, translate), scope, arguments).await,
-    CANCEL_RUN => propose_change(translate, scope, name, arguments).await,
+    CANCEL_RUN | CONTINUE_RUN => propose_change((services, translate), scope, name, arguments).await,
     MERGE_RUN => {
       switched(
         (services, translate),
@@ -283,6 +328,7 @@ async fn act(
       )
       .await
     }
+    RESUME_RUN => resume((services, translate), scope, arguments).await,
     ANSWER_QUESTION | SEND_MESSAGE => {
       switched(
         (services, translate),
@@ -293,6 +339,20 @@ async fn act(
       .await
     }
     _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
+    // A hold or a release that changed nothing is refused, so its card shows no change that did not happen.
+    HOLD_QUEUE | RELEASE_QUEUE => {
+      let call = if name == HOLD_QUEUE {
+        QueueCall::Hold
+      } else {
+        QueueCall::Release(ToldTo::Agent)
+      };
+      let task = arguments.get("task").and_then(Value::as_str);
+      let told = match app_tool((services, translate), name, arguments.clone()).await {
+        Ok(told) => control::queue_changed(told, call, (scope, task)).await,
+        refused => refused,
+      };
+      Ok(Acted::done(told))
+    }
     _ => Ok(Acted::done(
       app_tool((services, translate), name, arguments.clone()).await,
     )),
@@ -310,10 +370,21 @@ async fn switched(
   consent: OrchestratorConsent,
 ) -> Result<Acted, ToolError> {
   if !allows(services, consent).await? {
-    return propose_change(translate, scope, name, arguments).await;
+    return propose_change((services, translate), scope, name, arguments).await;
   }
-  let (change, task) = change::subject(scope, name, arguments).await?;
-  let result = change::apply((services, translate), scope, &change, (&[], SentWay::Direct)).await;
+  let (change, task) = change::subject((scope, services.programs()), name, arguments).await?;
+  // A message that moves a run none of whose agents waits or works is the person's to send.
+  if change.change.moves_run() {
+    return Ok(proposed(translate, change, task));
+  }
+  let result = change::apply(
+    (services, translate),
+    scope,
+    &change,
+    &[],
+    orchester_core::run::Answerer::Automation,
+  )
+  .await;
   Ok(Acted {
     result,
     kept: Kept {
@@ -330,7 +401,8 @@ async fn start(
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  if !auto_mode(scope).await? {
+  // In a turn nobody asked for, a start is only proposed.
+  if scope.on_its_own || !auto_mode(scope).await? {
     let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
     return Ok(Acted {
       result: Ok(told),
@@ -362,15 +434,38 @@ async fn start(
   })
 }
 
-/// A cancel, merge or publication the person applies.
+/// `resume_run`: refused for a run that is the person's to resume ([`guard::resumable`]); the run it resumed is kept.
+async fn resume(
+  (services, translate): (&Services, &Translate),
+  scope: &ChatScope,
+  arguments: &JsonObject,
+) -> Result<Acted, ToolError> {
+  let run = guard::resumable(scope, arguments).await?;
+  let result = app_tool((services, translate), RESUME_RUN, arguments.clone()).await;
+  let resumed = result.is_ok().then_some(run);
+  Ok(Acted {
+    result,
+    kept: Kept {
+      resumed,
+      ..Kept::default()
+    },
+  })
+}
+
+/// A cancel, merge, publication, answer, message or continuation the person applies.
 async fn propose_change(
-  translate: &Translate,
+  (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   name: &str,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
-  let (change, task) = change::subject(scope, name, arguments).await?;
-  Ok(Acted {
+  let (change, task) = change::subject((scope, services.programs()), name, arguments).await?;
+  Ok(proposed(translate, change, task))
+}
+
+/// `change`, of task `task`, proposed to the person: what the agent is told, and what its action keeps.
+fn proposed(translate: &Translate, change: ProposedChange, task: Option<String>) -> Acted {
+  Acted {
     result: Ok(change::told(translate, &change)),
     kept: Kept {
       waits: Some(ActionOutcome::Waits),
@@ -378,7 +473,7 @@ async fn propose_change(
       change: Some(change),
       ..Kept::default()
     },
-  })
+  }
 }
 
 /// A publication: proposed to the person, unless they let the Orchestrator publish drafts; then published, unless
@@ -390,11 +485,11 @@ async fn publish(
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
   if !allows(services, OrchestratorConsent::PublishDrafts).await? {
-    return propose_change(translate, scope, name, arguments).await;
+    return propose_change((services, translate), scope, name, arguments).await;
   }
-  let (change, _) = change::subject(scope, name, arguments).await?;
+  let (change, _) = change::subject((scope, services.programs()), name, arguments).await?;
   if !change::widens(scope, &change).await?.is_empty() && !changes_permissions(services).await? {
-    return propose_change(translate, scope, name, arguments).await;
+    return propose_change((services, translate), scope, name, arguments).await;
   }
   // The tool is given the draft that was checked, by its id: a name could name another one by now.
   let (tool, arguments) = change::tool_arguments(scope, &change);

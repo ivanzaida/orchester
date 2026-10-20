@@ -4,7 +4,7 @@
 //! decision under way holds the others; the runner's refusal is said above *Stop*. Without an agent step
 //! to return to, that part is left out. A step that waits unverified or unchanged is first offered
 //! *Accept … as it is*, and *Run … again* takes the retry's place; after a failed verdict the work has not changed
-//! since, *Run … again* comes first and accepting second. Accepting is a person's decision: lurq's synthetic input
+//! since, *Run … again* comes first and accepting second. Every choice is a person's decision: lurq's synthetic input
 //! takes it only while a person lets automation answer approvals, and it is recorded as automation's then. A press
 //! it may not take is refused in the button's handler alone, and the card says so; the rest of the window takes
 //! window input as before.
@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, events::is_synthetic_input},
+  app::ctx::Ctx,
   components::{Column, SelectOption, Text},
   core::Signal,
   node::{Element, dimension::Dimension},
@@ -23,7 +23,7 @@ use orchester_core::{
   tokens::compact_tokens,
 };
 use orchester_ipc::Command;
-use orchester_workspace::tasks::detail::RunView;
+use orchester_workspace::{decisions::DecisionKind, messages::Message, tasks::detail::RunView};
 
 use super::{
   super::{
@@ -35,7 +35,7 @@ use super::{
   Deciding, Target,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, answerer},
   theme::{ExtraSpacing, ExtraTypography, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -54,7 +54,7 @@ pub struct DecideCard<'a> {
   pub target: &'a Signal<Target>,
   pub note: &'a Signal<String>,
   pub asked: &'a Signal<Option<Deciding>>,
-  /// Set when window input pressed *Accept … as it is* without a person's leave.
+  /// Set when synthetic input pressed a decision without the person's consent.
   pub person_only: &'a Signal<bool>,
   pub action: &'a DecisionAction<Deciding>,
   pub gate: Option<&'a InputGate>,
@@ -84,6 +84,12 @@ impl DecideCard<'_> {
           .variant(TaskText::SectionTitle.role()),
       )
       .child(self.facts(ctx))
+      .with_children(self.person_only.get().then(|| {
+        field_error(
+          "task-decision-person-only",
+          &message_text(ctx, &Message::new("appMcp.errors.automationNotAllowed")),
+        )
+      }))
       .with_children(self.choices(ctx, pending))
       .with_children(self.returning(ctx, pending))
       .child(divider())
@@ -162,13 +168,7 @@ impl DecideCard<'_> {
     .icon(Icon::Check)
     .in_form();
     let decision = StuckDecision::Accept { by: Answerer::Person };
-    let refused = self
-      .person_only
-      .get()
-      .then(|| field_error("task-accept-person-only", &ctx.t("decisions.retries.acceptPersonOnly")).into());
     std::iter::once(self.button(accept, decision, pending).fill_width().into())
-      // Right under the button it refused.
-      .chain(refused)
       .chain(std::iter::once(meaning(
         "task-accept-meaning",
         &ctx.t_args("decisions.retries.acceptMeaning", [("step", step.as_str())]),
@@ -293,19 +293,33 @@ impl DecideCard<'_> {
       Some(_) => button.disabled(),
       None => {
         let (action, asked, run) = (self.action.clone(), self.asked.clone(), self.run.id());
+        let expected = self.run.run.last_sequence();
         let (gate, person_only) = (self.gate.cloned(), self.person_only.clone());
         button.on_click(move || {
           // A second press while the first is under way would replace it (lurq's `FutureAction::run`).
           if action.state().get_untracked().is_pending() {
             return;
           }
-          let Some(decision) = decided(gate.as_ref(), &decision) else {
-            tracing::warn!("synthetic input reached a step's acceptance; not taken");
+          let Some(by) = answerer(gate.as_ref(), Guarded::Decision(DecisionKind::Stuck)) else {
+            tracing::warn!("synthetic input reached a waiting run's decision without consent; not taken");
             person_only.set(true);
             return;
           };
+          person_only.set(false);
+          let decision = match &decision {
+            StuckDecision::Accept { .. } => StuckDecision::Accept { by },
+            other => other.clone(),
+          };
           asked.set(Some(deciding));
-          action.run((deciding, Command::DecideStuckRun { run, decision }));
+          action.run((
+            deciding,
+            Command::DecideStuckRunAs {
+              run,
+              expected,
+              decision,
+              by,
+            },
+          ));
         })
       }
     }
@@ -330,23 +344,6 @@ impl DecideCard<'_> {
       .find(|step| step.key == *key)
       .map_or_else(|| key.as_str().to_owned(), |step| step.name.to_string())
   }
-}
-
-/// `decision` as the input being delivered may take it: an acceptance is a person's, or automation's under the
-/// approvals opt-in; `None` when the input may not take it.
-fn decided(gate: Option<&InputGate>, decision: &StuckDecision) -> Option<StuckDecision> {
-  if !matches!(decision, StuckDecision::Accept { .. }) {
-    return Some(decision.clone());
-  }
-  if !input_may_decide(gate, Guarded::StepAccept) {
-    return None;
-  }
-  let by = if is_synthetic_input() {
-    Answerer::Automation
-  } else {
-    Answerer::Person
-  };
-  Some(StuckDecision::Accept { by })
 }
 
 /// What a choice above it does, under its button.

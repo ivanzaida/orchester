@@ -64,7 +64,9 @@ impl Run {
     let step = pending.step();
     let asked = match attempt.reason() {
       AttemptReason::Retry { .. } | AttemptReason::Accepted { .. } => false,
-      AttemptReason::Returned { return_to, .. } | AttemptReason::Restart { step: return_to } => return_to == step,
+      AttemptReason::Returned { return_to, .. }
+      | AttemptReason::ReturnedAfterEnd { return_to, .. }
+      | AttemptReason::Restart { step: return_to } => return_to == step,
       AttemptReason::Initial | AttemptReason::FollowUp { .. } | AttemptReason::Recovery { .. } => true,
     };
     if asked {
@@ -128,6 +130,10 @@ impl Run {
       .map(StepExecution::id)
       .ok_or_else(|| RunError::NotAcceptable(step.clone()))?;
     self.transition(now, |transition| {
+      transition.record(RunEventKind::StuckDecided {
+        decision: super::StuckDecision::Accept { by },
+        by,
+      })?;
       transition.record(RunEventKind::RetryAllowed)?;
       transition.record(RunEventKind::StepAccepted { execution, by })?;
       let attempt = RunEventKind::AttemptStarted {

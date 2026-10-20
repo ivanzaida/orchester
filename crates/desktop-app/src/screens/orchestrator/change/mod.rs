@@ -1,12 +1,14 @@
-//! The card of a publication, cancel, merge, answer or message the Orchestrator's agent proposed or the chat did
-//! itself, and of a run it started without asking because auto mode is on (`Orchestrator · publish proposal` `b55NqO`
-//! and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its head with
-//! the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits, the diff
-//! of the text it publishes; what it did or would do; its notes; and its actions. While it waits, only a person
-//! applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays open to
-//! automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
+//! The card of a publication, cancel, merge, answer, message or continuation the Orchestrator's agent proposed or the
+//! chat did itself, and of a run it started without asking because auto mode is on (`Orchestrator · publish proposal`
+//! `b55NqO` and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its
+//! head with the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits,
+//! the diff of the text it publishes; what it did or would do; its notes; and its actions. While it waits, only a
+//! person applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays
+//! open to automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
 
-mod answer;
+pub(in crate::screens) mod answer;
+mod continuation;
+mod control;
 mod facts;
 mod widens;
 mod words;
@@ -124,9 +126,13 @@ impl Component for ChangeCard {
     let notes = self.notes(ctx, (&props, &view, person_only), (read, &loaded.error));
     // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
     // and the apply refuses anything else than what was shown.
-    let shown = match (&loaded.error, read.and_then(|read| read.facts.as_ref())) {
-      (None, Some(read::Facts::Publication(publication))) => Some(publication.widens.clone()),
-      (None, Some(read::Facts::Run(_))) => Some(Vec::new()),
+    let shown = match (&loaded.error, read.map(|read| read.facts.as_ref())) {
+      (None, Some(Some(read::Facts::Publication(publication)))) => Some(publication.widens.clone()),
+      (None, Some(Some(read::Facts::Run(_)))) => Some(Vec::new()),
+      // A change with nothing to read (a release of new starts, a run or draft no longer there) widens nothing. Apply
+      // checks it again first (`orchestrator::change::apply`: nothing held to release, a run that went on, a draft
+      // saved again or gone) and refuses it with the card's own words.
+      (None, Some(None)) => Some(Vec::new()),
       _ => None,
     };
     card::frame(id, view.phase().name())
@@ -141,7 +147,7 @@ impl Component for ChangeCard {
           .width(Dimension::Pct(100.0)),
       )
       .with_children(notes.1)
-      .child(self.actions(ctx, &props, (&view, accept), shown))
+      .with_children(self.actions(ctx, &props, (&view, accept), shown))
   }
 }
 
@@ -202,7 +208,8 @@ impl ChangeCard {
       )),
       _ => {}
     }
-    if self.refused.get() {
+    // Automation's refused click is told while the card waits; once it was decided, the note is gone.
+    if self.refused.get() && view.phase() == Phase::Waits {
       after.push(card::note(
         id,
         "person-only",
@@ -222,16 +229,22 @@ impl ChangeCard {
     (before, after)
   }
 
-  /// The person's action and *Dismiss* while it waits, then the places it opens. The action is taken only once the
-  /// card knows what it widens (`shown`).
+  /// The person's action and *Dismiss* while it waits, then the places it opens; `None` when there is neither. The
+  /// action is taken only once the card knows what it widens (`shown`).
   fn actions(
     &self,
     ctx: &mut Ctx,
     props: &ChangeProps,
     (view, accept): (&View, Option<Accept>),
     shown: Option<Vec<Message>>,
-  ) -> Row {
+  ) -> Option<Row> {
     let id = props.id.as_str();
+    let opens = opens(ctx, props, view);
+    let waits = matches!(view.phase(), Phase::Waits) && props.scope.is_some() && accept.is_some();
+    // A card with nothing to do or open has no actions row, nor its gap (an applied release).
+    if !waits && opens.is_empty() {
+      return None;
+    }
     let mut row = Row::new()
       .id(format!("{id}-actions"))
       .width(Dimension::Pct(100.0))
@@ -273,21 +286,18 @@ impl ChangeCard {
       row = row.child(accept).child(dismiss);
     }
     let navigation = Navigation::of(ctx);
-    row.with_children(
-      opens(ctx, props, view)
-        .into_iter()
-        .enumerate()
-        .map(|(index, (glyph, label, route))| {
-          ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
-            .icon(glyph)
-            .opens(navigation.to(route))
-        }),
+    Some(
+      row.with_children(opens.into_iter().enumerate().map(|(index, (glyph, label, route))| {
+        ActionButton::new(format!("{id}-open-{index}"), ButtonKind::Ghost, label)
+          .icon(glyph)
+          .opens(navigation.to(route))
+      })),
     )
   }
 }
 
 /// The places a card opens: the draft or what was published, *What automation may do* after the chat published
-/// itself, the run's changes while a merge waits, the task otherwise.
+/// itself, the run's changes while a merge waits, the task otherwise, and the queue for a refused release.
 fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Route)> {
   let project = props.project.0;
   let task = view.action.task.as_deref();
@@ -316,6 +326,14 @@ fn opens(ctx: &Ctx, props: &ChangeProps, view: &View) -> Vec<(Icon, Arc<str>, Ro
       .into_iter()
       .collect(),
     Some(Change::Cancel { .. }) if view.phase().waits() => Vec::new(),
+    Some(Change::Release { .. }) if matches!(view.phase(), Phase::Refused(_)) => {
+      let queue = (
+        Icon::ArrowUpRight,
+        ctx.t("orchestrator.action.openQueue"),
+        super::action::queue_route(project),
+      );
+      task_open(TaskTab::Summary).into_iter().chain([queue]).collect()
+    }
     _ => task_open(TaskTab::Summary).into_iter().collect(),
   }
 }

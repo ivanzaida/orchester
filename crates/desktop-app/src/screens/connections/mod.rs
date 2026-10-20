@@ -17,11 +17,15 @@ mod inspector;
 mod list;
 mod mcp_form;
 mod page;
+mod provider_form;
 pub(crate) mod widen;
 pub(super) mod words;
 mod work;
 
-use lurq::{app::ctx::Ctx, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::Breakpoint},
+  node::Element,
+};
 use orchester_core::id::ConnectionId;
 
 use self::{
@@ -34,6 +38,12 @@ use crate::{
   project::ShownProject,
   routes::{ConnectionsView, NewConnection},
 };
+
+/// Whether the window is narrow (`Connections · All connections · 960` `Halhq`, `b3aoUZ`): the list then has
+/// compact rows and the page less room at its sides.
+fn narrow(ctx: &Ctx) -> bool {
+  ctx.breakpoint() < Some(Breakpoint::Xl)
+}
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: ConnectionsView) -> Element {
   let key = format!("connections-{}", project.open.project.id());

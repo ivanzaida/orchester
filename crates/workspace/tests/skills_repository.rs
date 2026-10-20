@@ -90,6 +90,38 @@ fn file_link(target: &Path, link: &Path) {
   #[cfg(unix)]
   std::os::unix::fs::symlink(target, link).expect("fixture file symlink");
 }
+/// Whether this process may make a file symbolic link. Windows makes one only with Developer Mode or the privilege to
+/// (`ERROR_PRIVILEGE_NOT_HELD`); without it `test` checks nothing and says so on stderr, past the test harness's
+/// capture, so the run shows it. Any other failure to make one fails the test.
+fn file_links_made_here(test: &str) -> bool {
+  #[cfg(windows)]
+  {
+    use std::io::Write as _;
+    const ERROR_PRIVILEGE_NOT_HELD: i32 = 1314;
+    let scratch = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/skills-expanded/fixtures");
+    fs::create_dir_all(&scratch).expect("scratch");
+    let dir = tempfile::tempdir_in(scratch).expect("probe directory");
+    let target = dir.path().join("target.md");
+    fs::write(&target, "probe").expect("probe file");
+    match std::os::windows::fs::symlink_file(&target, dir.path().join("link.md")) {
+      Ok(()) => true,
+      Err(error) if error.raw_os_error() == Some(ERROR_PRIVILEGE_NOT_HELD) => {
+        writeln!(
+          std::io::stderr(),
+          "SKIPPED {test}: Windows makes no file symbolic link here without Developer Mode ({error}); nothing checked"
+        )
+        .expect("stderr takes the notice");
+        false
+      }
+      Err(error) => panic!("making a file symbolic link failed: {error}"),
+    }
+  }
+  #[cfg(unix)]
+  {
+    let _ = test;
+    true
+  }
+}
 #[test]
 fn skills_repository_refuses_external_directories_before_traversal() {
   for relative in [".claude/skills", ".claude/skills/escaped"] {
@@ -102,6 +134,9 @@ fn skills_repository_refuses_external_directories_before_traversal() {
 }
 #[test]
 fn skills_repository_refuses_external_skill_reference_and_agent_file_links() {
+  if !file_links_made_here("skills_repository_refuses_external_skill_reference_and_agent_file_links") {
+    return;
+  }
   for (relative, swap) in [
     (".claude/skills/checks/SKILL.md", false),
     (".claude/skills/checks/notes.md", false),
@@ -143,6 +178,9 @@ fn skills_repository_refuses_external_skill_reference_and_agent_file_links() {
 }
 #[test]
 fn skills_repository_refuses_protected_targets_and_other_skill_roots() {
+  if !file_links_made_here("skills_repository_refuses_protected_targets_and_other_skill_roots") {
+    return;
+  }
   for relative in [".git/private", ".orchester/private", ".claude/skills/other"] {
     let f = Fixture::new();
     let skill = f.skill();
@@ -255,6 +293,9 @@ fn skills_repository_never_opens_a_special_file() {
 #[cfg(windows)]
 #[test]
 fn skills_repository_never_opens_a_special_file() {
+  if !file_links_made_here("skills_repository_never_opens_a_special_file") {
+    return;
+  }
   let f = Fixture::new();
   let skill = f.skill();
   file_link(Path::new(r"\\.\NUL"), &skill.join("notes.md"));
@@ -266,6 +307,9 @@ fn skills_repository_never_opens_a_special_file() {
 
 #[test]
 fn skills_repository_accepts_in_project_reference_file_links() {
+  if !file_links_made_here("skills_repository_accepts_in_project_reference_file_links") {
+    return;
+  }
   let f = Fixture::new();
   let skill = f.skill();
   let notes = skill.join("original.md");

@@ -152,8 +152,8 @@ pub struct AskedQuestions {
   /// The person's message the answers reached a step-end question's agent in; the card shows them, so
   /// the message is not shown again.
   pub message: Option<MessageId>,
-  /// The project's Orchestrator chat gave its answers (recorded as automation's), from the conversation and in the
-  /// way this says: the card names it.
+  /// The project's Orchestrator chat gave its answers, from the conversation and in the way this says (the way is who
+  /// answered, [`QuestionState::Answered`]): the card names it.
   pub orchestrator: Option<FromOrchestrator>,
 }
 

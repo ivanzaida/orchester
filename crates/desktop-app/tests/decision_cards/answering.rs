@@ -309,7 +309,7 @@ fn card_question_own_answer_set_by_a_tool_counts_and_is_kept() {
 
 /// What the card says when input from an MCP client gives an answer while automation may not answer.
 const PERSON_ONLY: &str = "Only a person answers this here: input from an MCP client answers only while you let \
-                           automation answer approvals and change agent permissions.";
+                           automation answer approvals.";
 
 #[test]
 fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() {
@@ -324,9 +324,10 @@ fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() 
   workspace
     .set_automation_answers_approvals(true)
     .expect("the approvals opt-in");
-  workspace
-    .set_automation_changes_permissions(true)
-    .expect("the permissions opt-in");
+  assert!(
+    !workspace.automation_permission_consent(),
+    "permission setup is a separate consent"
+  );
   lurq::app::events::with_synthetic_input(|| click(&mut window, &approve));
   // No runner here: automation's answer reaches none, and the card says so instead.
   window.until("the client's answer sent", |window| {
@@ -334,4 +335,66 @@ fn card_approval_takes_an_mcp_clients_answer_only_as_automation_under_consent() 
       .texts(&refused)
       .is_some_and(|texts| texts.join(" ") != PERSON_ONLY)
   });
+}
+
+/// What the card says when input from an MCP client gives a wider answer.
+const WIDER_PERSON_ONLY: &str = "Only a person gives a wider answer: automation approves a request once or denies it.";
+
+#[test]
+fn card_qa_start_offers_approval_for_every_run_of_the_project_to_a_person_only() {
+  let (mut window, card) = card_of("Check the board in a QA copy", "cards-approval-");
+  let (project, question) = (format!("{card}-project"), format!("{card}-widen"));
+  window.until("the request's choices", |window| {
+    window.tree.get_element_by_id(&project).is_some()
+  });
+  assert_eq!(
+    text(&mut window, &project),
+    "Approve for every run of this project Orchester start_qa_app in every run of this project while \
+     tools/qa-app.ps1 is unchanged (git blob 3f2a1b9). A changed script asks again; revoke the rule in Project \
+     settings › Auto mode. Approves this one too."
+  );
+  assert!(!locked(&mut window, &project));
+  // An MCP client's press does not make the rule, even with both opt-ins on.
+  let workspace = window.launch.workspace().expect("the session started");
+  workspace
+    .set_automation_answers_approvals(true)
+    .expect("the approvals opt-in");
+  workspace
+    .set_automation_changes_permissions(true)
+    .expect("the permissions opt-in");
+  click(&mut window, &project);
+  window.until("the question", |window| window.texts(&question).is_some());
+  assert_eq!(
+    text(&mut window, &format!("{question}-title")),
+    "Approve start_qa_app for every run of this project?"
+  );
+  let confirm = format!("{question}-confirm");
+  // The question takes no press before it lived through one pass.
+  for _ in 0..20 {
+    window.tree.tick_futures();
+    window.pass();
+  }
+  // Below the window's fold: pressed where it is, as an MCP client's `lurq_interact` does.
+  lurq::app::events::with_synthetic_input(|| {
+    window
+      .tree
+      .get_element_by_id_mut(&confirm)
+      .expect("the question's confirm")
+      .click();
+    window.pass();
+  });
+  let refused = format!("{card}-refused");
+  window.until("why the client's answer was not taken", |window| {
+    window.texts(&refused).is_some()
+  });
+  assert_eq!(text(&mut window, &refused), WIDER_PERSON_ONLY);
+}
+
+#[test]
+fn card_command_offers_no_approval_for_every_run_of_the_project() {
+  let (mut window, card) = card_of("Add serde to the webhook payloads", "cards-approval-");
+  window.until("the request's choices", |window| {
+    window.tree.get_element_by_id(&format!("{card}-similar")).is_some()
+  });
+  assert!(window.tree.get_element_by_id(&format!("{card}-project")).is_none());
 }

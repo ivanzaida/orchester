@@ -78,6 +78,9 @@ pub struct Run {
   pub(super) attempts: Vec<Attempt>,
   pub(super) last_checkpoint: Option<Checkpoint>,
   pub(super) last_sequence: EventSequence,
+  /// The run was reopened and its next attempt has not started: a follow-up or a return after it ended is the only
+  /// attempt it takes then. Never stored: both events are recorded in one transition.
+  pub(super) reopened: bool,
 }
 
 impl Run {
@@ -119,6 +122,7 @@ impl Run {
       attempts: Vec::new(),
       last_checkpoint: None,
       last_sequence: EventSequence::FIRST,
+      reopened: false,
     })
   }
 

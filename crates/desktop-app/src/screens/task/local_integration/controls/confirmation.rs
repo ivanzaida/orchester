@@ -123,6 +123,8 @@ pub(super) fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<
         accepted: props.view.changed_since_restoration.clone(),
       },
     ),
+    // Work found integrated outside Orchester is not merged or resolved again; only finishing the record is left.
+    Mode::Review if props.view.external.is_some() => return None,
     Mode::Review => review_decision(props, phase)?,
   })
 }
@@ -271,7 +273,7 @@ impl Inspector {
   ) -> Vec<Element> {
     let mut actions = Vec::new();
     if phase == LocalPhase::AwaitingApproval && *mode == Mode::Review {
-      actions.extend(self.cancellation(ctx, props, "local-review-cancel"));
+      actions.extend(self.cancellation(ctx, props, "local-review-cancel", ButtonKind::Ghost));
     }
     if phase == LocalPhase::TaskConflicts && *mode == Mode::Review {
       actions.push(

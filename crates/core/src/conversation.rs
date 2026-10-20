@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-  id::{InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ChatId, InvocationId, MessageId, ResourceId, RunId, StepExecutionId, TaskId},
   orchestrator::FromOrchestrator,
   resource::StepKey,
   run::{EventSequence, Run, StepStatus, WaitReason},
@@ -220,9 +220,11 @@ pub struct Message {
   /// When a person's message reaches an agent at work; [`Timing::AfterTurn`] for an agent's.
   timing: Timing,
   /// A message on the person's side that the project's Orchestrator chat wrote and sent
-  /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's, with
-  /// the chat's conversation it came from and how it went out (ORC-45).
-  from_orchestrator: Option<FromOrchestrator>,
+  /// (`docs/design/orchestrator-toolset.md`, "Decisions" 5): the conversation names it as the Orchestrator's.
+  by_orchestrator: bool,
+  /// The chat's conversation it came from (ORC-45); `None` for one kept before it was recorded.
+  orchestrator_chat: Option<ChatId>,
+  by_automation: bool,
 }
 
 impl Message {
@@ -246,7 +248,9 @@ impl Message {
       created_at: now,
       recovery_after: None,
       timing: Timing::AfterTurn,
-      from_orchestrator: None,
+      by_orchestrator: false,
+      orchestrator_chat: None,
+      by_automation: false,
     }
   }
 
@@ -272,7 +276,9 @@ impl Message {
       created_at: now,
       recovery_after: None,
       timing: Timing::AfterTurn,
-      from_orchestrator: None,
+      by_orchestrator: false,
+      orchestrator_chat: None,
+      by_automation: false,
     }
   }
 
@@ -301,7 +307,9 @@ impl Message {
       created_at,
       recovery_after: None,
       timing: Timing::AfterTurn,
-      from_orchestrator: None,
+      by_orchestrator: false,
+      orchestrator_chat: None,
+      by_automation: false,
     })
   }
 
@@ -341,12 +349,34 @@ impl Message {
 
   /// Whether the project's Orchestrator chat wrote and sent it, on the person's side.
   pub const fn by_orchestrator(&self) -> bool {
-    self.from_orchestrator.is_some()
+    self.by_orchestrator
   }
 
-  /// Where it came from and how it went out, when the project's Orchestrator chat wrote it.
+  /// The conversation it came from and how it went out, when the project's Orchestrator chat wrote it: sent by the
+  /// chat itself when automation decided it, applied by the person otherwise ([`Self::answerer`]).
   pub const fn from_orchestrator(&self) -> Option<FromOrchestrator> {
-    self.from_orchestrator
+    match self.answerer() {
+      Some(by) if self.by_orchestrator => Some(FromOrchestrator::of(self.orchestrator_chat, by)),
+      _ => None,
+    }
+  }
+
+  /// Who wrote a message on the person's side, including an answer or a continuation.
+  pub const fn answerer(&self) -> Option<crate::run::Answerer> {
+    match self.sender {
+      Sender::Person { .. } if self.by_automation => Some(crate::run::Answerer::Automation),
+      Sender::Person { .. } => Some(crate::run::Answerer::Person),
+      Sender::Agent { .. } => None,
+    }
+  }
+
+  /// Marks a message on the person's side as automation's; agent messages cannot be relabeled.
+  pub fn sent_by_automation(mut self) -> Result<Self, MessageError> {
+    if !matches!(self.sender, Sender::Person { .. }) {
+      return Err(MessageError::NotFromAPerson);
+    }
+    self.by_automation = true;
+    Ok(self)
   }
 
   /// A person's message sent as `timing` says.
@@ -358,12 +388,20 @@ impl Message {
     Ok(self)
   }
 
-  /// A message on the person's side that the Orchestrator chat wrote and sent, as `from` says; an agent's never is.
-  pub fn sent_by_orchestrator(mut self, from: FromOrchestrator) -> Result<Self, MessageError> {
+  /// A message on the person's side that the Orchestrator chat wrote in conversation `chat` and sent itself, as
+  /// automation; an agent's never is.
+  pub fn sent_by_orchestrator(self, chat: Option<ChatId>) -> Result<Self, MessageError> {
+    self.written_by_orchestrator(chat)?.sent_by_automation()
+  }
+
+  /// A message on the person's side that the Orchestrator chat wrote in conversation `chat`, whoever decided to send
+  /// it: the person who applied its proposal, or automation ([`Self::sent_by_automation`]).
+  pub fn written_by_orchestrator(mut self, chat: Option<ChatId>) -> Result<Self, MessageError> {
     if !matches!(self.sender, Sender::Person { .. }) {
       return Err(MessageError::NotFromAPerson);
     }
-    self.from_orchestrator = Some(from);
+    self.by_orchestrator = true;
+    self.orchestrator_chat = chat;
     Ok(self)
   }
 

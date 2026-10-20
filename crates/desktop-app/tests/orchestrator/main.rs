@@ -2,13 +2,14 @@
 //! runner and `orchester-fake-claude` (`crates/runner/tests/support/fake_claude_chat.rs`) as the Orchestrator's
 //! agent: a new conversation and its suggestions, a message answered and kept, the agent's actions through the
 //! domain tools carried out or refused as for any client, a stopped and a failed answer, a send the runner never
-//! took, History, links in its replies, choosing what the Orchestrator runs on, and the turn an agent's wait starts
-//! by itself. Run with `cargo test -p orchester-app --test orchestrator <filter>`; the first test builds the runner
-//! with its fakes.
+//! took, the composer's drafts, History, links in its replies, choosing what the Orchestrator runs on, and the turn an
+//! agent's wait starts by itself. Run with `cargo test -p orchester-app --test orchestrator <filter>`; the first test
+//! builds the runner with its fakes.
 
 mod changes;
 mod chat;
 mod decisions;
+mod drafts;
 mod harness;
 mod history;
 mod links;

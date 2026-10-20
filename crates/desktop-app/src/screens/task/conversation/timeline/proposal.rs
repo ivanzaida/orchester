@@ -1,10 +1,12 @@
 //! An answer or a message the project's Orchestrator chat proposed for the run and no one applied (ORC-45), after the
 //! timeline's rows. While it waits: the Orchestrator's row (its `waypoints` avatar, its name and when it proposed it),
-//! what it would send, *Waiting for you in the Orchestrator chat*, and *Apply*, *Dismiss* and *Open in Orchestrator
-//! chat*. *Apply* and *Dismiss* decide the chat's own proposal, as its card does, so deciding in either place decides
-//! both; only a person applies it: lurq's synthetic input is refused in the handler, visibly, and *Dismiss* stays open
-//! to automation, as on the card. Once dismissed, refused or stale, it leaves a muted line that says nothing was sent.
-//! Which proposals there are and where each stands are `orchester_workspace::tasks::conversation::orchestrator`'s.
+//! what it would send (for a message that moves the run, how, in the words of the chat's card, `ExRt1`), *Waiting
+//! for you in the Orchestrator chat*, and the card's action (*Send message*, *Run again with this message*, *Send
+//! answer*, ...), *Dismiss* and *Open in Orchestrator chat*. The action and *Dismiss* decide the chat's own proposal,
+//! as its card does, so deciding in either place decides both; only a person applies it: lurq's synthetic input is
+//! refused in the handler, visibly, and *Dismiss* stays open to automation, as on the card. Once dismissed, refused or
+//! stale, it leaves a muted line that says nothing was sent. Which proposals there are and where each stands are
+//! `orchester_workspace::tasks::conversation::orchestrator`'s.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -28,7 +30,10 @@ use orchester_workspace::{
 };
 
 use super::super::super::{
-  super::orchestrator::card::{DecideAction, Deciding, decide_action},
+  super::orchestrator::{
+    card::{DecideAction, Deciding, decide_action},
+    change::answer::moving,
+  },
   orchestrated::open_chat,
 };
 use crate::{
@@ -133,17 +138,20 @@ impl ProposalRow {
           name: props.project.name.to_string(),
           root: props.project.root.clone(),
           chat: proposal.chat,
+          // The person decides here, as on the chat's card.
+          on_its_own: false,
         },
         seq: proposal.seq,
         decision,
       };
-      let apply = ActionButton::new(
-        format!("{id}-apply"),
-        ButtonKind::Primary,
-        ctx.t("conversation.orchestrator.proposal.apply"),
-      )
-      .icon(Icon::Check)
-      .compact();
+      // Named as the chat's card names it: what applying sends, and how it moves the run.
+      let (label, glyph) = match &proposal.proposed {
+        Proposed::Message { then, .. } => (moving(*then).1, Icon::MessageSquareText),
+        Proposed::Answer { .. } => ("orchestrator.change.answer.accept", Icon::Reply),
+      };
+      let apply = ActionButton::new(format!("{id}-apply"), ButtonKind::Primary, ctx.t(label))
+        .icon(glyph)
+        .compact();
       let dismiss = ActionButton::new(
         format!("{id}-dismiss"),
         ButtonKind::Secondary,
@@ -214,7 +222,15 @@ fn said(ctx: &Ctx, id: &str, proposed: &Proposed) -> Vec<Element> {
       .into()
   };
   match proposed {
-    Proposed::Message { text: message } => vec![text("text".to_owned(), message)],
+    Proposed::Message {
+      text: message,
+      then: None,
+    } => vec![text("text".to_owned(), message)],
+    // One that moves a run none of whose agents waits or works says how, with its text, as the chat's card does.
+    Proposed::Message { text: message, then } => vec![text(
+      "text".to_owned(),
+      &ctx.t_args(moving(*then).0, [("text", &**message)]),
+    )],
     Proposed::Answer { choices, text: own, .. } => choices
       .iter()
       .map(|choice| ctx.t_args("conversation.orchestrator.proposal.choice", [("choice", &**choice)]))

@@ -5,10 +5,10 @@
 //! auto-approval leaves to a person, such as a command that reaches the network.
 
 use std::{
-  env, fs,
+  fs,
   path::{Path, PathBuf},
   process::Command,
-  sync::{Arc, OnceLock},
+  sync::Arc,
 };
 
 use orchester_core::{
@@ -18,48 +18,15 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
-  app_paths::runner_beside,
   tasks::integration_jobs::{MergeArgs, RunJobs},
   workspace::OpenProject,
 };
 use parking_lot::{Condvar, Mutex};
 use serde_json::{Value, json};
 
-use super::Served;
+use super::{Served, runner_programs::programs};
 
-/// The runner and the fake Codex, built into this profile's folder once per test process, before a
-/// test starts them (Windows keeps a running program's file).
-pub(super) fn programs() -> (PathBuf, PathBuf) {
-  static BUILT: OnceLock<(PathBuf, PathBuf)> = OnceLock::new();
-  BUILT.get_or_init(build_programs).clone()
-}
-
-fn build_programs() -> (PathBuf, PathBuf) {
-  let status = Command::new(env!("CARGO"))
-    .args([
-      "build",
-      "--quiet",
-      "-p",
-      "orchester-runner",
-      "--features",
-      "test-agent",
-      "--bins",
-    ])
-    .status()
-    .expect("run cargo");
-  assert!(status.success(), "cargo build -p orchester-runner: {status}");
-  let test = env::current_exe().expect("the test's path");
-  let profile = test
-    .parent()
-    .and_then(Path::parent)
-    .expect("tests live in <target>/<profile>/deps");
-  let fake = profile
-    .join("orchester-fake-codex")
-    .with_extension(env::consts::EXE_EXTENSION);
-  (runner_beside(&profile.join("orchester-app")), fake)
-}
-
-fn git(repo: &Path, args: &[&str]) -> String {
+pub(super) fn git(repo: &Path, args: &[&str]) -> String {
   let output = Command::new("git")
     .arg("-C")
     .arg(repo)
@@ -75,9 +42,12 @@ fn git(repo: &Path, args: &[&str]) -> String {
 }
 
 /// A new git repository on `main` with one commit, and the app on a data folder beside it.
-fn served() -> (Served, PathBuf, PathBuf) {
-  let (runner, fake) = programs();
-  let folder = tempfile::tempdir().expect("a temporary folder");
+pub(super) fn served(window_control: bool) -> (Served, PathBuf, PathBuf) {
+  let programs = programs();
+  let (runner, fake) = (programs.runner.clone(), programs.fake_codex.clone());
+  let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-31-live");
+  fs::create_dir_all(&scratch).expect("scratch");
+  let folder = tempfile::tempdir_in(scratch).expect("a temporary folder");
   let repo = folder.path().join("kontur");
   fs::create_dir_all(&repo).expect("the repository's folder");
   git(&repo, &["init", "--quiet", "--initial-branch=main"]);
@@ -89,12 +59,16 @@ fn served() -> (Served, PathBuf, PathBuf) {
   git(&repo, &["commit", "--quiet", "-m", "initial"]);
   let database = folder.path().join("bin").join("orchester.db");
   fs::create_dir_all(folder.path().join("bin")).expect("the data folder");
-  (Served::start(folder, &database, runner), repo, fake)
+  (
+    Served::start_with(folder, &database, runner, window_control),
+    repo,
+    fake,
+  )
 }
 
 /// Kontur set up through the tools: its connection to the fake Codex, a Builder profile and the
 /// Delivery pipeline, both published.
-fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
+pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
   let added = served.ok(
     "add_project",
     &json!({ "name": "Kontur", "folder": repo.display().to_string() }),
@@ -155,7 +129,7 @@ fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
 }
 
 /// Creates and runs a task with `brief` on Delivery; its key.
-fn run(served: &mut Served, brief: &str) -> String {
+pub(super) fn run(served: &mut Served, brief: &str) -> String {
   let created = served.ok(
     "create_task",
     &json!({
@@ -193,7 +167,7 @@ fn let_automation_answer(served: &Served) {
 
 #[test]
 fn domain_a_project_set_up_through_the_tools_runs_answers_and_merges() {
-  let (mut served, repo, fake) = served();
+  let (mut served, repo, fake) = served(false);
   set_up(&mut served, &repo, &fake);
   let key = run(&mut served, "Escalate `git status`.");
   let approval = waiting_approval(&mut served);
@@ -247,7 +221,7 @@ changed by hand
 
 #[test]
 fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
-  let (mut served, repo, fake) = served();
+  let (mut served, repo, fake) = served(false);
   set_up(&mut served, &repo, &fake);
   let check = json!({
     "project": "Kontur",
@@ -288,7 +262,7 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
 
 #[test]
 fn domain_automation_cannot_approve_a_network_request() {
-  let (mut served, repo, fake) = served();
+  let (mut served, repo, fake) = served(false);
   set_up(&mut served, &repo, &fake);
   run(&mut served, "Escalate `curl https://example.com`.");
   let approval = waiting_approval(&mut served);

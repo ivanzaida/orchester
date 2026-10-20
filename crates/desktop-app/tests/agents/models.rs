@@ -70,3 +70,37 @@ fn agents_custom_model_warning_opens_model_menu_and_connection() {
       .contains(&connection.id().to_string())
   );
 }
+
+#[test]
+fn agents_on_an_api_provider_offer_its_models_and_take_any_effort_its_cli_does() {
+  let mut screen = Agents::new(true);
+  let id = screen.profile(true);
+  let mut db = ProjectDb::open(&screen.root).expect("db");
+  let stored = db.connections().expect("connections").remove(0);
+  let mut connection = AgentConnection::try_from(stored).expect("CLI");
+  connection
+    .set_api_provider(Some(
+      orchester_core::connection::ApiProvider::new(
+        orchester_core::connection::BaseUrl::new("https://api.deepseek.com").expect("valid"),
+        orchester_core::id::SecretId::generate(),
+        vec![ModelId::new("deepseek-v4-pro").expect("model")],
+      )
+      .expect("a model"),
+    ))
+    .expect("on Default");
+  db.save_connection(&connection).expect("on the provider");
+  drop(db);
+  screen.open(id);
+  screen.set("agent-effort", "very high");
+  assert!(
+    screen.text("agent-model-section").contains("one word"),
+    "Codex takes one word"
+  );
+  screen.set("agent-effort", "ultra");
+  assert!(
+    !screen.text("agent-model-section").contains("one word"),
+    "any word the model advertises"
+  );
+  screen.click("agent-model");
+  assert!(screen.text("agent-model-menu").contains("deepseek-v4-pro"));
+}

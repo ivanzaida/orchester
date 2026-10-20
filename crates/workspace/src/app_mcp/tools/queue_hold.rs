@@ -42,12 +42,7 @@ pub async fn set_queue_hold(services: &Services, args: QueueHold, held: bool) ->
       Some(named) => {
         let db = ProjectDb::open(&project.repo_root)?;
         let task = find_task(&db, named)?;
-        let group = hold::group_of(&db, task.id())?.ok_or_else(|| {
-          ToolError::refused(
-            "not_in_group",
-            vec![Message::new("tasks.queue.notInGroup").with("task", task.key().to_string())],
-          )
-        })?;
+        let group = hold::group_of(&db, task.id())?.ok_or_else(|| not_in_group(&task.key().to_string()))?;
         HoldScope::Group(group)
       }
     };
@@ -68,4 +63,12 @@ pub async fn set_queue_hold(services: &Services, args: QueueHold, held: bool) ->
     }))
   })
   .await
+}
+
+/// A hold or release named by task `key`, which is in no reviewed group.
+pub(crate) fn not_in_group(key: &str) -> ToolError {
+  ToolError::refused(
+    "not_in_group",
+    vec![Message::new("tasks.queue.notInGroup").with("task", key.to_owned())],
+  )
 }

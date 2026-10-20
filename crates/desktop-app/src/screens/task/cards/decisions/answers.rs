@@ -29,6 +29,8 @@ use crate::{
 pub(in super::super) enum Given {
   ApproveOnce,
   ApproveSimilar,
+  /// Approve for every run of this project: Orchester's `start_qa_app` only.
+  ApproveProject,
   ApproveEverything,
   Deny,
   /// The answers to a question with suggested answers.

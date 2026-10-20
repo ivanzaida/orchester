@@ -110,11 +110,12 @@ impl ProjectDb {
     Ok(claimed)
   }
 
-  /// Ends the claimed action `seq` of conversation `chat` with `outcome` at `at`; `None` when it was not claimed.
+  /// Ends the claimed action `seq` of conversation `chat` with `outcome` at `at`, keeping the run carrying it out
+  /// `started` when it started one (a message that ran its task again); `None` when it was not claimed.
   pub fn finish_chat_action(
     &mut self,
     (chat, seq): (ChatId, i64),
-    outcome: ActionOutcome,
+    (outcome, started): (ActionOutcome, Option<RunId>),
     at: Timestamp,
   ) -> Result<Option<ChatAction>, StoreError> {
     self.replace_chat_action(
@@ -122,6 +123,7 @@ impl ProjectDb {
       |found| found.claimed.is_some(),
       |found| ChatAction {
         outcome,
+        started: started.or(found.started),
         settled: Some(at),
         claimed: None,
         ..found

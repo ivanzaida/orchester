@@ -358,6 +358,7 @@ fn sent_now(execution: StepExecutionId, at: Timestamp) -> Item {
       execution: Some(execution),
       sent_now: true,
       orchestrator: None,
+      by_automation: false,
     }),
   }
 }
@@ -417,6 +418,7 @@ fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
       decided_by: None,
       decided_at: None,
       review: None,
+      for_project: false,
     }),
   };
   assert_eq!(kinds_of(&around(execution, card)), ["tools", "approval", "tools"]);
@@ -478,6 +480,7 @@ fn timeline_a_return_shows_before_its_step_in_every_view_even_folded() {
     attempt: 2,
     at: Some(at(2)),
     by_person: false,
+    by: None,
     kind: MarkKind::Restarted {
       step: "Implement".into(),
     },
@@ -527,6 +530,7 @@ fn timeline_search_finds_a_question_with_its_step() {
         execution: Some(execution),
         sent_now: false,
         orchestrator: None,
+        by_automation: false,
       },
       step: Some("Implement".into()),
     },

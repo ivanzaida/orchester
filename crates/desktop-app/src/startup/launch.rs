@@ -13,6 +13,7 @@ use orchester_workspace::{
   runner::QUIET_STOP_TIMEOUT,
   secrets::Vault,
   session::{AppSession, StartupError},
+  tasks::resolve::Editor,
   workspace::Workspace,
 };
 use tokio::runtime::Handle;
@@ -137,6 +138,19 @@ impl Launch {
     }
     if let Some(running) = &mut self.running {
       running.services.programs = programs;
+    }
+    self
+  }
+
+  /// The session with *Resolve in editor* starting `editor`, e.g. a stand-in in a test, so no editor opens on the
+  /// person's desktop.
+  #[must_use]
+  pub fn with_editor(mut self, editor: Option<Editor>) -> Self {
+    if let Start::Ready(ready) = &mut self.start {
+      ready.services.editor.clone_from(&editor);
+    }
+    if let Some(running) = &mut self.running {
+      running.services.editor = editor;
     }
     self
   }

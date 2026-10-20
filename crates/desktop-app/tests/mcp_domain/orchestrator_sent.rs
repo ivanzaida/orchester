@@ -27,7 +27,10 @@ use orchester_workspace::{
     proposal::{self, Decision},
     tools::ChatScope,
   },
-  tasks::conversation::orchestrator::{ProposalState, proposals},
+  tasks::conversation::{
+    composer::ComposerMode,
+    orchestrator::{ProposalState, proposals},
+  },
   workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
@@ -110,6 +113,12 @@ fn sent_directly_names_the_orchestrator_and_how_it_went_out() {
   let (task, run) = task_run(&db, ASKING);
   let scope = chat(&served, &mut db);
   allow(&served, OrchestratorConsent::AnswerAgents);
+  // The message answers the agent's question: automation decides it only with the person's consent.
+  served
+    .services()
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("decision consent");
   let message = json!({ "project": "Kontur", "run": run.id().to_string(), "text": TEXT });
   chat_call(&mut served, &scope, "send_message", message).expect("sent at once");
   let stored = sent(&db, task.id(), TEXT).expect("the message");
@@ -304,18 +313,22 @@ fn sent_answer_of_the_orchestrator_names_it_on_the_card() {
       text: None,
     }])
     .expect("answers");
-  // As the runner records the answer the chat sent, and the tool marks it.
+  // As the runner records the answer of the chat's proposal the person applied, and the tool marks it.
   db.answer_questions(
     (run.id(), asked.request.id()),
     &given,
-    (Answerer::Automation, Timestamp::now()),
+    (Answerer::Person, Timestamp::now()),
     None,
   )
   .expect("answered");
-  let applied = FromOrchestrator::new(scope.chat, SentWay::AppliedByPerson);
   assert!(
-    db.mark_answered_by_orchestrator((run.id(), asked.request.id()), applied)
+    db.mark_answered_by_orchestrator((run.id(), asked.request.id()), scope.chat)
       .expect("marked")
+  );
+  assert_eq!(
+    db.questions(run.id()).expect("questions")[0].orchestrator,
+    Some(FromOrchestrator::new(scope.chat, SentWay::AppliedByPerson)),
+    "how it went out is who answered"
   );
   let key = task.key().to_string();
   let read = entries(&mut served, &key);
@@ -334,8 +347,19 @@ fn sent_answer_of_the_orchestrator_names_it_on_the_card() {
   served.until("how the chat's answer went out", |served| served.shows(&line));
 }
 
-/// The chat's action on run `run` with `outcome`, a message proposed at `at`; `claimed` and `settled` as given.
+/// The chat's action on run `run` with `outcome`, a message proposed at `at` and checked as a follow-up; `claimed` and
+/// `settled` as given.
 fn kept(run: RunId, (seq, outcome): (i64, ActionOutcome), (claimed, settled): (bool, bool)) -> KeptAction {
+  kept_as(run, (seq, outcome), (claimed, settled), Some("follow_up"))
+}
+
+/// [`kept`], checked as `sent_as` (`None`: kept before what it does was recorded).
+fn kept_as(
+  run: RunId,
+  (seq, outcome): (i64, ActionOutcome),
+  (claimed, settled): (bool, bool),
+  sent_as: Option<&str>,
+) -> KeptAction {
   let mut action = ChatAction::new("send_message", Some("KON-1".to_owned()), outcome);
   action.change = Some(Box::new(ProposedChange {
     subject: "Say hello".to_owned(),
@@ -344,6 +368,8 @@ fn kept(run: RunId, (seq, outcome): (i64, ActionOutcome), (claimed, settled): (b
       number: 1,
       text: format!("Message {seq}"),
       now: false,
+      then: None,
+      sent_as: sent_as.map(str::to_owned),
     },
   }));
   action.claimed = claimed.then(Timestamp::now);
@@ -373,7 +399,8 @@ fn sent_proposals_read_where_the_chats_action_stands_and_sent_ones_are_their_mes
     kept(run, (6, ActionOutcome::Done), (false, false)),
     kept(run, (7, ActionOutcome::Applied), (false, true)),
   ];
-  let states: Vec<(i64, ProposalState)> = proposals(&actions, (true, &[]))
+  let follow_up = ComposerMode::FollowUp;
+  let states: Vec<(i64, ProposalState)> = proposals(&actions, (Some(&follow_up), &[]))
     .into_iter()
     .map(|proposal| (proposal.seq, proposal.state))
     .collect();
@@ -386,8 +413,31 @@ fn sent_proposals_read_where_the_chats_action_stands_and_sent_ones_are_their_mes
       (4, ProposalState::Refused("The run moved on.".into())),
     ]
   );
-  // Once no agent of the run reads a message, a waiting one no longer applies.
-  let stale = proposals(&actions[..1], (false, &[]));
-  assert_eq!(stale[0].state, ProposalState::Stale);
-  assert!(!stale[0].waits(), "a stale proposal offers no Apply");
+  // Applying is refused, so the proposal is stale, once the run would take the message otherwise than it was checked
+  // (here run again instead of following it up), once the run is not the task's latest, and for one kept before what
+  // it does was recorded.
+  let moved_on = ComposerMode::RunAgain;
+  for (actions, offered) in [
+    (
+      vec![kept(run, (1, ActionOutcome::Waits), (false, false))],
+      Some(&moved_on),
+    ),
+    (vec![kept(run, (1, ActionOutcome::Waits), (false, false))], None),
+    (
+      vec![kept_as(run, (1, ActionOutcome::Waits), (false, false), None)],
+      Some(&follow_up),
+    ),
+  ] {
+    let stale = proposals(&actions, (offered, &[]));
+    assert_eq!(stale[0].state, ProposalState::Stale, "{offered:?}");
+    assert!(!stale[0].waits(), "a stale proposal offers no Apply");
+  }
+  // A message checked to run the task again still applies once the run ended (the applied run-again card).
+  let again = [kept_as(
+    run,
+    (1, ActionOutcome::Waits),
+    (false, false),
+    Some("run_again"),
+  )];
+  assert_eq!(proposals(&again, (Some(&moved_on), &[]))[0].state, ProposalState::Waits);
 }

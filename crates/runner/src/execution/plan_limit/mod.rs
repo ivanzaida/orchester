@@ -10,7 +10,7 @@ mod waits;
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform},
+  connection::AgentConnection,
   id::{ConnectionId, RunId},
   run::{PauseReason, RunLimit, RunStatus},
   store::ConnectionStore,
@@ -52,15 +52,7 @@ pub(super) fn continue_on(
     .map_err(|error| failed("cannot read the connection", &error))?
     .and_then(|chosen| AgentConnection::try_from(chosen).ok())
     .ok_or(Rejection::NotAnotherAccount)?;
-  let provider = stopped.provider();
-  let another = chosen.provider() == provider
-    && chosen.account().id(provider) != stopped.account().id(provider)
-    && chosen.status().is_usable()
-    && chosen
-      .account()
-      .start_problem(provider, Platform::current(), Path::is_dir)
-      .is_none();
-  if !another {
+  if !chosen.continues_plan_limited(stopped.provider(), stopped.plan_account()) {
     return Err(Rejection::NotAnotherAccount);
   }
   db.set_step_connection(run.id(), &step, connection)

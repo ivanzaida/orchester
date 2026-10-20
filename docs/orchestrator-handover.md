@@ -242,7 +242,8 @@ The script that made these edits is `.tmp/setup-tasks/no_check_in_steps.py`.
 Check, Review and Verify return to Implement on failure, at most 2 times per step. After that the run waits for the
 person with `retries_exhausted`.
 
-**Check tool:** `powershell -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1`, timeout 3600.
+**Check tool:** `powershell -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1 -Tests changed`, timeout 10800
+(since 2026-10-19 with the tests of the changed crates; `docs/stable-build.md`, Embedded MCP server).
 
 **MCP server `pencil-design`:**
 

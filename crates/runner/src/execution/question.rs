@@ -141,6 +141,12 @@ fn answer_step_end(
     .map_err(|error| failed("the answer says nothing", &error))?;
   let now = Timestamp::now();
   let message = Message::from_person(run.task(), Some(run.id()), Recipient::Agent(profile), body, now);
+  let message = match by {
+    Answerer::Person => message,
+    Answerer::Automation => message
+      .sent_by_automation()
+      .expect("the new message is on the person's side"),
+  };
   if !db
     .answer_questions((run.id(), request.id()), answers, (by, now), Some(message.id()))
     .map_err(store)?

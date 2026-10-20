@@ -3,25 +3,39 @@
 //! out, sent by the chat while the person's switch let it, or proposed by the chat and applied by the person
 //! ([`orchester_core::orchestrator::FromOrchestrator`]). An answer or a message it proposed and no one applied yet
 //! waits for the person in the conversation too, with the same proposal behind it in the chat: applying or dismissing
-//! it in either place decides both ([`crate::orchestrator::proposal::decide`]). One the run no longer takes, or whose
-//! question was answered meanwhile, is stale; a dismissed one, or one refused when it was applied, stays as a muted
-//! line. None of them ever reads as sent.
+//! it in either place decides both ([`crate::orchestrator::proposal::decide`]). One applying would refuse now is
+//! stale: a message the run would no longer take as it was checked (`send_message`'s own check), or an answer to a
+//! question answered meanwhile. A dismissed one, or one refused when it was applied, stays as a muted line. None of
+//! them ever reads as sent.
 
 use std::sync::Arc;
 
 use orchester_core::{
-  id::ChatId,
-  orchestrator::{ActionOutcome, change::Change},
+  id::{ChatId, RunId},
+  orchestrator::{
+    ActionOutcome,
+    change::{Change, MessageThen},
+  },
   question::AskedQuestions,
   time::Timestamp,
 };
 use orchester_store::KeptAction;
 
+use super::{
+  composer::ComposerMode,
+  outgoing::{conversation_of, offer},
+};
+use crate::{
+  app_mcp::{SendTiming, sent_as},
+  tasks::detail::TaskDetail,
+};
+
 /// What a proposal would send.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Proposed {
-  /// A message to the run's agents.
-  Message { text: Arc<str> },
+  /// A message to the run's agents, and what it does to a run none of whose agents waits or works (`then`: runs the
+  /// task again, continues it, ...), as it was checked.
+  Message { text: Arc<str>, then: Option<MessageThen> },
   /// The answer to the question with suggested answers `request`: the options picked and/or the chat's own words.
   Answer {
     request: Arc<str>,
@@ -39,7 +53,8 @@ pub enum ProposalState {
   Applying,
   /// The person dismissed it: nothing was sent.
   Dismissed,
-  /// It still waits in the chat, but the run no longer takes it, or its question was answered: applying it is refused.
+  /// It still waits in the chat, but applying it would be refused: the run changed since it was checked, or its
+  /// question was answered.
   Stale,
   /// Applying it was refused, for `0`, in the words the chat keeps: nothing was sent.
   Refused(Arc<str>),
@@ -69,19 +84,30 @@ impl Proposal {
   }
 }
 
+/// What a message sent now to `run` of the task `detail` holds would meet: the composer's mode of the task's latest
+/// run, as `send_message` reads it; `None` once `run` is not the latest, where every message is refused.
+pub fn message_offer(detail: &TaskDetail, run: RunId) -> Option<ComposerMode> {
+  let latest = detail.run.as_ref().filter(|latest| latest.id() == run)?;
+  Some(offer(&conversation_of(detail, false), Some(latest), None).0)
+}
+
 /// The proposals among `kept`, the chat's actions that answer the run's agents or send them a message, oldest first:
 /// what was sent (by the chat or applied by the person) shows as its message or answer, and what the chat's own call
-/// refused was never proposed, so neither is one. `takes_messages`: an agent of the run still reads a message; the
-/// run's `questions` tell which still wait for an answer.
-pub fn proposals(kept: &[KeptAction], (takes_messages, questions): (bool, &[AskedQuestions])) -> Vec<Proposal> {
+/// refused was never proposed, so neither is one. `offered`: what a message sent now would meet
+/// ([`message_offer`]); the run's `questions` tell which still wait for an answer.
+pub fn proposals(
+  kept: &[KeptAction],
+  (offered, questions): (Option<&ComposerMode>, &[AskedQuestions]),
+) -> Vec<Proposal> {
   kept
     .iter()
     .filter_map(|kept| {
-      let proposed = proposed(&kept.action.change.as_ref()?.change)?;
+      let change = &kept.action.change.as_ref()?.change;
+      let proposed = proposed(change)?;
       let action = &kept.action;
       let state = match &action.outcome {
         ActionOutcome::Waits if action.claimed.is_some() => ProposalState::Applying,
-        ActionOutcome::Waits if is_stale(&proposed, (takes_messages, questions)) => ProposalState::Stale,
+        ActionOutcome::Waits if is_stale(change, (offered, questions)) => ProposalState::Stale,
         ActionOutcome::Waits => ProposalState::Waits,
         ActionOutcome::Dismissed => ProposalState::Dismissed,
         ActionOutcome::Refused { reason, .. } if action.settled.is_some() => {
@@ -109,8 +135,9 @@ pub fn waiting_answer<'a>(proposals: &'a [Proposal], request: &str) -> Option<&'
 
 fn proposed(change: &Change) -> Option<Proposed> {
   match change {
-    Change::Message { text, .. } => Some(Proposed::Message {
+    Change::Message { text, then, .. } => Some(Proposed::Message {
       text: text.as_str().into(),
+      then: *then,
     }),
     Change::Answer {
       request, choices, text, ..
@@ -119,17 +146,30 @@ fn proposed(change: &Change) -> Option<Proposed> {
       choices: choices.iter().map(|choice| choice.as_str().into()).collect(),
       text: text.as_deref().map(Arc::from),
     }),
-    Change::Publish { .. } | Change::Cancel { .. } | Change::Merge { .. } => None,
+    Change::Publish { .. }
+    | Change::Cancel { .. }
+    | Change::Merge { .. }
+    | Change::Continue { .. }
+    | Change::Pause { .. }
+    | Change::Resume { .. }
+    | Change::Release { .. } => None,
   }
 }
 
-/// Whether applying `proposed` now would be refused: no agent reads a message any more, or its question no longer
-/// waits.
-fn is_stale(proposed: &Proposed, (takes_messages, questions): (bool, &[AskedQuestions])) -> bool {
-  match proposed {
-    Proposed::Message { .. } => !takes_messages,
-    Proposed::Answer { request, .. } => !questions
+/// Whether applying `change` now would be refused: a message that would no longer do what it was checked as (or was
+/// kept before that was recorded), as `send_message` checks it; an answer whose question no longer waits.
+fn is_stale(change: &Change, (offered, questions): (Option<&ComposerMode>, &[AskedQuestions])) -> bool {
+  match change {
+    Change::Message {
+      now, sent_as: checked, ..
+    } => {
+      let timing = if *now { SendTiming::Now } else { SendTiming::AfterTurn };
+      let would = offered.map(|mode| sent_as(mode, Some(timing)));
+      checked.is_none() || would != checked.as_deref()
+    }
+    Change::Answer { request, .. } => !questions
       .iter()
-      .any(|asked| asked.request.id() == &**request && asked.waits()),
+      .any(|asked| asked.request.id() == request && asked.waits()),
+    _ => false,
   }
 }

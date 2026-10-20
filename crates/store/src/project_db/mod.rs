@@ -14,6 +14,7 @@ mod environment;
 mod import;
 mod invocation_accounts;
 mod invocation_prompts;
+mod invocation_providers;
 mod joining;
 mod limits;
 mod local_integration;
@@ -30,6 +31,7 @@ mod organization;
 mod organized_drafts;
 mod plan_limits;
 mod plans;
+mod project_rules;
 mod pull_request_attempts;
 mod pull_request_diffs;
 mod pull_requests;
@@ -39,10 +41,12 @@ mod read_only;
 mod rebases;
 mod repository;
 mod repository_import;
+mod resolutions;
 mod resources;
 mod reviewer_usage;
 mod revision_diffs;
 mod run_connections;
+mod run_ends;
 mod runs;
 mod schema;
 mod secrets;
@@ -81,7 +85,9 @@ pub use self::{
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
+  resolutions::ResolutionStart,
   resources::ResourceUpdate,
+  run_ends::EndedRun,
   runs::RunBranch,
   shared_members::SharedMember,
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},

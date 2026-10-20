@@ -106,9 +106,10 @@ fn outcome<'a>(ctx: &Ctx, card: &'a ChoiceCard) -> Outcome<'a> {
     }
   };
   let time = display::clock(at);
+  // The chat's answer is the Orchestrator's whether it sent it or the person applied it; the sent line says which.
   let key = match by {
+    _ if card.asked.orchestrator.is_some() => "cards.choice.byOrchestrator",
     Answerer::Person => "cards.choice.byYou",
-    Answerer::Automation if card.asked.orchestrator.is_some() => "cards.choice.byOrchestrator",
     Answerer::Automation => "cards.choice.byAutomation",
   };
   Outcome {

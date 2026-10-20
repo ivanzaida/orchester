@@ -12,6 +12,7 @@ mod connections;
 mod files;
 pub(crate) mod gate;
 mod instructions;
+mod kept;
 mod not_found;
 mod orchestrator;
 mod overview;

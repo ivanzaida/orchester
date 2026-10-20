@@ -5,17 +5,17 @@
 use std::path::Path;
 
 use orchester_core::{
-  conversation::{Message, MessageBody, MessageError, Recipient, Timing},
-  id::{IdempotencyKey, MessageId, RunId, TaskId},
-  orchestrator::FromOrchestrator,
-  run::EventSequence,
+  conversation::{Message, MessageBody, MessageError, Recipient, Sender, Timing},
+  id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
+  run::{Answerer, EventSequence},
   store::ConversationStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::outgoing::{after_turn_run, conversation_of};
+use super::outgoing::{after_turn_run, answers_question, conversation_of};
 use crate::{
+  decisions::DecisionKind,
   messages::{self, Message as UiMessage},
   tasks::detail::TaskDetail,
 };
@@ -29,6 +29,8 @@ pub enum SendError {
   NotUndelivered,
   /// The message's run ended or is no longer the task's latest: no agent reads it any more.
   NotReadable,
+  /// Automation would decide for the person (answer a waiting question) without the consent for it.
+  NotAllowed,
   Store(StoreError),
 }
 
@@ -39,6 +41,7 @@ impl SendError {
       Self::InvalidRecovery => UiMessage::new("conversation.errors.invalidRecovery"),
       Self::NotUndelivered => UiMessage::new("conversation.errors.notUndelivered"),
       Self::NotReadable => UiMessage::new("conversation.errors.notReadable"),
+      Self::NotAllowed => UiMessage::new("appMcp.errors.automationNotAllowed"),
       Self::Store(error) => messages::store_error(error),
     }
   }
@@ -59,18 +62,18 @@ pub fn send_in(
     key,
     (task, run, recovery_after),
     (recipient, timing),
-    (text, None),
+    (text, None, Answerer::Person),
   )
 }
 
-/// [`send_in`], for the project's Orchestrator chat when `by_orchestrator` says where it came from and how it went
-/// out: it wrote `text` on the person's side, and the conversation names it as the chat's.
+/// [`send_in`], decided `by`, and for the project's Orchestrator chat when `by_orchestrator` names the conversation
+/// it came from: it wrote `text` on the person's side, and the conversation names it as the chat's.
 pub(super) fn send_as(
   repo_root: &Path,
   key: IdempotencyKey,
   (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
   (recipient, timing): (Recipient, Timing),
-  (text, by_orchestrator): (&str, Option<FromOrchestrator>),
+  (text, by_orchestrator, by): (&str, Option<ChatId>, Answerer),
 ) -> Result<Message, SendError> {
   // A new message's text is only checked for being blank.
   let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
@@ -78,8 +81,17 @@ pub(super) fn send_as(
     .sent(timing)
     .expect("a new message is a person's");
   let message = match by_orchestrator {
-    Some(from) => message.sent_by_orchestrator(from).expect("a new message is a person's"),
+    Some(chat) => message
+      .written_by_orchestrator(Some(chat))
+      .expect("a new message is a person's"),
     None => message,
+  };
+  let message = if by == Answerer::Automation {
+    message
+      .sent_by_automation()
+      .expect("a new message is on the person's side")
+  } else {
+    message
   };
   let message = match recovery_after {
     Some(sequence) => message
@@ -94,6 +106,17 @@ pub(super) fn send_as(
 /// Queues `task`'s message `id`, which its agent's CLI did not take, again for when its agent's
 /// turn ends (*Send after this turn*); refused once no agent of its run reads it ([`after_turn_run`]).
 pub fn send_after_turn_in(repo_root: &Path, task: TaskId, id: MessageId) -> Result<Message, SendError> {
+  send_after_turn_as(repo_root, (task, id), (Answerer::Person, |_| Ok(true)))
+}
+
+/// [`send_after_turn_in`], sent again `by`. A message queued again while its agent waits on a free-text question
+/// answers it ([`answers_question`]): automation sends it only where `allowed` says automation may decide that kind
+/// ([`SendError::NotAllowed`] otherwise). Automation's resend is recorded as automation's message.
+pub fn send_after_turn_as(
+  repo_root: &Path,
+  (task, id): (TaskId, MessageId),
+  (by, allowed): (Answerer, impl FnOnce(DecisionKind) -> Result<bool, StoreError>),
+) -> Result<Message, SendError> {
   let detail = TaskDetail::load_in(repo_root, task).map_err(SendError::Store)?;
   let reads = conversation_of(&detail, false).state.takes_messages();
   if after_turn_run(&detail, reads, id).is_none() {
@@ -105,8 +128,20 @@ pub fn send_after_turn_in(repo_root: &Path, task: TaskId, id: MessageId) -> Resu
     .into_iter()
     .find(|message| message.id() == id)
     .ok_or(SendError::NotUndelivered)?;
+  let Sender::Person { recipient, .. } = *before.sender() else {
+    return Err(SendError::NotUndelivered);
+  };
+  if by == Answerer::Automation
+    && answers_question(&detail, recipient)
+    && !allowed(DecisionKind::Question).map_err(SendError::Store)?
+  {
+    return Err(SendError::NotAllowed);
+  }
   let mut message = before.clone();
   message.send_after_turn().map_err(|_| SendError::NotUndelivered)?;
+  if by == Answerer::Automation {
+    message = message.sent_by_automation().map_err(|_| SendError::NotUndelivered)?;
+  }
   // The runner may deliver it meanwhile, when the CLI takes it late after all: then it was not sent
   // again.
   if !db.change_delivery(&before, &message).map_err(SendError::Store)? {

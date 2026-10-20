@@ -17,7 +17,7 @@
       "ended": "{{agent}} no longer waits for an answer: it ended without one.",
       "answered": "It was answered already.",
       "superseded": "This plan no longer waits for a decision: a later version came, or the run went on.",
-      "personOnly": "Only a person answers this here: input from an MCP client answers only while you let automation answer approvals and change agent permissions.",
+      "personOnly": "Only a person answers this here: input from an MCP client answers only while you let automation answer approvals.",
       "widerPersonOnly": "Only a person gives a wider answer: automation approves a request once or denies it."
     },
     "question": {
@@ -141,6 +141,8 @@
         "broadFolder": "Not available for a drive root, a home folder or a folder less than two levels below one: approve each read.",
         "everyCall": "Not available: this check's access rules ask before every call."
       },
+      "project": "Approve for every run of this project",
+      "projectCovers": "{{server}} {{tool}} in every run of this project while tools/qa-app.ps1 is unchanged (git blob {{script}}). A changed script asks again; revoke the rule in Project settings › Auto mode. Approves this one too.",
       "everything": "Approve everything in this run",
       "everythingCovers": "Approves this one; then Run {{run}} answers its worktree commands and MCP calls itself. Network commands, writes outside the worktree, secrets, installs and destructive commands still ask you.",
       "everythingOn": "On already: Run {{run}} answers its requests itself, and leaves this one to you, as it never answers a request like it.",
@@ -167,7 +169,8 @@
         "endedNow": "Ended without an answer · {{agent}} no longer waits",
         "deniedAt": "Denied at {{time}}",
         "deniedUntimed": "Denied",
-        "approvedUntimed": "Approved"
+        "approvedUntimed": "Approved",
+        "project": "Approved for every run of this project · by you at {{time}}"
       },
       "firstLine": "{{line}} …",
       "denyTellsCodexLabel": "Deny declines it, and Codex tells {{agent}}:",
@@ -176,8 +179,10 @@
       "confirm": {
         "similarTitle": "Approve similar requests until Run {{run}} ends?",
         "everythingTitle": "Let Run {{run}} answer its requests itself?",
+        "projectTitle": "Approve {{tool}} for every run of this project?",
         "similar": "Approve similar",
         "everything": "Approve everything",
+        "project": "Approve for every run",
         "keep": "Keep asking"
       }
     },

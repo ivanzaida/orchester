@@ -40,6 +40,8 @@ use tokio::runtime::Runtime;
 
 pub mod link_press;
 pub mod reads;
+#[path = "../../../workspace/tests/support/runner_programs.rs"]
+pub mod runner_programs;
 pub mod signed_in;
 pub mod stand_ins;
 

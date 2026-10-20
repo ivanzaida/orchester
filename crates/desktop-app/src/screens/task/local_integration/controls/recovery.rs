@@ -47,13 +47,7 @@ fn rows(ctx: &Ctx, operation: &LocalOperation, reviewing_commit: bool) -> Elemen
   let rows = [
     ("local_integration.operation", operation.run().to_string()),
     ("local_integration.preparation", preparation(ctx, operation)),
-    (
-      "local_integration.mergeRecord",
-      operation.merged().map_or_else(
-        || ctx.t("local_integration.notRecorded").to_string(),
-        |merged| display::short_revision(merged).to_owned(),
-      ),
-    ),
+    ("local_integration.mergeRecord", merge(ctx, operation)),
     (
       "local_integration.restoration",
       ctx.t(restoration(operation, reviewing_commit)).to_string(),
@@ -67,6 +61,21 @@ fn rows(ctx: &Ctx, operation: &LocalOperation, reviewing_commit: bool) -> Elemen
         .child(Text::new(&value).variant(LocalText::Value.role()))
     }))
     .into()
+}
+
+/// The run's merge: the commit that held its work when it was found merged without Orchester, also once recorded as
+/// the record's own, or Orchester's.
+fn merge(ctx: &Ctx, operation: &LocalOperation) -> String {
+  match (operation.merged(), operation.merged_outside()) {
+    (Some(merged), None) => display::short_revision(merged).to_owned(),
+    (_, Some(outside)) => ctx
+      .t_args(
+        "local_integration.mergedOutside",
+        [("commit", display::short_revision(outside))],
+      )
+      .to_string(),
+    (None, None) => ctx.t("local_integration.notRecorded").to_string(),
+  }
 }
 
 fn record(ctx: &Ctx) -> Column {

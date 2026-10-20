@@ -7,15 +7,22 @@ use std::{collections::BTreeMap, num::NonZeroU32};
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
-  run::{BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber, StepExecutor},
+  run::{
+    AttemptReason, BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber,
+    StepExecutor,
+  },
   sharing::TaskRevision,
   store::RunStore,
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
+pub(super) use self::load::sequence_value;
 use self::{
-  columns::{attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text, step_status_columns},
+  columns::{
+    attempt_conflicts_column, attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text,
+    step_status_columns,
+  },
   load::{load_checkpoint, load_events, load_runs},
 };
 use super::{
@@ -256,6 +263,13 @@ impl ProjectDb {
     if continues && super::worktree_removals::removal(&transaction, run.id())?.is_some() {
       return Err(RunStoreError::WorktreeRemoved(run.id()));
     }
+    if continues && super::resolutions::resolution(&transaction, run.id())?.is_some() {
+      return Err(RunStoreError::Resolving(run.id()));
+    }
+    // Work returned after the run ended goes on only while it is not merged: the merge stands for what the run did.
+    if events.iter().any(returns_after_end) && super::merges::merged(&transaction, run.id())? {
+      return Err(RunStoreError::Merged(run.id()));
+    }
     let stored: Option<i64> = transaction
       .query_row(
         "SELECT last_sequence FROM runs WHERE id = ?1",
@@ -409,8 +423,8 @@ fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError
 /// Inserts new attempts and executions and updates the status of existing ones.
 fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError> {
   let mut attempt_statement = transaction.prepare_cached(
-    "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
+    "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status, conflicts) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
   )?;
   let mut execution_statement = transaction.prepare_cached(
     "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure, \
@@ -429,6 +443,7 @@ fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreE
       reason.return_to,
       reason.note,
       attempt_status_text(attempt.status()),
+      attempt_conflicts_column(attempt.reason())?,
     ])?;
     for execution in attempt.executions() {
       let (profile_version, model) = match run.snapshot().step(execution.step()).map(|step| step.executor()) {
@@ -526,4 +541,15 @@ pub(super) fn stored_status(
       )
     })
     .transpose()
+}
+
+/// Whether `event` starts an attempt that returns the work of an ended run.
+fn returns_after_end(event: &RunEvent) -> bool {
+  matches!(
+    event.kind(),
+    RunEventKind::AttemptStarted {
+      reason: AttemptReason::ReturnedAfterEnd { .. },
+      ..
+    }
+  )
 }

@@ -17,7 +17,10 @@ use orchester_workspace::{
   orchestrator::facts::{Facts, Publication, RunFacts, Stands},
 };
 
-use super::super::{card::State, proposal::waits};
+use super::{
+  super::{card::State, proposal::waits},
+  control::{Control, control},
+};
 use crate::{
   routes::Screen,
   ui::{button::ButtonKind, icon::Icon},
@@ -148,7 +151,11 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
         .collect::<Vec<_>>();
       super::answer::answer(ctx, view, (*number, &answer.join(&separator)))
     }
-    Some(Change::Message { number, text, .. }) => super::answer::message(ctx, view, (*number, text)),
+    Some(Change::Message { number, text, then, .. }) => super::answer::message(ctx, view, (*number, text, *then)),
+    Some(Change::Pause { number, .. }) => control(ctx, view, (Control::Pause, Some(*number), None)),
+    Some(Change::Resume { number, .. }) => control(ctx, view, (Control::Resume, Some(*number), None)),
+    Some(Change::Release { task }) => control(ctx, view, (Control::Release, None, task.as_deref())),
+    Some(Change::Continue { number, choice, .. }) => super::continuation::continuation(ctx, view, (*number, choice)),
     None => start(ctx, view),
   }
 }
@@ -314,6 +321,13 @@ fn cancel(ctx: &Ctx, view: &View, number: u32) -> Words {
 }
 
 fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
+  let outside = view.run().and_then(|facts| match &facts.stands {
+    Stands::MergedOutside { into } => Some(into.as_str()),
+    _ => None,
+  });
+  if let (Phase::Waits, Some(outside)) = (view.phase(), outside) {
+    return merged_outside(ctx, view, (number, outside));
+  }
   let run = number.to_string();
   let args = [
     ("run", run.as_str()),
@@ -358,6 +372,26 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
       glyph: Icon::GitMerge,
       kind: ButtonKind::Primary,
     }),
+    person_only: "orchestrator.change.personOnly.merge",
+  }
+}
+
+/// A proposed merge of a run whose work git finds in `into` already, merged without Orchester (`RWBN8`): it no
+/// longer waits for the person and has nothing to accept or dismiss, since merging it again is refused.
+fn merged_outside(ctx: &Ctx, view: &View, (number, into): (u32, &str)) -> Words {
+  let run = number.to_string();
+  let args = [("run", run.as_str()), ("task", view.task()), ("into", into)];
+  Words {
+    glyph: Icon::GitMerge,
+    title: ctx.t_args("orchestrator.change.merge.outsideTitle", args),
+    auto_mode: false,
+    state: State {
+      glyph: Icon::CircleCheck,
+      color: PaletteColor::Success,
+      words: ctx.t("orchestrator.change.merge.outsideState"),
+    },
+    effect: ctx.t_args("orchestrator.change.merge.effectOutside", args),
+    accept: None,
     person_only: "orchestrator.change.personOnly.merge",
   }
 }

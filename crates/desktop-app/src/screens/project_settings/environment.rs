@@ -312,6 +312,7 @@ impl Environment {
       WidenProps {
         id: "settings-environment-question".into(),
         card: false,
+        affirming: false,
         automation: crate::mcp::input_gate::Guarded::PermissionWidening,
         title: ctx.t("project_settings.confirmEnvironment"),
         reasons: reasons.into(),

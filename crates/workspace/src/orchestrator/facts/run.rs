@@ -16,6 +16,7 @@ use crate::{
   display::short_revision,
   tasks::{
     changes::{Checkpointed, checkpointed_in},
+    delivery::{self, Delivery},
     detail::run_store_error,
     run_times::finished_at,
     standing::CurrentStep,
@@ -40,10 +41,13 @@ pub(super) fn read(
     .resource(run.snapshot().pipeline().resource)?
     .map(|found| found.name().as_str().to_owned())
     .unwrap_or_default();
-  let stands = stands(db, &run)?;
-  let changes = matches!(stands, Stands::Ready { .. } | Stands::Merged { .. })
-    .then(|| changes(root, programs, &run))
-    .flatten();
+  let stands = stands(db, (root, programs), &run)?;
+  let changes = matches!(
+    stands,
+    Stands::Ready { .. } | Stands::Merged { .. } | Stands::MergedOutside { .. }
+  )
+  .then(|| changes(root, programs, &run))
+  .flatten();
   Ok(Some(RunFacts {
     run: run.id(),
     number: run.number().get(),
@@ -56,8 +60,9 @@ pub(super) fn read(
   }))
 }
 
-/// Where `run` stands.
-fn stands(db: &ProjectDb, run: &Run) -> Result<Stands, StoreError> {
+/// Where `run` stands; git in the checkout at `root` tells a succeeded run Orchester did not merge that was merged
+/// outside it, as the task's Summary does.
+fn stands(db: &ProjectDb, (root, programs): (&Path, &Programs), run: &Run) -> Result<Stands, StoreError> {
   let step = || CurrentStep::of(run).map(|step| (step.number, step.name.to_string()));
   let tokens = run.used().get();
   Ok(match run.status() {
@@ -66,12 +71,16 @@ fn stands(db: &ProjectDb, run: &Run) -> Result<Stands, StoreError> {
         at: merge.merged_at,
         revision: short_revision(merge.revision.as_str()).to_owned(),
       },
-      None => Stands::Ready {
-        since: finished_at(db, run)?,
+      None => match delivery::of_run(programs, root, run) {
+        Delivery::MergedOutside(into) => Stands::MergedOutside { into: into.to_string() },
+        Delivery::Waiting | Delivery::NothingToMerge => Stands::Ready {
+          since: finished_at(db, run)?,
+        },
       },
     },
-    RunStatus::Cancelled => Stands::Cancelled { step: step(), tokens },
+    RunStatus::Cancelled => Stands::Cancelled,
     RunStatus::Failed(_) => Stands::Failed,
+    RunStatus::WaitingForPerson(_) => Stands::Decision { tokens },
     _ => Stands::Going { step: step(), tokens },
   })
 }

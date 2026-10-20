@@ -2,7 +2,7 @@
 //! answered once, or interrupted when the asking agent can no longer take an answer.
 
 use orchester_core::{
-  id::{InvocationId, MessageId, RunId},
+  id::{ChatId, InvocationId, MessageId, RunId},
   orchestrator::FromOrchestrator,
   question::{Answer, AskedQuestions, GivenAnswer, Question, QuestionRequest, QuestionState, QuestionTurn},
   run::Answerer,
@@ -18,7 +18,7 @@ use crate::{
 
 /// The columns [`StoredQuestions::read`] reads, in its order.
 const COLUMNS: &str = "id, run_id, step_execution_id, invocation_id, agent, questions, turn, asked_at, state, answers, \
-                       answered_by, ended_at, message_id, by_orchestrator, orchestrator_chat, orchestrator_way";
+                       answered_by, ended_at, message_id, by_orchestrator, orchestrator_chat";
 
 impl ProjectDb {
   /// Records request `request`, waiting for its answer. A repeated id in the run is refused.
@@ -125,26 +125,21 @@ impl ProjectDb {
   pub fn undelivered_questions(&mut self, run: RunId, id: &str) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE questions SET state = 'interrupted', answers = NULL, answered_by = NULL, message_id = NULL, \
-       by_orchestrator = 0, orchestrator_chat = NULL, orchestrator_way = NULL \
+       by_orchestrator = 0, orchestrator_chat = NULL \
        WHERE run_id = ?1 AND id = ?2 AND state = 'answered'",
       params![run.to_string(), id],
     )?;
     Ok(())
   }
 
-  /// The Orchestrator chat answered request `id` of `run`, as automation, from the conversation and in the way `from`
-  /// says, and the runner recorded it: its card names the chat. Only an answer automation gave is marked; whether it
-  /// was marked.
-  pub fn mark_answered_by_orchestrator(
-    &mut self,
-    (run, id): (RunId, &str),
-    from: FromOrchestrator,
-  ) -> Result<bool, StoreError> {
-    let columns = OrchestratorColumns::of(Some(from));
+  /// The Orchestrator chat of conversation `chat` wrote the answer to request `id` of `run`, and the runner recorded
+  /// it: its card names the chat, and how it went out is who answered (automation when the chat sent it, the person
+  /// when they applied its proposal). Whether it was marked.
+  pub fn mark_answered_by_orchestrator(&mut self, (run, id): (RunId, &str), chat: ChatId) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
-      "UPDATE questions SET by_orchestrator = 1, orchestrator_chat = ?3, orchestrator_way = ?4 \
-       WHERE run_id = ?1 AND id = ?2 AND state = 'answered' AND answered_by = 'automation'",
-      params![run.to_string(), id, columns.chat, columns.way],
+      "UPDATE questions SET by_orchestrator = 1, orchestrator_chat = ?3 \
+       WHERE run_id = ?1 AND id = ?2 AND state = 'answered'",
+      params![run.to_string(), id, chat.to_string()],
     )?;
     Ok(changed == 1)
   }
@@ -201,7 +196,7 @@ impl StoredQuestions {
       answered_by: row.get(10)?,
       ended_at: row.get(11)?,
       message: row.get(12)?,
-      orchestrator: OrchestratorColumns::read(row, 13)?,
+      orchestrator: OrchestratorColumns::read(row, (13, 14))?,
     })
   }
 
@@ -242,11 +237,18 @@ impl StoredQuestions {
       .as_deref()
       .map(|message| parse("question answer message id", message))
       .transpose()?;
+    // Only an answer is the chat's; how it went out is who answered.
+    let orchestrator = match &state {
+      QuestionState::Answered { by, .. } if self.orchestrator.by => {
+        Some(FromOrchestrator::of(self.orchestrator.chat()?, *by))
+      }
+      _ => None,
+    };
     Ok(AskedQuestions {
       request,
       state,
       message,
-      orchestrator: self.orchestrator.from()?,
+      orchestrator,
     })
   }
 }

@@ -193,7 +193,9 @@ fn form(
   let listed = ModelId::new(model)
     .ok()
     .filter(|id| connection.models().iter().any(|listed| listed.id() == id));
+  // A connection on an API provider takes the effort its CLI does (`ProfileForm`), not a listed one.
   if let (Some(effort), Some(id)) = (&args.effort, &listed)
+    && connection.api_provider().is_none()
     && !effort_options(connection, id).iter().any(|offered| offered == effort)
   {
     let reason = Message::new("appMcp.errors.effortNotOffered")
@@ -215,7 +217,13 @@ fn form(
   }
   .profile()
   .map_err(|errors| {
-    let reasons = [errors.role, errors.instructions, errors.connection, errors.model];
+    let reasons = [
+      errors.role,
+      errors.instructions,
+      errors.connection,
+      errors.model,
+      errors.effort,
+    ];
     ToolError::refused("invalid_profile", reasons.into_iter().flatten().collect())
   })
 }

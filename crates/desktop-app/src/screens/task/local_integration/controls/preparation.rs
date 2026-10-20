@@ -20,7 +20,7 @@ impl Inspector {
       )
       .into(),
     ];
-    actions.extend(self.cancellation(ctx, props, "local-review-cancel"));
+    actions.extend(self.cancellation(ctx, props, "local-review-cancel", ButtonKind::Ghost));
     actions
   }
 
@@ -82,12 +82,12 @@ impl Inspector {
       ));
     }
     panel
-      .with_children(self.cancellation(ctx, props, "local-review-cancel-partial"))
+      .with_children(self.cancellation(ctx, props, "local-review-cancel-partial", ButtonKind::Ghost))
       .child(guard_note(ctx, note))
       .into()
   }
 
-  pub(super) fn cancellation(&self, ctx: &Ctx, props: &Props, id: &str) -> Option<Element> {
+  pub(super) fn cancellation(&self, ctx: &Ctx, props: &Props, id: &str, kind: ButtonKind) -> Option<Element> {
     let operation = props.view.operation.as_ref()?;
     if !operation.can_cancel() || !operation.reserves_checkout() {
       return None;
@@ -97,6 +97,6 @@ impl Inspector {
     } else {
       "local_integration.release"
     };
-    Some(mode_button(ctx, props, (id, ButtonKind::Ghost), label, Mode::Cancel).into())
+    Some(mode_button(ctx, props, (id, kind), label, Mode::Cancel).into())
   }
 }

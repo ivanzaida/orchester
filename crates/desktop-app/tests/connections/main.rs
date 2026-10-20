@@ -14,7 +14,10 @@ mod support;
 
 mod accounts;
 mod add_cli;
+mod api_provider;
 mod harness;
+mod layout;
 mod list;
 mod mcp;
+mod qa_scenarios;
 mod reads;

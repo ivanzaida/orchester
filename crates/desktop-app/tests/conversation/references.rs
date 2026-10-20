@@ -1,6 +1,7 @@
 //! Places an agent's message in a task's conversation names as plain text are links, as in the Orchestrator's chat
-//! (`ui::chat::references`): a key of one of the project's tasks and an app route path of a place in a project,
-//! outside code; an unknown key, a route outside a project and code stay text. Every in-app link opens by a
+//! (`ui::chat::references`): a key of one of the project's tasks and an app route path of a place in a project, as
+//! text or as all a code span holds; an unknown key, a route outside a project and a path inside longer code stay
+//! as written. Every in-app link opens by a
 //! browser's rules (`support::link_press`).
 
 use orchester_app::routes::{ProjectPage, Route, TaskView};
@@ -34,6 +35,7 @@ fn conversation_message_links_task_keys_and_routes_and_opens_them_by_browser_rul
   let project = seeded.project;
   let changes = format!("/project/{project}/tasks/{other}/changes");
   let code = format!("/project/{project}/tasks/{other}/conversation");
+  let longer = format!("/project/{project}/tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's database");
   let task = db
     .tasks()
@@ -53,13 +55,14 @@ fn conversation_message_links_task_keys_and_routes_and_opens_them_by_browser_rul
     .expect("invocations")
     .pop()
     .expect("an invocation");
-  let said = format!("Like {other}: see {changes}. Not KON-999, /settings or `{code}`.");
+  let said = format!("Like {other}: see {changes} and `{code}`. Not KON-999, /settings or `open {longer}`.");
   db.append_activity(&invocation, &[(Timestamp::now(), AgentEvent::Message { text: said })])
     .expect("the message");
   open(&mut window, &seeded, &key, "conversation-chat");
   window.until("the linked message", |window| is_link(window, &other));
   assert!(is_link(&mut window, &changes), "a route path is a link");
-  for text in ["KON-999", "/settings", code.as_str()] {
+  assert!(is_link(&mut window, &code), "a code span of a route path is a link");
+  for text in ["KON-999", "/settings", longer.as_str()] {
     assert!(!is_link(&mut window, text), "{text} stays text");
   }
 

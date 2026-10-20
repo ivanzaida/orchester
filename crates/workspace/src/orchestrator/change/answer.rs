@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   conversation::MessageBody,
-  orchestrator::change::{Change, ProposedChange},
+  orchestrator::change::{Change, MessageThen, ProposedChange},
   question::GivenAnswer,
 };
 use orchester_store::ProjectDb;
@@ -16,7 +16,9 @@ use serde_json::{Value, json};
 
 use super::run_subject;
 use crate::{
-  app_mcp::{ToolError, check_answer, find_run, outgoing_refusal, plan_person_only, waiting_request},
+  app_mcp::{
+    SendTiming, ToolError, check_answer, find_run, outgoing_refusal, plan_person_only, sent_as, waiting_request,
+  },
   messages::Message,
   tasks::conversation::{
     composer::ComposerMode,
@@ -106,21 +108,46 @@ pub(super) fn message_change(root: &Path, sending: Sending) -> Result<(ProposedC
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &named)?;
   let prepared = prepare_in(root, (run.task(), Some(run.id())), (false, None)).map_err(outgoing_refusal)?;
-  match prepared.mode {
+  let then = match prepared.mode {
     ComposerMode::PlanChanges { .. } => return Err(plan_person_only()),
     ref mode if mode.then().is_none() => {
       return Err(outgoing_refusal(OutgoingError::Closed(prepared.conversation.state)));
     }
-    _ => {}
-  }
+    ref mode => moves(mode),
+  };
+  let sent_as = sent_as(
+    &prepared.mode,
+    Some(if now { SendTiming::Now } else { SendTiming::AfterTurn }),
+  );
   let (subject, task) = run_subject(&db, &run)?;
   let change = Change::Message {
     run: run.id(),
     number: run.number().get(),
     text: text.into(),
     now,
+    then,
+    sent_as: Some(sent_as.to_owned()),
   };
   Ok((ProposedChange { subject, change }, task))
+}
+
+/// What sending a message in `mode` does to a run none of whose agents waits or works, as the task's composer sends
+/// it; `None` when an agent reads it as it waits or works, or it waits for one.
+const fn moves(mode: &ComposerMode) -> Option<MessageThen> {
+  match mode {
+    ComposerMode::FollowUp => Some(MessageThen::FollowUp),
+    ComposerMode::Continue => Some(MessageThen::Continue),
+    ComposerMode::Resume { interrupted: false } => Some(MessageThen::Resume),
+    ComposerMode::Resume { interrupted: true } => Some(MessageThen::ContinueInterrupted),
+    ComposerMode::RaiseLimit => Some(MessageThen::RaiseLimit),
+    ComposerMode::RunAgain => Some(MessageThen::RunAgain),
+    ComposerMode::Steer(_)
+    | ComposerMode::Queue(_)
+    | ComposerMode::Answer { .. }
+    | ComposerMode::PlanChanges { .. }
+    | ComposerMode::NotStarted
+    | ComposerMode::Closed => None,
+  }
 }
 
 /// Adds the words of an answer or a message to the tool's `arguments`; nothing for another change.
@@ -140,6 +167,12 @@ pub(super) fn words(change: &Change, arguments: &mut JsonObject) {
       let timing = if *now { "now" } else { "after_turn" };
       arguments.insert("timing".to_owned(), json!(timing));
     }
-    Change::Publish { .. } | Change::Cancel { .. } | Change::Merge { .. } => {}
+    Change::Publish { .. }
+    | Change::Cancel { .. }
+    | Change::Merge { .. }
+    | Change::Continue { .. }
+    | Change::Pause { .. }
+    | Change::Resume { .. }
+    | Change::Release { .. } => {}
   }
 }

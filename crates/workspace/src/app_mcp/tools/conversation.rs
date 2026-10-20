@@ -25,7 +25,7 @@ use crate::{
   tasks::{
     conversation::{
       Author, Entry as MessageEntry, EntryState,
-      orchestrator::{Proposal, proposals},
+      orchestrator::{Proposal, message_offer, proposals},
       outgoing::conversation_of,
     },
     detail::{RunView, TaskDetail},
@@ -117,10 +117,8 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<
   };
   let transcript = transcript_in(root, run.id())?;
   let requests = requests_in(root, run.id())?;
-  let proposed = proposals(
-    &requests.orchestrated,
-    (conversation.state.takes_messages(), &requests.questions),
-  );
+  let offered = message_offer(detail, run.id());
+  let proposed = proposals(&requests.orchestrated, (offered.as_ref(), &requests.questions));
   let items = timeline::build(&Sources {
     run,
     entries: &transcript,
@@ -202,11 +200,12 @@ fn agent_author(agent: &str) -> Value {
   json!({ "kind": "agent", "name": agent })
 }
 
-/// Who wrote a message: an agent, the person, or the Orchestrator chat on the person's side, with how it went out and
-/// the chat's conversation it came from; and whom to.
+/// Who wrote a message: an agent, the person, automation, or the Orchestrator chat on the person's side, with how it
+/// went out and the chat's conversation it came from; and whom to.
 fn sender(message: &MessageEntry) -> Value {
   let mut author = match message.orchestrator {
     Some(from) => orchestrated::author(from),
+    None if message.by_automation => json!({ "kind": "automation" }),
     None => json!({ "kind": "person" }),
   };
   match &message.author {
@@ -243,9 +242,10 @@ fn choice_body(asked: &AskedQuestions) -> Value {
         .iter()
         .map(|answer| json!({ "choices": answer.choices(), "text": answer.text() }))
         .collect();
+      // The chat's answer is the Orchestrator's, whether it sent it or the person applied it.
       let by = match by {
+        _ if asked.orchestrator.is_some() => "orchestrator",
         Answerer::Person => "person",
-        Answerer::Automation if asked.orchestrator.is_some() => "orchestrator",
         Answerer::Automation => "automation",
       };
       ("answered", json!(given), json!(by))

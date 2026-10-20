@@ -7,18 +7,13 @@
 //! that went through clears its words from here itself, whether or not a page still shows the task. A task
 //! with nothing kept has no entry.
 
-use std::{
-  collections::HashMap,
-  sync::{
-    LazyLock,
-    atomic::{AtomicU64, Ordering},
-  },
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use orchester_core::id::{IdempotencyKey, MessageId, TaskId};
 use orchester_workspace::tasks::conversation::outgoing::{Action, Way};
-use parking_lot::Mutex;
 use tokio::sync::watch;
+
+use crate::screens::kept::{ByKey, Entry};
 
 /// Words sent, how, and the key they are stored under.
 struct Attempt {
@@ -49,7 +44,7 @@ struct Kept {
   flight: Option<Flight>,
 }
 
-impl Kept {
+impl Entry for Kept {
   fn is_empty(&self) -> bool {
     self.draft.is_empty() && self.attempt.is_none() && self.put_back.is_empty() && self.flight.is_none()
   }
@@ -57,31 +52,16 @@ impl Kept {
 
 static GENERATION: AtomicU64 = AtomicU64::new(1);
 
-static KEPT: LazyLock<Mutex<HashMap<TaskId, Kept>>> = LazyLock::new(Mutex::default);
-
-/// Changes what is kept of `task`; an entry left with nothing goes.
-fn change<T>(task: TaskId, change: impl FnOnce(&mut Kept) -> T) -> T {
-  let mut all = KEPT.lock();
-  let kept = all.entry(task).or_default();
-  let changed = change(kept);
-  if kept.is_empty() {
-    all.remove(&task);
-  }
-  changed
-}
-
-fn read<T: Default>(task: TaskId, read: impl FnOnce(&Kept) -> T) -> T {
-  KEPT.lock().get(&task).map(read).unwrap_or_default()
-}
+static KEPT: ByKey<TaskId, Kept> = ByKey::new();
 
 pub(super) fn draft(task: TaskId) -> String {
-  read(task, |kept| kept.draft.clone())
+  KEPT.read(task, |kept| kept.draft.clone())
 }
 
 /// The draft of `task` is `text` now: a message put back whose words are gone from it offers again,
 /// unless they were sent.
 pub(super) fn set_draft(task: TaskId, text: &str) {
-  change(task, |kept| {
+  KEPT.change(task, |kept| {
     text.clone_into(&mut kept.draft);
     kept.put_back.retain(|put| put.sent || text.contains(&put.text));
   });
@@ -90,7 +70,7 @@ pub(super) fn set_draft(task: TaskId, text: &str) {
 /// The key `text` of `task`, sent `how`, is stored under: the one of the last attempt when neither the
 /// words nor how they are sent changed.
 pub(super) fn key_for(task: TaskId, text: &str, how: (Way, Action)) -> IdempotencyKey {
-  change(task, |kept| match &kept.attempt {
+  KEPT.change(task, |kept| match &kept.attempt {
     Some(attempt) if attempt.text == text && attempt.how == how => attempt.key,
     _ => {
       let key = IdempotencyKey::generate();
@@ -107,7 +87,7 @@ pub(super) fn key_for(task: TaskId, text: &str, how: (Way, Action)) -> Idempoten
 /// `text` of `task`, sent under `key`, went through: its attempt goes, the draft empties unless it holds
 /// other words by now, and messages put back that it holds were sent.
 pub(super) fn stored(task: TaskId, key: IdempotencyKey, text: &str) {
-  change(task, |kept| {
+  KEPT.change(task, |kept| {
     if kept.attempt.as_ref().is_some_and(|attempt| attempt.key == key) {
       kept.attempt = None;
     }
@@ -122,12 +102,12 @@ pub(super) fn stored(task: TaskId, key: IdempotencyKey, text: &str) {
 
 /// The refused messages of `task` put back into the composer that offer nothing more.
 pub(super) fn handled(task: TaskId) -> Vec<MessageId> {
-  read(task, |kept| kept.put_back.iter().map(|put| put.message).collect())
+  KEPT.read(task, |kept| kept.put_back.iter().map(|put| put.message).collect())
 }
 
 /// The refused message `message` of `task`, which says `text`, was put back into the composer.
 pub(super) fn handle(task: TaskId, message: MessageId, text: &str) {
-  change(task, |kept| {
+  KEPT.change(task, |kept| {
     if !kept.put_back.iter().any(|put| put.message == message) {
       kept.put_back.push(PutBack {
         message,
@@ -142,7 +122,7 @@ pub(super) fn handle(task: TaskId, message: MessageId, text: &str) {
 pub(super) fn begin(task: TaskId) -> (u64, watch::Sender<bool>) {
   let generation = GENERATION.fetch_add(1, Ordering::Relaxed);
   let (ended, receiver) = watch::channel(false);
-  change(task, |kept| {
+  KEPT.change(task, |kept| {
     kept.flight = Some(Flight {
       generation,
       ended: receiver,
@@ -153,7 +133,7 @@ pub(super) fn begin(task: TaskId) -> (u64, watch::Sender<bool>) {
 
 /// The send `generation` of `task` ended, however it ended.
 pub(super) fn end(task: TaskId, (generation, ended): (u64, watch::Sender<bool>)) {
-  change(task, |kept| {
+  KEPT.change(task, |kept| {
     if kept
       .flight
       .as_ref()
@@ -168,5 +148,5 @@ pub(super) fn end(task: TaskId, (generation, ended): (u64, watch::Sender<bool>))
 
 /// The send of `task` under way, if one is.
 pub(super) fn flight(task: TaskId) -> Option<Flight> {
-  KEPT.lock().get(&task).and_then(|kept| kept.flight.clone())
+  KEPT.read(task, |kept| kept.flight.clone())
 }

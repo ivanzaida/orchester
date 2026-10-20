@@ -30,7 +30,10 @@ use orchester_core::{id::InvocationId, run::RunStatus};
 use orchester_workspace::{
   messages::Message,
   tasks::{
-    conversation::{Conversation, PanelState, orchestrator::proposals},
+    conversation::{
+      Conversation, PanelState,
+      orchestrator::{message_offer, proposals},
+    },
     detail::RunView,
     timeline::{
       self as items, Item, ItemKind, Sources,
@@ -189,10 +192,9 @@ impl ConversationTab {
       pending: loaded.pending.clone(),
       decided: loaded.decided.clone(),
     });
-    let proposed = proposals(
-      &loaded.orchestrated,
-      (conversation.state.takes_messages(), &loaded.questions),
-    );
+    // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
+    let offered = message_offer(&task.detail, run.id());
+    let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
     let working = working_line(run, conversation, (&items, &loaded.entries), asking);
     let arrived = arrivals(&items, &loaded.entries) + proposed.len();
     let chat = timeline::chat(ctx, &self.follow, (&shown, &items, &proposed), (working, arrived));
