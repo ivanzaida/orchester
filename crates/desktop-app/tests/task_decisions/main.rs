@@ -14,6 +14,7 @@ mod links;
 mod merge;
 mod pull_request;
 mod resolve;
+mod return_ended;
 #[path = "../support/mod.rs"]
 mod support;
 mod unverified;

@@ -83,6 +83,8 @@
         "one": "{{label}} sent the work back to {{target}} once and the pipeline’s retry limit is reached. The run waits for your decision; nothing runs until you choose.",
         "other": "{{label}} sent the work back to {{target}} {{count}} times and the pipeline’s retry limit is reached. The run waits for your decision; nothing runs until you choose."
       },
+      "noRouteNoticeTitle": "{{step}} found the work failing",
+      "noRouteNoticeBody": "{{label}} reported failed when it was asked again, and the pipeline has no step to send the work back to from it. The run waits for your decision; nothing runs until you choose.",
       "unverifiedNoticeTitle": {
         "one": "Unverified: {{step}} could not check 1 thing",
         "other": "Unverified: {{step}} could not check {{count}} things"
@@ -117,6 +119,14 @@
       "notePlaceholder": "What should {{agent}} change?",
       "returnWithNote": "Return to {{step}} with note",
       "stop": "Stop and fail the run"
+    },
+    "returnEnded": {
+      "title": "Return the work to an earlier step",
+      "body": "The run reopens at the step you choose, whose agent reads your note; the steps after it run again.",
+      "returnTo": "Return the work to",
+      "noteFor": "Note for {{agent}} · required",
+      "notePlaceholder": "What should {{agent}} change?",
+      "returnWithNote": "Return to {{step}} with note"
     },
     "ready": {
       "title": "Ready for your review",

@@ -8,6 +8,7 @@ mod code_index;
 mod conversation;
 mod failed_recovery;
 mod fixture;
+mod follow_up_routing;
 mod lifecycle;
 mod limits;
 mod memory_prompt;

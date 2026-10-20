@@ -116,7 +116,13 @@ impl Component for TaskSummary {
     };
     let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
-      Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run, section),
+      Some(run) if run.run.status().is_terminal() => {
+        // A Not shared task is read-only: its run goes back to no step either.
+        let lead = (!detail.not_shared())
+          .then(|| decisions::return_card(ctx, &props.task))
+          .flatten();
+        run_details::run_details(ctx, &props.task, run, (lead, section))
+      }
       Some(run) => this_run::this_run(ctx, run, (&root, props.task.lost()), (None, section)),
       None => this_task(ctx, &props.task, section),
     };

@@ -114,7 +114,9 @@ impl Run {
   /// follows the step's failure route while it has retries left, a breakage restarts the step once,
   /// and with no route left the run fails or waits for a person. Open executions of the ending
   /// attempt — steps running in parallel included — are skipped either way, so their agents must be
-  /// ended. A follow-up that fails is not routed: the run is succeeded again with the result it had.
+  /// ended. A follow-up whose step judged the work failed is routed the same way, and waits for a person
+  /// where the pipeline has no route ([`Run::after_follow_up_failure`]); one that failed otherwise is not
+  /// routed: the run is succeeded again with the result it had.
   pub fn fail_step(
     &mut self,
     execution: StepExecutionId,
@@ -141,16 +143,20 @@ impl Run {
         revision,
       })?;
       transition.skip_open()?;
-      if follow_up {
-        return transition.record(RunEventKind::FollowUpFailed);
-      }
       let step = transition
         .run
         .execution(execution)
         .expect("StepFailed was accepted for this execution")
         .step()
         .clone();
-      let next = transition.run.after_failure(&step, reason);
+      let next = if follow_up {
+        transition
+          .run
+          .after_follow_up_failure(&step, reason)
+          .unwrap_or(RunEventKind::FollowUpFailed)
+      } else {
+        transition.run.after_failure(&step, reason)
+      };
       transition.record(next)
     })
   }

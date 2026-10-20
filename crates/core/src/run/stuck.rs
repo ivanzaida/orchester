@@ -114,6 +114,23 @@ impl Run {
     }
   }
 
+  /// What follows the failure of `step` for `reason` in a follow-up of a run that had succeeded (the project task
+  /// ORC-44): a verdict on the work routes the run as it would in any attempt — the step's failure route while it has
+  /// retries left, else a wait for a person — and where the pipeline has no route, the run waits for a person, who
+  /// returns the work or stops the run, instead of failing or staying succeeded. `None` for any other failure, which
+  /// leaves the run as it was.
+  pub(super) fn after_follow_up_failure(&self, step: &StepKey, reason: StepFailure) -> Option<RunEventKind> {
+    if !reason.is_verdict() {
+      return None;
+    }
+    Some(match self.after_failure(step, reason) {
+      RunEventKind::Failed { .. } => RunEventKind::WaitingForPerson {
+        reason: Stuck::RetriesExhausted(step.clone()),
+      },
+      next => next,
+    })
+  }
+
   /// How often `step` broke — failed without a verdict on its work — since it last passed, across
   /// attempts.
   fn breakages_since_passed(&self, step: &StepKey) -> usize {
@@ -159,7 +176,8 @@ impl Run {
   }
 
   /// The step one more retry of a waiting run starts from: the failure route's target after used-up
-  /// retries, the step itself after it broke again. `None` for a run that does not wait.
+  /// retries, the step itself after it broke again, or after a follow-up of a step without a route failed.
+  /// `None` for a run that does not wait.
   pub fn retry_from(&self) -> Option<&StepKey> {
     let RunStatus::WaitingForPerson(stuck) = self.status() else {
       return None;
@@ -282,13 +300,7 @@ impl Run {
           (AttemptReason::Restart { step: step.clone() }, step)
         }
         Stuck::RetriesExhausted(_) => {
-          let return_to = self
-            .snapshot()
-            .body()
-            .step(&step)
-            .and_then(|pinned| pinned.on_failure.as_ref())
-            .map(|route| route.return_to.clone())
-            .ok_or(RunError::NoFailureRoute(step.clone()))?;
+          let return_to = self.retry_from().unwrap_or(&step).clone();
           let reason = AttemptReason::Retry {
             failed_step: step,
             return_to: return_to.clone(),

@@ -42,6 +42,7 @@ mod pull_requests;
 mod reads;
 mod reads_setup;
 mod resolve;
+mod return_ended;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
 #[path = "../support/signed_in.rs"]

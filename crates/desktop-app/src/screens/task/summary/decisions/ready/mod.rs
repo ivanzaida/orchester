@@ -41,7 +41,9 @@ use self::{
   pull_request::PullRequestRead,
   resolve::{Asking, Offer, StepChoice},
 };
-use super::{super::run_details::run_details, TaskContext, arranged, runs_section, stages::stages};
+use super::{
+  super::run_details::run_details, TaskContext, arranged, return_ended::return_card, runs_section, stages::stages,
+};
 use crate::{mcp::input_gate::InputGate, services::Services};
 
 /// How often a merge waiting in the run's worktree is read again while the person resolves it.
@@ -153,7 +155,8 @@ impl Component for ReadyForReview {
     }
     let linked = crate::screens::task::sharing::linked(ctx, &props);
     let section = crate::screens::task::sharing::section(ctx, &props, (linked.as_ref(), None));
-    let side = run_details(ctx, &props, run, section);
+    let lead = return_card(ctx, &props);
+    let side = run_details(ctx, &props, run, (lead, section));
     arranged(ctx, parts, None, Some(side))
   }
 }
@@ -166,7 +169,7 @@ impl lurq::app::component::DevtoolsInspectable for InWorktree {}
 
 /// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its
 /// resolving changes and at each `look` while one waits; `None` while it is first read.
-fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
+pub(super) fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
   let services = Services::of(ctx);
   let root = task.project.open.repo_root.clone();
   let job = task.jobs.run(run);
