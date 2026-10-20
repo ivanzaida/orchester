@@ -20,6 +20,7 @@ pub mod import;
 pub mod integration;
 pub mod limits;
 pub mod memory;
+pub mod module;
 pub mod name;
 pub mod native;
 pub mod notification;

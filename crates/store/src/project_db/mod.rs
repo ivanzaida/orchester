@@ -23,6 +23,7 @@ mod mcp_servers;
 mod memory;
 mod merges;
 mod messages;
+mod modules;
 mod native;
 mod orchestrator;
 mod orchestrator_sent;
