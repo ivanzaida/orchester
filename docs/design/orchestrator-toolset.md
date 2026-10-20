@@ -50,13 +50,16 @@ person can click.
      Orchestrator merge runs* it merges at once, only a run the person asked it to merge. The merge keeps all of
      `merge_run`'s rules: only a task's latest run that succeeded, only when the main checkout needs no local
      integration, else refused (`needs_decision`, `merge_failed`); conflict choices and approving the merged result
-     stay the person's, on the Local integration page. The merge is kept in the conversation as an action.
+     stay the person's, on the Local integration page. The merge is kept in the conversation as an action. A
+     `merge_failed` of the chat's merge names the next step: for a merge that stopped at conflicting files, proposing
+     `continue_run` `resolve_conflicts` (below), naming the files; otherwise the Local integration page.
    - Both switches are off until a person turns them on; synthetic input cannot flip them (the same rule as *Let
      automation change agent permissions* and *Let the Orchestrator publish drafts*).
    - The chat may propose how a run that waits for a person's decision goes on (`continue_run`): only `allow_retry`
      (one more retry of the step that used up its retries or broke again, or the step that waits unverified or
-     unchanged run again) and `return_to` (an earlier agent step, with a note for its agent). It is always a proposal
-     card the person applies or dismisses, showing the run, the step it stopped at and why, the choice and the note.
+     unchanged run again), `return_to` (an earlier agent step, with a note for its agent) and `resolve_conflicts`
+     (below). It is always a proposal card the person applies or dismisses, showing the run, the step it stopped at
+     and why, the choice and the note.
      Applying is the person's own decision, recorded as theirs, exactly as the task's Summary decides it; it is
      refused when the run went on since it was proposed (a newer attempt). No switch lets the chat continue a run
      itself: none of the person's switches was given for it (*answer agents* is about what agents asked, *merge runs*
@@ -65,6 +68,18 @@ person can click.
      refused (`person_only`). Where `continue_run` returns a run that ended (succeeded or failed) to an earlier agent
      step (ORC-44), the chat may propose that `return_to` too, under the same rules; a turn a failure started may
      propose it.
+   - The chat may propose sending a run whose last merge into its base branch stopped at conflicts back to an agent
+     (`continue_run` `resolve_conflicts`, ORC-52): exactly what the task page's *Ask an agent to resolve* does, through
+     the same code (`tasks::return_work::resolve_command`): the work goes back to a step whose agent may write in the
+     worktree (the step the call names, else the one that implemented what conflicts, else the last writing step),
+     with the conflict's note (`conflict_note`) and the chat's optional note after it, and the conflicting files as
+     data beside the note. Always a proposal card naming the run, the step, the base branch, the conflicting files and
+     the note; applied, it is the person's decision, recorded as theirs, and the failed merge is forgotten as after the
+     page's button. Refused when the run's last merge in the app did not stop at conflicts (`merge_not_conflicted`),
+     for a step that may not write (`step_cannot_write`) or a run with none (`no_writing_step`), while git works on the
+     run (`integration_running`), and as a return is refused (`run_merged`, `worktree_removed`, `worktree_in_merge`,
+     `run_not_ended`). A proposal is refused (`changed_since_proposed`) once the run went on, or its merge no longer
+     stands at the conflicts it was proposed for (resolved, merged or returned from the task page).
    - The chat resumes only a run a pause stopped (`resume_run`). A run stopped at a limit (its token budget or time
      limit, the daily or a group's budget, a step's budget, an account's plan limit) or interrupted is the person's to
      resume or continue, and the chat's call is refused (`person_only`). A proposed resume the person applies is
@@ -135,7 +150,7 @@ project.
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
 | Tasks | `list_tasks`, `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing) | — |
-| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; only a run a pause stopped; both, and `release_queue`, only proposed in a turn Orchester started) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started), `continue_run` (`allow_retry` and `return_to` only, always proposed) |
+| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; only a run a pause stopped; both, and `release_queue`, only proposed in a turn Orchester started) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*; a message that moves a run is always proposed) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |

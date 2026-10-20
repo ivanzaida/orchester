@@ -140,12 +140,39 @@ pub fn command(
 /// its prompt as data beside it ([`MergeConflicts`]), never in its words. Written to an agent in English, as prompts
 /// are.
 pub fn conflict_note(base: &BranchName) -> ReviewNote {
+  conflict_note_with(base, None)
+}
+
+/// [`conflict_note`]'s words, followed by `extra`, what whoever asked adds for the agent, when it says anything.
+pub fn conflict_note_with(base: &BranchName, extra: Option<&str>) -> ReviewNote {
   let base = base.as_str();
-  ReviewNote::new(&format!(
+  let mut note = format!(
     "Merge {base} into this branch and resolve the conflicts listed below, keeping both sides' intent; for appended \
      lists such as migrations keep the base's entries first and put this run's after them; commit the merge."
-  ))
-  .expect("the note names the merge, so it is never blank")
+  );
+  if let Some(extra) = extra.map(str::trim).filter(|extra| !extra.is_empty()) {
+    note.push_str("\n\n");
+    note.push_str(extra);
+  }
+  ReviewNote::new(&note).expect("the note names the merge, so it is never blank")
+}
+
+/// What *Ask an agent to resolve* sends, and `continue_run`'s `resolve_conflicts`: `view`'s work returned to the
+/// writing step `step` with [`conflict_note_with`]'s note (`extra` after it) and the `files` a merge into the run's
+/// base branch conflicted in as data, decided by `by`. `None` for a run that names no base branch.
+pub fn resolve_command(
+  view: &RunView,
+  step: StepKey,
+  (files, extra): (&[String], Option<&str>),
+  by: Answerer,
+) -> Option<Command> {
+  let base = view.run.base_branch()?;
+  let conflicts = MergeConflicts {
+    base: base.clone(),
+    files: files.to_vec(),
+  };
+  let note = conflict_note_with(base, extra);
+  Some(command(view, step, (note, Some(conflicts)), by))
 }
 
 /// The step `run`'s current attempt returned its work to, to resolve a merge's conflicts, and what it resolves,
