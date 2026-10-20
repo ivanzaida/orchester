@@ -26,7 +26,11 @@ fn project_settings_general_shows_project_identity_and_saves_repository_agent_fi
 fn project_settings_general_turns_off_telling_working_agents_when_the_base_branch_moves() {
   let mut page = Settings::new(false);
   assert!(page.db().tells_base_moves().expect("setting"), "on by default");
-  assert!(page.text("settings-base-moved-row").contains("Tell working agents when the base branch moves"));
+  assert!(
+    page
+      .text("settings-base-moved-row")
+      .contains("Tell working agents when the base branch moves")
+  );
   page.click("settings-base-notices");
   page.until("base notices save", |p| !p.db().tells_base_moves().expect("saved"));
   page.saved();

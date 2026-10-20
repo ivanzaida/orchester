@@ -13,8 +13,7 @@ use orchester_core::{
   id::{InvocationId, NoticeId, RunId, StepExecutionId, TaskId},
   resource::InjectionEvent,
   revision::Revision,
-  run::BranchName,
-  run::{BaseMoved, CONTINUE_PROMPT, DeliveredMessages, MessageOccasion, PromptInput, notice_text},
+  run::{BaseMoved, BranchName, CONTINUE_PROMPT, DeliveredMessages, MessageOccasion, PromptInput, notice_text},
   time::Timestamp,
 };
 

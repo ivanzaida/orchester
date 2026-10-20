@@ -57,7 +57,10 @@ fn domain_get_run_and_get_conversation_report_the_base_moved_notice() {
   assert_eq!(notice["tasks"][0]["key"], "KON-9");
   assert_eq!(notice["commits"][0]["subject"], "Merge KON-9 run #4");
   assert_eq!(notice["overlapping_files"], json!(["src/login.rs"]));
-  assert!(notice["state"].as_str().is_some_and(|state| state != "delivered"), "{notice}");
+  assert!(
+    notice["state"].as_str().is_some_and(|state| state != "delivered"),
+    "{notice}"
+  );
 
   let read = served.ok(
     "get_conversation",
