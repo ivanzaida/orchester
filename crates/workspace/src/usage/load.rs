@@ -1,6 +1,7 @@
 //! What the Usage page and `get_usage` read: the usage facts of a project, or of every listed project,
 //! from a time on, and the plan limits history of every listed project, since plan limits belong to the
-//! CLI accounts and every project's runs report them (decided 2026-09-30). Blocks on SQLite.
+//! CLI accounts and every project's runs report them (decided 2026-09-30), with what Orchester read of
+//! them outside runs. Blocks on SQLite.
 
 use std::{path::Path, sync::Arc};
 
@@ -79,6 +80,11 @@ impl UsageData {
     if matches!(scope, Scope::Project(_)) {
       // Only the project shown is read for its usage; others matter here for their plan limits.
       unread.clear();
+    }
+    // What Orchester read outside runs belongs to the accounts, not to a project.
+    match workspace.plan_reads(retained_since(now)) {
+      Ok(read) => snapshots.extend(read),
+      Err(error) => tracing::error!(%error, "cannot read the plan limits read outside runs"),
     }
     Ok(Self {
       projects: projects.into(),

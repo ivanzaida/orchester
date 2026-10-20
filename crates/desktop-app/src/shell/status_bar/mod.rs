@@ -225,6 +225,7 @@ fn limits(listed: &Accounts, readings: &PlanReadings, used: &Used) -> Vec<Accoun
       Some(AccountLimits {
         account: account.clone(),
         reading: readings.of_account(account.id())?.clone(),
+        source: readings.source_of(account.id())?,
       })
     })
     .collect()

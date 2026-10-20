@@ -1,5 +1,6 @@
 //! Plan limits per account (`XPjSc`): the bar names an account only when the project uses more than one of a CLI,
-//! an account at its limit says so in `danger` while the others stay, and a press opens each account's windows.
+//! an account at its limit says so in `danger` while the others stay, and a press opens each account's windows, with
+//! how old each account's reading is and whether a turn reported it or Orchester read it.
 
 use std::path::PathBuf;
 
@@ -8,7 +9,7 @@ use orchester_core::{
   account::{AccountCli, AccountFolder, AgentAccount},
   connection::{
     AgentProvider,
-    plan_limits::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits},
+    plan_limits::{Blocked, LimitBlock, LimitReading, LimitState, LimitWindow, PlanLimits, ReadingSource},
   },
   id::AgentAccountId,
   name::Name,
@@ -19,6 +20,7 @@ use orchester_workspace::{runner::state::RunnerState, tasks::data::ProjectTasks}
 use super::{Bar, facts, kontur, runner};
 
 const HOUR: i64 = 60 * 60 * 1000;
+const MINUTE: i64 = 60 * 1000;
 
 fn account(cli: AccountCli, name: &str) -> AgentAccount {
   AgentAccount::new(
@@ -46,24 +48,42 @@ fn limits(account: AgentAccount, used: f64, reached: bool) -> AccountLimits {
     false,
   )
   .expect("a window");
+  let mut limits = reading(account, (now, ReadingSource::Turn), vec![window]);
+  limits.reading.limits.blocked = reached.then_some(Blocked {
+    reason: LimitBlock::Window,
+    window: Some(300),
+  });
+  limits
+}
+
+/// `account`'s reading of `windows` at `at`, from `source`.
+fn reading(
+  account: AgentAccount,
+  (at, source): (Timestamp, ReadingSource),
+  windows: Vec<LimitWindow>,
+) -> AccountLimits {
   let provider: AgentProvider = account.cli().provider();
   AccountLimits {
     reading: LimitReading {
       provider,
       account: Some(account.id()),
-      at: now,
+      at,
       limits: PlanLimits {
-        windows: vec![window],
+        windows,
         plan: None,
         credits: None,
-        blocked: reached.then_some(Blocked {
-          reason: LimitBlock::Window,
-          window: Some(300),
-        }),
+        blocked: None,
       },
     },
     account,
+    source,
   }
+}
+
+/// A window of `minutes`, `used` percent full, that resets `resets` from now (in the past when negative).
+fn window(minutes: u64, used: f64, resets: i64) -> LimitWindow {
+  let at = Timestamp::from_unix_millis(Timestamp::now().unix_millis() + resets);
+  LimitWindow::new(minutes, Some(used), Some(at), LimitState::Normal, false).expect("a window")
 }
 
 fn bar(limits: Vec<AccountLimits>) -> Bar {
@@ -135,4 +155,59 @@ fn status_plan_limits_and_mcp_popovers_switch_in_one_press() {
     bar.texts("status-plan-limits-popover").is_some(),
     "and plan limits open"
   );
+}
+
+/// Nothing is estimated between readings: the hint says how old each account's reading is and where it came from
+/// (*as of 2 min ago · read*, *as of 3 h ago · from a turn*).
+#[test]
+fn status_plan_limits_hint_says_how_old_each_reading_is_and_where_it_came_from() {
+  let now = Timestamp::now().unix_millis();
+  let (work, client) = (
+    account(AccountCli::ClaudeCode, "Work"),
+    account(AccountCli::Codex, "Client"),
+  );
+  let mut bar = bar(vec![
+    reading(
+      work.clone(),
+      (Timestamp::from_unix_millis(now - 3 * HOUR), ReadingSource::Turn),
+      vec![window(10_080, 30.0, 24 * HOUR)],
+    ),
+    reading(
+      client.clone(),
+      (Timestamp::from_unix_millis(now - 2 * MINUTE), ReadingSource::Read),
+      vec![window(300, 65.0, 2 * HOUR)],
+    ),
+  ]);
+  bar.press("status-plan-limits");
+  let as_of = |bar: &mut Bar, account: &AgentAccount| {
+    bar
+      .texts(&format!("status-plan-limits-as-of-{}", account.id()))
+      .expect("the reading's age shows")
+      .join(" ")
+  };
+  assert_eq!(as_of(&mut bar, &work), "as of 3 h ago · from a turn");
+  assert_eq!(as_of(&mut bar, &client), "as of 2 min ago · read");
+}
+
+/// A window whose reset has passed since its reading is left out rather than shown as still used: its use now is
+/// not known until the next reading, and the bar's share is the window that still stands.
+#[test]
+fn status_plan_limits_leave_out_a_window_reset_since_its_reading() {
+  let now = Timestamp::now().unix_millis();
+  let client = account(AccountCli::Codex, "Client");
+  let mut bar = bar(vec![reading(
+    client.clone(),
+    (Timestamp::from_unix_millis(now - 6 * HOUR), ReadingSource::Read),
+    vec![window(300, 97.0, -HOUR), window(10_080, 41.0, 48 * HOUR)],
+  )]);
+  let words = bar.texts("status-plan-limits").expect("the item shows").join(" ");
+  assert_eq!(words, "Codex 41%", "the reset 5-hour window's 97% is not shown");
+  bar.press("status-plan-limits");
+  let block = bar
+    .texts(&format!("status-plan-limits-account-{}", client.id()))
+    .expect("Client's windows show")
+    .join(" ");
+  assert!(block.contains("Weekly") && block.contains("41%"), "{block}");
+  assert!(!block.contains("5-hour") && !block.contains("97%"), "{block}");
+  assert!(block.contains("as of 6 h ago · read"), "{block}");
 }

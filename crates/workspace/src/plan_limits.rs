@@ -1,4 +1,8 @@
-//! Desktop signal values for session readings and the project's CLI connections.
+//! Desktop signal values for session readings and the project's CLI connections, and the reads of plan limits outside
+//! runs ([`reads`]).
+
+pub mod reads;
+
 use orchester_core::connection::{AgentConnection, plan_limits::PlanReadings};
 
 use crate::messages::Message;

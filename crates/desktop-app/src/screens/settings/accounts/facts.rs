@@ -1,6 +1,7 @@
 //! The *Account* tab of the shown account (`Detail body` `pwIrF` in `t098v`): what its state means for runs and what
 //! to do (`E96CI`), who is signed in, the plan, the folder and the program that checked it, the folder's actions,
-//! its plan limits (`Plan window row` `B9myCE`), what runs on it get, and that Orchester never reads a token.
+//! its plan limits (`Plan window row` `B9myCE`) with a Claude Code account's *Check now*, what runs on it get, and
+//! that Orchester never reads a token.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -10,13 +11,13 @@ use lurq::{
 };
 use orchester_core::{
   account::{AccountCheckResult, AccountCli, AccountState, AgentAccount},
-  connection::plan_limits::{LimitReading, LimitWindow},
+  connection::plan_limits::{LimitReading, LimitWindow, ReadingSource},
   time::Timestamp,
 };
 use orchester_workspace::display;
 
 use super::{
-  Parts, Work,
+  Parts, PlanCheck, Work,
   state::{copy_folder, paragraph, sign_in_button, state_sentence},
   words::{Shown, folder, method_key, plan, status_command, t, ta},
 };
@@ -25,6 +26,7 @@ use crate::{
   theme::{AccountsSpacing, ExtraTypography, SettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
+    field::field_error,
     icon::Icon,
     inspector::{self, PropertyValue, property},
     message::message_text,
@@ -48,7 +50,9 @@ pub(super) fn body(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAcc
     .with_children(
       (shown != Shown::State(AccountState::FolderMissing)).then(|| folder_actions(ctx, parts, work, account)),
     )
-    .with_children((shown != Shown::State(AccountState::Unsupported)).then(|| limits(ctx, account, reading.as_ref())))
+    .with_children(
+      (shown != Shown::State(AccountState::Unsupported)).then(|| limits(ctx, work, account, reading.as_ref())),
+    )
     .child(runs_get(ctx, account))
     .child(inspector::note(
       "account-no-token",
@@ -65,16 +69,18 @@ pub(super) fn body(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAcc
     .into()
 }
 
-/// A reading of the account's plan limits stored by a project, as read.
+/// The last reading kept of the account's plan limits, with where it came from, as read.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Stored(Option<LimitReading>);
+struct Stored(Option<(LimitReading, ReadingSource)>);
 
 impl lurq::app::component::DevtoolsInspectable for Stored {}
 
-/// The account's last plan reading: this session's, or the last one a project stored, whichever is newer.
-fn last_reading(ctx: &mut Ctx, account: &AgentAccount) -> Option<LimitReading> {
+/// The account's last plan reading and where it came from: this session's, or the last one kept (a project's turn or
+/// a read), whichever is newer.
+fn last_reading(ctx: &mut Ctx, account: &AgentAccount) -> Option<(LimitReading, ReadingSource)> {
   let id = account.id();
-  let session = plan_limits::readings(ctx).of_account(id).cloned();
+  let readings = plan_limits::readings(ctx);
+  let session = readings.of_account(id).cloned().zip(readings.source_of(id));
   let workspace = crate::services::Services::of(ctx).workspace;
   let stored = ctx
     .future(id, move |id| {
@@ -91,7 +97,7 @@ fn last_reading(ctx: &mut Ctx, account: &AgentAccount) -> Option<LimitReading> {
     .data
     .and_then(|stored| stored.0);
   match (session, stored) {
-    (Some(session), Some(stored)) if stored.at > session.at => Some(stored),
+    (Some(session), Some(stored)) if stored.0.at > session.0.at => Some(stored),
     (Some(session), _) => Some(session),
     (None, stored) => stored,
   }
@@ -232,26 +238,20 @@ fn folder_actions(ctx: &Ctx, parts: &Parts, work: &Work, account: &AgentAccount)
     .into()
 }
 
-/// The account's plan windows as its CLI last reported them (`R7GCQ`).
-fn limits(ctx: &Ctx, account: &AgentAccount, reading: Option<&LimitReading>) -> Element {
+/// The account's plan windows as its CLI last reported them (`R7GCQ`), with when and how they were read; a Claude Code
+/// account's *Check now* and its error, if it failed (not drawn in the design yet).
+fn limits(ctx: &Ctx, work: &Work, account: &AgentAccount, reading: Option<&(LimitReading, ReadingSource)>) -> Element {
   let now = Timestamp::now();
   let program = account.cli().program();
-  let meta = reading.map(|reading| {
-    let at = when(ctx, reading.at, now, ("accounts.time.today", "accounts.time.day"));
-    ta(ctx, "accounts.planLimits.meta", [("time", at)])
-  });
-  let head = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .child(Text::new(&t(ctx, "accounts.planLimits.title")).variant(SettingsText::SectionTitle.role()))
-    .child(Spacer::new().flex(1.0))
-    .with_children(meta.map(|meta| Text::new(&meta).variant(ExtraTypography::Note.role())));
   let mut section = Column::new()
     .id("account-plan-limits")
     .width(Dimension::Pct(100.0))
     .spacing(crate::theme::ExtraSpacing::Snug.role())
-    .child(head);
+    .child(limits_head(ctx, work, account, reading, now));
+  if let PlanCheck::Failed(error) = work.plan_check_of(account.id()) {
+    section = section.child(field_error("account-plan-check-error", &message_text(ctx, &error)));
+  }
+  let reading = reading.map(|(reading, _)| reading);
   let windows: Vec<&LimitWindow> = reading
     .map(|reading| {
       reading
@@ -263,10 +263,11 @@ fn limits(ctx: &Ctx, account: &AgentAccount, reading: Option<&LimitReading>) -> 
     })
     .unwrap_or_default();
   if windows.is_empty() {
-    section = section.child(note(
-      "account-plan-none",
-      &ta(ctx, "accounts.planLimits.none", [("program", program)]),
-    ));
+    let key = match account.cli() {
+      AccountCli::ClaudeCode => "accounts.planLimits.none",
+      AccountCli::Codex => "accounts.planLimits.noneCodex",
+    };
+    section = section.child(note("account-plan-none", &ta(ctx, key, [("program", program)])));
   }
   for window in windows {
     let reading = reading.expect("windows come from a reading");
@@ -277,6 +278,51 @@ fn limits(ctx: &Ctx, account: &AgentAccount, reading: Option<&LimitReading>) -> 
     AccountCli::Codex => "accounts.planLimits.noteCodex",
   };
   section.child(note("account-plan-note", &t(ctx, note_key))).into()
+}
+
+/// *Plan limits*, when the reading is from and whether a turn reported it or Orchester read it, and a Claude Code
+/// account's *Check now*.
+fn limits_head(
+  ctx: &Ctx,
+  work: &Work,
+  account: &AgentAccount,
+  reading: Option<&(LimitReading, ReadingSource)>,
+  now: Timestamp,
+) -> Row {
+  let meta = reading.map(|(reading, source)| {
+    let at = when(ctx, reading.at, now, ("accounts.time.today", "accounts.time.day"));
+    let key = match source {
+      ReadingSource::Turn => "accounts.planLimits.metaTurn",
+      ReadingSource::Read => "accounts.planLimits.metaRead",
+    };
+    ta(ctx, key, [("time", at)])
+  });
+  let check = (account.cli() == AccountCli::ClaudeCode).then(|| {
+    let button = ActionButton::new(
+      "account-plan-check",
+      ButtonKind::Secondary,
+      t(ctx, "accounts.planLimits.checkNow"),
+    )
+    .icon(Icon::RefreshCw);
+    if work.plan_check_of(account.id()) == PlanCheck::Running {
+      button.loading()
+    } else {
+      let (work, id) = (work.clone(), account.id());
+      button.on_click(move || work.check_plan(id))
+    }
+  });
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(Text::new(&t(ctx, "accounts.planLimits.title")).variant(SettingsText::SectionTitle.role()))
+    .child(Spacer::new().flex(1.0))
+    .with_children(meta.map(|meta| {
+      Text::new(&meta)
+        .id("account-plan-meta")
+        .variant(ExtraTypography::Note.role())
+    }))
+    .with_children(check)
 }
 
 fn note(id: &str, text: &str) -> Text {
