@@ -33,13 +33,15 @@ impl LocalGit {
     }
   }
 
-  /// The commits reachable from `source` and not from `base`, oldest first: when `source` merged `base` in, its
-  /// commits from before that merge too (ORC-67).
+  /// The commits on `source`'s own line above `base`, oldest first: those made on its branch, the merges of the
+  /// target it took in included (ORC-54), not the target's commits those merges brought, which are the target's
+  /// work and no evidence about the run's. `base` need not be on that line: when `source` merged `base` in, the
+  /// commits of its own from before that merge count too (ORC-67).
   pub fn commits_after(&self, base: &str, source: &str) -> Result<Vec<String>, LocalGitError> {
     validate_object(base)?;
     validate_object(source)?;
     let excluded = format!("^{base}");
-    let text = self.text(&["rev-list", "--reverse", source, &excluded])?;
+    let text = self.text(&["rev-list", "--first-parent", "--reverse", source, &excluded])?;
     let commits = text.lines().map(str::to_owned).collect::<Vec<_>>();
     if commits.len() > 1024 {
       return Err(super::LocalError::Unsupported.into());
@@ -50,12 +52,28 @@ impl LocalGit {
     Ok(commits)
   }
 
+  /// Whether a commit `source` holds above `base` that `target` does not hold makes the change of a commit `target`
+  /// holds, a cherry-pick or a rebase of it (`git cherry`, by patch id; merges have none and are left out). An
+  /// empty commit, as an agent's `checkpoint before merging` is when it has nothing to commit (ORC-54), has the
+  /// patch id of every other empty commit and proves nothing.
   pub fn has_equivalent_patch(&self, base: &str, source: &str, target: &str) -> Result<bool, LocalGitError> {
     for object in [base, source, target] {
       validate_object(object)?;
     }
     let text = self.text(&["cherry", target, source, base])?;
-    Ok(text.lines().any(|line| line.starts_with("- ")))
+    for commit in text.lines().filter_map(|line| line.strip_prefix("- ")) {
+      validate_object(commit)?;
+      if self.changes_something(commit)? {
+        return Ok(true);
+      }
+    }
+    Ok(false)
+  }
+
+  /// Whether `commit` changes anything against its parent.
+  fn changes_something(&self, commit: &str) -> Result<bool, LocalGitError> {
+    let changed = self.text(&["diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit])?;
+    Ok(!changed.is_empty())
   }
 
   /// The exact patch ids of the commits reachable from `to` and not from `from`, merges left out,
