@@ -35,9 +35,9 @@ pub fn conversation(
   (key, title): (&str, &str),
   connection: ConnectionId,
 ) -> Result<ChatId, Box<dyn Error>> {
-  let task = format!("orchester:/project/{project}/tasks/{key}/summary");
+  let task = format!("orchester:/project/{project}/tasks/{key}/details");
   let runs = format!(
-    "Only Atlas has a run: [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/summary) is at 03 \
+    "Only Atlas has a run: [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/details) is at 03 \
      Implement, 18 min in.\n\nIn Kontur, [{key} · {title}]({task}) is the only run going."
   );
   let status = format!(
@@ -58,7 +58,7 @@ pub fn conversation(
      | Task | Step | Tokens |\n\
      | --- | --- | --- |\n\
      | [{key} · {title}]({task}) | 05 Review | 2.4M |\n\
-     | [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/summary) | 03 Implement | 0.8M |"
+     | [ATL-9 · Import schema](orchester:/project/{atlas}/tasks/ATL-9/details) | 03 Implement | 0.8M |"
   );
   keep(
     db,

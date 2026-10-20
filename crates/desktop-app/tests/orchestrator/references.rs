@@ -58,11 +58,11 @@ fn orchestrator_reply_links_task_keys_and_routes_and_opens_them_by_browser_rules
     );
   }
 
-  let summary = Route::Project(
+  let details = Route::Project(
     project,
-    ProjectPage::Task(key.parse().expect("a task key"), TaskView::Summary),
+    ProjectPage::Task(key.parse().expect("a task key"), TaskView::Details),
   );
-  opens_by_browser_rules(&mut screen.window, &key, &summary);
+  opens_by_browser_rules(&mut screen.window, &key, &details);
   screen.window.navigation().back();
   screen.until("the chat again", |screen| {
     screen

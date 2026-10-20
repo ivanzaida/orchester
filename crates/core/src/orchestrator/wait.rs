@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::{
   change::Change,
   chat::{ChatAction, ChatEntry, EntryKind},
+  resume::Continuing,
 };
 use crate::{
   id::{ChatId, RunId},
@@ -128,6 +129,11 @@ pub struct AgentWait {
   /// Orchestrator's own answer did not raise it.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub automatic: bool,
+  /// For an interrupted run's end that starts a turn while *Let the Orchestrator continue interrupted runs* was on
+  /// too and the chat may continue the run: whether that turn continues it, or leaves it to the person because it was
+  /// interrupted again soon. `None` otherwise: the turn only tells the person.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub continuing: Option<Continuing>,
 }
 
 /// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,

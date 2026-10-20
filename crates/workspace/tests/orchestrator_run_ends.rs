@@ -21,8 +21,8 @@ use orchester_core::{
   integration::{MergeKind, RunMerge},
   name::Name,
   orchestrator::{
-    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, OrchestratorSettings, RunEnd, StopReason, TurnState,
-    WaitKind, WaitTurn,
+    ActionOutcome, AgentWait, Chat, ChatAction, Continuing, EntryKind, OrchestratorSettings, RunEnd, StopReason,
+    TurnState, WaitKind, WaitTurn,
     change::{Change, ContinueChoice, ProposedChange, StepName},
   },
   resource::ModelId,
@@ -33,7 +33,10 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::waits::{Followed, MergeChecks, check_merges_in, follow_in};
+use orchester_workspace::{
+  orchestrator::waits::{Followed, MergeChecks, Switches, check_merges_in, follow_in},
+  tasks::changes::run_worktree,
+};
 use support::{Fixture, at};
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
@@ -82,11 +85,22 @@ fn project(fixture: &Fixture) -> ProjectId {
   fixture.db.project().id()
 }
 
-/// Follows the ends with the project's runner attached.
+/// Follows the ends with the project's runner attached, *Let the Orchestrator answer agents* on when `answers`.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
+  follow_with(
+    fixture,
+    Switches {
+      answers,
+      continues: false,
+    },
+  )
+}
+
+/// Follows the ends with the project's runner attached, under `switches`.
+fn follow_with(fixture: &Fixture, switches: Switches) -> Followed {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-  follow_in((root, project(fixture), &programs), &checks, (answers, true)).expect("followed")
+  follow_in((root, project(fixture), &programs), &checks, (switches, true)).expect("followed")
 }
 
 /// The waits of conversation `chat`, with their turns.
@@ -383,8 +397,130 @@ fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() 
   let followed = follow_in(
     (fixture.repo.path(), project(&fixture), &Programs::processes()),
     &checks,
-    (false, true),
+    (Switches::default(), true),
   )
   .expect("followed");
   assert_eq!(followed, Followed::default(), "never told as ready to merge");
+}
+
+/// Both of the person's switches a continuing turn needs: *answer agents* and *continue interrupted runs*.
+const CONTINUING: Switches = Switches {
+  answers: true,
+  continues: true,
+};
+
+/// `run` interrupted for `cause` now.
+fn interrupt(fixture: &mut Fixture, run: &mut Run, cause: InterruptCause) {
+  let events = run.interrupt(cause, Timestamp::now()).expect("interrupted");
+  fixture.record(run, &events);
+}
+
+/// A run of task `title` that `cause` interrupted, its worktree there.
+fn interrupted(fixture: &mut Fixture, title: &str, cause: InterruptCause) -> Run {
+  let mut run = working(fixture, title);
+  std::fs::create_dir_all(run_worktree(fixture.repo.path(), run.id())).expect("its worktree");
+  interrupt(fixture, &mut run, cause);
+  run
+}
+
+/// The prompt of the turn `followed` started.
+fn prompt_of(fixture: &Fixture, followed: &Followed) -> String {
+  let turn = followed.turn.expect("a turn");
+  let kept = fixture.db.chat_turn(turn.message).expect("read").expect("the turn");
+  kept.text.as_str().to_owned()
+}
+
+#[test]
+fn run_ends_of_a_crash_continue_the_run_once_with_both_switches_on() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
+  let followed = follow_with(&fixture, CONTINUING);
+  let prompt = prompt_of(&fixture, &followed);
+  let (wait, _) = &waits(&fixture)[0];
+  assert_eq!(wait.continuing, Some(Continuing::Continues), "{wait:?}");
+  for part in [
+    "Run #1 of ORC-1 (Add login) was interrupted",
+    "Let the Orchestrator continue interrupted runs",
+    "continue this run once with resume_run, from its last checkpoint",
+  ] {
+    assert!(prompt.contains(part), "{part} in {prompt}");
+  }
+  assert_eq!(
+    follow_with(&fixture, CONTINUING).turn,
+    None,
+    "one turn per interruption"
+  );
+}
+
+#[test]
+fn run_ends_of_a_run_interrupted_again_soon_leave_it_to_the_person() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut run = interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
+  let first = follow_with(&fixture, CONTINUING)
+    .turn
+    .expect("the first interruption's turn");
+  fixture
+    .db
+    .end_chat_turn(first.message, &TurnState::Answered, Timestamp::now())
+    .expect("ended");
+  // A person continued it on the task's Summary, and it crashed again at once.
+  let events = run.continue_run(Timestamp::now()).expect("continued");
+  fixture.record(&run, &events);
+  interrupt(&mut fixture, &mut run, InterruptCause::Crashed);
+  let followed = follow_with(&fixture, CONTINUING);
+  let prompt = prompt_of(&fixture, &followed);
+  let kept = waits(&fixture);
+  assert_eq!(kept.len(), 2, "a new end: {kept:?}");
+  assert_eq!(kept[1].0.continuing, Some(Continuing::InterruptedAgain));
+  for part in [
+    "interrupted again within 10 minutes of the time before",
+    "left to the person: do not continue it",
+    "Start, resume, cancel, continue or merge nothing",
+  ] {
+    assert!(prompt.contains(part), "{part} in {prompt}");
+  }
+}
+
+#[test]
+fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_chats_right() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
+  // Answering agents alone: the turn tells the person, as before the switch.
+  let followed = follow(&fixture, true);
+  let prompt = prompt_of(&fixture, &followed);
+  assert_eq!(waits(&fixture)[0].0.continuing, None);
+  assert!(prompt.contains("goes on only when a person continues it"), "{prompt}");
+  assert!(!prompt.contains("resume_run"), "{prompt}");
+
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  interrupted(&mut fixture, "Runner failed", InterruptCause::RunnerFailed);
+  let mut gone = working(&mut fixture, "Worktree gone");
+  interrupt(&mut fixture, &mut gone, InterruptCause::Crashed);
+  // Continuing alone starts no turn; with both on, these two stay the person's.
+  let alone = Switches {
+    answers: false,
+    continues: true,
+  };
+  assert_eq!(follow_with(&fixture, alone).turn, None);
+  assert!(
+    waits(&fixture)
+      .iter()
+      .all(|(wait, _)| !wait.automatic && wait.continuing.is_none())
+  );
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  interrupted(&mut fixture, "Runner failed", InterruptCause::RunnerFailed);
+  let mut gone = working(&mut fixture, "Worktree gone");
+  interrupt(&mut fixture, &mut gone, InterruptCause::Crashed);
+  follow_with(&fixture, CONTINUING);
+  let kept = waits(&fixture);
+  assert_eq!(kept.len(), 2, "{kept:?}");
+  assert!(
+    kept.iter().all(|(wait, _)| wait.automatic && wait.continuing.is_none()),
+    "the runner's failure and a gone worktree are the person's: {kept:?}"
+  );
 }

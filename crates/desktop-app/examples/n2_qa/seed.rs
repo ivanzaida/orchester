@@ -16,7 +16,7 @@ use orchester_api::{
   client::{PlainHttp, ServerAddress},
 };
 use orchester_app::{
-  routes::{ProjectPage, ProjectSettingsTab, Route, TaskList},
+  routes::{ProjectPage, ProjectSettingsTab, Route, TaskList, TaskView},
   services::Services,
 };
 use orchester_core::{
@@ -216,7 +216,7 @@ fn linked(
     }
     State::Tasks => tasks,
     State::Conflict => Route::Project(project, ProjectPage::EditTask("KON-1".parse()?)),
-    State::MissingPipeline => Route::Project(project, ProjectPage::Task("KON-1".parse()?, Default::default())),
+    State::MissingPipeline => Route::Project(project, ProjectPage::Task("KON-1".parse()?, TaskView::Summary)),
     _ => seeded.route.clone(),
   };
   Ok(seeded)

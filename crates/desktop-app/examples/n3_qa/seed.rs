@@ -16,7 +16,7 @@ use orchester_api::{
   client::{PlainHttp, ServerAddress},
 };
 use orchester_app::{
-  routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route, TaskList},
+  routes::{JoinTarget, OrchesterView, ProjectPage, ProjectSettingsTab, Route, TaskList, TaskView},
   services::Services,
 };
 use orchester_core::{
@@ -142,8 +142,8 @@ fn kontur_route(
     State::TasksFormerKey => tasks(TaskList::default().with_search("KON-3")),
     State::TasksOnlyNotShared => tasks(TaskList::default().with_search("KON-5")),
     State::TasksNotSharedSearch => tasks(TaskList::default().with_search("invoices").with_not_shared(true)),
-    State::TaskNotShared | State::TaskShare => at(ProjectPage::KeptTask("KON-1".parse()?, Default::default())),
-    State::TaskJoined => at(ProjectPage::Task(was(&repo, "KON-3")?, Default::default())),
+    State::TaskNotShared | State::TaskShare => at(ProjectPage::KeptTask("KON-1".parse()?, TaskView::Summary)),
+    State::TaskJoined => at(ProjectPage::Task(was(&repo, "KON-3")?, TaskView::Summary)),
     _ => tasks(TaskList::default()),
   })
 }

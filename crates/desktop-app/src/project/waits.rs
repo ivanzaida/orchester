@@ -16,13 +16,14 @@ use lurq::app::{
   ctx::{Ctx, StreamEmitter},
   i18n::I18n,
 };
+use orchester_store::StoreError;
 use orchester_workspace::{
   background, base_moved,
   messages::{self, Message},
   orchestrator::{
     send::{self, SendError},
     tools::ChatScope,
-    waits::{self, Followed, MergeChecks, SucceededAt, WaitTurn},
+    waits::{self, Followed, MergeChecks, SucceededAt, Switches, WaitTurn},
   },
   runner::Runners,
   workspace::{OpenProject, OrchestratorConsent},
@@ -68,19 +69,24 @@ pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
 /// starts only once the runner attached, since one that attaches ends the turns still thinking as interrupted. The
 /// conversations are told of a change only when there was one: telling them wakes this follower again.
 async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Result<(), Message> {
-  let answers = {
+  let switches = {
     let workspace = services.workspace.clone();
-    background::run(move || workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents))
-      .await?
-      .map_err(|error| messages::store_error(&error))?
+    background::run(move || {
+      Ok::<_, StoreError>(Switches {
+        answers: workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents)?,
+        continues: workspace.orchestrator_allows(OrchestratorConsent::ContinueInterrupted)?,
+      })
+    })
+    .await?
+    .map_err(|error| messages::store_error(&error))?
   };
   let checks = check_merges(services, open).await?;
   observe_bases(services, open).await?;
-  let mut followed = keep(services, open, &checks, (answers, false)).await?;
+  let mut followed = keep(services, open, &checks, (switches, false)).await?;
   if followed.pending {
     match services.runners.chat_runner(open).await {
       Ok(()) => {
-        let started = keep(services, open, &checks, (answers, true)).await?;
+        let started = keep(services, open, &checks, (switches, true)).await?;
         followed.kept |= started.kept;
         followed.turn = started.turn;
       }
@@ -126,18 +132,18 @@ async fn observe_bases(services: &Services, open: &OpenProject) -> Result<(), Me
 }
 
 /// Follows `open`'s waits and run ends once, with what git told of its runs that succeeded (`checks`; `services`'
-/// programs ask it for a run they do not tell), with *Let the Orchestrator answer agents* on when `answers`, and
-/// starting a turn only when the runner is `attached`.
+/// programs ask it for a run they do not tell), under the person's `switches`, and starting a turn only when the
+/// runner is `attached`.
 async fn keep(
   services: &Services,
   open: &OpenProject,
   checks: &MergeChecks,
-  (answers, attached): (bool, bool),
+  (switches, attached): (Switches, bool),
 ) -> Result<Followed, Message> {
   let (root, project, programs) = (open.repo_root.clone(), open.project.id(), services.programs.clone());
   let checks = checks.clone();
   let _keeping = KEEPING.lock().await;
-  background::run(move || waits::follow_in((&root, project, &programs), &checks, (answers, attached))).await?
+  background::run(move || waits::follow_in((&root, project, &programs), &checks, (switches, attached))).await?
 }
 
 /// Serves the tools of `turn` and asks `open`'s runner to answer it; a turn neither takes ends failed.

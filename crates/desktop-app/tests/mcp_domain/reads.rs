@@ -158,16 +158,23 @@ fn domain_reads_existing_results_carry_links_the_router_opens() {
   }
   every_link_opens(&served.ok("list_instructions", &kontur));
   let tasks = served.ok("list_tasks", &kontur);
-  let key = list(&tasks, "tasks")[0]["key"].clone();
-  let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+  let listed = &list(&tasks, "tasks")[0];
+  let key = listed["key"].clone();
+  let page = format!("/project/{}/tasks/{}", seeded.project, key.as_str().expect("a key"));
   assert_eq!(
-    link_of(&task),
-    format!(
-      "/project/{}/tasks/{}/summary",
-      seeded.project,
-      key.as_str().expect("a key")
-    )
+    link_of(listed),
+    format!("{page}/details"),
+    "a task opens on its Details"
   );
+  let task = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+  assert_eq!(link_of(&task), format!("{page}/details"), "a task opens on its Details");
+  for run in list(&task, "runs") {
+    assert_eq!(
+      link_of(run),
+      format!("{page}/summary"),
+      "a run opens the Summary: {run}"
+    );
+  }
   let profiles = served.ok("list_profiles", &kontur);
   let role = list(&profiles, "profiles")[0]["role"].clone();
   let profile = served.ok("get_profile", &json!({ "project": "Kontur", "profile": role }));

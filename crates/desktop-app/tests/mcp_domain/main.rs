@@ -30,6 +30,7 @@ mod merged_outside;
 mod orchestrator_chat;
 mod orchestrator_continue;
 mod orchestrator_guard;
+mod orchestrator_interrupted;
 mod orchestrator_moves;
 mod orchestrator_resolve;
 mod orchestrator_sent_as;
