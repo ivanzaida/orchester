@@ -445,7 +445,7 @@ impl Import {
   }
 }
 
-/// WMT1W's discovered sources are separate from the actual repository setting.
+/// WMT1W's discovered sources (`cyNh6`) are separate from the actual repository setting.
 pub fn inventory(ctx: &mut Ctx, p: &PageProps) -> Element {
   let items = p
     .data
@@ -462,38 +462,68 @@ pub fn inventory(ctx: &mut Ctx, p: &PageProps) -> Element {
     .background(PaletteColor::SurfaceRaised)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(crate::theme::ExtraRadius::Tile.role())
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .min_height(Dimension::Px(40.0))
-        .padding(Padding::horizontal(crate::theme::skills::cell_spacing()))
-        .spacing(SpacingSize::Sm)
-        .child(crate::ui::icon::icon(
-          crate::ui::icon::Icon::FolderSearch,
-          crate::theme::IconSize::Md,
-          PaletteColor::TextMuted,
-        ))
-        .child(Text::new(&ctx.t("skills.repositoryTitle")).variant(ExtraTypography::Strong.role()))
-        .child(
-          Text::new(&ctx.t_args(
-            "skills.repositoryCount",
-            [("count", p.data.repository.items.len().to_string())],
-          ))
-          .variant(ExtraTypography::Note.role()),
-        )
-        .child(
-          Text::new(&p.project.open.repo_root.display().to_string())
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0))
-            .variant(ExtraTypography::MonoNote.role()),
-        ),
-    )
+    .clip()
+    .child(found_header(ctx, p))
     .child(rows)
     .child(
-      Text::new(&ctx.t("skills.repositoryPreviewNote"))
+      Row::new()
+        .id("skills-found-footer")
         .width(Dimension::Pct(100.0))
-        .variant(ExtraTypography::Note.role())
-        .padding(crate::theme::skills::cell_spacing()),
+        .background(PaletteColor::SurfacePanel)
+        .border_top(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .padding(Padding::symmetric(
+          crate::theme::skills::cell_spacing(),
+          ExtraSpacing::Loose.role(),
+        ))
+        .child(
+          Text::new(&ctx.t("skills.repositoryPreviewNote"))
+            .id("skills-found-note")
+            .flex(1.0)
+            .min_width(Dimension::Px(0.0))
+            .variant(crate::theme::skills::found_note()),
+        ),
     )
     .into()
+}
+/// Found header `r3tdmV`: 40 high, its contents centered, the repository's folder at its end. A folder
+/// too long for one line wraps, and keeps room above and below it.
+const FOUND_HEADER_HEIGHT: f32 = 40.0;
+fn found_header(ctx: &Ctx, p: &PageProps) -> Row {
+  Row::new()
+    .id("skills-found-header")
+    .width(Dimension::Pct(100.0))
+    .min_height(Dimension::Px(FOUND_HEADER_HEIGHT))
+    .align_items(lurq::layout::Alignment::Center)
+    .padding(Padding::symmetric(
+      crate::theme::skills::cell_spacing(),
+      ExtraSpacing::Loose.role(),
+    ))
+    .spacing(SpacingSize::Sm)
+    .border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(crate::ui::icon::icon(
+      crate::ui::icon::Icon::FolderGit2,
+      crate::theme::IconSize::Md,
+      PaletteColor::TextSecondary,
+    ))
+    .child(
+      Text::new(&ctx.t("skills.repositoryTitle"))
+        .id("skills-found-title")
+        .variant(crate::theme::skills::found_title()),
+    )
+    .child(
+      Text::new(&ctx.t_args(
+        "skills.repositoryCount",
+        [("count", p.data.repository.items.len().to_string())],
+      ))
+      .id("skills-found-count")
+      .variant(crate::theme::skills::found_count()),
+    )
+    .child(
+      Text::new(&p.project.open.repo_root.display().to_string())
+        .id("skills-found-folder")
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .text_align(lurq::layout::text_style::TextAlign::Right)
+        .variant(ExtraTypography::MonoKey.role()),
+    )
 }

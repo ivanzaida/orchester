@@ -22,6 +22,13 @@ use crate::{
 };
 /// Repository item line TJ0Cb with its explanatory second line.
 const ROW_HEIGHT: f32 = 50.0;
+/// Repository item line TJ0Cb in WMT1W's found sources: one line, 34 high.
+const FOUND_ROW_HEIGHT: f32 = 34.0;
+/// Both lists show six lines (`cyNh6`), then scroll.
+const SHOWN_ROWS: usize = 6;
+/// A line's divider (`BorderSize::Sm`): a found list that scrolls hides its cut line's divider under the
+/// footer's own.
+const DIVIDER: f32 = 1.0;
 /// TmfIL/OLgEc/HjGPE: the widest type label is Instruction (55px).
 const TYPE_WIDTH: f32 = 55.0;
 const SOURCE_WIDTH: f32 = 230.0;
@@ -29,6 +36,7 @@ const SOURCE_WIDTH: f32 = 230.0;
 struct Props {
   item: ImportItem,
   index: usize,
+  last: bool,
   selected: Option<Signal<Chosen>>,
   preview: Option<Signal<usize>>,
   pending: bool,
@@ -37,6 +45,7 @@ impl PartialEq for Props {
   fn eq(&self, o: &Self) -> bool {
     self.item == o.item
       && self.index == o.index
+      && self.last == o.last
       && self.pending == o.pending
       && self.selected.is_some() == o.selected.is_some()
   }
@@ -54,7 +63,7 @@ impl Component for ItemRow {
     let mut row = Row::new()
       .width(Dimension::Pct(100.0))
       .id(format!("skill-source-row-{}", p.index))
-      .min_height(Dimension::Px(if reviewing { ROW_HEIGHT } else { 34.0 }))
+      .min_height(Dimension::Px(if reviewing { ROW_HEIGHT } else { FOUND_ROW_HEIGHT }))
       .spacing(crate::theme::ExtraSpacing::Loose.role())
       .align_items(if reviewing {
         lurq::layout::Alignment::Start
@@ -64,10 +73,18 @@ impl Component for ItemRow {
       .padding(if reviewing {
         Padding::symmetric(crate::theme::ExtraSpacing::Loose.role(), SpacingSize::Sm)
       } else {
-        Padding::horizontal(crate::theme::skills::cell_spacing())
+        // A one-line source keeps TJ0Cb's 34; a wrapped name keeps room above and below.
+        Padding::symmetric(crate::theme::skills::cell_spacing(), SpacingSize::Sm)
       });
     if !reviewing {
-      row = row.border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border));
+      // The last line leaves its divider to the found footer's (`idRGH` over `WYErT`).
+      if !p.last {
+        row = row.border_bottom(lurq::node::border::Border::inside(BorderSize::Sm, PaletteColor::Border));
+      }
+      // A source with nothing to import is faded as a whole and has no arrow (`ZjQDR`).
+      if p.item.outcome.is_err() {
+        row = row.opacity(crate::theme::DISABLED_OPACITY);
+      }
     }
     row = row.with_children(selection(&p)).child(content(ctx, &p));
     if let Some(preview) = p.preview {
@@ -97,16 +114,25 @@ pub fn listed(
   pending: bool,
 ) -> Element {
   let count = items.len();
-  let height = if selected.is_some() { ROW_HEIGHT } else { 34.0 };
-  VirtualizedList::new(ctx, items)
+  let last = items.last().map(|(index, _)| *index);
+  let list = VirtualizedList::new(ctx, items);
+  let list = if selected.is_some() {
+    list.height(Dimension::Px(ROW_HEIGHT * count.min(SHOWN_ROWS) as f32))
+  } else if count > SHOWN_ROWS {
+    // Found rows grow when a name wraps: the list follows them up to six one-line rows, then scrolls.
+    list.max_height(Dimension::Px(FOUND_ROW_HEIGHT * SHOWN_ROWS as f32 - DIVIDER))
+  } else {
+    list
+  };
+  list
     .list_key(key)
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(height * count.min(6) as f32))
     .mount_keyed::<ItemRow, _, _, _>(
       |(_, i)| i.source.clone(),
       move |(index, item)| Props {
         item: item.clone(),
         index: *index,
+        last: Some(*index) == last,
         selected: selected.clone(),
         preview: preview.clone(),
         pending,
@@ -149,8 +175,7 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
     .variant(crate::theme::skills::import_path());
   let summary = Text::new(&item_summary(ctx, &p.item))
     .id(format!("skill-source-summary-{}", p.index))
-    .width(Dimension::Pct(100.0))
-    .variant(ExtraTypography::Note.role());
+    .width(Dimension::Pct(100.0));
   let row = Row::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -163,7 +188,7 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
           .min_width(Dimension::Px(0.0))
           .spacing(crate::theme::ExtraSpacing::Tight.role())
           .child(source)
-          .child(summary),
+          .child(summary.variant(ExtraTypography::Note.role())),
       )
       .child(
         Text::new(&ctx.t(if p.item.kind == ItemKind::Skill {
@@ -176,6 +201,11 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
         .variant(ExtraTypography::Note.role()),
       )
   } else {
+    // TJ0Cb/q2J50y: only a source that becomes something points at what it becomes.
+    let arrow = p.item.outcome.is_ok().then(|| {
+      icon(Icon::ArrowRight, crate::theme::IconSize::Sm, PaletteColor::TextMuted)
+        .id(format!("skill-source-arrow-{}", p.index))
+    });
     row
       .child(icon(
         if p.item.kind == ItemKind::Skill {
@@ -187,12 +217,13 @@ fn content(ctx: &Ctx, p: &Props) -> Element {
         PaletteColor::TextMuted,
       ))
       .child(Column::new().width(Dimension::Px(SOURCE_WIDTH)).child(source))
-      .child(icon(
-        Icon::ArrowRight,
-        crate::theme::IconSize::Sm,
-        PaletteColor::TextMuted,
-      ))
-      .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(summary))
+      .with_children(arrow)
+      .child(
+        Column::new()
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0))
+          .child(summary.variant(ExtraTypography::Prose.role())),
+      )
   };
   row.into()
 }
