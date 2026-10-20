@@ -93,6 +93,8 @@ pub struct StepSpec {
   pub gate: bool,
   /// A tool step running this command tool instead of an agent step.
   pub tool: Option<tools::ToolSpec>,
+  /// The agent step's own choice of whether it merges the base when it moves; `None` follows the default rule.
+  pub takes_base_moves: Option<bool>,
 }
 
 impl StepSpec {
@@ -111,6 +113,7 @@ impl StepSpec {
       budget: None,
       gate: false,
       tool: None,
+      takes_base_moves: None,
     }
   }
 
@@ -132,6 +135,11 @@ impl StepSpec {
 
   pub const fn budget(mut self, tokens: u64) -> Self {
     self.budget = Some(tokens);
+    self
+  }
+
+  pub const fn takes_base_moves(mut self, takes: bool) -> Self {
+    self.takes_base_moves = Some(takes);
     self
   }
 }
@@ -295,7 +303,10 @@ fn graph_step(db: &mut ProjectDb, spec: &StepSpec, builder: orchester_core::id::
       profile: Some(builder),
       repository: RepositoryAccess::Write,
       model: None,
-      permissions: StepPermissions::default(),
+      permissions: StepPermissions {
+        takes_base_moves: spec.takes_base_moves,
+        ..StepPermissions::default()
+      },
     },
   };
   Step {

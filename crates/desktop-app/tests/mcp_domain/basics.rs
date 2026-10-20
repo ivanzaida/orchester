@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::{Served, post, titles};
 
@@ -253,4 +253,45 @@ fn domain_pipelines_are_made_saved_and_refused_as_the_editor_does() {
     write["code"], "invalid_step",
     "a step cannot write without a profile that writes"
   );
+}
+
+/// `save_pipeline_draft` keeps an agent step's choice of whether it merges the base branch when that moves (ORC-65);
+/// a step that leaves it out follows the default rule, and a tool step cannot choose.
+#[test]
+fn domain_save_pipeline_draft_keeps_a_steps_choice_about_base_moves() {
+  let (mut served, _) = Served::seeded("empty");
+  served.ok(
+    "create_pipeline",
+    &json!({ "project": "Kontur", "name": "Hotfix", "from": "empty" }),
+  );
+  let saved = served.ok(
+    "save_pipeline_draft",
+    &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
+      { "key": "fix", "name": "Fix" },
+      { "key": "verify", "name": "Verify", "runs_after": ["fix"], "takes_base_moves": true },
+    ] }),
+  );
+  let steps = &saved["pipeline"]["steps"];
+  assert_eq!(steps[0]["takes_base_moves"], Value::Null, "{saved}");
+  assert_eq!(
+    steps[0]["merges_moved_base"], false,
+    "a read-only step does not by default"
+  );
+  assert_eq!(steps[1]["takes_base_moves"], true, "{saved}");
+  assert_eq!(
+    steps[1]["merges_moved_base"], true,
+    "the step's choice overrides the default"
+  );
+  let opened = served.ok("get_pipeline", &json!({ "project": "Kontur", "pipeline": "Hotfix" }));
+  assert_eq!(
+    opened["pipeline"]["steps"][1]["takes_base_moves"], true,
+    "kept in the draft"
+  );
+  let tool = served.refused(
+    "save_pipeline_draft",
+    &json!({ "project": "Kontur", "pipeline": "Hotfix", "steps": [
+      { "key": "check", "name": "Check", "tool": "Check", "takes_base_moves": true },
+    ] }),
+  );
+  assert_eq!(tool["code"], "invalid_step", "{tool}");
 }
