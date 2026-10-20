@@ -107,6 +107,20 @@ fn usage_queries() -> [UsageQuery; 2] {
   [every, today]
 }
 
+/// Each tab of a task, with the route its link names.
+fn task_links(project: ProjectId) -> Vec<(Link, Route)> {
+  [
+    (TaskPage::Details, TaskView::Details),
+    (TaskPage::Summary, TaskView::Summary),
+    (TaskPage::Conversation, TaskView::Conversation),
+    (TaskPage::Changes, TaskView::Changes(None)),
+    (TaskPage::LocalIntegration, TaskView::LocalIntegration),
+  ]
+  .into_iter()
+  .map(|(page, view)| (Link::Task(project, key(), page), at(ProjectPage::Task(key(), view))))
+  .collect()
+}
+
 /// Every kind of link and each tab of a task, with the route each names.
 fn every_link() -> Vec<(Link, Route)> {
   let project = project();
@@ -114,26 +128,6 @@ fn every_link() -> Vec<(Link, Route)> {
     (
       Link::Project(project),
       at(ProjectPage::Overview(OverviewTab::default())),
-    ),
-    (
-      Link::Task(project, key(), TaskPage::Details),
-      at(ProjectPage::Task(key(), TaskView::Details)),
-    ),
-    (
-      Link::Task(project, key(), TaskPage::Summary),
-      at(ProjectPage::Task(key(), TaskView::Summary)),
-    ),
-    (
-      Link::Task(project, key(), TaskPage::Conversation),
-      at(ProjectPage::Task(key(), TaskView::Conversation)),
-    ),
-    (
-      Link::Task(project, key(), TaskPage::Changes),
-      at(ProjectPage::Task(key(), TaskView::Changes(None))),
-    ),
-    (
-      Link::Task(project, key(), TaskPage::LocalIntegration),
-      at(ProjectPage::Task(key(), TaskView::LocalIntegration)),
     ),
     (
       Link::Pipeline(project, id()),
@@ -175,6 +169,7 @@ fn every_link() -> Vec<(Link, Route)> {
     ),
   ]
   .into_iter()
+  .chain(task_links(project))
   .chain(file_links(project))
   .chain(usage_queries().into_iter().flat_map(|query| {
     let mut everywhere = query.clone();
