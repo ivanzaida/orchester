@@ -10,6 +10,8 @@ mod cleanup_edits;
 mod direct_merge;
 #[path = "local_integration/drafts.rs"]
 mod drafts;
+#[path = "local_integration/empty_checkpoints.rs"]
+mod empty_checkpoints;
 #[path = "local_integration/external.rs"]
 mod external;
 #[path = "local_integration/git_untouched.rs"]
