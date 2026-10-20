@@ -20,7 +20,7 @@ use super::{
 };
 
 /// The latest run of the task seeded in `state`, and the task's key.
-fn latest(seeded: &Seeded, state: &str) -> (String, Run) {
+pub(super) fn latest(seeded: &Seeded, state: &str) -> (String, Run) {
   let task = seeded
     .tasks
     .iter()
@@ -184,7 +184,12 @@ fn stored(seeded: &Seeded, run: orchester_core::id::RunId) -> Run {
 }
 
 /// The run as stored once `done` holds for it, the window drawn meanwhile.
-fn wait_for(served: &mut Served, seeded: &Seeded, run: orchester_core::id::RunId, done: impl Fn(&Run) -> bool) -> Run {
+pub(super) fn wait_for(
+  served: &mut Served,
+  seeded: &Seeded,
+  run: orchester_core::id::RunId,
+  done: impl Fn(&Run) -> bool,
+) -> Run {
   for _ in 0..600 {
     served.pass();
     let stored = ProjectDb::open(&seeded.repo)

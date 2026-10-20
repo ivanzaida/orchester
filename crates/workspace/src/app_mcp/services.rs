@@ -123,6 +123,11 @@ impl Services {
     &self.programs
   }
 
+  /// The projects' merge and removal operations, shared with the task pages.
+  pub(crate) const fn jobs(&self) -> &ProjectJobs {
+    &self.jobs
+  }
+
   /// The project `named` by its id or, ignoring case, its name, opened as the app opens it. Blocks on
   /// SQLite. It is not recorded as the most recently used project: only a person opening it is.
   pub(super) fn project(&self, named: &str) -> Result<OpenProject, ToolError> {

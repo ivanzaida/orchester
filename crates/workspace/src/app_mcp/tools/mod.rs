@@ -42,7 +42,7 @@ use serde_json::Value;
 pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
 pub(crate) use self::{
-  continue_run::{Choice as ContinueChoice, ContinueRun, offered as continue_offered},
+  continue_run::{Choice as ContinueChoice, ContinueRun, Offered as ContinueOffered, offered as continue_offered},
   messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
   pipeline_copy::duplicate_pipeline_draft,
   questions::{check_answer, waiting_request},
@@ -242,7 +242,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "continue_run",
-    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged). Retry, return and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
+    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged); and resolve_conflicts for a run whose merge into its base branch stopped at conflicts (merge_run's merge_failed): Ask an agent to resolve, which returns its work to a step whose agent may write in the worktree (the implementing one unless step names another) with a note to merge the base branch in and resolve them, the optional note after it, and the conflicting files as data; refused as merge_not_conflicted, step_cannot_write, no_writing_step, integration_running, run_merged, worktree_removed, worktree_in_merge or run_not_ended. Retry, return, resolving and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
     schema: schema_for_type::<continue_run::ContinueRun>,
     read_only: false,
   },

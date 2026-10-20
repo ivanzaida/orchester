@@ -66,7 +66,16 @@ fn unverified_run_lists_what_its_step_could_not_check() {
 }
 
 #[test]
-fn unverified_the_orchestrator_chat_is_served_no_decision_on_a_waiting_run() {
-  // Accepting a step that could not check everything is `continue_run`'s, which the chat's agent is not served.
-  assert!(!orchester_workspace::orchestrator::tools::TOOLS.contains(&"continue_run"));
+fn unverified_the_orchestrator_chat_may_not_accept_a_step_that_waits_unverified() {
+  // Accepting a step that could not check everything is `continue_run`'s accept, which the chat's `continue_run`
+  // refuses as the person's: it only proposes a retry, a return or an agent's resolution of conflicts.
+  let continued = orchester_workspace::orchestrator::tools::listed()
+    .into_iter()
+    .find(|tool| tool.name == "continue_run")
+    .and_then(|tool| tool.description.map(|told| told.into_owned()))
+    .expect("the chat lists continue_run");
+  assert!(
+    continued.contains("raise_limits, raise_step_budget, resume and accept are the person's"),
+    "{continued}"
+  );
 }
