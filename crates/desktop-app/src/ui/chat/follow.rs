@@ -1,9 +1,10 @@
-//! Following the run live (`docs/design/orchester-workspace.md`, "Following live (ORC-36)"): the chat keeps
-//! its newest row in view while it follows, or the card that waits for the person until the person scrolls;
-//! any scroll up stops following and shows *Jump to latest · N new* (`Jump to latest` `tvvRD`: a 30 pill on
-//! `surface_raised` in a `border_strong` stroke, its 13 `arrow-down` and 12/500 words 6 apart, 12 from its
-//! sides, over a 0 4 16 shadow), floating centered over the chat's foot, *N* counting what arrived since; pressing it,
-//! or sending a message ([`Follow::follow_again`]), goes to the end and follows again.
+//! Following a chat live, a task's Conversation and the project's Orchestrator chat alike
+//! (`docs/design/orchester-workspace.md`, "Following live (ORC-36)"): the chat opens at the very end of its newest
+//! row and keeps it in view while it follows, or the card that waits for the person until the person scrolls; any
+//! scroll up stops following and shows *Jump to latest · N new* (`Jump to latest` `tvvRD`: a 30 pill on
+//! `surface_raised` in a `border_strong` stroke, its 13 `arrow-down` and 12/500 words 6 apart, 12 from its sides,
+//! over a 0 4 16 shadow), floating centered over the chat's foot, *N* counting what arrived since; pressing it, or
+//! sending a message ([`Follow::follow_again`]), goes to the end and follows again.
 
 use std::sync::Arc;
 
@@ -19,10 +20,8 @@ use lurq::{
   layout::layout_kind::ScrollState,
   node::{Element, border::Border, dimension::Dimension},
 };
-use orchester_workspace::tasks::timeline::{self, Item, view::Shown};
 use parking_lot::Mutex;
 
-use super::RowProps;
 use crate::{
   theme::{ConversationShadow, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
@@ -38,20 +37,21 @@ const FOLLOW_SLACK: f32 = 24.0;
 /// How far from the end a following chat may sit, or its content grow, before it goes to the end again.
 const AT_END: f32 = 0.5;
 
-/// The card the chat reveals, and whether the person has scrolled since the tab opened.
+/// The card the chat reveals, and whether the person has scrolled since the chat opened.
 #[derive(Default)]
 struct Reveal {
   key: Option<String>,
   scrolled: bool,
 }
 
-/// Whether the chat follows the run, and what it needs to: its scroll, what had arrived when it stopped
-/// following (for *N new*) and at the last render, whether it has shown rows yet, whether it is going to the
-/// end after something arrived, how tall its content was at the last layout, and the card it reveals instead
-/// of its end. Only arrivals move a following chat: a row the person opens or folds leaves it where it is.
+/// Whether the chat follows, and what it needs to: its scroll, what had arrived when it stopped following (for
+/// *N new*) and at the last render, whether it has shown rows yet, whether it is going to the end after something
+/// arrived, how tall its content was at the last layout, the card it reveals instead of its end, and which
+/// conversation it shows when one chat shows several. Only arrivals move a following chat: a row the person opens or
+/// folds leaves it where it is.
 #[derive(Clone)]
-pub(in super::super) struct Follow {
-  pub(in super::super) following: Signal<bool>,
+pub struct Follow {
+  pub following: Signal<bool>,
   scroll: ScrollState,
   left_at: Arc<Mutex<Option<usize>>>,
   seen: Arc<Mutex<usize>>,
@@ -60,10 +60,11 @@ pub(in super::super) struct Follow {
   to_end: Arc<Mutex<bool>>,
   height: Arc<Mutex<f32>>,
   reveal: Arc<Mutex<Reveal>>,
+  shows: Arc<Mutex<Option<String>>>,
 }
 
 impl PartialEq for Follow {
-  /// The tab's own handles, the same for as long as the tab is mounted.
+  /// The chat's own handles, the same for as long as the chat is mounted.
   fn eq(&self, other: &Self) -> bool {
     Arc::ptr_eq(&self.started, &other.started)
   }
@@ -72,7 +73,7 @@ impl PartialEq for Follow {
 impl lurq::app::component::DevtoolsInspectable for Follow {}
 
 impl Follow {
-  pub(in super::super) fn new(ctx: &mut Ctx) -> Self {
+  pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       following: ctx.signal(true),
       scroll: ScrollState::new(),
@@ -82,11 +83,12 @@ impl Follow {
       to_end: Arc::default(),
       height: Arc::default(),
       reveal: Arc::default(),
+      shows: Arc::default(),
     }
   }
 
   /// Goes to the end of the chat and follows it again: *Jump to latest*, and a message the person sent.
-  pub(in crate::screens::task::conversation) fn follow_again(&self) {
+  pub fn follow_again(&self) {
     *self.reveal.lock() = Reveal {
       key: None,
       scrolled: true,
@@ -95,9 +97,29 @@ impl Follow {
     self.following.set(true);
   }
 
+  /// The chat shows `conversation`: another one than at the last render opens as a chat just mounted does, at its
+  /// end, following.
+  pub fn shows(&self, conversation: &str) {
+    {
+      let mut shows = self.shows.lock();
+      if shows.as_deref() == Some(conversation) {
+        return;
+      }
+      *shows = Some(conversation.to_owned());
+    }
+    *self.reveal.lock() = Reveal::default();
+    *self.started.lock() = false;
+    *self.left_at.lock() = None;
+    *self.height.lock() = 0.0;
+    *self.to_end.lock() = false;
+    if !self.following.get_untracked() {
+      self.following.set(true);
+    }
+  }
+
   /// A row the person opens or folds: the chat stays where it is, its scroll held over the content changing
   /// under it, and stops following, so nothing moves under the pointer.
-  pub(super) fn hold_in_place(&self) {
+  pub fn hold_in_place(&self) {
     self
       .scroll
       .set_scroll_pending(self.scroll.scroll_x(), self.scroll.scroll_y());
@@ -113,20 +135,17 @@ impl Follow {
     *self.to_end.lock() = true;
   }
 
-  /// Keeps the end of the chat in view while following: a render after something arrived (`arrived` counts
-  /// what the run brought so far) goes to the end. The first time, the chat starts at the end; until the
-  /// person scrolls, the first card that waits for them is revealed instead, for as long as it waits.
-  pub(super) fn follow(&self, shown: &Shown, items: &[Item], arrived: usize) -> Option<String> {
-    let rows = shown.rows.len();
+  /// Keeps the end of the chat in view while following: a render after something arrived (`arrived` counts what
+  /// the chat brought so far) goes to the end. The first time it has `rows`, the chat starts at the end; until the
+  /// person scrolls, the card `waiting` for them (its row's key) is revealed instead, for as long as it waits:
+  /// the key of the row to reveal.
+  pub fn follow(&self, rows: usize, arrived: usize, waiting: Option<String>) -> Option<String> {
     let came = std::mem::replace(&mut *self.seen.lock(), arrived) != arrived;
     let mut started = self.started.lock();
     let mut reveal = self.reveal.lock();
     let held = reveal.key.is_some();
     if !reveal.scrolled {
-      reveal.key = items
-        .iter()
-        .find(|item| timeline::waits_for_you(item))
-        .map(|item| item.key.to_string());
+      reveal.key = waiting;
     }
     // The first rows start at the end; later, only an arrival moves the chat, unless a card holds it.
     // A card the chat held stopped waiting before the person scrolled: the chat goes on to the end.
@@ -139,14 +158,14 @@ impl Follow {
     reveal.key.clone()
   }
 
-  /// `list`, scrolled as it follows: any scroll up stops following, a scroll down back to the end follows
-  /// again. `arrived` counts what the run has brought so far, for *N new*.
-  pub(super) fn list<'a>(
+  /// `list`, scrolled as it follows: any scroll up stops following, a scroll down back to the end follows again.
+  /// `arrived` counts what the chat has brought so far, for *N new*; `reveal` is what [`Follow::follow`] reveals.
+  pub fn list<'a, T>(
     &self,
-    list: VirtualizedList<'a, RowProps>,
+    list: VirtualizedList<'a, T>,
     arrived: usize,
     reveal: Option<String>,
-  ) -> VirtualizedList<'a, RowProps> {
+  ) -> VirtualizedList<'a, T> {
     let (scroll, following, left_at, revealed) = (
       self.scroll.clone(),
       self.following.clone(),
@@ -157,7 +176,7 @@ impl Follow {
       .with_scroll_state(self.scroll.clone())
       .reveal_key(reveal)
       .on_scroll(move |event: ScrollEvent| {
-        // The person scrolls: the card the tab opened at no longer holds the chat.
+        // The person scrolls: the card the chat opened at no longer holds it.
         *revealed.lock() = Reveal {
           key: None,
           scrolled: true,
@@ -174,7 +193,7 @@ impl Follow {
   }
 
   /// *Jump to latest · N new*: what arrived since the chat stopped following.
-  pub(super) fn jump(&self, ctx: &Ctx, arrived: usize) -> Element {
+  pub fn jump(&self, ctx: &Ctx, arrived: usize) -> Element {
     let new = {
       let mut left_at = self.left_at.lock();
       arrived.saturating_sub(*left_at.get_or_insert(arrived))
@@ -199,15 +218,15 @@ impl Follow {
     Row::new().padding_bottom(SpacingSize::Sm).child(button).into()
   }
 
-  /// What holds a following chat at its end, mounted after the list ([`FollowEnd`]).
-  pub(super) fn end(&self, ctx: &mut Ctx) -> Element {
-    ctx.mount_keyed::<FollowEnd>("conversation-follow-end", self.clone())
+  /// What holds a following chat at its end, mounted after the list ([`FollowEnd`]); `key` names it.
+  pub fn end(&self, ctx: &mut Ctx, key: &str) -> Element {
+    ctx.mount_keyed::<FollowEnd>(key, self.clone())
   }
 
   /// A chat going to its end after an arrival, whose content grew since the last layout, goes there at once,
   /// before the next frame: the list puts the row it anchored back where it was, which leaves the newest rows
-  /// under the view. A layout that did not grow the content ends that; a row the person opened never starts
-  /// it, so the scroll stays as the person left it.
+  /// under the view, and rows it measures late (Markdown, cards) move the end further. A layout that did not grow
+  /// the content ends that; a row the person opened never starts it, so the scroll stays as the person left it.
   fn keep_at_end(&self) {
     let height = self.scroll.content_height();
     let grew = {
@@ -234,12 +253,12 @@ impl Follow {
 
 /// The room *Jump to latest* takes over the chat's foot, under the last row while it shows: the pill's height
 /// (the row's own padding adds the gap).
-pub(super) fn jump_room() -> Element {
+pub fn jump_room() -> Element {
   Column::new().height(Dimension::Px(JUMP_HEIGHT)).into()
 }
 
 /// Mounted after the chat's list, so that its `after_layout` runs after the list's, which moves the scroll.
-pub(super) struct FollowEnd {
+struct FollowEnd {
   follow: Mutex<Option<Follow>>,
 }
 

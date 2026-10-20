@@ -4,9 +4,11 @@
 //! ([`agent_text`]). A person's (`Your message` `mr4lC`): at the right, *You* and the time, the message as written in
 //! a bubble that hugs it up to 80 % of the chat (`own_message` in a `border` stroke, radius 10, 8 by 12 inside) and,
 //! under it, where it stands. Where a link in what an agent wrote leads is [`links`]'; which places an agent names as
-//! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s.
+//! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s. Both chats open at
+//! their end and follow it ([`follow`]).
 
 mod agent_text;
+pub mod follow;
 mod grid;
 pub mod labelled;
 pub mod links;
