@@ -1,6 +1,20 @@
 {
   "conversation": {
     "agentMeta": "{{step}} · {{time}}",
+    "baseMoved": {
+      "commits": {
+        "one": "{{branch}} moved to {{revision}} · 1 commit landed · merge requested · {{state}}",
+        "other": "{{branch}} moved to {{revision}} · {{count}} commits landed · merge requested · {{state}}"
+      },
+      "delivered": "told {{agent}} at {{time}}",
+      "followUp": "waits for a follow-up",
+      "runGoesOn": "kept until the run goes on",
+      "tasks": {
+        "one": "{{branch}} moved to {{revision}} · 1 task landed · merge requested · {{state}}",
+        "other": "{{branch}} moved to {{revision}} · {{count}} tasks landed · merge requested · {{state}}"
+      },
+      "writingStep": "waits for a writing step"
+    },
     "change": {
       "every": "Replaces every occurrence; the lines show one",
       "finalBreakAdded": "Adds the final line break",

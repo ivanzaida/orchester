@@ -172,11 +172,11 @@ impl Nav {
     self.navigation.to(self.route(ProjectPage::Tasks(TaskList::default())))
   }
 
-  /// What opens the Summary of the task `key` where a press asks.
+  /// What opens the task `key`, on the tab a task opens on, where a press asks.
   pub fn to_task(&self, key: &TaskKey) -> Open {
     self
       .navigation
-      .to(self.route(ProjectPage::Task(key.clone(), TaskView::Summary)))
+      .to(self.route(ProjectPage::Task(key.clone(), TaskView::default())))
   }
 
   /// The task whose run was asked to start, in the form's place: its Conversation, or its Summary, which says why,

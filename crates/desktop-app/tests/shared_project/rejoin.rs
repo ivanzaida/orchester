@@ -107,13 +107,19 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
   let recorder = joined(&mut window, &server, &kontur);
   let project = support::project_id();
 
-  // From the list's Not shared filter, the row opens the kept task's own page.
+  // From the list's Not shared filter, the row opens the kept task's own page, on its Details; its Summary says it is
+  // kept Not shared.
+  let kept = |view| Route::Project(project, ProjectPage::KeptTask("KON-2".parse().expect("key"), view));
   harness::go(
     &mut window,
     Route::Project(project, ProjectPage::Tasks(TaskList::default().with_not_shared(true))),
     "task-row-KON-2",
   );
   press(&mut window, "task-row-KON-2");
+  window.until("the kept task's details", |window| {
+    window.navigation().route_now() == kept(TaskView::Details)
+  });
+  press(&mut window, "task-tab-summary");
   shows(&mut window, "task-not-shared");
   assert_eq!(window.text("task-title"), "Retry exports");
 
@@ -132,7 +138,6 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
   assert!(window.tree.get_element_by_id("task-not-shared").is_none());
 
   // The kept page's own links keep its address: its tabs open the kept task, not Alice's.
-  let kept = |view| Route::Project(project, ProjectPage::KeptTask("KON-2".parse().expect("key"), view));
   harness::go(
     &mut window,
     kept(TaskView::of(TaskTab::Summary)),
@@ -149,14 +154,7 @@ fn shared_project_a_not_shared_task_with_a_shared_key_has_its_own_page() {
   assert_eq!(window.text("task-title"), "Retry exports");
 
   // Share task from the kept page leaves Alice's KON-2 as it was.
-  harness::go(
-    &mut window,
-    Route::Project(
-      project,
-      ProjectPage::KeptTask("KON-2".parse().expect("key"), TaskView::of(TaskTab::Summary)),
-    ),
-    "task-share",
-  );
+  harness::go(&mut window, kept(TaskView::of(TaskTab::Summary)), "task-share");
   press(&mut window, "task-share");
   window.until("the next key", |window| {
     window.texts("task-share-confirm") == Some(vec!["Share as KON-5".to_owned()])

@@ -5,6 +5,7 @@
 mod across;
 mod approvals;
 mod auto_mode;
+mod base_moved;
 mod continue_run;
 mod conversation;
 mod limits;
@@ -113,7 +114,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, whose Summary lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
@@ -145,7 +146,10 @@ const SPECS: &[Spec] = &[
                   or automation through this server). merge says whether its work was merged, as its task's Summary \
                   tells it: merged by orchester (with the recorded merge) or outside (git proves its base branch \
                   holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
-                  The run's link is its task's page; the waiting approvals, \
+                  base_moved lists Orchester's notices that the run's base branch moved (kind base_moved): the \
+                  branch and revision, the tasks and commits that landed, the files both sides changed, and its \
+                  state (waits_for_writing_step, kept_until_run_goes_on, waits_for_follow_up, or delivered with the \
+                  agent and step that read it). The run's link is its task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
@@ -164,7 +168,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_conversation",
-    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
+    description: "A task's conversation as its Conversation tab shows it for the task's latest run, oldest first and newest last: what the person and the Orchestrator chat wrote to the agents (with whom to and whether it was delivered), what the agents wrote, the questions they wrote in the conversation (open while their step waits for the answer), their questions with suggested answers (options, state, answers, answered_by: person, automation or orchestrator), their plans (whole text, whether it waits for a decision, the decision), Orchester's notices that the base branch moved (kind base_moved: branch, revision, tasks and commits that landed, overlapping_files, state and delivered_to) and how each step ended; each with its author, step, run, time, `cursor` and the link to its card on the task's Conversation. At most `limit` entries, the newest (50 when left out, 200 at most); `before` (an entry's cursor) reads the entries older than it, and `more` says whether older ones are left. Texts are as stored, secrets redacted; tool calls and approvals have their own tools.",
     schema: schema_for_type::<conversation::GetConversation>,
     read_only: true,
   },

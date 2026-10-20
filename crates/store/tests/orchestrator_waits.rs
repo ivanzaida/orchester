@@ -31,6 +31,7 @@ fn wait(run: RunId) -> AgentWait {
     link: "/project/p/tasks/ORC-1/conversation".to_owned(),
     own: false,
     automatic: true,
+    continuing: None,
   }
 }
 

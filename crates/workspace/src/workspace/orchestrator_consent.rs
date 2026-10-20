@@ -1,7 +1,8 @@
 //! The person's switches over what the Orchestrator chat does itself (`docs/design/orchestrator-toolset.md`,
 //! decisions 3 and 5), in Settings › What automation may do: *Let the Orchestrator publish drafts*, *Let the
-//! Orchestrator answer agents* and *Let the Orchestrator merge runs*. Each is off until a person turns it on in the
-//! window, no tool changes it, and it is off from the moment a person turns it off, whether or not that was saved.
+//! Orchestrator answer agents*, *Let the Orchestrator merge runs* and *Let the Orchestrator continue interrupted
+//! runs*. Each is off until a person turns it on in the window, no tool changes it, and it is off from the moment a
+//! person turns it off, whether or not that was saved.
 
 use std::sync::Arc;
 
@@ -20,6 +21,9 @@ pub enum OrchestratorConsent {
   AnswerAgents,
   /// Its `merge_run` merges at once instead of proposing the merge.
   MergeRuns,
+  /// Its `resume_run` continues a run a crash, the runner going away or *Quit now* interrupted, from its last
+  /// checkpoint; with *answer agents* also on, a turn such an end started continues it once.
+  ContinueInterrupted,
 }
 
 impl OrchestratorConsent {
@@ -28,6 +32,7 @@ impl OrchestratorConsent {
       Self::PublishDrafts => db.orchestrator_publishes_drafts(),
       Self::AnswerAgents => db.orchestrator_answers_agents(),
       Self::MergeRuns => db.orchestrator_merges_runs(),
+      Self::ContinueInterrupted => db.orchestrator_continues_interrupted(),
     }
   }
 
@@ -36,6 +41,7 @@ impl OrchestratorConsent {
       Self::PublishDrafts => db.set_orchestrator_publishes_drafts(allowed),
       Self::AnswerAgents => db.set_orchestrator_answers_agents(allowed),
       Self::MergeRuns => db.set_orchestrator_merges_runs(allowed),
+      Self::ContinueInterrupted => db.set_orchestrator_continues_interrupted(allowed),
     }
   }
 }
@@ -46,6 +52,7 @@ pub(super) struct Consents {
   publish: Arc<Mutex<Consent>>,
   answer: Arc<Mutex<Consent>>,
   merge: Arc<Mutex<Consent>>,
+  continue_interrupted: Arc<Mutex<Consent>>,
 }
 
 impl Consents {
@@ -54,6 +61,7 @@ impl Consents {
       OrchestratorConsent::PublishDrafts => &self.publish,
       OrchestratorConsent::AnswerAgents => &self.answer,
       OrchestratorConsent::MergeRuns => &self.merge,
+      OrchestratorConsent::ContinueInterrupted => &self.continue_interrupted,
     }
   }
 }

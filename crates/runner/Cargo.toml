@@ -117,6 +117,10 @@ name = "conversation"
 required-features = ["test-agent"]
 
 [[test]]
+name = "base_moved"
+required-features = ["test-agent"]
+
+[[test]]
 name = "unreadable"
 required-features = ["test-agent"]
 

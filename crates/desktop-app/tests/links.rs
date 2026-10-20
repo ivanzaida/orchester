@@ -116,6 +116,10 @@ fn every_link() -> Vec<(Link, Route)> {
       at(ProjectPage::Overview(OverviewTab::default())),
     ),
     (
+      Link::Task(project, key(), TaskPage::Details),
+      at(ProjectPage::Task(key(), TaskView::Details)),
+    ),
+    (
       Link::Task(project, key(), TaskPage::Summary),
       at(ProjectPage::Task(key(), TaskView::Summary)),
     ),
@@ -323,11 +327,11 @@ fn links_pull_requests_are_numbered_from_one() {
 }
 
 #[test]
-fn links_written_without_a_tasks_tab_open_its_summary() {
+fn links_written_without_a_tasks_tab_open_its_details() {
   let path = format!("/project/{PROJECT}/tasks/ORC-24");
   let route = Route::parse(&path).expect("a task's page");
-  assert_eq!(route, at(ProjectPage::Task(key(), TaskView::Summary)));
-  assert_eq!(route.path(), Link::Task(project(), key(), TaskPage::Summary).path());
+  assert_eq!(route, at(ProjectPage::Task(key(), TaskView::Details)));
+  assert_eq!(route.path(), Link::Task(project(), key(), TaskPage::Details).path());
   let chain = routes().resolve(&path);
   let leaf = chain.last().unwrap_or_else(|| panic!("{path} resolves"));
   assert_eq!(
@@ -336,4 +340,11 @@ fn links_written_without_a_tasks_tab_open_its_summary() {
     "a route of its own, not the fallback"
   );
   assert_eq!(Route::parse(&format!("{path}/summary/more")), Err(RouteError::NoScreen));
+}
+
+#[test]
+fn links_naming_a_tasks_summary_still_open_it() {
+  let path = format!("/project/{PROJECT}/tasks/ORC-24/summary");
+  assert_eq!(Route::parse(&path), Ok(at(ProjectPage::Task(key(), TaskView::Summary))));
+  assert_eq!(path, Link::Task(project(), key(), TaskPage::Summary).path());
 }

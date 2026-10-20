@@ -314,6 +314,15 @@ locks (`orchester_core::integration`).
   moving: a commit of the run's the target has as a pick, or one never checkpointed, below the
   commit the branch was rebased onto, is not told apart from the target's own (the rebase itself
   leaves out of the branch a commit whose patch the target already has).
+- **Runs that took the base in (ORC-60).** A branch fast-forwarded onto a newer commit of its target (an agent
+  told to merge the base before it had committed anything), or one that merged it, holds the target's commits
+  above the recorded base. Their newest one is the base its own work starts from
+  (`orchester_core::integration::fork_point`): one a `…: Fast-forward` entry of the branch's reflog moved it to, a
+  base recorded before, or the newest commit branch and target share, as long as no commit of the run's own is at
+  or below it. The run's own commits are its checkpoints and the commits its branch's reflog shows were made on it
+  (commits, merge commits, picks, rebases; not fast-forwards or resets). External evidence and Merge into main read
+  the run from there, and so do Changes and *What changed*; the run's recorded base stays its start for history.
+  Writing agents commit a checkpoint before they merge the base, and merge it with `--no-ff`.
 - **Recording.** The merge is a desktop-written row (`run_merges`: the branch, the commit it was at
   afterwards, fast-forward / merge commit / already merged, when). The task is then *Merged*.
 - **Clearing up.** Right after a merge the run's worktrees (its own and those of failed or skipped

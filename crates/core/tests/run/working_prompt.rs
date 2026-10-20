@@ -1,12 +1,13 @@
 //! The prompt's *Files and commands* part names what the step's CLI and permissions have: Claude Code's
-//! file tools, and its edit tools only in a writing step; Codex's `apply_patch` only in a writing step;
-//! nothing for a native agent. A resumed session already holds it.
+//! file tools, and its edit tools only in a writing step; Codex's `apply_patch` only in a writing step; how to
+//! merge the base branch safely only in a writing step (ORC-54); nothing for a native agent. A resumed session
+//! already holds it.
 
 use orchester_core::{
   connection::AgentProvider,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, CommandPrefix, NetworkAccess, RepositoryAccess},
   resource::InjectionEvent,
-  run::{PromptInput, WorkingTools},
+  run::{MERGE_SAFELY, PromptInput, WorkingTools},
 };
 
 use crate::{
@@ -48,6 +49,16 @@ fn codex_processes() -> &'static str {
   "\nFind apps you started with list_run_processes and stop them with stop_run_process(pid) of the Orchester MCP server, instead of Stop-Process or kill. These tools run without asking and refuse executables outside this run's worktree, the runner and the agent CLI. Stop only apps you started. Drive that app with call_run_app(pid, tool, arguments) instead of running tools/lurq-mcp-client.py. The relay finds discovery itself, keeps its token private and returns PNG paths under .tmp/."
 }
 
+/// A writing step's `part` without its process steering, `processes`, and without how to merge the base branch
+/// (ORC-54), on a line of its own before it.
+fn written<'a>(part: &'a str, processes: &str) -> &'a str {
+  part
+    .strip_suffix(processes)
+    .expect("process steering")
+    .strip_suffix(format!("\n{MERGE_SAFELY}").as_str())
+    .expect("how to merge the base")
+}
+
 #[test]
 fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   let start = InjectionEvent::Start;
@@ -58,9 +69,7 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   )
   .expect("a part");
   assert_eq!(
-    claude_writes
-      .strip_suffix(claude_processes())
-      .expect("process steering"),
+    written(&claude_writes, claude_processes()),
     "Read, search and change files only with Orchester's file tools: mcp__Orchester__read_file, \
      mcp__Orchester__list_files, mcp__Orchester__search_file, mcp__Orchester__edit_file (after reading the file: give \
      the lines to replace and, as expected, exactly what they hold now), mcp__Orchester__create_file (new files \
@@ -97,7 +106,7 @@ fn working_prompt_names_the_tools_of_the_cli_and_the_access() {
   )
   .expect("a part");
   assert_eq!(
-    codex_writes.strip_suffix(codex_processes()).expect("process steering"),
+    written(&codex_writes, codex_processes()),
     "Read, search and change files with the read_file, list_files, search_file, edit_file (after read_file: give \
      the lines to replace and, as expected, exactly what they hold now), create_file (new files only), delete_file \
      and move_file (one file each, never a folder) tools of the Orchester MCP server, not through the shell (`cat`, \

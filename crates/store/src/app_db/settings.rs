@@ -6,8 +6,8 @@
 //! automation may widen what agents may do through Orchester's MCP server (off until a person turns it on
 //! in the window), the installed app's own MCP server: whether it listens, on which port, and the id of
 //! this installation that names its token in the keychain, whether the Orchestrator chat publishes drafts,
-//! answers agents and merges runs itself (each off until a person turns it on in the window), and which OS
-//! notifications the app shows.
+//! answers agents, merges runs and continues interrupted runs itself (each off until a person turns it on in the
+//! window), and which OS notifications the app shows.
 
 use orchester_core::{
   app_mcp::McpPort,
@@ -71,6 +71,13 @@ ALTER TABLE app_settings ADD COLUMN orchestrator_answers_agents INTEGER NOT NULL
   CHECK (orchestrator_answers_agents IN (0, 1));
 ALTER TABLE app_settings ADD COLUMN orchestrator_merges_runs INTEGER NOT NULL DEFAULT 0
   CHECK (orchestrator_merges_runs IN (0, 1));
+";
+
+pub(super) const ORCHESTRATOR_CONTINUES_MIGRATION: &str = r"
+-- Let the Orchestrator continue interrupted runs (docs/design/orchestrator-toolset.md, decision 5): off until a
+-- person turns it on.
+ALTER TABLE app_settings ADD COLUMN orchestrator_continues_interrupted INTEGER NOT NULL DEFAULT 0
+  CHECK (orchestrator_continues_interrupted IN (0, 1));
 ";
 
 pub(super) const NOTIFICATIONS_MIGRATION: &str = r"
@@ -279,6 +286,25 @@ impl AppDb {
   pub fn set_orchestrator_merges_runs(&mut self, allowed: bool) -> Result<(), StoreError> {
     self.connection.execute(
       "UPDATE app_settings SET orchestrator_merges_runs = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
+
+  /// Whether the Orchestrator chat's `resume_run` continues a run a crash, the runner going away or *Quit now*
+  /// interrupted (*Let the Orchestrator continue interrupted runs*); a run stopped at a limit or by a person stays
+  /// the person's either way.
+  pub fn orchestrator_continues_interrupted(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT orchestrator_continues_interrupted FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_orchestrator_continues_interrupted(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET orchestrator_continues_interrupted = ?1 WHERE id = 1",
       params![allowed],
     )?;
     Ok(())

@@ -47,6 +47,38 @@ fn local_policy_authenticated_legacy_domain_merge_keeps_original_gates_and_actua
   assert_eq!(before.snapshot(), after.snapshot());
 }
 
+/// ORC-60: the run's branch fast-forwarded onto newer main before it committed anything, and main moved on since.
+/// Main's commits are not the run's result: `merge_run` merges it, and no reconciliation is asked for.
+#[test]
+fn local_policy_legacy_merge_of_a_run_fast_forwarded_onto_newer_main_is_not_scoped() {
+  let commit = |root: &std::path::Path, file: &str, message: &str| {
+    fs::write(root.join(file), format!("{message}\n")).expect("write");
+    git(root, &["add", file]);
+    git(root, &["commit", "-m", message]);
+    git(root, &["rev-parse", "HEAD"])
+  };
+  let fixture = Fixture::worked(false, ("moved-ff-", "task"), |root, task| {
+    commit(root, "landed.txt", "landed work");
+    git(task, &["merge", "main"]);
+    vec![commit(task, "task.txt", "task work")]
+  });
+  commit(fixture.root(), "later.txt", "later main work");
+  let mut page = Page::new(fixture);
+  page.ready("local-review-preserve");
+  let source = git(&page.fixture.task_root, &["rev-parse", "HEAD"]);
+  let client = Client::new(&mut page, false);
+  let args = arguments(&page);
+  let result = client.call(&mut page, "merge_run", &args);
+  ok(&result);
+  assert_eq!(value(&result)["merge"]["kind"], "merge_commit");
+  assert_eq!(
+    git(page.root(), &["merge-base", "--is-ancestor", &source, "HEAD"]),
+    "",
+    "main holds the run's work"
+  );
+  assert_eq!(git(page.root(), &["show", "HEAD:later.txt"]), "later main work");
+}
+
 #[test]
 fn local_policy_legacy_domain_external_complete_partial_and_scoped_results_make_no_extra_commit() {
   for scope in ["complete", "partial", "scoped"] {
