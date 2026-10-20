@@ -1,12 +1,13 @@
 //! Token budgets and time limits as people enter and read them (`docs/design/orchester-workspace.md`,
 //! "Token budgets", "Stopped at limit"): field errors, the Project settings › Limits form,
-//! whole-minute time limits of active agent time and how many agents work at once. A run budget and
-//! a time limit are optional with no maximum: an empty field is no limit (user decision 2026-10-09).
+//! whole-minute time limits of active agent time, how many agents work at once and how many QA apps
+//! are open at once. A run budget and a time limit are optional with no maximum: an empty field is no
+//! limit (user decision 2026-10-09).
 
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{AgentSlots, LONGEST_TIME_LIMIT, ProjectLimits, ProjectLimitsError},
+  limits::{AgentSlots, LONGEST_TIME_LIMIT, ProjectLimits, ProjectLimitsError, QaSlots},
   tokens::{BudgetInputError, TokenBudget, grouped, parse_budget, parse_optional_budget},
 };
 
@@ -96,6 +97,23 @@ fn agent_slots_error() -> Message {
     .with("max", AgentSlots::MAX.to_string())
 }
 
+/// A QA slots field's text: a whole number from [`QaSlots::MIN`] to [`QaSlots::MAX`].
+pub fn read_qa_slots(text: &str) -> Result<QaSlots, Message> {
+  let count: u64 = text.trim().parse().map_err(|_| qa_slots_error())?;
+  qa_slots(count)
+}
+
+/// `count` QA apps at once, from [`QaSlots::MIN`] to [`QaSlots::MAX`].
+pub fn qa_slots(count: u64) -> Result<QaSlots, Message> {
+  QaSlots::new(count).map_err(|_| qa_slots_error())
+}
+
+fn qa_slots_error() -> Message {
+  Message::new("settings.limits.qaSlotsInvalid")
+    .with("min", QaSlots::MIN.to_string())
+    .with("max", QaSlots::MAX.to_string())
+}
+
 /// A time limit in a field: its whole minutes, empty for no limit.
 pub fn minutes_text(limit: Option<Duration>) -> String {
   limit.map(|limit| whole_minutes(limit).to_string()).unwrap_or_default()
@@ -122,8 +140,9 @@ pub fn whole_minutes(duration: Duration) -> u64 {
   duration.as_secs() / SECONDS_PER_MINUTE
 }
 
-/// The Limits tab's fields as entered. An empty default run budget or time limit means new tasks
-/// have none.
+/// The deprecated app's Limits tab fields as entered. An empty default run budget or time limit means new tasks
+/// have none. It has no *QA apps at once* field: its limits carry the default QA slots. The new app reads its
+/// fields with `crate::project_settings::LimitsText`.
 pub struct LimitsForm<'a> {
   pub default_run_budget: &'a str,
   pub daily_budget: &'a str,
@@ -140,6 +159,7 @@ pub struct LimitsErrors {
   pub daily_budget: Option<Message>,
   pub default_time_limit: Option<Message>,
   pub agent_slots: Option<Message>,
+  pub qa_slots: Option<Message>,
 }
 
 impl LimitsForm<'_> {
@@ -149,6 +169,7 @@ impl LimitsForm<'_> {
       daily_budget: read_budget(self.daily_budget, self.separator),
       default_time_limit: read_minutes(self.default_time_limit),
       agent_slots: read_agent_slots(self.agent_slots),
+      qa_slots: Ok(QaSlots::DEFAULT),
     }
     .limits()
   }
@@ -161,22 +182,25 @@ pub struct ReadLimits {
   pub daily_budget: Result<TokenBudget, Message>,
   pub default_time_limit: Result<Option<Duration>, Message>,
   pub agent_slots: Result<AgentSlots, Message>,
+  pub qa_slots: Result<QaSlots, Message>,
 }
 
 impl ReadLimits {
   /// The limits, or why they cannot be saved: each limit's own error.
   pub fn limits(self) -> Result<ProjectLimits, Box<LimitsErrors>> {
-    let (Ok(default), Ok(daily), Ok(time), Ok(slots)) = (
+    let (Ok(default), Ok(daily), Ok(time), Ok(slots), Ok(qa)) = (
       &self.default_run_budget,
       &self.daily_budget,
       &self.default_time_limit,
       &self.agent_slots,
+      &self.qa_slots,
     ) else {
       return Err(Box::new(LimitsErrors {
         default_run_budget: self.default_run_budget.err(),
         daily_budget: self.daily_budget.err(),
         default_time_limit: self.default_time_limit.err(),
         agent_slots: self.agent_slots.err(),
+        qa_slots: self.qa_slots.err(),
       }));
     };
     let limits = ProjectLimits::new(*default, *daily, *time).map_err(|error| {
@@ -189,6 +213,6 @@ impl ReadLimits {
         ..LimitsErrors::default()
       })
     })?;
-    Ok(limits.with_agent_slots(*slots))
+    Ok(limits.with_agent_slots(*slots).with_qa_slots(*qa))
   }
 }

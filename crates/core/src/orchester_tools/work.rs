@@ -160,7 +160,7 @@ pub enum ToolWork {
   Processes(ProcessCall),
   /// Calls one embedded MCP tool after the executor validates its process and discovery.
   App(AppCall),
-  /// Starts a QA copy of the app once the QA slot is free, and keeps it for the step.
+  /// Starts a QA copy of the app once a QA slot its project allows is free, and keeps it for the step.
   QaApp(QaAppStart),
   /// `find_references` of this name, which the caller answers from the code index and the worktree.
   References(String),

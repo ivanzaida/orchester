@@ -232,9 +232,11 @@ by `read_external_file` and `search_external_file`.
   `tools/lurq-mcp-client.py` outside the sandbox; the design-verification skill does too. This grants no access
   to the person's installed app, another run or arbitrary network endpoints.
 - **QA apps.** `start_qa_app(scenario)` replaces agents starting `tools/qa-app.ps1` themselves and negotiating a
-  shared QA slot in notes. The runner takes the computer's QA slot (one at a time, an OS file lock in the user's
-  data folder that every runner takes; a second start waits and the transcript says *Waiting for the QA slot*),
-  runs the worktree's `tools/qa-app.ps1 -Name run-<number>-<step> -Scenario <scenario>` (Windows PowerShell; `pwsh`
+  shared QA slot in notes. The runner takes one of the computer's QA slots (OS file locks in the user's data folder
+  that every runner takes; as many as the project's *QA apps at once* in Project settings › Limits, 1 to 16,
+  default 2, read at each start; a start while all of them are held waits and the transcript says *Waiting for a QA
+  slot*, naming the runs that hold them when their slot records read), runs the worktree's
+  `tools/qa-app.ps1 -Name run-<number>-<step> -Scenario <scenario>` (Windows PowerShell; `pwsh`
   on macOS; a worktree without the script, or a platform without either, is told so), checks the app it names with
   `call_run_app`'s process rules and that its discovery file lies in its QA folder, and keeps it for the invocation:
   `call_run_app` without `pid` reaches it through that exact file (checked for links at each call), without

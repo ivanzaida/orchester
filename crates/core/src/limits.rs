@@ -2,7 +2,7 @@
 //! are project settings. A run's budget and time limit are optional and have no maximum: an empty
 //! one means no limit (user decision 2026-10-09). Changes apply to new runs; a run keeps the
 //! limits it started with. How many agents work at once is the exception: the project's runner
-//! applies it at once.
+//! applies it at once; how many QA apps are open at once applies from the next QA app's start.
 
 use std::{num::NonZeroU32, time::Duration};
 
@@ -27,6 +27,17 @@ pub(crate) fn too_long(limit: Option<Duration>) -> bool {
   limit.is_some_and(|limit| limit > LONGEST_TIME_LIMIT)
 }
 
+/// The fewest and the most slots a project can set, for agents and for QA apps alike.
+const SLOTS: std::ops::RangeInclusive<u32> = 1..=16;
+
+/// `count` when it lies in [`SLOTS`].
+fn slots(count: u64) -> Option<NonZeroU32> {
+  u32::try_from(count)
+    .ok()
+    .filter(|count| SLOTS.contains(count))
+    .and_then(NonZeroU32::new)
+}
+
 #[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
 #[error("{count} agents at once is outside {min} to {max}", min = AgentSlots::MIN, max = AgentSlots::MAX)]
 pub struct AgentSlotsError {
@@ -40,17 +51,12 @@ pub struct AgentSlotsError {
 pub struct AgentSlots(NonZeroU32);
 
 impl AgentSlots {
-  pub const MIN: u32 = 1;
-  pub const MAX: u32 = 16;
+  pub const MIN: u32 = *SLOTS.start();
+  pub const MAX: u32 = *SLOTS.end();
   pub const DEFAULT: Self = Self(NonZeroU32::new(4).expect("four is above zero"));
 
   pub fn new(count: u64) -> Result<Self, AgentSlotsError> {
-    u32::try_from(count)
-      .ok()
-      .filter(|count| (Self::MIN..=Self::MAX).contains(count))
-      .and_then(NonZeroU32::new)
-      .map(Self)
-      .ok_or(AgentSlotsError { count })
+    slots(count).map(Self).ok_or(AgentSlotsError { count })
   }
 
   pub const fn get(self) -> NonZeroU32 {
@@ -64,7 +70,39 @@ impl Default for AgentSlots {
   }
 }
 
-/// A project's token budgets, time limit default and agent slots.
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+#[error("{count} QA apps at once is outside {min} to {max}", min = QaSlots::MIN, max = QaSlots::MAX)]
+pub struct QaSlotsError {
+  pub count: u64,
+}
+
+/// How many QA apps this project's runs may have open at once (`start_qa_app`): each open one takes one of the
+/// computer's QA slots, which every project's runner shares; a start while all the slots it may use are taken waits
+/// until one is free. Read at each start, so a change applies to the next one; lowering it closes no open app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct QaSlots(NonZeroU32);
+
+impl QaSlots {
+  pub const MIN: u32 = *SLOTS.start();
+  pub const MAX: u32 = *SLOTS.end();
+  pub const DEFAULT: Self = Self(NonZeroU32::new(2).expect("two is above zero"));
+
+  pub fn new(count: u64) -> Result<Self, QaSlotsError> {
+    slots(count).map(Self).ok_or(QaSlotsError { count })
+  }
+
+  pub const fn get(self) -> NonZeroU32 {
+    self.0
+  }
+}
+
+impl Default for QaSlots {
+  fn default() -> Self {
+    Self::DEFAULT
+  }
+}
+
+/// A project's token budgets, time limit default, agent slots and QA slots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProjectLimits {
   default_run_budget: Option<TokenBudget>,
@@ -72,21 +110,23 @@ pub struct ProjectLimits {
   daily_budget_unlimited: bool,
   default_time_limit: Option<Duration>,
   agent_slots: AgentSlots,
+  qa_slots: QaSlots,
 }
 
 impl ProjectLimits {
   /// No run budget and no time limit by default (user decision 2026-10-09), 20M tokens per
-  /// project per day and 4 agents at once.
+  /// project per day, 4 agents and 2 QA apps at once.
   pub const DEFAULT: Self = Self {
     default_run_budget: None,
     daily_budget: budget(20_000_000),
     daily_budget_unlimited: false,
     default_time_limit: None,
     agent_slots: AgentSlots::DEFAULT,
+    qa_slots: QaSlots::DEFAULT,
   };
 
-  /// The budgets and the time limit, with the default agent slots ([`ProjectLimits::with_agent_slots`]).
-  /// `None` for the run budget or the time limit means new tasks have none.
+  /// The budgets and the time limit, with the default agent slots ([`ProjectLimits::with_agent_slots`]) and QA
+  /// slots ([`ProjectLimits::with_qa_slots`]). `None` for the run budget or the time limit means new tasks have none.
   pub fn new(
     default_run_budget: Option<TokenBudget>,
     daily_budget: TokenBudget,
@@ -104,12 +144,19 @@ impl ProjectLimits {
       daily_budget_unlimited: false,
       default_time_limit,
       agent_slots: AgentSlots::DEFAULT,
+      qa_slots: QaSlots::DEFAULT,
     })
   }
 
   #[must_use]
   pub const fn with_agent_slots(mut self, agent_slots: AgentSlots) -> Self {
     self.agent_slots = agent_slots;
+    self
+  }
+
+  #[must_use]
+  pub const fn with_qa_slots(mut self, qa_slots: QaSlots) -> Self {
+    self.qa_slots = qa_slots;
     self
   }
 
@@ -158,6 +205,11 @@ impl ProjectLimits {
   /// How many agents may work at once.
   pub const fn agent_slots(self) -> AgentSlots {
     self.agent_slots
+  }
+
+  /// How many QA apps the project's runs may have open at once.
+  pub const fn qa_slots(self) -> QaSlots {
+    self.qa_slots
   }
 }
 

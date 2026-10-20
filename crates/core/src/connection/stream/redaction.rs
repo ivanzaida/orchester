@@ -103,7 +103,7 @@ impl RunnerProblem {
         *server = redact(server);
         *action = redact(action);
       }
-      // Versions, a model id and counts, parsed as such: no text that could hold a secret.
+      // Versions, a model id, task keys and counts, parsed as such: no text that could hold a secret.
       Self::StepBudgetReached { .. }
       | Self::RipgrepNotFound { .. }
       | Self::MemoryUnreadable { .. }
@@ -112,7 +112,7 @@ impl RunnerProblem {
       | Self::PermissionPromptUnreachable
       | Self::ContextCompacted { .. }
       | Self::ThinkingStripped
-      | Self::WaitingForQaSlot => {}
+      | Self::WaitingForQaSlot { .. } => {}
     }
   }
 }

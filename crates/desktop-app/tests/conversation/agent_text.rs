@@ -25,6 +25,11 @@ const SECONDARY: &str = "#B3B3BA";
 
 /// Records `text` as a message of the last agent of `key`'s latest run.
 pub fn agent_says(seeded: &Seeded, key: &TaskKey, text: &str) {
+  agent_event(seeded, key, AgentEvent::Message { text: text.to_owned() });
+}
+
+/// Records `event` in the activity of the last agent of `key`'s latest run.
+pub fn agent_event(seeded: &Seeded, key: &TaskKey, event: AgentEvent) {
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's database");
   let task = db
     .tasks()
@@ -44,11 +49,8 @@ pub fn agent_says(seeded: &Seeded, key: &TaskKey, text: &str) {
     .expect("invocations")
     .pop()
     .expect("an invocation");
-  db.append_activity(
-    &invocation,
-    &[(Timestamp::now(), AgentEvent::Message { text: text.to_owned() })],
-  )
-  .expect("the message");
+  db.append_activity(&invocation, &[(Timestamp::now(), event)])
+    .expect("the event");
 }
 
 /// Every run of text the window draws, the invisible marks lurq draws a link's words between left out.

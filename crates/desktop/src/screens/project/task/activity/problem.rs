@@ -190,7 +190,7 @@ pub(super) fn problem_text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Opt
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
-    | RunnerProblem::WaitingForQaSlot => native_problem(ctx, problem),
+    | RunnerProblem::WaitingForQaSlot { .. } => native_problem(ctx, problem),
   }
 }
 
@@ -222,7 +222,7 @@ fn native_problem(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<s
       ),
       Some(error.as_str().into()),
     ),
-    RunnerProblem::WaitingForQaSlot => (
+    RunnerProblem::WaitingForQaSlot { .. } => (
       ctx.t("runs.activity.problem.waitingForQaSlot"),
       Some(ctx.t("runs.activity.problem.waitingForQaSlotDetail")),
     ),

@@ -1,6 +1,6 @@
 //! Empty limits, validation, saving, status-bar readback and edits made outside the page.
 use orchester_core::{
-  limits::{AgentSlots, ProjectLimits},
+  limits::{AgentSlots, ProjectLimits, QaSlots},
   store::SettingsStore,
   tokens::TokenBudget,
 };
@@ -100,6 +100,49 @@ fn project_settings_limits_preserve_outside_fields_and_reload_unsaved_edits() {
   page.click("settings-reload");
   assert_eq!(page.value("settings-default-budget"), "");
   assert_eq!(page.value("settings-agent-slots"), "4");
+}
+
+#[test]
+fn project_settings_limits_qa_apps_at_once_saves_like_agents_and_rejects_bad_values() {
+  let mut page = Settings::new(false);
+  page.tab("limits", "settings-default-budget");
+  assert_eq!(page.value("settings-qa-slots"), "2");
+  assert_eq!(page.text("settings-qa-slots-read-back"), "1 to 16 · default 2");
+  assert!(page.text("settings-qa-row").contains("QA apps at once"));
+  page.set("settings-qa-slots", "3");
+  page.leave();
+  page.saved();
+  let read = page.db().project_limits().expect("limits");
+  assert_eq!(read.qa_slots().get().get(), 3);
+  assert_eq!(read.agent_slots(), AgentSlots::DEFAULT, "the agents' count is its own");
+  for text in ["0", "17", "two"] {
+    page.set("settings-qa-slots", text);
+    page.leave();
+    let note = page.text("settings-qa-slots-note");
+    assert!(
+      note.contains("Enter a whole number from 1 to 16.") && note.contains("Still 3."),
+      "{text}: {note}"
+    );
+    assert_eq!(page.value("settings-qa-slots"), text, "the person's edit stays");
+  }
+  assert_eq!(page.db().project_limits().expect("unchanged").qa_slots().get().get(), 3);
+  page.set("settings-qa-slots", "3");
+  page.leave();
+  page.saved();
+  // A change made outside the page to another limit keeps the QA apps, and the page shows it.
+  let outside = page
+    .db()
+    .project_limits()
+    .expect("limits")
+    .with_agent_slots(AgentSlots::new(6).expect("slots"));
+  page.db().save_project_limits(&outside).expect("outside save");
+  page.outside(Outside::Limits);
+  page.until("the outside change shown", |p| p.value("settings-agent-slots") == "6");
+  assert_eq!(page.value("settings-qa-slots"), "3");
+  let stored = ProjectLimits::DEFAULT.with_qa_slots(QaSlots::new(16).expect("slots"));
+  page.db().save_project_limits(&stored).expect("outside save");
+  page.outside(Outside::Limits);
+  page.until("the outside QA apps shown", |p| p.value("settings-qa-slots") == "16");
 }
 
 #[test]

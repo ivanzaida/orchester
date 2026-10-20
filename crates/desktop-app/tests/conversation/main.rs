@@ -16,6 +16,7 @@ mod jump;
 mod kontur;
 mod links;
 mod long;
+mod qa_slot;
 mod references;
 mod states;
 #[path = "../support/mod.rs"]

@@ -1,7 +1,8 @@
 //! `start_qa_app` end to end against `orchester-fake-codex`: the runner starts a QA copy through the worktree's
 //! `tools/qa-app.ps1` (`support::qa`'s stand-in), keeps it for the invocation so `call_run_app` without a pid reaches
-//! it, and stops it when the agent's turn ends or waits for a person. One QA slot: a second run's start waits, noted
-//! in its transcript, until the first app stops. A script that names no app has what it started ended.
+//! it, and stops it when the agent's turn ends or waits for a person. A project that allows one QA app at once: a
+//! second run's start waits, noted in its transcript with the run that holds the slot, until the first app stops. A
+//! script that names no app has what it started ended. Several QA apps at once: `qa_app_slots`.
 //!
 //! The stand-in is a Windows PowerShell script; on macOS the runner runs the script with `pwsh`, which is not part of
 //! the test setup, so these tests are Windows only.
@@ -25,7 +26,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use self::support::{
   git, is_running, pending_approval,
-  qa::{approve, calls, gone, noted, qa_project, reported_pid, started_pid, verify_step},
+  qa::{allow_qa_apps, approve, calls, gone, holder, noted, qa_project, reported_pid, started_pid, verify_step},
   queue_another_task, scheduler, wait_for,
 };
 
@@ -33,6 +34,7 @@ use self::support::{
 async fn qa_app_one_slot_second_run_waits_then_gets_it_and_apps_stop_at_turn_end() {
   let project = qa_project(verify_step("Start the QA app. Hold the QA app."));
   let root = project.repo.path();
+  allow_qa_apps(root, 1);
   let hold = root.join(".orchester").join("fake-hold");
   fs::write(&hold, "hold").expect("hold");
   let second_task = queue_another_task(root);
@@ -62,7 +64,10 @@ async fn qa_app_one_slot_second_run_waits_then_gets_it_and_apps_stop_at_turn_end
     .await
     .expect("second run");
   approve(&scheduler, root, &mut events, second).await;
-  noted(root, &mut events, second, RunnerProblem::WaitingForQaSlot).await;
+  let waiting = RunnerProblem::WaitingForQaSlot {
+    holders: vec![holder(root, first)],
+  };
+  noted(root, &mut events, second, waiting).await;
   assert!(
     !calls(root, second).iter().any(|call| call.starts_with("start_qa_app")),
     "the second start waits while the first app holds the slot"

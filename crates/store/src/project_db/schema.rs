@@ -36,6 +36,7 @@ mod plan_decided_by;
 mod plan_limits;
 mod project_approval_rules;
 mod pull_request_syncs;
+mod qa_slots;
 mod questions;
 mod queue_holds;
 mod recovery;

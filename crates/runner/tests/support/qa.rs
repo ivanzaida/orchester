@@ -11,11 +11,12 @@ use std::{
 };
 
 use orchester_core::{
-  connection::stream::{AgentEvent, RunnerProblem},
+  connection::stream::{AgentEvent, QaSlotHolder, RunnerProblem},
   id::RunId,
+  limits::QaSlots,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
   run::{Answerer, ApprovalAnswer},
-  store::ActivityStore,
+  store::{ActivityStore, RunStore, SettingsStore, TaskStore},
 };
 use orchester_ipc::Event;
 use orchester_runner::execution::Scheduler;
@@ -23,6 +24,39 @@ use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use super::{PATIENCE, Setup, StepSpec, TestProject, git, is_running, pending_approval, project, reported};
+
+/// Lets the project's runs have `count` QA apps open at once, as Project settings › Limits does.
+pub fn allow_qa_apps(root: &Path, count: u64) {
+  let mut db = ProjectDb::open(root).expect("open");
+  let limits = db
+    .project_limits()
+    .expect("limits")
+    .with_qa_slots(QaSlots::new(count).expect("in range"));
+  db.save_project_limits(&limits).expect("saved");
+}
+
+/// How a waiting start names `run` when its QA app holds a slot: its task's key and its number.
+pub fn holder(root: &Path, run: RunId) -> QaSlotHolder {
+  let db = ProjectDb::open(root).expect("open");
+  let run = db.run(run).expect("read").expect("the run");
+  let task = db.task(run.task()).expect("read").expect("the run's task");
+  QaSlotHolder {
+    task: task.key().to_string(),
+    run: run.number().get(),
+  }
+}
+
+/// The QA folder of `run`'s Verify step, with links resolved, as its slot's record names it.
+pub fn verify_folder(root: &Path, run: RunId) -> PathBuf {
+  let folder = root
+    .join(".orchester")
+    .join("worktrees")
+    .join(run.to_string())
+    .join(".tmp")
+    .join("qa")
+    .join(format!("run-{}-verify", holder(root, run).run));
+  fs::canonicalize(folder).expect("the QA folder")
+}
 
 const TEST_COMMAND: &str = env!("CARGO_BIN_EXE_orchester-test-command");
 

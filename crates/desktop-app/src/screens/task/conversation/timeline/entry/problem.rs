@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
-  connection::stream::{CommandStatus, MemoryNotSavedReason, QuestionRefusal, RunnerProblem},
+  connection::stream::{CommandStatus, MemoryNotSavedReason, QaSlotHolder, QuestionRefusal, RunnerProblem},
   run::DecidedBy,
   tokens::compact_tokens,
 };
@@ -144,7 +144,7 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
-    | RunnerProblem::WaitingForQaSlot => note(ctx, problem),
+    | RunnerProblem::WaitingForQaSlot { .. } => note(ctx, problem),
   }
 }
 
@@ -181,13 +181,42 @@ fn counted(ctx: &Ctx, count: u64, (one, other): (&str, &str), detail: &str) -> (
   (title, Some(ctx.t(detail)))
 }
 
+/// Who holds the QA slots a start waits for: *2 QA apps are open (ORC-62 run #39, ORC-18 run #32). This one starts
+/// when one closes.*, or that every slot is taken when the runner could not name them.
+fn qa_slot_holders(ctx: &Ctx, holders: &[QaSlotHolder]) -> Arc<str> {
+  if holders.is_empty() {
+    return ctx.t("conversation.problem.waitingForQaSlotDetail");
+  }
+  let named: Vec<Arc<str>> = holders
+    .iter()
+    .map(|holder| {
+      ctx.t_args(
+        "conversation.problem.qaSlotHolder",
+        [("task", holder.task.as_str()), ("run", holder.run.to_string().as_str())],
+      )
+    })
+    .collect();
+  let key = if holders.len() == 1 {
+    "conversation.problem.qaSlotsHeld.one"
+  } else {
+    "conversation.problem.qaSlotsHeld.other"
+  };
+  ctx.t_args(
+    key,
+    [
+      ("count", holders.len().to_string().as_str()),
+      ("runs", named.join(&*ctx.t("conversation.list.separator")).as_str()),
+    ],
+  )
+}
+
 /// What happened around the agent that is no failure: a native conversation with its model compacted, a request
-/// retried, its earlier reasoning dropped; or a start that waits for the QA slot.
+/// retried, its earlier reasoning dropped; or a start that waits for a QA slot.
 fn note(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
   match problem {
-    RunnerProblem::WaitingForQaSlot => (
+    RunnerProblem::WaitingForQaSlot { holders } => (
       ctx.t("conversation.problem.waitingForQaSlot"),
-      Some(ctx.t("conversation.problem.waitingForQaSlotDetail")),
+      Some(qa_slot_holders(ctx, holders)),
     ),
     RunnerProblem::ContextCompacted { before, after } => (
       ctx.t("conversation.problem.contextCompacted"),

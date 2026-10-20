@@ -161,9 +161,10 @@ fixed address instead (see *The new app's MCP server* below).
   agent steps, and publishes it as v1, as New pipeline, the editor and Publish do), `set_code_index`
   (*Use code index* in Project settings, off until a person turns it on; `list_projects` shows each
   project's setting) and
-  `update_project_limits` (Project settings › Limits: the token budgets, the default time limit and
-  *Agents working at once*, which the project's runner applies at once; invalid limits are refused with
-  `invalid_limits` and the tab's own words; `list_projects` shows each project's limits). A modal
+  `update_project_limits` (Project settings › Limits: the token budgets, the default time limit,
+  *Agents working at once*, which the project's runner applies at once, and *QA apps at once*, which
+  applies from the next `start_qa_app`; invalid limits are refused with `invalid_limits` and the tab's
+  own words; `list_projects` shows each project's limits). A modal
   open in the window does not stand in their way, and they work in the background without disturbing
   whoever uses the window: only the changed project's data is read again, the screens showing it
   update in place (no page switches, no form is reset; an Edit task form or a settings section with a

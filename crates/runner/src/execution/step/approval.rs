@@ -305,7 +305,7 @@ impl Worker {
     self.reviewing = self.start_review(watch, &approval, escalation)?;
     if self.reviewing.is_none() {
       watch.invocation.timing.wait_for_person(approval.requested_at);
-      // A person's wait never holds the computer's QA slot.
+      // A person's wait never holds one of the computer's QA slots.
       self.qa.release(watch.invocation.id);
       watch.db.save_invocation(&watch.invocation)?;
     }

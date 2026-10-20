@@ -360,8 +360,13 @@
       "thinkingStripped": "The model API refused the agent’s earlier reasoning",
       "thinkingStrippedDetail": "The conversation goes on without it; the agent keeps its messages, tool calls and results.",
       "told": "{{agent}} was told: “{{message}}”",
-      "waitingForQaSlot": "Waiting for the QA slot",
-      "waitingForQaSlotDetail": "Another run’s QA app is open. This one starts once that app stops.",
+      "waitingForQaSlot": "Waiting for a QA slot",
+      "waitingForQaSlotDetail": "Every QA app this project may have open at once is open. This one starts when one closes.",
+      "qaSlotHolder": "{{task}} run #{{run}}",
+      "qaSlotsHeld": {
+        "one": "{{count}} QA app is open ({{runs}}). This one starts when it closes.",
+        "other": "{{count}} QA apps are open ({{runs}}). This one starts when one closes."
+      },
       "unavailableVariable": "The prompt uses {{variable}}, which has no value in this run"
     },
     "provider": {

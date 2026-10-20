@@ -247,9 +247,9 @@ impl StepTools {
     ));
     if self.policy(OrchesterTool::StartQaApp).is_some() {
       text.push_str(&format!(
-        " For a QA copy of the app, call {}(scenario) instead of running tools/qa-app.ps1: it waits for the \
-         computer's QA slot, starts the copy off-screen and returns its pid; {} without pid drives it, and \
-         Orchester stops it when your turn ends or waits for a person.",
+        " For a QA copy of the app, call {}(scenario) instead of running tools/qa-app.ps1: it waits while every \
+         QA slot the project allows is taken, starts the copy off-screen and returns its pid; {} without pid drives \
+         it, and Orchester stops it when your turn ends or waits for a person.",
         OrchesterTool::StartQaApp.called(claude),
         OrchesterTool::CallRunApp.called(claude),
       ));

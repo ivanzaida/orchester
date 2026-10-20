@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{AgentSlots, AgentSlotsError, ProjectLimits, ProjectLimitsError},
+  limits::{AgentSlots, AgentSlotsError, ProjectLimits, ProjectLimitsError, QaSlots, QaSlotsError},
   run::TokenUsage,
   time::Timestamp,
   tokens::{BudgetInputError, TokenBudget, TokensUsed, grouped, parse_budget, parse_optional_budget, regroup},
@@ -91,6 +91,9 @@ fn tokens_project_limits_default_to_no_run_limits() {
   assert_eq!(limits.daily_budget().get(), 20_000_000);
   assert_eq!(limits.default_time_limit(), None);
   assert_eq!(limits.agent_slots().get().get(), 4);
+  assert_eq!(limits.qa_slots().get().get(), 2);
+  let new = ProjectLimits::new(None, budget(1_000), None).expect("valid limits");
+  assert_eq!(new.qa_slots(), QaSlots::DEFAULT);
 }
 
 #[test]
@@ -108,6 +111,22 @@ fn tokens_agent_slots_are_one_to_sixteen() {
   let limits = ProjectLimits::DEFAULT.with_agent_slots(two);
   assert_eq!(limits.agent_slots(), two);
   assert_eq!(limits.daily_budget(), ProjectLimits::DEFAULT.daily_budget());
+}
+
+#[test]
+fn tokens_qa_slots_are_one_to_sixteen_and_kept_apart_from_agent_slots() {
+  for count in [1, 2, 16] {
+    assert_eq!(QaSlots::new(count).map(|slots| u64::from(slots.get().get())), Ok(count));
+  }
+  for count in [0, 17, u64::from(u32::MAX) + 1] {
+    assert_eq!(QaSlots::new(count), Err(QaSlotsError { count }));
+  }
+  let five = QaSlots::new(5).expect("in range");
+  let limits = ProjectLimits::DEFAULT.with_qa_slots(five);
+  assert_eq!(limits.qa_slots(), five);
+  assert_eq!(limits.agent_slots(), AgentSlots::DEFAULT);
+  let agents = limits.with_agent_slots(AgentSlots::new(9).expect("in range"));
+  assert_eq!(agents.qa_slots(), five);
 }
 
 #[test]

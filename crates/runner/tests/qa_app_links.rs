@@ -77,7 +77,11 @@ async fn qa_app_cleanup_never_stops_a_program_through_a_linked_bin() {
   let slots = root.join(".orchester").join("qa-slots");
   fs::create_dir_all(&slots).expect("slots");
   let forged = fs::canonicalize(&forged).expect("canonical");
-  fs::write(slots.join("slot-0.lock"), format!("0\n{}", forged.display())).expect("forged record");
+  fs::write(
+    slots.join("slot-0.holder"),
+    format!("0\nORC-9\n9\n{}", forged.display()),
+  )
+  .expect("forged record");
 
   let (scheduler, mut events) = scheduler(root);
   let id = scheduler
