@@ -182,7 +182,9 @@ fn item_row(
     ItemKind::Result(card) if card.ended_on => cards::result(ctx, card, timeline),
     ItemKind::Result(card) => divider::result(ctx, timeline, card, item.at),
     ItemKind::End(end) => divider::end(ctx, end, (timeline.run_number, item.at)),
-    ItemKind::AgentMessage { .. } | ItemKind::Step(_) | ItemKind::Tools(_) => unreachable_row(),
+    ItemKind::AgentMessage { .. } | ItemKind::Step(_) | ItemKind::Tools(_) | ItemKind::BaseMoved(_) => {
+      unreachable_row()
+    }
   }
 }
 

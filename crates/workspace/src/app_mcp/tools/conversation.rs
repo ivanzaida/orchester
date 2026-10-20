@@ -1,10 +1,11 @@
 //! `get_conversation`: a task's conversation as its Conversation tab shows it for its latest run (ORC-42): what the
 //! person and the Orchestrator chat wrote to the agents, what the agents wrote, their questions (in the conversation,
 //! and with suggested answers), their plans and how each was decided, how a decision went on with a run that stopped
-//! (a return or a restart), and how each step ended; oldest first, newest last, a page at a time. Each entry names who
-//! wrote or decided it (for the Orchestrator chat, how it went out: sent by the chat or applied by the person,
-//! ORC-45), its step and run, when, and the link to its card; after the newest page's entries, the answers and
-//! messages the chat proposed that no one applied. It reads what the Conversation tab reads, stored with secrets
+//! (a return or a restart), Orchester's notices that the base branch moved (ORC-54) and how each step ended; oldest
+//! first, newest last, a page at a time. Each entry names who wrote or decided it (for the Orchestrator chat, how it
+//! went out: sent by the chat or applied by the person, ORC-45), its step and run, when, and the link to its card;
+//! after the newest page's entries, the answers and messages the chat proposed that no one applied. It reads what the
+//! Conversation tab reads, stored with secrets
 //! already redacted; tool calls and approvals are left to their own tools.
 
 use orchester_core::{
@@ -16,7 +17,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{orchestrated, plans, questions, tasks::find_task, wire};
+use super::{base_moved, orchestrated, plans, questions, tasks::find_task, wire};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -183,6 +184,12 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
     ItemKind::Mark(mark) if mark.by.is_some() || mark.orchestrator.is_some() => {
       ("run_continued", decider(mark), step_of(), continued_body(mark))
     }
+    ItemKind::BaseMoved(mark) => (
+      "base_moved",
+      json!({ "kind": "orchester" }),
+      step_of(),
+      base_moved::shown(mark),
+    ),
     ItemKind::Step(_) | ItemKind::Mark(_) | ItemKind::Approval(_) | ItemKind::Tools(_) | ItemKind::Problem(_) => {
       return None;
     }

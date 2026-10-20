@@ -38,6 +38,13 @@ pub(super) fn matches(item: &Item, needle: &str, rendered: Rendered<'_>) -> bool
       MarkKind::ReturnedWithNote { note, .. } => written(note),
       MarkKind::Returned { .. } | MarkKind::Restarted { .. } => false,
     },
+    ItemKind::BaseMoved(mark) => {
+      let notice = &mark.notice;
+      found(notice.branch.as_str())
+        || notice.tasks.iter().any(|task| found(&task.key) || found(&task.title))
+        || notice.commits.iter().any(|commit| found(&commit.subject))
+        || notice.overlapping.iter().any(|path| found(path))
+    }
     ItemKind::Step(_) | ItemKind::End(_) => false,
   }
 }

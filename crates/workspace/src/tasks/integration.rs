@@ -385,6 +385,7 @@ pub fn merge_in(
     });
   }
   super::local_integration::settle_review(&mut db, &merge);
+  crate::base_moved::after_merge(repo_root, programs);
   let cleanup = clear(&mut db, programs, repo_root, &run, None);
   if cleanup.is_err() {
     tracing::warn!("the run was merged, but what it left could not be cleared");

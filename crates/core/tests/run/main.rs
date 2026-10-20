@@ -3,6 +3,7 @@
 mod active_clock;
 mod again;
 mod agent;
+mod base_moved_prompt;
 mod code_index;
 mod conversation;
 mod failed_recovery;

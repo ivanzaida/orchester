@@ -110,7 +110,8 @@ impl RunTask {
   /// An agent that exited on its own. A turn that ended acknowledges the messages it read. The step
   /// then waits for the answer to the agent's question — also when the permission prompt closed only
   /// after the question was delivered (run 26), but not after any other failure of the turn — or
-  /// continues to read messages queued for its agent meanwhile; otherwise it fails when the agent
+  /// continues to read messages queued for its agent meanwhile, or the run's pending notice that its
+  /// base branch moved (a writing step's); otherwise it fails when the agent
   /// reported `failed` — also when its turn failed afterwards — or when the turn failed, and passes
   /// otherwise; a step that passes
   /// joins its work to the run's branch. A follow-up leaves no output: its answer is its
@@ -141,6 +142,9 @@ impl RunTask {
       }
       if !self.queued_for(execution)?.is_empty() {
         return self.save(execution, active, "saved to read messages");
+      }
+      if self.notice_for(execution)?.is_some() {
+        return self.save(execution, active, "saved to merge the moved base");
       }
     }
     // A question is never a step's output (the store refuses it): one that did not ask, as its turn

@@ -22,7 +22,9 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{approvals::approval, message_waits::message_waits, orchestrated, plans, wire, worktree::worktree_state};
+use super::{
+  approvals::approval, base_moved, message_waits::message_waits, orchestrated, plans, wire, worktree::worktree_state,
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -120,6 +122,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       "auto_mode": auto_mode,
       "worktree": worktree,
       "merge": merge,
+      "base_moved": base_moved::of_run(&view),
       "awaiting": {
         "plan_decisions": run.awaiting_plan().len(),
         "plan": plan,
