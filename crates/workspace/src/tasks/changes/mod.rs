@@ -1,5 +1,6 @@
-//! A run's changes as the task page's Changes tab shows them: its diff from its base revision to
-//! its latest checkpoint, read with git once per pair of commits and stored, and what its worktree
+//! A run's changes as the task page's Changes tab shows them: its diff from where its own work starts (its base
+//! revision, or the newer commit of its base branch its branch took in, [`run_changes_in`]) to its latest
+//! checkpoint, read with git once per pair of commits and stored, and what its worktree
 //! (`<repo>/.orchester/worktrees/<run>`) holds beyond its commit, which is not checkpointed and is
 //! read each time. Only read-only git commands run. Blocks on SQLite, blob files and git; the UI
 //! calls it off the UI thread.
@@ -17,9 +18,13 @@ use orchester_core::{
     git::{GitDiffError, RevisionChanges, RevisionDiffError, WorktreeRead, read_revision_diff, read_worktree_changes},
   },
   id::RunId,
-  integration::WORKTREES_DIR,
+  integration::{
+    RunWork, WORKTREES_DIR,
+    local::{RebaseStore, RunRebase},
+    own_base,
+  },
   revision::Revision,
-  run::RunStatus,
+  run::{Run, RunStatus},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -141,6 +146,50 @@ impl ChangesError {
       Self::WorktreeMissing(_) => Message::new("runs.changes.failure.worktreeMissing"),
     }
   }
+}
+
+/// What a run's checkpointed changes are read between: its work, from the revision it started from, and its latest
+/// checkpoint (`None` before its first).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunRange {
+  pub run: RunId,
+  pub work: RunWork,
+  pub head: Option<Revision>,
+}
+
+impl RunRange {
+  pub fn of(run: &Run) -> Self {
+    Self {
+      run: run.id(),
+      work: RunWork::of(run),
+      head: run.last_checkpoint().map(|checkpoint| checkpoint.revision().clone()),
+    }
+  }
+}
+
+/// The run's own changes up to its latest checkpoint: from where its work starts, above the commits of its base
+/// branch its branch took in since it started (ORC-60, [`own_base`]), else from the revision it started from.
+pub fn run_changes_in(repo_root: &Path, programs: &Programs, range: &RunRange) -> Result<Checkpointed, ChangesError> {
+  let Some(head) = &range.head else {
+    return Ok(Checkpointed::NoCheckpoint);
+  };
+  let db = ProjectDb::open(repo_root)?;
+  let checkpoints = db.checkpoint_revisions(range.run)?;
+  let proven = db.run_rebase(range.run)?;
+  let base = match own_base(
+    &programs.runner(),
+    (Path::new(GIT), repo_root),
+    (&range.work, head),
+    (&checkpoints, proven.as_ref().map(RunRebase::base)),
+  ) {
+    Ok(base) => base,
+    // The diff read next tells what git cannot read; the run's own start is the safe one meanwhile.
+    Err(error) => {
+      tracing::warn!(%error, run = %range.run, "cannot tell where the run's own work starts; reading from its start");
+      range.work.base.clone()
+    }
+  };
+  checkpointed_in(repo_root, programs, &base, Some(head))
 }
 
 /// The run's changes from `base` to `head`, its latest checkpoint (`None` before its first).

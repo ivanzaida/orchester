@@ -9,6 +9,7 @@
 mod cleanup;
 mod drift;
 mod forgotten;
+mod fork;
 mod git;
 pub mod local;
 mod merge;
@@ -27,6 +28,7 @@ pub use self::{
   },
   drift::{Drift, MAX_LANDED, branch_head, drift},
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
+  fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
   merge::{MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_at},
   merged::{Branches, Delivered, RunWork},
   recorded::{RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen},

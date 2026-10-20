@@ -9,11 +9,15 @@ use std::fmt::Write as _;
 use super::{CONTINUE_PROMPT, composition::push_block};
 use crate::base_move::BaseNotice;
 
-/// How a writing agent merges its base branch, should Orchester tell it that the base moved.
+/// How a writing agent merges its base branch, should Orchester tell it that the base moved. It commits its state
+/// first, even an empty commit, and merges with `--no-ff`, so its branch never fast-forwards onto the base (ORC-60).
 pub const MERGE_SAFELY: &str = "When Orchester tells you that the base branch moved, merge it into this worktree \
-                                with git: `git merge <base>` here, never `git stash`, and never rebase or force-push \
-                                a branch others share. Resolve conflicts keeping both sides' intent, commit the \
-                                merge as a checkpoint, then run the filtered tests the merged changes affect.";
+                                with git: first commit your current state as a checkpoint (`git add -A` and \
+                                `git commit --allow-empty -m \"checkpoint before merging <base>\"`), then \
+                                `git merge --no-ff <base>` here, so this branch never fast-forwards onto the base; \
+                                never `git stash`, and never rebase or force-push a branch others share. Resolve \
+                                conflicts keeping both sides' intent, commit the merge as a checkpoint, then run the \
+                                filtered tests the merged changes affect.";
 
 /// A notice an invocation delivers; `after_turn`: its agent finished its turn and its session resumes to read it.
 #[derive(Clone, Copy, Debug)]
@@ -53,9 +57,11 @@ pub fn notice_text(notice: &BaseNotice) -> String {
   }
   let _ = write!(
     text,
-    "\nMerge `{branch}` into this worktree now with git (`git merge {branch}`; never `git stash`, never rebase a \
-     shared branch). Resolve the conflicts keeping both sides' intent, commit the merge, and run the filtered tests \
-     the merged changes affect. Then go on with your step, and say in your result what you merged and how you \
+    "\nMerge `{branch}` into this worktree now with git: first commit your current state as a checkpoint, even an \
+     empty one (`git add -A`, then `git commit --allow-empty -m \"checkpoint before merging {branch}\"`), then \
+     `git merge --no-ff {branch}`, so this branch never fast-forwards onto `{branch}`; never `git stash`, never \
+     rebase a shared branch. Resolve the conflicts keeping both sides' intent, commit the merge, and run the filtered \
+     tests the merged changes affect. Then go on with your step, and say in your result what you merged and how you \
      resolved the conflicts."
   );
   text
