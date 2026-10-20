@@ -22,7 +22,10 @@ pub use repository::{RepositoryRead, check_repository_in, repository_in};
 
 use crate::{
   agents::form::effort_options,
-  budget::{LimitsErrors, LimitsForm, minutes_text, read_optional_budget},
+  budget::{
+    LimitsErrors, ReadLimits, minutes_text, read_agent_slots, read_budget, read_minutes, read_optional_budget,
+    read_qa_slots,
+  },
   messages::{self, Message},
   runner::Runners,
   tasks::{run_approvals::unavailable_key, usage::update_limits},
@@ -81,6 +84,8 @@ pub struct LimitsText {
   pub daily: String,
   pub minutes: String,
   pub slots: String,
+  /// *QA apps at once*.
+  pub qa: String,
 }
 impl LimitsText {
   pub fn of(limits: ProjectLimits, separator: &str) -> Self {
@@ -90,6 +95,7 @@ impl LimitsText {
       daily: budget(limits.daily_budget_limit()),
       minutes: minutes_text(limits.default_time_limit()),
       slots: limits.agent_slots().get().to_string(),
+      qa: limits.qa_slots().get().to_string(),
     }
   }
 
@@ -99,12 +105,12 @@ impl LimitsText {
       Ok(value) => value.unwrap_or(base.daily_budget()).get().to_string(),
       Err(_) => self.daily.clone(),
     };
-    let mut result = LimitsForm {
-      default_run_budget: &self.default,
-      daily_budget: &finite,
-      default_time_limit: &self.minutes,
-      agent_slots: &self.slots,
-      separator,
+    let mut result = ReadLimits {
+      default_run_budget: read_optional_budget(&self.default, separator),
+      daily_budget: read_budget(&finite, separator),
+      default_time_limit: read_minutes(&self.minutes),
+      agent_slots: read_agent_slots(&self.slots),
+      qa_slots: read_qa_slots(&self.qa),
     }
     .limits();
     if let Err(error) = daily {
@@ -153,7 +159,8 @@ pub fn save_limits_in(
           asked.daily_budget_limit(),
           stored.daily_budget_limit(),
         ))
-        .with_agent_slots(pick(base.agent_slots(), asked.agent_slots(), stored.agent_slots())),
+        .with_agent_slots(pick(base.agent_slots(), asked.agent_slots(), stored.agent_slots()))
+        .with_qa_slots(pick(base.qa_slots(), asked.qa_slots(), stored.qa_slots())),
     )
   })?;
   ProjectDb::open(root)?.project_limits()

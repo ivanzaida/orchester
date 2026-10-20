@@ -3,12 +3,12 @@
 use std::time::Duration;
 
 use orchester_core::{
-  limits::{AgentSlots, ProjectLimits},
+  limits::{AgentSlots, ProjectLimits, QaSlots},
   tokens::TokenBudget,
 };
 use orchester_workspace::budget::{
-  LimitsForm, MAX_STORED_MINUTES, TIME_LIMIT_CHOICES, budget_error, read_agent_slots, read_budget, read_minutes,
-  read_optional_budget, time_limit_choices,
+  LimitsForm, MAX_STORED_MINUTES, TIME_LIMIT_CHOICES, budget_error, qa_slots, read_agent_slots, read_budget,
+  read_minutes, read_optional_budget, read_qa_slots, time_limit_choices,
 };
 
 fn limits<'a>(default: &'a str, daily: &'a str, time: &'a str) -> LimitsForm<'a> {
@@ -115,6 +115,20 @@ fn budget_agent_slots_are_a_whole_number_from_one_to_sixteen() {
     Some("settings.limits.agentSlotsInvalid")
   );
   assert_eq!(errors.default_run_budget, None);
+}
+
+#[test]
+fn budget_qa_slots_are_a_whole_number_from_one_to_sixteen() {
+  assert_eq!(read_qa_slots(" 16 "), Ok(QaSlots::new(16).expect("in range")));
+  assert_eq!(qa_slots(1), Ok(QaSlots::new(1).expect("in range")));
+  for text in ["", "0", "17", "2.5", "-1", "two"] {
+    let error = read_qa_slots(text).expect_err("outside 1 to 16");
+    assert_eq!(error.key, "settings.limits.qaSlotsInvalid");
+    assert_eq!(error.args, [("min", "1".to_owned()), ("max", "16".to_owned())]);
+  }
+  // The deprecated app's form has no QA apps field: its limits carry the default.
+  let read = limits("", "20,000,000", "").limits().expect("valid limits");
+  assert_eq!(read.qa_slots(), QaSlots::DEFAULT);
 }
 
 #[test]

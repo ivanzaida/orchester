@@ -834,7 +834,8 @@
       "rebuildInUse": "The index was not rebuilt: a running agent is reading it. Try again when it finishes."
     },
     "limits": {
-      "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}."
+      "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
+      "qaSlotsInvalid": "Enter a whole number from {{min}} to {{max}}."
     }
   },
   "servers": {

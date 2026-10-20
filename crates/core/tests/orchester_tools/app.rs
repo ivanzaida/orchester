@@ -180,3 +180,19 @@ fn call_run_app_start_qa_app_input_is_strict_and_asks() {
   assert!(started.discovery.ends_with("4242.json"));
   assert_eq!(StartedQaApp::read("pid nothing\n"), None);
 }
+
+#[test]
+fn start_qa_app_waiting_note_names_its_holders_and_reads_notes_stored_before_them() {
+  use orchester_core::connection::stream::{QaSlotHolder, RunnerProblem};
+  let named = RunnerProblem::WaitingForQaSlot {
+    holders: vec![QaSlotHolder {
+      task: "ORC-62".to_owned(),
+      run: 39,
+    }],
+  };
+  let stored = serde_json::to_string(&named).expect("stored");
+  assert_eq!(serde_json::from_str::<RunnerProblem>(&stored).expect("reads"), named);
+  // A note stored when one QA app ran at a time named no holders; it still reads, naming none.
+  let earlier: RunnerProblem = serde_json::from_str(r#"{"problem":"waiting_for_qa_slot"}"#).expect("reads");
+  assert_eq!(earlier, RunnerProblem::WaitingForQaSlot { holders: Vec::new() });
+}

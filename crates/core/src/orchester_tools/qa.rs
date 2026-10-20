@@ -1,8 +1,9 @@
 //! `start_qa_app`: a QA copy of the app the run's worktree builds, started by the runner from the worktree's
 //! [`QA_APP_SCRIPT`] on a seeded scenario, off-screen and without focus as the script places it, and kept for the
-//! step: `call_run_app` without a pid calls it, through the exact discovery file the script names. One QA app runs on
-//! the computer at a time (the QA slot): a second start waits until the first app stops. The runner stops the app when
-//! the agent's turn ends, and with it frees the slot.
+//! step: `call_run_app` without a pid calls it, through the exact discovery file the script names. Each open QA app
+//! holds one of the computer's QA slots, and a project's runs use as many as its *QA apps at once*
+//! ([`crate::limits::QaSlots`]): a start while all of them are held waits until one app stops. The runner stops the
+//! app when the agent's turn ends, and with it frees its slot.
 
 use std::{num::NonZeroU32, path::PathBuf};
 

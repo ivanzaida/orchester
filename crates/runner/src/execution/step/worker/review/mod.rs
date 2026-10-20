@@ -179,7 +179,7 @@ impl Worker {
   /// it.
   fn ask_person(&self, watch: &mut Watch) -> Result<(), StoreError> {
     watch.invocation.timing.wait_for_person(Timestamp::now());
-    // A person's wait never holds the computer's QA slot.
+    // A person's wait never holds one of the computer's QA slots.
     self.qa.release(watch.invocation.id);
     watch.db.save_invocation(&watch.invocation)?;
     self.notifier.send(Event::ToolApprovalChanged {

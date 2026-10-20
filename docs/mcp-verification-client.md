@@ -8,24 +8,30 @@ app with `mcp__Orchester__start_qa_app(scenario, fake_agents?, no_runner?)` (Cod
 {"scenario":"decisions","fake_agents":null,"no_runner":null}
 ```
 
-The runner takes the computer's QA slot (one QA app at a time, an OS lock on
-`<user data>/orchester-qa-slots/slot-0.lock` that every runner takes, whatever its project; the OS frees it
-when its holder ends), waiting while another run's QA app holds it; the transcript then says *Waiting for
-the QA slot*. It runs the worktree's `tools/qa-app.ps1` with `-Name run-<number>-<step>` (Windows PowerShell
+The runner takes one of the computer's QA slots (OS locks on
+`<user data>/orchester-qa-slots/slot-<n>.lock` that every runner takes, whatever its project; the OS frees
+one when its holder ends). A project's runs use slots 0 to N−1, N being its *QA apps at once* (Project
+settings › Limits, 1 to 16, default 2, read at each start), so projects with different limits share the low
+slots. A start waits while all of them are held; the transcript then says *Waiting for a QA slot* and names
+the runs that hold them when their slot records read. Each app has its own QA folder, discovery folder and
+port, so several run at once without clashing. It runs the worktree's `tools/qa-app.ps1` with
+`-Name run-<number>-<step>` (Windows PowerShell
 on Windows, `pwsh` on macOS), checks that the app it names is this run's and that its discovery file lies in
 its QA folder, and answers its pid. `call_run_app` without `pid` then calls that app through its exact
 discovery file, checked again for links at each call. Starts of one turn run one at a time: a second waits
 for the first, then replaces its app and keeps the slot. When the agent's turn ends (the step passes, fails,
 asks, pauses or is stopped, or the runner fails), the runner stops the app with everything it started
 inside the worktree and frees the slot, off its async workers; it does the same while the turn waits for a
-person inside it (a tool approval, a question), so a person's wait never holds the computer's slot; a start
-that finishes during such a wait stops its app at once. The script runs in a process tree of its own (a
-kill-on-close Job Object on Windows, a process group on macOS): a start whose turn ends, whose run is
+person inside it (a tool approval, a question), so a person's wait never holds one of the computer's slots;
+a start that finishes during such a wait stops its app at once. The script runs in a process tree of its own
+(a kill-on-close Job Object on Windows, a process group on macOS): a start whose turn ends, whose run is
 stopped, that runs longer than 30 minutes (reading the script's output to its end included), or whose
-script exits without naming its app ends the script and everything it started. The slot file names its
-latest holder's QA folder and when that holder's run was created, so the next holder stops what a runner
-that died left running there; the file is untrusted input: a folder is looked at only when it is the QA
-folder of an Orchester worktree (`<repo>/.orchester/worktrees/<id>/.tmp/qa/run-<n>-<step>`) reached
+script exits without naming its app ends the script and everything it started. Each slot's record,
+`slot-<n>.holder` beside its lock, names its latest holder's QA folder, when that holder's run was created,
+its task's key and its run's number, so the next holder of that slot stops what a runner that died left
+running there, unless another slot held now names that folder; the record is untrusted input: a folder is
+looked at only when it is the QA folder of an Orchester worktree
+(`<repo>/.orchester/worktrees/<id>/.tmp/qa/run-<n>-<step>`) reached
 without any link, its `bin/` too, and only programs from that `bin/` that started since that run was
 created are stopped. A QA folder reached through a link refuses the start (on macOS a runner killed
 mid-script can still leave its script running). The call is offered only to a step that writes the

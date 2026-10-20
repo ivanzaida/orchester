@@ -100,7 +100,7 @@ pub(super) struct RunTask {
   /// The program Claude Code starts as its permission prompt ([`crate::approval_relay`]).
   pub(super) relay: Option<PathBuf>,
   pub(super) board: Arc<Board>,
-  /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slot.
+  /// The QA apps the run's agents started ([`QaApps`]), shared with the runner's other runs for the QA slots.
   pub(super) qa: Arc<QaApps>,
   pub(super) controls: mpsc::UnboundedReceiver<Control>,
   listening: bool,
@@ -320,7 +320,7 @@ impl RunTask {
 
   /// An end event is sent only once, even when recording it failed. Retire its worker before
   /// propagating that error so cleanup never waits for a second event from the same worker.
-  /// Its invocation is over, whatever ended it: its QA app stops and frees the QA slot.
+  /// Its invocation is over, whatever ended it: its QA app stops and frees its QA slot.
   pub(super) fn retire_worker(&mut self, execution: StepExecutionId) -> Option<Active> {
     let active = self.agents.remove(&execution)?;
     self.board.release(execution);

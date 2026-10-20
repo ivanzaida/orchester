@@ -288,9 +288,20 @@ pub enum RunnerProblem {
   /// The agent asked `question` in a way Orchester does not put to the person, for `reason`: the request
   /// was answered with why, and the agent went on.
   QuestionRefused { question: String, reason: QuestionRefusal },
-  /// The agent's `start_qa_app` waits for the computer's QA slot, which another run's QA app holds; it goes on
-  /// once that app stops.
-  WaitingForQaSlot,
+  /// The agent's `start_qa_app` waits for a QA slot: every one its project may use holds another run's QA app. It
+  /// goes on once one of them stops. `holders` names those runs when every slot file named its holder readably; it is
+  /// empty otherwise, and in notes stored before the runs were named.
+  WaitingForQaSlot {
+    #[serde(default)]
+    holders: Vec<QaSlotHolder>,
+  },
+}
+
+/// A run whose QA app holds a QA slot: its task's key (`ORC-62`) and its number (39), as its slot file names them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QaSlotHolder {
+  pub task: String,
+  pub run: u32,
 }
 
 /// Why Orchester did not put an agent's question to the person.

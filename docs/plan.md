@@ -52,13 +52,14 @@ not check and why: the run waits for the person (reason `unverified`) without th
 person accepts the step, runs it again, or returns the work with a note (`continue_run` `accept`, `allow_retry`,
 `return_to`; `get_run` lists the checks). A step whose latest failed or unverified result was for the revision it would
 run on now is not run again unless a person asked: the run waits with reason `unchanged`. `start_qa_app(scenario)`
-runs the worktree's `tools/qa-app.ps1` for the agent, behind one QA slot per computer (an OS file lock every runner
-takes; a second start waits, noted in the transcript), keeps the app for the invocation (`call_run_app` without a pid
-reaches it) and stops it when the turn ends. The task page's Summary shows *Unverified: …* with the list, *Accept … as
-it is*, *Run … again*, the return with a note and *Stop* (the `decisions` seed scenario holds one).
+runs the worktree's `tools/qa-app.ps1` for the agent, behind the computer's QA slots (OS file locks every runner
+takes; as many as the project's *QA apps at once*, ORC-64, default 2; a start while all are held waits, noted in the
+transcript with who holds them), keeps the app for the invocation (`call_run_app` without a pid reaches it) and stops
+it when the turn ends. The task page's Summary shows *Unverified: …* with the list, *Accept … as it is*, *Run …
+again*, the return with a note and *Stop* (the `decisions` seed scenario holds one).
 **Open:** design verification of the waits-unverified Summary (no Pencil frame of its own yet: it reuses `DVuXu`'s
 parts); the deprecated desktop shows the state but offers no *Accept*; the runner's macOS side is not cross-checked
-(its C dependencies need a macOS toolchain); the QA slot count is fixed at one.
+(its C dependencies need a macOS toolchain).
 
 ### D3 · Resolve a merge's conflicts, and return a finished run to a step · branch `claude/conflict-actions` (implemented 2026-10-19, waiting for review and design verification)
 

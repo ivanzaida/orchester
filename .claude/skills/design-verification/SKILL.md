@@ -95,8 +95,9 @@ app and compare the rest.
 `mcp__Orchester__start_qa_app` (Codex: `start_qa_app` of the Orchester server) with
 `{"scenario": "<scenario>", "fake_agents": null, "no_runner": null}`. Orchester runs the worktree's
 `tools/qa-app.ps1` for you on the scenario, in `.tmp/qa/run-<number>-<step>/`, and answers the copy's pid.
-One QA app runs on the computer at a time: while another run's QA app holds the QA slot, the call waits
-and the run's transcript says *Waiting for the QA slot*; never write lease, ACK or hold notes, and never
+As many QA apps run on the computer at once as the project's *QA apps at once* allows (Project settings ›
+Limits, default 2): while other runs' QA apps hold every QA slot, the call waits and the run's transcript
+says *Waiting for a QA slot*; never write lease, ACK or hold notes, and never
 start the script yourself. Calling it again replaces your QA app; Orchester stops it, and frees the slot,
 when your turn ends, and also while your turn waits for a person (a tool approval, a question): start it
 again once you go on. A person is asked to approve the start (*Approve similar* covers later starts only
@@ -183,7 +184,7 @@ Then call `lurq_read_tree`, `lurq_interact`, `lurq_set_value`, `lurq_wait`, and 
 through `call_run_app`. Open the returned PNG path and include it in the verification report.
 
 **Stop it.** A QA app `start_qa_app` started is stopped by Orchester when your turn ends; stop it
-earlier only to free the QA slot for another run. Otherwise close the app gracefully with its own close button: `lurq_read_tree` lists it as
+earlier only to free its QA slot for another run. Otherwise close the app gracefully with its own close button: `lurq_read_tree` lists it as
 `#window-close` with a `ref`, and `lurq_interact` `{"ref": "<ref>", "action": "click"}` clicks it; the
 app ends what it started and removes its discovery file. If that is not possible,
 use `mcp__Orchester__stop_run_process(pid)` to stop the app and its children inside the run's
@@ -205,7 +206,7 @@ and listed in the step's `unverified` result.
 
 - Several agents may run Orchester at the same time. Use only the app you started: the QA app of
   `start_qa_app` (no pid) or the pid you started, with `mcp__Orchester__call_run_app`; never select the
-  newest discovery file. The QA slot is Orchester's to hand out: wait in `start_qa_app`, never in notes. Before each batch,
+  newest discovery file. The QA slots are Orchester's to hand out: wait in `start_qa_app`, never in notes. Before each batch,
   call `lurq_windows` or `app_state` through the relay and confirm the intended app state.
 - The relay owns discovery credentials. Never read, print, log, paste or commit a discovery
   token, and never pass one as a tool argument.

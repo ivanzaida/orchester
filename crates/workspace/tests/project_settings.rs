@@ -3,7 +3,7 @@ use std::{fs, time::Duration};
 
 use orchester_core::{
   id::ProjectId,
-  limits::ProjectLimits,
+  limits::{ProjectLimits, QaSlots},
   name::Name,
   project::{Project, ProjectKey},
   run::review::AutoModeSettings,
@@ -32,6 +32,7 @@ fn project() -> (tempfile::TempDir, ProjectDb) {
 fn project_settings_limits_are_optional_without_a_product_maximum_and_report_each_error() {
   let text = LimitsText {
     slots: "4".into(),
+    qa: "2".into(),
     ..LimitsText::default()
   };
   let limits = text.limits(ProjectLimits::DEFAULT, ",").expect("no limits");
@@ -48,15 +49,18 @@ fn project_settings_limits_are_optional_without_a_product_maximum_and_report_eac
     daily: "1".into(),
     minutes: "400000".into(),
     slots: "16".into(),
+    qa: "16".into(),
   };
   let read = large.limits(limits, ",").expect("large limits");
   assert_eq!(read.default_run_budget().map(TokenBudget::get), Some(900_000_000));
   assert_eq!(read.default_time_limit(), Some(Duration::from_secs(400000 * 60)));
+  assert_eq!(read.qa_slots().get().get(), 16);
   let invalid = LimitsText {
     default: "one".into(),
     daily: "0".into(),
     minutes: "1.5".into(),
     slots: "17".into(),
+    qa: "0".into(),
   };
   let errors = invalid.limits(limits, ",").expect_err("invalid");
   assert!(
@@ -64,7 +68,35 @@ fn project_settings_limits_are_optional_without_a_product_maximum_and_report_eac
       && errors.daily_budget.is_some()
       && errors.default_time_limit.is_some()
       && errors.agent_slots.is_some()
+      && errors.qa_slots.is_some()
   );
+}
+
+#[test]
+fn project_settings_qa_apps_at_once_read_back_and_refuse_outside_one_to_sixteen() {
+  let stored = ProjectLimits::DEFAULT.with_qa_slots(QaSlots::new(3).expect("in range"));
+  let text = LimitsText::of(stored, ",");
+  assert_eq!((text.slots.as_str(), text.qa.as_str()), ("4", "3"));
+  assert_eq!(text.limits(stored, ","), Ok(stored), "read back as stored");
+  let raised = LimitsText {
+    qa: " 7 ".into(),
+    ..text.clone()
+  };
+  let read = raised.limits(stored, ",").expect("seven");
+  assert_eq!(read.qa_slots().get().get(), 7);
+  assert_eq!(read.agent_slots(), stored.agent_slots(), "the agents' count is its own");
+  for qa in ["", "0", "17", "2.5", "two"] {
+    let errors = LimitsText {
+      qa: qa.into(),
+      ..text.clone()
+    }
+    .limits(stored, ",")
+    .expect_err("outside 1 to 16");
+    let error = errors.qa_slots.expect("the QA field's error");
+    assert_eq!(error.key, "settings.limits.qaSlotsInvalid", "{qa}");
+    assert_eq!(error.args, [("min", "1".to_owned()), ("max", "16".to_owned())]);
+    assert_eq!(errors.agent_slots, None, "{qa}");
+  }
 }
 #[test]
 fn project_settings_environment_requires_confirmation_and_refuses_a_stale_baseline() {

@@ -35,6 +35,7 @@ pub(super) struct Limits {
   daily: Signal<String>,
   minutes: Signal<String>,
   slots: Signal<String>,
+  qa: Signal<String>,
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
   own: work::OwnSaves,
@@ -51,6 +52,8 @@ enum Field {
   Daily,
   Time,
   Slots,
+  /// *QA apps at once* (`yoQKh`), built as *Agents working at once*.
+  Qa,
 }
 impl Field {
   const fn id(self) -> &'static str {
@@ -59,6 +62,7 @@ impl Field {
       Self::Daily => "settings-daily-budget",
       Self::Time => "settings-time-limit",
       Self::Slots => "settings-agent-slots",
+      Self::Qa => "settings-qa-slots",
     }
   }
   const fn keys(self) -> (&'static str, &'static str, &'static str) {
@@ -83,7 +87,16 @@ impl Field {
         "project_settings.agentsUnit",
         "project_settings.slotsRange",
       ),
+      Self::Qa => (
+        "project_settings.qaSlots",
+        "project_settings.appsUnit",
+        "project_settings.qaSlotsRange",
+      ),
     }
+  }
+  /// A count of slots: always entered, and read back as its range.
+  const fn counts(self) -> bool {
+    matches!(self, Self::Slots | Self::Qa)
   }
 }
 impl Component for Limits {
@@ -95,6 +108,7 @@ impl Component for Limits {
       daily: ctx.signal(String::new()),
       minutes: ctx.signal(String::new()),
       slots: ctx.signal(String::new()),
+      qa: ctx.signal(String::new()),
       stored: ctx.signal(None),
       revision: ctx.signal(0),
       own: work::OwnSaves::new(ctx, &[Outside::Limits]),
@@ -199,6 +213,7 @@ impl Limits {
       daily: self.daily.get(),
       minutes: self.minutes.get(),
       slots: self.slots.get(),
+      qa: self.qa.get(),
     }
   }
   fn fill(&self, read: Read) {
@@ -207,6 +222,7 @@ impl Limits {
     self.daily.set(text.daily);
     self.minutes.set(text.minutes);
     self.slots.set(text.slots);
+    self.qa.set(text.qa);
     self.stored.set(Some(read));
   }
   fn accept(&self, limits: orchester_core::limits::ProjectLimits) {
@@ -220,6 +236,7 @@ impl Limits {
       (&self.daily, &sent.daily, read.daily),
       (&self.minutes, &sent.minutes, read.minutes),
       (&self.slots, &sent.slots, read.slots),
+      (&self.qa, &sent.qa, read.qa),
     ] {
       if signal.get_untracked() == *submitted {
         signal.set(saved);
@@ -268,10 +285,11 @@ impl Limits {
       Field::Daily => &self.daily,
       Field::Time => &self.minutes,
       Field::Slots => &self.slots,
+      Field::Qa => &self.qa,
     };
     let text = value.get();
     let (label, unit, empty) = kind.keys();
-    let readback = if matches!(kind, Field::Slots) || text.trim().is_empty() {
+    let readback = if kind.counts() || text.trim().is_empty() {
       ctx.t(empty)
     } else if matches!(kind, Field::Time) {
       ctx.t_args("project_settings.timeReadback", [("count", text)])
@@ -293,7 +311,7 @@ impl Limits {
       .width(Dimension::Px(page::CONTROL_WIDTH))
       .read_back_alignment(Alignment::Start)
       .on_leave(move || commit());
-    if !matches!(kind, Field::Slots) {
+    if !kind.counts() {
       field = field.placeholder(ctx.t("project_settings.noLimit"));
     }
     if matches!(kind, Field::Default | Field::Daily) {
@@ -317,6 +335,7 @@ impl Limits {
       .limits;
     let value = match kind {
       Field::Slots => return limits.agent_slots().get().to_string(),
+      Field::Qa => return limits.qa_slots().get().to_string(),
       Field::Time => {
         return limits.default_time_limit().map_or_else(
           || ctx.t("project_settings.noLimit").to_string(),
@@ -348,6 +367,7 @@ impl Limits {
     let daily = self.number(ctx, Field::Daily, errors.daily_budget.as_ref(), commit);
     let time = self.number(ctx, Field::Time, errors.default_time_limit.as_ref(), commit);
     let slots = self.number(ctx, Field::Slots, errors.agent_slots.as_ref(), commit);
+    let qa = self.number(ctx, Field::Qa, errors.qa_slots.as_ref(), commit);
     vec![
       section(
         "settings-budget-section",
@@ -384,17 +404,27 @@ impl Limits {
         )],
       )
       .into(),
+      // The design draws no line between the section's two rows (`D4V6Cm`, `yoQKh`).
       section(
         "settings-agents-section",
         &ctx.t("project_settings.agents"),
         None,
-        vec![page::row(
-          ctx,
-          "settings-slots",
-          ("project_settings.slots", "project_settings.slotsDetail"),
-          slots,
-          Place::Last,
-        )],
+        vec![
+          page::row(
+            ctx,
+            "settings-slots",
+            ("project_settings.slots", "project_settings.slotsDetail"),
+            slots,
+            Place::Last,
+          ),
+          page::row(
+            ctx,
+            "settings-qa",
+            ("project_settings.qaSlots", "project_settings.qaSlotsDetail"),
+            qa,
+            Place::Last,
+          ),
+        ],
       )
       .into(),
     ]

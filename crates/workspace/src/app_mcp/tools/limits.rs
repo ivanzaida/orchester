@@ -22,7 +22,7 @@ use crate::{
     error::ToolError,
     services::{Services, blocking},
   },
-  budget::{LimitsErrors, ReadLimits, agent_slots, budget_error, time_limit, whole_minutes},
+  budget::{LimitsErrors, ReadLimits, agent_slots, budget_error, qa_slots, time_limit, whole_minutes},
   tasks::{
     outside::Outside,
     usage::{limits_in, update_limits},
@@ -50,6 +50,10 @@ pub struct UpdateProjectLimits {
   /// How many agents work at once across the project's runs, 1 to 16. Applies at once: more let
   /// queued work start, fewer stop no agent and hold new work. Unchanged when left out.
   pub agent_slots: Option<u64>,
+  /// How many QA apps (`start_qa_app`) the project's runs may have open at once, 1 to 16; a start
+  /// beyond it waits until one closes. Applies from the next start: fewer close no open app.
+  /// Unchanged when left out.
+  pub qa_slots: Option<u64>,
 }
 
 pub async fn update_project_limits(services: &Services, args: UpdateProjectLimits) -> Result<Value, ToolError> {
@@ -92,6 +96,7 @@ fn changed(stored: ProjectLimits, args: &UpdateProjectLimits) -> Result<ProjectL
     },
     default_time_limit,
     agent_slots: args.agent_slots.map_or(Ok(stored.agent_slots()), agent_slots),
+    qa_slots: args.qa_slots.map_or(Ok(stored.qa_slots()), qa_slots),
   }
   .limits()
   .map(|limits| {
@@ -110,11 +115,18 @@ fn refused(errors: LimitsErrors) -> ToolError {
     daily_budget,
     default_time_limit,
     agent_slots,
+    qa_slots,
   } = errors;
-  let reasons = [default_run_budget, daily_budget, default_time_limit, agent_slots]
-    .into_iter()
-    .flatten()
-    .collect();
+  let reasons = [
+    default_run_budget,
+    daily_budget,
+    default_time_limit,
+    agent_slots,
+    qa_slots,
+  ]
+  .into_iter()
+  .flatten()
+  .collect();
   ToolError::refused("invalid_limits", reasons)
 }
 
@@ -125,6 +137,7 @@ pub fn limits_json(limits: ProjectLimits) -> Value {
     "daily_budget": limits.daily_budget_limit().map(TokenBudget::get),
     "default_time_limit_minutes": limits.default_time_limit().map(whole_minutes),
     "agent_slots": limits.agent_slots().get().get(),
+    "qa_slots": limits.qa_slots().get().get(),
   })
 }
 

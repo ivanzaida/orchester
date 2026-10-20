@@ -8,7 +8,7 @@ use std::{fmt::Debug, num::NonZeroU32, path::Path, str::FromStr, time::Duration}
 use orchester_core::{
   connection::stream::AgentEvent,
   id::IdempotencyKey,
-  limits::{AgentSlots, ProjectLimits},
+  limits::{AgentSlots, ProjectLimits, QaSlots},
   resource::StepKey,
   run::{
     Attempt, AttemptReason, AttemptStatus, PauseReason, Run, RunLimit, RunStatus, StepExecution, StepStatus, TokenUsage,
@@ -90,6 +90,64 @@ fn limits_agent_slots_persist_with_the_other_limits() {
   let reopened = ProjectDb::open(repo.path()).expect("open");
   assert_eq!(reopened.project_limits().expect("limits").agent_slots(), two);
   assert_eq!(reopened.project_limits().expect("limits"), changed);
+}
+
+#[test]
+fn limits_qa_slots_persist_with_the_other_limits() {
+  let (repo, mut db, ..) = started_run();
+  assert_eq!(db.project_limits().expect("limits").qa_slots(), QaSlots::DEFAULT);
+  let five = QaSlots::new(5).expect("in range");
+  let agents = AgentSlots::new(3).expect("in range");
+  let changed = ProjectLimits::DEFAULT.with_agent_slots(agents).with_qa_slots(five);
+  db.save_project_limits(&changed).expect("save");
+  let reopened = ProjectDb::open(repo.path()).expect("open");
+  let read = reopened.project_limits().expect("limits");
+  assert_eq!((read.qa_slots(), read.agent_slots()), (five, agents));
+  assert_eq!(read, changed);
+  let out_of_range = Connection::open(repo.path().join(".orchester").join("orchester.db"))
+    .expect("open")
+    .execute("UPDATE project_limits SET qa_slots = 0", []);
+  assert!(out_of_range.is_err(), "the schema keeps QA slots within 1 to 16");
+}
+
+#[test]
+fn limits_migration_gives_saved_limits_the_default_qa_slots() {
+  let (current, mut db, ..) = started_run();
+  // Saved with other limits changed; the copy at the old schema keeps all but the QA slots' column.
+  let saved = ProjectLimits::DEFAULT
+    .with_agent_slots(AgentSlots::new(7).expect("in range"))
+    .with_qa_slots(QaSlots::new(9).expect("in range"));
+  db.save_project_limits(&saved).expect("save");
+  drop(db);
+  let database = current.path().join(".orchester").join("orchester.db");
+  let latest = schema_version(&database);
+  // The newest schema without the column, wherever later migrations moved the latest.
+  let before = (1..latest)
+    .rev()
+    .find(|&version| {
+      let repo = tempfile::tempdir().expect("temporary directory");
+      !has_qa_slots(&ProjectDb::create_at_version(repo.path(), version).expect("an old database"))
+    })
+    .expect("a schema before the QA slots");
+  let old = copied_at_version(&database, before);
+  let old_database = old.path().join(".orchester").join("orchester.db");
+  assert!(!has_qa_slots(&Connection::open(&old_database).expect("open")));
+  let mut upgraded = ProjectDb::open(old.path()).expect("migrate");
+  assert_eq!(schema_version(&old_database), latest);
+  let read = upgraded.project_limits().expect("limits");
+  assert_eq!(
+    read.qa_slots(),
+    QaSlots::DEFAULT,
+    "a row saved before keeps the default"
+  );
+  assert_eq!(read.agent_slots(), saved.agent_slots());
+  let sixteen = read.with_qa_slots(QaSlots::new(16).expect("in range"));
+  upgraded.save_project_limits(&sixteen).expect("save");
+  assert_eq!(upgraded.project_limits().expect("limits"), sixteen);
+  let out_of_range = Connection::open(&old_database)
+    .expect("open")
+    .execute("UPDATE project_limits SET qa_slots = 17", []);
+  assert!(out_of_range.is_err(), "the schema keeps QA slots within 1 to 16");
 }
 
 #[test]
@@ -249,6 +307,14 @@ const EXECUTION: &str = "01920000-0000-7000-8000-00000000000c";
 
 fn id<T: FromStr<Err: Debug>>(value: &str) -> T {
   value.parse().expect("fixture id")
+}
+
+fn has_qa_slots(connection: &Connection) -> bool {
+  connection
+    .prepare("SELECT 1 FROM pragma_table_info('project_limits') WHERE name = 'qa_slots'")
+    .expect("columns")
+    .exists([])
+    .expect("columns")
 }
 
 fn has_agent_slots(connection: &Connection) -> bool {

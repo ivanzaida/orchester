@@ -1,15 +1,20 @@
-//! `start_qa_app` (`orchester_core::orchester_tools::QaAppStart`): the runner takes the computer's QA slot
-//! ([`slots`]), waiting while another run's QA app holds it, stops what a holder that died left running
-//! ([`leftover`]), runs the worktree's `tools/qa-app.ps1` ([`script`]) and keeps the app it started for the
+//! `start_qa_app` (`orchester_core::orchester_tools::QaAppStart`): the runner takes one of the computer's QA slots its
+//! project allows ([`slots`]), waiting while other runs' QA apps hold every one, stops what a holder that died left
+//! running ([`leftover`]), runs the worktree's `tools/qa-app.ps1` ([`script`]) and keeps the app it started for the
 //! invocation, so `call_run_app` without a pid reaches it through its exact discovery file.
+//!
+//! Several QA apps open at once do not clash: each run's step has its own QA folder, `.tmp/qa/run-<number>-<step>/`
+//! in its own worktree (run numbers are unique in a project and worktrees are per run), which holds the app's copied
+//! programs, its data, its seeded repository and its MCP discovery folder; the script gives each app a free port and a
+//! new token, and the app's own runner serves its own seeded project.
 //!
 //! Each invocation has its state ([`InvocationQa`]), shared by its tools and the runner: its starts run one at a time
 //! (a second waits for the first, then replaces its app and keeps the slot), and it ends once. When the invocation
 //! ends ([`QaApps::end`]) — its turn is over, its run stopped, paused or failed — its app is stopped with everything it
-//! started inside the worktree and the slot freed, off the async workers; a start still waiting for the slot, or
+//! started inside the worktree and the slot freed, off the async workers; a start still waiting for a slot, or
 //! whose script still runs, gives up and ends the script's tree. While the invocation waits for a person inside its
 //! turn (a tool approval, a question; [`QaApps::release`]) its app is stopped and the slot freed as well, so a person's
-//! wait never holds the computer's slot: the agent starts the app again once it goes on.
+//! wait never holds one of the computer's slots: the agent starts the app again once it goes on.
 
 mod leftover;
 mod script;
@@ -31,17 +36,23 @@ use std::{
 };
 
 use orchester_core::{
+  connection::stream::QaSlotHolder,
   id::InvocationId,
+  limits::QaSlots as Allowed,
   orchester_tools::{ProcessCall, QA_APP_SCRIPT, QaAppStart, StartedQaApp, ToolResult},
+  project::TaskKey,
+  run::RunNumber,
+  store::SettingsStore,
   time::Timestamp,
 };
 use orchester_exec::run_processes::RunProcesses;
+use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 
-use self::slots::Lease;
 pub use self::slots::QaSlots;
+use self::slots::{Holder, Lease, Take};
 
-/// How often a start that waits for the QA slot tries again.
+/// How often a start that waits for a QA slot tries again.
 const SLOT_POLL: Duration = Duration::from_millis(500);
 
 /// The QA state of the runner's invocations that have not ended, and the computer's QA slots.
@@ -165,9 +176,14 @@ pub(in crate::execution::step) struct StepQa {
   /// The QA folder's name, `.tmp/qa/<name>/` in the worktree.
   pub(in crate::execution::step) name: String,
   pub(in crate::execution::step) worktree: PathBuf,
+  /// The project's repository, whose database holds its *QA apps at once*.
+  pub(in crate::execution::step) root: PathBuf,
   pub(in crate::execution::step) run_created: Timestamp,
-  /// Says in the run's transcript that the start waits for the QA slot.
-  pub(in crate::execution::step) waiting: Box<dyn Fn() + Send + Sync>,
+  /// The run's task's key and the run's number, which its slot's record names.
+  pub(in crate::execution::step) task: TaskKey,
+  pub(in crate::execution::step) run: RunNumber,
+  /// Says in the run's transcript that the start waits for a QA slot, and who holds them when that is known.
+  pub(in crate::execution::step) waiting: Box<dyn Fn(Vec<QaSlotHolder>) + Send + Sync>,
 }
 
 impl StepQa {
@@ -212,7 +228,13 @@ impl StepQa {
       Ok(folder) => folder,
       Err(refusal) => return ToolResult::unavailable(&refusal),
     };
-    leftover::stop(&mut lease, &folder, self.run_created);
+    let holder = Holder {
+      folder: folder.clone(),
+      since: self.run_created,
+      task: self.task.clone(),
+      run: self.run,
+    };
+    leftover::stop(&mut lease, &holder);
     if let Err(refusal) = self.state.not_waiting() {
       return ToolResult::unavailable(&refusal);
     }
@@ -246,22 +268,40 @@ impl StepQa {
     }
   }
 
-  /// A free slot, waiting while every slot is held; refused when the invocation ends meanwhile.
+  /// A free slot of those the project allows, read at each try, waiting while every one is held; refused when the
+  /// invocation ends meanwhile.
   fn take_slot(&self) -> Result<Lease, String> {
     let mut said = false;
     loop {
       if self.state.ended() {
-        return Err("the turn ended before the QA slot was free".to_owned());
+        return Err("the turn ended before a QA slot was free".to_owned());
       }
       self.state.not_waiting()?;
-      if let Some(lease) = self.apps.slots.try_take().map_err(|error| error.to_string())? {
-        return Ok(lease);
-      }
-      if !said {
-        (self.waiting)();
-        said = true;
+      match self
+        .apps
+        .slots
+        .try_take(self.allowed())
+        .map_err(|error| error.to_string())?
+      {
+        Take::Taken(lease) => return Ok(lease),
+        Take::AllHeld(holders) if !said => {
+          (self.waiting)(named(holders));
+          said = true;
+        }
+        Take::AllHeld(_) => {}
       }
       thread::sleep(SLOT_POLL);
+    }
+  }
+
+  /// The project's *QA apps at once* as stored now; the fewest, logged, when it cannot be read.
+  fn allowed(&self) -> Allowed {
+    match ProjectDb::open_read_only(&self.root).and_then(|db| db.project_limits()) {
+      Ok(limits) => limits.qa_slots(),
+      Err(error) => {
+        tracing::warn!(%error, "the project's QA apps at once cannot be read; this start uses one slot");
+        Allowed::new(Allowed::MIN.into()).expect("the fewest QA slots are in range")
+      }
     }
   }
 
@@ -315,11 +355,23 @@ impl StepQa {
     );
     if waited >= SLOT_POLL {
       // Writing to a String cannot fail.
-      let _ = write!(text, " It waited {:.1} s for the QA slot.", waited.as_secs_f32());
+      let _ = write!(text, " It waited {:.1} s for a QA slot.", waited.as_secs_f32());
     }
     *app = Some(QaApp { running, lease });
     ToolResult::shown(text)
   }
+}
+
+/// The runs `holders` names for the transcript; none when a slot named no holder that reads.
+fn named(holders: Option<Vec<Holder>>) -> Vec<QaSlotHolder> {
+  holders
+    .unwrap_or_default()
+    .into_iter()
+    .map(|holder| QaSlotHolder {
+      task: holder.task.to_string(),
+      run: holder.run.get(),
+    })
+    .collect()
 }
 
 /// The git blob of the worktree's QA script as it is now, which a start's approval names; `None`, logged, when git

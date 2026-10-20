@@ -284,6 +284,10 @@ required-features = ["test-agent"]
 name = "qa_app_links"
 required-features = ["test-agent"]
 
+[[test]]
+name = "qa_app_slots"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
