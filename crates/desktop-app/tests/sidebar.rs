@@ -1,6 +1,6 @@
 //! The sidebar with a session's data: how many tasks the project has (a dash while they are read), the
 //! runs under way as the Running list shows them, the project switcher's RECENT (five at most, the shown
-//! project checked), and what *Open folder…* makes of a chosen folder.
+//! project checked), what *Open folder…* makes of a chosen folder, and how it fits a short window.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -17,8 +17,9 @@ use lurq::{
     App, Tree,
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::MouseButton,
+    events::{MouseButton, ScrollPhase},
   },
+  core::ElementRect,
   node::{Element, element::ElementRef},
 };
 use orchester_app::{
@@ -424,5 +425,130 @@ fn sidebar_feed_gives_the_tasks_as_they_stand_with_the_runner() {
     phase(feed.tasks_with_runner(&repo), "KON-16"),
     Some(TaskPhase::Interrupted),
     "without a runner a run recorded as running has lost its agent"
+  );
+}
+
+/// Where the element `id` is laid out.
+fn bounds(window: &mut Window, id: &str) -> ElementRect {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+fn bottom(rect: ElementRect) -> f32 {
+  rect.y + rect.height
+}
+
+/// Whether the sidebar's edge `id` shows its hairline.
+fn lined(window: &mut Window, id: &str) -> bool {
+  window
+    .tree
+    .get_element_by_id(id)
+    .is_some_and(|edge| edge.has_class("hairline"))
+}
+
+#[test]
+fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_keeps_the_bottom_group() {
+  const HEIGHT: f32 = 640.0;
+  let (data, repo) = seeded();
+  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
+  let runs = under_way(&tasks, false);
+  let last = format!("running-{}", runs.last().expect("the scenario has runs under way").key);
+  let launch = data.launch();
+  let mut window = Window::of(data, launch);
+  // Tall enough for the screens, too short once the runs under way show under them.
+  window.tree.resize(960, 800);
+  window.until("the runs under way to show", |window| {
+    window.texts(&last).is_some() && lined(window, "sidebar-bottom-edge")
+  });
+  assert!(
+    !lined(&mut window, "sidebar-top-edge"),
+    "runs that came in under the screens leave the part at its top"
+  );
+  // The app's smallest window (`window.rs`).
+  window.tree.resize(960, 640);
+  window.pass();
+  let sidebar = bounds(&mut window, "sidebar");
+  let settings = bounds(&mut window, "nav-project_settings");
+  assert!(
+    bottom(settings) <= bottom(sidebar) && bottom(sidebar) <= HEIGHT,
+    "Project settings inside the sidebar, inside the window: {settings:?} in {sidebar:?}"
+  );
+  let scroll = bounds(&mut window, "sidebar-scroll");
+  let first = bounds(&mut window, "nav-all_projects");
+  assert!(
+    bottom(scroll) <= first.y,
+    "the bottom group under the scrolling part: {scroll:?}, {first:?}"
+  );
+  assert!(
+    bottom(bounds(&mut window, &last)) > bottom(scroll),
+    "the last run is below the room before scrolling"
+  );
+  assert!(
+    lined(&mut window, "sidebar-bottom-edge") && !lined(&mut window, "sidebar-top-edge"),
+    "a hairline over the bottom group while the part holds more, none under the switcher at its top"
+  );
+  let overview = bounds(&mut window, "nav-overview").y;
+  let (x, y) = (scroll.x + scroll.width / 2.0, scroll.y + scroll.height / 2.0);
+  window.tree.mouse_move(x, y);
+  window.tree.scroll(x, y, 0.0, -4000.0, ScrollPhase::Scroll);
+  window.pass();
+  window.pass();
+  let row = bounds(&mut window, &last);
+  assert!(
+    row.y >= scroll.y && bottom(row) <= bottom(scroll) + 0.5,
+    "the last run scrolled into the room: {row:?} in {scroll:?}"
+  );
+  assert_eq!(
+    bounds(&mut window, "nav-project_settings"),
+    settings,
+    "the bottom group stays where it was"
+  );
+  assert!(
+    bottom(bounds(&mut window, "project-switcher")) <= scroll.y,
+    "the switcher stays above the scrolling part"
+  );
+  assert!(
+    lined(&mut window, "sidebar-top-edge") && lined(&mut window, "sidebar-bottom-edge"),
+    "scrolled to its end, a hairline at each edge"
+  );
+  assert!(
+    first.y - bottom(row) >= 4.0,
+    "room between the last run and All projects: {row:?}, {first:?}"
+  );
+  press(&mut window, "nav-project_settings");
+  window.until("Project settings", |window| {
+    window.texts("screen-project_settings").is_some()
+  });
+  grow_and_shrink(&mut window, &last, overview);
+}
+
+/// From the short window to the design's 1440 × 900, where every entry fits and no hairline shows, and back:
+/// the screens start where they start in the short window, the part at its top.
+fn grow_and_shrink(window: &mut Window, last: &str, overview: f32) {
+  window.tree.resize(1440, 900);
+  window.until("a window tall enough for every entry", |window| {
+    !lined(window, "sidebar-top-edge") && window.tree.get_element_by_id("sidebar-bottom-edge").is_none()
+  });
+  let scroll = bounds(window, "sidebar-scroll");
+  assert!(
+    bottom(bounds(window, last)) <= bottom(scroll),
+    "every run fits: {scroll:?}"
+  );
+  assert_eq!(
+    bounds(window, "nav-overview").y,
+    overview,
+    "the screens start where they did"
+  );
+  window.tree.resize(960, 640);
+  window.until("the window to be short again", |window| {
+    lined(window, "sidebar-bottom-edge") && !lined(window, "sidebar-top-edge")
+  });
+  assert_eq!(
+    bounds(window, "nav-overview").y,
+    overview,
+    "a window shrunk from one that held everything shows the screens from their top"
   );
 }
