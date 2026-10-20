@@ -4,6 +4,12 @@
       "name": "Orchester",
       "windowTitle": "{{tab}} — Orchester"
     },
+    "notifications": {
+      "badge": {
+        "one": "{{count}} thing needs you",
+        "other": "{{count}} things need you"
+      }
+    },
     "window": {
       "minimize": "Minimize",
       "maximize": "Maximize",

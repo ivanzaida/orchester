@@ -77,8 +77,8 @@ fn embedded_icon(width: i32, height: i32) -> Result<HICON, SystemIconError> {
 }
 
 /// This thread's top-level windows that carry a big window icon: the ones lurq gave theirs, not winit's
-/// hidden event window or the input method's.
-fn windows_with_icon() -> Vec<HWND> {
+/// hidden event window or the input method's. The taskbar's badge goes on them too (`notifications`).
+pub(crate) fn windows_with_icon() -> Vec<HWND> {
   let mut windows: Vec<HWND> = Vec::new();
   let list = (&raw mut windows).expose_provenance() as LPARAM;
   // SAFETY: `collect` runs only during this call, and only pushes onto `windows`, whose address `list`

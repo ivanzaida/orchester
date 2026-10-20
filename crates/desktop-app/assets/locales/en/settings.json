@@ -1,5 +1,35 @@
 {
   "settings": {
+    "notifications": {
+      "section": "Notifications",
+      "silent": "This build shows no notifications: only the installed app does, or a build started with {{variable}}=1. The counts on the app's icon still update.",
+      "needsYou": {
+        "title": "Needs you",
+        "description": "An agent waits for your approval, an answer or a message, or a plan or a run waits for your decision."
+      },
+      "stopped": {
+        "title": "Stopped",
+        "description": "A run stopped at a limit or was interrupted, a project's runner is offline, or a merge stopped."
+      },
+      "finished": {
+        "title": "Finished and info",
+        "description": "A run is ready to merge, was merged or failed, a plan limit reached 90% or was reset, or the Orchestrator proposes something."
+      },
+      "sound": {
+        "title": "Sound",
+        "description": "Notifications play the system's notification sound."
+      },
+      "quiet": {
+        "title": "Quiet hours",
+        "description": "No notifications between these times each day. The count on the app's icon still updates.",
+        "from": "From",
+        "to": "to",
+        "start": "Quiet hours start",
+        "end": "Quiet hours end",
+        "same": "Choose two different times: these quiet hours are not taken."
+      },
+      "notSaved": "Your notification settings were not saved: {{reason}}"
+    },
     "automation": {
       "section": "What automation may do",
       "changePermissions": {

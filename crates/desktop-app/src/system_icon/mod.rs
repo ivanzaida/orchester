@@ -18,6 +18,8 @@ mod windows;
 
 #[cfg(windows)]
 pub use self::windows::install;
+#[cfg(windows)]
+pub(crate) use self::windows::windows_with_icon;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SystemIconError {

@@ -18,6 +18,64 @@
   "common": {
     "listSeparator": ", "
   },
+  "notifications": {
+    "title": {
+      "command": "A command waits for your approval",
+      "tool": "A tool call waits for your approval",
+      "question": "{{agent}} asks you a question",
+      "message": "A step waits for your message",
+      "plan": "Plan v{{version}} waits for your decision",
+      "retries": "Retries used up: the run waits for your decision",
+      "brokeAgain": "A step broke again: the run waits for your decision",
+      "unverified": "A step could not check everything: the run waits for your decision",
+      "unchanged": "Nothing changed: the run waits for your decision",
+      "limit": {
+        "tokens": "The run stopped at its token budget",
+        "time": "The run stopped at its time limit",
+        "daily": "The daily budget stopped the run",
+        "dailyMany": "The daily budget stopped {{count}} runs",
+        "group": "The group's budget stopped the run",
+        "groupMany": "The group's budget stopped {{count}} runs",
+        "step": "A step used its budget: the run stopped",
+        "plan": "An account's plan limit stopped the run",
+        "any": "The run stopped at a limit"
+      },
+      "interrupted": "The run was interrupted",
+      "runnerOffline": "The project's runner is offline",
+      "runnerNotStarted": "The project's runner could not start",
+      "mergeConflicts": "The merge stopped at conflicts",
+      "localIntegration": "The merge continues in Local integration",
+      "readyToMerge": "The run is ready to merge",
+      "merged": "The run was merged",
+      "failed": "The run failed",
+      "planLimitNear": "{{percent}}% of a plan limit is used",
+      "planLimitReset": "A plan limit was reset",
+      "proposal": "An Orchestrator proposal waits for you"
+    },
+    "body": {
+      "taskStep": "{{project}} · {{task}} {{title}} · {{step}}",
+      "task": "{{project}} · {{task}} {{title}}",
+      "project": "{{project}}",
+      "account": "{{account}}"
+    },
+    "many": {
+      "needsYou": "{{count}} things need you",
+      "stopped": "{{count}} things stopped",
+      "finished": "{{count}} updates"
+    },
+    "list": {
+      "project": {
+        "one": "{{project}} · {{first}}",
+        "two": "{{project}} · {{first}} and {{second}}",
+        "more": "{{project}} · {{first}}, {{second}} and {{count}} more"
+      },
+      "across": {
+        "one": "{{first}}",
+        "two": "{{first}} and {{second}}",
+        "more": "{{first}}, {{second}} and {{count}} more"
+      }
+    }
+  },
   "runner": {
     "connection": {
       "notRestartedSince": {

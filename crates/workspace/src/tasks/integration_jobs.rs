@@ -140,6 +140,11 @@ impl ProjectJobState {
     self.runs.get(&run).cloned().unwrap_or_default()
   }
 
+  /// Each run that was asked about, with its operations.
+  pub fn runs(&self) -> impl Iterator<Item = (RunId, &RunJobState)> {
+    self.runs.iter().map(|(run, state)| (*run, state))
+  }
+
   /// The run git merges now, if any: one merge at a time in a project's checkout.
   pub fn merging(&self) -> Option<RunId> {
     self

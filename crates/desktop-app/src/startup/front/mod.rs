@@ -33,3 +33,11 @@ pub fn bring_to_front(holder: LockHolder) -> Front {
 pub fn bring_to_front(_holder: LockHolder) -> Front {
   Front::NoAnswer
 }
+
+/// Brings this app's own window to the front, restoring it when it is minimized: after a click of one of its
+/// notifications, which lets the app take the foreground. macOS activates the app on such a click itself
+/// (`notifications::os`).
+#[cfg(target_os = "windows")]
+pub fn bring_own_to_front() -> Front {
+  windows::bring_to_front(std::process::id(), orchester_core::time::Timestamp::now())
+}

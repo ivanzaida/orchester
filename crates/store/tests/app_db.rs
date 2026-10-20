@@ -5,6 +5,7 @@ use orchester_core::{
   appearance::ThemeSetting,
   id::{ProjectId, ServerId, UserId},
   name::Name,
+  notification::{NotificationSettings, QuietHours},
   project::{Project, ProjectKey},
   time::Timestamp,
   usage::limits::WarningThreshold,
@@ -232,6 +233,30 @@ fn orchestrator_answers_agents_and_merges_runs_only_once_a_person_turned_each_on
   db.set_orchestrator_answers_agents(false).expect("store");
   assert!(db.orchestrator_merges_runs().expect("read"));
   assert!(!db.orchestrator_answers_agents().expect("read"));
+}
+
+#[test]
+fn notification_settings_start_as_agreed_and_are_kept() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  let settings = db.notification_settings().expect("read");
+  assert_eq!(settings, NotificationSettings::default());
+  assert!(settings.needs_you && settings.stopped && !settings.finished && settings.sound);
+  assert_eq!(settings.quiet, None, "no quiet hours until a person sets them");
+  let changed = NotificationSettings {
+    finished: true,
+    sound: false,
+    quiet: Some(QuietHours::new(23 * 60, 7 * 60).expect("two times")),
+    ..settings
+  };
+  db.set_notification_settings(changed).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert_eq!(db.notification_settings().expect("read"), changed);
+  db.set_notification_settings(NotificationSettings { quiet: None, ..changed })
+    .expect("store");
+  assert_eq!(db.notification_settings().expect("read").quiet, None);
 }
 
 #[test]

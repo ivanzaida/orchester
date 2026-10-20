@@ -128,6 +128,10 @@ fn every_link() -> Vec<(Link, Route)> {
       at(ProjectPage::Task(key(), TaskView::Changes(None))),
     ),
     (
+      Link::Task(project, key(), TaskPage::LocalIntegration),
+      at(ProjectPage::Task(key(), TaskView::LocalIntegration)),
+    ),
+    (
       Link::Pipeline(project, id()),
       at(ProjectPage::Pipeline(id(), Default::default())),
     ),
