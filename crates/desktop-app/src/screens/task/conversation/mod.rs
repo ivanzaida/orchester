@@ -30,7 +30,10 @@ use orchester_core::{id::InvocationId, run::RunStatus};
 use orchester_workspace::{
   messages::Message,
   tasks::{
-    conversation::{Conversation, PanelState},
+    conversation::{
+      Conversation, PanelState,
+      orchestrator::{continued, message_offer, proposals},
+    },
     detail::RunView,
     timeline::{
       self as items, Item, ItemKind, Sources,
@@ -45,10 +48,10 @@ pub use self::composer::ComposerState;
 pub(crate) use self::timeline::{links, step_label};
 use self::{
   read::{Transcript, TranscriptRead, Waiting, with_requests},
-  timeline::{Follow, Timeline, Toggles},
+  timeline::{ChatProject, Follow, Timeline, Toggles},
   toolbar::RunState,
 };
-use super::{TaskContext, cards::Decisions};
+use super::{super::orchestrator::data::revision as chat_revision, TaskContext, cards::Decisions};
 use crate::{
   project::TasksState,
   services::Services,
@@ -105,7 +108,10 @@ impl Component for ConversationTab {
     let names = ProjectNames::read(ctx, workspace, 0);
     let (body, state) = match &detail.run {
       Some(run) => self.run_body(ctx, &task, (run, &conversation), names),
-      None => (states::without_run(ctx, detail, &conversation), None),
+      None => {
+        let project = task.project.open.project.id();
+        (states::without_run(ctx, (project, detail), &conversation), None)
+      }
     };
     let state = state.unwrap_or_else(|| RunState::of(&conversation, detail, false));
     Column::new()
@@ -144,7 +150,7 @@ impl ConversationTab {
       }
       Err(None) => return (states::loading(ctx, run), None),
     };
-    let items = items::build(&Sources {
+    let mut items = items::build(&Sources {
       run,
       entries: &loaded.entries,
       conversation,
@@ -153,6 +159,7 @@ impl ConversationTab {
       questions: &loaded.questions,
       merge: task.detail.merge.as_ref(),
     });
+    continued(&mut items, &loaded.orchestrated);
     let open = |key: &str, default: bool| self.toggles.is_open(key, default);
     let shown = timeline::without_usage(view::shown(&items, &Choice::default(), &open, &plain::rendered));
     // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
@@ -170,8 +177,14 @@ impl ConversationTab {
         .find(|item| items::waits_for_you(item))
         .map(|item| item.key.clone()),
     );
+    let open = &task.project.open;
     ctx.provide(Timeline {
-      project: task.project.open.project.id(),
+      project: open.project.id(),
+      chat_project: ChatProject {
+        id: open.project.id(),
+        name: open.project.name().as_str().into(),
+        root: open.repo_root.clone(),
+      },
       names,
       key: task.key.clone(),
       detail: task.detail.clone(),
@@ -180,9 +193,12 @@ impl ConversationTab {
       pending: loaded.pending.clone(),
       decided: loaded.decided.clone(),
     });
+    // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
+    let offered = message_offer(&task.detail, run.id());
+    let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
     let working = working_line(run, conversation, (&items, &loaded.entries), asking);
-    let arrived = arrivals(&items, &loaded.entries);
-    let chat = timeline::chat(ctx, &self.follow, (&shown, &items), (working, arrived));
+    let arrived = arrivals(&items, &loaded.entries) + proposed.len();
+    let chat = timeline::chat(ctx, &self.follow, (&shown, &items, &proposed), (working, arrived));
     (
       states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
       Some(state),
@@ -212,8 +228,10 @@ impl ConversationTab {
       TasksState::Ready(tasks) => Some(Waiting::of(&tasks, run.id())),
       TasksState::Loading | TasksState::Failed(_) => None,
     };
+    let runners = Services::of(ctx).runners;
+    let chats = chat_revision(ctx, &runners, &repo_root);
     let entries = read.data.as_ref().map(|Transcript(entries)| entries.clone());
-    let sources = with_requests(ctx, (repo_root, run.id(), hold), (entries, waiting, retry));
+    let sources = with_requests(ctx, (repo_root, run.id(), hold), (entries, waiting, chats, retry));
     match (sources.data.flatten(), read.error.or(sources.error)) {
       (Some(loaded), stale) => Ok((loaded, stale)),
       (None, error) => Err(error),

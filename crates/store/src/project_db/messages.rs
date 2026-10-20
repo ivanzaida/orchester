@@ -14,7 +14,7 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::ProjectDb;
+use super::{ProjectDb, orchestrator_sent::OrchestratorColumns};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -24,7 +24,8 @@ const PERSON: &str = "person";
 const AGENT: &str = "agent";
 const COLUMNS: &str = "id, task_id, run_id, author, kind, recipient_profile, step_execution_id, invocation_id, body, \
                        created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-                       undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation";
+                       undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation, \
+                       orchestrator_chat";
 
 impl ConversationStore for ProjectDb {
   type Error = StoreError;
@@ -173,8 +174,8 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
   connection.execute(
     "INSERT INTO messages (id, task_id, run_id, idempotency_key, author, kind, recipient_profile, step_execution_id, \
      invocation_id, body, created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-     undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+     undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation, orchestrator_chat) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
     params![
       message.id().to_string(),
       message.task().to_string(),
@@ -201,6 +202,10 @@ fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey
       columns.undelivered_reason,
       message.by_orchestrator(),
       message.answerer() == Some(orchester_core::run::Answerer::Automation),
+      message
+        .from_orchestrator()
+        .and_then(|from| from.chat)
+        .map(|chat| chat.to_string()),
     ],
   )?;
   Ok(())
@@ -304,7 +309,7 @@ struct StoredRow {
   undelivered_execution: Option<String>,
   undelivered_at: Option<i64>,
   undelivered_reason: Option<String>,
-  by_orchestrator: bool,
+  orchestrator: OrchestratorColumns,
   by_automation: bool,
 }
 
@@ -329,7 +334,7 @@ impl StoredRow {
       undelivered_execution: row.get(15)?,
       undelivered_at: row.get(16)?,
       undelivered_reason: row.get(17)?,
-      by_orchestrator: row.get(18)?,
+      orchestrator: OrchestratorColumns::read(row, (18, 20))?,
       by_automation: row.get(19)?,
     })
   }
@@ -355,9 +360,9 @@ impl StoredRow {
     } else {
       message.sent(timing).map_err(|error| corrupt("message", error))?
     };
-    let message = if self.by_orchestrator {
+    let message = if self.orchestrator.by {
       message
-        .sent_by_orchestrator()
+        .written_by_orchestrator(self.orchestrator.chat()?)
         .map_err(|error| corrupt("message", error))?
     } else {
       message

@@ -6,7 +6,7 @@
 //! person applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays
 //! open to automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
 
-mod answer;
+pub(in crate::screens) mod answer;
 mod continuation;
 mod control;
 mod facts;

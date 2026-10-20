@@ -1,6 +1,7 @@
 //! The waits of the project's agents in the Orchestrator chat (ORC-42): each kept once by its key, read back as a
 //! wait, and the turn a wait starts by itself, which starts only while no turn of its conversation thinks, once, and
-//! reads as the wait's prompt; messages and answers the chat sent are named its; and the migration that makes the
+//! reads as the wait's prompt; messages and answers the chat sent are named its, with their conversation and how they
+//! went out (ORC-45); the answers and messages it proposed for a run are read back; and the migration that makes the
 //! conversation's entries hold waits keeps the entries it had.
 //! `cargo test -p orchester-store --test orchestrator_waits waits`.
 
@@ -9,7 +10,10 @@ mod support;
 use orchester_core::{
   conversation::{AgentMessage, Message, MessageBody, Recipient},
   id::{ChatId, ChatMessageId, IdempotencyKey, RunId},
-  orchestrator::{AgentWait, Chat, EntryKind, TurnFailure, TurnState, WaitKind},
+  orchestrator::{
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, FromOrchestrator, SentWay, TurnFailure, TurnState, WaitKind,
+    change::{Change, ProposedChange},
+  },
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
   run::Answerer,
   store::{ActivityStore, ConversationStore},
@@ -184,35 +188,39 @@ fn decision_authors_persist_person_automation_and_orchestrator_messages() {
 #[test]
 fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
   let (_repo, mut db, run, execution) = started_run();
-  let sent = Message::from_person(
-    run.task(),
-    Some(run.id()),
-    Recipient::Orchestrator,
-    body("Keep it."),
-    at(20),
-  )
-  .sent_by_orchestrator()
-  .expect("a message on the person's side");
-  db.send_message(IdempotencyKey::generate(), &sent).expect("stored");
-  let own = Message::from_person(
-    run.task(),
-    Some(run.id()),
-    Recipient::Orchestrator,
-    body("Mine."),
-    at(21),
-  );
-  db.send_message(IdempotencyKey::generate(), &own).expect("stored");
+  let chat = ChatId::generate();
+  let message =
+    |text: &str, at| Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body(text), at);
+  // Sent by the chat itself, as automation; applied by the person from its proposal; the person's own.
+  let direct = message("Keep it.", at(20))
+    .sent_by_orchestrator(Some(chat))
+    .expect("a message on the person's side");
+  let applied = message("Keep that.", at(21))
+    .written_by_orchestrator(Some(chat))
+    .expect("a message on the person's side");
+  for sent in [direct, applied, message("Mine.", at(22))] {
+    db.send_message(IdempotencyKey::generate(), &sent).expect("stored");
+  }
   let stored = db.messages(run.task()).expect("messages");
   assert_eq!(
-    stored.iter().map(Message::by_orchestrator).collect::<Vec<_>>(),
-    [true, false]
+    stored.iter().map(Message::from_orchestrator).collect::<Vec<_>>(),
+    [
+      Some(FromOrchestrator::new(chat, SentWay::Direct)),
+      Some(FromOrchestrator::new(chat, SentWay::AppliedByPerson)),
+      None
+    ],
+    "the chat's messages keep their conversation, and how each went out is who decided it"
   );
   assert_eq!(
     stored.iter().map(Message::answerer).collect::<Vec<_>>(),
-    [Some(Answerer::Automation), Some(Answerer::Person)]
+    [
+      Some(Answerer::Automation),
+      Some(Answerer::Person),
+      Some(Answerer::Person)
+    ]
   );
   let invocation = db
-    .start_invocation(run.id(), execution, &model(), at(22))
+    .start_invocation(run.id(), execution, &model(), at(23))
     .expect("invocation");
   let reply = Message::from_agent(
     run.task(),
@@ -220,13 +228,20 @@ fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
     (execution, invocation.id),
     AgentMessage::Reply,
     body("Done."),
-    at(23),
+    at(24),
   );
   assert!(
-    reply.sent_by_orchestrator().is_err(),
+    reply.written_by_orchestrator(Some(chat)).is_err(),
     "an agent's message is never the chat's"
   );
+}
 
+#[test]
+fn waits_name_the_answers_the_orchestrator_gave() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(22))
+    .expect("invocation");
   let question = Question::new(
     "Where?",
     None,
@@ -243,8 +258,11 @@ fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
   )
   .expect("a request");
   db.ask_questions(&asked).expect("asked");
+  let chat = ChatId::generate();
   assert!(
-    !db.mark_answered_by_orchestrator(run.id(), "ask-1").expect("read"),
+    !db
+      .mark_answered_by_orchestrator((run.id(), "ask-1"), chat)
+      .expect("read"),
     "a question still waiting is no one's answer"
   );
   let given = asked
@@ -255,8 +273,70 @@ fn waits_name_the_messages_and_answers_the_orchestrator_sent() {
     .expect("answers");
   db.answer_questions((run.id(), "ask-1"), &given, (Answerer::Automation, at(25)), None)
     .expect("answered");
-  assert!(db.mark_answered_by_orchestrator(run.id(), "ask-1").expect("marked"));
-  assert!(db.questions(run.id()).expect("questions")[0].by_orchestrator);
+  assert!(
+    db.mark_answered_by_orchestrator((run.id(), "ask-1"), chat)
+      .expect("marked")
+  );
+  assert_eq!(
+    db.questions(run.id()).expect("questions")[0].orchestrator,
+    Some(FromOrchestrator::new(chat, SentWay::Direct)),
+    "answered by automation: the chat sent it itself"
+  );
+  // An answer that never reached its agent is no one's, the chat's neither.
+  db.undelivered_questions(run.id(), "ask-1").expect("ended");
+  assert_eq!(db.questions(run.id()).expect("questions")[0].orchestrator, None);
+}
+
+#[test]
+fn waits_read_the_answers_and_messages_the_orchestrator_proposed_for_a_run() {
+  let (_repo, mut db, run, _execution) = started_run();
+  let chat = Chat::named(ChatId::generate(), "Answers", at(10));
+  db.keep_chat_message(&chat, (ChatMessageId::generate(), &body("Answer ORC-1")), at(10))
+    .expect("kept");
+  let change = |change: Change| {
+    let mut action = ChatAction::new("send_message", Some("ORC-1".to_owned()), ActionOutcome::Waits);
+    action.change = Some(Box::new(ProposedChange {
+      subject: "Say hello".to_owned(),
+      change,
+    }));
+    action
+  };
+  let message = Change::Message {
+    run: run.id(),
+    number: 1,
+    text: "Keep it.".to_owned(),
+    now: false,
+    then: None,
+    sent_as: Some("send_after_turn".to_owned()),
+  };
+  db.add_chat_action(chat.id(), &change(message.clone()), at(11))
+    .expect("kept");
+  let other_run = Change::Message {
+    run: RunId::generate(),
+    number: 2,
+    text: "Elsewhere.".to_owned(),
+    now: false,
+    then: None,
+    sent_as: Some("send_after_turn".to_owned()),
+  };
+  db.add_chat_action(chat.id(), &change(other_run), at(12)).expect("kept");
+  db.add_chat_action(
+    chat.id(),
+    &change(Change::Cancel {
+      run: run.id(),
+      number: 1,
+    }),
+    at(13),
+  )
+  .expect("kept");
+  let read = db.run_answer_actions(run.id()).expect("read");
+  assert_eq!(read.len(), 1, "only what answers this run's agents: {read:?}");
+  assert_eq!(read[0].chat, chat.id());
+  assert_eq!(read[0].at, at(11));
+  assert_eq!(
+    read[0].action.change.as_ref().map(|change| &change.change),
+    Some(&message)
+  );
 }
 
 fn schema_version(path: &std::path::Path) -> u32 {

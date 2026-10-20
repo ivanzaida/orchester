@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  approvals::approval, base_moved, message_waits::message_waits, plans, questions, wire, worktree::worktree_state,
+  approvals::approval, base_moved, message_waits::message_waits, orchestrated, plans, wire, worktree::worktree_state,
 };
 use crate::{
   app_mcp::{
@@ -77,7 +77,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       .map(|shown| approval(shown, project))
       .collect();
     let asked = db.questions(run.id())?;
-    let questions = questions::waiting(&asked, &conversation);
+    let (questions, proposed) = orchestrated::awaiting(&root, &run, (&asked, &conversation))?;
     let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
     let auto_mode = db.run_auto_mode(run.id())?;
     let worktree = worktree_state(&db, &root, run.id())?;
@@ -130,6 +130,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
         "approvals": waiting,
         "questions": questions,
         "messages": messages,
+        "orchestrator_proposals": proposed,
       },
       "created_at": wire::time(run.created_at()),
       "finished_at": view.finished_at.map(wire::time),

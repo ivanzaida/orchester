@@ -12,6 +12,7 @@ use orchester_core::{
   conversation::{AgentMessage, Arrival, Delivery, Message, Recipient, Sender, Timing, Undelivered},
   id::{MessageId, ResourceId, StepExecutionId},
   integration::Leftovers,
+  orchestrator::FromOrchestrator,
   resource::StepKey,
   run::{EventSequence, PauseReason, RunStatus, StepExecutor, StepStatus, TaskPhase, can_run_again_after},
   time::Timestamp,
@@ -22,6 +23,7 @@ use super::detail::{RunView, TaskDetail};
 
 pub mod composer;
 pub mod follow;
+pub mod orchestrator;
 pub mod outgoing;
 mod send;
 
@@ -163,9 +165,9 @@ pub struct Entry {
   pub execution: Option<StepExecutionId>,
   /// A person's message sent now.
   pub sent_now: bool,
-  /// A message on the person's side that the project's Orchestrator chat wrote and sent: its heading names the
-  /// Orchestrator.
-  pub by_orchestrator: bool,
+  /// A message on the person's side that the project's Orchestrator chat wrote and sent: it is the Orchestrator's,
+  /// with the chat's conversation it came from and how it went out ([`orchestrator`]).
+  pub orchestrator: Option<FromOrchestrator>,
   /// Automation wrote this answer or continuation on the person's side.
   pub by_automation: bool,
 }
@@ -440,7 +442,7 @@ fn entry(
     state,
     execution,
     sent_now,
-    by_orchestrator: message.by_orchestrator(),
+    orchestrator: message.from_orchestrator(),
     by_automation: message.answerer() == Some(orchester_core::run::Answerer::Automation),
   }
 }

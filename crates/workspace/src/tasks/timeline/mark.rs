@@ -45,6 +45,9 @@ pub struct Mark {
   pub by_person: bool,
   pub by: Option<orchester_core::run::Answerer>,
   pub kind: MarkKind,
+  /// The Orchestrator chat decided it (`continue_run`), with how that went out: its conversation and whether the chat
+  /// sent it or the person applied its proposal (ORC-45, [`crate::tasks::conversation::orchestrator::continued`]).
+  pub orchestrator: Option<orchester_core::orchestrator::FromOrchestrator>,
 }
 
 /// The mark of the attempt at `index` of `run`'s attempts, when it is a return or a restart.
@@ -102,6 +105,7 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
     by_person: start.is_some_and(|start| start.by_person),
     by: start.and_then(|start| start.by),
     kind,
+    orchestrator: None,
   })
 }
 

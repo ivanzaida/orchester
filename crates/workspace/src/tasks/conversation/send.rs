@@ -6,7 +6,7 @@ use std::path::Path;
 
 use orchester_core::{
   conversation::{Message, MessageBody, MessageError, Recipient, Sender, Timing},
-  id::{IdempotencyKey, MessageId, RunId, TaskId},
+  id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
   run::{Answerer, EventSequence},
   store::ConversationStore,
   time::Timestamp,
@@ -62,28 +62,29 @@ pub fn send_in(
     key,
     (task, run, recovery_after),
     (recipient, timing),
-    (text, false, Answerer::Person),
+    (text, None, Answerer::Person),
   )
 }
 
-/// [`send_in`], for the project's Orchestrator chat when `by_orchestrator`: it wrote `text` on the person's side, and
-/// the conversation names it as the chat's.
+/// [`send_in`], decided `by`, and for the project's Orchestrator chat when `by_orchestrator` names the conversation
+/// it came from: it wrote `text` on the person's side, and the conversation names it as the chat's.
 pub(super) fn send_as(
   repo_root: &Path,
   key: IdempotencyKey,
   (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
   (recipient, timing): (Recipient, Timing),
-  (text, by_orchestrator, by): (&str, bool, Answerer),
+  (text, by_orchestrator, by): (&str, Option<ChatId>, Answerer),
 ) -> Result<Message, SendError> {
   // A new message's text is only checked for being blank.
   let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
   let message = Message::from_person(task, run, recipient, body, Timestamp::now())
     .sent(timing)
     .expect("a new message is a person's");
-  let message = if by_orchestrator {
-    message.sent_by_orchestrator().expect("a new message is a person's")
-  } else {
-    message
+  let message = match by_orchestrator {
+    Some(chat) => message
+      .written_by_orchestrator(Some(chat))
+      .expect("a new message is a person's"),
+    None => message,
   };
   let message = if by == Answerer::Automation {
     message

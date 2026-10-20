@@ -1,6 +1,7 @@
 //! A question with suggested answers once it no longer waits (`Question card · answered` `I6cZ5j`): quiet,
 //! *Answered · 16:44*, each question with what was answered (a check and the option, or the person's own
-//! words in quotes), and who answered when: the person, or automation through Orchester's MCP server. A
+//! words in quotes), and who answered when: the person, automation through Orchester's MCP server, or the
+//! Orchestrator chat, with how its answer went out and the way back to its conversation (ORC-45). A
 //! question whose agent stopped waiting before an answer reached it reads *Ended without an answer*, with the
 //! options it offered; one whose run was interrupted while it waited says so.
 
@@ -23,6 +24,7 @@ use orchester_core::{
 use orchester_workspace::{display, tasks::timeline::ChoiceCard};
 
 use super::super::{
+  super::orchestrated::sent_line,
   Place,
   frame::{Stands, frame, head, note},
 };
@@ -75,7 +77,15 @@ pub(super) fn card(ctx: &mut Ctx, id: &str, (place, card): (&Place, &ChoiceCard)
         .with_children(lines),
     );
   }
-  frame.child(note(&format!("{id}-context"), &context)).into()
+  // The Orchestrator chat's answer says how it went out and leads back to its conversation, as its messages do.
+  let sent = card
+    .asked
+    .orchestrator
+    .and_then(|from| sent_line(ctx, id, (place.project, from)));
+  frame
+    .child(note(&format!("{id}-context"), &context))
+    .with_children(sent)
+    .into()
 }
 
 fn outcome<'a>(ctx: &Ctx, card: &'a ChoiceCard) -> Outcome<'a> {
@@ -96,9 +106,10 @@ fn outcome<'a>(ctx: &Ctx, card: &'a ChoiceCard) -> Outcome<'a> {
     }
   };
   let time = display::clock(at);
+  // The chat's answer is the Orchestrator's whether it sent it or the person applied it; the sent line says which.
   let key = match by {
+    _ if card.asked.orchestrator.is_some() => "cards.choice.byOrchestrator",
     Answerer::Person => "cards.choice.byYou",
-    Answerer::Automation if card.asked.by_orchestrator => "cards.choice.byOrchestrator",
     Answerer::Automation => "cards.choice.byAutomation",
   };
   Outcome {

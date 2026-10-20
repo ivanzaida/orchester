@@ -120,15 +120,16 @@ impl PartialEq for Read {
 }
 
 /// The timeline's sources of `run`: `transcript`, the latest read of its transcript, with its requests
-/// read after it; read again when its `waiting` requests change and on `retry`. Until the requests of a
-/// new read are read, the read before it is shown with its own; `None` until the transcript was read.
+/// read after it; read again when its `waiting` requests change, when the project's Orchestrator chat changed
+/// (`chats`, its proposals for the run among them) and on `retry`. Until the requests of a new read are read, the
+/// read before it is shown with its own; `None` until the transcript was read.
 pub(super) fn with_requests(
   ctx: &mut Ctx,
   (repo_root, run, hold): (PathBuf, RunId, ReadHold),
-  (transcript, waiting, retry): (Option<Arc<Vec<Entry>>>, Option<Waiting>, u64),
+  (transcript, waiting, chats, retry): (Option<Arc<Vec<Entry>>>, Option<Waiting>, u64, u64),
 ) -> FutureState<Option<Loaded>, Message> {
-  let deps = (repo_root, run, waiting, Read(transcript), retry);
-  let load = ctx.future(deps, move |(repo_root, run, _, Read(transcript), _)| {
+  let deps = (repo_root, run, waiting, chats, Read(transcript), retry);
+  let load = ctx.future(deps, move |(repo_root, run, _, _, Read(transcript), _)| {
     if transcript.is_some() {
       tracing::trace!(target: crate::app_log::READ_LOG, read = "requests");
     }
