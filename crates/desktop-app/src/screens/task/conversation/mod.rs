@@ -48,14 +48,17 @@ pub use self::composer::ComposerState;
 pub(crate) use self::timeline::{links, step_label};
 use self::{
   read::{Transcript, TranscriptRead, Waiting, with_requests},
-  timeline::{ChatProject, Follow, Timeline, Toggles},
+  timeline::{ChatProject, Timeline, Toggles},
   toolbar::RunState,
 };
 use super::{super::orchestrator::data::revision as chat_revision, TaskContext, cards::Decisions};
 use crate::{
   project::TasksState,
   services::Services,
-  ui::{chat::names::ProjectNames, markdown::plain},
+  ui::{
+    chat::{follow::Follow, names::ProjectNames},
+    markdown::plain,
+  },
 };
 
 /// The tab's content for `task`, as the task page read it. Keyed by the task and its latest run, so a new

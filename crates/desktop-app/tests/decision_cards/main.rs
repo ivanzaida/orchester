@@ -189,6 +189,26 @@ fn card_question_waits_and_sends_the_answer_to_the_composer() {
   });
 }
 
+/// The chat follows its end (`ui::chat::follow`), but until the person scrolls it opens on the card that waits for
+/// them, its top in view.
+#[test]
+fn card_that_waits_opens_the_chat_on_it() {
+  let (mut window, card) = card_of("Sync contacts with HubSpot", "cards-question-");
+  for _ in 0..10 {
+    window.tree.tick_futures();
+    window.pass();
+  }
+  let (chat, shown) = (laid_out(&mut window, "conversation-chat"), laid_out(&mut window, &card));
+  assert!(
+    shown.y >= chat.y - 0.5 && shown.y < chat.y + chat.height,
+    "the waiting card's top is in view: {shown:?} in {chat:?}"
+  );
+  assert!(
+    window.tree.get_element_by_id("conversation-jump").is_none(),
+    "the chat still follows"
+  );
+}
+
 #[test]
 fn card_question_with_options_answered_says_what_by_whom_and_when() {
   let (mut window, card) = card_of("Name the retry setting", "cards-choice-");
