@@ -1,8 +1,11 @@
-//! Account plan readings reported by an agent turn, never an estimate of current usage.
+//! Account plan readings as a CLI reported them, never an estimate of current usage: with an agent turn, or read on
+//! their own ([`read`]: Codex App Server's `account/rateLimits/read`, Claude Code's explicit *Check now*).
 
 mod parse;
+pub mod read;
 mod readings;
-pub use parse::{claude_limits, codex_limits};
+pub mod schedule;
+pub use parse::{claude_limits, codex_limits, codex_read_limits};
 pub use readings::PlanReadings;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +16,25 @@ pub enum LimitState {
   Normal,
   Near,
   Reached,
+}
+
+/// Where a reading came from: an agent turn that reported it, or Orchester reading it outside a run.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadingSource {
+  #[default]
+  Turn,
+  Read,
+}
+
+impl ReadingSource {
+  /// Stable name for MCP and the window's element tree.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Turn => "turn",
+      Self::Read => "read",
+    }
+  }
 }
 
 /// A validated provider window. Hundredths retain fractional percentages without float equality;

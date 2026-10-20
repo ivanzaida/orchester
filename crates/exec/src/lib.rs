@@ -6,6 +6,7 @@
 
 mod capped;
 mod console;
+mod exchange;
 
 pub mod external;
 pub mod launch;

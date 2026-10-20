@@ -19,11 +19,12 @@ use orchester_core::{
   connection::{
     ConnectionAccount,
     invocation::{Platform, account_environment, agent_environment},
-    plan_limits::LimitReading,
+    plan_limits::{LimitReading, PlanLimits, PlanReadings, ReadingSource},
   },
   id::AgentAccountId,
   name::Name,
   time::Timestamp,
+  usage::limits::LimitSnapshot,
 };
 use orchester_exec::ProcessRunner;
 use orchester_store::StoreError;
@@ -286,14 +287,21 @@ impl Workspace {
     self.check_agent_account(id)
   }
 
-  /// The last report of the account's plan limits in any listed project, as its CLI gave it during a run: what the
-  /// account's details show before this session's runs report. A project that can't be read is passed over.
-  pub fn last_plan_reading(&self, id: AgentAccountId) -> Result<Option<LimitReading>, AccountsError> {
-    let mut last: Option<LimitReading> = None;
+  /// The last report of the account's plan limits, with where it came from: the last a turn reported in any listed
+  /// project, or the last read outside a run, whichever is newer. What the account's details show before this
+  /// session's runs or reads report. A project that can't be read is passed over.
+  pub fn last_plan_reading(&self, id: AgentAccountId) -> Result<Option<(LimitReading, ReadingSource)>, AccountsError> {
+    let mut last = self
+      .db
+      .lock()
+      .last_plan_read(id)?
+      .map(|reading| (reading, ReadingSource::Read));
     for project in self.every_project()?.iter().filter(|project| !project.folder_missing()) {
       let reading = orchester_store::ProjectDb::open(&project.repo_root).and_then(|db| db.last_account_reading(id));
       match reading {
-        Ok(Some(reading)) if last.as_ref().is_none_or(|known| known.at < reading.at) => last = Some(reading),
+        Ok(Some(reading)) if last.as_ref().is_none_or(|(known, _)| known.at < reading.at) => {
+          last = Some((reading, ReadingSource::Turn));
+        }
         Ok(_) => {}
         Err(error) => {
           tracing::warn!(%error, project = %project.repo_root.display(), "cannot read an account's plan limits")
@@ -304,12 +312,29 @@ impl Workspace {
   }
 
   /// [`Self::last_plan_reading`] of every account that has one.
-  pub fn last_plan_readings(&self) -> Result<Vec<LimitReading>, AccountsError> {
-    let mut readings = Vec::new();
+  pub fn last_plan_readings(&self) -> Result<PlanReadings, AccountsError> {
+    let mut readings = PlanReadings::default();
     for account in self.agent_accounts()? {
-      readings.extend(self.last_plan_reading(account.id())?);
+      if let Some((reading, source)) = self.last_plan_reading(account.id())? {
+        readings.observe_from(reading, source);
+      }
     }
     Ok(readings)
+  }
+
+  /// Keeps what a read outside a run found of the limits of `account`, an account of `cli`, at `at`.
+  pub fn save_plan_read(
+    &self,
+    account: (AgentAccountId, AccountCli),
+    at: Timestamp,
+    limits: &PlanLimits,
+  ) -> Result<(), StoreError> {
+    self.db.lock().save_plan_read(account, at, limits)
+  }
+
+  /// The reads outside runs kept from `since` on, oldest first, as snapshots of the plan limits history.
+  pub fn plan_reads(&self, since: Timestamp) -> Result<Vec<LimitSnapshot>, StoreError> {
+    self.db.lock().plan_reads(since)
   }
 
   /// Brings the connections of `repo_root` up to date with the accounts: one on a removed account goes where its
@@ -328,13 +353,7 @@ fn check(account: &AgentAccount) -> Result<AccountCheck, AccountsError> {
   if account.folder().path().is_some_and(|folder| !folder.is_dir()) {
     return Ok(AccountCheck::folder_missing(now));
   }
-  let provider = account.cli().provider();
-  let environment = account_environment(
-    agent_environment(std::env::vars_os()),
-    &ConnectionAccount::of(account),
-    provider,
-  )
-  .map_err(AccountsError::Invocation)?;
+  let environment = cli_environment(account)?;
   let program = probe::detect(account.cli().program()).into_iter().next();
   Ok(AccountCheck::run(
     account.cli(),
@@ -343,4 +362,14 @@ fn check(account: &AgentAccount) -> Result<AccountCheck, AccountsError> {
     &environment,
     now,
   ))
+}
+
+/// The environment `account`'s CLI runs with: the one agents get, with the account's folder variable.
+pub(crate) fn cli_environment(account: &AgentAccount) -> Result<Vec<(String, String)>, AccountsError> {
+  account_environment(
+    agent_environment(std::env::vars_os()),
+    &ConnectionAccount::of(account),
+    account.cli().provider(),
+  )
+  .map_err(AccountsError::Invocation)
 }

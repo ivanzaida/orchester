@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal, node::Element};
-use orchester_core::usage::Grouping;
+use orchester_core::{connection::plan_limits::ReadingSource, usage::Grouping};
 use orchester_workspace::usage::Dashboard;
 
 use super::{
@@ -133,18 +133,17 @@ fn limits_table(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     .into_iter()
     .enumerate()
     .map(|(index, (line, point))| {
-      let source = point.source.as_ref().map_or_else(
-        || ctx.t("usage.unknown"),
-        |source| {
-          ctx.t_args(
-            "usage.limits.source",
-            [
-              ("project", &*source.project),
-              ("run", &*words::run_label(ctx, &source.task_key, source.run.get())),
-            ],
-          )
-        },
-      );
+      let source = match (&point.source, point.origin) {
+        (_, ReadingSource::Read) => ctx.t("usage.limits.sourceRead"),
+        (Some(source), ReadingSource::Turn) => ctx.t_args(
+          "usage.limits.source",
+          [
+            ("project", &*source.project),
+            ("run", &*words::run_label(ctx, &source.task_key, source.run.get())),
+          ],
+        ),
+        (None, ReadingSource::Turn) => ctx.t("usage.unknown"),
+      };
       let cells = vec![
         Cell::Muted(words::reported(ctx, point.at, dashboard.now)),
         Cell::Text(line_name(ctx, dashboard, (line.provider, line.account, line.minutes))),

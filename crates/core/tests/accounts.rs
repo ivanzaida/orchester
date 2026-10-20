@@ -448,7 +448,7 @@ fn accounts_plan_readings_are_kept_per_account() {
   let mut readings = PlanReadings::default();
   assert!(readings.observe(reading(Some(work), 10, 42.0)));
   assert!(readings.observe(reading(None, 20, 8.0)));
-  assert_eq!(readings.all().len(), 2, "Work and Default each keep their own");
+  assert_eq!(readings.all().count(), 2, "Work and Default each keep their own");
   let default = AccountCli::ClaudeCode.default_account();
   assert_eq!(
     readings

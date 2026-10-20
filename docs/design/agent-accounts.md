@@ -41,7 +41,7 @@ Checked 2026-10-12 on Windows 11 with Claude Code 2.1.296 and Codex CLI 0.159.2,
 | `codex app-server` (v2 protocol, schema generated with `generate-json-schema`) has `account/read` → `{account: {type: "chatgpt", email, planType} \| {type: "apiKey"} \| …, requiresOpenaiAuth}`, `account/rateLimits/read`, `account/login/start` (`chatgpt` → `authUrl`; `chatgptDeviceCode` → `verificationUrl` + `userCode`), `account/login/completed`, `account/updated`, `account/logout`. | verified (schema); behaviour per home unverified |
 | Codex keeps its sign-in in `auth.json` in `CODEX_HOME` unless `cli_auth_credentials_store` moves it to the OS keyring; whether a keyring entry is per home. | **unverified** |
 | macOS: Claude Code keeps its OAuth sign-in in the login Keychain; whether each `CLAUDE_CONFIG_DIR` gets its own Keychain item. | **unverified, blocking for macOS** — must be checked on a Mac before Claude accounts other than Default ship there (state `E96CI` › *Not supported on macOS yet*) |
-| Claude Code reports plan limits only during a turn (`rate_limit_event`); Codex can be asked any time (`account/rateLimits/read`). | Claude: as today; Codex read: verified in schema only |
+| Claude Code reports plan limits only during a turn (`rate_limit_event`); Codex can be asked any time (`account/rateLimits/read`). | Claude: rechecked 2026-10-20 on 2.1.296, no turn-free read; Codex read: schema and a signed-out scratch home checked 2026-10-20 (0.137.0), see [Plan limits read on their own](#plan-limits-read-on-their-own) |
 | gh: `GH_CONFIG_DIR` isolates `hosts.yml`; gh itself holds several accounts per host with one active (`gh auth switch` changes it for every program). Git pushes go through git's credential helper, which follows `GH_CONFIG_DIR` only if git runs with it. | partly from gh docs; push path **unverified** |
 
 Each folder is also the CLI's **user configuration**, so an account brings its own:
@@ -166,7 +166,52 @@ add it to them once the tab is approved.
     agent slot, starts by itself at the reset, and offers *Start now on <other connection>* for this run.
 - **Later:** an ordered fallback list per connection (*if Work is at its limit, new runs use Personal*), applied to
   new runs only and shown on every run that used it; a warning before starting a run on an account above the
-  warning threshold; reading Codex limits on a timer with `account/rateLimits/read`.
+  warning threshold. (Reading Codex limits with `account/rateLimits/read` is done, below.)
+
+## Plan limits read on their own
+
+Built for ORC-55 (2026-10-20): the status bar, the hint, an account's details, `list_accounts` and the Usage page
+showed an account's quota only as of the last agent turn that reported it, so an account without a run, or after a
+reset, read stale or *Not reported yet*.
+
+- **Codex: read without a turn.** Each Codex account someone may be signed in to (not checked yet, signed in or
+  unknown; its folder there) is read through App Server's `account/rateLimits/read` with the account's CLI (the
+  program its last check ran, else `codex` on the `PATH`) and `CODEX_HOME` set to its folder: `codex app-server
+  --stdio` with the agents' isolation overrides, `initialize`, `initialized`, the read; no thread, no turn, no token.
+  The answer is parsed as `account/rateLimits/updated` is: the `codex` bucket (`rateLimitsByLimitId.codex`, else
+  `rateLimits`), windows by `windowDurationMins`, credits, `rateLimitReachedType`. Code:
+  `orchester_core::connection::plan_limits::read`, the reader `orchester_workspace::plan_limits::reads`.
+- **When.** At app start; when an account signs in or changes; when the status bar's plan limits hint or the Usage
+  page opens; once after a reset the last reading named passes; every 5 minutes only while the hint or a Usage page
+  is shown. Nothing polls otherwise. A failure waits 1 minute, doubled per failure in a row up to an hour; a provider
+  holding requests back (429) 5 minutes, doubled; an account nobody is signed in to waits until it changes
+  (`plan_limits::schedule`). Only the app's own window starts the reader (`Launch::read_plan_limits` in `main`): a
+  test or a QA copy never reads a person's real account.
+- **Claude Code: no supported turn-free read.** Claude Code 2.1.296 has no command or flag that reports plan usage
+  without a turn (`claude --help`, `claude auth --help`; `auth status --json` reports the sign-in only, `/usage` is a
+  slash command of an interactive session without machine-readable output). Orchester never reads, copies or sends
+  the CLI's credentials and calls no undocumented endpoint with them. The person was offered (a) turn-only readings
+  for Claude, or (b) an explicit *Check now*; **decided 2026-10-20: (b)**.
+- ***Check now*** (Settings › Accounts › a Claude Code account › *Plan limits*). The smallest print-mode turn Claude
+  Code runs, isolated as auto mode's reviewer is: `claude -p --output-format stream-json --verbose --model haiku
+  --strict-mcp-config --setting-sources "" --disable-slash-commands --no-session-persistence --tools ""
+  --system-prompt "Reply with one word."`, the prompt *Say OK.* on standard input, in an empty folder that goes
+  afterwards, with the account's `CLAUDE_CONFIG_DIR`. Its `rate_limit_event`s are the reading. **Cost:** one turn on
+  Haiku on the account's plan, a few dozen input tokens and a couple of output tokens by its shape (not measured on a
+  real account); the account's note says it spends tokens, and it never runs by itself. It says why it gave no
+  reading: nobody signed in, no plan limits (an API key), the CLI missing or refusing, a timeout, or a copy that does
+  not read on its own.
+- **Kept and shown.** A read is a reading like a turn's (`PlanReadings::observe_from`): per account, with its time and
+  source (`ReadingSource`: turn or read); the newest from either source wins, and nothing is estimated between
+  readings. Reads are kept 90 days in `orchester.db` (`plan_limit_reads`), which the Usage page's history and an
+  account's details read beside the projects' turn reports. The hint says each account's age and source (*as of 2 min
+  ago · read*, *as of 3 h ago · from a turn*); the account's details say *read …* or *reported … · from a turn*; the
+  Usage table and tooltip say *Read by Orchester*. `list_accounts` returns each account's latest reading with its
+  source, `observed_at`, `age_seconds`, state and windows, a window whose reset has passed since with its use unknown.
+- **Not in the design yet:** the hint's age line, *Check now* and its error, and the new notes are not drawn in
+  `orchester2.pen`; they reuse the hint's note style and the account panel's secondary button.
+- **macOS:** the same on both platforms; Claude Code accounts other than Default remain *Not supported on macOS yet*,
+  so *Check now* shows only for Default there.
 
 ## Security and privacy
 
@@ -236,7 +281,8 @@ read-back drawn here; plan readings per account; the limit-reached choice and wa
 accounts, and for Claude accounts only once the Keychain check passes.
 
 Later: GitHub accounts; fallback order per connection; copying settings from Default; Codex sign-in through App
-Server (`account/login/start`, browser opened by Orchester) instead of a terminal; reading Codex limits on a timer;
+Server (`account/login/start`, browser opened by Orchester) instead of a terminal (reading Codex limits outside runs
+is built: [Plan limits read on their own](#plan-limits-read-on-their-own));
 accounts on the future server (accounts stay per computer; a shared project's connection would name an account per
 person).
 

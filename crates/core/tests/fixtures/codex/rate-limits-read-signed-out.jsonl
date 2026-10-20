@@ -1,0 +1,3 @@
+{"id":1,"result":{"userAgent":"orchester/0.137.0 (Windows 10.0.26200; x86_64) xterm-256color (orchester; 0)","codexHome":"C:\\scratch\\home","platformFamily":"windows","platformOs":"windows"}}
+{"method":"remoteControl/status/changed","params":{"status":"disabled","serverName":"example","installationId":"00000000-0000-4000-8000-000000000000","environmentId":null}}
+{"error":{"code":-32600,"message":"codex account authentication required to read rate limits"},"id":2}

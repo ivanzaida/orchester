@@ -1,9 +1,10 @@
 //! Plan limits history (`docs/design/orchester-workspace.md`, "Usage dashboard", *Plan limits
-//! history*): a snapshot is stored whenever a CLI reports its limits during a run, and kept 90
-//! days. Snapshots exist only while Orchester runs agents, so the history is honest about gaps:
-//! points of one window are joined while reports keep coming, a stretch without reports is a gap
-//! (use outside Orchester is unknown), a window that reset between two reports is not joined across
-//! the reset, nothing is drawn before a CLI's first report, and no value is invented.
+//! history*): a snapshot is stored whenever a CLI reports its limits during a run or Orchester reads
+//! them outside one, and kept 90 days. Snapshots exist only while Orchester runs agents or reads, so
+//! the history is honest about gaps: points of one window are joined while reports keep coming, a
+//! stretch without reports is a gap (use outside Orchester is unknown until the next report), a window
+//! that reset between two reports is not joined across the reset, nothing is drawn before a CLI's
+//! first report, and no value is invented.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -12,7 +13,10 @@ use thiserror::Error;
 use super::{CliSeries, UsageFilter};
 use crate::{
   account::AccountCli,
-  connection::{AgentProvider, plan_limits::PlanLimits},
+  connection::{
+    AgentProvider,
+    plan_limits::{PlanLimits, ReadingSource},
+  },
   id::AgentAccountId,
   run::RunNumber,
   time::Timestamp,
@@ -46,8 +50,10 @@ pub struct LimitSnapshot {
   pub account: Option<crate::id::AgentAccountId>,
   pub at: Timestamp,
   pub limits: PlanLimits,
-  /// `None` when the run is no longer known.
+  /// The run whose turn reported it; `None` for a read, and when the run is no longer known.
   pub source: Option<SnapshotSource>,
+  /// Whether a turn reported it or Orchester read it outside a run.
+  pub origin: ReadingSource,
 }
 
 /// How a window is drawn: weekly windows solid, 5-hour windows dashed.
@@ -75,6 +81,7 @@ pub struct LimitPoint {
   pub percent: f64,
   pub resets: Option<Timestamp>,
   pub source: Option<SnapshotSource>,
+  pub origin: ReadingSource,
 }
 
 /// How two consecutive points of a window are joined.
@@ -188,6 +195,7 @@ impl LimitHistory {
           percent,
           resets: window.resets(),
           source: snapshot.source.clone(),
+          origin: snapshot.origin,
         };
         windows
           .entry(key)

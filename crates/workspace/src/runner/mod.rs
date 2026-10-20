@@ -347,15 +347,18 @@ impl Runners {
     counters.changes.send_modify(|revision| *revision += 1);
   }
 
-  /// Hands `reading` on as a project's runner would. For tests of what shows plan limits, which run no runner.
-  #[cfg(feature = "test-support")]
-  #[doc(hidden)]
-  pub fn observe_plan_limits_for_test(&self, reading: orchester_core::connection::plan_limits::LimitReading) {
+  /// Hands `reading`, from `source`, on to what shows the session's plan limits, as a project's runner hands on what
+  /// a turn reported: a read outside a run ([`crate::plan_limits::reads`]) is a reading like a turn's.
+  pub fn observe_plan_limits(
+    &self,
+    reading: orchester_core::connection::plan_limits::LimitReading,
+    source: orchester_core::connection::plan_limits::ReadingSource,
+  ) {
     self
       .inner
       .shared
       .limits
-      .send_if_modified(|readings| readings.observe(reading));
+      .send_if_modified(|readings| readings.observe_from(reading, source));
   }
 
   /// Changes whenever any runner reports that a run changed.

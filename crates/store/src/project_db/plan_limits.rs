@@ -3,7 +3,7 @@
 
 use orchester_core::{
   account::AccountCli,
-  connection::plan_limits::{LimitReading, PlanLimits},
+  connection::plan_limits::{LimitReading, PlanLimits, ReadingSource},
   id::{AgentAccountId, RunId, StepExecutionId},
   run::RunNumber,
   time::Timestamp,
@@ -86,6 +86,7 @@ impl ProjectDb {
           at: Timestamp::from_unix_millis(at),
           limits: decode_json::<PlanLimits>(WHAT, SCHEMA, &body)?,
           source,
+          origin: ReadingSource::Turn,
         })
       })
       .collect()

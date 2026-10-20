@@ -1634,6 +1634,19 @@
       "cliMissing": "The CLI isn't on the PATH. Install it, then check again.",
       "folderMissing": "The account's folder {{folder}} no longer exists.",
       "terminal": "The terminal could not be opened. Run the command in a terminal of your own."
+    },
+    "planCheck": {
+      "off": "This copy of Orchester doesn't read plan limits on its own, so nothing ran.",
+      "notClaude": "Check now runs for Claude Code accounts. Codex accounts are read on their own.",
+      "busy": "A check of this account is already running.",
+      "unavailable": "This account can't run Claude Code on this computer now, so it can't be checked.",
+      "notSignedIn": "Nobody is signed in to this account. Sign in, then check again.",
+      "cliMissing": "Claude Code isn't on the PATH. Install it, then check again.",
+      "noLimits": "Claude Code answered without plan limits. An API key has none to report.",
+      "noAnswer": "Claude Code ended without answering. The log has what it printed.",
+      "timedOut": "Claude Code didn't answer in time, so the check stopped.",
+      "refused": "Claude Code refused the check: {{reason}}",
+      "failed": "Claude Code couldn't run. The log has the system's reason."
     }
   },
   "orchestrator": {

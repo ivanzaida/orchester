@@ -432,6 +432,7 @@ fn weekly(at: Timestamp, percent: f64, resets: Timestamp) -> LimitSnapshot {
       blocked: None,
     },
     source: None,
+    origin: orchester_core::connection::plan_limits::ReadingSource::Turn,
   }
 }
 

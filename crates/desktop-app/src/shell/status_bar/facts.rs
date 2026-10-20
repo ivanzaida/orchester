@@ -66,11 +66,13 @@ pub struct ProjectFacts {
   pub revision: u64,
 }
 
-/// An account a project's connection runs on, with the newest plan reading its CLI reported.
+/// An account a project's connection runs on, with the newest plan reading its CLI reported, and where that came from:
+/// a turn, or a read outside a run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AccountLimits {
   pub account: orchester_core::account::AgentAccount,
   pub reading: orchester_core::connection::plan_limits::LimitReading,
+  pub source: orchester_core::connection::plan_limits::ReadingSource,
 }
 
 /// The project's tasks could not be read, and why.

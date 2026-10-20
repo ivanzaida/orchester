@@ -361,3 +361,43 @@ fn settings_accounts_sign_in_step_says_the_claude_plan_and_offers_the_folder() {
     },
   );
 }
+
+/// *Check now* is a Claude Code account's only (a Codex account is read on its own), says what it costs, and in a
+/// window that does not read plan limits on its own, as every test and QA copy is, says that nothing ran.
+#[test]
+fn settings_accounts_check_now_is_claudes_and_says_when_nothing_ran() {
+  in_child(
+    "settings_accounts_check_now_is_claudes_and_says_when_nothing_ran",
+    |_| {
+      let mut window = Window::open();
+      go(
+        &mut window,
+        Some(AccountCli::ClaudeCode.default_account()),
+        AccountsPanel::Account,
+      );
+      window.until("Claude's plan limits", |window| shown(window, "account-plan-check"));
+      let note = joined(&mut window, "account-plan-note");
+      assert!(
+        note.contains("Haiku") && note.contains("never checks on its own"),
+        "{note}"
+      );
+      click(&mut window, "account-plan-check");
+      window.until("why nothing ran", |window| {
+        joined(window, "account-plan-check-error").contains("doesn't read plan limits on its own")
+      });
+      go(
+        &mut window,
+        Some(AccountCli::Codex.default_account()),
+        AccountsPanel::Account,
+      );
+      window.until("Codex's plan limits", |window| {
+        joined(window, "account-plan-note").contains("without a turn or tokens")
+      });
+      assert!(!shown(&mut window, "account-plan-check"), "Codex is read on its own");
+      assert!(
+        !shown(&mut window, "account-plan-check-error"),
+        "the error was Claude's"
+      );
+    },
+  );
+}
