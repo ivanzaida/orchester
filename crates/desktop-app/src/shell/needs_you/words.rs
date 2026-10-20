@@ -26,7 +26,7 @@ pub(super) fn kind(ctx: &Ctx, item: &NeedItem) -> (Icon, Arc<str>) {
     NeedKind::Interrupted => Icon::CirclePause,
     NeedKind::StoppedAtLimit => Icon::Gauge,
     NeedKind::ReadyToMerge => Icon::GitMerge,
-    NeedKind::Memory => Icon::BookOpen,
+    NeedKind::Memory => Icon::Brain,
   };
   (glyph, message_text(ctx, &item.kind.label()))
 }
