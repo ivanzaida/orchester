@@ -6,7 +6,7 @@
 use orchester_core::{
   id::IdempotencyKey,
   store::SettingsStore,
-  task::{Task, TaskDetails, organization::TaskOrganization},
+  task::{Task, TaskDetails, estimate::StoryPoints, organization::TaskOrganization},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -29,10 +29,12 @@ use crate::{
   tasks::{
     conflict::{Edit, EditSaved, save_edit},
     data::{PipelineChoice, SaveTarget, published_pipelines},
+    estimate::{PointsError, set_automation_points},
     form::TaskForm,
     outside::Outside,
     writer::{TaskWriter, WriteError},
   },
+  workspace::OpenProject,
 };
 
 /// How whole tokens are grouped in the form's text; the tools give plain numbers.
@@ -65,6 +67,10 @@ pub struct CreateTask {
   pub workflow_status: Option<Workflow>,
   #[serde(default)]
   pub priority: Option<Rank>,
+  /// Story points: 1, 2, 3, 5, 8, 13 or 21, recorded as automation's. Left out: Orchester estimates them when
+  /// Settings lets it.
+  #[serde(default)]
+  pub story_points: Option<u32>,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -94,6 +100,11 @@ pub struct UpdateTask {
   pub workflow_status: Option<Workflow>,
   #[serde(default)]
   pub priority: Option<Rank>,
+  /// Story points: 1, 2, 3, 5, 8, 13 or 21, recorded as automation's; refused when a person set the task's points.
+  /// Left out: unchanged, and Orchester estimates them again after a change of the brief or criteria when Settings
+  /// lets it.
+  #[serde(default)]
+  pub story_points: Option<u32>,
 }
 
 /// The details as the form reads them from its fields' text.
@@ -140,8 +151,9 @@ pub async fn update_task(services: &Services, args: UpdateTask) -> Result<Value,
 }
 
 fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
+  let points = story_points(args.story_points)?;
   let open = services.project(&args.project)?;
-  let root = open.repo_root;
+  let root = open.repo_root.clone();
   let db = ProjectDb::open(&root)?;
   let limits = db.project_limits()?;
   let published = published_pipelines(&db)?;
@@ -177,12 +189,54 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     .saved()
     .ok_or_else(changed)?;
   services.changes.record(open.project.id(), Outside::Tasks);
-  Ok(task)
+  with_points(services, open, task, points)
+}
+
+/// The story points given, on the scale.
+fn story_points(given: Option<u32>) -> Result<Option<StoryPoints>, ToolError> {
+  given
+    .map(|points| {
+      StoryPoints::new(points).map_err(|_| {
+        ToolError::refused(
+          "invalid_story_points",
+          vec![Message::new("appMcp.errors.pointsOffScale")],
+        )
+      })
+    })
+    .transpose()
+}
+
+/// `task`, saved, with automation's `points`, never over a person's; without any given, Orchester is asked for its
+/// estimate, which it makes when Settings lets it and the brief or criteria are new.
+fn with_points(
+  services: &Services,
+  open: OpenProject,
+  task: Task,
+  points: Option<StoryPoints>,
+) -> Result<Task, ToolError> {
+  let Some(points) = points else {
+    services.estimates().request(open, task.id());
+    return Ok(task);
+  };
+  let mut db = ProjectDb::open(&open.repo_root)?;
+  match set_automation_points(&mut db, &task, points) {
+    Ok(()) => {}
+    Err(PointsError::Store(error)) => return Err(error.into()),
+    Err(PointsError::Refused(_)) => {
+      return Err(ToolError::refused(
+        "persons_points",
+        vec![Message::new("appMcp.errors.personsPoints")],
+      ));
+    }
+  }
+  let estimate = db.story_estimate(task.id())?;
+  Ok(task.with_estimate(estimate))
 }
 
 fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
+  let points = story_points(args.story_points)?;
   let open = services.project(&args.project)?;
-  let root = open.repo_root;
+  let root = open.repo_root.clone();
   let db = ProjectDb::open(&root)?;
   let published = published_pipelines(&db)?;
   let task = find_task(&db, &args.key)?;
@@ -238,7 +292,7 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     EditSaved::Conflict(_) => return Err(changed()),
   };
   services.changes.record(open.project.id(), Outside::Tasks);
-  Ok(saved)
+  with_points(services, open, saved, points)
 }
 
 /// `base` with the workflow status and priority given.
@@ -273,6 +327,7 @@ fn saved(task: &Task) -> Value {
     "submission": wire::submission(task.status()),
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
+    "story_points": wire::story_points(task.estimate()),
   })
 }
 

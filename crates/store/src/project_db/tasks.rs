@@ -91,6 +91,7 @@ impl ProjectDb {
       .transpose()?;
     details.limits = task_limits(snapshot.budget, snapshot.duration)?;
     let organization = task.organization().clone();
+    let estimate = task.estimate().cloned();
     Ok(Some(
       Task::from_stored(
         task.id(),
@@ -101,6 +102,7 @@ impl ProjectDb {
         task.created_at(),
       )
       .with_organization(organization)
+      .with_estimate(estimate)
       .with_revision(task.revision()),
     ))
   }
@@ -358,7 +360,8 @@ pub(super) fn load_tasks(
       let criteria = load_criteria(connection, &row.id)?;
       let task = row.into_task(project, criteria)?;
       let value = super::organization::load(connection, task.id())?;
-      Ok(task.with_organization(value))
+      let estimate = super::estimates::load(connection, task.id())?;
+      Ok(task.with_organization(value).with_estimate(estimate))
     })
     .collect()
 }

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use orchester_core::{
   store::TaskStore,
-  task::{Task, organization::TaskFilter},
+  task::{Task, estimate::calibration::calibration, organization::TaskFilter},
   tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
@@ -60,8 +60,56 @@ pub struct GetTask {
   pub key: String,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct GetCalibration {
+  /// The project's id, or its name.
+  pub project: String,
+}
+
 /// Joins the keys of a row's blocking tasks.
 const SEPARATOR: &str = ", ";
+
+/// Minutes, rounded up, of `ms`.
+const fn minutes(ms: u64) -> u64 {
+  ms.div_ceil(60_000)
+}
+
+pub async fn get_calibration(services: &Services, args: GetCalibration) -> Result<Value, ToolError> {
+  let services = services.clone();
+  let records =
+    blocking(move || Ok(ProjectDb::open(&services.project(&args.project)?.repo_root)?.calibration_records()?)).await?;
+  let per_points: Vec<Value> = calibration(&records)
+    .iter()
+    .map(|row| {
+      json!({
+        "points": row.points.get(),
+        "merged_tasks": row.tasks,
+        "median_tokens": row.median_tokens,
+        "median_active_minutes": minutes(row.median_active_ms),
+        "median_attempts": row.median_attempts,
+      })
+    })
+    .collect();
+  let tasks: Vec<Value> = records
+    .iter()
+    .map(|record| {
+      json!({
+        "key": record.key,
+        "title": record.title,
+        "points": record.points.map(|(points, _)| points.get()),
+        "set_by": record.points.map(|(_, source)| source),
+        "tokens": record.effort.tokens,
+        "active_minutes": minutes(record.effort.active_ms),
+        "attempts": record.effort.attempts,
+        "runs": record.effort.runs,
+        "merged_at": wire::time(record.merged_at),
+      })
+    })
+    .collect();
+  Ok(json!({ "per_points": per_points, "merged_tasks": tasks }))
+}
 
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
@@ -95,6 +143,7 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
           "title": &*row.title,
           "workflow_status": Workflow::from(row.organization.status()),
           "priority": Rank::from(row.organization.priority()),
+          "story_points": wire::story_points(row.estimate.as_ref()),
           "tags": row.tags.iter().map(|tag| &**tag).collect::<Vec<_>>(),
           "pipeline": translate.text(&row.pipeline.message()),
           "phase": row.phase.map(wire::phase),
@@ -148,6 +197,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "submission": wire::submission(task.status()),
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
+    "story_points": wire::story_points(task.estimate()),
     "tags": tag_names,
     "blocked_reason": task.organization().blocked_reason(),
     "blocked_by": &detail.blocked_by,

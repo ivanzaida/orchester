@@ -52,11 +52,14 @@ impl CliEstimator {
   pub fn command(&self, input: &EstimateInput) -> Command {
     let (model, effort) = (&self.model.0, self.model.1.as_deref());
     match self.cli {
-      EstimatorCli::ClaudeCode => Command::new(&self.executable, claude_estimate_args((model, effort), &self.folder.instructions))
-        .with_current_dir(&self.folder.work)
-        .with_environment(self.environment.clone())
-        .with_env(QUIET.0, QUIET.1)
-        .with_stdin(estimate_prompt(input)),
+      EstimatorCli::ClaudeCode => Command::new(
+        &self.executable,
+        claude_estimate_args((model, effort), &self.folder.instructions),
+      )
+      .with_current_dir(&self.folder.work)
+      .with_environment(self.environment.clone())
+      .with_env(QUIET.0, QUIET.1)
+      .with_stdin(estimate_prompt(input)),
       EstimatorCli::Codex => Command::new(&self.executable, codex_reviewer_args((model, effort), &self.folder))
         .with_current_dir(&self.folder.work)
         .with_environment(self.environment.clone())

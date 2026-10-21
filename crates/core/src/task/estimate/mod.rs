@@ -18,7 +18,13 @@ pub use self::prompt::{
   parse_estimate_text,
 };
 use super::TaskDetails;
-use crate::{run::review::ReviewFailure, time::Timestamp};
+use crate::{
+  connection::AgentProvider,
+  id::TaskId,
+  resource::ModelId,
+  run::{TokenUsage, review::ReviewFailure},
+  time::Timestamp,
+};
 
 /// The values story points take.
 const SCALE: [u8; 7] = [1, 2, 3, 5, 8, 13, 21];
@@ -215,4 +221,21 @@ pub enum EstimateOutcome {
   TriedBefore,
   /// The estimator gave no points, for this reason.
   Failed { failure: ReviewFailure },
+}
+
+/// One request to the estimator that asked a model, with what it spent: its own kind of usage, counted toward the
+/// project's daily budget like a review, and named apart in `get_usage`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EstimateRecord {
+  pub task: TaskId,
+  /// What the estimate was asked from: one is not asked again from the same brief and criteria.
+  pub basis: EstimateBasis,
+  pub provider: AgentProvider,
+  pub model: ModelId,
+  pub started_at: Timestamp,
+  pub ended_at: Timestamp,
+  /// `None`: what it spent could not be read.
+  pub usage: Option<TokenUsage>,
+  /// `None`: it gave points; else why not.
+  pub failure: Option<ReviewFailure>,
 }

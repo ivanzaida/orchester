@@ -23,6 +23,7 @@ mod spend;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub(crate) use self::prompt::one_line;
 pub use self::{
   choice::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
@@ -36,7 +37,6 @@ pub use self::{
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
 };
-pub(crate) use self::prompt::one_line;
 use super::answer::ApprovalSubject;
 use crate::resource::ModelId;
 

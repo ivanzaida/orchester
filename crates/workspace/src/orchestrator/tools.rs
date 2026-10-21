@@ -46,7 +46,7 @@ use crate::{
 /// agent's question, sending a run's agents a message and continuing a run that waits for a person's decision.
 /// Approvals, plan decisions, project setup, connections, MCP servers, the environment and what removes work are not
 /// among them. A name whose tool the app does not have (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 53] = [
+pub const TOOLS: [&str; 54] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -98,6 +98,7 @@ pub const TOOLS: [&str; 53] = [
   "list_accounts",
   "list_models",
   "get_usage",
+  "get_story_point_calibration",
   "list_pull_requests",
   "get_pull_request",
 ];

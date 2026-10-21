@@ -47,6 +47,7 @@ mod runner_programs;
 #[path = "../support/signed_in.rs"]
 mod signed_in;
 mod skills_window;
+mod story_points;
 mod tools;
 mod tools_window;
 mod unverified;

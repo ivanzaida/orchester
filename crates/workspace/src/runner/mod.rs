@@ -12,6 +12,7 @@ mod ask;
 mod chat;
 mod check;
 mod connection;
+mod estimate;
 mod idle;
 mod lifetime;
 mod report;

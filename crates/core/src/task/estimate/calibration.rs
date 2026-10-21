@@ -97,11 +97,7 @@ pub fn comparables<'a>(records: &'a [CalibrationRecord], details: &TaskDetails) 
       .cmp(left_shared)
       .then_with(|| right.merged_at.cmp(&left.merged_at))
   });
-  scored
-    .into_iter()
-    .take(COMPARABLES)
-    .map(|(_, record)| record)
-    .collect()
+  scored.into_iter().take(COMPARABLES).map(|(_, record)| record).collect()
 }
 
 /// The words of `text` that tell what it is about, lower case.

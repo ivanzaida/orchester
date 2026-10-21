@@ -57,6 +57,7 @@
       "context": "Context",
       "pipeline": "Pipeline",
       "limits": "Limits",
+      "points": "Story points",
       "instructions": "Instructions"
     },
     "project": {
@@ -106,6 +107,15 @@
           "one": "= 1 minute of active agent time",
           "other": "= {{count}} minutes of active agent time"
         }
+      },
+      "points": {
+        "label": "Story points",
+        "description": "How much work the task is, on 1, 2, 3, 5, 8, 13, 21. Automatic: Orchester estimates it when allowed in Settings. Points you choose are never changed by automation.",
+        "automatic": "Automatic",
+        "one": "1 point",
+        "other": "{{count}} points",
+        "estimated": "Orchester estimated {{points}}.",
+        "estimatedWhy": "Orchester estimated {{points}}: {{reason}}"
       },
       "context": {
         "label": "Attach context",

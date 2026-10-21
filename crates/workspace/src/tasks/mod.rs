@@ -18,6 +18,7 @@ pub mod data;
 pub mod delivery;
 pub mod detail;
 mod engines;
+pub mod estimate;
 mod first_agent;
 pub mod form;
 pub mod group;

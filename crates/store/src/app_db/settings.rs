@@ -92,7 +92,30 @@ ALTER TABLE app_settings ADD COLUMN quiet_start INTEGER CHECK (quiet_start BETWE
 ALTER TABLE app_settings ADD COLUMN quiet_end INTEGER CHECK (quiet_end BETWEEN 0 AND 1439);
 ";
 
+pub(super) const STORY_POINTS_MIGRATION: &str = r"
+-- Let Orchester estimate story points (ORC-49): off until a person turns it on (the person's decision, 2026-10-20).
+ALTER TABLE app_settings ADD COLUMN estimates_story_points INTEGER NOT NULL DEFAULT 0
+  CHECK (estimates_story_points IN (0, 1));
+";
+
 impl AppDb {
+  /// Whether Orchester estimates the story points of tasks without a person's value (*Let Orchester estimate story
+  /// points*); each estimate asks auto mode's reviewer's model and spends tokens.
+  pub fn estimates_story_points(&self) -> Result<bool, StoreError> {
+    Ok(self.connection.query_row(
+      "SELECT estimates_story_points FROM app_settings WHERE id = 1",
+      [],
+      |row| row.get(0),
+    )?)
+  }
+
+  pub fn set_estimates_story_points(&mut self, allowed: bool) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET estimates_story_points = ?1 WHERE id = 1",
+      params![allowed],
+    )?;
+    Ok(())
+  }
   /// Which OS notifications the app shows ([`NotificationSettings::default`] until a person changes them).
   pub fn notification_settings(&self) -> Result<NotificationSettings, StoreError> {
     let (needs_you, stopped, finished, sound, start, end): (bool, bool, bool, bool, Option<u16>, Option<u16>) =

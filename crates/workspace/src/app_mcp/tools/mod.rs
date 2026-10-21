@@ -119,27 +119,33 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_tasks",
-    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
+    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
     schema: schema_for_type::<tasks::ListTasks>,
     read_only: true,
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task).",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task). story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's; left out, Orchester estimates them when a person turned on Let Orchester estimate story points.",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one).",
+    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one). story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's and refused as persons_points when a person set the task's points; after a change of the brief or criteria without them, Orchester estimates them again when a person turned on Let Orchester estimate story points.",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
+  },
+  Spec {
+    name: "get_story_point_calibration",
+    description: "How a project's story points tracked reality: per points value (1, 2, 3, 5, 8, 13, 21) the merged tasks that had it and their median tokens, active agent minutes and attempts, and each merged task with its points (who set them) and what it actually took over all its runs. What estimates read as examples. The estimator's own requests are a kind of usage of their own: get_usage names their tokens under `estimates`.",
+    schema: schema_for_type::<tasks::GetCalibration>,
+    read_only: true,
   },
   Spec {
     name: "run_task",
@@ -317,7 +323,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_usage",
-    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account (an id, or `none` for usage on no account; names in any case); `unmatched` names each filter value nothing in the range matches. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row. `unread_runs` counts the runs left out because their record is damaged; the rest is counted.",
+    description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or account, filtered by task, run, pipeline, step, agent profile, model or account (an id, or `none` for usage on no account; names in any case); `unmatched` names each filter value nothing in the range matches. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row. `unread_runs` counts the runs left out because their record is damaged; the rest is counted. `estimates`, for one project, is the story-point estimator's own usage in the range (its tokens and how many requests asked a model), outside the runs and their filters; null without `project`.",
     schema: schema_for_type::<usage::GetUsage>,
     read_only: true,
   },
@@ -406,6 +412,7 @@ async fn dispatch_answers(
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
+    "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }

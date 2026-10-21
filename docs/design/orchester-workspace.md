@@ -1293,6 +1293,40 @@ New starts can be held from Tasks (*Hold new starts* / *Release*, and a *Release
 
 Not built: the bulk proposal editor, *Manage context* and attachments (shown unavailable), role instructions and project memory, history compaction, and the 960 and light passes.
 
+## Story points (ORC-49)
+
+Every task may carry story points on the Fibonacci scale (1, 2, 3, 5, 8, 13, 21), who set them (a person, or automation)
+and automation's one- or two-sentence reason. They are kept beside the task (`task_estimates`), outside its revision, so
+an estimate never conflicts with a person's edit.
+
+- **A person's value wins.** The task form's *Story points* select (*Automatic* or a value) sets a person's points;
+  automation never writes over them: the store refuses in the same statement, and `update_task` answers
+  `persons_points`. *Automatic* removes only a person's value; automation's points stay until re-estimated.
+- **Orchester's estimate.** With *Let Orchester estimate story points* on (Settings › What automation may do; off until
+  a person turns it on, the person's decision of 2026-10-20), saving a task (form, Create & run, `create_task`,
+  `update_task`) asks the project's runner (`EstimateTask`, IPC protocol 30). The runner asks nothing for a task with a
+  person's points, or whose automation points or a recorded request were made from the same brief and criteria (a title
+  change alone asks nothing). Otherwise it asks auto mode's reviewer's connection and model (as `get_auto_mode` names
+  them), in the reviewer's isolation, with the title, brief, criteria, the project's merged tasks most like it with their
+  points and actual effort, and the median effort per points value. A request that asked a model is recorded with its
+  tokens (`estimate_usage`): its own kind of usage, counted toward the daily budget and named under `estimates` in
+  `get_usage`.
+- **Automation through tools.** `create_task` / `update_task` take `story_points`, recorded as automation's (also for the
+  Orchestrator chat); they read back in `get_task`, `list_tasks` and the saved task.
+- **Calibration.** When a run of a task merges, what the task took over all its runs (tokens of its agents and auto
+  mode's reviews, active agent time, attempts, runs) is kept beside the points it had then (`task_effort`).
+  `get_story_point_calibration` reads the median effort per points value and each merged task; estimates read the same as
+  examples.
+- **Not a cost estimate.** Story points are effort sizes relative to the project's own tasks, not money or tokens, so
+  they do not conflict with `docs/architecture/native-agent.md` decision 8 (no cost estimates): no limit or budget reads
+  them, and the estimator is told they are not money, tokens or hours.
+
+Shown on the task row (a mono chip after the title: `5 pt` a person's, `~5 pt` Orchester's), in the task header beside
+the status (its tooltip says who set them and Orchester's reason) and in the task form (its own section, with
+Orchester's estimate and reason under the select while it is *Automatic*). No Pencil frame exists for these yet; they
+follow the task list and task header looks. A shared project's points stay on this computer (they are not sent to its
+server).
+
 ## Task conversation
 
 *Superseded 2026-10-01 by [Conversation (merged with Activity)](#conversation-merged-with-activity); the rules below still apply where that section does not change them.*

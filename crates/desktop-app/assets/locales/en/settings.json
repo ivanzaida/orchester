@@ -68,6 +68,13 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
+      "estimatePoints": {
+        "title": "Let Orchester estimate story points",
+        "description": "Orchester sizes each new task, and a task whose brief or criteria change, in story points (1, 2, 3, 5, 8, 13 or 21) with a short reason, from the brief, the criteria and the project's merged tasks. Each estimate asks auto mode's reviewer model and spends tokens, which count toward the project's daily budget. Points you set are never changed. Only you can change this, here in the window.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
       "server": {
         "section": "Orchester MCP server",
         "meta": {

@@ -6,7 +6,10 @@
 //! (`tasks::run`). A shared task is claimed for the person before its run starts, as the deprecated
 //! desktop does.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::ctx::{Ctx, FutureAction},
@@ -16,7 +19,7 @@ use orchester_core::{
   id::TaskId,
   project::TaskKey,
   resource::VersionNumber,
-  task::{Task, TaskDetails, TaskStatus, TaskUpdate, organization::TaskOrganization},
+  task::{Task, TaskDetails, TaskStatus, TaskUpdate, estimate::StoryPoints, organization::TaskOrganization},
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -29,9 +32,11 @@ use orchester_workspace::{
   tasks::{
     conflict::{Edit, EditConflict, EditSaved, save_edit},
     data::SaveTarget,
+    estimate::{Estimates, apply_person_points},
     run::{StartOutcome, queue_in, start_messages},
     writer::{TaskWriter, WriteError},
   },
+  workspace::OpenProject,
 };
 
 /// What a save stores, and where.
@@ -45,6 +50,8 @@ pub struct SaveArgs {
   pub base: Option<TaskDetails>,
   /// The task's organization, unchanged: the form does not edit it yet.
   pub organization: TaskOrganization,
+  /// The person's story points; `None`: Automatic. Stored beside the task once it is saved.
+  pub points: Option<StoryPoints>,
 }
 
 /// The task a save stored.
@@ -77,13 +84,19 @@ impl lurq::app::component::DevtoolsInspectable for SaveOutcome {}
 
 pub type SaveAction = FutureAction<SaveArgs, SaveOutcome, Problems>;
 
-pub fn save_action(ctx: &mut Ctx, servers: Servers) -> SaveAction {
+/// Saves the form; once a task is stored, Orchester is asked for its story points (`estimates`, which estimates them
+/// only while the person allows it and has set none).
+pub fn save_action(ctx: &mut Ctx, servers: Servers, (estimates, open): (Estimates, OpenProject)) -> SaveAction {
   ctx.future_action(move |args: SaveArgs| {
-    let servers = servers.clone();
+    let (servers, estimates, open) = (servers.clone(), estimates.clone(), open.clone());
     async move {
-      background::run(move || store(&args, &servers))
+      let outcome = background::run(move || store(&args, &servers))
         .await
-        .map_err(Problems::one)?
+        .map_err(Problems::one)??;
+      if let SaveOutcome::Stored(task) = &outcome {
+        estimates.request(open, task.id());
+      }
+      Ok(outcome)
     }
   })
 }
@@ -91,6 +104,14 @@ pub fn save_action(ctx: &mut Ctx, servers: Servers) -> SaveAction {
 fn write_problem(error: &WriteError) -> Problems {
   tracing::error!(%error, "cannot save the task");
   Problems::one(error.message())
+}
+
+/// `task`, saved, with the person's `points` stored beside it.
+fn with_points(repo_root: &Path, task: Task, points: Option<StoryPoints>) -> Result<Task, Problems> {
+  apply_person_points(repo_root, task, points).map_err(|error| {
+    tracing::error!(%error, "cannot store the task's story points");
+    Problems::one(messages::store_error(&error))
+  })
 }
 
 /// Saves `args` through the project's task writer: a shared project's server, else its database. A new
@@ -133,6 +154,7 @@ fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
     tracing::error!(task = %task.key(), "the stored details differ from the ones saved");
     return Err(Problems::one(messages::task_saved_differently()));
   }
+  let task = with_points(&args.repo_root, task, args.points)?;
   Ok(SaveOutcome::Stored(Arc::new(task)))
 }
 
@@ -191,6 +213,8 @@ pub struct RunServices {
   pub repo_root: PathBuf,
   /// Set as soon as the task is queued, so the form shows it while the start request is under way.
   pub queued: Signal<Option<QueuedTask>>,
+  /// Orchester's story-point estimates, and the project they are asked in.
+  pub estimates: (Estimates, OpenProject),
 }
 
 pub fn run_action(ctx: &mut Ctx, services: RunServices) -> RunAction {
@@ -218,7 +242,7 @@ async fn queue(
     saved: None,
   };
   let servers = services.servers.clone();
-  let (repo_root, target) = (save.repo_root.clone(), save.target);
+  let (repo_root, target, points) = (save.repo_root.clone(), save.target, save.points);
   let queued = background::run(move || queue_in(&save.repo_root, &servers, save.target, save.details, version))
     .await
     .map_err(|message| not_queued(Arc::from([message])))?;
@@ -239,7 +263,20 @@ async fn queue(
     outcome: StartOutcome::ConfirmedNotStarted,
   };
   services.queued.set(Some(task.clone()));
+  keep_points(services, repo_root, queued.task, points).await;
   Ok((task, queued.claim))
+}
+
+/// Stores the person's `points` beside the queued `task` and asks for Orchester's estimate. The run goes on either
+/// way: points that were not stored are logged, and the person sets them again on the task.
+async fn keep_points(services: &RunServices, repo_root: PathBuf, task: Task, points: Option<StoryPoints>) {
+  let id = task.id();
+  let stored = background::run(move || with_points(&repo_root, task, points)).await;
+  if let Ok(Err(problems)) = stored {
+    tracing::warn!(?problems, "the queued task's story points were not stored");
+  }
+  let (estimates, open) = &services.estimates;
+  estimates.request(open.clone(), id);
 }
 
 /// The draft a Create & run that stopped before queuing saved under the form's key, so the form goes on

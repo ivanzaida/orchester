@@ -383,6 +383,16 @@ impl Workspace {
     self.approval_consent.lock().allowed = false;
   }
 
+  /// Whether Orchester estimates the story points of tasks without a person's value (*Let Orchester estimate story
+  /// points*); off until a person turns it on in the window.
+  pub fn estimates_story_points(&self) -> Result<bool, StoreError> {
+    self.db.lock().estimates_story_points()
+  }
+
+  pub fn set_estimates_story_points(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_estimates_story_points(allowed)
+  }
+
   /// Where Usage › Plan limits draws its warning line, for every project; 80 % until it is changed.
   pub fn usage_warning_threshold(&self) -> Result<WarningThreshold, StoreError> {
     self.db.lock().usage_warning_threshold()

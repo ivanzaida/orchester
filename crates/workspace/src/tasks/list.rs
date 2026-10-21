@@ -385,6 +385,8 @@ pub struct TaskRow {
   pub step: Option<CurrentStep>,
   /// Its latest run passed every step and committed nothing, so there is nothing to merge.
   pub nothing_to_merge: bool,
+  /// Its story points, who set them and why; `None` while it has none.
+  pub estimate: Option<orchester_core::task::estimate::StoryEstimate>,
 }
 
 /// The latest run of each task that has one; a task without one is a draft or queued.
@@ -430,6 +432,7 @@ impl TaskRow {
       readiness,
       step: latest.and_then(|latest| latest.step.clone()),
       nothing_to_merge: latest.is_some_and(|latest| latest.nothing_to_merge),
+      estimate: task.estimate().cloned(),
     }
   }
 }

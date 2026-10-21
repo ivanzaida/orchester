@@ -6,6 +6,7 @@ use orchester_core::{
   run::{RunStatus, StepStatus, TaskPhase},
   task::{
     TaskStatus,
+    estimate::StoryEstimate,
     organization::{Priority, WorkflowStatus},
   },
   time::Timestamp,
@@ -98,6 +99,18 @@ pub const fn submission(status: TaskStatus) -> &'static str {
     TaskStatus::Draft => "draft",
     TaskStatus::Queued => "queued",
   }
+}
+
+/// A task's story points, who set them (`person` or `automation`) and automation's reason; `null` while it has
+/// none.
+pub fn story_points(estimate: Option<&StoryEstimate>) -> Value {
+  estimate.map_or(Value::Null, |estimate| {
+    json!({
+      "points": estimate.points().get(),
+      "set_by": plain(&estimate.source()),
+      "reason": estimate.reason(),
+    })
+  })
 }
 
 /// Where a task stands, from its latest run.

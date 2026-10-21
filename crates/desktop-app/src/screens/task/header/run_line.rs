@@ -1,12 +1,13 @@
 //! The row under the title (`Organization` `foLAM` in `lUXff`): where the task's run stands as a status
-//! (`Status · Running · 03 Implement` `tjx4l`), and at its end the run line (`Run line` `vKpQg`): "Run
+//! (`Status · Running · 03 Implement` `tjx4l`), the task's story points beside it (ORC-49, no design frame yet: who
+//! set them and Orchester's reason in its tooltip), and at its end the run line (`Run line` `vKpQg`): "Run
 //! 128 · attempt 2 · Feature delivery v3 · started 16:20". The organization pickers that the design
 //! puts before the status come later (agreed deviation D4).
 
 use std::sync::Arc;
 
 use lurq::{
-  app::ctx::Ctx,
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Row, Spacer, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -14,6 +15,7 @@ use lurq::{
 use orchester_core::{
   integration::MergeError,
   run::{PauseReason, RunLimit, RunStatus, Stuck, TaskPhase},
+  task::estimate::{EstimateSource, StoryEstimate},
 };
 use orchester_workspace::{
   display,
@@ -28,7 +30,11 @@ use orchester_workspace::{
 use crate::{
   screens::task::TaskContext,
   theme::{ControlHeight, ExtraTypography},
-  ui::status::{Status, StatusChip},
+  ui::{
+    chip::TagChip,
+    status::{Status, StatusChip},
+    tooltip::Tooltip,
+  },
 };
 
 pub fn status_row(ctx: &mut Ctx, task: &TaskContext) -> Element {
@@ -38,12 +44,18 @@ pub fn status_row(ctx: &mut Ctx, task: &TaskContext) -> Element {
   if let Some(words) = detail_words {
     chip = chip.detail(words);
   }
+  let points = detail.task.estimate().map(|estimate| points(ctx, estimate));
+  let status = Row::new()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(chip.render(ctx))
+    .with_children(points);
   Row::new()
     .id("task-status-row")
     .width(Dimension::Pct(100.0))
     .min_height(Dimension::Px(ControlHeight::Md.value()))
     .align_items(Alignment::Center)
-    .child(chip.render(ctx))
+    .child(status)
     .child(Spacer::new().flex(1.0))
     .child(
       Text::new(&run_line(ctx, detail))
@@ -52,6 +64,31 @@ pub fn status_row(ctx: &mut Ctx, task: &TaskContext) -> Element {
         .nowrap(),
     )
     .into()
+}
+
+/// The task's story points as a chip, a person's as they are (`5 pt`), Orchester's marked as an estimate (`~5 pt`),
+/// with who set them and Orchester's reason in its tooltip.
+fn points(ctx: &mut Ctx, estimate: &StoryEstimate) -> Element {
+  let count = estimate.points().get().to_string();
+  let (chip, tip) = match (estimate.source(), estimate.reason()) {
+    (EstimateSource::Person, _) => (
+      ctx.t_args("task.points.person", [("count", count.as_str())]),
+      ctx.t_args("task.points.byPerson", [("count", count.as_str())]),
+    ),
+    (EstimateSource::Automation, Some(reason)) => (
+      ctx.t_args("task.points.estimated", [("count", count.as_str())]),
+      ctx.t_args(
+        "task.points.byOrchester",
+        [("count", count.as_str()), ("reason", reason)],
+      ),
+    ),
+    (EstimateSource::Automation, None) => (
+      ctx.t_args("task.points.estimated", [("count", count.as_str())]),
+      ctx.t_args("task.points.byAutomation", [("count", count.as_str())]),
+    ),
+  };
+  let chip: Element = TagChip::new("task-points", chip).mono().into();
+  Tooltip::new("task-points-tip", tip).wrap(ctx, chip)
 }
 
 /// The task's status and what it is about: the step it stands at, why the run waits for the person's decision
