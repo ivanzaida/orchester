@@ -4,7 +4,8 @@
 //! for review with Merge into main and the merge's states (`F2LtFn`, `kxMAN`, [`ready`]). Each keeps the
 //! Summary's frame: where the task stands, the run's stages ([`stages`]) in place of its step rows, the
 //! decision, and *This run* beside them. A run stopped by the project's daily budget has nothing to
-//! decide here: it goes on with Resume run in the header once the day has room.
+//! decide here: it goes on with Resume run in the header once the day has room. A run that ended may still
+//! go back to one of its steps: that card stands above *Run details* ([`return_ended`]).
 
 mod action;
 mod limit;
@@ -13,6 +14,7 @@ mod plan_limit;
 mod pointing;
 mod ready;
 mod retries;
+mod return_ended;
 mod stages;
 
 use std::sync::Arc;
@@ -25,6 +27,8 @@ use lurq::{
 use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
+pub(super) use self::return_ended::return_card;
+pub use self::return_ended::returnable;
 use super::{
   column, layout,
   notice::{self, Said},

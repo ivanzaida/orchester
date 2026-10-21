@@ -16,7 +16,7 @@ use super::{
   group::hold_row_message,
   list::{self, ReadinessKind, TaskRow, TaskTab},
 };
-use crate::messages::Message;
+use crate::{messages::Message, modules::ModuleFilter};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TaskSort {
@@ -65,12 +65,23 @@ pub struct Query<'a> {
 }
 
 pub fn rows(data: &ProjectTasks, tab: TaskTab, query: Query<'_>, sort: TaskSort) -> Vec<TaskRow> {
+  rows_in(data, tab, (query, ModuleFilter::Any), sort)
+}
+
+/// [`rows`] narrowed to the tasks of a module, or of none (ORC-48).
+pub fn rows_in(
+  data: &ProjectTasks,
+  tab: TaskTab,
+  (query, module): (Query<'_>, ModuleFilter),
+  sort: TaskSort,
+) -> Vec<TaskRow> {
   let text = query.text.trim().to_lowercase();
   let mut tasks: Vec<_> = data
     .tasks
     .iter()
     .filter(|task| {
       (query.pipeline.0.is_none() || task.details().pipeline == query.pipeline.0)
+        && module.keeps(task)
         && query.organization.includes(task.organization())
         && matches_text(task, data.former_keys.get(&task.id()), &text)
     })

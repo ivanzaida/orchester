@@ -1,8 +1,9 @@
 //! What the projects QA window shows, all under the QA folder: an application database with the seed's
 //! `task-states` Kontur and projects in each state All projects names (opened minutes to weeks ago, one whose
 //! folder is gone, one whose data a newer Orchester wrote), the folders Add project is shown with (a repository
-//! with a GitHub remote, one without a remote, one on another host, a folder that is not a repository) and a
-//! repository that keeps no project for *Open project folder…*. The stand-in `gh` is built here too.
+//! with a GitHub remote, one without a remote, one on another host, a folder of files that is not a repository and
+//! an empty one) and a repository that keeps no project for *Open project folder…*. The stand-in `gh` is built here
+//! too, and the window's git settings, so *Create a git repository here* never reads or writes the person's.
 
 use std::{
   error::Error,
@@ -34,6 +35,8 @@ const LISTED: [(&str, &str, &str, i64); 5] = [
 /// The project whose folder is gone, and the one whose data a newer Orchester wrote.
 const GONE: &str = "notes";
 const NEWER: &str = "legacy-crm";
+/// The author of the repositories made here, and of first commits the window makes.
+const AUTHOR: &str = "[user]\n\tname = QA Author\n\temail = qa@example.com\n";
 /// The GitHub repository the setup folder's remote names (the design's).
 const GITHUB_REMOTE: &str = "https://github.com/ivanzaida/kontur.git";
 const OTHER_REMOTE: &str = "https://gitlab.com/ivanzaida/kontur.git";
@@ -62,6 +65,19 @@ impl Folders {
   pub fn folder(&self, name: &str) -> PathBuf {
     self.root.join("folders").join(name)
   }
+
+  /// The window's git settings (`GIT_CONFIG_GLOBAL`).
+  pub fn git_settings(&self) -> PathBuf {
+    self.root.join("gitconfig")
+  }
+}
+
+/// Writes the window's git settings: only `useConfigOnly`, so git never guesses an author from the computer, and
+/// the QA author unless `author` is false.
+pub fn git_settings(folders: &Folders, author: bool) -> Result<(), Box<dyn Error>> {
+  let who = if author { AUTHOR } else { "" };
+  fs::write(folders.git_settings(), format!("[user]\n\tuseConfigOnly = true\n{who}"))?;
+  Ok(())
 }
 
 fn gh_name() -> String {
@@ -162,14 +178,42 @@ pub fn folders(folders: &Folders) -> Result<(), Box<dyn Error>> {
   let other = folders.folder("other-host");
   git_init(&other)?;
   git(&other, &["remote", "add", "origin", OTHER_REMOTE])?;
-  fs::create_dir_all(folders.folder("kontur-notes"))?;
+  let notes = folders.folder("kontur-notes");
+  for (file, text) in [
+    (".gitignore", "*.log\n"),
+    ("README.md", "# Kontur\n"),
+    ("src/main.rs", "fn main() {}\n"),
+    ("run.log", "ignored\n"),
+  ] {
+    let path = notes.join(file);
+    fs::create_dir_all(path.parent().ok_or("a file in the folder")?)?;
+    fs::write(path, text)?;
+  }
+  fs::create_dir_all(folders.folder("kontur-empty"))?;
   git_init(&folders.folder("scratch"))?;
   Ok(())
 }
 
+/// A repository with an empty first commit, as runs need one.
 fn git_init(repo: &Path) -> Result<(), Box<dyn Error>> {
   fs::create_dir_all(repo)?;
-  git(repo, &["init", "--quiet"])
+  git(repo, &["init", "--quiet"])?;
+  git(
+    repo,
+    &[
+      "-c",
+      "user.name=QA Author",
+      "-c",
+      "user.email=qa@example.com",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "-m",
+      "Initial commit",
+    ],
+  )
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<(), Box<dyn Error>> {

@@ -23,6 +23,7 @@ mod list;
 mod local_integration;
 mod mcp;
 mod memory;
+mod modules;
 mod native_commands;
 mod native_conversations;
 mod optional_daily_budget;

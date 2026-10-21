@@ -26,7 +26,10 @@ use crate::{
   links::Link,
   messages::{self, Message},
   project_setup::{self, Creation, ExpectedAccount, GitHubLink, ProjectDraft, creatable, github_connection_name},
-  repository::{self, DetectTarget},
+  repository::{
+    self, DetectTarget,
+    init::{LocalRepository, read_local},
+  },
   tools::form::variable_error,
   workspace::OpenProject,
 };
@@ -70,6 +73,7 @@ pub struct SetAgentFiles {
 }
 
 pub async fn add_project(services: &Services, args: AddProject, translate: &Translate) -> Result<Value, ToolError> {
+  let programs = services.programs.clone();
   let (new, detection) = blocking(move || {
     let folder = PathBuf::from(&args.folder);
     if !folder.is_absolute() {
@@ -95,8 +99,15 @@ pub async fn add_project(services: &Services, args: AddProject, translate: &Tran
       program: None,
     });
     let new = creatable(draft, Some(&detection.state(None)))
-      .ok_or_else(|| store_refusal(&StoreError::NotAGitRepository(folder)))?;
-    Ok((new, detection))
+      .ok_or_else(|| store_refusal(&StoreError::NotAGitRepository(folder.clone())))?;
+    // As setup holds Create back: runs need git, and a commit to branch from.
+    match read_local(programs.runner(), &folder) {
+      LocalRepository::GitMissing => Err(refused("git_not_found", Message::new("appMcp.errors.gitNotFound"))),
+      LocalRepository::NoCommits { .. } => Err(refused("no_commits", Message::new("appMcp.errors.noCommits"))),
+      LocalRepository::NotRepository | LocalRepository::Commits { .. } | LocalRepository::Unread => {
+        Ok((new, detection))
+      }
+    }
   })
   .await?;
   // As setup does: the account gh acts as now is the one the project expects.

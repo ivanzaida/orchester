@@ -1,4 +1,13 @@
 {
+  "modules": {
+    "errors": {
+      "targetBeforeStart": "The target date can't be before the start date.",
+      "duplicateName": "Another module already has this name.",
+      "notFound": "This module no longer exists.",
+      "changedMeanwhile": "This module was changed since you opened it. Close the editor and open it again to see the change.",
+      "invalidDate": "Write the date as YYYY-MM-DD."
+    }
+  },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
     "preflightFailed": "Local integration could not prove the current checkout and result identities. Nothing was merged.",
@@ -44,6 +53,7 @@
       "message": "A step waits for your message",
       "plan": "Plan v{{version}} waits for your decision",
       "retries": "Retries used up: the run waits for your decision",
+      "noRoute": "A step reported the work failed: the run waits for your decision",
       "brokeAgain": "A step broke again: the run waits for your decision",
       "unverified": "A step could not check everything: the run waits for your decision",
       "unchanged": "Nothing changed: the run waits for your decision",
@@ -492,6 +502,7 @@
         "one": "{{step}} still fails after {{retries}} retry",
         "other": "{{step}} still fails after {{retries}} retries"
       },
+      "noRouteTitle": "{{step}} reported the work failed",
       "brokeTitle": "{{step}} stopped again without a result",
       "unverifiedTitle": "{{step}} could not check everything",
       "unchangedTitle": "{{step}} was not run again: nothing changed"
@@ -1242,6 +1253,8 @@
   },
   "appMcp": {
     "errors": {
+      "noCommits": "The repository has no commit yet, and runs branch from one. Make a first commit, or create the project in Orchester’s project setup, which offers to make it.",
+      "gitNotFound": "git is not installed on this computer. Orchester runs git to read the folder and runs work in git worktrees. Install git, then try again.",
       "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",

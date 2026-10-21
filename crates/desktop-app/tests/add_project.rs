@@ -1,7 +1,8 @@
 //! Add project: the folder chosen with a stand-in picker, the GitHub block for folders that need no `gh` (not a
 //! repository, a repository without a remote, a remote that is not on GitHub), the name's error, creating the
 //! project and a folder that holds one already, the folder the route names, and Back. Repositories are made with
-//! git under this worktree's `.tmp/`; no `gh` is asked.
+//! git under this worktree's `.tmp/`; no `gh` is asked. Making the folder a git repository in place is in
+//! `add_project_git_init`.
 
 mod support;
 
@@ -31,11 +32,27 @@ fn git(root: &Path, args: &[&str]) {
   assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
-/// A git repository `name` in `scratch` without a remote.
+/// A git repository `name` in `scratch` with a first commit and without a remote.
 fn repository(scratch: &TempDir, name: &str) -> PathBuf {
   let repo = scratch.path().join(name);
   std::fs::create_dir_all(&repo).expect("a folder");
   git(&repo, &["init", "--quiet"]);
+  git(
+    &repo,
+    &[
+      "-c",
+      "user.name=Test Author",
+      "-c",
+      "user.email=author@example.com",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "-m",
+      "First",
+    ],
+  );
   repo
 }
 
@@ -102,12 +119,21 @@ fn add_project_refuses_a_folder_that_is_not_a_repository() {
   );
   assert_eq!(window.text("github-detection-status"), "Not a repository");
   let block = window.text("github-detection");
-  assert!(block.contains("Run this in a terminal, then check again."), "{block}");
-  assert!(!block.contains("Optional"), "a repository is not optional: {block}");
   assert!(
-    window.texts("git-init-command-box").is_some(),
-    "the command to run: {block}"
+    block.contains("Or in a terminal: run git init and make a first commit, then check again."),
+    "{block}"
   );
+  assert!(!block.contains("Optional"), "a repository is not optional: {block}");
+  for command in [
+    "git-init-command-init",
+    "git-init-command-add",
+    "git-init-command-commit",
+  ] {
+    assert!(
+      window.texts(&format!("{command}-box")).is_some(),
+      "the commands to run: {block}"
+    );
+  }
   assert_eq!(
     window.text("add-project-status"),
     "The project folder must be a git repository to continue."

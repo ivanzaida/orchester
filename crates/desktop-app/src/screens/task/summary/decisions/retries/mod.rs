@@ -61,7 +61,8 @@ pub struct Target(Option<StepKey>);
 impl lurq::app::component::DevtoolsInspectable for Target {}
 
 /// Where the task stands; after used-up retries, how often and where the step sent the work back
-/// (`Notice · Review still fails after 2 retries` in `DVuXu`).
+/// (`Notice · Review still fails after 2 retries` in `DVuXu`); after a follow-up of a step without a failure route
+/// failed (the run had been ready for review), that it did and that nothing went back.
 fn notice(ctx: &Ctx, props: &TaskContext, run: &RunView, stuck: &Stuck) -> Notice {
   let mut said = task_notice(ctx, props);
   if stuck.can_accept() {
@@ -81,7 +82,12 @@ fn notice(ctx: &Ctx, props: &TaskContext, run: &RunView, stuck: &Stuck) -> Notic
     ("target", target.name.to_string()),
     ("count", count.to_string()),
   ];
-  let (title, body) = if count == 1 {
+  let (title, body) = if run.run.waits_without_route() {
+    (
+      "decisions.retries.noRouteNoticeTitle",
+      "decisions.retries.noRouteNoticeBody",
+    )
+  } else if count == 1 {
     ("decisions.retries.noticeTitle.one", "decisions.retries.noticeBody.one")
   } else {
     (

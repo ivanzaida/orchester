@@ -32,6 +32,7 @@ pub mod instructions;
 pub mod links;
 pub mod memory;
 pub mod messages;
+pub mod modules;
 pub mod notifications;
 pub mod orchestrator;
 pub mod pipelines;
