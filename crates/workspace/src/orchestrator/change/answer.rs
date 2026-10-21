@@ -173,6 +173,7 @@ pub(super) fn words(change: &Change, arguments: &mut JsonObject) {
     | Change::Continue { .. }
     | Change::Pause { .. }
     | Change::Resume { .. }
-    | Change::Release { .. } => {}
+    | Change::Release { .. }
+    | Change::InitRepository { .. } => {}
   }
 }

@@ -19,6 +19,7 @@ mod proposal;
 mod queue;
 mod references;
 mod report;
+mod repository;
 mod review;
 mod scroll;
 mod settings;

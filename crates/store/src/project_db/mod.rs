@@ -115,6 +115,12 @@ pub struct ProjectDb {
   directory: PathBuf,
 }
 
+/// Excludes `.orchester/` from git in the repository at `repo_root`, as [`ProjectDb::create`] does: for a project's
+/// folder made a repository after the project was.
+pub fn exclude_project_data(repo_root: &Path) -> Result<(), StoreError> {
+  git_exclude::exclude(repo_root, EXCLUDE_PATTERN)
+}
+
 impl ProjectDb {
   /// Initializes Orchester in the repository at `repo_root` and excludes `.orchester/` from git.
   pub fn create(repo_root: &Path, project: Project) -> Result<Self, StoreError> {

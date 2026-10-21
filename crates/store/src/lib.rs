@@ -21,4 +21,5 @@ pub use project_db::{
   AutoModeSave, AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, ChatListing, ChatTurn, DecisionCounts,
   EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResolutionStart,
   ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
+  exclude_project_data,
 };
