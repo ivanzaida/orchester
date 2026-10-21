@@ -3,6 +3,7 @@
 //! Task rules themselves are `orchester_core::task`; this module only maps between them and what is
 //! on screen.
 
+pub mod answering;
 mod approval_choices;
 pub mod approvals;
 pub mod attention;

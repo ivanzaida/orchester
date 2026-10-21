@@ -29,6 +29,7 @@ use orchester_workspace::{
   messages::{self, Message},
   runner::{RunnerStatus, Runners, state::RunnerState},
   tasks::{
+    answering::PendingAnswers,
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobState},
     outside::{OutsideChanges, OutsideCounts},
@@ -63,6 +64,8 @@ pub struct ProjectFeed {
   /// Counts saves of the project's tasks a screen made; the tasks are read again after each
   /// ([`ProjectFeed::saved`]).
   pub revision: Signal<u64>,
+  /// Counts answers the window sent ([`ProjectFeed::answer_sent`]): what they answer leaves the tasks at once.
+  answering: Signal<u64>,
   /// Counts the changes automation made to the project through Orchester's MCP server, by kind: the
   /// screens that show what changed read it again in place.
   pub outside: Signal<OutsideCounts>,
@@ -151,6 +154,7 @@ impl ProjectFeed {
       states: Signal::new(0),
       running: Signal::new(false),
       revision: Signal::new(0),
+      answering: Signal::new(0),
       outside: Signal::new(OutsideCounts::default()),
       job_state: Signal::new(jobs.state()),
       unsaved: Signal::new(UnsavedForms::default()),
@@ -163,6 +167,12 @@ impl ProjectFeed {
   /// A screen saved the project's tasks: they are read again, in every tab of the project.
   pub fn saved(&self) {
     self.revision.update(|revision| *revision += 1);
+  }
+
+  /// A screen sent an answer to the project's runner, which marked what it answers (`Runners::control_run_in`,
+  /// `Runners::answering`): the tasks drop it in this frame, without waiting for the mark to reach the feed.
+  pub fn answer_sent(&self) {
+    self.answering.update(|sent| *sent += 1);
   }
 
   /// The count of the project's run changes a view of runs follows: while one of its runs runs (`live`)
@@ -191,13 +201,13 @@ impl ProjectFeed {
     }
   }
 
-  /// `tasks` without a runner, made once per reading.
+  /// `tasks` without a runner, made once per reading and answers marked.
   fn without_runner(&self, tasks: ProjectTasks) -> ProjectTasks {
     let mut offline = self.offline.lock();
-    // Every clone of a reading shares its fields; another reading has its own.
+    // Every clone of a reading shares its fields; another reading has its own. Answers marked since leave it as read.
     if let Some(made) = offline
       .as_ref()
-      .filter(|made| Arc::ptr_eq(&made.read.phases, &tasks.phases))
+      .filter(|made| Arc::ptr_eq(&made.read.phases, &tasks.phases) && made.read.answered == tasks.answered)
     {
       return made.without.clone();
     }
@@ -276,11 +286,15 @@ impl Component for FeedLoader {
     // Tasks automation saved count as the screens' own saves.
     let saved = self.feed.revision.get() + outside.tasks;
     let hold = services.hold;
-    let (tasks, stale) = tasks(ctx, (root.clone(), saved, states), (&hold, &services.programs));
+    // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
+    let settled = answers(ctx, (runners.clone(), root.clone())).settled();
+    self.feed.answering.get();
+    let read = tasks(ctx, (root.clone(), saved, states, settled), (&hold, &services.programs));
+    let tasks = answered(&runners, &root, (read.tasks, read.settled));
     let running = tasks.ready().is_some_and(runs_now);
     publish(&self.feed.running, running);
     publish(&self.feed.tasks, tasks);
-    if let Some(stale) = stale {
+    if let Some(stale) = read.stale {
       publish(&self.feed.stale, stale);
     }
     let day_start = Timestamp::now().local_day_start();
@@ -302,6 +316,19 @@ fn runs_now(tasks: &ProjectTasks) -> bool {
     .phases
     .values()
     .any(|latest| latest.phase() == Some(TaskPhase::Running))
+}
+
+/// `tasks`, read once `settled` answers of the project at `root` had settled, with what the answers sent from the
+/// window since answer no longer waiting: the marks that reading tells the end of go first, and the rest, the ones
+/// marked by now included, leave every *Needs you* (`tasks::answering`).
+fn answered(runners: &Runners, root: &Path, (tasks, settled): (TasksState, Option<u64>)) -> TasksState {
+  if let Some(settled) = settled {
+    runners.answers_read(root, settled);
+  }
+  match tasks {
+    TasksState::Ready(tasks) => TasksState::Ready(tasks.with_answered(&runners.answers_now(root))),
+    state => state,
+  }
 }
 
 /// Sets `signal` to `value` unless it holds it already, so its readers render only for a change.
@@ -415,23 +442,37 @@ fn status(ctx: &mut Ctx, runners: &Runners, root: &Path) -> Option<RunnerStatus>
   status.state().get().data.flatten()
 }
 
-/// The project's tasks, read again whenever tasks were saved or a run changed state, and why the last
-/// reading failed: `None` while a reading of tasks already shown is under way, which keeps what the
-/// previous reading said until this one ends. A failed reading keeps the tasks last read, so no page or
-/// form showing them is replaced; only a failed first reading leaves no tasks to show.
-fn tasks(
-  ctx: &mut Ctx,
-  deps: (PathBuf, u64, u64),
-  (hold, programs): (&ReadHold, &Programs),
-) -> (TasksState, Option<Option<Message>>) {
+/// A reading of the project's tasks, begun once `settled` of the answers sent from the window had settled.
+#[derive(Clone, Debug, PartialEq)]
+struct Reading {
+  tasks: ProjectTasks,
+  settled: u64,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Reading {}
+
+/// What [`tasks`] found: the tasks, how many answers had settled when the reading shown began, and why the last
+/// reading failed (see there).
+struct Read {
+  tasks: TasksState,
+  settled: Option<u64>,
+  stale: Option<Option<Message>>,
+}
+
+/// The project's tasks, read again whenever tasks were saved, a run changed state or an answer sent from the
+/// window settled, and why the last reading failed: `None` while a reading of tasks already shown is under way,
+/// which keeps what the previous reading said until this one ends. A failed reading keeps the tasks last read, so
+/// no page or form showing them is replaced; only a failed first reading leaves no tasks to show.
+fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64, u64), (hold, programs): (&ReadHold, &Programs)) -> Read {
   let (hold, programs) = (hold.clone(), programs.clone());
-  let load = ctx.future(deps, move |(repo_root, ..)| {
+  let load = ctx.future(deps, move |(repo_root, _, _, settled)| {
     tracing::trace!(target: crate::app_log::READ_LOG, read = "project tasks");
     let (hold, programs) = (hold.clone(), programs.clone());
     async move {
       hold.released().await;
       background::run(move || ProjectTasks::load(&repo_root, &programs))
         .await?
+        .map(|tasks| Reading { tasks, settled })
         .map_err(|error| {
           tracing::error!(%error, "cannot read the project's tasks");
           messages::store_error(&error)
@@ -440,12 +481,32 @@ fn tasks(
   });
   let state = load.state().get();
   let reading = state.is_pending();
-  match (state.data, state.error) {
-    (Some(tasks), _) if reading => (TasksState::Ready(tasks), None),
-    (Some(tasks), stale) => (TasksState::Ready(tasks), Some(stale)),
+  let settled = state.data.as_ref().map(|read| read.settled);
+  let (tasks, stale) = match (state.data, state.error) {
+    (Some(read), _) if reading => (TasksState::Ready(read.tasks), None),
+    (Some(read), stale) => (TasksState::Ready(read.tasks), Some(stale)),
     (None, Some(error)) => (TasksState::Failed(error), Some(None)),
     (None, None) => (TasksState::Loading, Some(None)),
-  }
+  };
+  Read { tasks, settled, stale }
+}
+
+/// The answers sent from the window to `root`'s runner that its tasks were not read back with yet, whenever they
+/// change; other projects' wake the stream without a render.
+fn answers(ctx: &mut Ctx, deps: (Runners, PathBuf)) -> PendingAnswers {
+  let pending = ctx.stream(
+    deps,
+    |(runners, root), emitter: StreamEmitter<PendingAnswers, ()>| async move {
+      let mut updates = runners.answers_of(&root);
+      loop {
+        let answers = updates.borrow_and_update().clone();
+        if !emitter.emit(answers) || updates.changed().await.is_err() {
+          return;
+        }
+      }
+    },
+  );
+  pending.state().get().data.unwrap_or_default()
 }
 
 /// The project's limits and today's usage, read again whenever settings or runs changed. `None` until

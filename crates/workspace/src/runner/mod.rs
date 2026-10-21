@@ -8,6 +8,7 @@
 //! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
 //! object) exists only on Windows.
 
+mod answers;
 mod ask;
 mod chat;
 mod check;
@@ -42,6 +43,7 @@ use self::{
   state::{RunnerEvent, RunnerState},
 };
 pub use self::{
+  answers::AnswerMark,
   idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,
