@@ -89,6 +89,8 @@ pub enum Decided {
   Conversation,
   /// On the task's Summary, at its decision card when it has one.
   Summary(Option<SummaryCard>),
+  /// On the project's Memory page, in its *Waiting for approval* queue.
+  Memory,
   /// Nowhere it can be opened, and why.
   Unavailable(Message),
 }
@@ -156,10 +158,10 @@ impl NeedItem {
 
   /// Where it is decided: a request at its card, an agent's question in the conversation, a plan, a limit
   /// and a decision after retries at their card of the Summary, the rest on the Summary; the project's memory
-  /// records and what has no task to open nowhere yet.
+  /// records on its Memory page; what has no task to open nowhere.
   pub fn decided(&self) -> Decided {
     if self.kind == NeedKind::Memory {
-      return Decided::Unavailable(Message::new("overview.needs.unavailable.memory"));
+      return Decided::Memory;
     }
     if self.task().is_none() {
       return Decided::Unavailable(Message::new("overview.needs.unavailable.task"));

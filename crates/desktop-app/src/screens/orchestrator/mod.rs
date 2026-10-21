@@ -14,10 +14,12 @@ pub(in crate::screens) mod change;
 mod composer;
 pub(in crate::screens) mod data;
 mod draft;
+mod failure;
 mod header;
 mod held;
 mod history;
 mod proposal;
+mod report;
 mod run_end;
 mod send;
 mod settings;
@@ -54,7 +56,10 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
-  ui::{chat, markdown::LinkHandler},
+  ui::{
+    chat::{self, follow::Follow},
+    markdown::LinkHandler,
+  },
 };
 
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, chat: OrchestratorChat) -> Element {
@@ -98,6 +103,8 @@ struct View {
   stop: StopAction,
   /// What a press on a link in a reply does; made once, so a reply is laid out again only when it changes.
   links: LinkHandler,
+  /// The turns open at their end and follow it; another conversation opens at its own end.
+  follow: Follow,
 }
 
 struct OrchestratorScreen {
@@ -120,6 +127,7 @@ impl Component for OrchestratorScreen {
       send: send::send_action(ctx),
       stop: send::stop_action(ctx),
       links: chat::links(ctx),
+      follow: Follow::new(ctx),
     };
     let project = ctx.props::<Props>().project.open.project.id();
     let of = view.of.clone();
@@ -274,6 +282,7 @@ impl View {
 
   /// Sends the draft, as the message it was last sent as when its words did not change since, to conversation
   /// `chat` (a new one when `None`).
+  /// The chat goes to its end and follows it again (`ui::chat::follow`).
   fn send_draft(&self, project: &ShownProject, chat: Option<ChatId>) -> Arc<dyn Fn() + Send + Sync> {
     let (view, project) = (self.clone(), project.open.clone());
     let from = Conversation::from(chat);
@@ -285,6 +294,7 @@ impl View {
       let to = chat.unwrap_or_else(ChatId::generate);
       let outgoing = draft::sending(project.project.id(), from, (to, text));
       view.outgoing.set(Some(outgoing.clone()));
+      view.follow.follow_again();
       view.send.run(Sending {
         project: project.clone(),
         outgoing,
@@ -293,13 +303,15 @@ impl View {
     })
   }
 
-  /// Sends words once more to conversation `chat`, as a new message; the draft stays as it is.
+  /// Sends words once more to conversation `chat`, as a new message; the draft stays as it is. The chat goes to its
+  /// end and follows it again.
   fn ask_again(&self, project: &ShownProject, chat: ChatId) -> Arc<dyn Fn(Arc<str>) + Send + Sync> {
-    let (send, project) = (self.send.clone(), project.open.clone());
+    let (send, follow, project) = (self.send.clone(), self.follow.clone(), project.open.clone());
     Arc::new(move |text: Arc<str>| {
       if send.state().get_untracked().is_pending() {
         return;
       }
+      follow.follow_again();
       send.run(Sending {
         project: project.clone(),
         outgoing: Outgoing {

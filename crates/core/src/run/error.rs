@@ -72,8 +72,6 @@ pub enum RunError {
   WrongRun { expected: RunId, found: RunId },
   #[error("event {found} does not follow event {previous}")]
   OutOfSequence { previous: u64, found: u64 },
-  #[error("step `{0}` has no failure route to retry")]
-  NoFailureRoute(StepKey),
   #[error("the work cannot return to step `{0}`: it is no agent step the failed step runs after")]
   NotAReturnTarget(StepKey),
   #[error(

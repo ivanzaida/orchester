@@ -8,6 +8,7 @@ mod auto_mode;
 mod base_moved;
 mod continue_run;
 mod conversation;
+mod daily_report;
 mod limits;
 mod message_waits;
 mod messages;
@@ -26,6 +27,7 @@ mod run_list;
 mod run_task;
 mod runs;
 pub mod setup;
+mod task_organization;
 mod task_write;
 mod tasks;
 mod usage;
@@ -119,25 +121,25 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_tasks",
-    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
+    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, blocked_reason (the manual Blocked's reason, or null), held_by_blocking_tasks (whether unfinished blocking tasks keep it from running), pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
     schema: schema_for_type::<tasks::ListTasks>,
     read_only: true,
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, blocked_reason, blocked_by, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task). story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's; left out, Orchester estimates them when a person turned on Let Orchester estimate story points.",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task). Its organization is checked as the task form checks it: blocked_reason marks it Blocked (informational: it keeps no run from starting, but the Orchestrator chat does not start the task) and must not be blank (invalid_organization); blocked_by lists the project's tasks that block it, by key or id, each with its gate (merge, the form's, when left out); a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags are names matched ignoring case, a new name created as a tag as the form's tag picker does. The task's history records the organization as automation's. story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's; left out, Orchester estimates them when a person turned on Let Orchester estimate story points.",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one). story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's and refused as persons_points when a person set the task's points; after a change of the brief or criteria without them, Orchester estimates them again when a person turned on Let Orchester estimate story points.",
+    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one). blocked_reason sets the manual Blocked with its reason (not blank: invalid_organization) and null clears it; it is informational, but the Orchestrator chat does not start a task marked Blocked. blocked_by is the whole list of the project's blocking tasks, by key or id, each with its gate (merge, the form's, when left out), and [] clears it; a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags is the whole list of tag names, matched ignoring case, a new name created as a tag as the form's tag picker does, and [] clears them. The task's history records the organization changes as automation's. story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's and refused as persons_points when a person set the task's points; after a change of the brief or criteria without them, Orchester estimates them again when a person turned on Let Orchester estimate story points.",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
   },
@@ -165,8 +167,10 @@ const SPECS: &[Spec] = &[
                   holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
                   base_moved lists Orchester's notices that the run's base branch moved (kind base_moved): the \
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
-                  state (waits_for_writing_step, kept_until_run_goes_on, waits_for_follow_up, or delivered with the \
-                  agent and step that read it). The run's link is its task's page; the waiting approvals, \
+                  state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
+                  that never merge the base such as Review or Verify are left, kept_until_run_goes_on, \
+                  waits_for_follow_up, or delivered with the agent and step that read it). The run's link is its \
+                  task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
@@ -328,6 +332,12 @@ const SPECS: &[Spec] = &[
     read_only: true,
   },
   Spec {
+    name: "get_daily_report",
+    description: "A project's report of one local day (today when `day` is left out, up to now), the one its Orchestrator conversation got for that day when it was delivered (delivered: true), else read now from what Orchester holds: the tasks merged that day (key, title, run, when); the tasks' latest runs as they stand, ready to merge, stopped (failed, at a limit, waiting for a decision or interrupted, with `end` telling how and the step) or at work; what waits for the person (tool requests, questions, messages, plans, the Orchestrator's proposals); what the Orchestrator did that day (way: direct, itself, or applied by the person); the day's tokens (spent) and active agent time by task and by account, as get_usage reads them, against the daily budget (null: no limit); and the queued tasks in order. Every item has its app `link`.",
+    schema: schema_for_type::<daily_report::GetDailyReport>,
+    read_only: true,
+  },
+  Spec {
     name: "list_pipelines",
     description: "A project's pipelines that have a published version, which tasks run with: name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
     schema: schema_for_type::<across::InProjects>,
@@ -392,7 +402,7 @@ async fn dispatch(
   }
 }
 
-/// The tools that answer what agents wait for, auto mode's settings, and the pull requests.
+/// The tools that answer what agents wait for, auto mode's settings, the pull requests and the daily report.
 async fn dispatch_answers(
   services: &Services,
   translate: &Translate,
@@ -412,6 +422,7 @@ async fn dispatch_answers(
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
+    "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }

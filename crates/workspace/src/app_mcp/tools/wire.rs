@@ -190,6 +190,12 @@ pub fn nullable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<u64
   Option::<u64>::deserialize(deserializer)
 }
 
+/// An optional text argument as given (with `#[serde(default)]` for one left out, `None`): `null`
+/// clears it (`Some(None)`), a text sets it.
+pub fn clearable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Option<String>>, D::Error> {
+  Option::<String>::deserialize(deserializer).map(Some)
+}
+
 /// A limit argument as a form's field holds it: empty for no limit.
 pub fn limit_text(value: Option<u64>) -> String {
   value.map(|value| value.to_string()).unwrap_or_default()

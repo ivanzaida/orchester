@@ -22,6 +22,7 @@ use orchester_core::{
   appearance::ThemeSetting,
   id::{CloudAccountId, InstallationId, ProjectId},
   notification::NotificationSettings,
+  orchestrator::{ReportSchedule, ReportTime},
   project::Project,
   time::Timestamp,
   usage::limits::WarningThreshold,
@@ -418,6 +419,17 @@ impl Workspace {
 
   pub fn set_notification_settings(&self, settings: NotificationSettings) -> Result<(), StoreError> {
     self.db.lock().set_notification_settings(settings)
+  }
+
+  /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
+  pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
+    self.db.lock().daily_report_schedule()
+  }
+
+  /// Turns the daily report on at `time`, or off with `None`; only the window's setting, which a person changes, calls
+  /// it.
+  pub fn set_daily_report(&self, time: Option<ReportTime>) -> Result<(), StoreError> {
+    self.db.lock().set_daily_report(time, Timestamp::now())
   }
 
   /// Whether agents may control `orchester-app`'s window through its MCP server; `None` until it is

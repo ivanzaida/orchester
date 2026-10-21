@@ -7,6 +7,7 @@ mod general;
 mod github;
 mod harness;
 mod index;
+mod layout;
 mod limits;
 mod navigation_status;
 mod reads;

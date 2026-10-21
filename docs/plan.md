@@ -72,9 +72,30 @@ main), *Abort* puts the worktree back. *Ask an agent to resolve* returns the run
 conflicting files as data. The core of the project task *ORC-44 · Return a finished run to an earlier step*: a
 succeeded or failed run is reopened from an executed agent step with a note (`continue_run` `return_to` takes ended
 runs too); refused for a merged run, a gone worktree, a merge in the worktree and a run at work.
-**Open:** returning a failed run from the task page (only `continue_run` does today); a follow-up turn whose step
-reports failed does not route the run back yet; the design-verification of boards 1–9 of `fvCVT`, and a frame for
-files that wait for a side to be kept.
+ORC-44 (2026-10-21) added the rest: a follow-up whose step reports `failed` is routed as that step's failure is (its
+route and retries, a new attempt from the route's target with the follow-up's report), or waits for the person where
+the step has no route; the task page returns a succeeded or failed run with *Return the work to an earlier step*
+above *Run details*, and *Return to a step* in the run's header points at it (or at a waiting run's decision).
+**Open:** the design-verification of boards 1–9 of `fvCVT`; a frame for files that wait for a side to be kept; a
+frame for *Return the work to an earlier step* and the header's *Return to a step* (they reuse `DVuXu`'s return parts).
+
+### D4 · Base-moved notices go only to steps that change the code (ORC-65) · branch `orchester/orc-65-run-1` (implemented 2026-10-21, waiting for review)
+
+ORC-54 told a run's writing agent to merge the base branch when it moved; ORC-18 run #32's notice went to its Verify
+step, which writes only build output and QA files. Now only the step that implements the change takes it
+(`orchester_core::resource::Pipeline::takes_base_moves`): a step's own choice (`StepPermissions::takes_base_moves`,
+the pipeline editor's *Merge the base branch when it moves* and `save_pipeline_draft`'s `takes_base_moves`), else an
+agent step with repository write that is not a Review or Verify step (a word of its key, or a failure route back to a
+writing step). The runner delivers a notice only to such a step whose agent writes in the run; *Ask an agent to
+resolve* picks its default step among the same steps (`implementing_step`). A run past them keeps the notice, and the
+Conversation says *waits until the work goes back to Implement* (`get_run`: `waits_until_work_goes_back`). Verify's
+git-ignored writes make no checkpoint, so they never count as the run's work. Design:
+`docs/design/orchester-workspace.md` › *When the base branch moves (ORC-54, ORC-65)*. Tests: `orchester-core --test
+pipeline_base_moves base_moves`, `orchester-runner --features test-agent --test base_moved base_moved`,
+`orchester-workspace --test base_moved_steps base_moved_steps`, `orchester-app --test pipelines pipelines_base_moves`,
+`orchester-app --test mcp_domain domain_save_pipeline_draft_keeps`.
+**Open:** design verification of the editor switch and the Conversation wording (no Pencil frame of its own); the
+deprecated desktop's editor neither shows nor changes the choice (its edits change the other fields only).
 
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 

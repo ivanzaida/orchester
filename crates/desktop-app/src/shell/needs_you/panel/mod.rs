@@ -9,10 +9,10 @@
 //! questions with suggested answers expand in place around the conversation's own card (`in_place`), one at a
 //! time, and the list keeps the expanded one in view (`reveal`); the others open their task: a plan, a limit, a
 //! decision after retries and an interrupted run its Summary, pointing at the plan's, the limit's or the
-//! decision's card (`icGHG`), an agent's question its Conversation, where the composer answers it. The
-//! project's memory records, and an item whose task can't be read, are listed with their action unavailable,
-//! and why. An item expanded here keeps its place once it no longer waits, as a note of how it went (`note`),
-//! until the panel closes, so nothing moves under the pointer.
+//! decision's card (`icGHG`), an agent's question its Conversation, where the composer answers it; the
+//! project's memory records its Memory page, on the records waiting for approval. An item whose task can't be
+//! read is listed with its action unavailable, and why. An item expanded here keeps its place once it no longer waits,
+//! as a note of how it went (`note`), until the panel closes, so nothing moves under the pointer.
 
 mod frame;
 mod leads;

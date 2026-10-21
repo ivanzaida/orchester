@@ -26,6 +26,7 @@ mod merges;
 mod messages;
 mod native;
 mod orchestrator;
+mod orchestrator_reports;
 mod orchestrator_sent;
 mod orchestrator_usage;
 mod orchestrator_waits;
@@ -86,6 +87,7 @@ pub use self::{
   chat_decisions::KeptAction,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
+  orchestrator_reports::KeptReport,
   orchestrator_waits::KeptWait,
   read_only::ReadOnlyProjectDb,
   resolutions::ResolutionStart,

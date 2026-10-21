@@ -4,7 +4,8 @@
 //! checkout. A branch seen at a new head is a move, whether Orchester's merge, a commit, a pull or a fast-forward
 //! made it; moves within two minutes of the first are one. For each unfinished run on a branch that moved and whose
 //! branch lacks the new head, a notice is queued in place of the run's pending one: what landed, and the files both
-//! sides changed. The runner delivers it to the run's next writing agent (`orchester-runner`). With the project's
+//! sides changed. The runner delivers it to the run's next agent of a step that implements the change, never a Review
+//! or Verify step (`orchester-runner`, `orchester_core::resource::Pipeline::takes_base_moves`). With the project's
 //! switch off, the heads are still kept, so that turning it on does not tell of old moves.
 
 use std::{collections::BTreeMap, path::Path};

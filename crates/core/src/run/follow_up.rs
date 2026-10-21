@@ -1,8 +1,10 @@
 //! Follow-ups (Ask agent, 02.13): a person asks about a run that succeeded. The run works again in
 //! an attempt of its own with one execution of the step asked, which continues the CLI session of
 //! that step's passed execution in the run's worktree and makes new checkpoints; the run is ready for
-//! review again once it passes. The run's limits apply as to any work. A follow-up that fails leaves
-//! the run as it was: succeeded, with the result it had; its attempt stays recorded as failed.
+//! review again once it passes. The run's limits apply as to any work. A follow-up whose step reports
+//! the work failed is routed as that step's failure is in any attempt, or waits for a person where the
+//! pipeline has no route ([`Run::fail_step`]). One that fails otherwise leaves the run as
+//! it was: succeeded, with the result it had; its attempt stays recorded as failed.
 
 use super::{
   attempt::StepExecution,

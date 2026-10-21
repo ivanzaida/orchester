@@ -49,6 +49,7 @@ pub mod prompt_source;
 pub mod reference_file;
 pub mod resolved_source;
 pub mod rule_item;
+pub mod settings_page;
 pub mod skill_row;
 pub mod source_box;
 pub mod state;

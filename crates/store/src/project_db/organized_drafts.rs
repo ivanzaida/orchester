@@ -13,13 +13,14 @@ use super::{ProjectDb, organization, tasks};
 use crate::StoreError;
 
 impl ProjectDb {
-  /// Details, organization and history commit together, including an idempotent new draft.
+  /// Details, organization and history commit together, including an idempotent new draft; the
+  /// history names `actor` as who organized it.
   pub fn create_organized_task(
     &mut self,
     batch: IdempotencyKey,
     details: TaskDetails,
     value: &TaskOrganization,
-    at: Timestamp,
+    (actor, at): (ChangeActor, Timestamp),
   ) -> Result<Task, StoreError> {
     let transaction = self.connection.transaction()?;
     let existing = tasks::load_tasks(
@@ -44,14 +45,14 @@ impl ProjectDb {
       task
     };
     organization::validate(&transaction, task.id(), value)?;
-    organization::write(&transaction, task.id(), value, ChangeActor::Person, at)?;
+    organization::write(&transaction, task.id(), value, actor, at)?;
     let task = tasks::load_task(&transaction, self.project.key(), task.id())?;
     transaction.commit()?;
     Ok(task)
   }
 
-  /// Saves an edited task, read at revision `read`: its details, and the organization changes the
-  /// person made from `base` (what the form loaded) to `edited`, over what is stored now
+  /// Saves an edited task, read at revision `read`: its details, and the organization changes
+  /// `actor` made from `base` (what the form loaded) to `edited`, over what is stored now
   /// ([`TaskOrganization::rebase`]), so a status Orchester or a bulk change set meanwhile is not
   /// overwritten. A task changed since it was read is a conflict, and nothing is stored.
   pub fn update_organized_task(
@@ -60,7 +61,7 @@ impl ProjectDb {
     read: TaskRevision,
     details: TaskDetails,
     (base, edited): (&TaskOrganization, &TaskOrganization),
-    at: Timestamp,
+    (actor, at): (ChangeActor, Timestamp),
   ) -> Result<TaskUpdate, StoreError> {
     let transaction = self.connection.transaction()?;
     let task = tasks::load_task(&transaction, self.project.key(), id)?;
@@ -70,7 +71,7 @@ impl ProjectDb {
     let value = edited.rebase(base, &organization::load(&transaction, id)?);
     organization::validate(&transaction, id, &value)?;
     tasks::edit_task(&transaction, task, details)?;
-    organization::write(&transaction, id, &value, ChangeActor::Person, at)?;
+    organization::write(&transaction, id, &value, actor, at)?;
     let task = tasks::load_task(&transaction, self.project.key(), id)?;
     transaction.commit()?;
     Ok(TaskUpdate::Saved(task))

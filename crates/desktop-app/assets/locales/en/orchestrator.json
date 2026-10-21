@@ -470,6 +470,7 @@
         "why": {
           "retries": "used up its {{count}} retries",
           "retriesOne": "used up its retry",
+          "noRoute": "reported the work failed",
           "brokeAgain": "broke again",
           "unverified": "waits unverified",
           "unchanged": "waits unchanged"
@@ -576,6 +577,65 @@
       "open": "Open {{task}}'s summary",
       "limitDailyMore": "Run #{{run}} of {{task}} and {{count}} more stopped at the daily budget",
       "limitGroupMore": "Run #{{run}} of {{task}} and {{count}} more stopped at their group's budget"
+    },
+    "report": {
+      "title": "Daily report · {{day}}",
+      "conversation": "Daily report · {{day}}",
+      "delivered": "Delivered {{time}}",
+      "deliveredOn": "Delivered {{day}}, {{time}}",
+      "effectSummary": "Let the Orchestrator answer agents is on, so the Orchestrator reads the report and adds a short summary and its recommendations below. It changes nothing: what it recommends is yours to do.",
+      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator adds a summary and its recommendations after the turn under way ends.",
+      "asOf": "Runs, waits and the queue as they stood at {{time}}.",
+      "section": {
+        "done": "What was done",
+        "stands": "How the work stands",
+        "waits": "What waits for you",
+        "usage": "Tokens and agent time",
+        "next": "Next in the queue"
+      },
+      "none": {
+        "done": "Nothing was merged, and the Orchestrator did nothing itself.",
+        "stands": "No run is ready to merge, stopped or at work.",
+        "waits": "Nothing waits for you.",
+        "next": "No task waits in the queue."
+      },
+      "merged": "- Merged: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
+      "action": {
+        "direct": "- Orchestrator: [{{what}}]({{link}}) — {{tool}} at {{time}}",
+        "applied": "- You applied: [{{what}}]({{link}}) — {{tool}} at {{time}}"
+      },
+      "ready": "- Ready to merge: [{{task}} · {{title}}]({{link}}) — run #{{run}}; merge it on its Summary",
+      "working": "- At work: [{{task}} · {{title}}]({{link}}) — run #{{run}}",
+      "stopped": {
+        "failed": "- Failed: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}}; return it to an earlier step or run it again on its Summary",
+        "retries": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} used up its retries; allow one more or return it on its Summary",
+        "noRoute": "- Waits for you: [{{task}} · {{title}}]({{link}}) — a follow-up of run #{{run}} at {{step}} reported the work failed and its pipeline has no route for that; return it on its Summary",
+        "brokeAgain": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} broke again; allow a retry or return it on its Summary",
+        "unverified": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} could not check everything; accept, retry or return it on its Summary",
+        "unchanged": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} was not run again on unchanged work; accept, retry or return it on its Summary",
+        "limitTokens": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} used its token budget; raise it on its Summary",
+        "limitTime": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} reached its time limit; raise it on its Summary",
+        "limitDaily": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} stopped at the daily budget; resume it once the day has room, or raise the budget",
+        "limitGroup": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} stopped at its group's budget; raise the group's budget",
+        "limitStep": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} used the step's budget; raise it on its Summary",
+        "limitPlan": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} reached an account's plan limit; resume it once the plan allows",
+        "interrupted": "- Interrupted: [{{task}} · {{title}}]({{link}}) — run #{{run}}; continue it from its last checkpoint on its Summary"
+      },
+      "wait": {
+        "approval": "- Tool request: [{{task}}]({{link}}) — run #{{run}}: {{what}}",
+        "question": "- Question: [{{task}}]({{link}}) — run #{{run}} at {{what}}",
+        "message": "- Waits for a message: [{{task}}]({{link}}) — run #{{run}} at {{what}}",
+        "plan": "- Plan to decide: [{{task}}]({{link}}) — run #{{run}} at {{what}}",
+        "proposal": "- Proposal: [{{what}}]({{link}}) — {{task}}"
+      },
+      "usage": {
+        "total": "- Tokens: [{{spent}} of {{budget}}]({{link}}) — {{time}} of agent time",
+        "totalUnlimited": "- Tokens: [{{spent}}]({{link}}) — {{time}} of agent time; no daily limit",
+        "task": "- Task: [{{task}} · {{title}}]({{link}}) — {{spent}} tokens, {{time}}",
+        "account": "- Account: [{{name}}]({{link}}) — {{spent}} tokens, {{time}}",
+        "noAccount": "No account"
+      },
+      "queued": "- Next {{place}}: [{{task}} · {{title}}]({{link}})"
     }
   }
 }

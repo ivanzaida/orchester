@@ -205,6 +205,9 @@ name = "returned"
 required-features = ["test-agent"]
 
 [[test]]
+name = "follow_up_routing"
+required-features = ["test-agent"]
+[[test]]
 name = "claude_approvals"
 required-features = ["test-agent"]
 

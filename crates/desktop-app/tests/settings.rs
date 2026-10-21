@@ -278,3 +278,35 @@ fn settings_automation_scrolls_to_its_last_switch_in_a_short_window() {
   window.pass();
   assert!(bottom(&mut window, CONTINUE) <= 600.0, "scrolled into the window");
 }
+
+/// The switch of the Orchestrator's daily report, the section's last row.
+const DAILY_REPORT: &str = "settings-daily-report";
+
+#[test]
+fn settings_daily_report_is_off_until_turned_on_and_comes_at_six_by_default() {
+  let mut window = Window::open();
+  let workspace = window.launch.workspace().expect("session").clone();
+  window.navigation().go(Route::Settings);
+  window.until("the report's row", |window| {
+    window.texts(&format!("{DAILY_REPORT}-row")).is_some()
+  });
+  assert!(!switch_on(&mut window, DAILY_REPORT), "off until turned on");
+  assert!(
+    window.tree.get_element_by_id(&format!("{DAILY_REPORT}-time")).is_none(),
+    "no time while it is off"
+  );
+  window.until("the person's choice to be saved", |window| {
+    let stored = workspace.daily_report_schedule().expect("the setting reads");
+    if stored.is_none() {
+      press_element(window, DAILY_REPORT);
+    }
+    stored.is_some()
+  });
+  let schedule = workspace.daily_report_schedule().expect("read").expect("on");
+  assert_eq!(schedule.time.minute(), 18 * 60, "at 18:00 unless the person chooses");
+  window.until("its time to show", |window| {
+    window.tree.get_element_by_id(&format!("{DAILY_REPORT}-time")).is_some()
+  });
+  let texts = window.texts(&format!("{DAILY_REPORT}-at")).expect("the time's row");
+  assert!(texts.iter().any(|text| text == "Deliver at"), "{texts:?}");
+}

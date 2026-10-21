@@ -31,11 +31,11 @@ use super::{
   },
   duplicate, guard,
   keep::{self, HOLD_QUEUE, Named},
+  own_project::{in_own_project, own_project_by_id},
   proposal,
 };
 use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
-  messages::Message,
   runner::Runners,
   workspace::OrchestratorConsent,
 };
@@ -46,7 +46,7 @@ use crate::{
 /// agent's question, sending a run's agents a message and continuing a run that waits for a person's decision.
 /// Approvals, plan decisions, project setup, connections, MCP servers, the environment and what removes work are not
 /// among them. A name whose tool the app does not have (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 54] = [
+pub const TOOLS: [&str; 55] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -99,6 +99,7 @@ pub const TOOLS: [&str; 54] = [
   "list_models",
   "get_usage",
   "get_story_point_calibration",
+  "get_daily_report",
   "list_pull_requests",
   "get_pull_request",
 ];
@@ -158,7 +159,8 @@ const PROPOSE_RUN: &str = "Proposes running a task to the person: checks that th
   queued and started, a queued task starts, an ended one runs again) and starts nothing. The person starts or \
   dismisses it in the conversation. When auto mode is on for the project (get_auto_mode's new_runs), it starts the \
   run instead, through the same checks, and answers with the run, but never in a turn Orchester started by itself: \
-  there it only proposes. Refusals name why.";
+  there it only proposes. A task marked Blocked (its blocked_reason) is refused as task_blocked, naming the reason: \
+  you never start or propose it; the person may start it in the app. Refusals name why.";
 
 /// What the agent reads first of `duplicate_pipeline`.
 const DUPLICATE_AS_DRAFT: &str = "In this chat it saves the copy as a draft, and its first version is published as \
@@ -232,7 +234,8 @@ pub struct ChatScope {
   pub name: String,
   pub root: PathBuf,
   pub chat: ChatId,
-  /// A wait or a run's end started the turn by itself: nobody asked for anything in it ([`super::guard`]).
+  /// A wait, a run's end or a day's report started the turn by itself: nobody asked for anything in it; which one
+  /// started it, the guard reads from the conversation ([`super::guard`]).
   pub on_its_own: bool,
 }
 
@@ -253,7 +256,8 @@ pub async fn call(
     return app_tool((services, translate), name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
-  if name == DUPLICATE_PIPELINE {
+  // A copy saves a draft: a turn a day's report started refuses it, and keeps the refusal.
+  if name == DUPLICATE_PIPELINE && !guard::in_report_turn(scope).await? {
     return duplicate::duplicate((services, translate, runners), scope, arguments).await;
   }
   act_and_keep((services, translate, runners), scope, name, &arguments).await
@@ -325,9 +329,14 @@ async fn act(
   name: &str,
   arguments: &JsonObject,
 ) -> Acted {
+  // In a turn nobody asked for, what would change how runs go on or what agents run on is only proposed; in one a
+  // day's report started, every change is, or refused.
+  let proposes = match guard::only_proposed(scope, name).await {
+    Ok(proposes) => proposes,
+    Err(error) => return Acted::done(Err(error)),
+  };
   let acted = match name {
-    // In a turn nobody asked for, what would change how runs go on or what agents run on is only proposed.
-    _ if guard::proposed_on_its_own(scope, name) => propose_change((services, translate), scope, name, arguments).await,
+    _ if proposes => propose_change((services, translate), scope, name, arguments).await,
     RUN_TASK => start((services, translate), scope, arguments).await,
     CANCEL_RUN | CONTINUE_RUN => propose_change((services, translate), scope, name, arguments).await,
     MERGE_RUN => {
@@ -406,12 +415,14 @@ async fn switched(
   })
 }
 
-/// `run_task`: a start proposed to the person, or, while auto mode is on for the project, the run started.
+/// `run_task`: a start proposed to the person, or, while auto mode is on for the project, the run started; refused for
+/// a task marked Blocked.
 async fn start(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
   arguments: &JsonObject,
 ) -> Result<Acted, ToolError> {
+  blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
   // In a turn nobody asked for, a start is only proposed.
   if scope.on_its_own || !auto_mode(scope).await? {
     let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
@@ -556,37 +567,4 @@ pub(super) async fn app_tool(
 
 fn no_tool(name: &str) -> ToolError {
   ToolError::InvalidArguments(format!("no tool is named {name}"))
-}
-
-/// Holds a change to the chat's project: one that names it, by its id or its name, or names none, is given it by its
-/// id; one that names another project is refused.
-fn in_own_project(scope: &ChatScope, arguments: &mut JsonObject) -> Result<(), ToolError> {
-  let own = match arguments.get("project") {
-    None => true,
-    Some(Value::String(named)) => names_own_project(scope, named),
-    Some(_) => false,
-  };
-  if !own {
-    return Err(ToolError::refused(
-      "other_project",
-      vec![Message::new("orchestrator.tools.otherProject")],
-    ));
-  }
-  arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
-  Ok(())
-}
-
-/// A read that names the chat's project, by its id or its name, is given it by its id: the name may be another
-/// project's by now. A read of another project, or of every project, stays as it is.
-fn own_project_by_id(scope: &ChatScope, arguments: &mut JsonObject) {
-  if let Some(Value::String(named)) = arguments.get("project")
-    && names_own_project(scope, named)
-  {
-    arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
-  }
-}
-
-/// Whether `named` names the chat's project, by its id or its name.
-fn names_own_project(scope: &ChatScope, named: &str) -> bool {
-  named == scope.project.to_string() || named.eq_ignore_ascii_case(&scope.name)
 }

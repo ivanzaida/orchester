@@ -160,6 +160,19 @@ person can click.
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
    the place in the app.
+7. **The daily report (ORC-47).** At the time the person sets in Settings › What automation may do (off until they
+   turn it on), each open project's latest conversation (or one it opens) gets one *Daily report* entry per local day
+   that had activity (a merge, a run that ended or stopped, an action of the Orchestrator, anything its conversations
+   kept, tokens or agent time); a report whose time passed while the app was closed comes at the next start, labelled
+   with its day, for the days since the report was turned on, at most 7 back. It is built only from what the project's
+   database holds (`orchester_workspace::orchestrator::report`): what the day did, and what stands (runs, waits, the
+   queue) as of when it is built. With *Let the Orchestrator answer agents* on, the report starts one turn by itself, as
+   a wait does, which adds a summary and recommendations and changes nothing: its tools read from the conversation
+   that a report's turn is the one under way (`orchester_workspace::orchestrator::guard`), so every change a card
+   carries (a merge, cancel, pause, resume, release, continuation, publication, answer or message) is only proposed,
+   whatever the person's switches, and any other change (a task, a draft, a copy of a pipeline, a hold of new starts) is
+   refused as `report_turn`; a start is proposed as in any turn nobody asked for. `get_daily_report` reads the
+   delivered report of a day, or builds it.
 
 ## Tools
 
@@ -170,7 +183,7 @@ project.
 | Area | Read | Change (draft / free) | Proposed (person clicks, or switch) |
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
-| Tasks | `list_tasks`, `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing) | — |
+| Tasks | `list_tasks` (existing; with each task's `blocked_reason` and `held_by_blocking_tasks`, ORC-58), `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing; ORC-58: also the manual Blocked's `blocked_reason` — `null` clears it —, the whole list of blocking tasks `blocked_by` by key or id with the form's gate, and `tags` by name, a new name created as the tag picker does; checked as the task form checks them, refused with its reasons (`invalid_organization` for a blank reason or a cycle, `task_not_found` for a task not of the project), recorded in the task's history as automation's. Free organization changes, like the title or priority: a manual Blocked is informational and widens nothing, but the chat's `run_task` refuses a task marked Blocked as `task_blocked`, naming the reason; the person can still start it in the app) | — |
 | Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; a run a pause stopped, and with *Let the Orchestrator continue interrupted runs* a run a crash, the runner going away or *Quit now* interrupted, from its last checkpoint; never a run at a limit, canceled, failed by the runner or without its worktree; both, and `release_queue`, only proposed in a turn Orchester started, but for the interrupted run whose end started the turn, continued once under both that switch and *answer agents*) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*; a message that moves a run is always proposed) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
@@ -183,6 +196,7 @@ project.
 | Connections | `list_connections`, `list_accounts`, `list_models` (existing) | — | — |
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
+| Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,

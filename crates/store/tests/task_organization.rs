@@ -4,7 +4,7 @@ use orchester_core::{
   id::IdempotencyKey,
   integration::{MergeKind, RunMerge},
   revision::Revision,
-  run::BranchName,
+  run::{BranchName, StepFailure},
   store::{MergeStore, RunStore, TaskStore},
   task::{
     TaskUpdate,
@@ -239,7 +239,7 @@ fn organization_invalid_form_save_and_bulk_cancel_leave_content_unchanged() {
       task.revision(),
       details,
       (task.organization(), &canceled),
-      at(30)
+      (ChangeActor::Person, at(30))
     )
     .is_err()
   );
@@ -369,7 +369,6 @@ fn prepare_restart(
   execution: orchester_core::id::StepExecutionId,
   restart: Restart,
 ) {
-  use orchester_core::run::StepFailure;
   if matches!(restart, Restart::Resume) {
     let events = run.pause(at(10)).expect("pause");
     db.append_events(run, &events).expect("pause persisted");
@@ -395,7 +394,6 @@ fn prepare_restart(
 
 #[test]
 fn organization_failed_follow_up_restores_review_and_retains_transition_history() {
-  use orchester_core::run::StepFailure;
   let (_repo, mut db, mut run, execution) = started_run();
   prepare_restart(&mut db, &mut run, execution, Restart::FollowUp);
   let events = run
@@ -405,8 +403,9 @@ fn organization_failed_follow_up_restores_review_and_retains_transition_history(
   let follow_up = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run.start_step(follow_up, at(31)).expect("start step");
   db.append_events(&run, &events).expect("start");
+  // A follow-up whose agent broke leaves the run as it was; one that reports the work failed is routed back.
   let events = run
-    .fail_step(follow_up, StepFailure::ReportedFailed, at(32))
+    .fail_step(follow_up, StepFailure::AgentFailed, at(32))
     .expect("failed follow up");
   db.append_events(&run, &events).expect("persist failure");
   let history = db.task_organization_history(run.task()).expect("history");
@@ -520,13 +519,18 @@ fn organization_form_save_keeps_the_status_set_meanwhile() {
   details.pipeline = Some(orchester_core::id::ResourceId::generate());
   // Orchester's change raised the revision the form read: the save is a conflict, and the form
   // sends again on the current revision.
-  let Ok(TaskUpdate::Conflict { current }) =
-    db.update_organized_task(task.id(), task.revision(), details.clone(), (&loaded, &loaded), at(20))
-  else {
+  let by = ChangeActor::Person;
+  let Ok(TaskUpdate::Conflict { current }) = db.update_organized_task(
+    task.id(),
+    task.revision(),
+    details.clone(),
+    (&loaded, &loaded),
+    (by, at(20)),
+  ) else {
     panic!("Orchester changed the task after the form read it");
   };
   let saved = db
-    .update_organized_task(task.id(), current.revision(), details, (&loaded, &loaded), at(20))
+    .update_organized_task(task.id(), current.revision(), details, (&loaded, &loaded), (by, at(20)))
     .expect("save")
     .saved()
     .expect("saved on the current revision");
@@ -540,7 +544,7 @@ fn organization_form_save_keeps_the_status_set_meanwhile() {
       saved.revision(),
       saved.details().clone(),
       (&loaded, &edited),
-      at(21),
+      (by, at(21)),
     )
     .expect("save")
     .saved()

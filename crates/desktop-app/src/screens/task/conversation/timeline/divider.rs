@@ -386,11 +386,13 @@ fn labelled(ctx: &Ctx, timeline: &Timeline, name: &Arc<str>) -> Arc<str> {
 }
 
 /// Orchester's notice that the base branch moved (ORC-54): "master moved to 1a2b3c4 · 2 tasks landed · merge
-/// requested · told Builder at 16:31".
+/// requested · told Builder at 16:31", or, past the steps that merge it (ORC-65), "… · waits until the work goes back
+/// to Implement".
 pub(super) fn base_moved(ctx: &Ctx, key: &str, mark: &BaseMovedMark) -> Element {
   let notice = &mark.notice;
   let state = match &mark.state {
     NoticeState::WritingStep => ctx.t("conversation.baseMoved.writingStep"),
+    NoticeState::WorkGoesBack { step } => ctx.t_args("conversation.baseMoved.workGoesBack", [("step", &**step)]),
     NoticeState::RunGoesOn => ctx.t("conversation.baseMoved.runGoesOn"),
     NoticeState::FollowUp => ctx.t("conversation.baseMoved.followUp"),
     NoticeState::Delivered { agent, step } => {

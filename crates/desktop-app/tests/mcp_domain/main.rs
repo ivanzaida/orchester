@@ -33,6 +33,7 @@ mod orchestrator_continued;
 mod orchestrator_guard;
 mod orchestrator_interrupted;
 mod orchestrator_moves;
+mod orchestrator_report_turn;
 mod orchestrator_resolve;
 mod orchestrator_sent;
 mod orchestrator_sent_as;
@@ -42,12 +43,14 @@ mod pull_requests;
 mod reads;
 mod reads_setup;
 mod resolve;
+mod return_ended;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
 #[path = "../support/signed_in.rs"]
 mod signed_in;
 mod skills_window;
 mod story_points;
+mod task_organization;
 mod tools;
 mod tools_window;
 mod unverified;

@@ -15,7 +15,10 @@ use orchester_core::{
   resource::ResourceKind,
   sharing::{MemberRole, TaskRevision},
   store::{ResourceStore, TaskStore},
-  task::{TaskDetails, TaskLimits, TaskStatus, organization::TaskOrganization},
+  task::{
+    TaskDetails, TaskLimits, TaskStatus,
+    organization::{ChangeActor, TaskOrganization},
+  },
   tokens::TokenBudget,
 };
 use orchester_store::{CachedTask, ProjectDb, SharingLink};
@@ -80,12 +83,23 @@ fn creation_snapshots_keep_what_a_new_task_asked_for_through_edits() {
 fn creation_snapshots_an_organized_draft_keeps_its_first_save() {
   let (_repo, mut db, _run, _) = started_run();
   let batch = IdempotencyKey::generate();
+  let by = ChangeActor::Person;
   let task = db
-    .create_organized_task(batch, requirements("Organized"), &TaskOrganization::default(), at(10))
+    .create_organized_task(
+      batch,
+      requirements("Organized"),
+      &TaskOrganization::default(),
+      (by, at(10)),
+    )
     .expect("created");
   // The same form sent again edits its draft; the creation version stays the first one.
-  db.create_organized_task(batch, edited(task.details()), &TaskOrganization::default(), at(11))
-    .expect("sent again");
+  db.create_organized_task(
+    batch,
+    edited(task.details()),
+    &TaskOrganization::default(),
+    (by, at(11)),
+  )
+  .expect("sent again");
   assert_eq!(
     db.task_creation_details(task.id()).expect("read"),
     Some(requirements("Organized"))

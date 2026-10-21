@@ -112,7 +112,6 @@ impl Component for SettingsScreen {
       link_page: self.link_page.clone(),
       make_local,
     };
-    let header = page::header(ctx, (&project, tab), &self.status);
     let content = match tab {
       Tab::General => ctx.mount_keyed::<general::General>("project-settings-general", props),
       Tab::Limits => ctx.mount_keyed::<limits::Limits>("project-settings-limits", props),
@@ -120,7 +119,7 @@ impl Component for SettingsScreen {
       Tab::CodeIndex => ctx.mount_keyed::<index::CodeIndex>("project-settings-index", props),
       Tab::Sharing => ctx.mount_keyed::<sharing::Sharing>("project-settings-sharing", props),
     };
-    page::screen(header, content)
+    page::settings(ctx, (&project, tab), &self.status, content)
   }
 }
 pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: Tab) -> Element {

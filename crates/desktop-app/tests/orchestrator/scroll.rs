@@ -1,6 +1,6 @@
 //! Scrolling a long conversation: the turns stay where the person scrolled them through later passes, idle or
 //! with something to redraw, also in a conversation opened again whose newest turn is taller than the view (the
-//! list reveals that turn when it opens), and a conversation at its end still shows a new turn.
+//! list opens at that turn's end), and a conversation at its end still shows a new turn.
 
 use lurq::{app::events::ScrollPhase, node::element::ElementRef};
 use orchester_app::routes::OrchestratorChat;
@@ -11,7 +11,7 @@ use super::harness::{Orchestrator, Setup};
 const PARAGRAPHS: usize = 10;
 
 /// A message of [`PARAGRAPHS`] paragraphs, each a few lines at the column's width; `tag` names it.
-fn long_message(tag: &str) -> String {
+pub fn long_message(tag: &str) -> String {
   (1..=PARAGRAPHS)
     .map(|paragraph| {
       format!(
@@ -23,24 +23,29 @@ fn long_message(tag: &str) -> String {
     .join("\n\n")
 }
 
-/// A new conversation of `turns` long turns, each answered.
-fn long_conversation(turns: usize) -> Orchestrator {
-  let mut screen = Orchestrator::new(Setup::Ready);
-  screen.go(OrchestratorChat::New);
+/// Sends `turns` long turns to the conversation shown, tagged `tag` and their number, each answered.
+pub fn long_turns(screen: &mut Orchestrator, tag: &str, turns: usize) {
   for turn in 1..=turns {
-    let tag = format!("Turn {turn}");
+    let tag = format!("{tag} {turn}");
     screen.send(&long_message(&tag));
     let answer = format!("Noted: {tag} paragraph 1");
     screen.until("the answer", |screen| {
       !screen.exists("orchestrator-thinking") && screen.text("orchestrator-conversation").contains(&answer)
     });
   }
-  settle(&mut screen);
+  settle(screen);
+}
+
+/// A new conversation of `turns` long turns, each answered.
+pub fn long_conversation(turns: usize) -> Orchestrator {
+  let mut screen = Orchestrator::new(Setup::Ready);
+  screen.go(OrchestratorChat::New);
+  long_turns(&mut screen, "Turn", turns);
   screen
 }
 
 /// Lets the window run a few passes with nothing new from the person.
-fn settle(screen: &mut Orchestrator) {
+pub fn settle(screen: &mut Orchestrator) {
   for _ in 0..10 {
     screen.window.tree.tick_futures();
     screen.window.pass();
@@ -48,7 +53,7 @@ fn settle(screen: &mut Orchestrator) {
 }
 
 /// Turns the wheel over the turns: up (`delta` above 0) scrolls toward the start.
-fn wheel(screen: &mut Orchestrator, delta: f32) {
+pub fn wheel(screen: &mut Orchestrator, delta: f32) {
   let frame = screen.bounds("orchestrator-scroll");
   let (x, y) = (frame.x + frame.width / 2.0, frame.y + frame.height / 2.0);
   let tree = &mut screen.window.tree;
@@ -59,7 +64,7 @@ fn wheel(screen: &mut Orchestrator, delta: f32) {
 }
 
 /// The ids of the turns built, first to newest.
-fn turns(screen: &mut Orchestrator) -> Vec<String> {
+pub fn turns(screen: &mut Orchestrator) -> Vec<String> {
   fn walk(element: ElementRef<'_>, found: &mut Vec<String>) {
     if let Some(id) = element.id().filter(|id| id.starts_with("orchestrator-turn-")) {
       found.push(id.to_owned());
@@ -75,8 +80,8 @@ fn turns(screen: &mut Orchestrator) -> Vec<String> {
   found
 }
 
-/// How far the turns' view ends below the newest turn's foot: 0 or more when the newest turn ends in view.
-fn newest_foot_gap(screen: &mut Orchestrator) -> f32 {
+/// How far the turns' view ends below the newest turn's foot: 0 when the chat is at the newest turn's very end.
+pub fn newest_foot_gap(screen: &mut Orchestrator) -> f32 {
   let ids = turns(screen);
   let newest = ids.last().expect("a turn is shown").clone();
   let turn = screen.bounds(&newest);
@@ -85,7 +90,7 @@ fn newest_foot_gap(screen: &mut Orchestrator) -> f32 {
 }
 
 /// Where the newest turn's top sits below the top of the turns' view.
-fn newest_top(screen: &mut Orchestrator) -> f32 {
+pub fn newest_top(screen: &mut Orchestrator) -> f32 {
   let newest = turns(screen).last().expect("a turn is shown").clone();
   screen.bounds(&newest).y - screen.bounds("orchestrator-scroll").y
 }
@@ -137,8 +142,8 @@ fn orchestrator_scroll_holds_where_the_person_scrolled() {
   scrolls_and_holds(&mut screen);
 }
 
-/// The person's report: the conversation opened again, its newest turn taller than the view, and every scroll up
-/// came back to that turn's top.
+/// The person's reports: the conversation opened again, its newest turn taller than the view, and every scroll up
+/// came back to that turn's top; then, that it opened on the turn's top instead of the conversation's end.
 #[test]
 fn orchestrator_scroll_holds_in_a_reopened_conversation_with_a_tall_newest_turn() {
   let mut screen = long_conversation(3);
@@ -156,11 +161,12 @@ fn orchestrator_scroll_holds_in_a_reopened_conversation_with_a_tall_newest_turn(
     screen.bounds(&newest).height > screen.bounds("orchestrator-scroll").height,
     "the newest turn is taller than the view"
   );
-  let top = newest_top(&mut screen);
+  let gap = newest_foot_gap(&mut screen);
   assert!(
-    top.abs() < 1.0,
-    "the conversation opens on its newest turn: its top at {top}"
+    gap.abs() < 1.0,
+    "the conversation opens at its newest turn's end: {gap} under it"
   );
+  assert!(!screen.exists("conversation-jump"), "it follows its end");
   scrolls_and_holds(&mut screen);
 }
 

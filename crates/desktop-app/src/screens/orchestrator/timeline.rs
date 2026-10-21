@@ -1,13 +1,15 @@
 //! The conversation (`Chat` in `ZJzV0`): one row per turn, newest last, in a list that keeps the rows out of view
-//! unbuilt and opens on the newest turn. A turn is the person's message (`Your message` `mr4lC`) with where it stands
+//! unbuilt and opens at the very end of the newest turn, following it (`ui::chat::follow`). A turn is the person's
+//! message (`Your message` `mr4lC`) with where it stands
 //! (*Sending…*, then *Delivered* and when, `check-check` in `success`), the Orchestrator's answer
 //! (`Agent message` `dcd0m` with `waypoints`: its replies as every chat draws what an agent wrote,
 //! `ui::chat::agent_text`, and its actions as cards, `action`), and how the turn ended: while it thinks, the working
 //! line with *Stop response* (`Thinking` `PR7nz`); stopped or cut short, an
 //! event line (`Event divider` `YKpmi`) and *Ask again*; failed, a danger notice with *Retry* (and *Open
-//! Connections* or *Open settings* when the connection is why), or for an earlier turn an event line. A wait of an
-//! agent of the project opens a row of its own with its card (`wait`, linking to the task's Conversation), and the
-//! answer and ending of the turn it started by itself, if any; such a turn ends without *Ask again* or *Retry*.
+//! Connections* or *Open settings* when the connection is why, `failure`), or for an earlier turn an event line. A
+//! wait of an agent of the project opens a row of its own with its card (`wait`, linking to the task's Conversation),
+//! and the answer and ending of the turn it started by itself, if any; such a turn ends without *Ask again* or
+//! *Retry*.
 
 use std::sync::Arc;
 
@@ -17,15 +19,14 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text, VirtualizedList},
+  components::{Column, Row, Spacer, Stack, Text, VirtualizedList},
   layout::{
-    Alignment,
+    Alignment, StackAlignment,
     scrollbar::{ScrollBarPlacement, ScrollBarStyle},
   },
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::AccountStartProblem,
   id::ProjectId,
   orchestrator::{ActionOutcome, ChatAction, ChatEvent, HeldWork, SessionChange, TurnFailure, TurnState},
   time::Timestamp,
@@ -34,20 +35,23 @@ use orchester_workspace::{display, orchestrator::tools::ChatScope};
 
 use super::{
   change::{ChangeCard, ChangeProps},
+  failure::{earlier, failure_notice},
   held::{HeldCard, HeldProps},
   proposal::{ProposalProps, StartProposal},
   turns::{Part, Turn},
 };
 use crate::{
-  navigation::Navigation,
-  routes::{ConnectionsView, ProjectPage, Route},
   theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    chat::{Avatar, agent_text, chat_row, delivery_line, names::ProjectNames, person_message},
+    chat::{
+      Avatar, agent_text, chat_row, delivery_line,
+      follow::{Follow, jump_room},
+      names::ProjectNames,
+      person_message,
+    },
     icon::{Icon, icon},
     markdown::LinkHandler,
-    notice::{Notice, NoticeTone},
   },
 };
 
@@ -101,46 +105,111 @@ impl PartialEq for TurnRow {
 
 impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 
-/// The list of `rows`, opening on the newest. lurq reveals a key once, when it changes, so the list shows a new
-/// turn when it comes and otherwise stays where the person scrolled it; a turn taller than the view is revealed at
-/// its top.
-pub(super) fn list(ctx: &mut Ctx, rows: Vec<TurnRow>) -> Element {
-  let newest = rows.last().map(|row| row.turn.key());
+/// A row of the list: a turn, or the room under the last one while *Jump to latest* floats over the chat's foot, so
+/// the turn can scroll clear of it.
+#[derive(Clone, PartialEq)]
+enum Line {
+  Turn(TurnRow),
+  JumpRoom,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Line {}
+
+impl Line {
+  fn key(&self) -> String {
+    match self {
+      Self::Turn(row) => row.turn.key(),
+      Self::JumpRoom => "orchestrator-jump-room".to_owned(),
+    }
+  }
+}
+
+/// The list of `rows`, as `follow` follows it (`ui::chat::follow`): it opens at the very end of the newest turn and
+/// keeps it in view as turns come and replies grow, until the person scrolls up; then *Jump to latest* floats over
+/// its foot.
+pub(super) fn list(ctx: &mut Ctx, follow: &Follow, rows: Vec<TurnRow>) -> Element {
+  let arrived = arrivals(&rows);
+  let reveal = follow.follow(rows.len(), arrived, None);
+  let following = follow.following.get();
+  let lines: Vec<Line> = rows
+    .into_iter()
+    .map(Line::Turn)
+    .chain((!following).then_some(Line::JumpRoom))
+    .collect();
   // The thumb keeps a lane of its own, so it never covers a message's end.
   let scrollbar = ScrollBarStyle {
     placement: ScrollBarPlacement::Reserved,
     ..ctx.theme().scrollbar().clone()
   };
-  VirtualizedList::new_shared(ctx, Arc::new(rows))
+  let list = follow
+    .list(VirtualizedList::new_shared(ctx, Arc::new(lines)), arrived, reveal)
     .list_key("orchestrator-chat")
     .scrollbar(scrollbar)
-    .reveal_key(newest)
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .mount_keyed::<TurnView, _, _, _>(|row| row.turn.key(), Clone::clone)
+    .mount_keyed::<TurnView, _, _, _>(Line::key, Clone::clone);
+  let jump = (!following).then(|| follow.jump(ctx, arrived));
+  let turns = Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .child(list)
+    .child(follow.end(ctx, "orchestrator-follow-end"));
+  Stack::new()
+    .id("orchestrator-chat")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .stack_align(StackAlignment::BottomCenter)
+    .child(turns)
+    .with_children(jump)
+    .into()
+}
+
+/// What the person can see arrive, counted: each turn, each part of its answer, and its end. Anything new moves a
+/// following chat to its end, and *N new* counts it.
+fn arrivals(rows: &[TurnRow]) -> usize {
+  rows
+    .iter()
+    .map(|row| {
+      let ended = row
+        .turn
+        .state
+        .as_ref()
+        .is_some_and(|state| *state != TurnState::Thinking);
+      1 + row.turn.answer.len() + usize::from(ended)
+    })
+    .sum()
 }
 
 struct TurnView;
 
 impl Component for TurnView {
-  type Props = TurnRow;
+  type Props = Line;
 
   fn create(_ctx: &mut Ctx) -> Self {
     Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let row = ctx.props::<TurnRow>().clone();
+    let Line::Turn(row) = ctx.props::<Line>().clone() else {
+      return jump_room();
+    };
     let key = row.turn.key();
-    // A wait of an agent opens its row with its own card (`super::wait`); a person's turn with their message.
-    let opening = match &row.turn.wait {
-      Some(wait) => super::wait::card(
+    // A wait of an agent and a daily report open their row with their own card (`super::wait`, `super::report`); a
+    // person's turn with their message.
+    let opening = match (&row.turn.wait, &row.turn.report) {
+      (Some(wait), _) => super::wait::card(
         ctx,
         &format!("orchestrator-wait-{key}"),
         (wait, row.turn.at, row.turn.state.is_some()),
         row.env.project,
       ),
-      None => opening_message(ctx, &row, &key),
+      (None, Some(report)) => super::report::card(
+        ctx,
+        &format!("orchestrator-report-{key}"),
+        (report, row.turn.at, row.turn.state.is_some()),
+        &row.env,
+      ),
+      (None, None) => opening_message(ctx, &row, &key),
     };
     let answer = answer(ctx, &row);
     let end = if row.turn.message.is_some() {
@@ -159,6 +228,7 @@ impl Component for TurnView {
         .with_children(answer)
         .with_children(end),
     )
+    .into()
   }
 }
 
@@ -325,7 +395,7 @@ fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
         &ctx.t("orchestrator.interrupted"),
       ),
     ),
-    TurnState::Failed(failure) if row.last && row.turn.wait.is_none() => vec![failure_notice(ctx, row, failure)],
+    TurnState::Failed(failure) if row.last && !row.turn.on_its_own() => vec![failure_notice(ctx, row, failure)],
     TurnState::Failed(failure) => vec![event(
       ctx,
       "orchestrator-failed",
@@ -379,7 +449,7 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
 
 /// `event`, then, for the newest turn a person's message started, *Ask again* and what it does.
 fn again(ctx: &Ctx, row: &TurnRow, event: Element) -> Vec<Element> {
-  if !row.last || row.turn.wait.is_some() {
+  if !row.last || row.turn.on_its_own() {
     return vec![event];
   }
   let ask = row.env.ask_again.clone();
@@ -432,126 +502,6 @@ fn event(ctx: &Ctx, id: &str, glyph: Icon, words: &str) -> Element {
     )
     .child(rule())
     .into()
-}
-
-/// Why the newest turn failed, with *Retry* and where to fix it.
-fn failure_notice(ctx: &mut Ctx, row: &TurnRow, failure: &TurnFailure) -> Element {
-  let connection = row.env.connection.clone();
-  let unreachable = || match &connection {
-    Some(name) => ctx.t_args("orchestrator.failure.unreachable", [("connection", &**name)]),
-    None => ctx.t("orchestrator.failure.unreachableUnknown"),
-  };
-  let (title, body, fix) = match failure {
-    TurnFailure::NotSignedIn => (
-      unreachable(),
-      ctx.t("orchestrator.failure.notSignedIn"),
-      Fix::Connections,
-    ),
-    TurnFailure::ConnectionGone => (
-      unreachable(),
-      ctx.t("orchestrator.failure.connectionGone"),
-      Fix::Settings,
-    ),
-    TurnFailure::Account(problem) => (unreachable(), account(ctx, problem), Fix::Connections),
-    TurnFailure::CannotStart { .. } => (unreachable(), ctx.t("orchestrator.failure.cannotStart"), Fix::None),
-    TurnFailure::Failed { reason } => (
-      ctx.t("orchestrator.failure.failed"),
-      ctx.t_args("orchestrator.failure.failedBody", [("reason", reason.as_str())]),
-      Fix::None,
-    ),
-    TurnFailure::Interrupted => (
-      ctx.t("orchestrator.failure.failed"),
-      ctx.t("orchestrator.interrupted"),
-      Fix::None,
-    ),
-    TurnFailure::TimeLimit { minutes } => (
-      ctx.t("orchestrator.failure.failed"),
-      ctx.t_args("orchestrator.failure.timeLimit", [("minutes", minutes.to_string())]),
-      Fix::None,
-    ),
-  };
-  let mut notice = Notice::new("orchestrator-failure", NoticeTone::Danger, title)
-    .icon(Icon::CloudOff)
-    .body(body);
-  let ask = row.env.ask_again.clone();
-  let words = row.turn.text.clone();
-  let mut retry = ActionButton::new(
-    "orchestrator-retry",
-    ButtonKind::Secondary,
-    ctx.t("orchestrator.failure.retry"),
-  )
-  .icon(Icon::RotateCcw);
-  retry = if row.can_ask {
-    retry.on_click(move || ask(words.clone()))
-  } else {
-    retry.disabled()
-  };
-  notice = notice.action(retry);
-  if let Some(open) = fix.button(ctx, row.env.project) {
-    notice = notice.action(open);
-  }
-  notice.into()
-}
-
-/// Where the person fixes what kept the Orchestrator from answering.
-#[derive(Clone, Copy)]
-enum Fix {
-  Connections,
-  Settings,
-  None,
-}
-
-impl Fix {
-  fn button(self, ctx: &mut Ctx, project: ProjectId) -> Option<ActionButton> {
-    let (id, key, page) = match self {
-      Self::Connections => (
-        "orchestrator-open-connections",
-        "orchestrator.failure.openConnections",
-        ProjectPage::Connections(ConnectionsView::default()),
-      ),
-      Self::Settings => (
-        "orchestrator-open-settings",
-        "orchestrator.notReady.openSettings",
-        ProjectPage::OrchestratorSettings,
-      ),
-      Self::None => return None,
-    };
-    let navigation = Navigation::of(ctx);
-    let route = Route::Project(project, page);
-    Some(
-      ActionButton::new(id, ButtonKind::Primary, ctx.t(key))
-        .icon(Icon::ArrowUpRight)
-        .opens(navigation.to(route)),
-    )
-  }
-}
-
-/// Why the connection's account cannot start the CLI.
-fn account(ctx: &Ctx, problem: &AccountStartProblem) -> Arc<str> {
-  match problem {
-    AccountStartProblem::NoAccount => ctx.t("orchestrator.failure.accountNone"),
-    AccountStartProblem::FolderMissing { folder } => ctx.t_args(
-      "orchestrator.failure.accountFolderMissing",
-      [("folder", folder.display().to_string().as_str())],
-    ),
-    AccountStartProblem::Unsupported => ctx.t("orchestrator.failure.accountUnsupported"),
-  }
-}
-
-/// An earlier turn's failure, on its event line.
-fn earlier(ctx: &Ctx, failure: &TurnFailure) -> Arc<str> {
-  match failure {
-    TurnFailure::NotSignedIn => ctx.t("orchestrator.failure.earlierNotSignedIn"),
-    TurnFailure::Failed { reason } => ctx.t_args("orchestrator.failure.earlier", [("reason", reason.as_str())]),
-    TurnFailure::TimeLimit { minutes } => ctx.t_args(
-      "orchestrator.failure.earlierTimeLimit",
-      [("minutes", minutes.to_string())],
-    ),
-    TurnFailure::ConnectionGone
-    | TurnFailure::Account(_)
-    | TurnFailure::CannotStart { .. }
-    | TurnFailure::Interrupted => ctx.t("orchestrator.failure.earlierUnreachable"),
-  }
 }
 
 /// The name `describe` reports a turn by, for tests and QA; `none` for a wait that started no turn.

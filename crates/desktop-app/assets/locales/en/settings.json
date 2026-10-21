@@ -30,6 +30,14 @@
       },
       "notSaved": "Your notification settings were not saved: {{reason}}"
     },
+    "dailyReport": {
+      "title": "Daily report from the Orchestrator",
+      "description": "Each day at this time, every open project's Orchestrator conversation gets a report of what was done that day: merges, runs, what waits for you, what the Orchestrator did and the day's tokens. A day without activity gets none; a report missed while the app was closed comes at its next start. With Let the Orchestrator answer agents on, the Orchestrator adds a summary that only proposes.",
+      "at": "Deliver at",
+      "time": "Daily report time",
+      "unreadable": "Whether the daily report is on cannot be read: {{reason}}",
+      "notSaved": "Your daily report setting was not saved: {{reason}}"
+    },
     "automation": {
       "section": "What automation may do",
       "changePermissions": {
