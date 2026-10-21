@@ -19,7 +19,7 @@ pub use git_exclude::is_repository_root;
 pub use project_db::ProjectMigration;
 pub use project_db::{
   AttachmentOwner, AutoModeSave, AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, ChatListing, ChatTurn,
-  DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResolutionStart,
-  ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
-  attachment_file,
+  DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb,
+  ResolutionStart, ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson, SharedTaskInfo, SharingLink,
+  UnsentStatus, attachment_file,
 };

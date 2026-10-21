@@ -10,7 +10,8 @@ use orchester_core::{
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
     AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, OrchestratorSettings, TurnFailure,
-    TurnState, WaitTurn, instructions::wait_prompt,
+    TurnState, WaitTurn,
+    instructions::{report_prompt, wait_prompt},
   },
   resource::ModelId,
   time::Timestamp,
@@ -20,6 +21,7 @@ use rusqlite::{OptionalExtension, Row, params};
 use super::{
   ProjectDb,
   attachments::{self, AttachmentOwner},
+  orchestrator_reports::report_of,
 };
 use crate::{
   StoreError,
@@ -226,6 +228,7 @@ impl ProjectDb {
       .ok_or_else(|| corrupt("chat message", "its conversation is gone"))?;
     let prompt = match kind.as_str() {
       "wait" => wait_prompt(&wait_of(&body)?),
+      "report" => report_prompt(&report_of(&body)?),
       _ => body,
     };
     Ok(Some(ChatTurn {
@@ -491,20 +494,14 @@ impl RawEntry {
       ("event", ..) => {
         EntryKind::Event(serde_json::from_str(&self.body).map_err(|error| corrupt("chat event", error))?)
       }
-      ("wait", message, turn, _) => {
-        let turn = match (message, turn) {
-          (Some(message), Some(turn)) => Some(WaitTurn {
-            message: parse("chat message id", &message)?,
-            state: turn_state(&turn, self.failure.as_deref())?,
-            ended: self.ended.map(Timestamp::from_unix_millis),
-          }),
-          _ => None,
-        };
-        EntryKind::Wait {
-          wait: wait_of(&self.body)?,
-          turn,
-        }
-      }
+      ("wait", message, turn, _) => EntryKind::Wait {
+        turn: started_turn((message, turn), self.failure.as_deref(), self.ended)?,
+        wait: wait_of(&self.body)?,
+      },
+      ("report", message, turn, _) => EntryKind::Report {
+        turn: started_turn((message, turn), self.failure.as_deref(), self.ended)?,
+        report: Box::new(report_of(&self.body)?),
+      },
       (kind, ..) => return Err(corrupt("chat entry kind", kind)),
     };
     Ok(ChatEntry {
@@ -513,6 +510,23 @@ impl RawEntry {
       kind,
     })
   }
+}
+
+/// The turn a wait or a report started by itself, from its entry's message and turn columns; `None` while it started
+/// none.
+fn started_turn(
+  (message, turn): (Option<String>, Option<String>),
+  failure: Option<&str>,
+  ended: Option<i64>,
+) -> Result<Option<WaitTurn>, StoreError> {
+  let (Some(message), Some(turn)) = (message, turn) else {
+    return Ok(None);
+  };
+  Ok(Some(WaitTurn {
+    message: parse("chat message id", &message)?,
+    state: turn_state(&turn, failure)?,
+    ended: ended.map(Timestamp::from_unix_millis),
+  }))
 }
 
 /// The wait a `wait` entry's body holds.

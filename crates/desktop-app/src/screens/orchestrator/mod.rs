@@ -19,6 +19,7 @@ mod header;
 mod held;
 mod history;
 mod proposal;
+mod report;
 mod run_end;
 mod send;
 mod settings;

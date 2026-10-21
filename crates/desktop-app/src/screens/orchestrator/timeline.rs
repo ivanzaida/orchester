@@ -197,15 +197,22 @@ impl Component for TurnView {
       return jump_room();
     };
     let key = row.turn.key();
-    // A wait of an agent opens its row with its own card (`super::wait`); a person's turn with their message.
-    let opening = match &row.turn.wait {
-      Some(wait) => super::wait::card(
+    // A wait of an agent and a daily report open their row with their own card (`super::wait`, `super::report`); a
+    // person's turn with their message.
+    let opening = match (&row.turn.wait, &row.turn.report) {
+      (Some(wait), _) => super::wait::card(
         ctx,
         &format!("orchestrator-wait-{key}"),
         (wait, row.turn.at, row.turn.state.is_some()),
         row.env.project,
       ),
-      None => opening_message(ctx, &row, &key),
+      (None, Some(report)) => super::report::card(
+        ctx,
+        &format!("orchestrator-report-{key}"),
+        (report, row.turn.at, row.turn.state.is_some()),
+        &row.env,
+      ),
+      (None, None) => opening_message(ctx, &row, &key),
     };
     let answer = answer(ctx, &row);
     let end = if row.turn.message.is_some() {
@@ -387,7 +394,7 @@ fn ending(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
         &ctx.t("orchestrator.interrupted"),
       ),
     ),
-    TurnState::Failed(failure) if row.last && row.turn.wait.is_none() => vec![failure_notice(ctx, row, failure)],
+    TurnState::Failed(failure) if row.last && !row.turn.on_its_own() => vec![failure_notice(ctx, row, failure)],
     TurnState::Failed(failure) => vec![event(
       ctx,
       "orchestrator-failed",
@@ -443,7 +450,7 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
 /// words once more, so a message with attached files, which it would send without them, does not offer it: the
 /// person sends them again from the composer.
 fn again(ctx: &Ctx, row: &TurnRow, event: Element) -> Vec<Element> {
-  if !row.last || row.turn.wait.is_some() || !row.turn.attachments.is_empty() {
+  if !row.last || row.turn.on_its_own() || !row.turn.attachments.is_empty() {
     return vec![event];
   }
   let ask = row.env.ask_again.clone();

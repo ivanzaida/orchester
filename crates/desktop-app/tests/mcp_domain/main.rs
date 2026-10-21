@@ -33,6 +33,7 @@ mod orchestrator_continued;
 mod orchestrator_guard;
 mod orchestrator_interrupted;
 mod orchestrator_moves;
+mod orchestrator_report_turn;
 mod orchestrator_resolve;
 mod orchestrator_sent;
 mod orchestrator_sent_as;

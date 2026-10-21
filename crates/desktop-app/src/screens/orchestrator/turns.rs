@@ -1,14 +1,14 @@
 //! A conversation as turns: each message a person sent, what the Orchestrator answered it with (its replies and
 //! the actions it took, in the order they were kept) and how the turn ended; and each wait of an agent of the
-//! project, with the turn it started by itself, if it started one. What is kept while a turn runs belongs to that
-//! turn, even when a wait kept meanwhile shows under it.
+//! project and each daily report, with the turn it started by itself, if it started one. What is kept while a turn
+//! runs belongs to that turn, even when a wait kept meanwhile shows under it.
 
 use std::{collections::BTreeMap, sync::Arc};
 
 use orchester_core::{
   attachment::{Attachment, is_names_only},
   id::ChatMessageId,
-  orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, EntryKind, TurnState},
+  orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, DailyReport, EntryKind, TurnState, WaitTurn},
   resource::ModelId,
   time::Timestamp,
 };
@@ -41,24 +41,27 @@ impl Part {
   }
 }
 
-/// One message and its answer, or one wait of an agent and the answer of the turn it started, if any.
+/// One message and its answer, or one wait of an agent or one daily report and the answer of the turn it started, if
+/// any.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Turn {
-  /// `None` while it is being sent and not kept yet, and for a wait that started no turn.
+  /// `None` while it is being sent and not kept yet, and for a wait or a report that started no turn.
   pub(super) message: Option<ChatMessageId>,
-  /// The person's words; empty for a wait, and for a message of attachments only.
+  /// The person's words; empty for a wait or a report, and for a message of attachments only.
   pub(super) text: Arc<str>,
   /// The files the person attached to the message.
   pub(super) attachments: Arc<[Attachment]>,
   /// The wait that opens the row instead of a person's message.
   pub(super) wait: Option<Box<AgentWait>>,
+  /// The daily report that opens the row instead of a person's message.
+  pub(super) report: Option<Box<DailyReport>>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
   /// When it was kept; `None` while it is being sent.
   pub(super) at: Option<Timestamp>,
   /// When its turn ended, when the runner said.
   pub(super) ended: Option<Timestamp>,
-  /// Where its turn stands; `None` for a wait that started no turn.
+  /// Where its turn stands; `None` for a wait or a report that started no turn.
   pub(super) state: Option<TurnState>,
   pub(super) answer: Vec<Part>,
 }
@@ -71,10 +74,33 @@ impl Turn {
       text: Arc::from(text),
       attachments: Arc::from([]),
       wait: None,
+      report: None,
       seq: None,
       at: None,
       ended: None,
       state: Some(TurnState::Thinking),
+      answer: Vec::new(),
+    }
+  }
+
+  /// Whether its turn, if any, was one Orchester started by itself: a wait's or a report's, with no words of the
+  /// person's to send again.
+  pub(super) const fn on_its_own(&self) -> bool {
+    self.wait.is_some() || self.report.is_some()
+  }
+
+  /// The row of `entry`, which opens with a wait or a report (the caller sets which), and the turn it started, if any.
+  fn opened(entry: &ChatEntry, turn: Option<&WaitTurn>) -> Self {
+    Self {
+      message: turn.map(|turn| turn.message),
+      text: Arc::from(""),
+      attachments: Arc::from([]),
+      wait: None,
+      report: None,
+      seq: Some(entry.seq),
+      at: Some(entry.at),
+      ended: turn.and_then(|turn| turn.ended),
+      state: turn.map(|turn| turn.state.clone()),
       answer: Vec::new(),
     }
   }
@@ -98,7 +124,7 @@ impl Turn {
     })
   }
 
-  /// The row's key: its message, its wait's entry, or *sending* until it is kept.
+  /// The row's key: its message, its wait's or report's entry, or *sending* until it is kept.
   pub(super) fn key(&self) -> String {
     match (self.message, self.seq) {
       (Some(message), _) => message.to_string(),
@@ -129,6 +155,7 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
           text: Arc::from(words),
           attachments,
           wait: None,
+          report: None,
           seq: Some(entry.seq),
           at: Some(entry.at),
           ended: *ended,
@@ -139,15 +166,15 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
       }
       EntryKind::Wait { wait, turn } => {
         turns.push(Turn {
-          message: turn.as_ref().map(|turn| turn.message),
-          text: Arc::from(""),
-          attachments: Arc::from([]),
           wait: Some(Box::new(wait.clone())),
-          seq: Some(entry.seq),
-          at: Some(entry.at),
-          ended: turn.as_ref().and_then(|turn| turn.ended),
-          state: turn.as_ref().map(|turn| turn.state.clone()),
-          answer: Vec::new(),
+          ..Turn::opened(entry, turn.as_ref())
+        });
+        continue;
+      }
+      EntryKind::Report { report, turn } => {
+        turns.push(Turn {
+          report: Some(report.clone()),
+          ..Turn::opened(entry, turn.as_ref())
         });
         continue;
       }
