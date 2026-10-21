@@ -1,6 +1,7 @@
 //! What a record list says in place of records, centered in the list's room: on the task's tab a bare glyph over the
 //! title, the explanation and the actions, in the middle of the list (`n3lxin` in `fQ33n`, `qLxGh` in `e8oWP4`);
-//! on the project's page the empty state's glyph tile and a smaller title, under the filters (`X0l2I6` in `z4t51u`).
+//! on the project's page the empty state's glyph tile and a smaller title, under a tab's filters (`KCGyF` in
+//! `C0OJpC`), or lower in a tab without records (`xFUjH` in `ejSHj`).
 
 use std::sync::Arc;
 
@@ -30,8 +31,8 @@ pub struct Centered {
   text: Arc<str>,
   note: Option<Arc<str>>,
   actions: Vec<ActionButton>,
-  /// The project's page: the glyph tile and a smaller title; else the task's tab.
-  page: bool,
+  /// The project's page, with the room above it: the glyph tile and a smaller title; else the task's tab.
+  page: Option<MemorySpacing>,
 }
 
 impl Centered {
@@ -43,17 +44,23 @@ impl Centered {
       text: text.into(),
       note: None,
       actions: Vec::new(),
-      page: false,
+      page: None,
     }
   }
 
-  /// As the project's page draws it (`X0l2I6`).
-  pub fn page(mut self, page: bool) -> Self {
-    self.page = page;
+  /// As the project's page draws it under a tab's filters (`KCGyF`).
+  pub fn page(mut self) -> Self {
+    self.page = Some(MemorySpacing::StateTop);
     self
   }
 
-  /// A line under the explanation (*1 match among deprecated records*, `rYmDP`).
+  /// As the project's page draws it in a tab without records (`xFUjH`).
+  pub fn empty_tab(mut self) -> Self {
+    self.page = Some(MemorySpacing::EmptyTabTop);
+    self
+  }
+
+  /// A line under the explanation (*1 match in Deprecated*, `qcASN`).
   pub fn note(mut self, note: impl Into<Arc<str>>) -> Self {
     self.note = Some(note.into());
     self
@@ -73,21 +80,16 @@ impl From<Centered> for Element {
       .width(Dimension::Pct(100.0))
       .align_items(Alignment::Center)
       .describe("state", "empty");
-    let (frame, glyph, title, text) = if state.page {
-      (
+    let (frame, glyph, title, text) = match state.page {
+      Some(top) => (
         frame
-          .padding(
-            Padding::new()
-              .top(MemorySpacing::StateTop.role())
-              .bottom(ExtraSpacing::Roomy.role()),
-          )
+          .padding(Padding::new().top(top.role()).bottom(ExtraSpacing::Roomy.role()))
           .spacing(SpacingSize::Sm),
         Element::from(glyph_tile(&id, state.glyph)),
         TypographyStyle::Label,
         TypographyStyle::Description,
-      )
-    } else {
-      (
+      ),
+      None => (
         frame
           .flex(1.0)
           .justify(Justify::Center)
@@ -96,9 +98,9 @@ impl From<Centered> for Element {
         Element::from(icon(state.glyph, IconSize::Xl, PaletteColor::TextMuted).id(format!("{id}-glyph"))),
         MemoryText::PanelTitle.role(),
         MemoryText::StateText.role(),
-      )
+      ),
     };
-    let text_width = if state.page {
+    let text_width = if state.page.is_some() {
       Dimension::Auto
     } else {
       Dimension::Px(TASK_TEXT_WIDTH)
@@ -114,7 +116,7 @@ impl From<Centered> for Element {
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .with_children(state.actions);
-      if state.page {
+      if state.page.is_some() {
         row
       } else {
         row.padding(Padding::new().top(ExtraSpacing::Snug.role()))
@@ -124,7 +126,7 @@ impl From<Centered> for Element {
       .child(glyph)
       .child(line(&state.title, title).id(format!("{id}-title")))
       .child(line(&state.text, text))
-      .with_children(state.note.map(|note| line(&note, text)))
+      .with_children(state.note.map(|note| line(&note, text).id(format!("{id}-note"))))
       .with_children(actions)
       .into()
   }

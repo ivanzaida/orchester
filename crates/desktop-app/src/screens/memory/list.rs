@@ -1,17 +1,18 @@
-//! The grouped list of records the Memory screens share (`Record list` `sglU2` in `a0PLO`, `marKn` in `xY2Uj`): the
+//! The grouped list of records the Memory screens share (`Record list` `sglU2` in `a0PLO`, `Fqhrb` in `TeKGM`): the
 //! records waiting for approval first on a task's tab, then a group per type under its heading; in a record's place
-//! its editor or its delete confirmation while one is open. A task's handoffs show the latest, with *Show N earlier
-//! handoffs* for the steps' other ones.
+//! its editor or its delete confirmation while one is open, and on the project's page its details under its row
+//! while a press opened them (`aBtsx`). A task's handoffs show the latest, with *Show N earlier handoffs* for the
+//! steps' other ones.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
   id::MemoryId,
@@ -20,20 +21,22 @@ use orchester_core::{
 use orchester_workspace::memory::{
   listing::{self, Filters, Group, Listed},
   origin::Origins,
+  read::ProjectMemory,
 };
 
 use super::{
   delete::DeleteConfirm,
+  details::{DetailsProps, RecordDetails},
   editor::{RecordEditor, opened_on},
   opened::{self, Among},
   parts,
   proposal::{self, Listed as Place},
-  row::{Earlier, RecordRow, RowProps},
+  row::{Details, Earlier, RecordRow, RowProps},
   state::{MemoryState, Opened},
   words,
 };
 use crate::{
-  theme::{ExtraSpacing, IconSize, MemorySpacing},
+  theme::{ExtraRadius, ExtraSpacing, IconSize, MemorySpacing},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -48,6 +51,8 @@ pub struct ListInput<'a> {
   pub filters: &'a Filters,
   /// The task's tab: the waiting records first, and the latest handoff flagged.
   pub task_tab: bool,
+  /// The project's page, whose records open their details in place.
+  pub project: Option<&'a Arc<ProjectMemory>>,
 }
 
 impl<'a> ListInput<'a> {
@@ -124,7 +129,8 @@ fn group(
   column.into()
 }
 
-/// A record in its list: its editor or its delete confirmation while one is open in its place, else its row.
+/// A record in its list: its editor or its delete confirmation while one is open in its place, else its row, with
+/// its details under it while they are open.
 fn entry(
   ctx: &mut Ctx,
   state: &MemoryState,
@@ -143,37 +149,58 @@ fn entry(
   if input.task_tab && memory.status() == MemoryStatus::Proposed {
     return proposal::proposal(ctx, (memory, input.records), input.origins, Place::Task);
   }
+  let open = input.project.filter(|_| state.chosen() == Some(memory.id()));
   let props = RowProps {
     memory: memory.clone(),
     meta: words::meta(ctx, memory, input.origins, !input.task_tab),
     latest: Some(memory.id()) == latest,
     earlier: earlier_versions(ctx, memory, input),
-    selected: !input.task_tab && state.chosen() == Some(memory.id()),
-    selectable: !input.task_tab,
+    details: input
+      .project
+      .map(|_| if open.is_some() { Details::Open } else { Details::Closed }),
   };
   let row = ctx.mount_keyed::<RecordRow>(&format!("memory-row-{}", memory.id()), props);
-  let Some(note) = row_note(ctx, state, memory.id()) else {
-    return row;
+  let note = row_note(ctx, state, memory.id()).map(note_line);
+  let Some(project) = open else {
+    let Some(note) = note else {
+      return row;
+    };
+    return Column::new().width(Dimension::Pct(100.0)).child(row).child(note).into();
   };
+  let details = ctx.mount_keyed::<RecordDetails>(
+    &format!("memory-details-{}", memory.id()),
+    DetailsProps {
+      memory: Arc::clone(project),
+      record: memory.id(),
+    },
+  );
   Column::new()
+    .id(format!("memory-record-{}-open", memory.id()))
     .width(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfaceInput)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(ExtraRadius::Tile.role())
     .child(row)
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .top(ExtraSpacing::Tight.role())
-            .right(SpacingSize::Md)
-            .bottom(SpacingSize::Sm)
-            .left(MemorySpacing::RowText.role()),
-        )
-        .child(note),
-    )
+    .with_children(note)
+    .child(details)
     .into()
 }
 
-/// Why the last change of `record`, asked for from its row or the inspector, did nothing, under its row (`gQodn` in
+/// A row's note in its place under the row's text.
+fn note_line(note: Row) -> Row {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .top(ExtraSpacing::Tight.role())
+        .right(SpacingSize::Md)
+        .bottom(SpacingSize::Sm)
+        .left(MemorySpacing::RowText.role()),
+    )
+    .child(note)
+}
+
+/// Why the last change of `record`, asked for from its row or its details, did nothing, under its row (`gQodn` in
 /// `rKIl1`); `None` while something is open in a record's place, which says it there.
 fn row_note(ctx: &Ctx, state: &MemoryState, record: MemoryId) -> Option<Row> {
   if state.opened.get() != Opened::Nothing {
@@ -256,16 +283,16 @@ pub fn new_record(ctx: &mut Ctx, state: &MemoryState) -> Option<Element> {
   Some(ctx.mount_keyed::<RecordEditor>("memory-editor-new", props))
 }
 
-/// Why a change of a record the list does not show did nothing (it is gone, or the filters hide it now), above the
+/// Why a change of a record the list does not show did nothing (it is gone, or `filters` hide it now), above the
 /// list while nothing is open in a record's place; a listed record says it under its row.
-pub fn row_failure(ctx: &Ctx, state: &MemoryState, records: &[Memory]) -> Option<Element> {
+pub fn row_failure(ctx: &Ctx, state: &MemoryState, records: &[Memory], filters: &Filters) -> Option<Element> {
   if state.opened.get() != Opened::Nothing {
     return None;
   }
   let Some(Some(record)) = state.asked() else {
     return None;
   };
-  if listing::lists(records, &state.filters.get(), record) {
+  if listing::lists(records, filters, record) {
     return None;
   }
   Some(state.failure_note(ctx, "memory-change", Some(record))?.into())

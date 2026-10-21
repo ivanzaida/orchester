@@ -107,7 +107,7 @@ pub fn status_filter(ctx: &Ctx, status: StatusFilter) -> Arc<str> {
     StatusFilter::Waiting => "memory.filters.status.waiting",
     StatusFilter::Deprecated => "memory.filters.status.deprecated",
     StatusFilter::Superseded => "memory.filters.status.superseded",
-    StatusFilter::Rejected => "memory.filters.status.rejected",
+    StatusFilter::Rejected | StatusFilter::RejectedOrWithdrawn => "memory.filters.status.rejected",
     StatusFilter::Withdrawn => "memory.filters.status.withdrawn",
     StatusFilter::All => "memory.filters.status.all",
   })

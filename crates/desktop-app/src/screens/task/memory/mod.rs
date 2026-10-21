@@ -273,7 +273,7 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Shown {
   if memory.records.is_empty() {
     return alone(above, empty(ctx, state, memory));
   }
-  above.extend(memory_ui::row_failure(ctx, state, &memory.records));
+  above.extend(memory_ui::row_failure(ctx, state, &memory.records, &filters));
   let groups = memory_ui::groups(
     ctx,
     state,
@@ -282,6 +282,7 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &TaskMemory) -> Shown {
       origins: &memory.origins,
       filters: &filters,
       task_tab: true,
+      project: None,
     },
   );
   if groups.is_empty() {

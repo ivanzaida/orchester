@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::routes::{MemoryTab, ProjectPage, Route, TaskTab, TaskView};
 use orchester_core::{
   id::{MemoryId, ProjectId, SecretId},
   memory::{Memory, MemoryFilter, MemoryStore, ScopeFilter},
@@ -131,15 +131,97 @@ impl Page {
     });
   }
 
-  /// Opens the project's Memory page and waits until it is read.
+  /// Opens the project's Memory page on the tab it opens on and waits until it is read.
   pub fn project_memory(&mut self) {
+    self.open_memory(None);
+  }
+
+  /// Opens the project's Memory page on `tab` and waits until it is read.
+  pub fn memory_tab(&mut self, tab: MemoryTab) {
+    self.open_memory(Some(tab));
+  }
+
+  fn open_memory(&mut self, tab: Option<MemoryTab>) {
     self
       .window
       .navigation()
-      .go(Route::Project(self.project, ProjectPage::Memory));
+      .go(Route::Project(self.project, ProjectPage::Memory(tab)));
     self.window.until("the project's memory", |window| {
       window.texts("memory-body").is_some() || window.texts("memory-load-error").is_some()
     });
+  }
+
+  /// The page's tabs in their order from the left, by name (`waiting`, `active`, …), and the one it shows.
+  pub fn tabs(&mut self) -> (Vec<&'static str>, &'static str) {
+    let mut placed: Vec<(f32, &'static str)> = MemoryTab::ALL
+      .into_iter()
+      .filter_map(|tab| Some((self.bounds_of(&format!("memory-tab-{}", tab.name()))?.x, tab.name())))
+      .collect();
+    placed.sort_by(|(left, _), (right, _)| left.total_cmp(right));
+    let shown = MemoryTab::ALL
+      .into_iter()
+      .find(|tab| {
+        let body = match tab {
+          MemoryTab::Settings => "memory-settings".to_owned(),
+          tab => format!("memory-tab-body-{}", tab.name()),
+        };
+        self.has(&body)
+      })
+      .expect("a tab's body is shown");
+    (placed.into_iter().map(|(_, name)| name).collect(), shown.name())
+  }
+
+  fn bounds_of(&mut self, id: &str) -> Option<lurq::core::ElementRect> {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.bounds())
+  }
+
+  /// Moves the keyboard's focus to the element `id`, as pressing another field does, so the field it leaves saves.
+  pub fn focus(&mut self, id: &str) {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .unwrap_or_else(|| panic!("{id} is shown"))
+      .focus();
+    self.window.pass();
+  }
+
+  /// What the text input `id` holds.
+  pub fn value(&mut self, id: &str) -> String {
+    self
+      .window
+      .tree
+      .get_element_by_id_mut(id)
+      .and_then(|element| element.as_text_input())
+      .unwrap_or_else(|| panic!("{id} is a text input"))
+      .value()
+  }
+
+  /// The ids of the elements under `id` that end past `right`, the window's right edge.
+  pub fn past_right_edge(&mut self, id: &str, right: f32) -> Vec<String> {
+    fn ids(element: lurq::node::element::ElementRef<'_>, into: &mut Vec<String>) {
+      for child in element.children() {
+        if let Some(id) = child.id() {
+          into.push(id.to_owned());
+        }
+        ids(child, into);
+      }
+    }
+    let mut inner = Vec::new();
+    ids(self.window.tree.get_element_by_id(id).expect("shown"), &mut inner);
+    assert!(inner.len() > 20, "{id} holds identified elements");
+    inner
+      .into_iter()
+      .filter(|child| {
+        self
+          .bounds_of(child)
+          .is_some_and(|rect| rect.width > 0.0 && rect.x + rect.width > right + 0.5)
+      })
+      .collect()
   }
 
   pub fn db(&self) -> ProjectDb {

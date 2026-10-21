@@ -30,7 +30,7 @@ use lurq::{
   app::events::{MouseButton, with_synthetic_input},
   node::element::ElementRef,
 };
-use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::routes::{MemoryTab, ProjectPage, Route, TaskTab, TaskView};
 use orchester_core::{
   id::ResourceId,
   memory::{
@@ -371,13 +371,13 @@ fn needs_you_panel_opens_the_memory_page_on_the_records_waiting_for_approval() {
   click(&mut window, &format!("{item}-action"));
   assert_eq!(
     window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Memory)
+    Route::Project(seeded.project, ProjectPage::Memory(Some(MemoryTab::Waiting)))
   );
   window.until("the panel to close", |window| window.texts("needs-you-panel").is_none());
   window.until("the records waiting for approval", |window| {
-    window.texts("memory-queue-count").is_some()
+    window.texts("memory-queue").is_some()
   });
-  assert_eq!(text(&mut window, "memory-queue-count"), "2");
+  assert_eq!(text(&mut window, "memory-tab-waiting-badge"), "2");
   let queue = window.texts("memory-queue").expect("the queue");
   for record in ["Webhooks retry three times.", "Docs live in docs/."] {
     assert!(queue.iter().any(|said| said == record), "{record:?} in {queue:?}");

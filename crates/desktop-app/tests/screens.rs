@@ -27,7 +27,7 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, NewConnection, OrchestratorChat,
+    ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, MemoryTab, NewConnection, OrchestratorChat,
     OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::Services,
@@ -291,7 +291,10 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::Instructions(Default::default())),
       placeholder("Instructions"),
     ),
-    (at(ProjectPage::Memory), placeholder("Memory")),
+    (
+      at(ProjectPage::Memory(Some(MemoryTab::Rejected))),
+      placeholder("Memory"),
+    ),
     (at(ProjectPage::Skills(Default::default())), placeholder("Skills")),
     (at(ProjectPage::Tools), placeholder("Tools")),
     (at(ProjectPage::Secrets(Default::default())), placeholder("Secrets")),

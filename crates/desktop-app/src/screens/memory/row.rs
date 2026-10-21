@@ -3,7 +3,7 @@
 //! lines); the meta line with its tags; *Supersedes N earlier versions*, which unfolds them; and at its end the pin,
 //! the status of a record no agent is given and, under the pointer, its actions. A record no agent is given says
 //! what it says in `text_muted`; a deprecated one is restored or deleted, the others only deleted. On the
-//! project's page a press shows the record in the inspector.
+//! project's page a press opens the record's details in place, and a second press closes them.
 
 use std::sync::Arc;
 
@@ -53,10 +53,15 @@ pub struct RowProps {
   /// The task's latest handoff, which every agent of the task is given.
   pub latest: bool,
   pub earlier: Arc<[Earlier]>,
-  /// The project's inspector shows it.
-  pub selected: bool,
-  /// A press shows it in the inspector (the project's page).
-  pub selectable: bool,
+  /// A press opens its details in place, or closes them while they are open (the project's page).
+  pub details: Option<Details>,
+}
+
+/// Whether a row's details are open in place.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Details {
+  Closed,
+  Open,
 }
 
 impl DevtoolsInspectable for RowProps {}
@@ -93,20 +98,20 @@ impl Component for RecordRow {
       .child(parts::glyph(words::glyph(memory.content().kind())))
       .child(body(ctx, &state, &props, &id))
       .child(self.trailing(ctx, &state, memory, &id));
-    let row = if props.selected {
-      row.background(PaletteColor::AccentMuted)
-    } else if self.hovered.get() {
+    // An open record's row sits in its details' box, which colors it (`aBtsx`).
+    let row = if self.hovered.get() && props.details != Some(Details::Open) {
       row.background(ExtraColor::Hover.role())
     } else {
       row
     };
-    if !props.selectable {
+    let Some(details) = props.details else {
       return Element::from(row);
-    }
+    };
     let record = memory.id();
     pressable(move || state.choose(record))
       .id(format!("{id}-select"))
       .width(Dimension::Pct(100.0))
+      .describe("details", if details == Details::Open { "open" } else { "closed" })
       .child(row)
       .into()
   }

@@ -90,7 +90,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     // Listed in the sidebar as the design draws it (`q9mf0k`); its own task builds it.
     ProjectPage::MergeQueue => placeholder(ctx, page.screen()),
-    ProjectPage::Memory => memory::screen(ctx, project),
+    ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),

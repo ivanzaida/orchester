@@ -1,7 +1,8 @@
 //! The Memory screens with no record (`tasks` scenario): the task's tab says what agents keep and which step works
-//! (`Empty · no records yet` `e8oWP4`), with no toolbar, as its own *New record* stands in the state; the project's
-//! page shows its empty state (`Empty project memory` `T10K7`) without a queue; and a task's Artifacts tab says runs
-//! keep no artifacts yet.
+//! (`Empty · no records yet` `e8oWP4`), with no toolbar, as its own *New record* stands in the state; each tab of the
+//! project's page says it has no records (`ejSHj`); and a task's Artifacts tab says runs keep no artifacts yet.
+
+use orchester_app::routes::MemoryTab;
 
 use super::harness::Page;
 
@@ -26,17 +27,24 @@ fn memory_empty_task_tab_says_what_agents_keep() {
 }
 
 #[test]
-fn memory_empty_project_page_shows_its_empty_state() {
+fn memory_empty_project_tabs_say_they_have_no_records() {
   let mut page = Page::seeded("tasks");
-  page.project_memory();
-  let empty = page.text("memory-empty");
-  assert!(empty.starts_with("No project memory yet"), "{empty}");
+  for (tab, title) in [
+    (MemoryTab::Active, "No active records"),
+    (MemoryTab::Deprecated, "No deprecated records"),
+    (MemoryTab::Superseded, "No superseded versions"),
+    (MemoryTab::Rejected, "No rejected records"),
+  ] {
+    page.memory_tab(tab);
+    assert_eq!(page.text("memory-empty-title"), title, "{tab:?}");
+    assert!(!page.has("memory-search"), "{tab:?} hides its search");
+  }
+  let rejected = page.text("memory-empty");
   assert!(
-    empty.contains("Project memory saves after approval, task memory automatically"),
-    "{empty}"
+    rejected.ends_with("So are proposals an agent replaced with a newer one before anyone decided."),
+    "{rejected}"
   );
-  assert!(!page.has("memory-queue"));
-  assert!(page.has("memory-panel"));
+  assert!(!page.has("memory-panel"), "no side panel");
 }
 
 #[test]

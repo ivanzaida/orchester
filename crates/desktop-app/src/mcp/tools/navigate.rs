@@ -15,7 +15,7 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, InstructionsView,
+    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, InstructionsView, MemoryTab,
     NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route, Screen,
     SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
   },
@@ -24,8 +24,8 @@ use crate::{
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
-  reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
-  Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
+  reports it). overview and memory also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
+  after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
   (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
@@ -48,12 +48,13 @@ fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, accounts, orchester, connect; \
-     overview {}; tasks {}; task {}; connections {}; pull_requests {}.",
+     overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     ConnectionsTab::ALL.map(ConnectionsTab::name).join(", "),
     PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
+    MemoryTab::ALL.map(MemoryTab::name).join(", "),
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
@@ -140,7 +141,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
-    Screen::Memory => ProjectPage::Memory,
+    Screen::Memory => ProjectPage::Memory(memory_tab(args)?),
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets(SecretsView::default()),
@@ -163,6 +164,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],
     Screen::Connections => &["project", "tab", "selected"],
+    Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
@@ -177,11 +179,22 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
-    | Screen::Memory
     | Screen::Secrets
     | Screen::OrchestratorSettings
     | Screen::ProjectSettings => &["project"],
   }
+}
+
+/// Memory's tab, or none when left out: the page opens on the one it chooses.
+fn memory_tab(args: &Map<String, Value>) -> Result<Option<MemoryTab>, ToolError> {
+  string(args, "tab")?
+    .map(|name| {
+      MemoryTab::from_name(name).ok_or_else(|| ToolError::UnknownTab {
+        name: name.to_owned(),
+        known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
+      })
+    })
+    .transpose()
 }
 
 /// The Modules list, or with `module` (its id) that module's page.

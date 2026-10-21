@@ -14,7 +14,7 @@ use super::{
   pointed::{Pointed, PointedCard},
   press::OpenIn,
 };
-use crate::routes::{ProjectPage, Route, TaskTab, TaskView};
+use crate::routes::{MemoryTab, ProjectPage, Route, TaskTab, TaskView};
 
 /// A page to open for an item, and the card on it to point at.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,14 +26,14 @@ pub struct Destination {
 impl Destination {
   /// Where `item` of `project` leads: a request or a question to its task's Conversation, a plan, a limit and a
   /// decision after retries to their card of the Summary, the rest to the Summary; the project's memory records to
-  /// its Memory page, which opens on *Waiting for approval* (`QA2RK`); why not, where it leads nowhere
+  /// its Memory page's *Waiting for approval* tab (`CIThk`); why not, where it leads nowhere
   /// ([`Decided::Unavailable`]).
   pub fn of(project: ProjectId, item: &NeedItem) -> Result<Self, Message> {
     let (view, card) = match item.decided() {
       Decided::Unavailable(reason) => return Err(reason),
       Decided::Memory => {
         return Ok(Self {
-          route: Route::Project(project, ProjectPage::Memory),
+          route: Route::Project(project, ProjectPage::Memory(Some(MemoryTab::Waiting))),
           pointed: None,
         });
       }

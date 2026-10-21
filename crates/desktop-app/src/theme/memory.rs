@@ -1,5 +1,5 @@
 //! Values of the Memory screens: the task's Memory tab (`Task · Memory · dark` `a0PLO` in `g5dmWI`) and the
-//! project's Memory page (`Memory · project page` `xY2Uj` in `x4pFb`), with their components (`Memory / Record row`
+//! project's Memory page (`Memory with tabs` `wMr98` in `x4pFb`), with their components (`Memory / Record row`
 //! `J1utD`, `Memory / Proposal row` `LdHs2`, the record editors `t0jt2k` and `MO5Mu`, `Memory / Delete confirmation`
 //! `YdVse`, `Memory / Given row` `Q0BAI`, `Memory / Group heading` `CJvK7`).
 use std::sync::Arc;
@@ -107,15 +107,18 @@ pub enum MemorySpacing {
   RowText,
   /// 36: above the project page's *No active records match* (`X0l2I6` in `z4t51u`).
   StateTop,
+  /// 96: above an empty tab's state on the project's page (`xFUjH` in `ejSHj`).
+  EmptyTabTop,
 }
 
 impl MemorySpacing {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::Groups,
     Self::TextIndent,
     Self::ListSide,
     Self::RowText,
     Self::StateTop,
+    Self::EmptyTabTop,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -129,6 +132,7 @@ impl MemorySpacing {
       Self::ListSide => "memory_list_side",
       Self::RowText => "memory_row_text",
       Self::StateTop => "memory_state_top",
+      Self::EmptyTabTop => "memory_empty_tab_top",
     }
   }
 
@@ -139,6 +143,7 @@ impl MemorySpacing {
       Self::ListSide => 20.0,
       Self::RowText => 40.0,
       Self::StateTop => 36.0,
+      Self::EmptyTabTop => 96.0,
     }
   }
 }

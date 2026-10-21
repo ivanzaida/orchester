@@ -4,7 +4,7 @@
 //! Import resources is not built, and a request whose task cannot be read has nothing to open: they stay locked
 //! and go nowhere.
 
-use orchester_app::routes::{OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
+use orchester_app::routes::{MemoryTab, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
 use orchester_core::project::TaskKey;
 use orchester_workspace::tasks::{
   attention::{self, NeedKind},
@@ -171,7 +171,7 @@ fn overview_memory_records_card_opens_the_project_memory_page() {
   seeded.click(&format!("{card}-action"));
   assert_eq!(
     seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Memory)
+    Route::Project(seeded.project, ProjectPage::Memory(Some(MemoryTab::Waiting)))
   );
 }
 
@@ -195,7 +195,7 @@ fn overview_needs_you_tab_lists_the_memory_records_after_its_tasks_and_opens_the
   seeded.click("overview-memory-row-action");
   assert_eq!(
     seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Memory)
+    Route::Project(seeded.project, ProjectPage::Memory(Some(MemoryTab::Waiting)))
   );
 }
 
