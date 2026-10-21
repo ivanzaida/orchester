@@ -1,8 +1,8 @@
 //! Where the Overview's actions lead: a tab is the route's, a row opens its task's Details and a run its Summary, a
 //! *Needs you* card opens its task where it is decided, pointing at its decision card as the Needs you panel
-//! does, *View all tasks* the Tasks list and New task its form. Import resources and reviewing memory records
-//! are not built, and a request whose task cannot be read has nothing to open: they stay locked and go
-//! nowhere.
+//! does, *View all tasks* the Tasks list and New task its form, and the project's memory records its Memory page.
+//! Import resources is not built, and a request whose task cannot be read has nothing to open: they stay locked
+//! and go nowhere.
 
 use orchester_app::routes::{OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView};
 use orchester_core::project::TaskKey;
@@ -152,7 +152,7 @@ fn overview_a_plan_and_a_limit_open_at_their_card_ringed_as_from_the_panel() {
 }
 
 #[test]
-fn overview_memory_records_card_says_their_review_is_not_built_and_goes_nowhere() {
+fn overview_memory_records_card_opens_the_project_memory_page() {
   let mut seeded = Seeded::overview("tasks-memory", OverviewTab::Running);
   let tasks = seeded.tasks();
   let items = attention::items(&tasks);
@@ -167,20 +167,16 @@ fn overview_memory_records_card_says_their_review_is_not_built_and_goes_nowhere(
     assert!(said.iter().any(|said| said == line), "{line:?} in {said:?}");
   }
   assert_eq!(seeded.text(&format!("{card}-action")), "Review records");
-  assert_eq!(
-    seeded.text(&format!("{card}-reason-text")),
-    "Reviewing memory records isn't built in this app yet."
-  );
+  assert!(!seeded.shows(&format!("{card}-reason")), "the review is built");
   seeded.click(&format!("{card}-action"));
   assert_eq!(
     seeded.window.navigation().route_now(),
-    seeded.route(OverviewTab::Running),
-    "an unavailable action goes nowhere"
+    Route::Project(seeded.project, ProjectPage::Memory)
   );
 }
 
 #[test]
-fn overview_needs_you_tab_lists_the_memory_records_after_its_tasks_and_counts_them() {
+fn overview_needs_you_tab_lists_the_memory_records_after_its_tasks_and_opens_their_page() {
   let mut seeded = Seeded::overview("tasks-memory", OverviewTab::NeedsYou);
   let tasks = seeded.tasks();
   let count = BoardTab::NeedsYou.count(&tasks);
@@ -195,15 +191,11 @@ fn overview_needs_you_tab_lists_the_memory_records_after_its_tasks_and_counts_th
   );
   assert_eq!(seeded.text("overview-memory-row-detail"), "Not a task: Kontur memory");
   assert_eq!(seeded.text("overview-memory-row-action"), "Review records");
-  assert_eq!(
-    seeded.text("overview-memory-row-reason-text"),
-    "Reviewing memory records isn't built in this app yet."
-  );
+  assert!(!seeded.shows("overview-memory-row-reason"), "the review is built");
   seeded.click("overview-memory-row-action");
   assert_eq!(
     seeded.window.navigation().route_now(),
-    seeded.route(OverviewTab::NeedsYou),
-    "an unavailable action goes nowhere"
+    Route::Project(seeded.project, ProjectPage::Memory)
   );
 }
 

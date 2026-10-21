@@ -33,11 +33,12 @@ fn enforced(choice: &ProfileChoice, option: PermissionOption) -> bool {
     .is_some_and(|p| support(p, Platform::current(), option).is_enforced())
 }
 
-/// Restores command and network inheritance without dropping the step's tool-approval gate.
-/// Saving and publishing still use the ordinary widening checks.
+/// Restores command and network inheritance without dropping the step's tool-approval gate or its choice about base
+/// moves. Saving and publishing still use the ordinary widening checks.
 pub fn inherit_profile(current: &StepPermissions) -> StepPermissions {
   StepPermissions {
     interactive_tool_approvals: current.interactive_tool_approvals,
+    takes_base_moves: current.takes_base_moves,
     ..StepPermissions::default()
   }
 }
@@ -122,7 +123,8 @@ pub fn check_step(
       if *repository == RepositoryAccess::Write && choice.is_some_and(|choice| !can_write(choice)) {
         return Err(Message::new("appMcp.errors.stepCannotWrite"));
       }
-      if *narrowing != StepPermissions::default() {
+      // Which step merges the base narrows nothing of the profile: any step may choose it.
+      if inherit_profile(narrowing) != *narrowing || narrowing.interactive_tool_approvals {
         let choice = choice.ok_or_else(|| Message::new("appMcp.errors.narrowNeedsProfile"))?;
         let commands = match &narrowing.commands {
           StepCommands::AsProfile => None,

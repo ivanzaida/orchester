@@ -179,6 +179,7 @@ fn narrowed(kontur: &mut Kontur) -> Result<(), SeedError> {
         ),
         network: StepNetwork::AsProfile,
         interactive_tool_approvals: true,
+        ..StepPermissions::default()
       },
     };
   });

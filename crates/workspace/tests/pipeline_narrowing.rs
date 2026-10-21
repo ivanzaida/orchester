@@ -13,11 +13,17 @@ fn pipeline_narrowing_reset_preserves_tool_approval_and_requires_review_on_publi
     commands: StepCommands::Only(AllowedCommands::new(vec![CommandPrefix::new("cargo check").unwrap()]).unwrap()),
     network: StepNetwork::Off,
     interactive_tool_approvals: true,
+    takes_base_moves: Some(false),
   };
   let inherited = narrowing::inherit_profile(&restricted);
   assert_eq!(inherited.commands, StepCommands::AsProfile);
   assert_eq!(inherited.network, StepNetwork::AsProfile);
   assert!(inherited.interactive_tool_approvals);
+  assert_eq!(
+    inherited.takes_base_moves,
+    Some(false),
+    "the step's choice about base moves stays"
+  );
 
   let mut edit = PipelineEdit::new(Pipeline::new(vec![]).unwrap());
   let key = edit.add_step(Name::new("Inspect").unwrap(), None);
