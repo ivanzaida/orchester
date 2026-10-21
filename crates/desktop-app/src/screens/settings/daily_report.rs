@@ -40,9 +40,16 @@ const ID: &str = "settings-daily-report";
 
 type SaveAction = FutureAction<Option<ReportTime>, (), Message>;
 
+/// The setting: the time the report comes at, or `None` while it is off. A type of its own because lurq's signals
+/// need its DevTools marker, which core's `ReportTime` cannot carry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Setting(Option<ReportTime>);
+
+impl lurq::app::component::DevtoolsInspectable for Setting {}
+
 pub struct DailyReportSection {
-  /// The setting as shown: `None` until it is read, then the time the report comes at, or `None` while it is off.
-  shown: Signal<Option<Option<ReportTime>>>,
+  /// The setting as shown: `None` until it is read.
+  shown: Signal<Option<Setting>>,
   /// The time's select, `HH:MM`.
   time: Signal<String>,
 }
@@ -62,12 +69,12 @@ impl Component for DailyReportSection {
     let failed = save.state().get().error;
     let read = stored(ctx);
     if self.shown.get_untracked().is_none()
-      && let Some(stored) = read.data
+      && let Some(Setting(stored)) = read.data
     {
-      self.shown.set(Some(stored));
+      self.shown.set(Some(Setting(stored)));
       show(&self.time, clock(stored.unwrap_or(ReportTime::DEFAULT).minute()));
     }
-    let shown = self.shown.get();
+    let shown = self.shown.get().map(|Setting(time)| time);
     self.follow_time(shown, &save);
     let title = ctx.t("settings.dailyReport.title");
     let description = ctx.t("settings.dailyReport.description");
@@ -108,7 +115,7 @@ impl DailyReportSection {
           .and_then(ReportTime::new)
           .unwrap_or(ReportTime::DEFAULT)
       });
-      shown.set(Some(at));
+      shown.set(Some(Setting(at)));
       save.run(at);
     })
   }
@@ -122,7 +129,7 @@ impl DailyReportSection {
       return;
     };
     if chosen != stored {
-      self.shown.set(Some(Some(chosen)));
+      self.shown.set(Some(Setting(Some(chosen))));
       save.run(Some(chosen));
     }
   }
@@ -167,7 +174,7 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 }
 
 /// The setting as stored, read when the section opens.
-fn stored(ctx: &mut Ctx) -> FutureState<Option<ReportTime>, Message> {
+fn stored(ctx: &mut Ctx) -> FutureState<Setting, Message> {
   let workspace = Services::of(ctx).workspace;
   ctx
     .future((), move |()| {
@@ -175,7 +182,7 @@ fn stored(ctx: &mut Ctx) -> FutureState<Option<ReportTime>, Message> {
       async move {
         background::run(move || workspace.daily_report_schedule())
           .await?
-          .map(|schedule| schedule.map(|schedule| schedule.time))
+          .map(|schedule| Setting(schedule.map(|schedule| schedule.time)))
           .map_err(|error| {
             tracing::error!(%error, "the daily report setting cannot be read");
             messages::store_error(&error)
