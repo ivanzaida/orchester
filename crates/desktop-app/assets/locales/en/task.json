@@ -35,6 +35,13 @@
       "unchanged": "not run again",
       "conflict": "conflict"
     },
+    "points": {
+      "person": "{{count}} pt",
+      "estimated": "~{{count}} pt",
+      "byPerson": "{{count}} story points, set by you",
+      "byOrchester": "{{count}} story points, Orchester’s estimate: {{reason}}",
+      "byAutomation": "{{count}} story points, set by automation"
+    },
     "runLine": {
       "run": "Run {{run}} · {{pipeline}} {{version}}",
       "attempt": "Run {{run}} · attempt {{attempt}} · {{pipeline}} {{version}}",

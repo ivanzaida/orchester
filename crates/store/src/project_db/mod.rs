@@ -12,6 +12,7 @@ mod code_index;
 mod connections;
 mod consistent;
 mod environment;
+mod estimates;
 mod import;
 mod invocation_accounts;
 mod invocation_prompts;
@@ -61,6 +62,7 @@ mod sources;
 mod step_outputs;
 mod step_progress;
 mod tags;
+mod task_effort;
 mod task_groups;
 mod task_snapshots;
 mod tasks;
@@ -85,6 +87,7 @@ pub use self::{
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,
+  estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_reports::KeptReport,

@@ -335,6 +335,14 @@ async fn answer(
     Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
     Command::AnswerInChat { message, ref tools } => chat_answering(scheduler, message, tools.clone()).await,
     Command::StopChat { chat } => chat_stopped(scheduler, chat),
+    Command::EstimateTask { task } => {
+      return later.reply(async move {
+        match handle.estimate_task(task).await {
+          Ok(outcome) => Reply::TaskEstimated { task, outcome },
+          Err(rejection) => Reply::Rejected(rejection),
+        }
+      });
+    }
   };
   Answer::Reply(Event::Reply { id, reply })
 }

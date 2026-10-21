@@ -63,6 +63,7 @@ impl TaskForm {
       organization: made_on
         .as_ref()
         .map_or_else(TaskOrganization::default, |(task, ..)| task.organization().clone()),
+      points: view.values.points,
       module: view.module,
     });
     let (ask, keep) = (self.confirming_discard.clone(), self.confirming_discard.clone());
@@ -117,6 +118,7 @@ impl TaskForm {
       base: Some(current.details().clone()),
       details,
       organization: current.organization().clone(),
+      points: view.values.points,
       module: view.module,
     };
     Some(press(save, args, &self.dismissed))
