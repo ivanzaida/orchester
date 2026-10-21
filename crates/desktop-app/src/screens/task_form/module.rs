@@ -2,7 +2,12 @@
 //! one of the project's modules or none, saved after the task's details. A project without modules shows no section
 //! for a task in none; while the task is queued its module is locked with its details.
 
-use lurq::{app::ctx::Ctx, components::SelectOption, core::Signal, node::Element};
+use lurq::{
+  app::ctx::Ctx,
+  components::SelectOption,
+  core::Signal,
+  node::{Element, dimension::Dimension},
+};
 use orchester_core::module::Module;
 use orchester_workspace::modules::ModuleChoice;
 
@@ -11,6 +16,9 @@ use crate::ui::{
   field::SelectField,
   form_section::{Label, Place, section, side_row},
 };
+
+/// The select's width, as the pipeline select's (`Control` `ZIliW`).
+const SELECT_WIDTH: f32 = 240.0;
 
 pub fn module_section(
   ctx: &mut Ctx,
@@ -35,7 +43,8 @@ pub fn module_section(
     ctx.t("task_form.fields.module.label"),
     chosen.clone(),
     options,
-  );
+  )
+  .width(Dimension::Px(SELECT_WIDTH));
   let select = if view.locked() { select.locked() } else { select };
   let row = side_row(
     Label::new("task-form-module", ctx.t("task_form.fields.module.label"))
