@@ -37,8 +37,9 @@ const SPECS: &[Spec] = &[
     name: "add_project",
     description: "Adds a project in a folder that is the top of a git repository, as project setup does: Orchester \
                   keeps its data in the folder's .orchester (excluded from git) and suggests the project's key from \
-                  its name. Refused for a folder that is not a git repository's top, or that holds an Orchester \
-                  project already (it is in list_projects then). Where the repository is on GitHub and a signed-in \
+                  its name. Refused for a folder that is not a git repository's top (not_a_git_repository), a \
+                  repository without a commit, which runs need to branch from (no_commits), git not installed \
+                  (git_not_found), or a folder that holds an Orchester project already (it is in list_projects then). Where the repository is on GitHub and a signed-in \
                   gh can read it, the project is linked to it, as setup does; a link that fails does not undo the \
                   project and is reported under `github`.",
     schema: schema_for_type::<project::AddProject>,

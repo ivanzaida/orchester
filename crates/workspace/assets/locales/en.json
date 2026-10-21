@@ -1224,6 +1224,8 @@
   },
   "appMcp": {
     "errors": {
+      "noCommits": "The repository has no commit yet, and runs branch from one. Make a first commit, or create the project in Orchester’s project setup, which offers to make it.",
+      "gitNotFound": "git is not installed on this computer. Orchester runs git to read the folder and runs work in git worktrees. Install git, then try again.",
       "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",

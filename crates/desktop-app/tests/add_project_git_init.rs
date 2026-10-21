@@ -22,9 +22,11 @@ use tempfile::TempDir;
 
 const AUTHOR: &str = "[user]\n\tname = Test Author\n\temail = author@example.com\n";
 
-/// git with the settings file `global` only, or, with `program`, a git that is not installed.
+/// git with the settings file `global` only, looking for no repository above `ceiling` (the worktree's own), or,
+/// with `program`, a git that is not installed.
 struct Isolated {
   global: PathBuf,
+  ceiling: PathBuf,
   program: Option<PathBuf>,
 }
 
@@ -41,7 +43,8 @@ impl CommandRunner for Isolated {
       None => command.clone(),
     }
     .with_env("GIT_CONFIG_GLOBAL", &self.global.to_string_lossy())
-    .with_env("GIT_CONFIG_NOSYSTEM", "1");
+    .with_env("GIT_CONFIG_NOSYSTEM", "1")
+    .with_env("GIT_CEILING_DIRECTORIES", &self.ceiling.to_string_lossy());
     for variable in [
       "GIT_AUTHOR_NAME",
       "GIT_AUTHOR_EMAIL",
@@ -94,6 +97,7 @@ impl Scratch {
   fn programs(&self, program: Option<PathBuf>) -> Programs {
     Programs::with_runner(Arc::new(Isolated {
       global: self.global(),
+      ceiling: self.dir.path().to_path_buf(),
       program,
     }))
   }
@@ -178,12 +182,16 @@ fn git_init_makes_the_folder_a_repository_with_its_files_and_the_project_can_be_
   );
   let block = window.text("github-detection");
   for said in [
-    "git init on the branch main: git’s default, since init.defaultBranch is not set.",
+    "git init on the branch main, since init.defaultBranch is not set.",
     "Adds 3 files. The .gitignore in the folder is honoured: what it lists stays out of git.",
     "Review the files git will add; a .gitignore keeps files out.",
   ] {
     assert!(block.contains(said), "{said}: {block}");
   }
+  assert!(
+    words(&mut window, "git-init-fallback").contains("git init --initial-branch=main"),
+    "the terminal makes the branch the button makes"
+  );
   window.set("project-name", "Kontur");
   window.press("create-project");
   assert_eq!(project_count(&window), 0, "Create waits for a repository");

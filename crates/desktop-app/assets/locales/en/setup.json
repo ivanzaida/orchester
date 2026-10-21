@@ -175,17 +175,15 @@
         "filesUnknown": "Couldn’t count the files",
         "noCommits": "Git repository · {{branch}} · no commits",
         "noCommitsDetached": "Git repository · no commits",
-        "commits": "Git repository · {{branch}} · {{count}} commits",
         "commit": "Git repository · {{branch}} · 1 commit",
-        "commitsDetached": "Git repository · {{count}} commits",
         "commitDetached": "Git repository · 1 commit",
-        "commitsUncounted": "Git repository · {{branch}}",
-        "repository": "Git repository"
+        "repository": "Git repository",
+        "branch": "Git repository · {{branch}}"
       },
       "create": {
         "title": "Create a git repository here",
         "branchConfigured": "git init on the branch {{branch}}, the name your git setting init.defaultBranch gives.",
-        "branchDefault": "git init on the branch {{branch}}: git’s default, since init.defaultBranch is not set.",
+        "branchDefault": "git init on the branch {{branch}}, since init.defaultBranch is not set.",
         "branchChecking": "git init on the branch your git setting init.defaultBranch names, or main.",
         "then": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
         "firstCommit": "FIRST COMMIT",
@@ -210,7 +208,9 @@
         "chooseAnother": "Choose another folder…",
         "unavailable": "Create a git repository here needs git on this computer.",
         "fallback": "Or in a terminal: run git init and make a first commit, then check again.",
-        "fallbackCommit": "Or in a terminal: make a first commit, then check again."
+        "fallbackCommit": "Or in a terminal: make a first commit, then check again.",
+        "emptyStaged": "Files are staged in this repository already, and an empty first commit would leave them out. Commit the folder’s files, or unstage them in a terminal.",
+        "inside": "This folder is inside the git repository {{repository}}. Create a separate repository here, or choose {{repository}}."
       },
       "progress": {
         "initializing": "Creating the repository on {{branch}}…",
@@ -224,7 +224,8 @@
       "done": {
         "files": "Created here with a first commit of {{count}} files.",
         "file": "Created here with a first commit of 1 file.",
-        "empty": "Created here with an empty first commit."
+        "empty": "Created here with an empty first commit.",
+        "unknown": "Created here with a first commit."
       },
       "error": {
         "gitMissing": "git could not be started: it is no longer found on this computer. Install git, then check again.",
@@ -237,7 +238,8 @@
         "commitFailed": "git commit failed. git said:",
         "initStopped": "git init did not finish. Try again.",
         "addStopped": "git add did not finish. Try again.",
-        "commitStopped": "git commit did not finish. Try again."
+        "commitStopped": "git commit did not finish. Try again.",
+        "staged": "Files are staged in this repository, and an empty first commit would leave them out. Commit the folder’s files instead, or unstage them in a terminal, then try again."
       },
       "identity": {
         "intro": "Tell git who you are in a terminal, then try again. Orchester never changes git’s settings.",

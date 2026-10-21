@@ -10,9 +10,12 @@ mod words;
 
 use std::path::{Path, PathBuf};
 
-use lurq::app::{
-  component::DevtoolsInspectable,
-  ctx::{Ctx, FutureAction},
+use lurq::{
+  app::{
+    component::DevtoolsInspectable,
+    ctx::{Ctx, FutureAction},
+  },
+  core::Signal,
 };
 use orchester_workspace::{
   background,
@@ -24,7 +27,7 @@ use orchester_workspace::{
 };
 
 pub(super) use self::view::{block, created_line};
-use super::super::{Actions, Detected, Form};
+use super::super::{Actions, Detected, Form, Picked};
 use crate::services::Services;
 
 /// What git sees of the chosen folder, when it holds Create back and the block offers to fix it.
@@ -204,7 +207,8 @@ enum Progress {
 }
 
 /// Follows the page's git work: a folder detected without a repository or without a commit is surveyed; a made
-/// repository gets its first commit; a first commit that ended, either way, reads the folder again.
+/// repository gets its first commit; work that failed, and a first commit that ended either way, read the folder
+/// again.
 pub(in crate::screens::add_project) fn follow(ctx: &mut Ctx, form: &Form, actions: &Actions) {
   let survey = actions.git.survey.clone();
   ctx.watch(&actions.detect.state(), move |state| {
@@ -218,37 +222,58 @@ pub(in crate::screens::add_project) fn follow(ctx: &mut Ctx, form: &Form, action
       survey.run(detected.folder().to_path_buf());
     }
   });
-  let (commit, attempt) = (actions.git.commit.clone(), form.attempt.clone());
+  let (commit, ended) = (actions.git.commit.clone(), Ended::of(form, actions));
   ctx.watch(&actions.git.init.state(), move |state| match state.outcome() {
     Some(Ok(Made(request, _))) => commit.run(request.clone()),
-    Some(Err(Failed(folder, error))) => attempt.set(Attempt(Some((folder.clone(), Err(error.clone()))))),
+    Some(Err(Failed(folder, error))) => ended.record(folder, Err(error.clone())),
     None => {}
   });
-  let (attempt, chosen, program, detect) = (
-    form.attempt.clone(),
-    form.folder.clone(),
-    form.program.clone(),
-    actions.clone(),
-  );
-  ctx.watch(&actions.git.commit.state(), move |state| {
-    let (folder, result) = match state.outcome() {
-      Some(Ok(Committed(folder, made))) => (folder.clone(), Ok(made.clone())),
-      Some(Err(Failed(folder, error))) => (folder.clone(), Err(error.clone())),
-      None => return,
-    };
-    attempt.set(Attempt(Some((folder.clone(), result))));
-    // The repository is there now, with or without its commit: the block says what git sees.
-    if chosen.get_untracked().0.as_deref() == Some(folder.as_path()) {
-      detect.detect(folder, program.get_untracked().0);
-    }
+  let ended = Ended::of(form, actions);
+  ctx.watch(&actions.git.commit.state(), move |state| match state.outcome() {
+    Some(Ok(Committed(folder, made))) => ended.record(folder, Ok(made.clone())),
+    Some(Err(Failed(folder, error))) => ended.record(folder, Err(error.clone())),
+    None => {}
   });
 }
 
+/// Where the end of an attempt goes: the attempt it was, and the folder read again.
+struct Ended {
+  attempt: Signal<Attempt>,
+  chosen: Signal<Picked>,
+  program: Signal<Picked>,
+  actions: Actions,
+}
+
+impl Ended {
+  fn of(form: &Form, actions: &Actions) -> Self {
+    Self {
+      attempt: form.attempt.clone(),
+      chosen: form.folder.clone(),
+      program: form.program.clone(),
+      actions: actions.clone(),
+    }
+  }
+
+  /// Keeps how the attempt in `folder` ended and, while it is the chosen folder, reads it again: git may have made
+  /// the repository, or something else may have, since it was read.
+  fn record(&self, folder: &Path, result: Result<Initialized, InitError>) {
+    self.attempt.set(Attempt(Some((folder.to_path_buf(), result))));
+    if self.chosen.get_untracked().0.as_deref() == Some(folder) {
+      self
+        .actions
+        .detect(folder.to_path_buf(), self.program.get_untracked().0);
+    }
+  }
+}
+
 /// The first commit the block takes: what the person chose, else the folder's files; an empty one for a folder
-/// with nothing to add.
+/// with nothing to add, the files for a repository with files staged.
 fn first_commit(form: &Form, surveyed: Option<&Result<Survey, SurveyError>>) -> FirstCommit {
-  if matches!(surveyed, Some(Ok(survey)) if survey.files == 0) {
-    return FirstCommit::Empty;
+  match surveyed {
+    Some(Ok(survey)) if survey.files == 0 => return FirstCommit::Empty,
+    // An empty first commit would leave out what is staged.
+    Some(Ok(survey)) if survey.staged > 0 => return FirstCommit::Files,
+    _ => {}
   }
   form.first.get().0.unwrap_or(FirstCommit::Files)
 }

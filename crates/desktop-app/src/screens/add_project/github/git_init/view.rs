@@ -40,6 +40,8 @@ const ERROR_SLOT: (f32, f32) = (13.0, 17.0);
 /// The commands the block makes, for a terminal (`eZ99l`).
 const GIT_INIT: &str = "git init";
 const GIT_ADD: &str = "git add -A";
+/// `git init` on the branch the button makes it on.
+const GIT_INIT_ON: &str = "git init --initial-branch=";
 
 /// What the block is drawn from.
 struct Git<'a> {
@@ -117,6 +119,21 @@ fn create(ctx: &mut Ctx, form: &Form, actions: &Actions, git: &Git<'_>) -> Eleme
   let fresh = matches!(git.shown, Shown::NotRepository);
   let idle = git.progress.is_none();
   let mut section = section(ctx, false);
+  if let Some(Ok(Survey {
+    enclosing: Some(repository),
+    ..
+  })) = git.surveyed.filter(|_| fresh)
+  {
+    let repository = repository.display().to_string();
+    section = section.child(
+      line(
+        Icon::TriangleAlert,
+        PaletteColor::Warning,
+        &ctx.t_args("setup.git.create.inside", [("repository", repository.as_str())]),
+      )
+      .id("git-init-inside"),
+    );
+  }
   if fresh {
     section = section
       .child(line(
@@ -167,11 +184,14 @@ fn choices(ctx: &Ctx, form: &Form, git: &Git<'_>) -> Column {
   if matches!(git.surveyed, Some(Ok(survey)) if survey.files == 0) {
     files = files.unavailable(ctx.t("setup.git.create.filesEmpty"));
   }
-  let empty = card(
+  let mut empty = card(
     FirstCommit::Empty,
     ("git-init-first-empty", Icon::CircleDashed, "setup.git.create.empty"),
     words::empty_detail(ctx, git.surveyed),
   );
+  if matches!(git.surveyed, Some(Ok(survey)) if survey.staged > 0) {
+    empty = empty.unavailable(ctx.t("setup.git.create.emptyStaged"));
+  }
   Column::new()
     .id("git-init-first")
     .width(Dimension::Pct(100.0))
@@ -347,7 +367,12 @@ fn fallback(ctx: &mut Ctx, git: &Git<'_>) -> Element {
   };
   let mut commands = Vec::new();
   if init {
-    commands.push(("git-init-command-init", GIT_INIT.to_owned()));
+    let init = match git.surveyed {
+      Some(Ok(survey)) => format!("{GIT_INIT_ON}{}", survey.branch.name()),
+      // The branch is not known: git's own.
+      _ => GIT_INIT.to_owned(),
+    };
+    commands.push(("git-init-command-init", init));
   }
   if git.first == FirstCommit::Files {
     commands.push(("git-init-command-add", GIT_ADD.to_owned()));

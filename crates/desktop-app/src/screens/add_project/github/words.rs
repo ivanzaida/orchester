@@ -9,7 +9,10 @@ use orchester_core::{
   connection::{GitHubCheckResult, GitHubLogin, REQUIRED_SCOPE},
   repository::{Detection, DetectionState, GitHubDetection, GitHubRepo},
 };
-use orchester_workspace::{display, repository::init::LocalRepository};
+use orchester_workspace::{
+  display,
+  repository::init::{Commits, LocalRepository},
+};
 
 use crate::ui::icon::Icon;
 
@@ -242,30 +245,25 @@ pub(super) fn folder_property(ctx: &Ctx, folder: &Path) -> Property {
   )
 }
 
-/// What git sees of a repository: its branch and how many commits it has (`WD3IS`, `g6z6w`); `None` for a
-/// folder that is none, or one git could not read.
+/// What git sees of a repository: its branch, and that it has no commit or one (`WD3IS`, `g6z6w`); a longer
+/// history is not counted. `None` for a folder that is none, or one git could not read.
 pub(super) fn git_value(ctx: &Ctx, local: &LocalRepository) -> Option<Arc<str>> {
   Some(match local {
     LocalRepository::NoCommits { branch: Some(branch) } => {
       ctx.t_args("setup.git.value.noCommits", [("branch", branch.as_str())])
     }
     LocalRepository::NoCommits { branch: None } => ctx.t("setup.git.value.noCommitsDetached"),
-    LocalRepository::Commits { branch, count } => commits(ctx, branch.as_deref(), *count),
+    LocalRepository::Commits { branch, commits } => committed(ctx, branch.as_deref(), *commits),
     LocalRepository::GitMissing | LocalRepository::NotRepository | LocalRepository::Unread => return None,
   })
 }
 
-fn commits(ctx: &Ctx, branch: Option<&str>, count: Option<u64>) -> Arc<str> {
-  match (branch, count) {
-    (Some(branch), Some(1)) => ctx.t_args("setup.git.value.commit", [("branch", branch)]),
-    (Some(branch), Some(count)) => ctx.t_args(
-      "setup.git.value.commits",
-      [("branch", branch.to_owned()), ("count", count.to_string())],
-    ),
-    (Some(branch), None) => ctx.t_args("setup.git.value.commitsUncounted", [("branch", branch)]),
-    (None, Some(1)) => ctx.t("setup.git.value.commitDetached"),
-    (None, Some(count)) => ctx.t_args("setup.git.value.commitsDetached", [("count", count.to_string())]),
-    (None, None) => ctx.t("setup.git.value.repository"),
+fn committed(ctx: &Ctx, branch: Option<&str>, commits: Commits) -> Arc<str> {
+  match (branch, commits) {
+    (Some(branch), Commits::One) => ctx.t_args("setup.git.value.commit", [("branch", branch)]),
+    (Some(branch), Commits::Several | Commits::Unknown) => ctx.t_args("setup.git.value.branch", [("branch", branch)]),
+    (None, Commits::One) => ctx.t("setup.git.value.commitDetached"),
+    (None, Commits::Several | Commits::Unknown) => ctx.t("setup.git.value.repository"),
   }
 }
 

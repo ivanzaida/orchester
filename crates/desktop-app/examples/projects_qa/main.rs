@@ -7,11 +7,11 @@
 //! project is shown with. The window runs in a child process whose `PATH` starts with a stand-in `gh` (built with
 //! `rustc` from `gh.rs`) answering as the state's GitHub state, and leaves out every folder holding a real `gh`, so
 //! no real GitHub sign-in is read. git reads the settings file of the QA folder only (`GIT_CONFIG_GLOBAL`, no system
-//! settings), with a QA author except in `setup-git-no-author`; `setup-git-not-found` leaves every folder holding
-//! git off the `PATH`. The system's pickers are replaced: a folder picker hands over the state's folder
-//! and the file picker (*Choose program…*) the stand-in `gh`; Copy writes to `copied.txt` in the QA folder, never the
-//! clipboard. The verifier connects through the discovery file in `.tmp/qa/projects/mcp/`
-//! (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
+//! settings, no repository above the QA folder), with a QA author except in `setup-git-no-author`;
+//! `setup-git-not-found` leaves every folder holding git off the `PATH`. The system's pickers are replaced: a folder
+//! picker hands over the state's folder and the file picker (*Choose program…*) the stand-in `gh`; Copy writes to
+//! `copied.txt` in the QA folder, never the clipboard. The verifier connects through the discovery file in
+//! `.tmp/qa/projects/mcp/` (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
 
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
@@ -161,6 +161,8 @@ fn start(state: State) -> Result<(), Box<dyn Error>> {
     .env("PATH", env::join_paths(path)?)
     .env("GIT_CONFIG_GLOBAL", folders.git_settings())
     .env("GIT_CONFIG_NOSYSTEM", "1")
+    // The QA folders are inside this checkout's repository, which git would otherwise find around them.
+    .env("GIT_CEILING_DIRECTORIES", root.path())
     .env(CHILD, root.path())
     .env(DATABASE, &seeded.database)
     .spawn()?;

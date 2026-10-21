@@ -179,9 +179,10 @@ pub(super) fn initializing(ctx: &Ctx, surveyed: Option<&Result<Survey, SurveyErr
 /// The repository made here, with its first commit (`pY9fQ` in `Tz5KP`).
 pub(super) fn done(ctx: &Ctx, made: &Initialized) -> Arc<str> {
   match made.files {
-    0 => ctx.t("setup.git.done.empty"),
-    1 => ctx.t("setup.git.done.file"),
-    count => ctx.t_args("setup.git.done.files", [("count", count.to_string())]),
+    Some(0) => ctx.t("setup.git.done.empty"),
+    Some(1) => ctx.t("setup.git.done.file"),
+    Some(count) => ctx.t_args("setup.git.done.files", [("count", count.to_string())]),
+    None => ctx.t("setup.git.done.unknown"),
   }
 }
 
@@ -201,6 +202,7 @@ pub(super) fn failure<'a>(ctx: &Ctx, error: &'a InitError, folder: &Path) -> (Ar
     InitError::AlreadyRepository => (ctx.t("setup.git.error.alreadyRepository"), None),
     InitError::NotRepository => (ctx.t("setup.git.error.notRepository"), None),
     InitError::HasCommits => (ctx.t("setup.git.error.hasCommits"), None),
+    InitError::Staged => (ctx.t("setup.git.error.staged"), None),
     InitError::InitFailed(text) => said("setup.git.error.initFailed", text),
     InitError::AddFailed(text) => said("setup.git.error.addFailed", text),
     InitError::CommitFailed(text) | InitError::NoIdentity(text) => said("setup.git.error.commitFailed", text),

@@ -1,6 +1,7 @@
 //! Making a folder a git repository in place (`repository::init`), with real git in folders of the tests' own under
 //! the worktree's `.tmp/`. git's settings are a file of each test's own (`GIT_CONFIG_GLOBAL`, no system settings,
-//! no identity from the environment), so the person's git settings are never read or written.
+//! no identity from the environment), so the person's git settings are never read or written, and git looks for
+//! no repository above each test's folder (`GIT_CEILING_DIRECTORIES`), so the worktree's own is not found.
 
 use std::{
   fs,
@@ -11,7 +12,7 @@ use std::{
 use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 use orchester_exec::ProcessRunner;
 use orchester_workspace::repository::init::{
-  FALLBACK_BRANCH, FirstCommit, InitError, LocalRepository, SurveyError, create_repository, init_repository,
+  Commits, FALLBACK_BRANCH, FirstCommit, InitError, LocalRepository, SurveyError, create_repository, init_repository,
   make_first_commit, read_local, survey,
 };
 use tempfile::TempDir;
@@ -25,11 +26,14 @@ const IDENTITY_VARIABLES: [&str; 5] = [
   "EMAIL",
 ];
 
-/// git with the settings file `global` only.
+/// git with the settings file `global` only, looking for no repository above `ceiling`.
 struct Isolated {
   global: PathBuf,
+  ceiling: PathBuf,
   /// Runs this program in place of git: one that does not exist stands for git not installed.
   program: Option<PathBuf>,
+  /// Variables of the caller's environment, as a hook that started Orchester could pass on.
+  inherited: Vec<(&'static str, String)>,
 }
 
 impl CommandRunner for Isolated {
@@ -45,9 +49,16 @@ impl CommandRunner for Isolated {
       None => command.clone(),
     }
     .with_env("GIT_CONFIG_GLOBAL", &self.global.to_string_lossy())
-    .with_env("GIT_CONFIG_NOSYSTEM", "1");
+    .with_env("GIT_CONFIG_NOSYSTEM", "1")
+    .with_env("GIT_CEILING_DIRECTORIES", &self.ceiling.to_string_lossy());
     for variable in IDENTITY_VARIABLES {
       isolated = isolated.without_env(variable);
+    }
+    // As this process's environment would hold them: each reaches git unless the command leaves it out.
+    for (name, value) in &self.inherited {
+      if !command.env_removed().iter().any(|removed| removed == name) {
+        isolated = isolated.with_env(name, value);
+      }
     }
     ProcessRunner::new(Duration::from_secs(60)).run(&isolated)
   }
@@ -74,7 +85,12 @@ impl Scratch {
     write_settings(&global, settings);
     fs::create_dir_all(dir.path().join("folder")).expect("the folder");
     Self {
-      git: Isolated { global, program: None },
+      git: Isolated {
+        global,
+        ceiling: dir.path().to_path_buf(),
+        program: None,
+        inherited: Vec::new(),
+      },
       dir,
     }
   }
@@ -127,7 +143,8 @@ fn git_init_an_empty_folder_makes_an_empty_first_commit_on_the_default_branch() 
     LocalRepository::NotRepository
   );
   let made = init_repository(&scratch.git, &scratch.folder(), FirstCommit::Empty).expect("the repository is made");
-  assert_eq!((made.branch.as_str(), made.files), (FALLBACK_BRANCH, 0));
+  assert_eq!(made.files, Some(0));
+  assert_eq!(scratch.ask(&["symbolic-ref", "--short", "HEAD"]), FALLBACK_BRANCH);
   assert_eq!(scratch.ask(&["rev-list", "--count", "HEAD"]), "1");
   assert_eq!(
     scratch.ask(&["log", "-1", "--format=%s|%an"]),
@@ -138,7 +155,7 @@ fn git_init_an_empty_folder_makes_an_empty_first_commit_on_the_default_branch() 
     read_local(&scratch.git, &scratch.folder()),
     LocalRepository::Commits {
       branch: Some(FALLBACK_BRANCH.to_owned()),
-      count: Some(1)
+      commits: Commits::One
     }
   );
   assert!(scratch.ask(&["remote"]).is_empty(), "no remote is added");
@@ -160,7 +177,7 @@ fn git_init_commits_the_folders_files_and_leaves_out_what_gitignore_lists() {
     "counting makes nothing in the folder"
   );
   let made = init_repository(&scratch.git, &scratch.folder(), FirstCommit::Files).expect("the repository is made");
-  assert_eq!(made.files, 3);
+  assert_eq!(made.files, Some(3));
   assert_eq!(scratch.committed(), [".gitignore", "README.md", "src/main.rs"]);
 }
 
@@ -181,8 +198,7 @@ fn git_init_honours_init_default_branch() {
   let surveyed = survey(&scratch.git, &scratch.folder()).expect("the folder is surveyed");
   assert_eq!(surveyed.branch.name(), "trunk");
   assert!(surveyed.branch.is_configured());
-  let made = init_repository(&scratch.git, &scratch.folder(), FirstCommit::Empty).expect("the repository is made");
-  assert_eq!(made.branch, "trunk");
+  init_repository(&scratch.git, &scratch.folder(), FirstCommit::Empty).expect("the repository is made");
   assert_eq!(scratch.ask(&["symbolic-ref", "--short", "HEAD"]), "trunk");
 }
 
@@ -242,7 +258,7 @@ fn git_init_without_an_author_says_so_and_try_again_makes_only_the_commit() {
     "[user]\n\tname = Test Author\n\temail = author@example.com\n",
   );
   let made = make_first_commit(&scratch.git, &scratch.folder(), FirstCommit::Files).expect("the commit is made");
-  assert_eq!(made.files, 1);
+  assert_eq!(made.files, Some(1));
   assert!(mark.exists(), "the repository was kept");
   assert_eq!(scratch.ask(&["rev-list", "--count", "HEAD"]), "1");
 }
@@ -273,4 +289,102 @@ fn git_init_says_git_is_missing() {
     Err(InitError::GitMissing)
   );
   assert!(!scratch.folder().join(".git").exists());
+}
+
+#[test]
+fn git_init_refuses_an_empty_first_commit_over_staged_files() {
+  let scratch = Scratch::new();
+  scratch.file("README.md", "Kontur\n");
+  scratch.file("notes.txt", "draft\n");
+  scratch.ask(&["init", "--quiet"]);
+  scratch.ask(&["add", "README.md"]);
+  let surveyed = survey(&scratch.git, &scratch.folder()).expect("the folder is surveyed");
+  assert_eq!((surveyed.files, surveyed.staged), (2, 1));
+  assert_eq!(
+    make_first_commit(&scratch.git, &scratch.folder(), FirstCommit::Empty),
+    Err(InitError::Staged)
+  );
+  assert_eq!(
+    scratch.ask(&["ls-files", "--cached"]),
+    "README.md",
+    "what the person staged is kept"
+  );
+  let made = make_first_commit(&scratch.git, &scratch.folder(), FirstCommit::Files).expect("the commit is made");
+  assert_eq!(made.files, Some(2));
+}
+
+#[test]
+fn git_init_says_which_repository_a_folder_is_inside_of() {
+  let scratch = Scratch::new();
+  scratch.ask(&["init", "--quiet"]);
+  let inner = scratch.folder().join("inner");
+  fs::create_dir_all(&inner).expect("a folder inside the repository");
+  assert_eq!(read_local(&scratch.git, &inner), LocalRepository::NotRepository);
+  let surveyed = survey(&scratch.git, &inner).expect("the folder is surveyed");
+  let enclosing = surveyed.enclosing.expect("the repository the folder is inside of");
+  assert_eq!(
+    fs::canonicalize(enclosing).expect("the repository's top"),
+    fs::canonicalize(scratch.folder()).expect("the folder")
+  );
+  assert_eq!(
+    survey(&scratch.git, &scratch.folder())
+      .expect("the folder is surveyed")
+      .enclosing,
+    None,
+    "a repository's top is inside of none"
+  );
+}
+
+#[test]
+fn git_init_works_on_the_folder_whatever_repository_the_environment_names() {
+  let scratch = Scratch::new();
+  let other = scratch.dir.path().join("other");
+  fs::create_dir_all(&other).expect("another repository");
+  let in_other = |args: &[&str]| {
+    let output = scratch
+      .git
+      .run(&Command::new(Path::new("git"), args.iter().copied()).with_current_dir(&other))
+      .expect("git runs");
+    assert!(output.success(), "git {args:?}: {}", output.stderr);
+    output.stdout.trim().to_owned()
+  };
+  in_other(&["init", "--quiet"]);
+  fs::write(other.join("kept.txt"), "kept\n").expect("a file");
+  in_other(&["add", "kept.txt"]);
+  in_other(&["commit", "--quiet", "-m", "Theirs"]);
+  fs::write(other.join("staged.txt"), "staged\n").expect("a file");
+  in_other(&["add", "staged.txt"]);
+  let (head, index) = (in_other(&["rev-parse", "HEAD"]), in_other(&["ls-files", "--stage"]));
+  let git_dir = other.join(".git");
+  let poisoned = Isolated {
+    global: scratch.git.global.clone(),
+    ceiling: scratch.git.ceiling.clone(),
+    program: None,
+    inherited: vec![
+      ("GIT_DIR", git_dir.to_string_lossy().into_owned()),
+      ("GIT_WORK_TREE", other.to_string_lossy().into_owned()),
+      ("GIT_INDEX_FILE", git_dir.join("index").to_string_lossy().into_owned()),
+    ],
+  };
+  scratch.file("README.md", "Kontur\n");
+  assert_eq!(read_local(&poisoned, &scratch.folder()), LocalRepository::NotRepository);
+  let surveyed = survey(&poisoned, &scratch.folder()).expect("the folder is surveyed");
+  assert_eq!((surveyed.files, surveyed.enclosing), (1, None));
+  init_repository(&poisoned, &scratch.folder(), FirstCommit::Files).expect("the repository is made");
+  assert_eq!(scratch.committed(), ["README.md"]);
+  assert_eq!(
+    in_other(&["rev-parse", "HEAD"]),
+    head,
+    "the other repository has no new commit"
+  );
+  assert_eq!(in_other(&["ls-files", "--stage"]), index, "its index is as it was");
+  let empty = scratch.dir.path().join("empty");
+  fs::create_dir_all(&empty).expect("an empty folder");
+  create_repository(&poisoned, &empty).expect("the repository is made");
+  make_first_commit(&poisoned, &empty, FirstCommit::Empty).expect("the commit is made");
+  assert_eq!(
+    in_other(&["ls-files", "--stage"]),
+    index,
+    "an empty first commit leaves its index alone"
+  );
 }
