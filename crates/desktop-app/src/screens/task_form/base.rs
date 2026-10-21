@@ -58,7 +58,7 @@ impl Base {
     Self {
       task: Some(task.clone()),
       revision: Some(task.revision()),
-      values: Values::of_details(task.details(), separator),
+      values: Values::of_task(task, separator),
     }
   }
 
@@ -217,9 +217,12 @@ impl TaskForm {
     };
     let merge = ContentMerge::new(made_on, mine, task.details().clone());
     if merge.is_clean() {
-      self
-        .fields
-        .fill(&Values::of_details(&merge.merged(|_| Choice::Mine), separator));
+      // Story points are not part of the details: the person's choice in the field stays.
+      let merged = Values {
+        points: self.fields.points.get_untracked().0,
+        ..Values::of_details(&merge.merged(|_| Choice::Mine), separator)
+      };
+      self.fields.fill(&merged);
       self.base.set(Some(Base::of(task, separator)));
       self.newer.set(None);
       self.dismissed.set(true);

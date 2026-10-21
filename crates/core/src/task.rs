@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 pub mod content;
+pub mod estimate;
 pub mod organization;
 pub mod requirements;
 
@@ -177,6 +178,7 @@ pub struct Task {
   pipeline_version: Option<VersionNumber>,
   created_at: Timestamp,
   organization: organization::TaskOrganization,
+  estimate: Option<estimate::StoryEstimate>,
   /// The module the task belongs to ([`crate::module`]), if any.
   module: Option<ModuleId>,
   revision: TaskRevision,
@@ -225,6 +227,7 @@ impl Task {
       pipeline_version,
       created_at,
       organization: organization::TaskOrganization::default(),
+      estimate: None,
       module: None,
       revision: TaskRevision::FIRST,
     }
@@ -253,6 +256,19 @@ impl Task {
   /// Attaches persisted user metadata; run prompt details remain separate.
   pub fn with_organization(mut self, value: organization::TaskOrganization) -> Self {
     self.organization = value;
+    self
+  }
+
+  /// The task's story points, who set them and why; `None` while it has none.
+  pub const fn estimate(&self) -> Option<&estimate::StoryEstimate> {
+    self.estimate.as_ref()
+  }
+
+  /// Attaches the stored story points. They are kept beside the task, outside its revision: an estimate never
+  /// conflicts with a person's edit.
+  #[must_use]
+  pub fn with_estimate(mut self, value: Option<estimate::StoryEstimate>) -> Self {
+    self.estimate = value;
     self
   }
 
