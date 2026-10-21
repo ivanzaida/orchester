@@ -307,11 +307,7 @@ fn report_names_the_orchestrator_as_who_merged_what_it_merged_itself() {
     ],
   );
   let read = report(&fixture, at(18));
-  let by: Vec<(&str, MergedBy)> = read
-    .merged
-    .iter()
-    .map(|task| (task.task.as_str(), task.by))
-    .collect();
+  let by: Vec<(&str, MergedBy)> = read.merged.iter().map(|task| (task.task.as_str(), task.by)).collect();
   assert_eq!(
     by,
     [

@@ -18,8 +18,8 @@ use orchester_core::{
   id::{ChatId, ChatMessageId, ConnectionId, TaskId},
   name::Name,
   orchestrator::{
-    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, OrchestratorSettings, RunEnd,
-    TurnState, WaitKind, WaitTurn,
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, OrchestratorSettings, RunEnd, TurnState,
+    WaitKind, WaitTurn,
   },
   resource::ModelId,
   revision::Revision,
@@ -145,7 +145,11 @@ fn auto_merge_leaves_an_opted_out_blocked_or_held_task_to_the_person() {
   organize(&mut fixture, task, |value| value.with_no_automatic_merge(true));
   assert_eq!(rule(&fixture, &run), left(MergeLeft::OptedOut));
   organize(&mut fixture, task, |value| value.with_no_automatic_merge(false));
-  assert_eq!(rule(&fixture, &run), Merging::Merges, "the flag cleared, it merges again");
+  assert_eq!(
+    rule(&fixture, &run),
+    Merging::Merges,
+    "the flag cleared, it merges again"
+  );
 
   let marked = |value: TaskOrganization| {
     TaskOrganization::new(
@@ -266,7 +270,10 @@ fn auto_merge_marks_a_success_only_with_every_switch_on() {
   let (wait, turn) = &waits(&fixture)[0];
   assert_eq!(wait.kind, WaitKind::Ended(RunEnd::Succeeded));
   assert_eq!(wait.merging, Some(Merging::Merges), "{wait:?}");
-  assert_eq!(turn.as_ref().map(|turn| turn.message), followed.turn.map(|turn| turn.message));
+  assert_eq!(
+    turn.as_ref().map(|turn| turn.message),
+    followed.turn.map(|turn| turn.message)
+  );
   let prompt = fixture
     .db
     .chat_turn(followed.turn.expect("a turn").message)
@@ -274,9 +281,10 @@ fn auto_merge_marks_a_success_only_with_every_switch_on() {
     .expect("the turn")
     .text;
   assert!(
-    prompt
-      .as_str()
-      .contains(&format!("merge this run once with merge_run (run #{})", run.number().get())),
+    prompt.as_str().contains(&format!(
+      "merge this run once with merge_run (run #{})",
+      run.number().get()
+    )),
     "{}",
     prompt.as_str()
   );
@@ -339,7 +347,11 @@ fn auto_merge_turns_start_one_at_a_time_in_the_order_the_runs_ended() {
   fixture.succeed(&mut second, Timestamp::now());
   let started = follow(&fixture, MERGING).turn.expect("the first end's turn");
   assert_eq!(started.chat, first_chat.id(), "the run that ended first merges first");
-  assert_eq!(follow(&fixture, MERGING).turn, None, "the second waits, though its conversation is free");
+  assert_eq!(
+    follow(&fixture, MERGING).turn,
+    None,
+    "the second waits, though its conversation is free"
+  );
   assert_eq!(turn_in(&fixture, &second_chat), None);
   fixture
     .db
@@ -381,8 +393,12 @@ fn auto_merge_holds_back_no_turn_that_does_not_merge() {
   organize(&mut fixture, second_task, |value| value.with_no_automatic_merge(true));
   fixture.succeed(&mut first, Timestamp::now());
   fixture.succeed(&mut second, Timestamp::now());
-  follow(&fixture, MERGING).turn.expect("the first end's turn, which merges");
-  let told = follow(&fixture, MERGING).turn.expect("the opted-out end only tells the person");
+  follow(&fixture, MERGING)
+    .turn
+    .expect("the first end's turn, which merges");
+  let told = follow(&fixture, MERGING)
+    .turn
+    .expect("the opted-out end only tells the person");
   assert_eq!(told.chat, second_chat.id());
   assert_eq!(waits_in(&fixture, second_chat.id())[0].0.run, second.id());
 }

@@ -371,7 +371,10 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
   ] {
     assert!(prompt.contains(part), "{part} in {prompt}");
   }
-  assert!(!prompt.contains("Never merge a run nobody asked you to merge"), "{prompt}");
+  assert!(
+    !prompt.contains("Never merge a run nobody asked you to merge"),
+    "{prompt}"
+  );
   let left = AgentWait {
     merging: Some(Merging::Left {
       why: MergeLeft::BlockedByTasks {
@@ -402,7 +405,8 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
   );
   let system = system_prompt("Kontur", ProjectId::generate());
   assert!(
-    system.contains("with one exception: when the person turned on Let the Orchestrator merge finished runs on its own"),
+    system
+      .contains("with one exception: when the person turned on Let the Orchestrator merge finished runs on its own"),
     "{system}"
   );
 }

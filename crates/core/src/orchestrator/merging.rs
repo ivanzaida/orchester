@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::run::{AttemptReason, AttemptStart, Answerer, Run, StepStatus};
+use crate::run::{Answerer, AttemptReason, AttemptStart, Run, StepStatus};
 
 /// What the turn of a run's success does about merging the run, while the person lets the Orchestrator merge
 /// finished runs on its own.
@@ -59,7 +59,10 @@ impl MergeLeft {
       let Some(attempt) = accepted_in else {
         continue;
       };
-      let by = starts.iter().find(|start| start.attempt == attempt.id()).and_then(|start| start.by);
+      let by = starts
+        .iter()
+        .find(|start| start.attempt == attempt.id())
+        .and_then(|start| start.by);
       if by != Some(Answerer::Person) {
         return Some(Self::AcceptedByAutomation { step: name() });
       }

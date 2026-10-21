@@ -28,10 +28,17 @@ pub fn merging_section(ctx: &mut Ctx, view: &View, field: &Signal<bool>) -> Elem
     switch.on_change(move |on| field.set(on))
   };
   let row = side_row(
-    Label::new("task-form-no-automatic-merge", label).description(ctx.t("task_form.fields.noAutomaticMerge.description")),
+    Label::new("task-form-no-automatic-merge", label)
+      .description(ctx.t("task_form.fields.noAutomaticMerge.description")),
     switch,
     Place::Last,
     false,
   );
-  section("task-form-merging", &ctx.t("task_form.sections.merging"), None, vec![row]).into()
+  section(
+    "task-form-merging",
+    &ctx.t("task_form.sections.merging"),
+    None,
+    vec![row],
+  )
+  .into()
 }

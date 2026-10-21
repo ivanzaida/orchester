@@ -156,7 +156,9 @@ fn continuation(kept: &[KeptAction], attempt: u32) -> Option<FromOrchestrator> {
     let Change::Continue { attempt: stopped, .. } = kept.action.change.as_ref()?.change else {
       return None;
     };
-    (stopped.checked_add(1) == Some(attempt)).then(|| carried_out(kept)).flatten()
+    (stopped.checked_add(1) == Some(attempt))
+      .then(|| carried_out(kept))
+      .flatten()
   })
 }
 

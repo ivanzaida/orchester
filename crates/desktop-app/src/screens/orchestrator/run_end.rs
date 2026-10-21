@@ -153,9 +153,7 @@ fn left_words(ctx: &Ctx, why: &MergeLeft) -> Arc<str> {
     MergeLeft::AcceptedByAutomation { step } => {
       ctx.t_args("orchestrator.end.mergeLeft.acceptedByAutomation", [("step", step)])
     }
-    MergeLeft::MarkedBlocked { reason } => {
-      ctx.t_args("orchestrator.end.mergeLeft.markedBlocked", [("reason", reason)])
-    }
+    MergeLeft::MarkedBlocked { reason } => ctx.t_args("orchestrator.end.mergeLeft.markedBlocked", [("reason", reason)]),
     MergeLeft::BlockedByTasks { tasks } => ctx.t_args(
       "orchestrator.end.mergeLeft.blockedByTasks",
       [("tasks", tasks.join(", "))],

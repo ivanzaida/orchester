@@ -336,7 +336,8 @@ fn waits_read_the_answers_and_messages_the_orchestrator_proposed_for_a_run() {
     checkpoint: Some("a".repeat(40)),
     into: Some("main".to_owned()),
   };
-  db.add_chat_action(chat.id(), &change(merge.clone()), at(14)).expect("kept");
+  db.add_chat_action(chat.id(), &change(merge.clone()), at(14))
+    .expect("kept");
   let read = db.run_answer_actions(run.id()).expect("read");
   assert_eq!(read.len(), 2, "what answers this run's agents and merges it: {read:?}");
   assert_eq!(read[0].chat, chat.id());

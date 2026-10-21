@@ -109,7 +109,11 @@ pub(super) enum MergeAs {
 /// merges only the run whose success started the turn, while the turn's wait says it merges it ([`Merging::Merges`]),
 /// and only once: a second call in the turn is proposed. A run the rule leaves to the person now is refused
 /// (`left_to_person`), with why; any other call is proposed.
-pub(super) async fn merge_as(scope: &ChatScope, arguments: &JsonObject, switched_on: bool) -> Result<MergeAs, ToolError> {
+pub(super) async fn merge_as(
+  scope: &ChatScope,
+  arguments: &JsonObject,
+  switched_on: bool,
+) -> Result<MergeAs, ToolError> {
   if !switched_on {
     return Ok(MergeAs::Propose);
   }
@@ -127,7 +131,10 @@ pub(super) async fn merge_as(scope: &ChatScope, arguments: &JsonObject, switched
     }
     match left(&db, run.id())? {
       None => Ok(MergeAs::OnItsOwn),
-      Some(why) => Err(ToolError::refused("left_to_person", vec![left_message(&why, run.number().get())])),
+      Some(why) => Err(ToolError::refused(
+        "left_to_person",
+        vec![left_message(&why, run.number().get())],
+      )),
     }
   })
   .await
@@ -139,9 +146,8 @@ fn started_to_merge(entries: &[ChatEntry], run: RunId) -> bool {
   let Some((seq, wait)) = thinking_wait(entries) else {
     return false;
   };
-  let merges = wait.run == run
-    && wait.kind == WaitKind::Ended(RunEnd::Succeeded)
-    && wait.merging == Some(Merging::Merges);
+  let merges =
+    wait.run == run && wait.kind == WaitKind::Ended(RunEnd::Succeeded) && wait.merging == Some(Merging::Merges);
   merges
     && !entries
       .iter()

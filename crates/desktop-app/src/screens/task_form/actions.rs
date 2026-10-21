@@ -242,7 +242,14 @@ async fn queue(
     if base == edited {
       return queue_in(&save.repo_root, &servers, save.target, save.details, version);
     }
-    queue_organized_in(&save.repo_root, &servers, save.target, save.details, (base, edited), version)
+    queue_organized_in(
+      &save.repo_root,
+      &servers,
+      save.target,
+      save.details,
+      (base, edited),
+      version,
+    )
   })
   .await
   .map_err(|message| not_queued(Arc::from([message])))?;
