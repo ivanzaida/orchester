@@ -29,19 +29,19 @@ use super::{
 /// The seeded task the seed interrupted with a crash, its worktree there.
 const CRASHED: &str = "Import contacts from CSV";
 
-fn resume(run: &Run) -> Value {
+pub(super) fn resume(run: &Run) -> Value {
   json!({ "project": "Kontur", "run": run.id().to_string() })
 }
 
 /// The refusal's code and the key of its first reason (the tests' words are the keys).
-fn refusal(error: &ToolError) -> (&str, &str) {
+pub(super) fn refusal(error: &ToolError) -> (&str, &str) {
   match error {
     ToolError::Refused { code, reasons } => (code, reasons.first().map_or("", |reason| reason.key)),
     other => panic!("a refusal: {other:?}"),
   }
 }
 
-fn allow(served: &Served, consent: OrchestratorConsent, allowed: bool) {
+pub(super) fn allow(served: &Served, consent: OrchestratorConsent, allowed: bool) {
   served
     .services()
     .workspace
@@ -161,7 +161,7 @@ fn chat_never_continues_a_limit_a_cancel_a_runner_failure_or_a_gone_worktree() {
 }
 
 /// The turn an end of `run` (`kind`) started by itself in `scope`'s conversation, thinking now.
-fn turn_of_end(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): (&Seeded, &Run), kind: RunEnd) {
+pub(super) fn turn_of_end(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): (&Seeded, &Run), kind: RunEnd) {
   let wait = AgentWait {
     kind: WaitKind::Ended(kind),
     task: "KON".to_owned(),

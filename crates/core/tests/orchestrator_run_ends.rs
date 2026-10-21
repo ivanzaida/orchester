@@ -8,7 +8,8 @@
 use orchester_core::{
   id::{ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, MergeLeft, Merging, RunEnd, StopReason, WaitKind,
+    ActionOutcome, AgentWait, ChatAction, ChatEntry, Continuing, EntryKind, MergeLeft, Merging, RunEnd, StopReason,
+    WaitKind,
     change::{Change, ContinueChoice, MessageThen, ProposedChange, StepName},
     instructions::{system_prompt, wait_prompt},
     wait::raised_by_own,
@@ -336,6 +337,31 @@ fn orchestrator_run_end_prompt_says_what_to_do_with_each_end() {
 }
 
 #[test]
+fn orchestrator_run_end_prompt_of_contention_tells_the_person_and_continues_nothing() {
+  let wait = AgentWait {
+    automatic: true,
+    continuing: Some(Continuing::StorageContention),
+    ..ended(RunId::generate(), RunEnd::Interrupted)
+  };
+  let prompt = wait_prompt(&wait);
+  for part in [
+    "Run #3 of KON-12 (Sync contacts) was interrupted",
+    "the project database stayed busy, and more than 3 runs of the project were stopped so within 10 minutes",
+    "do not continue it",
+    "the database is under contention",
+    "suggest running fewer agents at once",
+    "Start, resume, cancel, continue or merge nothing",
+  ] {
+    assert!(prompt.contains(part), "{part} in {prompt}");
+  }
+  let once = wait_prompt(&AgentWait {
+    continuing: Some(Continuing::Continues),
+    ..wait
+  });
+  assert!(once.contains("continue this run once with resume_run"), "{once}");
+}
+
+#[test]
 fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
   let prompt = system_prompt("Kontur", ProjectId::generate());
   for rule in [
@@ -344,6 +370,8 @@ fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
     "return_to (an earlier agent step, with a note for its agent; also for a run that ended",
     "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's",
     "only when the person turned on Let the Orchestrator continue interrupted runs",
+    "one the runner stopped because the project database stayed busy",
+    "one the runner could not record for any other reason",
     "one whose worktree is gone are the person's",
     "In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
      propose",

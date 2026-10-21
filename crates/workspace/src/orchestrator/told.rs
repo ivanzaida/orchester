@@ -62,13 +62,15 @@ const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the mer
 
 /// What the agent reads first of `resume_run`.
 const RESUME_PAUSED: &str = "In this chat it resumes a run a pause stopped, and in a turn Orchester started by itself \
-  it only proposes that. It continues a run that a crash, the runner going away or Quit now interrupted, from its \
-  last checkpoint, only when the person turned on Let the Orchestrator continue interrupted runs; in a turn Orchester \
-  started by itself then only the run whose interruption started the turn, once, and not when it was interrupted \
-  again within 10 minutes of the time before (interrupted_again). A run stopped at a limit (its budget or time limit, \
-  the daily or a group's budget, a step's budget, an account's plan limit), one the person canceled, one the runner \
-  could not record and one whose worktree is gone are the person's on the task's Summary, and are refused here \
-  (person_only), as is an interrupted run while that switch is off.";
+  it only proposes that. It continues a run that a crash, the runner going away or Quit now interrupted, or that the \
+  runner stopped because the project database stayed busy (status runner_failure storage_contention), from its last \
+  checkpoint, only when the person turned on Let the Orchestrator continue interrupted runs; in a turn Orchester \
+  started by itself then only the run whose interruption started the turn, once, not when it was interrupted again \
+  within 10 minutes of the time before (interrupted_again), and not while more than 3 runs of the project were \
+  stopped by the busy database within 10 minutes (storage_contention). A run stopped at a limit (its budget or time \
+  limit, the daily or a group's budget, a step's budget, an account's plan limit), one the person canceled, one the \
+  runner could not record for any other reason and one whose worktree is gone are the person's on the task's \
+  Summary, and are refused here (person_only), as is an interrupted run while that switch is off.";
 
 /// What the agent reads first of `pause_run` and `release_queue`.
 const PROPOSE_ON_ITS_OWN: &str = "In a turn Orchester started by itself (its message begins with [Orchester]) it \

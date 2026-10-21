@@ -76,7 +76,7 @@ pub use self::{
   state::{NewRun, Run, StoredRun},
   status::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, MergeConflicts, PauseReason, RunFailure, RunLimit,
-    RunStatus, StepFailure, StepStatus, Stuck, WaitReason,
+    RunStatus, RunnerFailure, StepFailure, StepStatus, Stuck, WaitReason,
   },
   stuck::{AttemptStart, MAX_AUTOMATIC_ATTEMPTS, RetryReportSource, StuckDecision, attempt_starts},
   tool_approval::{

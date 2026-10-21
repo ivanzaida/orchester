@@ -122,9 +122,9 @@ const fn title(end: RunEnd, (named, more): (bool, bool)) -> &'static str {
 }
 
 /// What happens with `end` of `wait`'s run: the Orchestrator takes it up by itself (in the turn it `turned`, or after
-/// the turn under way; an interruption it continues once, or leaves to the person when it came again soon; a success
-/// it merges on its own, or leaves to the person and says why), the Orchestrator's own decision on the run led to it so
-/// it waits for the person, or the person's switch is off.
+/// the turn under way; an interruption it continues once, or leaves to the person when it came again soon or the
+/// database is under contention; a success it merges on its own, or leaves to the person and says why), the
+/// Orchestrator's own decision on the run led to it so it waits for the person, or the person's switch is off.
 fn effect(ctx: &Ctx, wait: &AgentWait, end: RunEnd, turned: bool) -> Arc<str> {
   let key = match (end, wait.automatic, turned, wait.continuing, &wait.merging) {
     (RunEnd::Succeeded, true, true, _, Some(Merging::Merges)) => "orchestrator.end.effectMerging",
@@ -137,6 +137,7 @@ fn effect(ctx: &Ctx, wait: &AgentWait, end: RunEnd, turned: bool) -> Arc<str> {
     (RunEnd::Interrupted, true, true, Some(Continuing::InterruptedAgain), _) => {
       "orchestrator.end.effectInterruptedAgain"
     }
+    (RunEnd::Interrupted, true, true, Some(Continuing::StorageContention), _) => "orchestrator.end.effectContention",
     (_, true, true, ..) => "orchestrator.end.effectAnswering",
     (_, true, false, ..) => "orchestrator.end.effectQueued",
     (_, false, ..) if wait.own => "orchestrator.end.effectOwn",
