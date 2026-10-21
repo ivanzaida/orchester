@@ -18,7 +18,7 @@ use lurq::{
 use orchester_core::{
   orchestrator::{
     DailyReport, RunEnd, StopReason,
-    report::{ActionWay, PersonWaitKind, ReportRun},
+    report::{ActionWay, MergedBy, PersonWaitKind, ReportRun},
   },
   run::RunLimit,
   time::Timestamp,
@@ -149,8 +149,13 @@ impl Words<'_> {
   /// What was merged and what the Orchestrator did, in the order it happened.
   fn done(&self, report: &DailyReport) -> Vec<String> {
     let merged = report.merged.iter().map(|task| {
+      let key = match task.by {
+        MergedBy::Person => "orchestrator.report.merged",
+        MergedBy::Orchestrator => "orchestrator.report.mergedByOrchestrator",
+        MergedBy::OrchestratorOnItsOwn => "orchestrator.report.mergedOnItsOwn",
+      };
       self.line(
-        "orchestrator.report.merged",
+        key,
         &[
           ("task", escape(&task.task)),
           ("title", escape(&task.title)),

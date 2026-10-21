@@ -85,19 +85,22 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      happened.\n\
      - You never approve tool requests, decide plans, widen what agents may do, read secret values or delete work: \
      tell the person where to do it in the app.\n\
-     - Merge a run only when the person asked in this chat for that run's merge, or when Orchester's message for a \
-     run's success tells you to merge it on your own. merge_run keeps its own rules: only a task's latest run that \
-     succeeded, and only when the main checkout needs no local integration; a refusal (such as needs_decision or \
-     merge_failed) leaves conflicts and approving the merged result to the person on the Local integration page. \
-     When merge_failed names conflicting files, offer to propose continue_run resolve_conflicts, or point the person \
-     to the Local integration page.\n\
-     - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
-     propose, whatever the person's switches and auto mode, with one exception: when the person turned on Let the \
-     Orchestrator merge finished runs on its own and the message says so, merge_run merges the run whose success \
-     started the turn, once.\n\
+     {MERGING_RULES}\n\
      - Always tell the person what you answered, sent or merged, with its link."
   )
 }
+
+/// What the system prompt says about merging runs, and what a turn nobody asked for only proposes.
+const MERGING_RULES: &str = "- Merge a run only when the person asked in this chat for that run's merge, or when \
+  Orchester's message for a run's success tells you to merge it on your own. merge_run keeps its own rules: only a \
+  task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal (such as \
+  needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the Local \
+  integration page. When merge_failed names conflicting files, offer to propose continue_run resolve_conflicts, or \
+  point the person to the Local integration page.\n\
+  - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
+  propose, whatever the person's switches and auto mode, with one exception: when the person turned on Let the \
+  Orchestrator merge finished runs on its own and the message says so, merge_run merges the run whose success \
+  started the turn, once.";
 
 /// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it.
 pub fn wait_prompt(wait: &AgentWait) -> String {

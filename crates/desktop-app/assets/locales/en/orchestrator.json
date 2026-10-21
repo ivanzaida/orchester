@@ -613,6 +613,8 @@
         "next": "No task waits in the queue."
       },
       "merged": "- Merged: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
+      "mergedByOrchestrator": "- Merged by the Orchestrator: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
+      "mergedOnItsOwn": "- Merged by the Orchestrator on its own: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
       "action": {
         "direct": "- Orchestrator: [{{what}}]({{link}}) — {{tool}} at {{time}}",
         "applied": "- You applied: [{{what}}]({{link}}) — {{tool}} at {{time}}"
