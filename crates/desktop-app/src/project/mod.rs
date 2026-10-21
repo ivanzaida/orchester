@@ -7,6 +7,7 @@
 //! one once, keeps the runners of the open ones running, and keeps one [`ProjectFeed`] per open project
 //! current. Screens get an open project as a [`ShownProject`].
 
+mod daily_report;
 pub mod feed;
 pub mod hold;
 mod host;

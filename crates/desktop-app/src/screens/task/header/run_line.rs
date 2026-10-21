@@ -13,7 +13,7 @@ use lurq::{
 };
 use orchester_core::{
   integration::MergeError,
-  run::{PauseReason, RunLimit, RunStatus, Stuck, TaskPhase},
+  run::{PauseReason, Run, RunLimit, RunStatus, Stuck, TaskPhase},
 };
 use orchester_workspace::{
   display,
@@ -60,7 +60,7 @@ fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
   let detail = &task.detail;
   let lost = task.lost();
   if !lost && detail.phase() == TaskPhase::Stuck {
-    let words = detail.run.as_ref().and_then(|run| stuck_words(run.run.status()));
+    let words = detail.run.as_ref().and_then(|run| stuck_words(&run.run));
     return (Status::NeedsInput, words.map(|key| ctx.t(key)));
   }
   // A request the run's agent waits on: the run needs the person, as its notice and steps say.
@@ -80,9 +80,11 @@ fn chip_words(ctx: &Ctx, task: &TaskContext) -> (Status, Option<Arc<str>>) {
 }
 
 /// Why a run waits for the person's decision: its step used up its retries or broke again ("retries used", as the
-/// design's chip says), could not check everything, or was not run again on an unchanged revision.
-const fn stuck_words(status: &RunStatus) -> Option<&'static str> {
-  match status {
+/// design's chip says), reported the work failed in a follow-up the pipeline has no route for, could not check
+/// everything, or was not run again on an unchanged revision.
+fn stuck_words(run: &Run) -> Option<&'static str> {
+  match run.status() {
+    RunStatus::WaitingForPerson(_) if run.waits_without_route() => Some("task.status.failed"),
     RunStatus::WaitingForPerson(Stuck::RetriesExhausted(_) | Stuck::BrokeAgain(_)) => Some("task.status.retriesUsed"),
     RunStatus::WaitingForPerson(Stuck::Unverified(_)) => Some("task.status.unverified"),
     RunStatus::WaitingForPerson(Stuck::Unchanged(_)) => Some("task.status.unchanged"),

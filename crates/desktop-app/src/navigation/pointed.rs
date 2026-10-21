@@ -16,10 +16,12 @@ pub struct Pointed {
 impl lurq::app::component::DevtoolsInspectable for Pointed {}
 
 /// Which decision of the Summary: the plan under review (`JY0xW`), raising the limit the run stopped at
-/// (`krC4n`), or the decision after a step's retries.
+/// (`krC4n`), the decision after a step's retries, or returning the work of a run that ended to a step, which the
+/// run's header points at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PointedCard {
   Plan,
   RaiseLimit,
   Retries,
+  Return,
 }

@@ -68,6 +68,9 @@ pub enum RunEnd {
 pub enum StopReason {
   /// Its step used up the `retries` its failure route allows.
   RetriesExhausted { retries: u32 },
+  /// A follow-up's step reported the work failed, and the pipeline has no route for that failure
+  /// ([`Run::waits_without_route`]).
+  NoRoute,
   /// Its step broke again in the attempt that restarted it.
   BrokeAgain,
   /// Its step could not check everything it is for.
@@ -84,6 +87,7 @@ impl StopReason {
       return None;
     };
     Some(match stuck {
+      Stuck::RetriesExhausted(_) if run.waits_without_route() => Self::NoRoute,
       Stuck::RetriesExhausted(step) => Self::RetriesExhausted {
         retries: run
           .snapshot()
@@ -198,6 +202,6 @@ fn is_about(kind: &EntryKind, wait: &AgentWait) -> bool {
         || action.started == Some(wait.run)
         || action.change.as_ref().and_then(|change| change.change.run()) == Some(wait.run)
     }
-    EntryKind::Person { .. } | EntryKind::Reply { .. } | EntryKind::Event(_) => false,
+    EntryKind::Person { .. } | EntryKind::Reply { .. } | EntryKind::Event(_) | EntryKind::Report { .. } => false,
   }
 }

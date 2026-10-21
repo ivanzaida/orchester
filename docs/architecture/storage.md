@@ -120,7 +120,7 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
     as a fresh execution in a new attempt (reason *restart*: that step, its dependent and its
     unfinished steps; never its route's target). A step that broke twice since it last passed —
     counted across attempts, so steps that break in turn do not restart each other forever — makes
-    the run wait for a person. A follow-up that fails is not routed at all.
+    the run wait for a person. A follow-up that breaks is not routed at all.
   - At most 10 automatic attempts (retries and restarts) follow each other; any failure after them
     makes the run wait for a person.
   - A run **waiting for a person** (*Needs you*) holds no agent slot. The person allows one more
@@ -221,8 +221,11 @@ fewer stop no agent, and new work waits until fewer agents work than the slots.
   the recipient's profile, for a direct message — once more, continuing the CLI session of that
   step's passed execution in the run's worktree, so its work makes new checkpoints. The run is
   running meanwhile and succeeded again when the step passes; the run's limits apply as to any work.
-  Its reply is its message in the conversation, not a new output. A follow-up that fails leaves the
-  run succeeded with the result it had; its attempt stays recorded as failed and decides nothing. A
+  Its reply is its message in the conversation, not a new output. A follow-up whose agent reports
+  `failed` is routed as that step's verdict is in any attempt: its failure route while retries are
+  left, a new attempt from the route's target whose prompt carries the follow-up's report; else the
+  run waits for a person, also where the step has no route (ORC-44). A follow-up that fails otherwise
+  leaves the run succeeded with the result it had; its attempt stays recorded as failed and decides nothing. A
   run that succeeds while messages are still queued for its agents (e.g. written while a tool step
   ran) is followed up at once. A run whose work was merged into its base branch takes no messages. A
   question answered while no runner was attached resumes its step once a runner attaches, and a run

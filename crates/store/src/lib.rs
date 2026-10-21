@@ -25,6 +25,6 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 pub use project_db::ProjectMigration;
 pub use project_db::{
   AutoModeSave, AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, ChatListing, ChatTurn, DecisionCounts,
-  EndedRun, JoinedKey, KeptAction, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResolutionStart, ResourceUpdate,
-  ReturnedTask, RunBranch, SharedMember, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
+  EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResolutionStart,
+  ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus,
 };

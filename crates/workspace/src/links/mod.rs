@@ -10,7 +10,7 @@ mod usage;
 use std::num::NonZeroU64;
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, ProjectId, ResourceId},
+  id::{AgentAccountId, ChatId, ConnectionId, ProjectId, ResourceId},
   project::TaskKey,
 };
 
@@ -62,6 +62,8 @@ pub enum Link {
   Usage(ProjectId, Box<UsageQuery>),
   /// Every project's usage, All projects' *Usage* tab, showing a query.
   UsageEverywhere(Box<UsageQuery>),
+  /// A conversation of the project's Orchestrator chat.
+  Orchestrator(ProjectId, ChatId),
 }
 
 /// The tab of a task's page a link opens.
@@ -131,6 +133,10 @@ impl Link {
       } => files_path(format!("{}/files", root(*project)), Some(path.as_str()), at, *line),
       Self::Usage(project, query) => with_usage_query(format!("{}/{USAGE}", root(*project)), query),
       Self::UsageEverywhere(query) => with_usage_query(format!("/{USAGE}"), query),
+      Self::Orchestrator(project, chat) => with_query(
+        format!("{}/orchestrator", root(*project)),
+        &[("chat", Some(&chat.to_string()))],
+      ),
     }
   }
 }

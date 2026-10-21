@@ -22,9 +22,11 @@
     },
     "edit": "Edit",
     "removeWorktree": "Remove worktree",
+    "returnToStep": "Return to a step",
     "status": {
       "step": "{{number}} {{step}}",
       "retriesUsed": "retries used",
+      "failed": "reported failed",
       "unverified": "could not check everything",
       "unchanged": "not run again",
       "conflict": "conflict"
