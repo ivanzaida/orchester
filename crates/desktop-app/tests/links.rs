@@ -29,7 +29,7 @@ const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 16;
+const KINDS: usize = 18;
 
 /// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
 fn matched(chain: &[RouteMatch]) -> String {
@@ -75,7 +75,9 @@ const fn kind(link: &Link) -> usize {
     Link::PullRequests(..) => 12,
     Link::Usage(..) => 13,
     Link::UsageEverywhere(_) => 14,
-    Link::Orchestrator(..) => 15,
+    Link::Modules(_) => 15,
+    Link::Module(..) => 16,
+    Link::Orchestrator(..) => 17,
   }
 }
 
@@ -168,6 +170,8 @@ fn every_link() -> Vec<(Link, Route)> {
       Link::PullRequests(project, PullRequestTab::NeedsReview),
       at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
     ),
+    (Link::Modules(project), at(ProjectPage::Modules)),
+    (Link::Module(project, id()), at(ProjectPage::Module(id()))),
     (
       Link::Orchestrator(project, id()),
       at(ProjectPage::Orchestrator(OrchestratorChat::Chat(id()))),

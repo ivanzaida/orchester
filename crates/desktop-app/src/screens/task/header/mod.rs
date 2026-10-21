@@ -1,11 +1,13 @@
 //! The task page's header (`Task header` `x8Dmfa` in `lUXff`): the breadcrumb, the title with its
-//! actions (`actions`), the status and run line, the frame's notices, Run again's and the latest run's
+//! actions (`actions`), the status and run line, the task's module (`module`, ORC-48, no frame yet), the frame's
+//! notices, Run again's and the latest run's
 //! *Remove worktree* confirmations in place, and the page tabs (`Page tabs` `L9OIIZ`; Artifacts and Memory last,
 //! `ogMzT` in `a0PLO`). It is the same component on every tab, so a request under way or an open
 //! confirmation stays as the tabs switch.
 
 mod actions;
 pub(super) mod controls;
+mod module;
 mod notices;
 mod refusal;
 mod run_again;
@@ -133,6 +135,7 @@ impl Component for TaskHeader {
       .child(crumbs(ctx, &props))
       .child(title_row)
       .child(run_line::status_row(ctx, &props.task))
+      .with_children(module::field(ctx, &props.task))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
       .with_children(confirmation)
       .with_children(removal(ctx, &props))
