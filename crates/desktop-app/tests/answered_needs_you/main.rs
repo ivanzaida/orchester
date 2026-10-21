@@ -224,8 +224,10 @@ impl Page {
   }
 
   /// Answers `item` with `press`, then measures: whether it left and the count and the pill went down by one in the
-  /// press's own frame (two layouts, nothing a future did delivered), and how long, from the press, until the feed
-  /// lists it no more. Prints the time as `label`'s.
+  /// press's own frame (two layouts, nothing a future did delivered), how long, from the press, until the feed lists
+  /// it no more, and until a reading after the runner's record took over from the mark, which still does not list
+  /// it. Prints the times as `label`'s.
+  #[allow(clippy::print_stderr, reason = "the timings ORC-70 asks to report")]
   fn answer(&mut self, label: &str, item: &WaitingItem, press: impl FnOnce(&mut Self)) -> Answered {
     let before = self.count();
     let pressed = Instant::now();
@@ -241,9 +243,19 @@ impl Page {
       thread::sleep(Duration::from_millis(2));
     }
     let took = pressed.elapsed();
+    let runners = self.window.launch.services().expect("the session started").runners.clone();
+    while !runners.answers_now(&self.repo).is_empty() {
+      assert!(Instant::now() < deadline, "timed out waiting for the runner to record {label}");
+      self.window.tree.tick_futures();
+      self.window.pass();
+      thread::sleep(Duration::from_millis(2));
+    }
+    let read = pressed.elapsed();
+    assert!(!self.lists(item), "{label}: the runner took it, and the reading after it no longer lists it");
     eprintln!(
-      "ORC-70 timing {label}: {} ms to leave (in the press's frame: {at_once})",
-      took.as_millis()
+      "ORC-70 timing {label}: {} ms to leave (in the press's frame: {at_once}), {} ms until read back",
+      took.as_millis(),
+      read.as_millis()
     );
     Answered { at_once }
   }

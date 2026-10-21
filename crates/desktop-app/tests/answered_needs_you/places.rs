@@ -2,8 +2,9 @@
 //! pill leave in the press's frame, and the runner's record lets them go for good.
 
 use orchester_app::routes::{OverviewTab, ProjectPage, Route, TaskTab};
-use orchester_core::run::{Answerer, ApprovalAnswer};
+use orchester_core::{question::GivenAnswer, run::Answerer};
 use orchester_ipc::Command;
+use orchester_store::ProjectDb;
 use orchester_workspace::tasks::needs_you::{WaitingItem, WaitingKind};
 
 use super::{Page, ids_in, is_approval, is_choice, is_decision, is_plan};
@@ -80,15 +81,18 @@ fn answered_on_the_conversation_card_leaves_at_once() {
   });
   card.sort_by_key(String::len);
   let card = card.remove(0);
-  page.click(&format!("{card}-option-0-1"));
-  page.window.pass();
+  // The fake asks two questions; each takes an option.
+  for option in ["0-1", "1-0"] {
+    page.click(&format!("{card}-option-{option}"));
+    page.window.pass();
+  }
   let answered = page.answer("conversation card", &item, |page| page.click(&format!("{card}-send")));
   assert!(answered.at_once, "the item leaves in the press's frame");
   page.end();
 }
 
 #[test]
-fn decided_on_the_summary_leaves_at_once() {
+fn answered_on_the_summary_plan_leaves_at_once() {
   let mut page = Page::live();
   page.start(PLAN);
   let item = page.wait_for("the plan", is_plan);
@@ -99,7 +103,7 @@ fn decided_on_the_summary_leaves_at_once() {
 }
 
 #[test]
-fn decided_after_retries_on_the_summary_leaves_at_once() {
+fn answered_after_retries_on_the_summary_leaves_at_once() {
   let mut page = Page::live();
   page.start(FAILS);
   let item = page.wait_for("the decision after retries", is_decision);
@@ -124,15 +128,32 @@ fn answered_in_the_composer_leaves_at_once() {
   page.end();
 }
 
-/// The Orchestrator chat's tools decide as `decide_approval` does: through the project's runner, as automation.
-fn decide_as_the_orchestrator(page: &Page, item: &WaitingItem) {
-  let WaitingKind::Approval(shown) = &item.kind else {
-    panic!("an approval");
+/// The Orchestrator chat's tools answer as `answer_question` does: through the project's runner, as automation, with
+/// each question's first option.
+fn answer_as_the_orchestrator(page: &Page, item: &WaitingItem) {
+  let WaitingKind::Choice(choice) = &item.kind else {
+    panic!("a question with suggested answers");
   };
-  let command = Command::DecideToolApproval {
-    run: shown.approval.run,
-    approval: shown.approval.id.clone(),
-    answer: ApprovalAnswer::Once,
+  let asked = ProjectDb::open(&page.repo)
+    .expect("the project's database")
+    .waiting_questions()
+    .expect("the waiting questions")
+    .into_iter()
+    .find(|asked| *asked.request.id() == *choice.request)
+    .expect("the question waits");
+  let answers = asked
+    .request
+    .questions()
+    .iter()
+    .map(|question| GivenAnswer {
+      choices: vec![question.options()[0].label().to_owned()],
+      text: None,
+    })
+    .collect();
+  let command = Command::AnswerQuestion {
+    run: asked.request.run(),
+    request: asked.request.id().to_owned(),
+    answers,
     by: Answerer::Automation,
   };
   let (services, open) = (
@@ -142,7 +163,7 @@ fn decide_as_the_orchestrator(page: &Page, item: &WaitingItem) {
   let runners = services.runners.clone();
   services.runtime.spawn(async move {
     if let Err(error) = runners.control_run_in(&open, command).await {
-      panic!("the runner did not take the decision: {error}");
+      panic!("the runner did not take the answer: {error}");
     }
   });
 }
@@ -151,8 +172,8 @@ fn decide_as_the_orchestrator(page: &Page, item: &WaitingItem) {
 /// answer off the window's thread, so the item leaves once their mark reaches the feed, not in a press's frame.
 fn orchestrator(away: bool) {
   let mut page = Page::live();
-  page.start(APPROVAL);
-  let item = page.wait_for("the agent's request", is_approval);
+  page.start(CHOICE);
+  let item = page.wait_for("the agent's question", is_choice);
   if away {
     page.away();
   } else {
@@ -167,7 +188,7 @@ fn orchestrator(away: bool) {
   } else {
     "Orchestrator chat, Overview card"
   };
-  page.answer(label, &item, |page| decide_as_the_orchestrator(page, &item));
+  page.answer(label, &item, |page| answer_as_the_orchestrator(page, &item));
   if !away {
     assert_eq!(
       page.window.text("overview-needs-count"),
@@ -179,11 +200,11 @@ fn orchestrator(away: bool) {
 }
 
 #[test]
-fn decided_by_the_orchestrator_leaves_the_overview() {
+fn answered_by_the_orchestrator_leaves_the_overview() {
   orchestrator(false);
 }
 
 #[test]
-fn decided_by_the_orchestrator_for_another_tab_leaves() {
+fn answered_by_the_orchestrator_for_another_tab_leaves() {
   orchestrator(true);
 }
