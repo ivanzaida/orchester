@@ -94,8 +94,10 @@ fn orchestrator_tools_say_which_interrupted_runs_resume_run_continues() {
     .expect("resume_run is listed with a description");
   for part in [
     "a crash, the runner going away or Quit now",
+    "runner_failure storage_contention",
     "Let the Orchestrator continue interrupted runs",
     "interrupted_again",
+    "(storage_contention)",
     "one the person canceled",
     "whose worktree is gone",
     "person_only",

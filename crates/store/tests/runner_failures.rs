@@ -39,7 +39,9 @@ fn runner_failure_of_a_busy_or_locked_database_is_contention() {
   let folder = TempDir::new().expect("a folder");
   let path = folder.path().join("locked.db");
   let holder = Connection::open(&path).expect("open");
-  holder.execute_batch("CREATE TABLE t (x INTEGER); BEGIN IMMEDIATE; INSERT INTO t VALUES (1);").expect("held");
+  holder
+    .execute_batch("CREATE TABLE t (x INTEGER); BEGIN IMMEDIATE; INSERT INTO t VALUES (1);")
+    .expect("held");
   let writer = Connection::open(&path).expect("open");
   writer.busy_timeout(std::time::Duration::ZERO).expect("no wait");
   let locked = StoreError::from(writer.execute("INSERT INTO t VALUES (2)", []).expect_err("locked"));
@@ -65,10 +67,7 @@ fn runner_failure_of_storage_unavailable_for_real_and_of_the_rest() {
   ] {
     assert_eq!(sqlite(code).runner_failure(), RunnerFailure::StorageFailure, "{code}");
   }
-  let schema = StoreError::SchemaTooNew {
-    found: 9,
-    supported: 8,
-  };
+  let schema = StoreError::SchemaTooNew { found: 9, supported: 8 };
   assert_eq!(schema.runner_failure(), RunnerFailure::StorageFailure, "another schema");
   let damaged = StoreError::Corrupt {
     what: "run",
@@ -101,7 +100,9 @@ fn runner_failure_is_kept_with_its_interruption() {
   let events = run.continue_run(at(2)).expect("continued");
   db.append_events(&run, &events).expect("recorded");
   let interrupted = Timestamp::now();
-  let events = run.interrupt(InterruptCause::RunnerFailed, interrupted).expect("interrupted");
+  let events = run
+    .interrupt(InterruptCause::RunnerFailed, interrupted)
+    .expect("interrupted");
   db.append_runner_failure(&run, &events, RunnerFailure::StorageContention)
     .expect("recorded with why");
   assert_eq!(
@@ -132,7 +133,9 @@ fn runner_failure_is_kept_with_its_interruption() {
   // Its last interruption decides: a crash after it has no kind.
   let events = run.continue_run(Timestamp::now()).expect("continued");
   db.append_events(&run, &events).expect("recorded");
-  let events = run.interrupt(InterruptCause::Crashed, Timestamp::now()).expect("interrupted");
+  let events = run
+    .interrupt(InterruptCause::Crashed, Timestamp::now())
+    .expect("interrupted");
   db.append_events(&run, &events).expect("recorded");
   assert_eq!(db.runner_failure(run.id()).expect("read"), None);
 }

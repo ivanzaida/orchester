@@ -219,10 +219,12 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
     return Ok(None);
   };
   let present = db.worktree_removal(run.id())?.is_none() && run_worktree(root, run.id()).is_dir();
-  Ok(match ChatResume::of(run.status(), db.runner_failure(run.id())?, present) {
-    ChatResume::Interrupted(cause) => Some(super::guard::continuing_of(db, run.id(), cause)?),
-    ChatResume::Paused | ChatResume::PersonOnly(_) | ChatResume::Other => None,
-  })
+  Ok(
+    match ChatResume::of(run.status(), db.runner_failure(run.id())?, present) {
+      ChatResume::Interrupted(cause) => Some(super::guard::continuing_of(db, run.id(), cause)?),
+      ChatResume::Paused | ChatResume::PersonOnly(_) | ChatResume::Other => None,
+    },
+  )
 }
 
 /// The entries of every conversation that start a turn by themselves and have none, each by its conversation and

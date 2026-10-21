@@ -253,6 +253,7 @@ impl RunStore for ProjectDb {
 }
 
 /// What is stored with a run's events, in their transaction.
+#[derive(Clone, Copy)]
 pub(super) enum With<'a> {
   Nothing,
   Plan(&'a Plan),

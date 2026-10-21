@@ -146,7 +146,10 @@ pub(super) fn continuing_of(db: &ProjectDb, run: RunId, cause: InterruptCause) -
   }
   let window = i64::try_from(AGAIN_WITHIN.as_millis()).expect("ten minutes of milliseconds fit in i64");
   let since = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - window);
-  Ok(Continuing::after_contention(&interruptions, db.contended_runs_since(since)?))
+  Ok(Continuing::after_contention(
+    &interruptions,
+    db.contended_runs_since(since)?,
+  ))
 }
 
 /// What a resume reads of its run: its id and number, what the chat may do with it, what a turn nobody asked for does

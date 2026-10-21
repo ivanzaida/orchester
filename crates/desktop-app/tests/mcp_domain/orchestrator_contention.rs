@@ -53,7 +53,10 @@ fn chat_continues_only_storage_contention_and_only_with_the_persons_switch() {
   let broken = stopped(&mut db, BROKEN, RunnerFailure::StorageFailure);
   let other = stopped(&mut db, OTHER, RunnerFailure::Other);
   let refused = chat_call(&mut served, &scope, "resume_run", resume(&busy)).expect_err("the switch is off");
-  assert_eq!(refusal(&refused), ("person_only", "orchestrator.tools.resumePersonOnly"));
+  assert_eq!(
+    refusal(&refused),
+    ("person_only", "orchestrator.tools.resumePersonOnly")
+  );
   allow(&served, OrchestratorConsent::ContinueInterrupted, true);
   for run in [&broken, &other] {
     let refused = chat_call(&mut served, &scope, "resume_run", resume(run)).expect_err("the person's");
@@ -84,8 +87,18 @@ fn chat_reads_why_the_runner_stopped_a_run() {
   let (mut served, seeded) = Served::seeded("task-states");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   for (title, failure, kind, words) in [
-    (BUSY, RunnerFailure::StorageContention, "storage_contention", "database busy"),
-    (BROKEN, RunnerFailure::StorageFailure, "storage_failure", "database unavailable"),
+    (
+      BUSY,
+      RunnerFailure::StorageContention,
+      "storage_contention",
+      "database busy",
+    ),
+    (
+      BROKEN,
+      RunnerFailure::StorageFailure,
+      "storage_failure",
+      "database unavailable",
+    ),
     (OTHER, RunnerFailure::Other, "other", "runner error"),
   ] {
     let run = stopped(&mut db, title, failure);
@@ -112,7 +125,10 @@ fn chat_reads_why_the_runner_stopped_a_run() {
     .interrupt(InterruptCause::RunnerFailed, Timestamp::now())
     .expect("interrupted");
   db.append_events(&crashed, &events).expect("recorded without why");
-  let read = served.ok("get_run", &json!({ "project": "Kontur", "run": crashed.id().to_string() }));
+  let read = served.ok(
+    "get_run",
+    &json!({ "project": "Kontur", "run": crashed.id().to_string() }),
+  );
   assert!(read["status"]["runner_failure"].is_null(), "{read}");
 }
 
