@@ -7,6 +7,7 @@
 
 mod accounts;
 mod automation;
+mod daily_report;
 mod notifications;
 pub mod orchester;
 mod page;

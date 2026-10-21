@@ -225,7 +225,7 @@ fn ended_wait(project: ProjectId, task: &Task, run: &Run, end: RunEnd) -> AgentW
 }
 
 /// The step `run` stopped at: the one that failed, waits for a decision, or used its budget or its account's plan.
-fn stopped_step(run: &Run) -> Option<&StepKey> {
+pub(super) fn stopped_step(run: &Run) -> Option<&StepKey> {
   match run.status() {
     RunStatus::Failed(RunFailure::StepFailed(step) | RunFailure::RetriesExhausted(step)) => Some(step),
     RunStatus::WaitingForPerson(stuck) => Some(stuck.step()),

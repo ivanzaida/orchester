@@ -39,7 +39,7 @@ use crate::{
   },
 };
 
-/// The minutes between the times quiet hours can start and end at.
+/// The minutes between the times a time's select offers.
 const STEP: u16 = 30;
 
 type SaveAction = FutureAction<NotificationSettings, (), Message>;
@@ -156,14 +156,8 @@ impl NotificationsSection {
 
   /// The quiet hours' start and end (`From 22:00 to 08:00`); two same times say they are not taken.
   fn times(&self, ctx: &Ctx) -> Element {
-    let options = || -> Vec<SelectOption<String>> {
-      (0..MINUTES_PER_DAY)
-        .step_by(usize::from(STEP))
-        .map(|minute| SelectOption::new(clock(minute), clock(minute)))
-        .collect()
-    };
     let select = |id: &str, name: &str, value: &Signal<String>| {
-      SelectField::new(id, ctx.t(name), value.clone(), options())
+      SelectField::new(id, ctx.t(name), value.clone(), time_options())
         .width(Dimension::Px(TIME_WIDTH))
         .render(ctx)
     };
@@ -201,7 +195,7 @@ impl NotificationsSection {
 }
 
 /// The width of a time's select (`22:00` and its chevron).
-const TIME_WIDTH: f32 = 112.0;
+pub(super) const TIME_WIDTH: f32 = 112.0;
 
 /// The row `settings-notify-{key}` with its switch, titled and described by `settings.notifications.{key}.*`; turning
 /// the switch shows the settings `change` makes at once and saves them.
@@ -253,19 +247,27 @@ fn save_action(ctx: &mut Ctx) -> SaveAction {
 }
 
 /// `minute` of the day as `HH:MM`.
-fn clock(minute: u16) -> String {
+pub(super) fn clock(minute: u16) -> String {
   format!("{:02}:{:02}", minute / 60, minute % 60)
 }
 
+/// The times of day a time's select offers, [`STEP`] apart: the quiet hours' ends and the daily report's time.
+pub(super) fn time_options() -> Vec<SelectOption<String>> {
+  (0..MINUTES_PER_DAY)
+    .step_by(usize::from(STEP))
+    .map(|minute| SelectOption::new(clock(minute), clock(minute)))
+    .collect()
+}
+
 /// Sets a select's `value` to `time`, unless it shows it already.
-fn show(value: &Signal<String>, time: String) {
+pub(super) fn show(value: &Signal<String>, time: String) {
   if value.get_untracked() != time {
     value.set(time);
   }
 }
 
 /// The minute of the day `HH:MM` names.
-fn minute(clock: &str) -> Option<u16> {
+pub(super) fn minute(clock: &str) -> Option<u16> {
   let (hours, minutes) = clock.split_once(':')?;
   let minute = hours.parse::<u16>().ok()? * 60 + minutes.parse::<u16>().ok()?;
   (minute < MINUTES_PER_DAY).then_some(minute)

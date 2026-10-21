@@ -8,6 +8,7 @@ mod auto_mode;
 mod base_moved;
 mod continue_run;
 mod conversation;
+mod daily_report;
 mod limits;
 mod message_waits;
 mod messages;
@@ -322,6 +323,12 @@ const SPECS: &[Spec] = &[
     read_only: true,
   },
   Spec {
+    name: "get_daily_report",
+    description: "A project's report of one local day (today when `day` is left out, up to now), the one its Orchestrator conversation got for that day when it was delivered (delivered: true), else read now from what Orchester holds: the tasks merged that day (key, title, run, when); the tasks' latest runs as they stand, ready to merge, stopped (failed, at a limit, waiting for a decision or interrupted, with `end` telling how and the step) or at work; what waits for the person (tool requests, questions, messages, plans, the Orchestrator's proposals); what the Orchestrator did that day (way: direct, itself, or applied by the person); the day's tokens (spent) and active agent time by task and by account, as get_usage reads them, against the daily budget (null: no limit); and the queued tasks in order. Every item has its app `link`.",
+    schema: schema_for_type::<daily_report::GetDailyReport>,
+    read_only: true,
+  },
+  Spec {
     name: "list_pipelines",
     description: "A project's pipelines that have a published version, which tasks run with: name, version, steps, and its link in the app (its editor). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why.",
     schema: schema_for_type::<across::InProjects>,
@@ -386,7 +393,7 @@ async fn dispatch(
   }
 }
 
-/// The tools that answer what agents wait for, auto mode's settings, and the pull requests.
+/// The tools that answer what agents wait for, auto mode's settings, the pull requests and the daily report.
 async fn dispatch_answers(
   services: &Services,
   translate: &Translate,
@@ -406,6 +413,7 @@ async fn dispatch_answers(
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
+    "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }

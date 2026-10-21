@@ -31,8 +31,9 @@ use orchester_workspace::{
 
 use crate::services::Services;
 
-/// One follower keeps waits at a time, so two that overlap never both open a conversation for the same new wait.
-static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+/// One follower keeps waits at a time, so two that overlap never both open a conversation for the same new wait; the
+/// daily report (`super::daily_report`) is kept under it too, so a report and a wait never both open one.
+pub(super) static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// The runs of each project, by its folder, that git found merged outside Orchester or with nothing to merge, each by
 /// the event it succeeded with: a run that succeeded so stays so until it works again, and git is not asked about it
