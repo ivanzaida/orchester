@@ -1,4 +1,12 @@
 {
+  "modules": {
+    "errors": {
+      "targetBeforeStart": "The target date can't be before the start date.",
+      "duplicateName": "Another module already has this name.",
+      "notFound": "This module no longer exists.",
+      "invalidDate": "Write the date as YYYY-MM-DD."
+    }
+  },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
     "preflightFailed": "Local integration could not prove the current checkout and result identities. Nothing was merged.",

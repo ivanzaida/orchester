@@ -17,8 +17,7 @@ use crate::{
   rows::{corrupt, parse},
 };
 
-const SELECT_MODULES: &str =
-  "SELECT id, name, description, start_date, target_date, state, created_at FROM modules";
+const SELECT_MODULES: &str = "SELECT id, name, description, start_date, target_date, state, created_at FROM modules";
 
 impl ProjectDb {
   /// The project's modules, oldest first.
@@ -167,7 +166,11 @@ impl ProjectDb {
 
 fn load(connection: &Connection, id: ModuleId) -> Result<Option<Module>, StoreError> {
   connection
-    .query_row(&format!("{SELECT_MODULES} WHERE id = ?1"), [id.to_string()], ModuleRow::read)
+    .query_row(
+      &format!("{SELECT_MODULES} WHERE id = ?1"),
+      [id.to_string()],
+      ModuleRow::read,
+    )
     .optional()?
     .map(ModuleRow::into_module)
     .transpose()
@@ -257,8 +260,16 @@ impl ModuleRow {
       "closed" => ModuleState::Closed,
       other => return Err(corrupt("module state", other)),
     };
-    let start = self.start.as_deref().map(|day| parse("module start date", day)).transpose()?;
-    let target = self.target.as_deref().map(|day| parse("module target date", day)).transpose()?;
+    let start = self
+      .start
+      .as_deref()
+      .map(|day| parse("module start date", day))
+      .transpose()?;
+    let target = self
+      .target
+      .as_deref()
+      .map(|day| parse("module target date", day))
+      .transpose()?;
     let details = ModuleDetails::new(
       Name::new(&self.name).map_err(|error| corrupt("module name", error))?,
       &self.description,

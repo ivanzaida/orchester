@@ -27,6 +27,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod merged_outside;
+mod modules;
 mod orchestrator_chat;
 mod orchestrator_continue;
 mod orchestrator_continued;

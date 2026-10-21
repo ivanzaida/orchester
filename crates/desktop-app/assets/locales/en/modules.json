@@ -1,0 +1,83 @@
+{
+  "modules": {
+    "title": "Modules",
+    "description": "Group tasks into epics, milestones or sprints and follow how their work burns down.",
+    "newModule": "New module",
+    "reading": "Reading the modules…",
+    "readFailed": "The modules couldn't be read",
+    "empty": {
+      "title": "No modules yet",
+      "body": "Make a module to group tasks and follow how its work burns down."
+    },
+    "columns": {
+      "name": "NAME",
+      "dates": "DATES",
+      "state": "STATE",
+      "tasks": "TASKS",
+      "progress": "PROGRESS",
+      "key": "KEY",
+      "task": "TASK",
+      "status": "STATUS"
+    },
+    "state": {
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "dates": {
+      "none": "No dates",
+      "from": "From {{start}}",
+      "until": "Until {{target}}",
+      "range": "{{start}} – {{target}}"
+    },
+    "progress": {
+      "tasks": "{{done}} of {{scope}} tasks done",
+      "none": "Nothing in scope",
+      "percent": "{{percent}}%"
+    },
+    "unit": {
+      "tasks": "Counted in tasks"
+    },
+    "form": {
+      "newTitle": "New module",
+      "editTitle": "Edit module",
+      "name": "Name",
+      "description": "Description",
+      "descriptionPlaceholder": "What this module delivers",
+      "start": "Start date",
+      "target": "Target date",
+      "datePlaceholder": "YYYY-MM-DD",
+      "state": "State",
+      "create": "Create module",
+      "save": "Save changes",
+      "cancel": "Cancel"
+    },
+    "page": {
+      "back": "Modules",
+      "edit": "Edit",
+      "reading": "Reading the module…",
+      "notFound": "This module no longer exists",
+      "notFoundBody": "It may have been removed from this project's data.",
+      "tasks": "Tasks",
+      "noTasks": "No task is in this module yet. Choose it as a task's module on the task form or the task's page."
+    },
+    "burndown": {
+      "title": "Burndown",
+      "subtitle": "Remaining work at the end of each day",
+      "noTarget": "Set a target date to see the ideal line.",
+      "remaining": "Remaining",
+      "ideal": "Ideal",
+      "added": "Added",
+      "removed": "Removed",
+      "pointValue": "{{remaining}} remaining",
+      "ahead": "—"
+    },
+    "table": {
+      "day": "DAY",
+      "scope": "SCOPE",
+      "remaining": "REMAINING",
+      "ideal": "IDEAL",
+      "added": "ADDED",
+      "removed": "REMOVED"
+    }
+  }
+}

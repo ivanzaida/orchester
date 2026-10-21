@@ -4,9 +4,12 @@
 //! project's [`TaskWriter`], so a shared project's task goes to its server.
 
 use orchester_core::{
-  id::IdempotencyKey,
+  id::{IdempotencyKey, ModuleId},
   store::SettingsStore,
-  task::{Task, TaskDetails, organization::TaskOrganization},
+  task::{
+    Task, TaskDetails,
+    organization::{ChangeActor, TaskOrganization},
+  },
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -16,6 +19,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
+  modules::find_module,
   tasks::find_task,
   wire::{self, Rank, Workflow},
 };
@@ -65,6 +69,9 @@ pub struct CreateTask {
   pub workflow_status: Option<Workflow>,
   #[serde(default)]
   pub priority: Option<Rank>,
+  /// The module to put the task in, by its id or name (list_modules).
+  #[serde(default)]
+  pub module: Option<String>,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -94,6 +101,9 @@ pub struct UpdateTask {
   pub workflow_status: Option<Workflow>,
   #[serde(default)]
   pub priority: Option<Rank>,
+  /// The module to move the task to, by its id or name; `null` takes it out of its module.
+  #[serde(default, deserialize_with = "super::modules::nullable")]
+  pub module: Option<Option<String>>,
 }
 
 /// The details as the form reads them from its fields' text.
@@ -145,6 +155,11 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
   let db = ProjectDb::open(&root)?;
   let limits = db.project_limits()?;
   let published = published_pipelines(&db)?;
+  let module = args
+    .module
+    .as_deref()
+    .map(|named| find_module(&db, named).map(|module| module.id()))
+    .transpose()?;
   drop(db);
   let fields = Fields {
     title: &args.title,
@@ -176,8 +191,20 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     .map_err(write_error)?
     .saved()
     .ok_or_else(changed)?;
+  let task = moved(&mut writer, task, module)?;
   services.changes.record(open.project.id(), Outside::Tasks);
   Ok(task)
+}
+
+/// `task` put in `module`, or in none, when it is not there already.
+fn moved(writer: &mut TaskWriter, task: Task, module: Option<ModuleId>) -> Result<Task, ToolError> {
+  if task.module() == module {
+    return Ok(task);
+  }
+  writer
+    .set_task_module(task.id(), module, ChangeActor::Person)
+    .map_err(write_error)?;
+  Ok(task.with_module(module))
 }
 
 fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
@@ -186,6 +213,11 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let db = ProjectDb::open(&root)?;
   let published = published_pipelines(&db)?;
   let task = find_task(&db, &args.key)?;
+  let module = match &args.module {
+    Some(Some(named)) => Some(Some(find_module(&db, named)?.id())),
+    Some(None) => Some(None),
+    None => None,
+  };
   drop(db);
   let current = task.details();
   let pipeline = match args.pipeline.as_deref() {
@@ -237,6 +269,10 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     EditSaved::Saved { task, .. } => task,
     EditSaved::Conflict(_) => return Err(changed()),
   };
+  let saved = match module {
+    Some(module) => moved(&mut writer, saved, module)?,
+    None => saved,
+  };
   services.changes.record(open.project.id(), Outside::Tasks);
   Ok(saved)
 }
@@ -273,6 +309,7 @@ fn saved(task: &Task) -> Value {
     "submission": wire::submission(task.status()),
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
+    "module": task.module().map(|module| module.to_string()),
   })
 }
 

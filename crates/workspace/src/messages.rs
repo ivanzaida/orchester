@@ -53,9 +53,19 @@ pub fn organization_error(error: &orchester_core::task::organization::Organizati
   })
 }
 
+pub fn module_error(error: &orchester_core::module::ModuleError) -> Message {
+  use orchester_core::module::ModuleError;
+  Message::new(match error {
+    ModuleError::TargetBeforeStart => "modules.errors.targetBeforeStart",
+    ModuleError::DuplicateName => "modules.errors.duplicateName",
+    ModuleError::NotFound(_) => "modules.errors.notFound",
+  })
+}
+
 pub fn store_error(error: &StoreError) -> Message {
   match error {
     StoreError::Organization(error) => organization_error(error),
+    StoreError::Module(error) => module_error(error),
     StoreError::NotAGitRepository(_) => Message::new("errors.notAGitRepository"),
     StoreError::AlreadyInitialized(_) => Message::new("errors.alreadyInitialized"),
     StoreError::NotInitialized(_) => Message::new("errors.projectMissing"),
