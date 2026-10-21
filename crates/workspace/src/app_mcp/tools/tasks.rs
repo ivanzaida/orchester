@@ -205,6 +205,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "priority": Rank::from(task.organization().priority()),
     "story_points": wire::story_points(task.estimate()),
     "tags": tag_names,
+    "module": task.module().map(|module| module.to_string()),
     "blocked_reason": task.organization().blocked_reason(),
     "blocked_by": &detail.blocked_by,
     "pipeline": {

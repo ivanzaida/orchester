@@ -16,6 +16,7 @@ use lurq::{
 };
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
+  module::Module,
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -35,6 +36,7 @@ use super::{
   head::{head, no_run_notice},
   kept::KeptEdits,
   limits::{LimitFields, limits_section},
+  module::module_section,
   plan::pipeline_section,
   points::points_section,
   state::{Phase, Subject, View},
@@ -50,6 +52,8 @@ pub struct FormProps {
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for.
   pub missing_pipeline: Option<Arc<str>>,
+  /// The project's modules, which the task may go in.
+  pub modules: Arc<Vec<Module>>,
   /// The project's tasks, whose kept edits stay; those of other tasks are removed.
   pub tasks: Arc<[TaskId]>,
   /// When the task was last saved, as the project's tasks were read.
@@ -234,6 +238,7 @@ impl TaskForm {
       .child(brief(ctx, view, &props.project.open, &brief_fields))
       .child(context_section(ctx))
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
+      .with_children(module_section(ctx, view, &props.modules, &self.fields.module))
       .child(limits_section(ctx, view, &limit_fields, separator))
       .child(points_section(ctx, view, &self.fields.points))
       .child(instructions_section(ctx))
@@ -255,12 +260,16 @@ impl TaskForm {
       Err(errors) => (None, errors),
     };
     let missing = form.missing();
-    let base = self.base.get().map(|base| base.values).unwrap_or_default();
+    let base = self.base.get();
+    let stored_module = base.as_ref().and_then(Base::module);
+    let base = base.map(|base| base.values).unwrap_or_default();
+    let module = self.fields.module.get().0;
     let (phase, failure) = self.phase(actions);
     View {
       subject: self.subject(props),
       phase,
-      changed: values.differ_from(&base, separator),
+      changed: values.differ_from(&base, separator) || module != stored_module,
+      module,
       values,
       title_error: errors.title,
       budget_error: errors.budget,

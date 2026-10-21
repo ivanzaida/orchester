@@ -66,6 +66,7 @@ const BUILT: &[Screen] = &[
   Screen::Files,
   Screen::Instructions,
   Screen::Memory,
+  Screen::Modules,
   Screen::NewConnection,
   Screen::NewTask,
   Screen::Orchestrator,
@@ -319,7 +320,19 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       Vec::new(),
     ),
   ]);
+  all.extend(module_screens());
   all
+}
+
+/// The Modules list and a module's page (ORC-48); `tests/modules` reads what they show.
+fn module_screens() -> [(Route, Vec<&'static str>); 2] {
+  [
+    (at(ProjectPage::Modules), Vec::new()),
+    (
+      at(ProjectPage::Module(CONNECTION.parse().expect("a module id"))),
+      Vec::new(),
+    ),
+  ]
 }
 
 #[test]

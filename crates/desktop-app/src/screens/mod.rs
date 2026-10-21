@@ -14,6 +14,7 @@ pub(crate) mod gate;
 mod instructions;
 mod kept;
 pub(crate) mod memory;
+pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
 mod overview;
@@ -95,6 +96,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),
     ProjectPage::Task(key, view) => task::screen(ctx, project, (key, false), view),
     ProjectPage::KeptTask(key, view) => task::screen(ctx, project, (key, true), view),
+    ProjectPage::Modules => modules::list(ctx, project),
+    ProjectPage::Module(id) => modules::page(ctx, project, *id),
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(ctx, project, *number, file.as_deref()),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),

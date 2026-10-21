@@ -16,10 +16,14 @@ use lurq::{
   core::Signal,
 };
 use orchester_core::{
-  id::TaskId,
+  id::{ModuleId, TaskId},
   project::TaskKey,
   resource::VersionNumber,
-  task::{Task, TaskDetails, TaskStatus, TaskUpdate, estimate::StoryPoints, organization::TaskOrganization},
+  task::{
+    Task, TaskDetails, TaskStatus, TaskUpdate,
+    estimate::StoryPoints,
+    organization::{ChangeActor, TaskOrganization},
+  },
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
@@ -52,6 +56,8 @@ pub struct SaveArgs {
   pub organization: TaskOrganization,
   /// The person's story points; `None`: Automatic. Stored beside the task once it is saved.
   pub points: Option<StoryPoints>,
+  /// The module the task goes in once its details are saved.
+  pub module: Option<ModuleId>,
 }
 
 /// The task a save stored.
@@ -154,8 +160,18 @@ fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
     tracing::error!(task = %task.key(), "the stored details differ from the ones saved");
     return Err(Problems::one(messages::task_saved_differently()));
   }
+  let task = moved(&mut writer, task, args.module).map_err(|error| write_problem(&error))?;
   let task = with_points(&args.repo_root, task, args.points)?;
   Ok(SaveOutcome::Stored(Arc::new(task)))
+}
+
+/// `task` in `module`, or in none, when it is not there already.
+fn moved(writer: &mut TaskWriter, task: Task, module: Option<ModuleId>) -> Result<Task, WriteError> {
+  if task.module() == module {
+    return Ok(task);
+  }
+  writer.set_task_module(task.id(), module, ChangeActor::Person)?;
+  Ok(task.with_module(module))
 }
 
 /// A task queued for its first run, which has not started (yet).
@@ -242,7 +258,7 @@ async fn queue(
     saved: None,
   };
   let servers = services.servers.clone();
-  let (repo_root, target, points) = (save.repo_root.clone(), save.target, save.points);
+  let (repo_root, target, points, module) = (save.repo_root.clone(), save.target, save.points, save.module);
   let queued = background::run(move || queue_in(&save.repo_root, &servers, save.target, save.details, version))
     .await
     .map_err(|message| not_queued(Arc::from([message])))?;
@@ -263,7 +279,30 @@ async fn queue(
     outcome: StartOutcome::ConfirmedNotStarted,
   };
   services.queued.set(Some(task.clone()));
-  keep_points(services, repo_root, queued.task, points).await;
+  let in_module = queued.task.module() == module;
+  keep_points(services, repo_root.clone(), queued.task, points).await;
+  if !in_module {
+    let (servers, id) = (services.servers.clone(), task.task);
+    let moved = background::run(move || {
+      let mut writer = TaskWriter::open(&repo_root, &servers)?;
+      writer.set_task_module(id, module, ChangeActor::Person)
+    })
+    .await;
+    // The task is queued: the form keeps it, with Retry run, and says why it is not in the module.
+    let refused = |message: Message| RunProblems {
+      messages: Arc::from([message]),
+      queued: Some(task.clone()),
+      saved: None,
+    };
+    match moved {
+      Ok(Ok(_)) => {}
+      Ok(Err(error)) => {
+        tracing::warn!(%error, "the queued task was not put in its module");
+        return Err(refused(error.message()));
+      }
+      Err(message) => return Err(refused(message)),
+    }
+  }
   Ok((task, queued.claim))
 }
 

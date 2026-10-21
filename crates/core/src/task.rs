@@ -11,7 +11,7 @@ pub mod requirements;
 use thiserror::Error;
 
 use crate::{
-  id::{ResourceId, TaskId},
+  id::{ModuleId, ResourceId, TaskId},
   name::Name,
   project::TaskKey,
   resource::VersionNumber,
@@ -179,6 +179,8 @@ pub struct Task {
   created_at: Timestamp,
   organization: organization::TaskOrganization,
   estimate: Option<estimate::StoryEstimate>,
+  /// The module the task belongs to ([`crate::module`]), if any.
+  module: Option<ModuleId>,
   revision: TaskRevision,
 }
 
@@ -226,6 +228,7 @@ impl Task {
       created_at,
       organization: organization::TaskOrganization::default(),
       estimate: None,
+      module: None,
       revision: TaskRevision::FIRST,
     }
   }
@@ -266,6 +269,17 @@ impl Task {
   #[must_use]
   pub fn with_estimate(mut self, value: Option<estimate::StoryEstimate>) -> Self {
     self.estimate = value;
+    self
+  }
+
+  pub const fn module(&self) -> Option<ModuleId> {
+    self.module
+  }
+
+  /// Attaches the module the task is stored in.
+  #[must_use]
+  pub const fn with_module(mut self, module: Option<ModuleId>) -> Self {
+    self.module = module;
     self
   }
 

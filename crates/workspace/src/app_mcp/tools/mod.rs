@@ -12,6 +12,7 @@ mod daily_report;
 mod limits;
 mod message_waits;
 mod messages;
+mod modules;
 mod orchestrated;
 mod pipeline_copy;
 mod plan_read;
@@ -343,6 +344,30 @@ const SPECS: &[Spec] = &[
     schema: schema_for_type::<across::InProjects>,
     read_only: true,
   },
+  Spec {
+    name: "list_modules",
+    description: "A project's modules (epics, milestones or sprints that group its tasks), oldest first: name, description, start and target dates (YYYY-MM-DD, local days), state (open or closed), how many tasks it has, its progress (scope and done in its unit, tasks until tasks have story points; Canceled tasks are out of scope) and its link in the app (its page). Shared projects have no modules.",
+    schema: schema_for_type::<modules::ListModules>,
+    read_only: true,
+  },
+  Spec {
+    name: "get_module",
+    description: "One module, as its page shows it: its details, progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person.",
+    schema: schema_for_type::<modules::GetModule>,
+    read_only: true,
+  },
+  Spec {
+    name: "create_module",
+    description: "Makes a new open module in a local project, with a name no other module has, an optional description and optional start and target dates (YYYY-MM-DD; the target not before the start). Put tasks in it with create_task's or update_task's module. Refused as shared_task in a shared project.",
+    schema: schema_for_type::<modules::CreateModule>,
+    read_only: false,
+  },
+  Spec {
+    name: "update_module",
+    description: "Changes a module's name, description, dates (null for none) or state (open or closed); fields left out stay as they are. Its tasks and the history of what moved in and out stay.",
+    schema: schema_for_type::<modules::UpdateModule>,
+    read_only: false,
+  },
 ];
 
 /// Every tool, as `tools/list` answers.
@@ -422,6 +447,10 @@ async fn dispatch_answers(
     "set_auto_mode" => auto_mode::set_auto_mode(services, parse(arguments)?).await,
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
+    "list_modules" => modules::list_modules(services, parse(arguments)?).await,
+    "get_module" => modules::get_module(services, parse(arguments)?).await,
+    "create_module" => modules::create_module(services, parse(arguments)?).await,
+    "update_module" => modules::update_module(services, parse(arguments)?).await,
     "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),

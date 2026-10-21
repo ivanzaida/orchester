@@ -156,6 +156,23 @@ fn domain_setup_tools_check_their_input_as_the_forms_do() {
     &json!({ "name": "Plain", "folder": not_a_repository.display().to_string() }),
   );
   assert_eq!(plain["code"], "not_a_git_repository");
+  let unborn = served.folder.path().join("unborn");
+  std::fs::create_dir_all(&unborn).expect("a folder");
+  let init = std::process::Command::new("git")
+    .arg("-C")
+    .arg(&unborn)
+    .args(["init", "--quiet"])
+    .output()
+    .expect("git runs");
+  assert!(init.status.success(), "git init");
+  let no_commits = served.refused(
+    "add_project",
+    &json!({ "name": "Unborn", "folder": unborn.display().to_string() }),
+  );
+  assert_eq!(
+    no_commits["code"], "no_commits",
+    "runs need a commit to branch from: {no_commits}"
+  );
   let unknown = served.refused(
     "save_profile_draft",
     &json!({ "project": "Kontur", "role": "Builder", "connection": "nowhere", "model": "gpt-5.5" }),

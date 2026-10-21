@@ -6,7 +6,7 @@
 //! automation's: they come from a client of the app's MCP server or the Orchestrator chat.
 
 use orchester_core::{
-  id::IdempotencyKey,
+  id::{IdempotencyKey, ModuleId},
   store::SettingsStore,
   task::{
     Task, TaskDetails,
@@ -22,6 +22,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
+  modules::find_module,
   task_organization::{Blocker, Changes},
   tasks::find_task,
   wire::{self, Rank, Workflow},
@@ -81,6 +82,9 @@ pub struct CreateTask {
   /// Settings lets it.
   #[serde(default)]
   pub story_points: Option<u32>,
+  /// The module to put the task in, by its id or name (list_modules).
+  #[serde(default)]
+  pub module: Option<String>,
   /// Marks the task Blocked with this reason, which must not be blank. Informational: it keeps no
   /// run from starting, but the Orchestrator chat does not start the task.
   #[serde(default)]
@@ -125,6 +129,9 @@ pub struct UpdateTask {
   /// lets it.
   #[serde(default)]
   pub story_points: Option<u32>,
+  /// The module to move the task to, by its id or name; `null` takes it out of its module.
+  #[serde(default, deserialize_with = "super::modules::nullable")]
+  pub module: Option<Option<String>>,
   /// Marks the task Blocked with this reason, which must not be blank; `null` clears it.
   /// Informational: it keeps no run from starting, but the Orchestrator chat does not start the task.
   #[serde(default, deserialize_with = "wire::clearable")]
@@ -213,6 +220,11 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
   let db = ProjectDb::open(&root)?;
   let limits = db.project_limits()?;
   let published = published_pipelines(&db)?;
+  let module = args
+    .module
+    .as_deref()
+    .map(|named| find_module(&db, named).map(|module| module.id()))
+    .transpose()?;
   let base = TaskOrganization::default();
   let changes = args.changes();
   let edited = changes.apply(&db, &base)?;
@@ -239,6 +251,10 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
   };
   let details = fields.details()?;
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
+  // A move a shared project refuses is refused before the task is made, so a retry makes no second task.
+  if module.is_some() {
+    writer.ensure_modules().map_err(write_error)?;
+  }
   let edited = changes.tagged(&mut writer, edited)?;
   let target = SaveTarget::New(IdempotencyKey::generate());
   let task = writer
@@ -246,6 +262,7 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     .map_err(write_error)?
     .saved()
     .ok_or_else(changed)?;
+  let task = moved(&mut writer, task, module)?;
   services.changes.record(open.project.id(), Outside::Tasks);
   with_points(services, open, task, points)
 }
@@ -291,6 +308,15 @@ fn with_points(
   Ok(task.with_estimate(estimate))
 }
 
+/// `task` put in `module`, or in none, when it is not there already; the move is recorded as automation's.
+fn moved(writer: &mut TaskWriter, task: Task, module: Option<ModuleId>) -> Result<Task, ToolError> {
+  if task.module() == module {
+    return Ok(task);
+  }
+  writer.set_task_module(task.id(), module, ACTOR).map_err(write_error)?;
+  Ok(task.with_module(module))
+}
+
 fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let points = story_points(args.story_points)?;
   let open = services.project(&args.project)?;
@@ -298,6 +324,11 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let db = ProjectDb::open(&root)?;
   let published = published_pipelines(&db)?;
   let task = find_task(&db, &args.key)?;
+  let module = match &args.module {
+    Some(Some(named)) => Some(Some(find_module(&db, named)?.id())),
+    Some(None) => Some(None),
+    None => None,
+  };
   let base = task.organization().clone();
   let changes = args.changes();
   let edited = changes.apply(&db, &base)?;
@@ -339,6 +370,10 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     details.pipeline = current.pipeline;
   }
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
+  // A move a shared project refuses is refused before the task's details are saved.
+  if matches!(module, Some(Some(_))) {
+    writer.ensure_modules().map_err(write_error)?;
+  }
   let edited = changes.tagged(&mut writer, edited)?;
   let edit = Edit {
     task: task.id(),
@@ -350,6 +385,10 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let saved = match save_edit_by(&mut writer, edit, (ACTOR, Timestamp::now())).map_err(write_error)? {
     EditSaved::Saved { task, .. } => task,
     EditSaved::Conflict(_) => return Err(changed()),
+  };
+  let saved = match module {
+    Some(module) => moved(&mut writer, saved, module)?,
+    None => saved,
   };
   services.changes.record(open.project.id(), Outside::Tasks);
   with_points(services, open, saved, points)
@@ -377,6 +416,7 @@ fn saved(task: &Task) -> Value {
     "priority": Rank::from(task.organization().priority()),
     "story_points": wire::story_points(task.estimate()),
     "blocked_reason": task.organization().blocked_reason(),
+    "module": task.module().map(|module| module.to_string()),
   })
 }
 

@@ -327,8 +327,8 @@ const fn stopped_key(end: RunEnd) -> &'static str {
     RunEnd::Failed => "orchestrator.report.stopped.failed",
     RunEnd::Stopped { why } => match why {
       StopReason::RetriesExhausted { .. } => "orchestrator.report.stopped.retries",
-      StopReason::NoRoute => "orchestrator.report.stopped.noRoute",
       StopReason::BrokeAgain => "orchestrator.report.stopped.brokeAgain",
+      StopReason::NoRoute => "orchestrator.report.stopped.noRoute",
       StopReason::Unverified => "orchestrator.report.stopped.unverified",
       StopReason::Unchanged => "orchestrator.report.stopped.unchanged",
     },

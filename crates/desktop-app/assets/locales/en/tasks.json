@@ -29,6 +29,9 @@
       "clearSearch": "Clear search",
       "pipeline": "Pipeline",
       "allPipelines": "All pipelines",
+      "module": "Module",
+      "allModules": "All modules",
+      "noModule": "No module",
       "sort": "Sort",
       "sortNote": "Sorting never changes the run queue."
     },
