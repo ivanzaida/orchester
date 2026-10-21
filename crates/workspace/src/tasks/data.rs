@@ -85,6 +85,9 @@ pub struct ProjectTasks {
   pub kept_tags: Arc<std::collections::HashMap<TaskId, Vec<String>>>,
   /// The key each task had before it was uploaded (*was KON-12*), which the search finds.
   pub former_keys: Arc<std::collections::HashMap<TaskId, String>>,
+  /// Whether the project is shared on a server: its tasks change there, which keeps no *Don't merge
+  /// automatically* (ORC-69).
+  pub shared: bool,
   pub pipelines: Arc<Vec<PipelineChoice>>,
   /// Shared tasks whose pipeline this computer lacks, with the pipeline's slug.
   pub missing_pipelines: Arc<std::collections::HashMap<TaskId, String>>,
@@ -248,6 +251,7 @@ impl ProjectTasks {
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),
       former_keys: Arc::new(db.former_keys()?),
+      shared: db.sharing()?.is_some(),
       group_holds: Arc::new(group_holds),
       queue: Arc::new(super::hold::held_in(db)?),
       grouped: Arc::new(grouped),

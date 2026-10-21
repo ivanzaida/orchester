@@ -51,6 +51,8 @@ pub struct FormProps {
   pub missing_pipeline: Option<Arc<str>>,
   /// The project's modules, which the task may go in.
   pub modules: Arc<Vec<Module>>,
+  /// Whether the project is shared on a server, which keeps no *Don't merge automatically*.
+  pub shared: bool,
   /// The project's tasks, whose kept edits stay; those of other tasks are removed.
   pub tasks: Arc<[TaskId]>,
   /// When the task was last saved, as the project's tasks were read.
@@ -227,7 +229,12 @@ impl TaskForm {
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
       .with_children(module_section(ctx, view, &props.modules, &self.fields.module))
       .child(limits_section(ctx, view, &limit_fields, separator))
-      .child(merging_section(ctx, view, &self.fields.no_automatic_merge))
+      .with_children(merging_section(
+        ctx,
+        view,
+        props.shared,
+        &self.fields.no_automatic_merge,
+      ))
       .child(instructions_section(ctx))
   }
 

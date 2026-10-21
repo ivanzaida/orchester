@@ -66,12 +66,17 @@ person can click.
      does not; the task is not marked Blocked and no unfinished task blocks it (ORC-58); new starts are not held for
      its reviewed group or the project (`hold_queue`); the task does not say *Don't merge automatically*, a task
      organization flag set in the task form or with `create_task`/`update_task` (`no_automatic_merge`); and the run is
-     not the chat's own doing in a loop (`raised_by_own`: such an end starts no turn). `merge_run`'s own rules hold on
-     top: a main checkout that needs local integration is refused (`needs_decision`, `scoped_integration_required`).
+     not the chat's own doing in a loop (`raised_by_own`: such an end starts no turn). A shared project's server does
+     not keep *Don't merge automatically* yet: its task form has no Merging section and setting the flag there is
+     refused (`shared_task`), rather than saved on this computer and lost (decided by the person on 2026-10-21).
+     `merge_run`'s own rules hold on top: a main checkout that needs local integration is refused (`needs_decision`,
+     `scoped_integration_required`).
      The rule is read when the end is kept (the entry says whether the turn merges the run or why it is left to the
      person, `merging`) and again when the turn calls `merge_run`: a run it leaves to the person by then is refused
      (`left_to_person`), naming why. One automatic merge attempt per run end: the turn merges only the run whose
-     success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_failed` at conflicts
+     success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_run` of that run that
+     was carried out or refused counts as the attempt, and so does one refused before it named a run (an unknown run,
+     say): it errs towards leaving the run to the person. A `merge_failed` at conflicts
      leads the turn to propose `continue_run` `resolve_conflicts` (a card, as for any merge of the chat's); after the
      agent resolved them and the run succeeded again, that is a new end, merged again under the same rule. Any other
      refusal is told to the person with its reason and the merge left to them. Runs that end close together are merged
@@ -81,7 +86,8 @@ person can click.
      the base branch to and the task's link (`ChatAction::on_its_own`); the task's Conversation shows the
      Orchestrator's row under the run's end with the way back to the chat's conversation (ORC-45's attribution), and
      `get_conversation` names the Orchestrator as the merge's author. OS notifications treat it as a merge the chat
-     carried out itself (no notification of its own, ORC-56), as will the daily report (ORC-47) once it exists.
+     carried out itself (no notification of its own, ORC-56), and the daily report (ORC-47) names the Orchestrator as
+     who merged it (`MergedBy`).
    - These switches are off until a person turns them on; synthetic input cannot flip them (the same rule as *Let
      automation change agent permissions* and *Let the Orchestrator publish drafts*).
    - The chat may propose how a run that waits for a person's decision goes on (`continue_run`): only `allow_retry`

@@ -170,10 +170,12 @@ impl TaskWriter {
         local.change(|db| db.update_organized_task(task, read, details, (base, edited), (actor, now)))
       }
       (Self::Shared(store), SaveTarget::New(batch)) => {
+        check_merging(&TaskOrganization::default(), edited)?;
         let created = store.create_organized(batch, &details, edited, actor);
         Ok(TaskUpdate::Saved(shared(store, created)?))
       }
       (Self::Shared(store), SaveTarget::Task(task, read)) => {
+        check_merging(base, edited)?;
         check_cancel(store.db(), task, base, edited)?;
         let update = store.update_organized(task, read, &details, (base, edited), actor);
         shared(store, update)
@@ -194,6 +196,7 @@ impl TaskWriter {
       Self::Shared(store) => {
         let base = store.db().task_organization(task)?;
         let edited = update(base.clone());
+        check_merging(&base, &edited)?;
         check_cancel(store.db(), task, &base, &edited)?;
         let changed = store.change_organization(task, (&base, &edited), ChangeActor::Person);
         shared(store, changed)
@@ -276,6 +279,15 @@ impl TaskWriter {
     }
   }
 
+  /// Refuses a change of Don't merge automatically from `base` to `edited` in a shared project, whose server does
+  /// not keep it, before anything else is changed.
+  pub fn ensure_merging(&self, base: &TaskOrganization, edited: &TaskOrganization) -> Result<(), WriteError> {
+    match self {
+      Self::Local(_) => Ok(()),
+      Self::Shared(_) => check_merging(base, edited),
+    }
+  }
+
   /// The local project's tasks; a shared project's modules are refused.
   fn local(&mut self) -> Result<&mut LocalTasks, WriteError> {
     match self {
@@ -352,4 +364,13 @@ fn check_cancel(
       .map_err(StoreError::from)?;
   }
   Ok(())
+}
+
+/// A shared project's server does not keep Don't merge automatically: setting it there is refused rather than lost,
+/// so the Orchestrator never merges a task on its own that the person believes opted out.
+fn check_merging(base: &TaskOrganization, edited: &TaskOrganization) -> Result<(), WriteError> {
+  if base.no_automatic_merge() == edited.no_automatic_merge() {
+    return Ok(());
+  }
+  Err(WriteError::Store(StoreError::SharedProject))
 }

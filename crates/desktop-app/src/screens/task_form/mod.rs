@@ -75,6 +75,7 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
     pipelines: Some(tasks.pipelines),
     missing_pipeline: None,
     modules: tasks.modules,
+    shared: tasks.shared,
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
 }
@@ -108,6 +109,7 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
       .get(&task_id)
       .map(|slug| Arc::from(slug.as_str())),
     modules: tasks.modules.clone(),
+    shared: tasks.shared,
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
 }

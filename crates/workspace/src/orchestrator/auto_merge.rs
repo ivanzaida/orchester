@@ -162,7 +162,8 @@ fn tried_to_merge(action: &ChatAction, run: RunId) -> bool {
   }
   match action.change.as_deref().map(|change| &change.change) {
     Some(Change::Merge { run: merged, .. }) => *merged == run,
-    // A merge refused before the tool knew its run names none: it was a try all the same.
+    // A merge refused before the tool knew its run (an unknown run, say) names none: it was a try all the same, so
+    // the turn errs towards leaving the run to the person rather than trying twice.
     _ => true,
   }
 }

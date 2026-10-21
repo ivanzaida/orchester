@@ -248,10 +248,12 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
   };
   let details = fields.details()?;
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
-  // A move a shared project refuses is refused before the task is made, so a retry makes no second task.
+  // A move or an opt-out a shared project refuses is refused before the task is made, so a retry makes no second
+  // task.
   if module.is_some() {
     writer.ensure_modules().map_err(write_error)?;
   }
+  writer.ensure_merging(&base, &edited).map_err(write_error)?;
   let edited = changes.tagged(&mut writer, edited)?;
   let target = SaveTarget::New(IdempotencyKey::generate());
   let task = writer
@@ -325,10 +327,11 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     details.pipeline = current.pipeline;
   }
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
-  // A move a shared project refuses is refused before the task's details are saved.
+  // A move or an opt-out a shared project refuses is refused before the task's details are saved.
   if matches!(module, Some(Some(_))) {
     writer.ensure_modules().map_err(write_error)?;
   }
+  writer.ensure_merging(&base, &edited).map_err(write_error)?;
   let edited = changes.tagged(&mut writer, edited)?;
   let edit = Edit {
     task: task.id(),
