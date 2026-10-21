@@ -1,8 +1,9 @@
 //! What git sees of a folder before anything is made there: whether it is a repository and has commits
-//! ([`read_local`]), and what a first commit would hold and on which branch ([`survey`]).
+//! ([`read_local`]), and what a first commit would hold and on which branch ([`survey`], [`first_commit_files`]).
 
 use std::{
   env,
+  io::Write,
   path::{Path, PathBuf},
 };
 
@@ -12,7 +13,7 @@ use thiserror::Error;
 
 use super::{
   FALLBACK_BRANCH, InitError, InitStep,
-  git::{command, current_branch, has_commits, listed, said, staged},
+  git::{command, current_branch, has_commits, named, said, staged},
   halted,
 };
 
@@ -132,10 +133,10 @@ pub fn survey(runner: &dyn CommandRunner, folder: &Path) -> Result<Survey, Surve
     _ => SurveyError::Unreadable,
   };
   let (files, staged, enclosing) = if is_repository_root(folder) {
-    let files = untracked_files(runner, folder, &[])?;
+    let files = added_files(runner, folder, (&[], &[]))?.len();
     (files, staged(runner, folder).map_err(unreadable)?, None)
   } else {
-    (scratch_files(runner, folder)?, 0, enclosing(runner, folder))
+    (scratch_files(runner, folder, &[])?.len(), 0, enclosing(runner, folder))
   };
   Ok(Survey {
     files,
@@ -146,9 +147,33 @@ pub fn survey(runner: &dyn CommandRunner, folder: &Path) -> Result<Survey, Surve
   })
 }
 
-/// The files `git add -A` would add in `folder`, which is no repository, through a repository of its own outside
-/// the folder, so nothing is made there and no repository the folder is inside of is asked.
-fn scratch_files(runner: &dyn CommandRunner, folder: &Path) -> Result<usize, SurveyError> {
+/// The paths `git add -A` would add in `folder`, a repository without a commit or no repository, when git kept out
+/// what `excluded` lists as well, in `.gitignore`'s words from the folder's top: a `.gitignore` or an exclusion not
+/// written yet. Nothing is made in the folder.
+pub fn first_commit_files(
+  runner: &dyn CommandRunner,
+  folder: &Path,
+  excluded: &str,
+) -> Result<Vec<String>, SurveyError> {
+  let mut patterns = tempfile::Builder::new()
+    .prefix("orchester-exclude-")
+    .tempfile()
+    .map_err(|_| SurveyError::Unreadable)?;
+  patterns
+    .write_all(excluded.as_bytes())
+    .map_err(|_| SurveyError::Unreadable)?;
+  let from = format!("--exclude-from={}", patterns.path().to_string_lossy());
+  if is_repository_root(folder) {
+    added_files(runner, folder, (&[], &[from.as_str()]))
+  } else {
+    scratch_files(runner, folder, &[from.as_str()])
+  }
+}
+
+/// The paths `git add -A` would add in `folder`, which is no repository, through a repository of its own outside
+/// the folder, so nothing is made there and no repository the folder is inside of is asked; `listing` are more
+/// arguments of `ls-files`.
+fn scratch_files(runner: &dyn CommandRunner, folder: &Path, listing: &[&str]) -> Result<Vec<String>, SurveyError> {
   let scratch = tempfile::Builder::new()
     .prefix("orchester-survey-")
     .tempdir()
@@ -163,21 +188,24 @@ fn scratch_files(runner: &dyn CommandRunner, folder: &Path) -> Result<usize, Sur
     _ => return Err(SurveyError::Unreadable),
   }
   let work_tree = folder.to_string_lossy().into_owned();
-  untracked_files(
-    runner,
-    folder,
-    &["--git-dir", git_dir.as_str(), "--work-tree", work_tree.as_str()],
-  )
+  let repository = ["--git-dir", git_dir.as_str(), "--work-tree", work_tree.as_str()];
+  added_files(runner, folder, (&repository, listing))
 }
 
-/// The files git would add in `folder`: untracked ones `.gitignore` does not list, and those staged already.
-fn untracked_files(runner: &dyn CommandRunner, folder: &Path, repository: &[&str]) -> Result<usize, SurveyError> {
+/// The paths git would add in the repository in `folder`, or the one `repository` names: untracked ones `.gitignore`
+/// does not list, and those staged already; `listing` are more arguments of `ls-files`.
+fn added_files(
+  runner: &dyn CommandRunner,
+  folder: &Path,
+  (repository, listing): (&[&str], &[&str]),
+) -> Result<Vec<String>, SurveyError> {
   let args = repository
     .iter()
     .copied()
-    .chain(["ls-files", "-z", "--cached", "--others", "--exclude-standard"]);
+    .chain(["ls-files", "-z", "--cached", "--others", "--exclude-standard"])
+    .chain(listing.iter().copied());
   match runner.run(&command(folder, args)) {
-    Ok(output) if output.success() => Ok(listed(&output)),
+    Ok(output) if output.success() => Ok(named(&output)),
     Err(CommandError::NotFound) => Err(SurveyError::GitMissing),
     _ => Err(SurveyError::Unreadable),
   }

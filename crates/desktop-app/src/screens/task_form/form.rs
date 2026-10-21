@@ -19,7 +19,10 @@ use orchester_core::{
   module::Module,
   time::Timestamp,
 };
-use orchester_workspace::{messages::Message, tasks::data::PipelineChoice};
+use orchester_workspace::{
+  messages::Message,
+  tasks::{data::PipelineChoice, estimate::Estimates},
+};
 use parking_lot::Mutex;
 
 use super::{
@@ -36,6 +39,7 @@ use super::{
   merging::merging_section,
   module::module_section,
   plan::pipeline_section,
+  points::points_section,
   state::{Phase, Subject, View},
   unbuilt::{context_section, instructions_section},
 };
@@ -112,7 +116,16 @@ impl Component for TaskForm {
     let task = props.subject.task().map(|task| task.id());
     let batch = IdempotencyKey::generate();
     let queued = ctx.signal(None);
-    let save = save_action(ctx, services.servers.clone());
+    let estimates = Estimates::new(
+      services.workspace.clone(),
+      services.runners.clone(),
+      services.changes.clone(),
+    );
+    let save = save_action(
+      ctx,
+      services.servers.clone(),
+      (estimates.clone(), props.project.open.clone()),
+    );
     let run = run_action(
       ctx,
       RunServices {
@@ -120,6 +133,7 @@ impl Component for TaskForm {
         servers: services.servers.clone(),
         repo_root: props.project.open.repo_root.clone(),
         queued: queued.clone(),
+        estimates: (estimates, props.project.open.clone()),
       },
     );
     let form = Self {
@@ -229,6 +243,7 @@ impl TaskForm {
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
       .with_children(module_section(ctx, view, &props.modules, &self.fields.module))
       .child(limits_section(ctx, view, &limit_fields, separator))
+      .child(points_section(ctx, view, &self.fields.points))
       .with_children(merging_section(
         ctx,
         view,

@@ -19,6 +19,7 @@ use std::{
 use orchester_core::{
   id::{ProjectId, ResourceId, TaskId},
   sharing::TaskRevision,
+  task::estimate::StoryPoints,
   time::Timestamp,
 };
 use orchester_workspace::workspace::Workspace;
@@ -240,6 +241,7 @@ fn encode_values(values: &Values) -> Value {
     "pipeline": values.pipeline.map(|pipeline| pipeline.to_string()),
     "budget": values.budget,
     "time_limit": values.time_limit,
+    "points": values.points.map(StoryPoints::get),
     "no_automatic_merge": values.no_automatic_merge,
   })
 }
@@ -267,6 +269,11 @@ fn decode_values(value: &Value) -> Option<Values> {
     .iter()
     .map(|criterion| criterion.as_str().map(str::to_owned))
     .collect::<Option<Vec<_>>>()?;
+  // Edits kept before story points existed have none: Automatic.
+  let points = match value.get("points") {
+    None | Some(Value::Null) => None,
+    Some(points) => Some(StoryPoints::new(u32::try_from(points.as_u64()?).ok()?).ok()?),
+  };
   // Edits kept before the form had *Don't merge automatically* did not change it.
   let no_automatic_merge = match value.get("no_automatic_merge") {
     None => false,
@@ -279,6 +286,7 @@ fn decode_values(value: &Value) -> Option<Values> {
     pipeline,
     budget: text("budget")?,
     time_limit: text("time_limit")?,
+    points,
     no_automatic_merge,
   })
 }

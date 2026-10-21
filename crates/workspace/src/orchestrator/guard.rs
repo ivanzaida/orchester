@@ -28,6 +28,7 @@ use serde_json::Value;
 
 use super::{
   change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
+  repository::INIT_REPOSITORY,
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE},
 };
 use crate::{
@@ -71,7 +72,15 @@ pub(super) async fn in_report_turn(scope: &ChatScope) -> Result<bool, ToolError>
 fn card_carries(name: &str) -> bool {
   matches!(
     name,
-    MERGE_RUN | CANCEL_RUN | CONTINUE_RUN | ANSWER_QUESTION | SEND_MESSAGE | PAUSE_RUN | RESUME_RUN | RELEASE_QUEUE
+    MERGE_RUN
+      | CANCEL_RUN
+      | CONTINUE_RUN
+      | ANSWER_QUESTION
+      | SEND_MESSAGE
+      | PAUSE_RUN
+      | RESUME_RUN
+      | RELEASE_QUEUE
+      | INIT_REPOSITORY
   ) || Publishing::of_tool(name).is_some()
 }
 

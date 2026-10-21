@@ -213,7 +213,8 @@ fn proposed(change: &Change) -> Option<Proposed> {
     | Change::Continue { .. }
     | Change::Pause { .. }
     | Change::Resume { .. }
-    | Change::Release { .. } => None,
+    | Change::Release { .. }
+    | Change::InitRepository { .. } => None,
   }
 }
 

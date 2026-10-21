@@ -66,6 +66,7 @@ impl TaskForm {
         .and_then(|(_, _, values)| values.task_form(&separator).details().ok()),
       details,
       organization: (organization.clone(), edited.clone()),
+      points: view.values.points,
       module: view.module,
     });
     let (ask, keep) = (self.confirming_discard.clone(), self.confirming_discard.clone());
@@ -123,6 +124,7 @@ impl TaskForm {
       base: Some(current.details().clone()),
       details,
       organization: (organization, edited),
+      points: view.values.points,
       module: view.module,
     };
     Some(press(save, args, &self.dismissed))

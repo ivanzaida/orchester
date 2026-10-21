@@ -24,6 +24,7 @@ mod limits;
 mod merging;
 mod module;
 mod plan;
+pub(crate) mod points;
 mod state;
 mod unbuilt;
 mod values;

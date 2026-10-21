@@ -121,6 +121,7 @@ macro_rules! markers {
     impl $inspect for crate::tasks::cancel_run::Stop {}
     impl $inspect for crate::tasks::changes::Checkpointed {}
     impl $inspect for crate::tasks::changes::NotCheckpointed {}
+    impl $inspect for crate::tasks::answering::PendingAnswers {}
     impl $inspect for crate::tasks::conflict::EditConflict {}
     impl $inspect for crate::tasks::conversation::Conversation {}
     impl $inspect for crate::tasks::conversation::follow::Sent {}

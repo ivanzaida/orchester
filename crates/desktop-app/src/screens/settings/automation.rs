@@ -6,10 +6,11 @@
 //! application setting that is off until a person turns it on here. While the first is off, the MCP server's setup
 //! tools refuse whatever would widen what agents may do (`person_only`), including matching window confirmations; while
 //! one of the Orchestrator's is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted
-//! or finished run, leaves it to the person. A setting is read and saved off the UI thread; while either runs, its
-//! switch cannot be flipped. While a row is mounted, the app's MCP server refuses window input (`mcp::input_gate`),
-//! and the row refuses lurq's synthetic input, so only a person flips it. The section ends with the Orchestrator's
-//! daily report and its time (`super::daily_report`).
+//! or finished run, leaves it to the person. *Let Orchester estimate story points* (ORC-49, same row, no design frame
+//! yet) lets Orchester's estimator size tasks on auto mode's reviewer, spending tokens. A setting is read and saved off
+//! the UI thread; while either runs, its switch cannot be flipped. While a row is mounted, the app's MCP server refuses
+//! window input (`mcp::input_gate`), and the row refuses lurq's synthetic input, so only a person flips it. The section
+//! ends with the Orchestrator's daily report and its time (`super::daily_report`).
 
 use lurq::{
   app::{
@@ -50,6 +51,8 @@ pub enum Consent {
   ChangePermissions,
   /// *Let the Orchestrator publish drafts*, *answer agents*, *merge runs* or *continue interrupted runs*.
   Orchestrator(OrchestratorConsent),
+  /// *Let Orchester estimate story points* (ORC-49): off until a person turns it on.
+  EstimatePoints,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Consent {}
@@ -73,6 +76,7 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::MergeRuns) => "settings-merge-runs",
       Self::Orchestrator(OrchestratorConsent::MergeFinished) => "settings-merge-finished",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "settings-continue-interrupted",
+      Self::EstimatePoints => "settings-estimate-points",
     }
   }
 
@@ -120,6 +124,13 @@ impl Consent {
         not_saved: "settings.automation.continueInterrupted.notSaved",
         blocked: "settings.automation.continueInterrupted.blocked",
       },
+      Self::EstimatePoints => Words {
+        title: "settings.automation.estimatePoints.title",
+        description: "settings.automation.estimatePoints.description",
+        unreadable: "settings.automation.estimatePoints.unreadable",
+        not_saved: "settings.automation.estimatePoints.notSaved",
+        blocked: "settings.automation.estimatePoints.blocked",
+      },
     }
   }
 
@@ -132,6 +143,7 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::MergeRuns) => "Let the Orchestrator merge runs",
       Self::Orchestrator(OrchestratorConsent::MergeFinished) => "Let the Orchestrator merge finished runs on its own",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "Let the Orchestrator continue interrupted runs",
+      Self::EstimatePoints => "Let Orchester estimate story points",
     }
   }
 
@@ -140,6 +152,7 @@ impl Consent {
     match self {
       Self::ChangePermissions => workspace.automation_changes_permissions(),
       Self::Orchestrator(consent) => workspace.orchestrator_allows(consent),
+      Self::EstimatePoints => workspace.estimates_story_points(),
     }
   }
 
@@ -148,6 +161,7 @@ impl Consent {
     match self {
       Self::ChangePermissions => workspace.set_automation_changes_permissions(allowed),
       Self::Orchestrator(consent) => workspace.set_orchestrator_allows(consent, allowed),
+      Self::EstimatePoints => workspace.set_estimates_story_points(allowed),
     }
   }
 }
@@ -173,6 +187,7 @@ pub fn section(ctx: &mut Ctx) -> Element {
       "continue-interrupted",
       Consent::Orchestrator(OrchestratorConsent::ContinueInterrupted),
     ),
+    ("estimate-points", Consent::EstimatePoints),
   ];
   let rows: Vec<Element> = rows
     .into_iter()
@@ -322,6 +337,8 @@ impl ConsentRow {
         match consent {
           Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
           Consent::Orchestrator(consent) => workspace.revoke_orchestrator_consent(consent),
+          // Read as stored before each estimate: off holds once it is saved.
+          Consent::EstimatePoints => {}
         }
       }
       saved.set(Some(chosen));

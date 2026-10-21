@@ -23,6 +23,7 @@ mod spend;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub(crate) use self::prompt::one_line;
 pub use self::{
   choice::{
     AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
@@ -112,11 +113,11 @@ impl Review {
     let model = model.as_str().to_owned();
     match result {
       Ok(ReviewVerdict::Approve { reason }) => Self::Approved {
-        reason: kept(&reason),
+        reason: one_plain_line(&reason),
         model,
       },
       Ok(ReviewVerdict::AskPerson { reason }) => Self::Asked {
-        reason: kept(&reason),
+        reason: one_plain_line(&reason),
         model,
       },
       Err(error) => Self::Failed {
@@ -144,9 +145,10 @@ impl Review {
   }
 }
 
-/// `reason` as one plain line: control characters and line breaks become spaces, runs of spaces one,
-/// double quotation marks single ones (the app quotes it), cut to [`REASON_MAX_CHARS`] with an ellipsis.
-fn kept(reason: &str) -> String {
+/// `reason`, a model's own text, as one plain line: control characters and line breaks become spaces, runs of
+/// spaces one, double quotation marks single ones (the app quotes it), cut to [`REASON_MAX_CHARS`] with an ellipsis.
+/// The reviewer's reasons and the story-point estimator's are kept so.
+pub fn one_plain_line(reason: &str) -> String {
   let plain: String = reason
     .chars()
     .map(|c| match c {

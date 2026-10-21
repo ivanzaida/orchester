@@ -14,7 +14,7 @@ use orchester_ipc::{Command, Reply};
 use orchester_store::StoreError;
 
 use super::{Continued, RequestError, RunRequestError, Runners, state::RunnerState};
-use crate::workspace::OpenProject;
+use crate::{tasks::answering::Answered, workspace::OpenProject};
 
 /// How long continuing interrupted runs, or a request automation makes, waits for a project's
 /// runner to come online.
@@ -115,9 +115,26 @@ impl Runners {
     accepted(self.ask(self.displayed().as_deref(), command).await?)
   }
 
-  /// [`Runners::control_run`] for `project`.
-  pub async fn control_run_in(&self, project: &OpenProject, command: Command) -> Result<(), RunRequestError> {
-    accepted(self.ask_project(project, command).await?)
+  /// [`Runners::control_run`] for `project`. A command that answers an item waiting for a person marks it answered
+  /// when this is called, before the request is under way, so every *Needs you* drops it at once; the runner's
+  /// reply settles the mark (`tasks::answering`).
+  pub fn control_run_in(
+    &self,
+    project: &OpenProject,
+    command: Command,
+  ) -> impl Future<Output = Result<(), RunRequestError>> + Send + use<> {
+    let mark = Answered::of(&command).map(|answered| self.answering(&project.repo_root, answered));
+    let (runners, project) = (self.clone(), project.clone());
+    async move {
+      let result = match runners.ask_project(&project, command).await {
+        Ok(reply) => accepted(reply),
+        Err(error) => Err(error.into()),
+      };
+      if let Some(mark) = mark {
+        mark.settle(result.is_ok());
+      }
+      result
+    }
   }
 
   /// Asks the displayed project's runner to continue interrupted run `run` from its last

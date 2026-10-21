@@ -220,8 +220,10 @@ impl TaskForm {
     let merge = ContentMerge::new(made_on, mine, task.details().clone());
     if merge.is_clean() {
       let organization = values.organization(&base.values, task.organization());
+      // Story points are not part of the details: the person's choice in the field stays.
       self.fields.fill(&Values {
         no_automatic_merge: organization.no_automatic_merge(),
+        points: values.points,
         ..Values::of_details(&merge.merged(|_| Choice::Mine), separator)
       });
       self.base.set(Some(Base::of(task, separator)));
