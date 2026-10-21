@@ -27,9 +27,19 @@ pub(super) fn said(output: &CommandOutput) -> String {
   }
 }
 
-/// The paths `output` lists, `-z` separated.
+/// How many paths `output` lists, `-z` separated.
 pub(super) fn listed(output: &CommandOutput) -> usize {
   output.stdout.split('\0').filter(|name| !name.is_empty()).count()
+}
+
+/// The paths `output` lists, `-z` separated, as git writes them: from the folder's top, `/` between names.
+pub(super) fn named(output: &CommandOutput) -> Vec<String> {
+  output
+    .stdout
+    .split('\0')
+    .filter(|name| !name.is_empty())
+    .map(str::to_owned)
+    .collect()
 }
 
 /// Whether the repository in `folder` has a commit at `HEAD`.

@@ -61,19 +61,22 @@ pub(super) fn rows(ctx: &mut Ctx, id: &str, view: &View, project: ProjectId) -> 
     Facts::Publication(publication) => publication_rows(ctx, view, publication, project),
     Facts::Run(run) => run_rows(ctx, view, run, project),
   };
+  Some(column(ctx, id, rows))
+}
+
+/// The facts `rows` of card `id`, each a key and the parts of its value.
+pub(super) fn column(ctx: &mut Ctx, id: &str, rows: Vec<(Arc<str>, Vec<Part>)>) -> Column {
   let navigation = Navigation::of(ctx);
-  Some(
-    Column::new()
-      .id(format!("{id}-facts"))
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .with_children(
-        rows
-          .into_iter()
-          .enumerate()
-          .map(|(index, (key, parts))| row(&format!("{id}-fact-{index}"), &key, parts, &navigation)),
-      ),
-  )
+  Column::new()
+    .id(format!("{id}-facts"))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .with_children(
+      rows
+        .into_iter()
+        .enumerate()
+        .map(|(index, (key, parts))| row(&format!("{id}-fact-{index}"), &key, parts, &navigation)),
+    )
 }
 
 fn row(id: &str, key: &str, parts: Vec<Part>, navigation: &Navigation) -> Row {

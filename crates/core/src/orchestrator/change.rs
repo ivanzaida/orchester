@@ -1,8 +1,9 @@
 //! A change the Orchestrator's agent proposed that only a person carries out, unless the person's switch lets the chat
 //! carry it out itself (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
-//! run, merging one, answering an agent's question, sending a run's agents a message or continuing a run that waits
-//! for a person's decision. It holds what the person reads before *Apply* and what *Apply* would change; a draft saved
-//! again, a version published meanwhile or a run with newer work needs a fresh proposal.
+//! run, merging one, answering an agent's question, sending a run's agents a message, continuing a run that waits
+//! for a person's decision, or making the project's folder a git repository (always the person's). It holds what the
+//! person reads before *Apply* and what *Apply* would change; a draft saved again, a version published meanwhile or a
+//! run with newer work needs a fresh proposal.
 
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +93,49 @@ pub enum Change {
     why: Option<StopReason>,
     choice: ContinueChoice,
   },
+  /// Make the project's folder a git repository on `branch` and its first commit (`init_repository`), or only the
+  /// first commit of the repository without one it is already (`exists`): `first` holds the `files` files git adds
+  /// or nothing. `gitignore` is the `.gitignore` the commit honours, written first when the chat proposed it;
+  /// `sensitive` the files the commit adds that look as if they hold secrets, which the person decides on.
+  InitRepository {
+    branch: String,
+    first: FirstCommitOf,
+    files: usize,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    exists: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    gitignore: Option<Gitignore>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    sensitive: Vec<String>,
+  },
+}
+
+/// What a proposed first commit holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FirstCommitOf {
+  /// The folder's files `.gitignore` does not list.
+  Files,
+  /// Nothing.
+  Empty,
+}
+
+/// The `.gitignore` a proposed first commit honours, in full.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Gitignore {
+  /// The chat's text, written as the folder's `.gitignore` before the commit; never over one that is there.
+  Writes { text: String },
+  /// The folder's own, kept as it is.
+  Kept { text: String },
+}
+
+impl Gitignore {
+  pub fn text(&self) -> &str {
+    match self {
+      Self::Writes { text } | Self::Kept { text } => text,
+    }
+  }
 }
 
 /// A step of a run's pipeline as people read it: its place in the pipeline, from 1, and its name.
@@ -160,10 +204,10 @@ pub enum MessageThen {
 }
 
 impl Change {
-  /// The run it acts on; `None` for a publication or a release of new starts.
+  /// The run it acts on; `None` for a publication, a release of new starts or a repository made.
   pub const fn run(&self) -> Option<RunId> {
     match self {
-      Self::Publish { .. } | Self::Release { .. } => None,
+      Self::Publish { .. } | Self::Release { .. } | Self::InitRepository { .. } => None,
       Self::Cancel { run, .. }
       | Self::Merge { run, .. }
       | Self::Answer { run, .. }
