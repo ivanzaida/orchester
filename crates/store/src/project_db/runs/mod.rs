@@ -8,8 +8,8 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
   run::{
-    AttemptReason, BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber,
-    StepExecutor,
+    AttemptReason, BranchName, Checkpoint, EventSequence, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind,
+    RunNumber, RunnerFailure, StepExecutor,
   },
   sharing::TaskRevision,
   store::RunStore,
@@ -177,14 +177,14 @@ impl RunStore for ProjectDb {
   }
 
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
-    self.append(run, events, None)
+    self.append(run, events, With::Nothing)
   }
 
   fn append_events_with_plan(&mut self, run: &Run, events: &[RunEvent], plan: &Plan) -> Result<(), RunStoreError> {
     if plan.run != run.id() {
       return Err(RunStoreError::EventsMismatch("the plan belongs to another run"));
     }
-    self.append(run, events, Some(plan))
+    self.append(run, events, With::Plan(plan))
   }
 
   fn plans(&self, run: RunId) -> Result<Vec<Plan>, RunStoreError> {
@@ -252,9 +252,17 @@ impl RunStore for ProjectDb {
   }
 }
 
+/// What is stored with a run's events, in their transaction.
+pub(super) enum With<'a> {
+  Nothing,
+  Plan(&'a Plan),
+  /// Why the runner failed, kept with its interruption, the event at this sequence.
+  RunnerFailure(EventSequence, RunnerFailure),
+}
+
 impl ProjectDb {
-  /// Appends `events` and stores `run`, and `plan` if given, in one transaction.
-  fn append(&mut self, run: &Run, events: &[RunEvent], plan: Option<&Plan>) -> Result<(), RunStoreError> {
+  /// Appends `events` and stores `run`, and what comes `with` them, in one transaction.
+  pub(super) fn append(&mut self, run: &Run, events: &[RunEvent], with: With<'_>) -> Result<(), RunStoreError> {
     check_events(run, events)?;
     let continues = events.iter().any(|event| event.kind().starts_execution());
     // Transactions take the write lock before they read (`migrate`), so a continuation and a removal
@@ -305,8 +313,12 @@ impl ProjectDb {
         super::organization::automatic(&transaction, run.task(), status, event.at())?;
       }
     }
-    if let Some(plan) = plan {
-      plans::save(&transaction, plan)?;
+    match with {
+      With::Nothing => {}
+      With::Plan(plan) => plans::save(&transaction, plan)?,
+      With::RunnerFailure(sequence, failure) => {
+        super::runner_failures::insert(&transaction, run.id(), sequence, failure)?;
+      }
     }
     transaction.commit()?;
     Ok(())

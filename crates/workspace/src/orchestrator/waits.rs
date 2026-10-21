@@ -207,9 +207,10 @@ fn keep_new(
 }
 
 /// What the turn `wait` starts does about its run while the person lets the Orchestrator continue interrupted runs:
-/// for an interrupted run's end the chat may continue (a crash, the runner going away or *Quit now*, its worktree
-/// there), it continues the run, or leaves it to the person when it was interrupted again soon; `None` for any other
-/// wait, which the switch does not touch.
+/// for an interrupted run's end the chat may continue (a crash, the runner going away, *Quit now* or the database
+/// staying busy, its worktree there), it continues the run, or leaves it to the person when it was interrupted again
+/// soon or the database is under contention ([`super::guard::continuing_of`]); `None` for any other wait, which the
+/// switch does not touch.
 fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Option<Continuing>, StoreError> {
   if wait.kind != WaitKind::Ended(RunEnd::Interrupted) {
     return Ok(None);
@@ -218,8 +219,8 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
     return Ok(None);
   };
   let present = db.worktree_removal(run.id())?.is_none() && run_worktree(root, run.id()).is_dir();
-  Ok(match ChatResume::of(run.status(), present) {
-    ChatResume::Interrupted(_) => Some(Continuing::after(&db.run_interruptions(run.id())?)),
+  Ok(match ChatResume::of(run.status(), db.runner_failure(run.id())?, present) {
+    ChatResume::Interrupted(cause) => Some(super::guard::continuing_of(db, run.id(), cause)?),
     ChatResume::Paused | ChatResume::PersonOnly(_) | ChatResume::Other => None,
   })
 }
