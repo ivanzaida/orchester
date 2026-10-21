@@ -48,8 +48,14 @@ fn panel_in_place(away: bool) {
   }
   let card = expand_in_panel(&mut page, APPROVAL, "cards-approval-");
   let approve = format!("{card}-approve");
-  page.wait("Approve once", |window| window.tree.get_element_by_id(&approve).is_some());
-  let label = if away { "panel in place, another tab" } else { "panel in place" };
+  page.wait("Approve once", |window| {
+    window.tree.get_element_by_id(&approve).is_some()
+  });
+  let label = if away {
+    "panel in place, another tab"
+  } else {
+    "panel in place"
+  };
   let answered = page.answer(label, &item, |page| page.click(&approve));
   assert!(answered.at_once, "the item leaves in the press's frame");
   page.end();
@@ -96,7 +102,9 @@ fn answered_on_the_summary_plan_leaves_at_once() {
   let mut page = Page::live();
   page.start(PLAN);
   let item = page.wait_for("the plan", is_plan);
-  page.wait("Approve plan", |window| window.tree.get_element_by_id("plan-approve").is_some());
+  page.wait("Approve plan", |window| {
+    window.tree.get_element_by_id("plan-approve").is_some()
+  });
   let answered = page.answer("summary decision bar (plan)", &item, |page| page.click("plan-approve"));
   assert!(answered.at_once, "the plan leaves in the press's frame");
   page.end();
@@ -107,8 +115,12 @@ fn answered_after_retries_on_the_summary_leaves_at_once() {
   let mut page = Page::live();
   page.start(FAILS);
   let item = page.wait_for("the decision after retries", is_decision);
-  page.wait("Stop the run", |window| window.tree.get_element_by_id("task-stop-run").is_some());
-  let answered = page.answer("summary decision bar (stuck)", &item, |page| page.click("task-stop-run"));
+  page.wait("Stop the run", |window| {
+    window.tree.get_element_by_id("task-stop-run").is_some()
+  });
+  let answered = page.answer("summary decision bar (stuck)", &item, |page| {
+    page.click("task-stop-run")
+  });
   assert!(answered.at_once, "the decision leaves in the press's frame");
   page.end();
 }
@@ -122,8 +134,12 @@ fn answered_in_the_composer_leaves_at_once() {
   page.wait("the composer on the plan", |window| {
     window.tree.get_element_by_id("composer-input").is_some() && window.texts("composer-context").is_some()
   });
-  page.window.set("composer-input", "Split the limiter into its own module.");
-  let answered = page.answer("composer (plan's changes)", &item, |page| page.click("composer-send-button"));
+  page
+    .window
+    .set("composer-input", "Split the limiter into its own module.");
+  let answered = page.answer("composer (plan's changes)", &item, |page| {
+    page.click("composer-send-button")
+  });
   assert!(answered.at_once, "the plan leaves in the press's frame");
   page.end();
 }

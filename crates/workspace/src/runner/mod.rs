@@ -36,18 +36,18 @@ use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState}
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
-use self::{
-  connection::Connection,
-  lifetime::Lingering,
-  report::{Reporter, Shared},
-  state::{RunnerEvent, RunnerState},
-};
 pub use self::{
   answers::AnswerMark,
   idle::ForgetRefusal,
   report::RunnerStatus,
   requests::RequestError,
   work::{ActiveWork, ActiveWorkFields, SaveState},
+};
+use self::{
+  connection::Connection,
+  lifetime::Lingering,
+  report::{Reporter, Shared},
+  state::{RunnerEvent, RunnerState},
 };
 use crate::{activity::Activity, workspace::OpenProject};
 

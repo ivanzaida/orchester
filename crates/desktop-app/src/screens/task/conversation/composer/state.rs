@@ -309,11 +309,13 @@ fn answering(services: &Services, request: &Request) -> Option<AnswerMark> {
 const fn taken(sent: &Result<Outcome, Message>) -> bool {
   matches!(
     sent,
-    Ok(Outcome::PlanChanges { .. }
-      | Outcome::Message {
-        sent: Sent::Taken | Sent::Started(_),
-        ..
-      })
+    Ok(
+      Outcome::PlanChanges { .. }
+        | Outcome::Message {
+          sent: Sent::Taken | Sent::Started(_),
+          ..
+        }
+    )
   )
 }
 

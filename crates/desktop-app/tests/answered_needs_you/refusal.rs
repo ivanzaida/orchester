@@ -31,7 +31,9 @@ fn answered_refused_comes_back_with_its_reason_where_it_was_given() {
   let item = request_of(&mut page, APPROVAL);
   let card = expand_in_panel(&mut page, APPROVAL, "cards-approval-");
   let approve = format!("{card}-approve");
-  page.wait("Approve once", |window| window.tree.get_element_by_id(&approve).is_some());
+  page.wait("Approve once", |window| {
+    window.tree.get_element_by_id(&approve).is_some()
+  });
   let before = page.count();
   // No runner takes it: the refusal may come back before the press's frame is laid out.
   page.click(&approve);

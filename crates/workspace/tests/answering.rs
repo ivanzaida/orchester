@@ -67,21 +67,43 @@ fn answering_covers_exactly_the_item_its_command_answers() {
   };
   let answered = Answered::of(&answer).expect("a question's answer answers its request");
   assert!(answered.covers(&choice(run, "q-1")));
-  assert!(!answered.covers(&choice(run, "q-2")), "another request of the run waits on");
+  assert!(
+    !answered.covers(&choice(run, "q-2")),
+    "another request of the run waits on"
+  );
   assert!(!answered.covers(&choice(other, "q-1")), "another run's waits on");
-  assert!(!answered.covers(&plan(run, PlanVersion::FIRST)), "and so does the run's plan");
+  assert!(
+    !answered.covers(&plan(run, PlanVersion::FIRST)),
+    "and so does the run's plan"
+  );
   let second = PlanVersion::FIRST.next();
   let decided = Answered::Plan { run, version: second };
   assert!(decided.covers(&plan(run, second)));
-  assert!(!decided.covers(&plan(run, PlanVersion::FIRST)), "another version waits on");
+  assert!(
+    !decided.covers(&plan(run, PlanVersion::FIRST)),
+    "another version waits on"
+  );
   let message = Answered::Message { run };
-  let question = item(run, WaitingKind::Question(Some(AwaitedQuestion {
-    agent: "Builder".into(),
-    text: "Which crate?".into(),
-  })));
-  assert!(message.covers(&question), "the composer's answer answers the agent's question");
-  assert!(!message.covers(&choice(run, "q-1")), "not a question with suggested answers");
-  assert_eq!(Answered::of(&Command::PauseRun { run }), None, "a pause answers nothing");
+  let question = item(
+    run,
+    WaitingKind::Question(Some(AwaitedQuestion {
+      agent: "Builder".into(),
+      text: "Which crate?".into(),
+    })),
+  );
+  assert!(
+    message.covers(&question),
+    "the composer's answer answers the agent's question"
+  );
+  assert!(
+    !message.covers(&choice(run, "q-1")),
+    "not a question with suggested answers"
+  );
+  assert_eq!(
+    Answered::of(&Command::PauseRun { run }),
+    None,
+    "a pause answers nothing"
+  );
   let stuck = item(run, WaitingKind::StoppedAtLimit { daily_budget: false });
   assert!(Answered::Limit { run }.covers(&stuck));
 }
@@ -103,18 +125,30 @@ fn answering_keeps_a_mark_until_a_reading_after_its_settling_takes_over() {
   let mark = runners.answering(root, Answered::Decision { run });
   let marked = runners.answers_now(root);
   assert_eq!(marked.answered(), [Answered::Decision { run }]);
-  assert!(runners.answers_now(Path::new("atlas")).is_empty(), "one set per project");
+  assert!(
+    runners.answers_now(Path::new("atlas")).is_empty(),
+    "one set per project"
+  );
   let before = marked.settled();
   runners.answers_read(root, before);
-  assert!(!runners.answers_now(root).is_empty(), "no reading ends a mark on its way");
+  assert!(
+    !runners.answers_now(root).is_empty(),
+    "no reading ends a mark on its way"
+  );
   mark.settle(true);
   let taken = runners.answers_now(root);
   assert_eq!(taken.settled(), before + 1, "the settling reads the tasks again");
   assert_eq!(taken.answered().len(), 1, "a taken answer stays marked until a reading");
   runners.answers_read(root, before);
-  assert!(!runners.answers_now(root).is_empty(), "a reading begun before the settling knows nothing of it");
+  assert!(
+    !runners.answers_now(root).is_empty(),
+    "a reading begun before the settling knows nothing of it"
+  );
   runners.answers_read(root, taken.settled());
-  assert!(runners.answers_now(root).is_empty(), "a reading begun after it takes over");
+  assert!(
+    runners.answers_now(root).is_empty(),
+    "a reading begun after it takes over"
+  );
 }
 
 #[test]
@@ -132,7 +166,11 @@ fn answering_a_refusal_or_a_dropped_send_settles_the_mark() {
   );
   drop(dropped);
   let left = runners.answers_now(root);
-  assert_eq!(left.answered().len(), 1, "a send that ended without word waits for a reading");
+  assert_eq!(
+    left.answered().len(),
+    1,
+    "a send that ended without word waits for a reading"
+  );
   runners.answers_read(root, left.settled());
   assert!(runners.answers_now(root).is_empty());
 }

@@ -140,7 +140,9 @@ impl Page {
       assert!(Instant::now() < deadline, "timed out waiting for {what}");
       self.window.tree.tick_futures();
       self.window.pass();
-      found = self.waiting().and_then(|waiting| waiting.into_iter().find(|item| of(item)));
+      found = self
+        .waiting()
+        .and_then(|waiting| waiting.into_iter().find(|item| of(item)));
       thread::sleep(Duration::from_millis(20));
     }
     found.expect("found above")
@@ -243,15 +245,27 @@ impl Page {
       thread::sleep(Duration::from_millis(2));
     }
     let took = pressed.elapsed();
-    let runners = self.window.launch.services().expect("the session started").runners.clone();
+    let runners = self
+      .window
+      .launch
+      .services()
+      .expect("the session started")
+      .runners
+      .clone();
     while !runners.answers_now(&self.repo).is_empty() {
-      assert!(Instant::now() < deadline, "timed out waiting for the runner to record {label}");
+      assert!(
+        Instant::now() < deadline,
+        "timed out waiting for the runner to record {label}"
+      );
       self.window.tree.tick_futures();
       self.window.pass();
       thread::sleep(Duration::from_millis(2));
     }
     let read = pressed.elapsed();
-    assert!(!self.lists(item), "{label}: the runner took it, and the reading after it no longer lists it");
+    assert!(
+      !self.lists(item),
+      "{label}: the runner took it, and the reading after it no longer lists it"
+    );
     eprintln!(
       "ORC-70 timing {label}: {} ms to leave (in the press's frame: {at_once}), {} ms until read back",
       took.as_millis(),
@@ -280,9 +294,16 @@ struct Answered {
   at_once: bool,
 }
 
-/// One waiting object, however it reads now: the same run waits for the same kind of thing.
+/// One waiting object, however it reads now: the same run waits for the same kind of thing, and for a plan the same
+/// version (the plan's changes may bring the next version, which waits anew).
 fn same(one: &WaitingItem, other: &WaitingItem) -> bool {
-  one.run == other.run && std::mem::discriminant(&one.kind) == std::mem::discriminant(&other.kind)
+  let version = |item: &WaitingItem| match &item.kind {
+    WaitingKind::Plan(plan) => Some(plan.version),
+    _ => None,
+  };
+  one.run == other.run
+    && std::mem::discriminant(&one.kind) == std::mem::discriminant(&other.kind)
+    && version(one) == version(other)
 }
 
 fn ids_in(element: ElementRef<'_>, prefix: &str, into: &mut Vec<String>) {

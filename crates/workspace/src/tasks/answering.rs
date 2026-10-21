@@ -8,10 +8,7 @@
 
 use std::sync::Arc;
 
-use orchester_core::{
-  id::RunId,
-  run::PlanVersion,
-};
+use orchester_core::{id::RunId, run::PlanVersion};
 use orchester_ipc::Command;
 
 use super::{
