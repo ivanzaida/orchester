@@ -110,6 +110,8 @@ pub struct ProjectTasks {
   pub lost_to_runner: usize,
   /// The active runs that auto-approve their agents' requests, oldest task first.
   pub auto_approving: Arc<Vec<AutoApprovingRun>>,
+  /// What answers sent from this window answer, which no longer waits ([`Self::with_answered`]).
+  pub answered: Arc<Vec<super::answering::Answered>>,
   /// What waits for the person, once asked for ([`Self::waiting`]).
   pub waiting_once: WaitingOnce,
 }
@@ -257,6 +259,7 @@ impl ProjectTasks {
       runs: Arc::new(counts),
       lost_to_runner: 0,
       auto_approving: Arc::new(auto_approving),
+      answered: Arc::default(),
       waiting_once: WaitingOnce::default(),
     })
   }

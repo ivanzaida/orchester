@@ -20,6 +20,7 @@ use orchester_workspace::{
 
 use super::{super::frame::note, kept};
 use crate::{
+  project::Projects,
   services::Services,
   ui::{field::field_error, message::message_text},
 };
@@ -88,29 +89,29 @@ pub(super) type SendAnswer = FutureAction<Sending, (), ()>;
 
 /// The action that sends an answer: made once by the tab and asked for in the same place in each render. What
 /// became of the answer is kept ([`super::kept`]) where it ends, on the app's runtime, so it is known even
-/// once no tab waits for it; the action only says that it ended.
+/// once no tab waits for it; the action only says that it ended. What it answers leaves every *Needs you* as it
+/// is sent, in the press's frame, until the runner refuses it.
 pub(super) fn action(ctx: &mut Ctx) -> SendAnswer {
   let services = Services::of(ctx);
+  let projects = Projects::of(ctx);
   ctx.future_action(move |sending: Sending| {
-    let (runners, runtime, clock) = (
-      services.runners.clone(),
-      services.runtime.clone(),
-      services.clock.clone(),
-    );
+    let (runtime, clock) = (services.runtime.clone(), services.clock.clone());
+    let Sending {
+      run,
+      key,
+      given,
+      by,
+      project,
+      command,
+    } = sending;
+    let sent = services.runners.control_run_in(&project, command);
+    projects.feed(project.project.id()).answer_sent();
     async move {
-      let Sending {
-        run,
-        key,
-        given,
-        by,
-        project,
-        command,
-      } = sending;
       let card = key.clone();
       // On the runtime, not in the screen's future: an answer under way ends even once nothing shows it.
       let ended = runtime
         .spawn(async move {
-          let stage = match runners.control_run_in(&project, command).await {
+          let stage = match sent.await {
             Ok(()) => Stage::Taken(clock.now()),
             Err(error) => Stage::Refused(refused(error)),
           };
