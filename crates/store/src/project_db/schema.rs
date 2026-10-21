@@ -46,6 +46,7 @@ mod returned_after_end;
 mod reviewer_usage;
 mod run_rebases;
 mod run_resolutions;
+mod runner_failures;
 mod shared_members;
 mod sharing;
 mod sources;

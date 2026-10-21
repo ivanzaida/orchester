@@ -29,6 +29,7 @@ mod merge;
 mod merged_outside;
 mod modules;
 mod orchestrator_chat;
+mod orchestrator_contention;
 mod orchestrator_continue;
 mod orchestrator_continued;
 mod orchestrator_guard;

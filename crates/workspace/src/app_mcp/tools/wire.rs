@@ -3,7 +3,7 @@
 use orchester_core::{
   id::ProjectId,
   project::TaskKey,
-  run::{RunStatus, StepStatus, TaskPhase},
+  run::{InterruptCause, RunStatus, RunnerFailure, StepStatus, TaskPhase},
   task::{
     TaskStatus,
     organization::{Priority, WorkflowStatus},
@@ -118,13 +118,22 @@ pub const fn phase(phase: TaskPhase) -> &'static str {
   }
 }
 
-/// A run's state and, where it has one, why.
-pub fn run_status(status: &RunStatus) -> Value {
+/// A run's state and, where it has one, why; for one the runner interrupted after its own failure, also what kind of
+/// failure (`runner_failure`: `storage_contention`, `storage_failure` or `other`; `null` when it was not recorded),
+/// `runner_failure` being what the store read for the run.
+pub fn run_status(status: &RunStatus, runner_failure: Option<RunnerFailure>) -> Value {
   let (state, reason) = match status {
     RunStatus::Pending => ("pending", Value::Null),
     RunStatus::Running => ("running", Value::Null),
     RunStatus::Paused(reason) => ("paused", plain(reason)),
     RunStatus::WaitingForPerson(stuck) => ("waiting_for_person", plain(stuck)),
+    RunStatus::Interrupted(InterruptCause::RunnerFailed) => {
+      return json!({
+        "state": "interrupted",
+        "reason": plain(&InterruptCause::RunnerFailed),
+        "runner_failure": runner_failure.as_ref().map(plain),
+      });
+    }
     RunStatus::Interrupted(cause) => ("interrupted", plain(cause)),
     RunStatus::Succeeded => ("succeeded", Value::Null),
     RunStatus::Failed(failure) => ("failed", plain(failure)),

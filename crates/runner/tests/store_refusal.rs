@@ -10,7 +10,7 @@ use std::num::NonZeroU32;
 use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   id::IdempotencyKey,
-  run::{InterruptCause, RunStatus, active_time},
+  run::{InterruptCause, RunStatus, RunnerFailure, active_time},
   store::{ActivityStore, RunStore},
   time::Timestamp,
 };
@@ -261,4 +261,9 @@ async fn store_refusal_interrupts_the_run_and_reports_why() {
       } if detail.contains("refused by the test"))
     });
   assert!(reported, "the run's activity says why it stopped");
+  assert_eq!(
+    ProjectDb::open(root).expect("open").runner_failure(id).expect("read"),
+    Some(RunnerFailure::Other),
+    "kept with the interruption: a write the database refused is no contention"
+  );
 }

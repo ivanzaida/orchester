@@ -1,13 +1,14 @@
 //! A run whose task failed on the runner's own side: the project database failed or refused a write, a
 //! transition was rejected, or no step could run. Its agents have ended by then. The run must not stay
 //! running with nothing behind it, so it is interrupted ([`InterruptCause::RunnerFailed`]) from what was
-//! last stored, and the error goes into its activity: a person continues it from its last checkpoint,
-//! where retrying is safe, or cancels it.
+//! last stored, with why ([`RunnerFailure`], ORC-75), and the error goes into its activity: a person continues
+//! it from its last checkpoint, where retrying is safe, or cancels it; the Orchestrator may continue it too when
+//! the database only stayed busy.
 
 use orchester_core::{
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
   id::RunId,
-  run::{InterruptCause, RunStatus},
+  run::{InterruptCause, RunStatus, RunnerFailure},
   store::{ActivityStore, RunStore},
   time::Timestamp,
 };
@@ -15,9 +16,22 @@ use orchester_ipc::Event;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  record::record,
+  record::RecordError,
   run::{ExecutionError, RunTask},
 };
+
+impl ExecutionError {
+  /// What kind of failure stopped the run, as the store reads its storage errors.
+  fn runner_failure(&self) -> RunnerFailure {
+    match self {
+      Self::Store(error) => error.runner_failure(),
+      Self::Record(RecordError::Store(error)) => error.runner_failure(),
+      Self::Record(RecordError::Run(_)) | Self::NotAnAgentStep(_) | Self::Stalled | Self::Conversation(_) => {
+        RunnerFailure::Other
+      }
+    }
+  }
+}
 
 impl RunTask {
   /// Interrupts the run after `error` ended its task. What the task held in memory may be ahead of
@@ -32,18 +46,27 @@ impl RunTask {
   fn try_interrupt(&mut self, error: &ExecutionError) -> Result<(), ExecutionError> {
     let run = self.run.id();
     self.db = ProjectDb::open(&self.root)?;
-    if let Some(stored) = self.db.run(run).map_err(super::record::RecordError::from)? {
+    if let Some(stored) = self.db.run(run).map_err(RecordError::from)? {
       self.run = stored;
     }
     if self.run.status() != &RunStatus::Running {
       return Ok(());
     }
-    // Recording an invocation or activity may still fail. Persist the interruption first so
+    // Recording an invocation or activity may still fail. Persist the interruption first, with why, so
     // a writable run log never claims that the workers we already ended are still running.
     let ended_at = Timestamp::now();
-    record(&mut self.db, &self.notifier, &mut self.run, |run, _| {
-      run.interrupt(InterruptCause::RunnerFailed, ended_at)
-    })?;
+    let events = self
+      .run
+      .interrupt(InterruptCause::RunnerFailed, ended_at)
+      .map_err(RecordError::from)?;
+    self
+      .db
+      .append_runner_failure(&self.run, &events, error.runner_failure())
+      .map_err(RecordError::from)?;
+    self.notifier.send(Event::RunChanged {
+      run,
+      task: self.run.task(),
+    });
     if let Err(error) = close_invocations(&mut self.db, run, ended_at) {
       tracing::error!(%run, %error, "the ended invocations could not be recorded after runner failure");
     }
