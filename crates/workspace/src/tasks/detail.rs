@@ -78,6 +78,16 @@ pub struct StepView {
   pub stage: usize,
 }
 
+impl StepView {
+  /// Whether the step's agent may write in the worktree in its next invocation, as the run's pinned pipeline version,
+  /// its profile version and any change of its permissions for this run give them.
+  pub fn writes(&self) -> bool {
+    self.permissions.as_ref().is_some_and(|permissions| {
+      permissions.permissions.repository() == orchester_core::permission::RepositoryAccess::Write
+    })
+  }
+}
+
 /// The latest run of a task.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunView {

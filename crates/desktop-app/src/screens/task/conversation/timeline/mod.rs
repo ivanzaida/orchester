@@ -1,5 +1,6 @@
 //! The chat (`Chat` `RM1e7` in `D1PYAe`): the run's timeline as rows 12 apart, 32 in from the sides, in a
-//! virtualized list that follows the run ([`follow`]): a step's divider, finished steps folded into one line,
+//! virtualized list that follows the run (`ui::chat::follow`), opening at its end or at the card that waits for the
+//! person: a step's divider, finished steps folded into one line,
 //! the steps a failure kept from starting, returns and restarts and the run's end ([`divider`]); an agent's
 //! message with its tool groups ([`message`], [`chips`]); the person's message, or the Orchestrator chat's; a card
 //! that waits for or records a decision ([`cards`], C3's); a problem row ([`entry`]); a step's result card
@@ -11,7 +12,6 @@ mod cards;
 mod chips;
 mod divider;
 mod entry;
-mod follow;
 mod message;
 mod proposal;
 mod result;
@@ -38,6 +38,7 @@ use orchester_workspace::tasks::{
     Item, ItemKind,
     group::unwrapped,
     view::{Row, Shown},
+    waits_for_you,
   },
   transcript::{Entry, EntryKind},
 };
@@ -45,7 +46,6 @@ use orchester_workspace::tasks::{
 use self::proposal::{ProposalProps, ProposalRow};
 pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
-  follow::Follow,
   message::person_message,
   proposal::ChatProject,
   working::{Wait, Working},
@@ -54,7 +54,10 @@ use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskView},
   theme::ExtraSpacing,
-  ui::chat::names::ProjectNames,
+  ui::chat::{
+    follow::{self, Follow},
+    names::ProjectNames,
+  },
 };
 
 /// What the chat's rows share: whose timeline it is, and what a person opened or folded in it.
@@ -223,7 +226,12 @@ pub(super) fn chat(
   (shown, items, proposals): (&Shown, &[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
 ) -> Element {
-  let reveal = follow.follow(shown, items, arrived);
+  // Until the person scrolls, the first card that waits for them opens the chat instead of its end.
+  let waiting = items
+    .iter()
+    .find(|item| waits_for_you(item))
+    .map(|item| item.key.to_string());
+  let reveal = follow.follow(shown.rows.len(), arrived, waiting);
   let rows: Arc<Vec<RowProps>> = Arc::new(
     shown
       .rows
@@ -253,7 +261,7 @@ pub(super) fn chat(
     .padding_top(SpacingSize::Sm)
     .padding_bottom(SpacingSize::Xs)
     .child(list)
-    .child(follow.end(ctx));
+    .child(follow.end(ctx, "conversation-follow-end"));
   Stack::new()
     .id("conversation-chat")
     .width(Dimension::Pct(100.0))

@@ -27,7 +27,8 @@ pub enum StepNetwork {
   Off,
 }
 
-/// A step's narrowing of commands and network; plain data, every combination is valid.
+/// A step's narrowing of commands and network, and whether it merges the base branch when that moves; plain data,
+/// every combination is valid.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StepPermissions {
   #[serde(default)]
@@ -38,10 +39,16 @@ pub struct StepPermissions {
   /// The default keeps the existing non-interactive Codex policy for published pipelines.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub interactive_tool_approvals: bool,
+  /// The pipeline's own choice of whether this step's agent is told to merge the base branch when it moves (ORC-65);
+  /// `None`, as in pipelines saved before it existed, follows the default rule
+  /// ([`crate::resource::Pipeline::takes_base_moves`]).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub takes_base_moves: Option<bool>,
 }
 
 impl StepPermissions {
-  /// Nothing narrowed: the step runs with its profile's permissions (apart from repository access).
+  /// Nothing narrowed and nothing chosen: the step runs with its profile's permissions (apart from repository access)
+  /// and follows the default rule for base moves.
   pub fn is_as_profile(&self) -> bool {
     *self == Self::default()
   }

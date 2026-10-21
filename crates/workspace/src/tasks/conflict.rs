@@ -13,7 +13,7 @@ use orchester_core::{
   task::{
     Task, TaskDetails, TaskUpdate,
     content::{Choice, ContentField, ContentMerge},
-    organization::TaskOrganization,
+    organization::{ChangeActor, TaskOrganization},
   },
   time::Timestamp,
 };
@@ -71,6 +71,15 @@ pub struct Edit<'a> {
 
 /// Saves `edit`, merging it into a task changed meanwhile when no content field conflicts.
 pub fn save_edit(writer: &mut TaskWriter, edit: Edit<'_>, now: Timestamp) -> Result<EditSaved, WriteError> {
+  save_edit_by(writer, edit, (ChangeActor::Person, now))
+}
+
+/// [`save_edit`], the organization changes recorded as `actor`'s.
+pub fn save_edit_by(
+  writer: &mut TaskWriter,
+  edit: Edit<'_>,
+  (actor, now): (ChangeActor, Timestamp),
+) -> Result<EditSaved, WriteError> {
   let Edit {
     task,
     mut read,
@@ -80,7 +89,8 @@ pub fn save_edit(writer: &mut TaskWriter, edit: Edit<'_>, now: Timestamp) -> Res
   } = edit;
   let mut base = base.clone();
   for _ in 0..ATTEMPTS {
-    let current = match writer.save_organized(SaveTarget::Task(task, read), details.clone(), organization, now)? {
+    let target = SaveTarget::Task(task, read);
+    let current = match writer.save_organized_by(target, details.clone(), organization, (actor, now))? {
       TaskUpdate::Saved(task) => return Ok(EditSaved::Saved { task, details }),
       TaskUpdate::Conflict { current } => current,
     };

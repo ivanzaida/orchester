@@ -108,6 +108,14 @@ fn strictness_names_every_weaker_step() {
   assert_eq!(
     weaker_than(
       &old,
+      &changed(&steps, "build", |step| narrowing(step).takes_base_moves = Some(false))
+    ),
+    build,
+    "which step merges the base is a person's choice"
+  );
+  assert_eq!(
+    weaker_than(
+      &old,
       &changed(&steps, "build", |step| narrowing(step).interactive_tool_approvals =
         false)
     ),

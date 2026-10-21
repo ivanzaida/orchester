@@ -10,7 +10,10 @@ use orchester_core::{
   id::{IdempotencyKey, TaskId},
   sharing::TaskRevision,
   store::TaskStore,
-  task::{Task, TaskDetails, TaskStatus, TaskUpdate, organization::TaskOrganization},
+  task::{
+    Task, TaskDetails, TaskStatus, TaskUpdate,
+    organization::{ChangeActor, TaskOrganization},
+  },
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -121,7 +124,7 @@ impl RemoteTaskStore {
     created.tasks.iter().map(|task| self.cached(task.id)).collect()
   }
 
-  /// Saves `details` of `task`, read at `read`, with the organization changes the person made from
+  /// Saves `details` of `task`, read at `read`, with the organization changes `actor` made from
   /// `base` to `edited` on top of the organization the cache has now.
   pub fn update_organized(
     &mut self,
@@ -129,24 +132,40 @@ impl RemoteTaskStore {
     read: TaskRevision,
     details: &TaskDetails,
     (base, edited): (&TaskOrganization, &TaskOrganization),
+    actor: ChangeActor,
   ) -> Result<TaskUpdate, SharingError> {
     let cached = self.cached(task)?;
     let changes = convert::content_changes(&self.db, &cached, details, cached.status())?;
     let value = edited.rebase(base, cached.organization());
-    let changes = convert::with_organization(changes, cached.organization(), &value);
+    let mut changes = convert::with_organization(changes, cached.organization(), &value);
+    changes.actor = Some(actor);
     self.patch(task, read, changes)
   }
 
-  /// Creates a draft of `details` organized as `organization` under `batch`.
+  /// Creates a draft of `details` organized as `organization` by `actor` under `batch`. The server
+  /// records a new task's organization as a person's, so automation's is sent as a change of the
+  /// new draft.
   pub fn create_organized(
     &mut self,
     batch: IdempotencyKey,
     details: &TaskDetails,
     organization: &TaskOrganization,
+    actor: ChangeActor,
   ) -> Result<Task, SharingError> {
-    let content = convert::content(&self.db, details, organization)?;
-    let mut created = self.create(batch, vec![content])?;
-    created.pop().ok_or(SharingError::InvalidAnswer("created tasks"))
+    let first = match actor {
+      ChangeActor::Person => organization.clone(),
+      ChangeActor::Orchester => TaskOrganization::default(),
+    };
+    let content = convert::content(&self.db, details, &first)?;
+    let task = self
+      .create(batch, vec![content])?
+      .pop()
+      .ok_or(SharingError::InvalidAnswer("created tasks"))?;
+    if first == *organization {
+      return Ok(task);
+    }
+    self.change_organization(task.id(), (&first, organization), actor)?;
+    self.cached(task.id())
   }
 }
 

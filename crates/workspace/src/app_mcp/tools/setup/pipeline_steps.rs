@@ -83,6 +83,10 @@ pub struct StepInput {
   pub model: Option<String>,
   /// An agent step's narrowing of its profile's permissions.
   pub narrow: Option<NarrowInput>,
+  /// Whether an agent step's agent is told to merge the base branch when it moves (true) or never (false); left
+  /// out, the default rule: a step with repository write that does not review or verify (no `review` or `verify` in
+  /// its key, no failure route back to a writing step).
+  pub takes_base_moves: Option<bool>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -218,7 +222,11 @@ fn kind(input: &StepInput, assignables: &Assignables) -> Result<StepKind, Messag
   match (&input.profile, &input.tool) {
     (Some(_), Some(_)) => Err(Message::new("appMcp.errors.profileOrTool")),
     (None, Some(tool)) => {
-      if input.repository.is_some() || input.model.is_some() || input.narrow.is_some() {
+      if input.repository.is_some()
+        || input.model.is_some()
+        || input.narrow.is_some()
+        || input.takes_base_moves.is_some()
+      {
         return Err(Message::new("appMcp.errors.toolStepOptions"));
       }
       let lowered = tool.to_lowercase();
@@ -265,7 +273,7 @@ fn agent(input: &StepInput, choice: Option<&ProfileChoice>) -> Result<StepKind, 
     .as_deref()
     .map(|model| ModelId::new(model.trim()).map_err(|_| Message::new("errors.modelInvalid")))
     .transpose()?;
-  let permissions = match (&input.narrow, choice) {
+  let narrowing = match (&input.narrow, choice) {
     (None, _) => StepPermissions::default(),
     (Some(_), None) => return Err(Message::new("appMcp.errors.narrowNeedsProfile")),
     (Some(narrow), Some(choice)) => narrowed(narrow, choice)?,
@@ -274,7 +282,10 @@ fn agent(input: &StepInput, choice: Option<&ProfileChoice>) -> Result<StepKind, 
     profile: choice.map(|choice| choice.id),
     repository,
     model,
-    permissions,
+    permissions: StepPermissions {
+      takes_base_moves: input.takes_base_moves,
+      ..narrowing
+    },
   })
 }
 

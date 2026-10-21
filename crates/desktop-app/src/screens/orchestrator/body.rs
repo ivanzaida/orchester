@@ -168,6 +168,10 @@ fn conversation(
     all.push(Turn::sending(text));
   }
   let chat = shown.map(|shown| shown.chat.id());
+  // Another conversation opens at its own end.
+  view
+    .follow
+    .shows(&chat.map_or_else(|| "new".to_owned(), |chat| chat.to_string()));
   let connection = match readiness {
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
@@ -215,7 +219,7 @@ fn conversation(
         .width(Dimension::Pct(100.0))
         .flex(1.0)
         .min_height(Dimension::Px(0.0))
-        .child(list(ctx, rows)),
+        .child(list(ctx, &view.follow, rows)),
     )
     .child(
       Row::new()
