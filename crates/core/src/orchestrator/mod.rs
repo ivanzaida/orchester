@@ -11,6 +11,7 @@ pub mod chat;
 pub mod instructions;
 pub mod merging;
 pub mod proposal;
+pub mod report;
 pub mod resume;
 pub mod sent;
 pub mod settings;
@@ -22,6 +23,7 @@ pub use self::{
     TurnFailure, TurnState, WaitTurn,
   },
   merging::{MergeLeft, Merging},
+  report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
   sent::{FromOrchestrator, SentWay},
   settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},

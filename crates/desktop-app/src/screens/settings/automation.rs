@@ -8,7 +8,8 @@
 //! one of the Orchestrator's is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted
 //! or finished run, leaves it to the person. A setting is read and saved off the UI thread; while either runs, its
 //! switch cannot be flipped. While a row is mounted, the app's MCP server refuses window input (`mcp::input_gate`),
-//! and the row refuses lurq's synthetic input, so only a person flips it.
+//! and the row refuses lurq's synthetic input, so only a person flips it. The section ends with the Orchestrator's
+//! daily report and its time (`super::daily_report`).
 
 use lurq::{
   app::{
@@ -177,11 +178,14 @@ pub fn section(ctx: &mut Ctx) -> Element {
     .into_iter()
     .map(|(key, consent)| ctx.mount_keyed::<ConsentRow>(key, consent))
     .collect();
+  // The daily report's time is the section's last row (`super::daily_report`).
+  let report = ctx.mount_keyed::<super::daily_report::DailyReportSection>("daily-report", ());
   Column::new()
     .id("settings-automation")
     .width(Dimension::Pct(100.0))
     .child(section_title(&ctx.t("settings.automation.section")))
     .with_children(rows)
+    .child(report)
     .into()
 }
 

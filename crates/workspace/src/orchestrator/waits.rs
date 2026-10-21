@@ -12,7 +12,8 @@
 //! interrupted runs* on too, the turn of an interrupted run's end continues the run, unless it was interrupted again
 //! soon; with *Let the Orchestrator merge finished runs on its own* and *merge runs* on too, the turn of a run's
 //! success merges the run when the chat's rule lets it ([`super::auto_merge`]), one such turn at a time in the order
-//! the runs ended. The app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns
+//! the runs ended. A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry
+//! first. The app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns
 //! [`follow_in`] gives, with the chat's tools served for them.
 
 use std::{collections::HashSet, path::Path};
@@ -236,34 +237,42 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
   })
 }
 
-/// The waits of every conversation that start a turn by themselves, have none and still wait (their keys among
-/// `waiting`), oldest first.
-fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<KeptWait>, StoreError> {
-  Ok(
-    db.automatic_waits_without_turn()?
-      .into_iter()
-      .filter(|kept| waiting.contains(kept.key.as_str()))
-      .collect(),
-  )
+/// An entry that starts a turn by itself and has none: its conversation, its `seq`, and whether its turn merges a
+/// run on its own.
+type NextTurn = (ChatId, i64, bool);
+
+/// The entries of every conversation that start a turn by themselves and have none, oldest first: the waits that
+/// still wait (their keys among `waiting`), and the daily reports (`super::report`), whose turn adds a summary to what
+/// they tell.
+fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<NextTurn>, StoreError> {
+  let mut next: Vec<NextTurn> = db
+    .automatic_waits_without_turn()?
+    .into_iter()
+    .filter(|kept| waiting.contains(kept.key.as_str()))
+    .map(|kept: KeptWait| (kept.chat, kept.seq, merges(&kept.wait)))
+    .chain(
+      db.automatic_reports_without_turn()?
+        .into_iter()
+        .map(|kept| (kept.chat, kept.seq, false)),
+    )
+    .collect();
+  next.sort_by_key(|(_, seq, _)| *seq);
+  Ok(next)
 }
 
 /// Gives the oldest of `next` whose conversation has no turn thinking its turn, in that conversation; none while a
 /// turn thinks in each of theirs. Runs merge one at a time in the order they ended: a turn that merges its run on its
 /// own does not start while one that ended before, in any conversation, still waits for its turn or thinks.
-fn start(db: &mut ProjectDb, next: &[KeptWait]) -> Result<Option<WaitTurn>, StoreError> {
+fn start(db: &mut ProjectDb, next: &[NextTurn]) -> Result<Option<WaitTurn>, StoreError> {
   let mut merging_before = db.waits_thinking()?.iter().any(|kept| merges(&kept.wait));
-  for kept in next {
-    let merging = merges(&kept.wait);
+  for &(chat, seq, merging) in next {
     if merging && merging_before {
       continue;
     }
     let message = ChatMessageId::generate();
-    // Refused while another turn of its conversation thinks: the wait keeps no turn and starts once that one ended.
-    if db.start_wait_turn((kept.chat, kept.seq), message)? {
-      return Ok(Some(WaitTurn {
-        chat: kept.chat,
-        message,
-      }));
+    // Refused while another turn of its conversation thinks: the entry keeps no turn and starts once that one ended.
+    if db.start_wait_turn((chat, seq), message)? {
+      return Ok(Some(WaitTurn { chat, message }));
     }
     merging_before |= merging;
   }

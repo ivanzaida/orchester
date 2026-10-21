@@ -191,6 +191,19 @@ person can click.
      work (worktrees, drafts, tasks).
 6. **Links everywhere.** Every object a tool returns carries an app `link`. The chat renders links and a click opens
    the place in the app.
+7. **The daily report (ORC-47).** At the time the person sets in Settings › What automation may do (off until they
+   turn it on), each open project's latest conversation (or one it opens) gets one *Daily report* entry per local day
+   that had activity (a merge, a run that ended or stopped, an action of the Orchestrator, anything its conversations
+   kept, tokens or agent time); a report whose time passed while the app was closed comes at the next start, labelled
+   with its day, for the days since the report was turned on, at most 7 back. It is built only from what the project's
+   database holds (`orchester_workspace::orchestrator::report`): what the day did, and what stands (runs, waits, the
+   queue) as of when it is built. With *Let the Orchestrator answer agents* on, the report starts one turn by itself, as
+   a wait does, which adds a summary and recommendations and changes nothing: its tools read from the conversation
+   that a report's turn is the one under way (`orchester_workspace::orchestrator::guard`), so every change a card
+   carries (a merge, cancel, pause, resume, release, continuation, publication, answer or message) is only proposed,
+   whatever the person's switches, and any other change (a task, a draft, a copy of a pipeline, a hold of new starts) is
+   refused as `report_turn`; a start is proposed as in any turn nobody asked for. `get_daily_report` reads the
+   delivered report of a day, or builds it.
 
 ## Tools
 
@@ -214,6 +227,7 @@ project.
 | Connections | `list_connections`, `list_accounts`, `list_models` (existing) | — | — |
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
+| Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,

@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{change::ProposedChange, proposal::ProposedStart, wait::AgentWait};
+use super::{change::ProposedChange, proposal::ProposedStart, report::DailyReport, wait::AgentWait};
 use crate::{
   connection::AccountStartProblem,
   conversation::MessageBody,
@@ -308,10 +308,16 @@ pub enum EntryKind {
     wait: AgentWait,
     turn: Option<WaitTurn>,
   },
+  /// The project's report of a day ([`DailyReport`]), and the turn it started by itself to add a summary, once it
+  /// started one.
+  Report {
+    report: Box<DailyReport>,
+    turn: Option<WaitTurn>,
+  },
 }
 
-/// The Orchestrator turn a wait started by itself: under the id its prompt was kept by, where it stands and when it
-/// ended, as a person's message's turn.
+/// The Orchestrator turn a wait or a daily report started by itself: under the id its prompt was kept by, where it
+/// stands and when it ended, as a person's message's turn.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WaitTurn {
   pub message: ChatMessageId,
@@ -320,11 +326,15 @@ pub struct WaitTurn {
 }
 
 impl EntryKind {
-  /// The turn this entry started, and where it stands: a person's message's, or a wait's that started one.
+  /// The turn this entry started, and where it stands: a person's message's, or a wait's or a report's that started
+  /// one.
   pub fn turn(&self) -> Option<(ChatMessageId, &TurnState)> {
     match self {
       Self::Person { message, turn, .. } => Some((*message, turn)),
       Self::Wait {
+        turn: Some(started), ..
+      }
+      | Self::Report {
         turn: Some(started), ..
       } => Some((started.message, &started.state)),
       _ => None,
