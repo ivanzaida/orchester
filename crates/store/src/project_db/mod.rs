@@ -51,6 +51,7 @@ mod reviewer_usage;
 mod revision_diffs;
 mod run_connections;
 mod run_ends;
+mod runner_failures;
 mod runs;
 mod schema;
 mod secrets;

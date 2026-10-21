@@ -27,6 +27,20 @@ impl InterruptCause {
   }
 }
 
+/// Why the runner could not record or carry on a run it interrupted ([`InterruptCause::RunnerFailed`]), recorded with
+/// the interruption (ORC-75). Runs interrupted before it was recorded have none, which reads as unknown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunnerFailure {
+  /// The project database stayed busy or locked by another connection after the retries: transient, so continuing
+  /// from the last checkpoint is safe.
+  StorageContention,
+  /// The project database is unavailable for real: damaged, full, read-only, unreachable or of another schema.
+  StorageFailure,
+  /// Any other failure on the runner's side: a transition was rejected or no step could run.
+  Other,
+}
+
 /// Why a run failed.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

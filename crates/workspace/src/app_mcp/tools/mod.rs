@@ -152,7 +152,10 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_run",
-    description: "A run: its steps, state, tokens (auto mode's reviewer included, and its part apart), active time and \
+    description: "A run: its steps, state (for one the runner interrupted after its own failure, reason \
+                  runner_failed with runner_failure: storage_contention when the project database stayed busy, \
+                  storage_failure when it was unavailable, other, or null when not recorded), tokens (auto mode's \
+                  reviewer included, and its part apart), active time and \
                   what it waits for, its agents' waiting questions with their options, the steps that wait for a \
                   message with what each one's agent wrote last (awaiting.messages: the question it ended its step with, \
                   or its newest message), and the plan waiting for a decision (version, step, its whole text and an \
@@ -172,7 +175,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_runs",
-    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase; merged also when git proves its work merged outside Orchester), its state and why, what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
+    description: "Runs, newest first, as each task's Summary lists them: id, number, task (key and title), where it stands (phase; merged also when git proves its work merged outside Orchester), its state and why (with runner_failure, as get_run gives it, for a run the runner interrupted after its own failure), what happened, tokens used and its budget, when it started and last changed, and its link in the app (its task's page). At most `limit` runs, the newest: 50 when left out, 200 at most; `more` says whether older ones were left out. With `task`, that task's runs (needs `project`). Without `project`, every project's, each naming its project; unreadable_projects lists the projects that could not be read, with why. A run that cannot be read has no phase, state, tokens or start time; its detail says why.",
     schema: schema_for_type::<run_list::ListRuns>,
     read_only: true,
   },

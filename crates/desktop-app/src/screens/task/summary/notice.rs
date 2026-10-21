@@ -8,7 +8,7 @@ use std::sync::Arc;
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   id::StepExecutionId,
-  run::{PauseReason, RunFailure, RunLimit, RunStatus, Stuck},
+  run::{PauseReason, RunFailure, RunLimit, RunStatus, RunnerFailure, Stuck},
   task::TaskStatus,
   tokens::compact_tokens,
 };
@@ -369,12 +369,36 @@ fn interrupted(ctx: &Ctx, run: &RunView) -> Said {
     );
     return Said::new(NoticeTone::Warning, Icon::FolderX, text);
   }
+  let (with_checkpoint, without) = interrupted_keys(run.runner_failure);
   let body = match checkpoint(run) {
-    Some(checkpoint) => ctx.t_args("summary.notice.interruptedBody", [("checkpoint", checkpoint.as_str())]),
-    None => ctx.t("summary.notice.interruptedNoCheckpointBody"),
+    Some(checkpoint) => ctx.t_args(with_checkpoint, [("checkpoint", checkpoint.as_str())]),
+    None => ctx.t(without),
   };
   let title = ctx.t_args("summary.notice.interruptedTitle", [("step", step.as_str())]);
   Said::new(NoticeTone::Warning, Icon::CirclePause, (title, body))
+}
+
+/// The body of an interrupted run's notice, with its last checkpoint and before its first: why the runner stopped it,
+/// when its own failure did and it recorded why (ORC-75).
+const fn interrupted_keys(failure: Option<RunnerFailure>) -> (&'static str, &'static str) {
+  match failure {
+    None => (
+      "summary.notice.interruptedBody",
+      "summary.notice.interruptedNoCheckpointBody",
+    ),
+    Some(RunnerFailure::StorageContention) => (
+      "summary.notice.storageContentionBody",
+      "summary.notice.storageContentionNoCheckpointBody",
+    ),
+    Some(RunnerFailure::StorageFailure) => (
+      "summary.notice.storageFailureBody",
+      "summary.notice.storageFailureNoCheckpointBody",
+    ),
+    Some(RunnerFailure::Other) => (
+      "summary.notice.runnerErrorBody",
+      "summary.notice.runnerErrorNoCheckpointBody",
+    ),
+  }
 }
 
 /// A run recorded as running whose runner is gone: it is interrupted until a runner is back.

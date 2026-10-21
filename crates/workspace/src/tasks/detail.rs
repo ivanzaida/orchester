@@ -14,8 +14,8 @@ use orchester_core::{
   question::AskedQuestions,
   resource::{StepKey, VersionNumber},
   run::{
-    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, Plan, Run, RunLimit, RunStatus, StepExecutor,
-    StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
+    ActiveClock, ActivityEntry, AttemptStart, Invocation, PauseReason, Plan, Run, RunLimit, RunStatus, RunnerFailure,
+    StepExecutor, StepFailure, StepOutput, StepStatus, TaskPhase, TokenUsage, active_time, execution_tokens,
     review::{ReviewRecord, reviews_usage},
   },
   store::{ActivityStore, ConversationStore, MergeStore, ResourceStore, RunStore, TaskStore, WorktreeStore},
@@ -116,6 +116,8 @@ pub struct RunView {
   /// When its own worktree was removed, if Orchester removed it: an interrupted run then can never
   /// continue (ORC-63).
   pub worktree_removed: Option<Timestamp>,
+  /// Why the runner failed, for a run it interrupted so and recorded why (ORC-75).
+  pub runner_failure: Option<RunnerFailure>,
   /// What its step executions left for the steps after them.
   pub outputs: Vec<StepOutput>,
   /// The plans of its gated steps, by step and version.
@@ -509,6 +511,7 @@ pub fn run_view(db: &ProjectDb, run: Run) -> Result<RunView, StoreError> {
     saved_at_pause,
     finished_at,
     worktree_removed,
+    runner_failure: history::runner_failure(db, &run)?,
     pipeline,
     version: pinned.number,
     steps,
