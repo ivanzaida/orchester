@@ -470,7 +470,13 @@
       "interruptedAt": "Interrupted at {{step}}",
       "interruptedAtCantContinue": "Interrupted at {{step}} · can’t continue",
       "interrupted": "Interrupted",
-      "interruptedCantContinue": "Interrupted · can’t continue"
+      "interruptedCantContinue": "Interrupted · can’t continue",
+      "storageContentionAt": "Interrupted at {{step}} · database busy",
+      "storageContention": "Interrupted · database busy",
+      "storageFailureAt": "Interrupted at {{step}} · database unavailable",
+      "storageFailure": "Interrupted · database unavailable",
+      "runnerErrorAt": "Interrupted at {{step}} · runner error",
+      "runnerError": "Interrupted · runner error"
     },
     "permissions": {
       "errors": {
@@ -1789,6 +1795,7 @@
       "continueRunnerFailed": "Run #{{run}} was interrupted because the runner could not record or carry it on: continuing it is the person's, on the task's Summary, once they know why. Tell them what stopped it.",
       "continueWorktreeGone": "Run #{{run}} was interrupted and its worktree is gone, so it cannot continue: running the task again is the person's, on the task's Summary.",
       "continueAgain": "Run #{{run}} was interrupted again within {{minutes}} minutes of the time before, so it is left to the person, on the task's Summary. Tell them it keeps being interrupted and what you recommend.",
+      "continueContention": "Run #{{run}} was interrupted because the project database stayed busy, and more than {{runs}} runs of the project were interrupted so within {{minutes}} minutes: the database is under contention, so it is left to the person, on the task's Summary. Tell them, and suggest running fewer agents at once.",
       "pauseWaits": "Run #{{run}} goes on: pausing it waits for the person, who applies or dismisses it in the conversation. Tell them why you would pause it.",
       "resumeWaits": "Run #{{run}} stays paused: resuming it waits for the person, who applies or dismisses it in the conversation. Tell them why you would resume it.",
       "releaseWaits": "New starts stay held: releasing them waits for the person, who applies or dismisses it in the conversation. Tell them why you would release them.",

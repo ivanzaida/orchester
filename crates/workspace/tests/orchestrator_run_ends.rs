@@ -27,7 +27,7 @@ use orchester_core::{
   },
   resource::ModelId,
   revision::Revision,
-  run::{BranchName, InterruptCause, Run, RunLimit, StepFailure, StuckDecision},
+  run::{BranchName, InterruptCause, Run, RunLimit, RunnerFailure, StepFailure, StuckDecision},
   store::{ConnectionStore, MergeStore},
   time::Timestamp,
 };
@@ -522,5 +522,42 @@ fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_ch
   assert!(
     kept.iter().all(|(wait, _)| wait.automatic && wait.continuing.is_none()),
     "the runner's failure and a gone worktree are the person's: {kept:?}"
+  );
+}
+
+/// A run of task `title` the runner stopped now because the project database stayed busy, its worktree there.
+fn contended(fixture: &mut Fixture, title: &str) -> Run {
+  let mut run = working(fixture, title);
+  std::fs::create_dir_all(run_worktree(fixture.repo.path(), run.id())).expect("its worktree");
+  let events = run
+    .interrupt(InterruptCause::RunnerFailed, Timestamp::now())
+    .expect("interrupted");
+  fixture
+    .db
+    .append_runner_failure(&run, &events, RunnerFailure::StorageContention)
+    .expect("recorded with why");
+  run
+}
+
+#[test]
+fn run_ends_of_storage_contention_continue_once_until_more_than_three_runs_were_so() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  contended(&mut fixture, "Add login");
+  let followed = follow_with(&fixture, CONTINUING);
+  let prompt = prompt_of(&fixture, &followed);
+  assert_eq!(waits(&fixture)[0].0.continuing, Some(Continuing::Continues));
+  assert!(prompt.contains("continue this run once with resume_run"), "{prompt}");
+  for title in ["Add logout", "Add search", "Add export"] {
+    contended(&mut fixture, title);
+  }
+  follow_with(&fixture, CONTINUING);
+  let kept = waits(&fixture);
+  assert_eq!(kept.len(), 4, "{kept:?}");
+  assert!(
+    kept[1..]
+      .iter()
+      .all(|(wait, _)| wait.automatic && wait.continuing == Some(Continuing::StorageContention)),
+    "four runs within ten minutes: the database is under contention: {kept:?}"
   );
 }

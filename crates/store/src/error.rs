@@ -5,7 +5,7 @@ use orchester_core::{
     AgentAccountId, ConnectionId, InvocationId, MemoryId, ProjectId, ResourceId, RunId, SecretId, ServerId, TaskId,
   },
   resource::{PublishError, ResourceKind},
-  run::{AlwaysAllowError, RunError},
+  run::{AlwaysAllowError, RunError, RunnerFailure},
   task::EditError,
   task_selection::SelectionProblem,
 };
@@ -186,6 +186,40 @@ impl StoreError {
     }
   }
 
+  /// What kind of failure this is when it stops the runner from recording or carrying on a run (ORC-75), the one
+  /// place that reads it from SQLite: busy or locked by another connection (`BUSY`, `BUSY_SNAPSHOT`, `LOCKED`,
+  /// "database is locked"), once the retries are spent, is transient contention; damaged, full, read-only, an I/O
+  /// error, cannot be opened or another schema is storage unavailable for real; anything else is another failure.
+  pub fn runner_failure(&self) -> RunnerFailure {
+    use rusqlite::ErrorCode;
+    if self.is_locked() {
+      return RunnerFailure::StorageContention;
+    }
+    match self {
+      Self::Corrupt { .. }
+      | Self::Io { .. }
+      | Self::SchemaTooNew { .. }
+      | Self::SchemaTooOld { .. }
+      | Self::MigrationBrokeReferences { .. } => RunnerFailure::StorageFailure,
+      Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _))
+        if matches!(
+          failure.code,
+          ErrorCode::DatabaseCorrupt
+            | ErrorCode::NotADatabase
+            | ErrorCode::DiskFull
+            | ErrorCode::SystemIoFailure
+            | ErrorCode::ReadOnly
+            | ErrorCode::CannotOpen
+            | ErrorCode::PermissionDenied
+            | ErrorCode::FileLockingProtocolFailed
+        ) =>
+      {
+        RunnerFailure::StorageFailure
+      }
+      _ => RunnerFailure::Other,
+    }
+  }
+
   pub(crate) fn io(path: impl Into<PathBuf>) -> impl FnOnce(io::Error) -> Self {
     let path = path.into();
     move |source| Self::Io { path, source }
@@ -230,6 +264,23 @@ pub enum RunStoreError {
   Resolving(RunId),
 }
 
+impl RunStoreError {
+  /// [`StoreError::runner_failure`] of the storage failure beneath; any rule of the run's log is another failure.
+  pub fn runner_failure(&self) -> RunnerFailure {
+    match self {
+      Self::Store(error) | Self::Unreadable { source: error, .. } => error.runner_failure(),
+      Self::Run(_)
+      | Self::RunNotFound(_)
+      | Self::TaskNotQueued(_)
+      | Self::TaskChangedMeanwhile(_)
+      | Self::SequenceConflict { .. }
+      | Self::EventsMismatch(_)
+      | Self::WorktreeRemoved(_)
+      | Self::Merged(_)
+      | Self::Resolving(_) => RunnerFailure::Other,
+    }
+  }
+}
 impl From<rusqlite::Error> for RunStoreError {
   fn from(error: rusqlite::Error) -> Self {
     Self::Store(StoreError::Sqlite(error))

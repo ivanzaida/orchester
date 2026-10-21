@@ -36,6 +36,7 @@ use crate::{
     approvals::pending,
     delivery::{self, Delivery},
     detail::{RunView, StepView, run_store_error, run_view},
+    history,
     plan::PlanReview,
     run::control_message,
   },
@@ -103,7 +104,7 @@ pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolErro
       "number": run.number().get(),
       "task": task.key().to_string(),
       "pipeline": { "name": &*view.pipeline, "version": view.version.get() },
-      "status": wire::run_status(run.status()),
+      "status": wire::run_status(run.status(), view.runner_failure),
       "unverified": unverified,
       "tokens": {
         "used": run.used().get(),
@@ -217,7 +218,8 @@ pub(super) async fn status_now(project: &OpenProject, id: RunId) -> Result<Value
       .run(id)
       .map_err(run_store_error)?
       .ok_or_else(|| ToolError::not_found(Missing::Run, id.to_string()))?;
-    Ok(json!({ "run": { "id": id.to_string(), "status": wire::run_status(run.status()) } }))
+    let status = wire::run_status(run.status(), history::runner_failure(&db, &run)?);
+    Ok(json!({ "run": { "id": id.to_string(), "status": status } }))
   })
   .await
 }

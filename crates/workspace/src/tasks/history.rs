@@ -7,7 +7,10 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   id::RunId,
   resource::{AgentProfile, StepKey},
-  run::{ListedRun, Run, RunFailure, RunNumber, RunStatus, StepExecutor, StepStatus, TaskPhase, attempt_starts},
+  run::{
+    InterruptCause, ListedRun, Run, RunFailure, RunNumber, RunStatus, RunnerFailure, StepExecutor, StepStatus,
+    TaskPhase, attempt_starts,
+  },
   store::{ActivityStore, ResourceStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
@@ -33,6 +36,8 @@ pub struct RunRecord {
   pub run: Option<Arc<Run>>,
   /// When its own worktree was removed, if Orchester removed it.
   pub removed_at: Option<Timestamp>,
+  /// Why the runner failed, for a run it interrupted so and recorded why ([`runner_failure`]).
+  pub runner_failure: Option<RunnerFailure>,
 }
 
 impl RunRecord {
@@ -51,8 +56,18 @@ impl RunRecord {
       at: None,
       run: None,
       removed_at: None,
+      runner_failure: None,
     }
   }
+}
+
+/// Why the runner failed, while `run` stands interrupted after the runner's own failure and the runner recorded why
+/// (ORC-75); `None` otherwise.
+pub fn runner_failure(db: &ProjectDb, run: &Run) -> Result<Option<RunnerFailure>, StoreError> {
+  if run.status() != &RunStatus::Interrupted(InterruptCause::RunnerFailed) {
+    return Ok(None);
+  }
+  db.runner_failure(run.id())
 }
 
 /// Records the removal of the worktree of each interrupted run of `listed` whose folder is gone
@@ -104,6 +119,7 @@ pub(super) fn read(
 fn record(db: &ProjectDb, task: &Task, run: &Run, removed_at: Option<Timestamp>) -> Result<RunRecord, StoreError> {
   let latest = latest_run(db, task, run)?;
   let step = || last_step(db, run);
+  let runner_failure = runner_failure(db, run)?;
   let detail = match (run.status(), latest.phase) {
     (RunStatus::Failed(RunFailure::StepFailed(step) | RunFailure::RetriesExhausted(step)), _) => {
       Message::new("runs.history.failedAt").with("step", step_name(run, step))
@@ -114,7 +130,7 @@ fn record(db: &ProjectDb, task: &Task, run: &Run, removed_at: Option<Timestamp>)
       Some(step) => Message::new("runs.history.cancelledAt").with("step", step),
       None => Message::new("runs.history.cancelled"),
     },
-    (RunStatus::Interrupted(_), _) => interrupted(step()?, removed_at.is_some()),
+    (RunStatus::Interrupted(_), _) => interrupted(step()?, removed_at.is_some(), runner_failure),
     (RunStatus::Running, TaskPhase::Running) if !run.pause_requested() => at_work(db, run)?,
     (RunStatus::Succeeded, TaskPhase::Succeeded) => Message::new("runs.history.notMerged"),
     _ => latest.message(),
@@ -127,16 +143,28 @@ fn record(db: &ProjectDb, task: &Task, run: &Run, removed_at: Option<Timestamp>)
     at: Some(latest.updated_at),
     run: Some(Arc::new(run.clone())),
     removed_at,
+    runner_failure,
   })
 }
 
-/// "Interrupted at Implement", and once its worktree was removed, that it can't continue.
-fn interrupted(step: Option<String>, removed: bool) -> Message {
-  match (step, removed) {
-    (Some(step), false) => Message::new("runs.history.interruptedAt").with("step", step),
-    (Some(step), true) => Message::new("runs.history.interruptedAtCantContinue").with("step", step),
-    (None, false) => Message::new("runs.history.interrupted"),
-    (None, true) => Message::new("runs.history.interruptedCantContinue"),
+/// "Interrupted at Implement", with why when the runner's own failure interrupted it and it recorded why ("·
+/// database busy"), and once its worktree was removed, that it can't continue.
+fn interrupted(step: Option<String>, removed: bool, failure: Option<RunnerFailure>) -> Message {
+  let key = match (step.is_some(), removed, failure) {
+    (true, true, _) => "runs.history.interruptedAtCantContinue",
+    (false, true, _) => "runs.history.interruptedCantContinue",
+    (true, false, None) => "runs.history.interruptedAt",
+    (false, false, None) => "runs.history.interrupted",
+    (true, false, Some(RunnerFailure::StorageContention)) => "runs.history.storageContentionAt",
+    (false, false, Some(RunnerFailure::StorageContention)) => "runs.history.storageContention",
+    (true, false, Some(RunnerFailure::StorageFailure)) => "runs.history.storageFailureAt",
+    (false, false, Some(RunnerFailure::StorageFailure)) => "runs.history.storageFailure",
+    (true, false, Some(RunnerFailure::Other)) => "runs.history.runnerErrorAt",
+    (false, false, Some(RunnerFailure::Other)) => "runs.history.runnerError",
+  };
+  match step {
+    Some(step) => Message::new(key).with("step", step),
+    None => Message::new(key),
   }
 }
 
