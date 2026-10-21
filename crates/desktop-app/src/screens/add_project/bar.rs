@@ -1,8 +1,8 @@
-//! The action bar under Add project's form (`Action bar` `YgMOm`, its states `XHoie` in `gh5wV`): what is
-//! missing or what *Create project & continue* does, and the button. It waits for a folder, and for a folder
-//! that is a git repository; GitHub never holds it back. While the project is created nothing else can be
-//! pressed; a creation that failed says why in place of the line, while the name and folder are the ones it
-//! was raised for.
+//! The action bar under Add project's form (`Action bar` `YgMOm`, its states `XHoie` in `gh5wV`, `OdlXb`): what
+//! is missing or what *Create project & continue* does, and the button. It waits for a folder, for git, and for a
+//! folder that is a git repository with a commit; GitHub never holds it back. While the project is created nothing
+//! else can be pressed; a creation that failed says why in place of the line, while the name and folder are the
+//! ones it was raised for.
 
 use lurq::{
   app::{
@@ -34,7 +34,8 @@ pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Opti
   let name = form.name.get();
   let expected = detection.as_ref().and_then(|detection| form.expected_for(detection));
   let state = detection.as_ref().map(|detection| detection.state(expected.as_ref()));
-  let readiness = project_setup::readiness(folder.is_some(), state.as_ref());
+  let local = actions.local(folder.as_deref());
+  let readiness = project_setup::readiness(folder.is_some(), state.as_ref(), local.as_ref());
   let created = actions.create.state().get();
   let pending = created.is_pending();
   let draft = ProjectDraft {
@@ -50,7 +51,10 @@ pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Opti
     None => {
       let (key, color) = match readiness {
         Readiness::NoFolder => ("setup.bar.chooseFolder", PaletteColor::TextMuted),
+        _ if actions.git.busy() => ("setup.bar.creatingRepository", PaletteColor::TextMuted),
+        Readiness::GitMissing => ("setup.bar.needsGit", PaletteColor::TextMuted),
         Readiness::NotARepository => ("setup.bar.needsRepository", PaletteColor::TextMuted),
+        Readiness::NoCommits => ("setup.bar.needsCommit", PaletteColor::TextMuted),
         Readiness::Ready if pending => ("setup.bar.explanation", PaletteColor::TextMuted),
         Readiness::Ready => ("setup.bar.explanation", PaletteColor::TextSecondary),
       };
@@ -73,7 +77,9 @@ pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Opti
   let create = match (pending, readiness) {
     (true, _) => create.loading(),
     (false, Readiness::Ready) => create.on_click(press(ctx, form, actions, (detection, expected))),
-    (false, Readiness::NoFolder | Readiness::NotARepository) => create.disabled(),
+    (false, Readiness::NoFolder | Readiness::GitMissing | Readiness::NotARepository | Readiness::NoCommits) => {
+      create.disabled()
+    }
   };
   Row::new()
     .id("add-project-bar")

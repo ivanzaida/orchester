@@ -1,7 +1,8 @@
 //! Add project (`Project setup · step 1` `kkGWj` and `W5PIR`, `vJTcd`, the detection states `gh5wV`): a page with
 //! the setup rail at its start ([`rail`]) and the form of its first step — the project's name, the folder of an
 //! existing git repository chosen in the system's folder picker ([`fields`]), and the GitHub repository detected in
-//! that folder as soon as it is chosen ([`github`]) — then *Create project & continue* in the action bar ([`bar`]).
+//! that folder as soon as it is chosen ([`github`]), which can make the folder a git repository in place — then
+//! *Create project & continue* in the action bar ([`bar`]).
 //! Create makes the project in the folder's `.orchester` and opens its Overview; the account `gh` acted as when the
 //! folder was detected becomes the one the project expects. The later setup steps are not built: the rail says so.
 //! Leaving discards what was entered. The rules are `orchester_workspace::project_setup`'s.
@@ -32,11 +33,15 @@ use orchester_workspace::{
   background,
   messages::Message,
   project_setup::{self, CreateFailure, Creation, ExpectedAccount, FolderDetection},
-  repository::{DetectTarget, detect},
+  repository::{
+    DetectTarget, detect,
+    init::{LocalRepository, read_local},
+  },
   workspace::OpenProject,
 };
 use parking_lot::Mutex;
 
+use self::github::git_init::{self, Attempt, Choice, GitActions};
 use crate::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route, Screen},
@@ -60,9 +65,9 @@ struct Props(Option<PathBuf>);
 
 impl DevtoolsInspectable for Props {}
 
-/// A detection and the folder it was made for, as the page's futures hold it.
+/// A detection and the folder it was made for, with what git sees there, as the page's futures hold it.
 #[derive(Clone, Debug, PartialEq)]
-struct Detected(FolderDetection);
+struct Detected(FolderDetection, LocalRepository);
 
 impl DevtoolsInspectable for Detected {}
 
@@ -89,6 +94,7 @@ struct Actions {
   program: PickAction,
   detect: DetectAction,
   create: CreateAction,
+  git: GitActions,
 }
 
 impl Actions {
@@ -98,9 +104,19 @@ impl Actions {
     Self {
       folder: pick_action(ctx, &picker),
       program: pick_action(ctx, &picker),
-      detect: ctx.future_action(|target: DetectTarget| async move {
-        background::run(move || Detected(FolderDetection::new(target.repo_root.clone(), detect(&target)))).await
-      }),
+      detect: {
+        let programs = services.programs.clone();
+        ctx.future_action(move |target: DetectTarget| {
+          let programs = programs.clone();
+          async move {
+            background::run(move || {
+              let local = read_local(programs.runner(), &target.repo_root);
+              Detected(FolderDetection::new(target.repo_root.clone(), detect(&target)), local)
+            })
+            .await
+          }
+        })
+      },
       create: ctx.future_action(move |creation: Creation| {
         let (workspace, activity) = (services.workspace.clone(), services.activity.clone());
         async move {
@@ -109,6 +125,7 @@ impl Actions {
             .map(|created| created.project)
         }
       }),
+      git: GitActions::of(ctx),
     }
   }
 
@@ -130,6 +147,15 @@ impl Actions {
       .data
       .filter(|_| finished)
       .and_then(|detected| detected.0.of(folder).cloned())
+  }
+
+  /// What git sees of `folder` in its finished detection; `None` as [`Self::detection`].
+  fn local(&self, folder: Option<&Path>) -> Option<LocalRepository> {
+    let state = self.detect.state().get();
+    state
+      .fulfilled_data()
+      .filter(|detected| detected.0.of(folder).is_some())
+      .map(|detected| detected.1.clone())
   }
 }
 
@@ -153,6 +179,10 @@ struct Form {
   access: Signal<bool>,
   /// Whether Create was pressed: a name the rules reject is said from then on.
   pressed: Signal<bool>,
+  /// What the first commit of a repository made here holds.
+  first: Signal<Choice>,
+  /// How the last attempt to make the repository or its first commit ended.
+  attempt: Signal<Attempt>,
 }
 
 struct AddProject {
@@ -174,6 +204,8 @@ impl Component for AddProject {
         expected: ctx.signal(Expected::default()),
         access: ctx.signal(false),
         pressed: ctx.signal(false),
+        first: ctx.signal(Choice::default()),
+        attempt: ctx.signal(Attempt::default()),
       },
       started: Mutex::new(false),
     }
@@ -228,13 +260,14 @@ impl AddProject {
     *started = true;
     follow_folder(ctx, &self.form, actions);
     follow_program(ctx, &self.form, actions);
+    git_init::follow(ctx, &self.form, actions);
     let expected = self.form.expected.clone();
     ctx.watch(&actions.detect.state(), move |state| {
       if state.is_pending() || !state.is_fulfilled() {
         return;
       }
       // Another folder or host starts from the account gh acts as there.
-      if let Some(Detected(detected)) = &state.data {
+      if let Some(Detected(detected, _)) = &state.data {
         let current = expected.get_untracked().0;
         let next = project_setup::expected_account(current.as_ref(), detected.folder(), detected.detection());
         if next != current {
