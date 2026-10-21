@@ -187,9 +187,9 @@ impl StoreError {
   }
 
   /// What kind of failure this is when it stops the runner from recording or carrying on a run (ORC-75), the one
-  /// place that reads it from SQLite: busy or locked by another connection (`BUSY`, `BUSY_SNAPSHOT`, `LOCKED`, "database
-  /// is locked"), once the retries are spent, is transient contention; damaged, full, read-only, an I/O error, cannot
-  /// be opened or another schema is storage unavailable for real; anything else is another failure.
+  /// place that reads it from SQLite: busy or locked by another connection (`BUSY`, `BUSY_SNAPSHOT`, `LOCKED`,
+  /// "database is locked"), once the retries are spent, is transient contention; damaged, full, read-only, an I/O
+  /// error, cannot be opened or another schema is storage unavailable for real; anything else is another failure.
   pub fn runner_failure(&self) -> RunnerFailure {
     use rusqlite::ErrorCode;
     if self.is_locked() {
