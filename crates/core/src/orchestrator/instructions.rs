@@ -1,8 +1,9 @@
 //! What the Orchestrator's agent is told on every turn: its system prompt (`--system-prompt-file`), which a resumed
 //! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, or the end
-//! of a task's run, started by itself ([`wait_prompt`]).
+//! of a task's run, started by itself ([`wait_prompt`]), or a daily report did ([`report_prompt`]).
 
 use super::{
+  report::DailyReport,
   resume::{AGAIN_WITHIN, Continuing},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
 };
@@ -67,6 +68,8 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      interrupted, from its last checkpoint, only when the person turned on Let the Orchestrator continue interrupted \
      runs. A run stopped at a limit, one the person canceled, one the runner could not record and one whose worktree \
      is gone are the person's.\n\
+     - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
+     person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
@@ -212,6 +215,9 @@ const fn end_todo(end: RunEnd) -> &'static str {
 fn why_words(why: StopReason) -> String {
   match why {
     StopReason::RetriesExhausted { retries } => format!("its step used up its {retries} retries"),
+    StopReason::NoRoute => "a follow-up of its step reported the work failed, and its pipeline has no route for that \
+                            failure"
+      .to_owned(),
     StopReason::BrokeAgain => "its step broke again".to_owned(),
     StopReason::Unverified => "its step could not check everything".to_owned(),
     StopReason::Unchanged => "its step was not run again on unchanged work".to_owned(),
@@ -228,4 +234,34 @@ const fn limit_words(limit: RunLimit) -> &'static str {
     RunLimit::StepBudget { .. } => "a step's token budget",
     RunLimit::PlanLimit { .. } => "an account's plan limit",
   }
+}
+
+/// The prompt of the Orchestrator turn the daily report `report` started by itself: read the report and add a short
+/// summary and recommendations on top of it, changing nothing.
+pub fn report_prompt(report: &DailyReport) -> String {
+  let budget = report
+    .usage
+    .budget
+    .map(|budget| format!(" of a daily budget of {budget}"))
+    .unwrap_or_default();
+  format!(
+    "[Orchester] The project's daily report for {day} is in this conversation: {merged} tasks merged, {ready} runs \
+     ready to merge, {stopped} runs stopped (failed, at a limit, waiting for a decision or interrupted), {working} \
+     at work, {waiting} things waiting for the person, {actions} actions of yours, {spent} tokens spent{budget}, \
+     {queued} tasks queued.\n\
+     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator answer agents is on. \
+     Read the whole report with get_daily_report for this project and the day {day}, and where it helps get_run or \
+     get_task. Then write a short summary of the day on top of the report, and your recommendations for what the \
+     person could do next, each with its link. Change nothing: start, resume, pause, cancel, merge, continue, answer, \
+     send, publish, hold and release nothing; what you recommend, the person does in the app.",
+    day = report.day.format("%Y-%m-%d"),
+    merged = report.merged.len(),
+    ready = report.ready.len(),
+    stopped = report.stopped.len(),
+    working = report.working.len(),
+    waiting = report.waiting.len(),
+    actions = report.actions.len(),
+    spent = report.usage.spent,
+    queued = report.queued.len(),
+  )
 }

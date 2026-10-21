@@ -1,7 +1,8 @@
 //! The title row (`Title row` `ZjHxm` in `lUXff`): the task's title, and at its right Edit, *Remove
-//! worktree* of the latest run once it ended, the run controls and Run again. A locked action says why
-//! in full in its tooltip; under the actions one short line says why for all of them, except on a run
-//! that cannot be read, whose Summary says it already.
+//! worktree* of the latest run once it ended, *Return to a step* of a run whose work can go back to one of its
+//! agent steps, the run controls and Run again. A locked action says why in full in its tooltip; under the
+//! actions one short line says why for all of them, except on a run that cannot be read, whose Summary says it
+//! already.
 
 use lurq::{
   app::{
@@ -12,15 +13,21 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::run::RunStatus;
+use orchester_workspace::tasks::return_work;
 
 use super::{
   HeaderProps,
   controls::{Control, Reason},
 };
 use crate::{
-  navigation::Navigation,
-  routes::{ProjectPage, Route},
-  screens::task::{PageState, RemovalPlace, sharing},
+  navigation::{
+    Navigation,
+    pointed::{Pointed, PointedCard},
+    press::OpenIn,
+  },
+  routes::{ProjectPage, Route, TaskTab, TaskView},
+  screens::task::{PageState, RemovalPlace, sharing, summary},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -30,15 +37,10 @@ use crate::{
   },
 };
 
-/// The row with `controls` after Edit and *Remove worktree*.
+/// The row with `controls` after the task's own actions ([`task_actions`]).
 pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> Element {
   let mut reasons: Vec<Reason> = Vec::new();
-  let mut actions: Vec<Element> = edit_button(ctx, props)
-    .into_iter()
-    .chain(remove_button(ctx, props))
-    .chain(share_button(ctx, props))
-    .map(Element::from)
-    .collect();
+  let mut actions = task_actions(ctx, props);
   for control in controls {
     let Some(reason) = control.reason else {
       actions.push(control.button.into());
@@ -116,6 +118,17 @@ pub fn title_row(ctx: &mut Ctx, props: &HeaderProps, controls: Vec<Control>) -> 
     .into()
 }
 
+/// Edit, *Remove worktree*, *Return to a step* and *Share task*, those that apply.
+fn task_actions(ctx: &mut Ctx, props: &HeaderProps) -> Vec<Element> {
+  edit_button(ctx, props)
+    .into_iter()
+    .chain(remove_button(ctx, props))
+    .chain(return_button(ctx, props))
+    .chain(share_button(ctx, props))
+    .map(Element::from)
+    .collect()
+}
+
 /// Edit, while the task can be edited; locked, with why, while it is kept *Not shared* (`R4elt`).
 fn edit_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   if props.task.detail.not_shared() {
@@ -186,4 +199,37 @@ fn remove_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
     job.clear_failed_removal();
     state.open_removal(id, RemovalPlace::Header);
   }))
+}
+
+/// *Return to a step* of the latest run, while its work can go back to one of its agent steps: a run that ended and
+/// was not merged, or one that waits for the person's decision. It opens the Summary at the card that returns it,
+/// which it brings into view and rings: *Return the work to an earlier step* above *Run details*, or the decision
+/// of a waiting run. The card is where the person picks the step and writes the note, and says when it cannot be
+/// returned now.
+fn return_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
+  let detail = &props.task.detail;
+  let run = detail.run.as_ref()?;
+  if detail.latest_unreadable.is_some() || detail.not_shared() || return_work::targets(run).is_empty() {
+    return None;
+  }
+  let card = match run.run.status() {
+    RunStatus::WaitingForPerson(_) => PointedCard::Retries,
+    _ => {
+      summary::returnable(&props.task)?;
+      PointedCard::Return
+    }
+  };
+  let project = props.task.project.open.project.id();
+  let route = Route::Project(project, props.task.page(TaskView::of(TaskTab::Summary)));
+  let pointed = Pointed {
+    project,
+    task: props.task.key.clone(),
+    card,
+  };
+  let navigation = Navigation::of(ctx);
+  Some(
+    ActionButton::new("task-return-to-step", ButtonKind::Ghost, ctx.t("task.returnToStep"))
+      .icon(Icon::CornerDownLeft)
+      .on_click(move || navigation.open_to_card(&route, OpenIn::ActiveTab, pointed.clone())),
+  )
 }

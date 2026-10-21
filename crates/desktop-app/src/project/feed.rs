@@ -273,8 +273,9 @@ impl Component for FeedLoader {
     let root = open.repo_root.clone();
     let states = counter(ctx, (runners.clone(), root.clone(), Counter::States));
     let changes = counter(ctx, (runners.clone(), root.clone(), Counter::Changes(active)));
-    // The Orchestrator chat follows what the project's agents wait for (ORC-42).
+    // The Orchestrator chat follows what the project's agents wait for (ORC-42), and gets its daily report (ORC-47).
     super::waits::follow(ctx, (&open, states));
+    super::daily_report::deliver(ctx, &open);
     publish(&self.feed.status, status(ctx, &runners, &root));
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);

@@ -26,6 +26,7 @@
       "message": "A step waits for your message",
       "plan": "Plan v{{version}} waits for your decision",
       "retries": "Retries used up: the run waits for your decision",
+      "noRoute": "A step reported the work failed: the run waits for your decision",
       "brokeAgain": "A step broke again: the run waits for your decision",
       "unverified": "A step could not check everything: the run waits for your decision",
       "unchanged": "Nothing changed: the run waits for your decision",
@@ -474,6 +475,7 @@
         "one": "{{step}} still fails after {{retries}} retry",
         "other": "{{step}} still fails after {{retries}} retries"
       },
+      "noRouteTitle": "{{step}} reported the work failed",
       "brokeTitle": "{{step}} stopped again without a result",
       "unverifiedTitle": "{{step}} could not check everything",
       "unchangedTitle": "{{step}} was not run again: nothing changed"
@@ -1781,6 +1783,7 @@
       "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry, return_to or resolve_conflicts.",
       "mergeConflictsNext": "Run #{{run}} conflicts with its base branch in {{files}}. Next: propose continue_run with resolve_conflicts, which sends the run back to an agent that may write to resolve them, or tell the person they can resolve them on the Local integration page.",
       "mergeFailedNext": "Run #{{run}} was not merged. The person resolves this on the Local integration page.",
+      "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "releaseNothing": {
         "project": "New starts in {{project}} are not held: there is nothing to release. Nothing was changed.",
         "group": "New starts of {{task}}'s group are not held: there is nothing to release. Nothing was changed.",

@@ -44,7 +44,9 @@
 //!   and completes the turn.
 //!
 //! A resumed session appends `continued` to `README.md` and completes its turn, once no `fake-hold` lies next to the
-//! worktrees (a test holds a continued session at work with it). The final message is the step result when the turn
+//! worktrees (a test holds a continued session at work with it); when its prompt says "Answer failed" (a person's
+//! message to a follow-up), its final message is the step result `failed` the prompt asks for, though a resumed turn
+//! has no output schema. The final message is the step result when the turn
 //! was given an output schema (`{"outcome", "summary"}`, the summary "Finished <step>"), else "Done.". The step is read
 //! from the prompt's "# Current step:" line.
 
@@ -162,8 +164,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   }
   let result = asked_report(prompt, structured, &worktree);
   if session.resumed {
-    wait_while_held(&worktree);
-    return finish(session, "continued", &result);
+    return continued(session, prompt, result);
   }
   if prompt.contains("Ask first") {
     return ask(session);
@@ -185,6 +186,17 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
     "hello".to_owned()
   };
   finish(session, &line, &result)
+}
+
+/// A resumed session's turn: it appends `continued` once nothing holds it, and with "Answer failed" ends with the
+/// result `failed` the prompt asks for, though a resumed turn has no output schema.
+fn continued(session: &mut Session, prompt: &str, mut result: StepReport) -> Step {
+  wait_while_held(&session.cwd);
+  if prompt.contains("Answer failed") {
+    result.structured = true;
+    result.failed = true;
+  }
+  finish(session, "continued", &result)
 }
 
 /// A message sent now (`turn/steer` with `id`): taken after the running command, refused, accepted and

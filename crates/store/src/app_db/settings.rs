@@ -7,13 +7,16 @@
 //! in the window), the installed app's own MCP server: whether it listens, on which port, and the id of
 //! this installation that names its token in the keychain, whether the Orchestrator chat publishes drafts,
 //! answers agents, merges runs and continues interrupted runs itself (each off until a person turns it on in the
-//! window), and which OS notifications the app shows.
+//! window), which OS notifications the app shows, and when the Orchestrator's daily report comes (off until a person
+//! turns it on).
 
 use orchester_core::{
   app_mcp::McpPort,
   appearance::ThemeSetting,
   id::InstallationId,
   notification::{NotificationSettings, QuietHours},
+  orchestrator::{ReportSchedule, ReportTime},
+  time::Timestamp,
   usage::limits::WarningThreshold,
 };
 use rusqlite::params;
@@ -92,7 +95,42 @@ ALTER TABLE app_settings ADD COLUMN quiet_start INTEGER CHECK (quiet_start BETWE
 ALTER TABLE app_settings ADD COLUMN quiet_end INTEGER CHECK (quiet_end BETWEEN 0 AND 1439);
 ";
 
+pub(super) const DAILY_REPORT_MIGRATION: &str = r"
+-- The Orchestrator's daily report (ORC-47): off (both NULL) until a person turns it on; the time of day it comes at,
+-- in minutes after local midnight, and since when it is on, in milliseconds since the Unix epoch.
+ALTER TABLE app_settings ADD COLUMN daily_report_minute INTEGER CHECK (daily_report_minute BETWEEN 0 AND 1439);
+ALTER TABLE app_settings ADD COLUMN daily_report_since INTEGER;
+";
+
 impl AppDb {
+  /// When the Orchestrator's daily report comes; `None` while it is off, as it is until a person turns it on.
+  pub fn daily_report_schedule(&self) -> Result<Option<ReportSchedule>, StoreError> {
+    let (minute, since): (Option<u16>, Option<i64>) = self.connection.query_row(
+      "SELECT daily_report_minute, daily_report_since FROM app_settings WHERE id = 1",
+      [],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    match (minute, since) {
+      (Some(minute), Some(since)) => Ok(Some(ReportSchedule {
+        time: ReportTime::new(minute).ok_or_else(|| corrupt("daily report time", minute))?,
+        since: Timestamp::from_unix_millis(since),
+      })),
+      (None, None) => Ok(None),
+      (minute, since) => Err(corrupt("daily report", format!("{minute:?} since {since:?}"))),
+    }
+  }
+
+  /// Turns the daily report on at `time`, or off with `None`; it stays on since when it was turned on (`now` for a
+  /// report that was off), so a change of its time delivers no report of a day before.
+  pub fn set_daily_report(&mut self, time: Option<ReportTime>, now: Timestamp) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE app_settings SET daily_report_minute = ?1,
+         daily_report_since = CASE WHEN ?1 IS NULL THEN NULL ELSE COALESCE(daily_report_since, ?2) END
+       WHERE id = 1",
+      params![time.map(ReportTime::minute), now.unix_millis()],
+    )?;
+    Ok(())
+  }
   /// Which OS notifications the app shows ([`NotificationSettings::default`] until a person changes them).
   pub fn notification_settings(&self) -> Result<NotificationSettings, StoreError> {
     let (needs_you, stopped, finished, sound, start, end): (bool, bool, bool, bool, Option<u16>, Option<u16>) =
