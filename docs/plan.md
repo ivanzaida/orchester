@@ -72,9 +72,12 @@ main), *Abort* puts the worktree back. *Ask an agent to resolve* returns the run
 conflicting files as data. The core of the project task *ORC-44 · Return a finished run to an earlier step*: a
 succeeded or failed run is reopened from an executed agent step with a note (`continue_run` `return_to` takes ended
 runs too); refused for a merged run, a gone worktree, a merge in the worktree and a run at work.
-**Open:** returning a failed run from the task page (only `continue_run` does today); a follow-up turn whose step
-reports failed does not route the run back yet; the design-verification of boards 1–9 of `fvCVT`, and a frame for
-files that wait for a side to be kept.
+ORC-44 (2026-10-21) added the rest: a follow-up whose step reports `failed` is routed as that step's failure is (its
+route and retries, a new attempt from the route's target with the follow-up's report), or waits for the person where
+the step has no route; the task page returns a succeeded or failed run with *Return the work to an earlier step*
+above *Run details*, and *Return to a step* in the run's header points at it (or at a waiting run's decision).
+**Open:** the design-verification of boards 1–9 of `fvCVT`; a frame for files that wait for a side to be kept; a
+frame for *Return the work to an earlier step* and the header's *Return to a step* (they reuse `DVuXu`'s return parts).
 
 ### D4 · Base-moved notices go only to steps that change the code (ORC-65) · branch `orchester/orc-65-run-1` (implemented 2026-10-21, waiting for review)
 

@@ -112,6 +112,32 @@ fn overview_needs_you_counts_runs_waiting_for_a_decision_after_retries() {
   assert_eq!(decision.title().key, "runs.retryLimit.brokeTitle");
 }
 
+/// A follow-up whose step reports the work failed, where the pipeline has no route for that failure (the project task
+/// ORC-44), waits for the person: its card says the step reported the work failed, not that it used up retries.
+#[test]
+fn overview_needs_you_names_a_failed_follow_up_without_a_route() {
+  let mut fixture = support::Fixture::new();
+  let task = fixture.task("Add login", support::at(10));
+  let mut run = fixture.started_run(task, support::at(20));
+  fixture.succeed(&mut run, support::at(30));
+  let step = run.current_attempt().expect("attempt").executions()[0].step().clone();
+  let mut events = run.follow_up(&step, support::at(40)).expect("followed up");
+  let follow_up = run.current_attempt().expect("the follow-up").executions()[0].id();
+  events.extend(run.start_step(follow_up, support::at(41)).expect("started"));
+  events.extend(
+    run
+      .fail_step(follow_up, StepFailure::ReportedFailed, support::at(42))
+      .expect("reported failed"),
+  );
+  fixture.db.append_events(&run, &events).expect("append");
+  let tasks = ProjectTasks::load(fixture.repo.path(), &Programs::processes()).expect("load the project's tasks");
+  assert_eq!(OverviewTab::NeedsYou.count(&tasks.tasks, &tasks.phases), 1);
+  let rows = OverviewTab::NeedsYou.rows(&tasks.tasks, &tasks.pipelines, &tasks.phases, 3);
+  let decision = rows[0].decision.as_ref().expect("the decision it waits for");
+  assert_eq!(decision.why, orchester_workspace::tasks::list::DecisionWhy::NoRoute);
+  assert_eq!(decision.title().key, "runs.retryLimit.noRouteTitle");
+}
+
 #[test]
 fn overview_pulse_without_a_runner_counts_interrupted_runs() {
   let (_fixture, tasks) = project();

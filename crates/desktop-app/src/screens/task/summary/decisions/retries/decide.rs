@@ -203,10 +203,13 @@ impl DecideCard<'_> {
       .fill_width()
   }
 
-  /// What one more retry runs: the step it resumes, and the failing step after it.
+  /// What one more retry runs: the step it resumes, and the failing step after it; without a route, the failing step.
   fn retry_meaning(&self, ctx: &Ctx) -> Arc<str> {
     let failed = self.name(ctx, self.stuck.step());
     match self.stuck {
+      Stuck::RetriesExhausted(_) if self.run.run.waits_without_route() => {
+        ctx.t_args("decisions.retries.noRouteMeaning", [("step", &*failed)])
+      }
       Stuck::RetriesExhausted(step) => {
         let from = self.name(ctx, self.run.run.retry_from().unwrap_or(step));
         ctx.t_args(
