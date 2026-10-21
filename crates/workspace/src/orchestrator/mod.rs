@@ -10,6 +10,7 @@ mod duplicate;
 pub mod facts;
 mod guard;
 mod keep;
+mod own_project;
 pub mod proposal;
 pub mod recover;
 pub mod report;

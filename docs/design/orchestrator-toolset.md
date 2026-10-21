@@ -167,8 +167,12 @@ person can click.
    with its day, for the days since the report was turned on, at most 7 back. It is built only from what the project's
    database holds (`orchester_workspace::orchestrator::report`): what the day did, and what stands (runs, waits, the
    queue) as of when it is built. With *Let the Orchestrator answer agents* on, the report starts one turn by itself, as
-   a wait does, which adds a summary and recommendations and only proposes (the turn's tools know it started by
-   itself). `get_daily_report` reads the delivered report of a day, or builds it.
+   a wait does, which adds a summary and recommendations and changes nothing: its tools read from the conversation
+   that a report's turn is the one under way (`orchester_workspace::orchestrator::guard`), so every change a card
+   carries (a merge, cancel, pause, resume, release, continuation, publication, answer or message) is only proposed,
+   whatever the person's switches, and any other change (a task, a draft, a copy of a pipeline, a hold of new starts) is
+   refused as `report_turn`; a start is proposed as in any turn nobody asked for. `get_daily_report` reads the
+   delivered report of a day, or builds it.
 
 ## Tools
 
