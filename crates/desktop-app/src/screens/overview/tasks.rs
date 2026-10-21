@@ -52,7 +52,7 @@ pub(super) fn section(
       let rows = board_tab(tab).rows(tasks, SHOWN, &separator);
       let others = board_tab(tab).project_rows(tasks, name);
       let mut shown: Vec<Element> = rows.iter().map(|shown| row(ctx, project, shown).into()).collect();
-      shown.extend(others.iter().map(|other| project_row(ctx, other).into()));
+      shown.extend(others.iter().map(|other| project_row(ctx, project, other).into()));
       if shown.is_empty() {
         shown.push(empty_tab(ctx, tab).into());
       }

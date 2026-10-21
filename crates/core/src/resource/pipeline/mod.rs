@@ -14,6 +14,7 @@ use super::{
 };
 use crate::{id::ResourceId, name::Name, permission::StepPermissions, tokens::TokenBudget};
 
+mod base_moves;
 mod budget;
 mod changes;
 mod edit;
@@ -22,6 +23,7 @@ mod starter;
 mod strictness;
 
 pub use self::{
+  base_moves::{takes_base_moves, takes_base_moves_by_default},
   changes::{PipelineChange, StepChange, changes},
   edit::{EditProblem, PipelineEdit},
   sources::{PipelineSources, PipelineSourcesError},

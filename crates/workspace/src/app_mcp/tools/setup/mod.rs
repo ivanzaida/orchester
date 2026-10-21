@@ -289,7 +289,10 @@ const SPECS: &[Spec] = &[
                   (small letters, digits and -), a name, and an agent profile or a tool (left out: unassigned, which \
                   blocks publishing only). An agent step may set repository access (write only where its profile \
                   writes), a model override, and narrow its profile's permissions: commands to some of the profile's \
-                  allowed list, network off, or asking about tool calls; never more than the profile allows. A step \
+                  allowed list, network off, or asking about tool calls; never more than the profile allows. An agent \
+                  step may also say whether its agent merges the base branch when it moves (takes_base_moves); left \
+                  out, a step with write access does unless it reviews or verifies (review or verify in its key, or \
+                  a failure route back to a writing step). A step \
                   runs after the steps it names (no cycles), may wait at an approval gate, may return to an earlier \
                   step it runs after when it fails (1 or more retries), and may have a token budget (left out: no \
                   step budget). Refused with the editor's reasons when the steps do not form a pipeline; nothing is \

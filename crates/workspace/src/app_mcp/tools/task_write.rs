@@ -1,7 +1,9 @@
 //! `create_task` and `update_task`: a task saved as the new task form and the task page save it. The
 //! details are read with the form's rules ([`TaskForm`]: each limit optional with no maximum, the
-//! project's default limits filled in as the form fills them), and saved through the
-//! project's [`TaskWriter`], so a shared project's task goes to its server.
+//! project's default limits filled in as the form fills them), the organization as the form gives it
+//! ([`super::task_organization`]), and saved through the project's [`TaskWriter`], so a shared
+//! project's task goes to its server. The task's history records the organization changes as
+//! automation's: they come from a client of the app's MCP server or the Orchestrator chat.
 
 use orchester_core::{
   id::{IdempotencyKey, ModuleId},
@@ -20,6 +22,7 @@ use serde_json::{Value, json};
 
 use super::{
   modules::find_module,
+  task_organization::{Blocker, Changes},
   tasks::find_task,
   wire::{self, Rank, Workflow},
 };
@@ -31,7 +34,7 @@ use crate::{
   budget::whole_minutes,
   messages::Message,
   tasks::{
-    conflict::{Edit, EditSaved, save_edit},
+    conflict::{Edit, EditSaved, save_edit_by},
     data::{PipelineChoice, SaveTarget, published_pipelines},
     form::TaskForm,
     outside::Outside,
@@ -41,6 +44,9 @@ use crate::{
 
 /// How whole tokens are grouped in the form's text; the tools give plain numbers.
 const GROUP_SEPARATOR: &str = ",";
+
+/// Who the task's history names for the organization these tools save.
+const ACTOR: ChangeActor = ChangeActor::Orchester;
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -72,6 +78,16 @@ pub struct CreateTask {
   /// The module to put the task in, by its id or name (list_modules).
   #[serde(default)]
   pub module: Option<String>,
+  /// Marks the task Blocked with this reason, which must not be blank. Informational: it keeps no
+  /// run from starting, but the Orchestrator chat does not start the task.
+  #[serde(default)]
+  pub blocked_reason: Option<String>,
+  /// The tasks that block this one: it cannot run until each is finished.
+  #[serde(default)]
+  pub blocked_by: Vec<Blocker>,
+  /// Tag names, matched ignoring case; a name the project has no tag of is created as a tag.
+  #[serde(default)]
+  pub tags: Vec<String>,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -104,6 +120,42 @@ pub struct UpdateTask {
   /// The module to move the task to, by its id or name; `null` takes it out of its module.
   #[serde(default, deserialize_with = "super::modules::nullable")]
   pub module: Option<Option<String>>,
+  /// Marks the task Blocked with this reason, which must not be blank; `null` clears it.
+  /// Informational: it keeps no run from starting, but the Orchestrator chat does not start the task.
+  #[serde(default, deserialize_with = "wire::clearable")]
+  pub blocked_reason: Option<Option<String>>,
+  /// The whole list of tasks that block this one, which it cannot run before each is finished;
+  /// `[]` clears it.
+  #[serde(default)]
+  pub blocked_by: Option<Vec<Blocker>>,
+  /// The whole list of tag names, matched ignoring case; a name the project has no tag of is
+  /// created as a tag. `[]` clears them.
+  #[serde(default)]
+  pub tags: Option<Vec<String>>,
+}
+
+impl CreateTask {
+  fn changes(&self) -> Changes<'_> {
+    Changes {
+      status: self.workflow_status,
+      priority: self.priority,
+      blocked_reason: self.blocked_reason.as_deref().map(Some),
+      blocked_by: Some(&self.blocked_by),
+      tags: Some(&self.tags),
+    }
+  }
+}
+
+impl UpdateTask {
+  fn changes(&self) -> Changes<'_> {
+    Changes {
+      status: self.workflow_status,
+      priority: self.priority,
+      blocked_reason: self.blocked_reason.as_ref().map(Option::as_deref),
+      blocked_by: self.blocked_by.as_deref(),
+      tags: self.tags.as_deref(),
+    }
+  }
 }
 
 /// The details as the form reads them from its fields' text.
@@ -160,6 +212,9 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     .as_deref()
     .map(|named| find_module(&db, named).map(|module| module.id()))
     .transpose()?;
+  let base = TaskOrganization::default();
+  let changes = args.changes();
+  let edited = changes.apply(&db, &base)?;
   drop(db);
   let fields = Fields {
     title: &args.title,
@@ -182,12 +237,11 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
     ),
   };
   let details = fields.details()?;
-  let base = TaskOrganization::default();
-  let edited = organized(base.clone(), args.workflow_status, args.priority);
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
+  let edited = changes.tagged(&mut writer, edited)?;
   let target = SaveTarget::New(IdempotencyKey::generate());
   let task = writer
-    .save_organized(target, details, (&base, &edited), Timestamp::now())
+    .save_organized_by(target, details, (&base, &edited), (ACTOR, Timestamp::now()))
     .map_err(write_error)?
     .saved()
     .ok_or_else(changed)?;
@@ -196,14 +250,12 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
   Ok(task)
 }
 
-/// `task` put in `module`, or in none, when it is not there already.
+/// `task` put in `module`, or in none, when it is not there already; the move is recorded as automation's.
 fn moved(writer: &mut TaskWriter, task: Task, module: Option<ModuleId>) -> Result<Task, ToolError> {
   if task.module() == module {
     return Ok(task);
   }
-  writer
-    .set_task_module(task.id(), module, ChangeActor::Person)
-    .map_err(write_error)?;
+  writer.set_task_module(task.id(), module, ACTOR).map_err(write_error)?;
   Ok(task.with_module(module))
 }
 
@@ -218,6 +270,9 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     Some(None) => Some(None),
     None => None,
   };
+  let base = task.organization().clone();
+  let changes = args.changes();
+  let edited = changes.apply(&db, &base)?;
   drop(db);
   let current = task.details();
   let pipeline = match args.pipeline.as_deref() {
@@ -255,9 +310,8 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   if args.pipeline.is_none() && pipeline.is_none() {
     details.pipeline = current.pipeline;
   }
-  let base = task.organization().clone();
-  let edited = organized(base.clone(), args.workflow_status, args.priority);
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
+  let edited = changes.tagged(&mut writer, edited)?;
   let edit = Edit {
     task: task.id(),
     read: task.revision(),
@@ -265,7 +319,7 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     details,
     organization: (&base, &edited),
   };
-  let saved = match save_edit(&mut writer, edit, Timestamp::now()).map_err(write_error)? {
+  let saved = match save_edit_by(&mut writer, edit, (ACTOR, Timestamp::now())).map_err(write_error)? {
     EditSaved::Saved { task, .. } => task,
     EditSaved::Conflict(_) => return Err(changed()),
   };
@@ -275,18 +329,6 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   };
   services.changes.record(open.project.id(), Outside::Tasks);
   Ok(saved)
-}
-
-/// `base` with the workflow status and priority given.
-fn organized(base: TaskOrganization, status: Option<Workflow>, priority: Option<Rank>) -> TaskOrganization {
-  let base = match status {
-    Some(status) => base.with_status(status.into()),
-    None => base,
-  };
-  match priority {
-    Some(priority) => base.with_priority(priority.into()),
-    None => base,
-  }
 }
 
 /// The published pipeline `named` by its id or, ignoring case, its name.
@@ -309,6 +351,7 @@ fn saved(task: &Task) -> Value {
     "submission": wire::submission(task.status()),
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
+    "blocked_reason": task.organization().blocked_reason(),
     "module": task.module().map(|module| module.to_string()),
   })
 }

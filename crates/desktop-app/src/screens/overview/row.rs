@@ -4,6 +4,8 @@
 //! Details; rows are pointer-only. After the tasks, a line that is no task's (`Row · project memory`
 //! `S9Zgf`): what waits, what it is about and its action.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -15,13 +17,13 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::{
-  attention::Decided,
   board::ProjectRow,
   list::{RunStage, TaskRow},
 };
 
 use super::open_task;
 use crate::{
+  navigation::{Navigation, waiting::Destination},
   routes::TaskTab,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -43,13 +45,11 @@ const STATUS_WIDTH: f32 = 200.0;
 /// The project's line's id, apart from the tasks' `overview-row-<key>`.
 const PROJECT_ROW: &str = "overview-memory-row";
 
-/// The project's memory records waiting for approval, in the brain's `warning` (`S9Zgf`). No screen
-/// reviews memory records yet: *Review records* stays in place and says why, as the *Needs you* card's.
-pub(super) fn project_row(ctx: &Ctx, row: &ProjectRow) -> Row {
-  let reason = match row.item.decided() {
-    Decided::Unavailable(reason) => Some(message_text(ctx, &reason)),
-    Decided::Card(_) | Decided::Conversation | Decided::Summary(_) => None,
-  };
+/// The project's memory records waiting for approval, in the brain's `warning` (`S9Zgf`). *Review records*
+/// leads where the *Needs you* card's does (`navigation::waiting`): the project's Memory page.
+pub(super) fn project_row(ctx: &mut Ctx, project: ProjectId, row: &ProjectRow) -> Row {
+  let destination = Destination::of(project, &row.item).map_err(|reason| message_text(ctx, &reason));
+  let reason = destination.as_ref().err().cloned();
   let text = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -77,9 +77,12 @@ pub(super) fn project_row(ctx: &Ctx, row: &ProjectRow) -> Row {
     message_text(ctx, &row.item.kind.action()),
   )
   .icon(Icon::ArrowUpRight);
-  let review = match reason {
-    Some(reason) => review.unavailable(reason),
-    None => review,
+  let review = match destination {
+    Ok(destination) => {
+      let navigation = Navigation::of(ctx);
+      review.opens(Arc::new(move |at| destination.open(&navigation, at)))
+    }
+    Err(reason) => review.unavailable(reason),
   };
   Row::new()
     .id(PROJECT_ROW)

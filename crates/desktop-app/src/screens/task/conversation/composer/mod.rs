@@ -58,13 +58,14 @@ use self::{
   controls::{Bar, Sending},
   presses::Target,
 };
-use super::{TaskContext, timeline::Follow};
+use super::TaskContext;
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    chat::follow::Follow,
     composer::message_scrollbar,
     icon::{Icon, icon},
     message::message_text,

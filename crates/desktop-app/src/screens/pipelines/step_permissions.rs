@@ -5,8 +5,8 @@ use lurq::{
   node::Element,
 };
 use orchester_core::{
-  permission::{StepCommands, StepNetwork},
-  resource::{RepositoryAccess, Step, StepKind},
+  permission::{StepCommands, StepNetwork, StepPermissions},
+  resource::{RepositoryAccess, Step, StepKind, takes_base_moves, takes_base_moves_by_default},
 };
 use orchester_workspace::pipelines::{data::ProfileChoice, narrowing};
 
@@ -77,12 +77,50 @@ pub fn rows(ctx: &mut Ctx, state: &State, step: &Step, locked: bool) -> Element 
     &ctx.t("pipelines.access"),
     segmented("step-access-choice", segments, Focus::Keyboard),
   ));
+  if *repository == RepositoryAccess::Write {
+    body = body.child(base_moves_rows(ctx, state, (editing.shown().steps(), step), locked));
+  }
   let Some(choice) = choice else {
     return body
       .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
       .into();
   };
   body.child(permission_section(ctx, state, step, choice, locked)).into()
+}
+
+/// *Merge the base branch when it moves* (ORC-65) for a writing step of `steps`, as the pipeline's rule decides it for
+/// `step`: its own choice, else the default. A choice the default already makes is not kept, so the step goes on
+/// following the rule.
+fn base_moves_rows(ctx: &Ctx, state: &State, (steps, step): (&[Step], &Step), locked: bool) -> Column {
+  let by_default = takes_base_moves_by_default(steps, step);
+  let toggle = Toggle::new(
+    "step-base-moves",
+    ToggleKind::Switch,
+    takes_base_moves(steps, &step.key),
+    ctx.t("pipelines.baseMoves"),
+  );
+  let (edit, key) = (state.clone(), step.key.clone());
+  let toggle = if locked {
+    toggle
+  } else {
+    toggle.on_change(move |on| {
+      edit.update(|s| {
+        s.change(&key, |step| {
+          if let StepKind::Agent { permissions, .. } = &mut step.kind {
+            permissions.takes_base_moves = (on != by_default).then_some(on);
+          }
+        });
+      });
+    })
+  };
+  Column::new()
+    .spacing(SpacingSize::Xs)
+    .child(switch_row(ctx, "pipelines.baseMoves", toggle))
+    .child(note(
+      "step-base-moves-note",
+      Icon::Info,
+      &ctx.t("pipelines.baseMovesHint"),
+    ))
 }
 
 fn permission_section(ctx: &mut Ctx, state: &State, step: &Step, choice: &ProfileChoice, locked: bool) -> Element {
@@ -256,7 +294,11 @@ fn apply(
     s.field(&format!("{key}:step-permissions"), result, |s, value| {
       s.change(key, |step| {
         if let StepKind::Agent { permissions, .. } = &mut step.kind {
-          *permissions = value;
+          // The narrowing is chosen anew; whether the step merges the base is not part of it.
+          *permissions = StepPermissions {
+            takes_base_moves: permissions.takes_base_moves,
+            ..value
+          };
         }
       })
     })

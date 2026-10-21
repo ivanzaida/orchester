@@ -241,7 +241,7 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
     .body
     .steps()
     .iter()
-    .map(|step| step_json(step, &opened.assignables))
+    .map(|step| step_json(step, &opened.body, &opened.assignables))
     .collect();
   json!({
     "id": opened.id.to_string(),
@@ -256,7 +256,9 @@ pub(super) fn pipeline_json(opened: &OpenedPipeline, project: ProjectId, transla
   })
 }
 
-fn step_json(step: &Step, assignables: &Assignables) -> Value {
+/// `step` of `body`, with what it may change of its profile and whether it merges the base branch when that moves:
+/// its own choice (`takes_base_moves`, null for the default rule) and the outcome (`merges_moved_base`).
+fn step_json(step: &Step, body: &Pipeline, assignables: &Assignables) -> Value {
   let mut value = json!({
     "key": step.key.as_str(),
     "name": step.name.as_str(),
@@ -289,6 +291,8 @@ fn step_json(step: &Step, assignables: &Assignables) -> Value {
           "network_off": permissions.network == StepNetwork::Off,
           "ask_before_tool_calls": permissions.interactive_tool_approvals,
         },
+        "takes_base_moves": permissions.takes_base_moves,
+        "merges_moved_base": body.takes_base_moves(&step.key),
       })
     }
     StepKind::Tool { tool } => json!({

@@ -440,10 +440,10 @@ fn needs_you_items_are_decided_at_the_card_the_panel_and_the_overview_open() {
       [
         Decided::Summary(Some(SummaryCard::RaiseLimit)),
         Decided::Summary(None),
-        Decided::Unavailable(_),
+        Decided::Memory,
       ]
     ),
-    "the limit, the work to merge, the memory: {decided:?}"
+    "the limit, the work to merge, the memory on the project's Memory page: {decided:?}"
   );
 }
 

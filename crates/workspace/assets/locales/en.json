@@ -227,7 +227,6 @@
         "reviewRecords": "Review records"
       },
       "unavailable": {
-        "memory": "Reviewing memory records isn't built in this app yet.",
         "task": "Its task can't be read, so there is nothing to open."
       }
     }
@@ -1766,7 +1765,8 @@
       "releasePersonHeld": "A person held these new starts in Tasks; release them there. Nothing was changed."
     },
     "start": {
-      "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started."
+      "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
+      "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",

@@ -148,23 +148,34 @@ impl TaskWriter {
     &mut self,
     target: SaveTarget,
     details: TaskDetails,
-    (base, edited): (&TaskOrganization, &TaskOrganization),
+    organization: (&TaskOrganization, &TaskOrganization),
     now: Timestamp,
+  ) -> Result<TaskUpdate, WriteError> {
+    self.save_organized_by(target, details, organization, (ChangeActor::Person, now))
+  }
+
+  /// [`Self::save_organized`], the organization changes recorded as `actor`'s.
+  pub fn save_organized_by(
+    &mut self,
+    target: SaveTarget,
+    details: TaskDetails,
+    (base, edited): (&TaskOrganization, &TaskOrganization),
+    (actor, now): (ChangeActor, Timestamp),
   ) -> Result<TaskUpdate, WriteError> {
     match (self, target) {
       (Self::Local(local), SaveTarget::New(batch)) => local
-        .change(|db| db.create_organized_task(batch, details, edited, now))
+        .change(|db| db.create_organized_task(batch, details, edited, (actor, now)))
         .map(TaskUpdate::Saved),
       (Self::Local(local), SaveTarget::Task(task, read)) => {
-        local.change(|db| db.update_organized_task(task, read, details, (base, edited), now))
+        local.change(|db| db.update_organized_task(task, read, details, (base, edited), (actor, now)))
       }
       (Self::Shared(store), SaveTarget::New(batch)) => {
-        let created = store.create_organized(batch, &details, edited);
+        let created = store.create_organized(batch, &details, edited, actor);
         Ok(TaskUpdate::Saved(shared(store, created)?))
       }
       (Self::Shared(store), SaveTarget::Task(task, read)) => {
         check_cancel(store.db(), task, base, edited)?;
-        let update = store.update_organized(task, read, &details, (base, edited));
+        let update = store.update_organized(task, read, &details, (base, edited), actor);
         shared(store, update)
       }
     }

@@ -240,6 +240,8 @@ fn pipelines_valid_changes_autosave_and_published_history_is_read_only() {
 
 #[path = "pipelines/async_failures.rs"]
 mod async_failures;
+#[path = "pipelines/base_moves.rs"]
+mod base_moves;
 #[path = "pipelines/history_safety.rs"]
 mod history_safety;
 #[path = "pipelines/layout.rs"]

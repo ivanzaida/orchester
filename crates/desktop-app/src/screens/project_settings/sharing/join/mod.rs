@@ -153,7 +153,7 @@ impl Component for JoinPage {
       (None, Some(reason)) => self.failed(ctx, &reason),
       (None, None) => page::screen(
         loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
-        page::scroll(lurq::components::Column::new()),
+        page::page_scroll(lurq::components::Column::new()),
       ),
     }
   }
@@ -172,7 +172,7 @@ impl JoinPage {
     }
     page::screen(
       loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
-      page::scroll(lurq::components::Column::new()),
+      page::page_scroll(lurq::components::Column::new()),
     )
   }
 
@@ -188,7 +188,7 @@ impl JoinPage {
       // Put away: the watch above returns to Sharing.
       None => page::screen(
         loading("sharing-join-loading", &ctx.t("sharing.join.loading")).into(),
-        page::scroll(lurq::components::Column::new()),
+        page::page_scroll(lurq::components::Column::new()),
       ),
     }
   }
@@ -204,7 +204,7 @@ impl JoinPage {
         (&ctx.t("sharing.join.loadFailed"), &text),
         move || retries.update(|count| *count += 1),
       ),
-      page::scroll(lurq::components::Column::new()),
+      page::page_scroll(lurq::components::Column::new()),
     )
   }
 }
