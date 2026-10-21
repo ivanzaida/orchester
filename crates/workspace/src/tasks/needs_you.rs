@@ -27,6 +27,7 @@ use orchester_core::{
 use orchester_store::StoreError;
 
 use super::{
+  answering::PendingAnswers,
   approvals::ShownApproval,
   conversation::Conversation,
   data::ProjectTasks,
@@ -183,6 +184,21 @@ impl ProjectTasks {
       .collect()
   }
 
+  /// These tasks with what `pending`, the answers sent from this window and not read back yet, answer no longer
+  /// waiting: every *Needs you* drops those items at once ([`super::answering`]).
+  #[must_use]
+  pub fn with_answered(&self, pending: &PendingAnswers) -> Self {
+    let answered = pending.answered();
+    if *self.answered == answered {
+      return self.clone();
+    }
+    Self {
+      answered: Arc::new(answered),
+      waiting_once: WaitingOnce::default(),
+      ..self.clone()
+    }
+  }
+
   fn work_out_waiting(&self) -> Vec<WaitingItem> {
     let mut items: Vec<WaitingItem> = self
       .pending_tool_approvals
@@ -204,6 +220,7 @@ impl ProjectTasks {
         },
       });
     }
+    items.retain(|item| !self.answered.iter().any(|answered| answered.covers(item)));
     items.sort_by_key(|item| item.since);
     items
   }

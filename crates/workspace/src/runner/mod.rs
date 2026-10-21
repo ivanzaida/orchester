@@ -8,10 +8,12 @@
 //! Windows only for now: the IPC client (`orchester_ipc::RunnerClient`, a named pipe and a job
 //! object) exists only on Windows.
 
+mod answers;
 mod ask;
 mod chat;
 mod check;
 mod connection;
+mod estimate;
 mod idle;
 mod lifetime;
 mod report;
@@ -35,17 +37,18 @@ use orchester_ipc::{AttachSession, RefusedRun, Rejection, SessionEnd, WorkState}
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
+pub use self::{
+  answers::AnswerMark,
+  idle::ForgetRefusal,
+  report::RunnerStatus,
+  requests::RequestError,
+  work::{ActiveWork, ActiveWorkFields, SaveState},
+};
 use self::{
   connection::Connection,
   lifetime::Lingering,
   report::{Reporter, Shared},
   state::{RunnerEvent, RunnerState},
-};
-pub use self::{
-  idle::ForgetRefusal,
-  report::RunnerStatus,
-  requests::RequestError,
-  work::{ActiveWork, ActiveWorkFields, SaveState},
 };
 use crate::{activity::Activity, workspace::OpenProject};
 

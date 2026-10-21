@@ -9,6 +9,7 @@
 //! review that asked a model cost is recorded when it ends, dropped or not, and counts like a turn of the
 //! agent's ([`ledger`]).
 
+mod estimate;
 mod ledger;
 mod native;
 mod process;
@@ -29,7 +30,7 @@ use orchester_ipc::Event;
 use orchester_store::StoreError;
 use tokio::{runtime::Handle, task::JoinHandle};
 
-pub(in crate::execution::step) use self::setup::ReviewerKeys;
+pub(in crate::execution) use self::{estimate::estimate_task, setup::ReviewerKeys};
 use self::{
   ledger::ReviewLedger,
   process::{StopReview, stop_review},

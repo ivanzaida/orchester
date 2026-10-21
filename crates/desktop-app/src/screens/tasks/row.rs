@@ -16,7 +16,14 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{id::ProjectId, project::TaskKey, task::organization::WorkflowStatus};
+use orchester_core::{
+  id::ProjectId,
+  project::TaskKey,
+  task::{
+    estimate::{EstimateSource, StoryEstimate},
+    organization::WorkflowStatus,
+  },
+};
 use orchester_workspace::tasks::list::{PipelineLabel, TaskRow};
 
 use super::{readiness, table};
@@ -95,10 +102,14 @@ impl Component for TaskListRow {
   }
 }
 
-/// The title, cut to its room, then *was KON-12* for a task that joined with another key (`Xr4Wb`), the first tags,
-/// how many more there are, and the New badge.
+/// The title, cut to its room, then *was KON-12* for a task that joined with another key (`Xr4Wb`), its story
+/// points (ORC-49, no design frame yet), the first tags, how many more there are, and the New badge.
 fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
   let key = &row.key;
+  let points = row
+    .estimate
+    .as_ref()
+    .map(|estimate| TagChip::new(format!("task-points-{key}"), points_chip(ctx, estimate)).mono());
   let tags = row
     .tags
     .iter()
@@ -134,9 +145,20 @@ fn title_cell(ctx: &mut Ctx, row: &TaskRow, highlighted: bool) -> Row {
         .nowrap()
         .flex_shrink(0.0)
     }))
+    .with_children(points)
     .with_children(tags)
     .with_children(more)
     .with_children(new)
+}
+
+/// A task's story points as a chip says them: a person's as they are (`5 pt`), Orchester's estimate marked as one
+/// (`~5 pt`).
+fn points_chip(ctx: &Ctx, estimate: &StoryEstimate) -> Arc<str> {
+  let key = match estimate.source() {
+    EstimateSource::Person => "tasks.points.person",
+    EstimateSource::Automation => "tasks.points.estimated",
+  };
+  ctx.t_args(key, [("count", estimate.points().get().to_string())])
 }
 
 /// The workflow status, with the Blocked flag beside it, over the run's status (`Workflow cell` `x5bPKe`).

@@ -45,12 +45,15 @@ impl MergeStore for ProjectDb {
       [merge.run.to_string()],
       |row| row.get(0),
     )?;
+    let task = crate::rows::parse("task id", &task)?;
     super::organization::automatic(
       &transaction,
-      crate::rows::parse("task id", &task)?,
+      task,
       orchester_core::task::organization::WorkflowStatus::Done,
       merge.merged_at,
     )?;
+    // Story points' calibration: what the task took, beside the points it had.
+    super::task_effort::record(&transaction, task, merge.merged_at)?;
     transaction.commit()?;
     Ok(())
   }

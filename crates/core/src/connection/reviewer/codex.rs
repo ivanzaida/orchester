@@ -131,6 +131,12 @@ pub fn codex_reviewer_args((model, effort): (&ModelId, Option<&str>), folder: &R
 /// The verdict in `codex exec --json`'s events: the text of its last `agent_message`, strictly the JSON
 /// object alone. A failed turn or an error event is a review that did not run.
 pub fn parse_codex_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
+  codex_final_text(stdout).and_then(|text| parse_verdict_text(&text))
+}
+
+/// The text of the last `agent_message` of `codex exec --json`'s events; a failed turn or an error event is a
+/// request that did not run.
+pub(super) fn codex_final_text(stdout: &str) -> Result<String, ReviewError> {
   let events: Vec<Value> = events(stdout).collect();
   if cut(&events) {
     return Err(ReviewError::CouldNotRun(
@@ -146,31 +152,36 @@ pub fn parse_codex_review(stdout: &str) -> Result<ReviewVerdict, ReviewError> {
       kind(failed).unwrap_or_default()
     )));
   }
-  let text = events
+  events
     .iter()
     .rev()
     .filter(|event| kind(event) == Some("item.completed"))
     .filter_map(|event| event.get("item"))
     .find(|item| item.get("type").and_then(Value::as_str) == Some("agent_message"))
     .and_then(|item| item.get("text").and_then(Value::as_str))
-    .ok_or_else(|| ReviewError::Unparseable("no final message".to_owned()))?;
-  parse_verdict_text(text)
+    .map(str::to_owned)
+    .ok_or_else(|| ReviewError::Unparseable("no final message".to_owned()))
 }
 
 /// Codex's answer in `codex exec --json`'s events: the verdict ([`parse_codex_review`]) and what the review
-/// spent, the `usage` of its `turn.completed` events summed; unknown when none of them reports it readably.
+/// spent ([`codex_spend`]).
 pub fn read_codex_review(stdout: &str) -> Reviewed {
+  Reviewed::new(parse_codex_review(stdout), codex_spend(stdout))
+}
+
+/// What a Codex request spent: the `usage` of its `turn.completed` events summed; unknown when none of them
+/// reports it readably.
+pub(super) fn codex_spend(stdout: &str) -> ReviewSpend {
   let events: Vec<Value> = events(stdout).collect();
   let turns: Option<Vec<TokenUsage>> = events
     .iter()
     .filter(|event| kind(event) == Some("turn.completed"))
     .map(|event| event.get("usage").and_then(codex_usage))
     .collect();
-  let spend = match turns {
+  match turns {
     Some(turns) if !turns.is_empty() && !cut(&events) => ReviewSpend::Reported(turns.into_iter().sum()),
     _ => ReviewSpend::Unknown,
-  };
-  Reviewed::new(parse_codex_review(stdout), spend)
+  }
 }
 
 /// Whether `events` lost their start: they do not open with `thread.started`.

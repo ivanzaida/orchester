@@ -22,6 +22,7 @@ mod kept;
 mod limits;
 mod module;
 mod plan;
+pub(crate) mod points;
 mod state;
 mod unbuilt;
 mod values;

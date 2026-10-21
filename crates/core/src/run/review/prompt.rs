@@ -127,7 +127,7 @@ fn agent_data(input: &ReviewInput) -> String {
 /// `value` as JSON on one line in plain ASCII: `<`, `>` and every character beyond ASCII (line and
 /// paragraph separators, look-alikes of the markers) are escaped, so no marker or line can appear inside
 /// it. They occur only inside strings, where an escape means the same character.
-fn one_line(value: &Value) -> String {
+pub(crate) fn one_line(value: &Value) -> String {
   let mut line = String::new();
   for c in value.to_string().chars() {
     if c.is_ascii() && c != '<' && c != '>' {
