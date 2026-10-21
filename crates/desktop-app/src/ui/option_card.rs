@@ -3,7 +3,8 @@
 //! `text_secondary`; 12 over and under, 14 at its sides, radius 6. Off it is `surface_input` in a `border`
 //! stroke with an empty dot; chosen, `surface_raised` in an `accent` stroke with the dot filled. A choice that
 //! cannot be made is faded, shows a lock in place of its dot and says why under its description (`Reason`
-//! `a7DoR`). It is a form control: Tab reaches it and Enter or Space chooses it.
+//! `a7DoR`); while the work it chose runs, it is faded with its dot kept. It is a form control: Tab reaches it
+//! and Enter or Space chooses it.
 
 use std::sync::Arc;
 
@@ -31,6 +32,8 @@ const DOT_CENTER: f32 = 6.0;
 enum Choice {
   Choose(Arc<dyn Fn() + Send + Sync>),
   Unavailable(Arc<str>),
+  /// It cannot be changed while the work it chose runs.
+  Waiting,
 }
 
 pub struct OptionCard {
@@ -125,6 +128,13 @@ impl OptionCard {
     self
   }
 
+  /// The choice cannot be changed while the work it chose runs: faded, its dot kept (`HKJj5` in `q7SPto`).
+  #[must_use]
+  pub fn waiting(mut self) -> Self {
+    self.choice = Choice::Waiting;
+    self
+  }
+
   fn dot(&self) -> Element {
     if matches!(self.choice, Choice::Unavailable(_)) {
       return icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).into();
@@ -168,7 +178,7 @@ impl From<OptionCard> for Element {
           .variant(ExtraTypography::Prose.role())
           .color(PaletteColor::TextMuted),
       ),
-      Choice::Choose(_) => None,
+      Choice::Choose(_) | Choice::Waiting => None,
     };
     let text = card.text(glyph).with_children(reason);
     let (fill, stroke) = if card.chosen {
@@ -204,6 +214,7 @@ impl From<OptionCard> for Element {
         })
         .into(),
       Choice::Unavailable(reason) => inert(frame.describe("reason", reason)).opacity(DISABLED_OPACITY).into(),
+      Choice::Waiting => inert(frame).opacity(DISABLED_OPACITY).into(),
     }
   }
 }

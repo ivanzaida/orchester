@@ -3,6 +3,8 @@
 //! what detection found — the GitHub connection for the repository's host and the project's
 //! link. Every function blocks on git, `gh` or SQLite; the UI calls them off the UI thread.
 
+pub mod init;
+
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
