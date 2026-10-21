@@ -145,16 +145,36 @@ fn creation_failures_not_about_the_folder_stay_beside_create() {
 #[test]
 fn setup_readiness_needs_a_folder_that_is_a_repository() {
   use orchester_core::{connection::GitHubLogin, repository::DetectionState};
-  use orchester_workspace::project_setup::{Readiness, readiness};
-  assert_eq!(readiness(false, None), Readiness::NoFolder);
+  use orchester_workspace::{
+    project_setup::{Readiness, readiness},
+    repository::init::LocalRepository,
+  };
+  assert_eq!(readiness(false, None, None), Readiness::NoFolder);
   assert_eq!(
-    readiness(true, None),
+    readiness(true, None, None),
     Readiness::Ready,
     "a detection still running never holds Create back"
   );
   assert_eq!(
-    readiness(true, Some(&DetectionState::NotAGitRepository)),
+    readiness(true, Some(&DetectionState::NotAGitRepository), None),
     Readiness::NotARepository
+  );
+  assert_eq!(
+    readiness(
+      true,
+      Some(&DetectionState::GitFailed),
+      Some(&LocalRepository::GitMissing)
+    ),
+    Readiness::GitMissing,
+    "git that is not installed holds Create back"
+  );
+  let unborn = LocalRepository::NoCommits {
+    branch: Some("main".to_owned()),
+  };
+  assert_eq!(
+    readiness(true, Some(&DetectionState::NoRemote), Some(&unborn)),
+    Readiness::NoCommits,
+    "runs need a commit to branch from"
   );
   let account = GitHubLogin::new("ivanzaida").expect("a login");
   for state in [
@@ -164,7 +184,7 @@ fn setup_readiness_needs_a_folder_that_is_a_repository() {
     DetectionState::NoAccess { account },
   ] {
     assert_eq!(
-      readiness(true, Some(&state)),
+      readiness(true, Some(&state), None),
       Readiness::Ready,
       "{state:?} is GitHub's, optional"
     );

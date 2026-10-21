@@ -17,7 +17,7 @@ use crate::{
   activity::{Activity, operations},
   background,
   messages::{self, Message},
-  repository::adopt_in,
+  repository::{adopt_in, init::LocalRepository},
   workspace::{OpenProject, Workspace},
 };
 
@@ -149,23 +149,34 @@ impl CreateFailure {
   }
 }
 
-/// How far the setup form is from Create: a folder must be chosen, and it must be a git repository.
+/// How far the setup form is from Create: a folder must be chosen, git must be installed, and the folder must be a
+/// git repository with a commit for runs to branch from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Readiness {
   NoFolder,
+  /// git is not installed on this computer.
+  GitMissing,
   /// Detection found no git repository in the chosen folder (01.C9).
   NotARepository,
+  /// The folder's repository has no commit yet.
+  NoCommits,
   /// Create may be pressed; a name the rules reject is said under the name field then.
   Ready,
 }
 
-/// Where the form stands with `folder_chosen` and the folder's finished detection (`None` while it runs or
-/// before it ran, which never holds Create back).
-pub fn readiness(folder_chosen: bool, detection: Option<&DetectionState>) -> Readiness {
-  match (folder_chosen, detection) {
-    (false, _) => Readiness::NoFolder,
-    (true, Some(state)) if state.blocks_project() => Readiness::NotARepository,
-    (true, _) => Readiness::Ready,
+/// Where the form stands with `folder_chosen`, the folder's finished detection and what git sees of it (`None`
+/// while they run or before they ran, which never holds Create back).
+pub fn readiness(
+  folder_chosen: bool,
+  detection: Option<&DetectionState>,
+  local: Option<&LocalRepository>,
+) -> Readiness {
+  match (folder_chosen, local, detection) {
+    (false, ..) => Readiness::NoFolder,
+    (true, Some(LocalRepository::GitMissing), _) => Readiness::GitMissing,
+    (true, Some(LocalRepository::NoCommits { .. }), _) => Readiness::NoCommits,
+    (true, _, Some(state)) if state.blocks_project() => Readiness::NotARepository,
+    (true, ..) => Readiness::Ready,
   }
 }
 
