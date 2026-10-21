@@ -1265,6 +1265,8 @@
       "messageChanged": "Run #{{run}} changed since the message was checked: sending it now would do something else. Nothing was sent; read the run again before you send.",
       "notAnAgentStep": "{{step}} is not an agent step, so it has no agent profile to change.",
       "automationNotAllowed": "Let automation answer approvals is off. A person turns it on in Settings › What automation may do.",
+      "personsPoints": "A person set this task’s story points; automation does not change them.",
+      "pointsOffScale": "Story points are 1, 2, 3, 5, 8, 13 or 21.",
       "runNotEnded": "The run still works; its worktree is removed once it ended.",
       "worktreeRemoved": "The run’s worktree was removed already.",
       "integrationRunning": "A merge or worktree removal of this task is running; try again once it ended.",
@@ -1830,7 +1832,24 @@
       "holdAlready": {
         "project": "New starts in {{project}} are held already: there is nothing to hold. Nothing was changed.",
         "group": "New starts of {{task}}'s group are held already: there is nothing to hold. Nothing was changed."
-      }
+      },
+      "initWaits": "Nothing is made yet: the first commit of {{project}}'s folder on {{branch}} waits for the person, who applies or dismisses it in the conversation. Tell them what the commit holds and which files look as if they hold secrets, if any."
+    },
+    "repository": {
+      "gitMissing": "git is not installed on this computer, so the project's folder cannot be made a git repository. Install git, then ask again. Nothing was changed.",
+      "notWritable": "Orchester cannot write to the project's folder, so no repository was made there.",
+      "hasCommits": "The project's folder is a git repository with a commit already: its history is never touched. Nothing was changed.",
+      "changed": "The project's folder changed since this was proposed. Nothing more was done; ask the Orchestrator to propose it again.",
+      "staged": "Files are staged in the repository already, which an empty first commit would leave out: propose a first commit of the folder's files instead. Nothing was changed.",
+      "nothingToCommit": "The folder has no files for a first commit: propose an empty first commit instead. Nothing was changed.",
+      "gitignoreExists": "The folder has a .gitignore already, which the first commit honours as it is: a .gitignore is never written over. Propose it again without gitignore. Nothing was changed.",
+      "gitignoreUnreadable": "The folder's .gitignore could not be read. Nothing was changed.",
+      "gitignoreAppeared": "A .gitignore appeared in the folder since this was proposed: it is never written over. Nothing was committed; ask the Orchestrator to propose it again.",
+      "sensitiveAppeared": "Files that look as if they hold secrets appeared since this was proposed: {{files}}. Nothing was changed; ask the Orchestrator to propose it again.",
+      "unread": "git could not read the project's folder. Nothing was changed.",
+      "gitFailed": "{{command}} failed. git said: {{said}}",
+      "authorUnknown": "git does not know who the commit's author is, so the first commit was not made. Tell git once in a terminal: git config --global user.name \"Your Name\" and git config --global user.email \"you@example.com\", then ask the Orchestrator to propose it again. git said: {{said}}",
+      "stopped": "{{command}} did not finish. Nothing more was done."
     }
   },
   "memory": {

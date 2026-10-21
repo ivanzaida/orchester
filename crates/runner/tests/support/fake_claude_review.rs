@@ -6,7 +6,8 @@
 //! seconds, "Reviewer hangs" never answers, anything else approves; "Reviewer reports limits" adds a
 //! `rate_limit_event` ([`LIMITS`]), "Reviewer hides usage" leaves the usage out of the result, and "Reviewer
 //! rambles" prints more than the runner keeps of its output (320 events of 1 KiB) before its result. It
-//! reports the arguments it got on standard error (`review argv: `). When the variable
+//! reports the arguments it got on standard error (`review argv: `). Asked for a task's story points (ORC-49), it
+//! answers as the estimator ([`estimate`]). When the variable
 //! `FAKE_REVIEW_LOG` names a file, it appends where it ran to it: `pid <id>`, `cwd <folder>`, `empty
 //! <whether the folder was empty>` and `instructions <whether its system prompt file is the reviewer's>`.
 
@@ -36,6 +37,9 @@ pub fn review(args: &[String]) -> ExitCode {
   if let Err(error) = std::io::stdin().read_to_string(&mut prompt) {
     eprintln!("cannot read the review prompt: {error}");
     return ExitCode::from(2);
+  }
+  if prompt.contains("Give the task's story points.") {
+    return estimate(&prompt);
   }
   if prompt.contains("Reviewer babbles") {
     println!("Sure, that looks fine to me.");
@@ -78,6 +82,32 @@ pub fn review(args: &[String]) -> ExitCode {
   if !prompt.contains("Reviewer hides usage") {
     answer["usage"] = serde_json::from_str(USAGE).expect("the usage is JSON");
   }
+  println!("{answer}");
+  ExitCode::SUCCESS
+}
+
+/// The story-point estimator's answer on the same connection: "Estimator babbles" prints prose; a task whose brief
+/// says "Large" gets 8 points, any other 3, with the review's usage. The reason names how many merged tasks the
+/// prompt gave as examples (`examples <n>`), counted by their keys.
+fn estimate(prompt: &str) -> ExitCode {
+  if prompt.contains("Estimator babbles") {
+    println!("About a three, I'd say.");
+    return ExitCode::SUCCESS;
+  }
+  let points = if prompt.contains("Large") { 8 } else { 3 };
+  let examples = prompt.matches("\"key\":").count();
+  println!(
+    "{}",
+    serde_json::json!({"type": "system", "subtype": "init", "session_id": "fake-estimate"})
+  );
+  let answer = serde_json::json!({
+    "type": "result",
+    "subtype": "success",
+    "is_error": false,
+    "result": "",
+    "structured_output": {"points": points, "reason": format!("Sized by the fake estimator; examples {examples}.")},
+    "usage": serde_json::from_str::<serde_json::Value>(USAGE).expect("the usage is JSON"),
+  });
   println!("{answer}");
   ExitCode::SUCCESS
 }

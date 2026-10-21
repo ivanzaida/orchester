@@ -15,6 +15,7 @@ use orchester_core::{
     UsageQuery as ReportQuery, UsageReport, grouped, local_date,
   },
 };
+use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -80,9 +81,19 @@ pub async fn get_usage(services: &Services, args: GetUsage) -> Result<Value, Too
   blocking(move || {
     let open = project.as_deref().map(|named| services.project(named)).transpose()?;
     let scope = open.as_ref().map_or(Scope::All, |open| Scope::Project(&open.repo_root));
-    let since = query.range(local_date(now)).start();
-    let data = UsageData::read(&services.workspace, scope, since, now)?;
-    Ok(answer(open.map(|open| open.project.id()), &query, &data, now))
+    let range = query.range(local_date(now));
+    let data = UsageData::read(&services.workspace, scope, range.start(), now)?;
+    // The story-point estimator's requests, a kind of usage of their own outside runs: one project's.
+    let estimates = match &open {
+      Some(open) => {
+        let (usage, requests) = ProjectDb::open(&open.repo_root)?.estimates_between(range.start(), range.end())?;
+        json!({ "tokens": tokens(usage), "requests": requests })
+      }
+      None => Value::Null,
+    };
+    let mut answered = answer(open.map(|open| open.project.id()), &query, &data, now);
+    answered["estimates"] = estimates;
+    Ok(answered)
   })
   .await
 }

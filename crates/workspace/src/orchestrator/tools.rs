@@ -7,8 +7,9 @@
 //! question, sending a run's agents a message and deciding how a stopped run goes on wait for the person
 //! ([`super::change`]) unless the person's switch lets the chat do it itself (publishing, merging, answering; never
 //! canceling or deciding how a stopped run goes on), and so does starting a run unless auto mode is on for the project
-//! ([`super::proposal`]). An interrupted run is continued only under the person's switch ([`super::guard`]). What the
-//! agent changed, or tried to, is kept in its conversation as an action.
+//! ([`super::proposal`]). An interrupted run is continued only under the person's switch ([`super::guard`]). The chat's
+//! own `init_repository` is always the person's to apply ([`super::repository`]). What the agent changed, or tried
+//! to, is kept in its conversation as an action.
 
 use std::path::PathBuf;
 
@@ -33,6 +34,7 @@ use super::{
   keep::{self, HOLD_QUEUE, Named},
   own_project::{in_own_project, own_project_by_id},
   proposal,
+  repository::{self, INIT_REPOSITORY},
 };
 use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
@@ -47,7 +49,7 @@ use crate::{
 /// message and continuing a run that waits for a person's decision. Approvals, plan decisions, project setup,
 /// connections, MCP servers, the environment and what removes work are not among them. A name whose tool the app
 /// does not have (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 58] = [
+pub const TOOLS: [&str; 59] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -103,10 +105,15 @@ pub const TOOLS: [&str; 58] = [
   "list_accounts",
   "list_models",
   "get_usage",
+  "get_story_point_calibration",
   "get_daily_report",
   "list_pull_requests",
   "get_pull_request",
 ];
+
+/// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
+/// the person applies ([`super::repository`]).
+pub const CHAT_TOOLS: [&str; 1] = [INIT_REPOSITORY];
 
 /// The tool whose call starts a run, or proposes it.
 pub(super) const RUN_TASK: &str = "run_task";
@@ -123,7 +130,8 @@ pub(super) const SEND_MESSAGE: &str = "send_message";
 /// The tool whose copy the chat saves as a draft before it publishes it by the publication rule.
 pub(super) const DUPLICATE_PIPELINE: &str = "duplicate_pipeline";
 
-/// The chat's tools as `tools/list` answers: those of [`TOOLS`] the app has, each told how it works in the chat.
+/// The chat's tools as `tools/list` answers: those of [`TOOLS`] the app has, each told how it works in the chat, and
+/// the chat's own ([`CHAT_TOOLS`]).
 pub fn listed() -> Vec<Tool> {
   app_mcp::listed()
     .into_iter()
@@ -135,6 +143,7 @@ pub fn listed() -> Vec<Tool> {
       }
       tool
     })
+    .chain([repository::tool()])
     .collect()
 }
 
@@ -344,7 +353,8 @@ async fn act(
   let acted = match name {
     _ if proposes => propose_change((services, translate), scope, name, arguments).await,
     RUN_TASK => start((services, translate), scope, arguments).await,
-    CANCEL_RUN | CONTINUE_RUN => propose_change((services, translate), scope, name, arguments).await,
+    // Making a repository writes to the project's folder: always the person's, whatever auto mode and the switches.
+    CANCEL_RUN | CONTINUE_RUN | INIT_REPOSITORY => propose_change((services, translate), scope, name, arguments).await,
     MERGE_RUN => {
       switched(
         (services, translate),

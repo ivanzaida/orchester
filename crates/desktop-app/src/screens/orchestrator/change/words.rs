@@ -156,6 +156,7 @@ pub(super) fn words(ctx: &Ctx, view: &View) -> Words {
     Some(Change::Resume { number, .. }) => control(ctx, view, (Control::Resume, Some(*number), None)),
     Some(Change::Release { task }) => control(ctx, view, (Control::Release, None, task.as_deref())),
     Some(Change::Continue { number, choice, .. }) => super::continuation::continuation(ctx, view, (*number, choice)),
+    Some(Change::InitRepository { branch, exists, .. }) => super::repository::words(ctx, view, (branch, *exists)),
     None => start(ctx, view),
   }
 }

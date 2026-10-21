@@ -77,6 +77,7 @@ CREATE TABLE ui_state (
   plan_reads::MIGRATION,
   settings::NOTIFICATIONS_MIGRATION,
   settings::DAILY_REPORT_MIGRATION,
+  settings::STORY_POINTS_MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

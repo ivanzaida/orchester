@@ -13,6 +13,7 @@ mod code_index;
 mod connections;
 mod consistent;
 mod environment;
+mod estimates;
 mod import;
 mod invocation_accounts;
 mod invocation_prompts;
@@ -62,6 +63,7 @@ mod sources;
 mod step_outputs;
 mod step_progress;
 mod tags;
+mod task_effort;
 mod task_groups;
 mod task_snapshots;
 mod tasks;
@@ -87,6 +89,7 @@ pub use self::{
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,
+  estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_reports::KeptReport,
@@ -115,6 +118,12 @@ pub struct ProjectDb {
   project: Project,
   /// `<repo>/.orchester`, where the database and the blob files live.
   directory: PathBuf,
+}
+
+/// Excludes `.orchester/` from git in the repository at `repo_root`, as [`ProjectDb::create`] does: for a project's
+/// folder made a repository after the project was.
+pub fn exclude_project_data(repo_root: &Path) -> Result<(), StoreError> {
+  git_exclude::exclude(repo_root, EXCLUDE_PATTERN)
 }
 
 impl ProjectDb {

@@ -1,12 +1,14 @@
-//! Making a folder a git repository in place (project setup, `Create a git repository here` `OdlXb`): `git init` on
-//! the branch git's `init.defaultBranch` names, else `main`, then a first commit "Initial commit" by the author git
-//! is set up with, holding the folder's files (`git add -A`, which honours `.gitignore`) or nothing. Never adds a
-//! remote, pushes, or changes git's settings, and git works on the folder only, whatever repository the caller's
-//! environment names ([`git`]). Also what git sees of a folder before GitHub is asked and what a first commit would
-//! hold ([`read`]). Every function blocks on git; a UI calls them off its thread.
+//! Making a folder a git repository in place (project setup, `Create a git repository here` `OdlXb`, and the
+//! Orchestrator chat's `init_repository`): `git init` on the branch git's `init.defaultBranch` names, else `main`,
+//! then a first commit "Initial commit" by the author git is set up with, holding the folder's files (`git add -A`,
+//! which honours `.gitignore`) or nothing. Never adds a remote, pushes, or changes git's settings, and git works on
+//! the folder only, whatever repository the caller's environment names ([`git`]). Also what git sees of a folder
+//! before GitHub is asked and what a first commit would hold ([`read`]), and which of its files look as if they hold
+//! secrets ([`sensitive`]). Every function blocks on git; a UI calls them off its thread.
 
 mod git;
 mod read;
+mod sensitive;
 
 use std::{io::ErrorKind, path::Path};
 
@@ -15,8 +17,12 @@ use orchester_store::is_repository_root;
 use thiserror::Error;
 
 use self::git::{command, has_commits, listed, said, staged};
-pub use self::read::{
-  Commits, InitialBranch, LocalRepository, Survey, SurveyError, initial_branch, read_local, survey,
+pub use self::{
+  read::{
+    Commits, InitialBranch, LocalRepository, Survey, SurveyError, first_commit_files, initial_branch, read_local,
+    survey,
+  },
+  sensitive::sensitive,
 };
 
 /// The message of the first commit.

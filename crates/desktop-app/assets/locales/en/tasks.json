@@ -53,6 +53,10 @@
     "pipelineVersion": "{{name}} v{{version}}",
     "runStep": "{{number}} {{step}}",
     "moreTags": "+{{count}}",
+    "points": {
+      "person": "{{count}} pt",
+      "estimated": "~{{count}} pt"
+    },
     "listSeparator": ", ",
     "newBadge": "New",
     "blocked": "Blocked",

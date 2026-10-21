@@ -43,12 +43,17 @@ pub(super) struct ReviewPlace {
 
 impl ReviewPlace {
   pub(super) fn new() -> io::Result<Self> {
+    Self::with(REVIEW_INSTRUCTIONS, REVIEW_SCHEMA)
+  }
+
+  /// A folder for one request of another kind (the story-point estimator), with its `instructions` and `schema`.
+  pub(super) fn with(instructions: &str, schema: &str) -> io::Result<Self> {
     let root = tempfile::Builder::new().prefix("orchester-review-").tempdir()?;
     let place = Self { root };
     let folder = place.folder();
     std::fs::create_dir(&folder.work)?;
-    std::fs::write(&folder.instructions, REVIEW_INSTRUCTIONS)?;
-    std::fs::write(&folder.schema, REVIEW_SCHEMA)?;
+    std::fs::write(&folder.instructions, instructions)?;
+    std::fs::write(&folder.schema, schema)?;
     Ok(place)
   }
 

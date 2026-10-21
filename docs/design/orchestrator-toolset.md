@@ -4,7 +4,7 @@ Status: decided by the person on 2026-10-15; decision 5 and the waits changed by
 continuing a stopped run and the ends of runs added to decision 5 on 2026-10-19 (proposed, conservative; see there);
 continuing interrupted runs behind *Let the Orchestrator continue interrupted runs* decided by the person on
 2026-10-20 (ORC-53); runs the runner stopped because the project database stayed busy added to them by the person on
-2026-10-21 (ORC-75).
+2026-10-21 (ORC-75); the proposed first commit of a project's folder (decision 8) added on 2026-10-21 (ORC-72).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -189,6 +189,24 @@ person can click.
    whatever the person's switches, and any other change (a task, a draft, a copy of a pipeline, a hold of new starts) is
    refused as `report_turn`; a start is proposed as in any turn nobody asked for. `get_daily_report` reads the
    delivered report of a day, or builds it.
+8. **Making the project's folder a git repository (ORC-72, 2026-10-21).** When the project's folder is not a git
+   repository yet, or its repository has no commit, no run can start. The chat's own tool `init_repository {project,
+   first_commit: "files" | "empty", gitignore?}` (no client of the app has it: `orchester_workspace::orchestrator::
+   repository`, listed in `tools::CHAT_TOOLS`) proposes what project setup's *Create a git repository here* does,
+   through the same functions (`orchester_workspace::repository::init`): `git init` on `init.defaultBranch`, else
+   `main`, or nothing for a repository without a commit; the chat's `.gitignore` text written first, only where the
+   folder has none (`gitignore_exists` otherwise: the folder's own is honoured as it is); `.orchester/` kept out of
+   git through `.git/info/exclude`, as for every project; then the first commit "Initial commit" of the folder's
+   files (`git add -A`) or an empty one. It never adds a remote, pushes or changes git's settings. It writes to the
+   project's folder, so it is **always a card the person applies**, whatever auto mode, *Let the Orchestrator answer
+   agents* and the other switches say, also in a turn nobody asked for and in a report's turn; automation's click on
+   *Apply* is refused (`person_only`). The card shows the folder, the branch, how many files the commit adds, the
+   whole `.gitignore` it honours, and a warning naming the files that look as if they hold secrets (`.env`, private
+   keys, credential files; by name only), which the person decides on. *Apply* checks the folder again: a repository
+   with a commit since is refused (`has_commits`) and never touched, a `.gitignore` that appeared is never written
+   over and a file that looks secret the person was not shown is refused (`changed_since_proposed`). Refusals carry
+   stable codes: `git_not_found`, `folder_not_writable`, `git_failed` (git's own words), `author_unknown` (with the
+   `git config --global user.name` / `user.email` commands), `staged_files`, `nothing_to_commit`, `git_stopped`.
 
 ## Tools
 
@@ -213,12 +231,14 @@ project.
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
 | Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
+| Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |
 
 Deciding approvals (`decide_approval`) and plans (`decide_plan`, and a `send_message` that would request a plan's
 changes), `continue_run`'s raising of limits and budgets, resuming after the daily budget and accepting a step,
-widening what agents may do, secret values, project setup, connections' changes, MCP server changes,
-environment, worktree removal and `return_to_draft` stay out of the chat's tools. Answering agents' questions and
-sending a run's agents messages are the chat's since ORC-42, behind *Let the Orchestrator answer agents* (decision 5).
+widening what agents may do, secret values, project setup (but the proposed first commit of decision 8),
+connections' changes, MCP server changes, environment, worktree removal and `return_to_draft` stay out of the chat's
+tools. Answering agents' questions and sending a run's agents messages are the chat's since ORC-42, behind *Let the
+Orchestrator answer agents* (decision 5).
 
 ## Links
 

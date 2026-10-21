@@ -30,6 +30,7 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::workspace::OrchestratorConsent;
 
@@ -77,16 +78,21 @@ pub struct Orchestrator {
 
 impl Orchestrator {
   pub fn new(setup: Setup) -> Self {
-    Self::started(setup, false).0
+    Self::started(setup, None, false).0
   }
 
   /// As [`Orchestrator::new`], with the system's pickers and clipboard replaced (`support::stand_ins`).
   pub fn with_stand_ins(setup: Setup) -> (Self, StandIns) {
-    let (screen, stand_ins) = Self::started(setup, true);
+    let (screen, stand_ins) = Self::started(setup, None, true);
     (screen, stand_ins.expect("the stand-ins"))
   }
 
-  fn started(setup: Setup, stand_ins: bool) -> (Self, Option<StandIns>) {
+  /// [`Orchestrator::new`] whose window runs git (and gh) with `git_programs` when they are given.
+  pub fn with_git(setup: Setup, git_programs: Option<Programs>) -> Self {
+    Self::started(setup, git_programs, false).0
+  }
+
+  fn started(setup: Setup, git_programs: Option<Programs>, stand_ins: bool) -> (Self, Option<StandIns>) {
     let programs = programs();
     let (runner, fake, fake_codex) = (programs.runner.clone(), &programs.fake_claude, &programs.fake_codex);
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
@@ -109,6 +115,10 @@ impl Orchestrator {
       Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly => runner,
     };
     let launch = data.launch_with(runner);
+    let launch = match git_programs {
+      Some(git_programs) => launch.with_programs(git_programs),
+      None => launch,
+    };
     let project = ProjectId::generate();
     let open = add_project(
       launch.workspace().expect("the session started"),

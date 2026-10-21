@@ -27,34 +27,45 @@ pub const NATIVE_MAX_OUTPUT: u32 = 4_096;
 
 /// The one request that reviews `input` with `model` and `effort`.
 pub fn native_request(input: &ReviewInput, model: &ModelId, effort: Option<String>) -> ModelRequest {
+  one_request((REVIEW_INSTRUCTIONS, review_prompt(input)), model, effort)
+}
+
+/// One request without tools: `system` as the system prompt and `text` as the one user message.
+pub(super) fn one_request((system, text): (&str, String), model: &ModelId, effort: Option<String>) -> ModelRequest {
   ModelRequest {
     model: model.clone(),
     effort,
     max_output: NATIVE_MAX_OUTPUT,
-    system: REVIEW_INSTRUCTIONS.to_owned(),
+    system: system.to_owned(),
     tools: ToolSet::none(),
-    items: vec![Item::user(review_prompt(input), UserOrigin::Task)],
+    items: vec![Item::user(text, UserOrigin::Task)],
     cache_key: ConversationId::generate(),
   }
 }
 
-/// The verdict in the model's answer: its text, when it ended its turn without calling anything.
+/// The verdict in the model's answer ([`native_text`]).
 pub fn native_verdict(response: &ModelResponse) -> Result<ReviewVerdict, ReviewError> {
+  native_text(response).and_then(|text| parse_verdict_text(&text))
+}
+
+/// The model's answer: its text, when it ended its turn without calling anything.
+pub(super) fn native_text(response: &ModelResponse) -> Result<String, ReviewError> {
   if response.stop != StopReason::EndTurn {
     return Err(ReviewError::Unparseable(format!(
       "the model stopped with {:?}",
       response.stop
     )));
   }
-  let text: String = response
-    .items
-    .iter()
-    .filter_map(|item| match item {
-      Item::Assistant { text } => Some(text.as_str()),
-      _ => None,
-    })
-    .collect();
-  parse_verdict_text(&text)
+  Ok(
+    response
+      .items
+      .iter()
+      .filter_map(|item| match item {
+        Item::Assistant { text } => Some(text.as_str()),
+        _ => None,
+      })
+      .collect(),
+  )
 }
 
 /// What a native review spent, followed through its client's stream events. A complete response the client
@@ -88,30 +99,41 @@ impl NativeSpend {
     }
   }
 
-  /// The model's answer as a review: its verdict ([`native_verdict`]), and its usage with what the dropped
-  /// responses spent; unknown when an earlier attempt may have been billed for more.
+  /// The model's answer as a review: its verdict ([`native_verdict`]), and what it spent ([`Self::answered_spend`]).
   pub fn answered(self, response: &ModelResponse) -> Reviewed {
+    Reviewed::new(native_verdict(response), self.answered_spend(response))
+  }
+
+  /// What a request that was answered with `response` spent: its usage with what the dropped responses spent;
+  /// unknown when an earlier attempt may have been billed for more.
+  pub fn answered_spend(self, response: &ModelResponse) -> ReviewSpend {
     let mut spent = response.usage;
     spent += self.dropped;
-    let spend = if self.uncertain {
+    if self.uncertain {
       ReviewSpend::Unknown
     } else {
       ReviewSpend::Reported(spent)
-    };
-    Reviewed::new(native_verdict(response), spend)
+    }
   }
 
-  /// A review the client gave up on with `error`: what its complete dropped responses spent, nothing when
-  /// there were none, and unknown when any attempt, the last one included, may have been billed.
+  /// A review the client gave up on with `error`, at what it spent ([`Self::unanswered_spend`]).
   pub fn unanswered(self, error: &ModelError) -> Reviewed {
-    let spend = if self.uncertain || self.attempt_spent || may_have_billed(error) {
+    Reviewed::new(
+      Err(ReviewError::CouldNotRun(error.to_string())),
+      self.unanswered_spend(error),
+    )
+  }
+
+  /// What a request the client gave up on with `error` spent: what its complete dropped responses spent, nothing
+  /// when there were none, and unknown when any attempt, the last one included, may have been billed.
+  pub fn unanswered_spend(self, error: &ModelError) -> ReviewSpend {
+    if self.uncertain || self.attempt_spent || may_have_billed(error) {
       ReviewSpend::Unknown
     } else if self.dropped == TokenUsage::default() {
       ReviewSpend::Nothing
     } else {
       ReviewSpend::Reported(self.dropped)
-    };
-    Reviewed::new(Err(ReviewError::CouldNotRun(error.to_string())), spend)
+    }
   }
 }
 

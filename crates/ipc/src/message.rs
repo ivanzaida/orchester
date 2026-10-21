@@ -248,6 +248,10 @@ pub enum Command {
   /// Stops the answer under way in conversation `chat`: its agent CLI ends, and what it did until then stays.
   /// Answered with [`Reply::ChatStopped`], whether an answer was under way or not.
   StopChat { chat: ChatId },
+  /// Estimates the story points of task `task` on auto mode's reviewer's connection and model (protocol 30), unless a
+  /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
+  /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.
+  EstimateTask { task: TaskId },
 }
 
 /// Which session a runner serves, from the desktop's side.
@@ -417,6 +421,11 @@ pub enum Reply {
   /// The answer to [`Command::StopChat`].
   ChatStopped {
     chat: ChatId,
+  },
+  /// The answer to [`Command::EstimateTask`].
+  TaskEstimated {
+    task: TaskId,
+    outcome: orchester_core::task::estimate::EstimateOutcome,
   },
   Rejected(Rejection),
 }
