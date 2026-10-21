@@ -159,8 +159,10 @@ const SPECS: &[Spec] = &[
                   holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
                   base_moved lists Orchester's notices that the run's base branch moved (kind base_moved): the \
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
-                  state (waits_for_writing_step, kept_until_run_goes_on, waits_for_follow_up, or delivered with the \
-                  agent and step that read it). The run's link is its task's page; the waiting approvals, \
+                  state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
+                  that never merge the base such as Review or Verify are left, kept_until_run_goes_on, \
+                  waits_for_follow_up, or delivered with the agent and step that read it). The run's link is its \
+                  task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,

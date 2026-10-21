@@ -1,10 +1,13 @@
 //! Notices that the run's base branch moved (ORC-54, `orchester_core::base_move`), which the desktop queues: the
-//! run's next agent of a writing step (repository access `write`) takes its pending notice once the window of its
-//! move has passed, never mid-edit. An invocation that starts takes it into its prompt — a step's start, a session
-//! continued after a pause, a limit, a restart or a follow-up — and an agent of a writing step that finishes its turn
-//! while one is pending does not end its step but continues its session to read it, as for people's messages. A
-//! read-only or command step never takes it: it waits for the run's next writing step, as it does in a paused,
-//! waiting or stopped run until the run goes on. While the project's switch is off, none is delivered.
+//! run's next agent of a step that implements the change takes its pending notice once the window of its move has
+//! passed, never mid-edit. Such a step is one the pipeline has take base moves (ORC-65,
+//! `orchester_core::resource::Pipeline::takes_base_moves`: its own choice, else a writing step that does not review
+//! or verify) and whose agent writes in this run (repository access `write`). An invocation that starts takes it into
+//! its prompt — a step's start, a session continued after a pause, a limit, a restart or a follow-up — and such an
+//! agent that finishes its turn while one is pending does not end its step but continues its session to read it, as
+//! for people's messages. A read-only, command, Review or Verify step never takes it: it waits for the run's next step
+//! that does, when the work goes back to it, as it does in a paused, waiting or stopped run until the run goes on.
+//! While the project's switch is off, none is delivered.
 
 use orchester_core::{
   base_move::BaseNotice, id::StepExecutionId, permission::RepositoryAccess, run::Invocation, time::Timestamp,
@@ -13,10 +16,10 @@ use orchester_core::{
 use super::super::run::{ExecutionError, RunTask};
 
 impl RunTask {
-  /// The notice `execution`'s agent takes now: the run's pending one, past its window, when the step writes and the
-  /// project tells its working agents when the base branch moves.
+  /// The notice `execution`'s agent takes now: the run's pending one, past its window, when its step takes base moves
+  /// and the project tells its working agents when the base branch moves.
   pub(super) fn notice_for(&self, execution: StepExecutionId) -> Result<Option<BaseNotice>, ExecutionError> {
-    if !self.writes(execution) || !self.db.tells_base_moves()? {
+    if !self.takes_base_moves(execution) || !self.db.tells_base_moves()? {
       return Ok(None);
     }
     let notice = self.db.pending_base_notice(self.run.id())?;
@@ -45,11 +48,15 @@ impl RunTask {
     Ok(())
   }
 
-  /// Whether `execution`'s agent may write in its worktree, as the run gives its step's profile permissions.
-  fn writes(&self, execution: StepExecutionId) -> bool {
+  /// Whether `execution`'s step is one the run's pipeline has merge the base when it moves, and its agent may write in
+  /// its worktree, as the run gives its step's profile permissions.
+  fn takes_base_moves(&self, execution: StepExecutionId) -> bool {
     let Ok((step, profile, _)) = self.agent_step(execution) else {
       return false;
     };
+    if !self.run.snapshot().body().takes_base_moves(&step.key) {
+      return false;
+    }
     let Ok((body, _)) = self.profile_and_connection(profile, &step.key) else {
       return false;
     };
