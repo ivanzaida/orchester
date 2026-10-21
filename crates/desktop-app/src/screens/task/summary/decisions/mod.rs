@@ -17,8 +17,6 @@ mod retries;
 mod return_ended;
 mod stages;
 
-pub(super) use self::return_ended::return_card;
-
 use std::sync::Arc;
 
 use lurq::{
@@ -29,6 +27,7 @@ use lurq::{
 use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
+pub(super) use self::return_ended::return_card;
 use super::{
   column, layout,
   notice::{self, Said},

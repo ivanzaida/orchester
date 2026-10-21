@@ -116,5 +116,14 @@ fn remove_worktree_of(repo: &Path, key: &str) {
     .expect("its run")
     .expect("readable");
   let worktree = repo.join(".orchester/worktrees").join(run.id().to_string());
-  std::fs::remove_dir_all(&worktree).expect("the worktree's folder removed");
+  // On Windows a file another process still reads (a git status, a virus scan of the fresh checkout) stays until it
+  // is closed, so the removal is tried again for a while.
+  let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+  while let Err(error) = std::fs::remove_dir_all(&worktree) {
+    assert!(
+      std::time::Instant::now() < deadline,
+      "the worktree's folder removed: {error}"
+    );
+    std::thread::sleep(std::time::Duration::from_millis(200));
+  }
 }
