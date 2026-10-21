@@ -1,7 +1,7 @@
 //! `repository`: a conversation where the Orchestrator's agent proposed making Kontur's folder a git repository
-//! (`init_repository`, ORC-72; on the proposal cards' pattern of `ExRt1` / `k80K3d`, no frame of its own), seeded as the
-//! chat keeps it, one turn holding every card (`-0` to `-4` of its action ids): waiting with a `.gitignore` the chat
-//! writes and a `.env` the person decides on; waiting for only the first commit of a repository without one, the
+//! (`init_repository`, ORC-72; on the proposal cards' pattern of `ExRt1` / `k80K3d`, no frame of its own), seeded as
+//! the chat keeps it, one turn holding every card (`-0` to `-4` of its action ids): waiting with a `.gitignore` the
+//! chat writes and a `.env` the person decides on; waiting for only the first commit of a repository without one, the
 //! folder's own `.gitignore` kept, with more files that look secret than the warning names; applied; dismissed; and
 //! refused because git does not know the author, in the words the apply path gives it. Its folder is the seed's, a
 //! repository with commits: Apply on a waiting card is refused there (`has_commits`).

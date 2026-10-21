@@ -1,8 +1,8 @@
-//! The chat's `init_repository` (ORC-72): its card shows the branch, what the first commit holds, the whole `.gitignore`
-//! and the files that look secret, and only a person applies it: automation's click is refused (`person_only`), and
-//! the person's makes the first commit. Kontur's repository has no commit here, as the person's had on 2026-10-21; the
-//! window runs git with git's settings in a file of the test's own (`GIT_CONFIG_GLOBAL`, no system settings, no author
-//! from the environment), the author the repository's own settings name.
+//! The chat's `init_repository` (ORC-72): its card shows the branch, what the first commit holds, the whole
+//! `.gitignore` and the files that look secret, and only a person applies it: automation's click is refused
+//! (`person_only`), and the person's makes the first commit. Kontur's repository has no commit here, as the person's
+//! had on 2026-10-21; the window runs git with git's settings in a file of the test's own (`GIT_CONFIG_GLOBAL`, no
+//! system settings, no author from the environment), the author the repository's own settings name.
 
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
