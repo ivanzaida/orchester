@@ -355077,7 +355077,7 @@
       "y": 2000,
       "name": "Welcome & projects",
       "width": 2344,
-      "height": 11952,
+      "height": 14600,
       "layout": "none",
       "children": [
         {
@@ -365522,6 +365522,3788 @@
           "fontFamily": "$font_sans",
           "fontSize": 16,
           "fontWeight": "500"
+        },
+        {
+          "type": "text",
+          "id": "gNRkC",
+          "x": 0,
+          "y": 11992,
+          "name": "Label · Project setup · Create a git repository here · states · dark",
+          "fill": "#8A8A92",
+          "content": "Project setup · Create a git repository here · states · dark",
+          "fontFamily": "$font_sans",
+          "fontSize": 16,
+          "fontWeight": "500"
+        },
+        {
+          "type": "frame",
+          "id": "OdlXb",
+          "x": 0,
+          "y": 12024,
+          "name": "Project setup · Create a git repository here · states · dark",
+          "theme": {
+            "mode": "dark",
+            "accent": "graphite"
+          },
+          "clip": true,
+          "width": 2064,
+          "fill": "$surface_base",
+          "cornerRadius": 8,
+          "stroke": "$border_strong",
+          "strokeWidth": 1,
+          "strokeAlignment": "outer",
+          "layout": "vertical",
+          "gap": 28,
+          "padding": 32,
+          "children": [
+            {
+              "type": "frame",
+              "id": "NsBdh",
+              "name": "Board head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TUo4B",
+                  "name": "Board title",
+                  "fill": "$text_primary",
+                  "content": "Project setup · Create a git repository here (Not a repository, in place) · proposed",
+                  "fontFamily": "$font_sans",
+                  "fontSize": 15,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "ghe7F",
+                  "name": "Board note",
+                  "fill": "$text_secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 1400,
+                  "content": "The Not a repository block (gh5wV, Row 4) gains an action that makes the chosen folder a git repository with a first commit, in place, without a dialog. Orchester runs git init (branch from init.defaultBranch, or main when it is not set) and one commit; it never changes git’s settings, adds a remote or pushes. Choose another folder… opens the folder picker of the field above; Check again reads the folder again. All new copy is proposed. Project settings › General has no Not a repository frame, so nothing is drawn there; see the open questions in the hand-off.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font_sans",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "WdSvb",
+              "name": "Row 1",
+              "gap": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "vu5Ux",
+                  "name": "Cell · (a) Not a repository · the folder has files · committing the",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "i2T7J",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(a) Not a repository · the folder has files · committing them is the default · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zHJ8E",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "kGG7E",
+                          "name": "GitHub detection · Not a repository · create here",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "Af5Qf",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "This folder is not a git repository"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "Not a repository",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vzK69",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "CWag1",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "RRcwH",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "No git repository found",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "zWwl2",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Files",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Files",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "214 files · a .gitignore is in the folder"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "wzrTC",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Runs work in git worktrees, so the project folder must be a git repository. Orchester can create one here, or you can choose another folder.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ohtvI",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "iUlxQ",
+                                  "name": "Section title",
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "E6oG2",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "v7Ht71",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "bJ1Ri",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-branch",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "Rpgmg",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "git init on the branch main: git’s default, since init.defaultBranch is not set.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ruXjq",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "UH3AN",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "H3Bbbs",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-commit-horizontal",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "IHvig",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "vj81K",
+                                  "name": "First commit",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "T33T76",
+                                      "name": "Label",
+                                      "fill": "$text_muted",
+                                      "content": "FIRST COMMIT",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 10.5,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "id": "m98LAi",
+                                      "type": "ref",
+                                      "ref": "g8tsS",
+                                      "name": "Option · Commit the folder’s files as the first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "NukSw": {
+                                          "icon": "files"
+                                        },
+                                        "H42b0M": {
+                                          "content": "Commit the folder’s files as the first commit"
+                                        },
+                                        "gsvsq": {
+                                          "content": "Adds 214 files. The .gitignore in the folder is honoured: what it lists stays out of git."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "pPDOB",
+                                      "type": "ref",
+                                      "ref": "Imh8O",
+                                      "name": "Option · Start with an empty first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "qa1NQ": {
+                                          "icon": "circle-dashed"
+                                        },
+                                        "ldQGh": {
+                                          "content": "Start with an empty first commit"
+                                        },
+                                        "wOeJ8": {
+                                          "content": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s 214 files until you commit them."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "t3HjiX",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "Pp8SB",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "yaJfc",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "eye",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "BBxa5",
+                                      "name": "Text",
+                                      "fill": "$text_muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Review the files git will add; a .gitignore keeps files out.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "E1eSbF",
+                                  "name": "Actions",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "AvxCM",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Create a git repository here",
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "git-branch-plus"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Create a git repository here"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "bEfZQ",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Choose another folder…",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "folder-open"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Choose another folder…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "fggXR",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Check again",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Check again"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "UrR0Z",
+                                  "name": "Fallback · terminal",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Ze6Ue",
+                                      "name": "Fallback intro",
+                                      "fill": "$text_muted",
+                                      "content": "Or in a terminal: run git init and make a first commit, then check again.",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "eZ99l",
+                                      "type": "ref",
+                                      "ref": "PEnj5",
+                                      "name": "Command · git init",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "t30w57": {
+                                          "content": "git init"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Reyqk",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Kmydl",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "The project folder must be a git repository to continue.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "w52eUi",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xpJla",
+                  "name": "Cell · (a) Not a repository · the folder is empty · only an empty f",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Znlzd",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(a) Not a repository · the folder is empty · only an empty first commit applies; branch from init.defaultBranch · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b6aEi2",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "MBr8S",
+                          "name": "GitHub detection · Not a repository · empty folder",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "VHZ65",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "This folder is not a git repository"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "Not a repository",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "y30S6",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "U7ziMF",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "g4DD8",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "No git repository found",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "X8XyJ",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Files",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Files",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "None · the folder is empty"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "EMCDk",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Runs work in git worktrees, so the project folder must be a git repository. Orchester can create one here, or you can choose another folder.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "YUA2E",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "X2L50",
+                                  "name": "Section title",
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "fGWOq",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "BRwSi",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "Vkvaz",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-branch",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ffbMI",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "git init on the branch trunk, the name your git setting init.defaultBranch gives.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "c3lic",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "QWJYq",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "DPBKB",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-commit-horizontal",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "E1i9pi",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "zAG0n",
+                                  "name": "First commit",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "sjZLU",
+                                      "name": "Label",
+                                      "fill": "$text_muted",
+                                      "content": "FIRST COMMIT",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 10.5,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "id": "NL7hq",
+                                      "type": "ref",
+                                      "ref": "Imh8O",
+                                      "name": "Option · Commit the folder’s files as the first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "qa1NQ": {
+                                          "icon": "files",
+                                          "fill": "$text_muted"
+                                        },
+                                        "ldQGh": {
+                                          "content": "Commit the folder’s files as the first commit",
+                                          "fill": "$text_muted"
+                                        },
+                                        "wOeJ8": {
+                                          "content": "Adds the folder’s files.",
+                                          "fill": "$text_muted"
+                                        },
+                                        "a7DoR": {
+                                          "enabled": true
+                                        },
+                                        "L5vif": {
+                                          "content": "The folder is empty: there are no files to commit."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "K1IiVO",
+                                      "type": "ref",
+                                      "ref": "g8tsS",
+                                      "name": "Option · Start with an empty first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "NukSw": {
+                                          "icon": "circle-dashed"
+                                        },
+                                        "H42b0M": {
+                                          "content": "Start with an empty first commit"
+                                        },
+                                        "gsvsq": {
+                                          "content": "The repository starts with one commit that holds no files, for runs to branch from."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "YPTo4",
+                                  "name": "Actions",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "nrr1I",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Create a git repository here",
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "git-branch-plus"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Create a git repository here"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "nNL83",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Choose another folder…",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "folder-open"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Choose another folder…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "iaK3g",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Check again",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Check again"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "pqv0Q",
+                                  "name": "Fallback · terminal",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "mf63k",
+                                      "name": "Fallback intro",
+                                      "fill": "$text_muted",
+                                      "content": "Or in a terminal: run git init and make a first commit, then check again.",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "FSu4i",
+                                      "type": "ref",
+                                      "ref": "PEnj5",
+                                      "name": "Command · git init",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "t30w57": {
+                                          "content": "git init"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Miq58",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NDyJp",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "The project folder must be a git repository to continue.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "aOOd3",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kKG69",
+                  "name": "Cell · (a) Not a repository · Start with an empty first commit chos",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wJXtd",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(a) Not a repository · Start with an empty first commit chosen · the files stay uncommitted · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UP7zt",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "sVJe4",
+                          "name": "GitHub detection · Not a repository · empty first commit chosen",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "EMK4i",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "This folder is not a git repository"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "Not a repository",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "RpBqx",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "GU5AK",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "Ze761",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "No git repository found",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "xKlpY",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Files",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Files",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "214 files · a .gitignore is in the folder"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "IGLrg",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Runs work in git worktrees, so the project folder must be a git repository. Orchester can create one here, or you can choose another folder.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "RdMZJ",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Gfxvx",
+                                  "name": "Section title",
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Rde09",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "LUI13",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "RvfQv",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-branch",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ZbNVM",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "git init on the branch main: git’s default, since init.defaultBranch is not set.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "xNY1q",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "kQ0bu",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "S9h3kb",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-commit-horizontal",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "P0gKX",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "X5wIQd",
+                                  "name": "First commit",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "whfll",
+                                      "name": "Label",
+                                      "fill": "$text_muted",
+                                      "content": "FIRST COMMIT",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 10.5,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "id": "tkQEv",
+                                      "type": "ref",
+                                      "ref": "Imh8O",
+                                      "name": "Option · Commit the folder’s files as the first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "qa1NQ": {
+                                          "icon": "files"
+                                        },
+                                        "ldQGh": {
+                                          "content": "Commit the folder’s files as the first commit"
+                                        },
+                                        "wOeJ8": {
+                                          "content": "Adds 214 files. The .gitignore in the folder is honoured: what it lists stays out of git."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "e2o5vI",
+                                      "type": "ref",
+                                      "ref": "g8tsS",
+                                      "name": "Option · Start with an empty first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "NukSw": {
+                                          "icon": "circle-dashed"
+                                        },
+                                        "H42b0M": {
+                                          "content": "Start with an empty first commit"
+                                        },
+                                        "gsvsq": {
+                                          "content": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s 214 files until you commit them."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "PIEpo",
+                                  "name": "Actions",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "XN1zT",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Create a git repository here",
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "git-branch-plus"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Create a git repository here"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "IHv0E",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Choose another folder…",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "folder-open"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Choose another folder…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "caU7L",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Check again",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Check again"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "l2Lms3",
+                                  "name": "Fallback · terminal",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "x9961",
+                                      "name": "Fallback intro",
+                                      "fill": "$text_muted",
+                                      "content": "Or in a terminal: run git init and make a first commit, then check again.",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "MP5K5",
+                                      "type": "ref",
+                                      "ref": "PEnj5",
+                                      "name": "Command · git init",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "t30w57": {
+                                          "content": "git init"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "q7NGIZ",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "T1EpC0",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "The project folder must be a git repository to continue.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "ifcKb",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "L4HtEe",
+              "name": "Row 2",
+              "gap": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "q7SPto",
+                  "name": "Cell · (b) Creating · progress in place; the choices and every butt",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "v9QKDW",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(b) Creating · progress in place; the choices and every button are unavailable until git ends · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LsQCo",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "K7pXw",
+                          "name": "GitHub detection · Not a repository · creating",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "h80j7",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "This folder is not a git repository"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "Not a repository",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ld5OF",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "rizKy",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "ALeuj",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "No git repository found",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "W3OFg0",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Files",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Files",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "214 files · a .gitignore is in the folder"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "ssd17",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Runs work in git worktrees, so the project folder must be a git repository. Orchester can create one here, or you can choose another folder.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "apr63",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "fKb17",
+                                  "name": "Section title",
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "r0jS9X",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "hXkRi",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "EY4AR",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-branch",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "i67gPn",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "git init on the branch main: git’s default, since init.defaultBranch is not set.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "hz5ed",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "ARJ0K",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "r9yQ7b",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-commit-horizontal",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "cnrFQ",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "pnEtU",
+                                  "name": "First commit",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "agrXZ",
+                                      "name": "Label",
+                                      "fill": "$text_muted",
+                                      "content": "FIRST COMMIT",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 10.5,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "id": "HKJj5",
+                                      "type": "ref",
+                                      "ref": "g8tsS",
+                                      "name": "Option · Commit the folder’s files as the first commit",
+                                      "width": "fill_container",
+                                      "opacity": 0.5,
+                                      "descendants": {
+                                        "NukSw": {
+                                          "icon": "files"
+                                        },
+                                        "H42b0M": {
+                                          "content": "Commit the folder’s files as the first commit"
+                                        },
+                                        "gsvsq": {
+                                          "content": "Adds 214 files. The .gitignore in the folder is honoured: what it lists stays out of git."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "q4c5X",
+                                      "type": "ref",
+                                      "ref": "Imh8O",
+                                      "name": "Option · Start with an empty first commit",
+                                      "width": "fill_container",
+                                      "opacity": 0.5,
+                                      "descendants": {
+                                        "qa1NQ": {
+                                          "icon": "circle-dashed"
+                                        },
+                                        "ldQGh": {
+                                          "content": "Start with an empty first commit"
+                                        },
+                                        "wOeJ8": {
+                                          "content": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s 214 files until you commit them."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Lj60r",
+                                  "name": "Progress",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "Y6pvnS",
+                                      "name": "Line",
+                                      "width": "fill_container",
+                                      "gap": 8,
+                                      "children": [
+                                        {
+                                          "type": "frame",
+                                          "id": "KmWKu",
+                                          "name": "Icon slot",
+                                          "width": 14,
+                                          "height": 18,
+                                          "alignItems": "center",
+                                          "children": [
+                                            {
+                                              "type": "icon",
+                                              "id": "D0nvPp",
+                                              "name": "Icon",
+                                              "width": 13,
+                                              "height": 13,
+                                              "icon": "circle-check",
+                                              "library": "lucide",
+                                              "fill": "$success"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "text",
+                                          "id": "k3Ok3",
+                                          "name": "Text",
+                                          "fill": "$text_secondary",
+                                          "textGrowth": "fixed-width",
+                                          "width": "fill_container",
+                                          "content": "Created the repository on main",
+                                          "lineHeight": 1.5,
+                                          "fontFamily": "$font_sans",
+                                          "fontSize": 12,
+                                          "fontWeight": "normal"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "AWogn",
+                                      "type": "ref",
+                                      "ref": "js05b",
+                                      "name": "Working line",
+                                      "descendants": {
+                                        "OOs1a": {
+                                          "content": "Committing 214 files as the first commit…"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "y0eis",
+                                  "name": "Actions",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "gapqd",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Creating repository…",
+                                      "opacity": 0.5,
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "loader-circle"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Creating repository…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "a0EeB",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Choose another folder…",
+                                      "opacity": 0.5,
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "folder-open"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Choose another folder…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "RdO55",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Check again",
+                                      "opacity": 0.5,
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Check again"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "fCi37",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ar2VD",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Creating the git repository…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "Af4tW",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Tz5KP",
+                  "name": "Cell · (c) Done · the block reads the folder again: Local only, as ",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qBbOw",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(c) Done · the block reads the folder again: Local only, as for any repository without a GitHub remote; Create project & continue is available · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wmtU9",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M2pWQ",
+                          "name": "GitHub detection · Local only · created here",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "q7WbIw",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "No GitHub remote"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-minus",
+                                  "fill": "$text_muted"
+                                },
+                                "y9aWl": {
+                                  "content": "Local only",
+                                  "fill": "$text_secondary"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "FQxGH",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "w39yPv",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "WD3IS",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "Git repository · main · 1 commit"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "O2FnJ",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Remote",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Remote",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "No remote named origin",
+                                      "fill": "$text_secondary"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "VSLvH",
+                              "name": "Line",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "O6Cmr",
+                                  "name": "Icon slot",
+                                  "width": 14,
+                                  "height": 18,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "Y0YSVK",
+                                      "name": "Icon",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle-check",
+                                      "library": "lucide",
+                                      "fill": "$success"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "pY9fQ",
+                                  "name": "Text",
+                                  "fill": "$text_secondary",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Created here with a first commit of 214 files.",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "hZOZe",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "You can create the project. Pull request steps and the Pull requests screen stay unavailable until the folder has a GitHub remote.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "l9xwG",
+                              "name": "Actions",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "id": "SiXoO",
+                                  "type": "ref",
+                                  "ref": "Dswcx",
+                                  "name": "Check again",
+                                  "descendants": {
+                                    "umW23": {
+                                      "icon": "refresh-cw"
+                                    },
+                                    "Y6DIM": {
+                                      "content": "Check again"
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u1HbK",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "T4tiQ",
+                              "name": "Status",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Creates the project in the repository’s .orchester folder and opens it.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "eH4Qs",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "k20Zq",
+                  "name": "Cell · (d) Failed · git’s own error, as git wrote it · git init wor",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Y8UJVu",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(d) Failed · git’s own error, as git wrote it · git init worked, the first commit did not; Try again makes only the commit · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g1DB0J",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "KBlBu",
+                          "name": "GitHub detection · No commits · first commit failed",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "qOLJ5",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "The first commit failed"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "No commits",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Ceni7",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "ebd88",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "g6z6w",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "Git repository · main · no commits",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "q2sid",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Files",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Files",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "214 files · a .gitignore is in the folder"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "C4H7IK",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Runs branch from a commit, so the project folder needs one. The repository is kept: Try again makes only the first commit.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "e53ETN",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "n6hNm",
+                                  "name": "Section title",
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "NRQ6S",
+                                  "name": "First commit",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "TQ7B6",
+                                      "name": "Label",
+                                      "fill": "$text_muted",
+                                      "content": "FIRST COMMIT",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 10.5,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "id": "KX3h5",
+                                      "type": "ref",
+                                      "ref": "g8tsS",
+                                      "name": "Option · Commit the folder’s files as the first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "NukSw": {
+                                          "icon": "files"
+                                        },
+                                        "H42b0M": {
+                                          "content": "Commit the folder’s files as the first commit"
+                                        },
+                                        "gsvsq": {
+                                          "content": "Adds 214 files. The .gitignore in the folder is honoured: what it lists stays out of git."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "Jd0Hs",
+                                      "type": "ref",
+                                      "ref": "Imh8O",
+                                      "name": "Option · Start with an empty first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "qa1NQ": {
+                                          "icon": "circle-dashed"
+                                        },
+                                        "ldQGh": {
+                                          "content": "Start with an empty first commit"
+                                        },
+                                        "wOeJ8": {
+                                          "content": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s 214 files until you commit them."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "e5mlF",
+                                  "name": "Error",
+                                  "width": "fill_container",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "E05Ei",
+                                      "name": "Icon slot",
+                                      "width": 13,
+                                      "height": 17,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "fZlLi",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "circle-alert",
+                                          "library": "lucide",
+                                          "fill": "$danger"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "mOlU7",
+                                      "name": "Error text",
+                                      "fill": "$danger",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "git commit failed. git said:",
+                                      "lineHeight": 1.45,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "eoAWr",
+                                  "name": "git output",
+                                  "width": "fill_container",
+                                  "fill": "$code_bg",
+                                  "cornerRadius": 6,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "strokeAlignment": "inner",
+                                  "layout": "vertical",
+                                  "padding": [
+                                    8,
+                                    10
+                                  ],
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "gpVqf",
+                                      "name": "Output",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Author identity unknown\n\n*** Please tell me who you are.\n\nfatal: unable to auto-detect email address (got 'ivan@DESKTOP-K2.(none)')",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "oryGp",
+                                  "name": "Fix intro",
+                                  "fill": "$text_muted",
+                                  "content": "Tell git who you are in a terminal, then try again. Orchester never changes git’s settings.",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "EL6Sz",
+                                  "type": "ref",
+                                  "ref": "PEnj5",
+                                  "name": "Command · git config --global user.name \"Your Name\"",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "t30w57": {
+                                      "content": "git config --global user.name \"Your Name\""
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "RnP5s",
+                                  "type": "ref",
+                                  "ref": "PEnj5",
+                                  "name": "Command · git config --global user.email \"you@example.com\"",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "t30w57": {
+                                      "content": "git config --global user.email \"you@example.com\""
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "SsW6P",
+                                  "name": "Actions",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "v1W6JZ",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Try again",
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "rotate-ccw"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Try again"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "g0fkIb",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Choose another folder…",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "folder-open"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Choose another folder…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "c9vCF",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Check again",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Check again"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "H1t5f",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "s2qAT",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "The project folder needs a first commit to continue.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "Si3Bz",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ZgYj7",
+              "name": "Row 3",
+              "gap": 40,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "QOLLn",
+                  "name": "Cell · (d) Failed · the folder can’t be written; nothing was create",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "X0Wbo",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(d) Failed · the folder can’t be written; nothing was created · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "j4gg0x",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "p2MaC",
+                          "name": "GitHub detection · Not a repository · create failed",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "aQGLq",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "This folder is not a git repository"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "Not a repository",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "D7n3U9",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "LdBOK",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "rqh7c",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "No git repository found",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "b3DpvF",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Files",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Files",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "214 files · a .gitignore is in the folder"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "FsbPg",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Runs work in git worktrees, so the project folder must be a git repository. Orchester can create one here, or you can choose another folder.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "uLhGz",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Ohad6",
+                                  "name": "Section title",
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "jK5T6",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "jSiW4",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "l85aiE",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-branch",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "i8gwK",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "git init on the branch main: git’s default, since init.defaultBranch is not set.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Y7HOa",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "ApAVX",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "AXhhQ",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "git-commit-horizontal",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "BFIgu",
+                                      "name": "Text",
+                                      "fill": "$text_secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "CgFXT",
+                                  "name": "First commit",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "p4MEGE",
+                                      "name": "Label",
+                                      "fill": "$text_muted",
+                                      "content": "FIRST COMMIT",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 10.5,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "id": "N1HeMR",
+                                      "type": "ref",
+                                      "ref": "g8tsS",
+                                      "name": "Option · Commit the folder’s files as the first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "NukSw": {
+                                          "icon": "files"
+                                        },
+                                        "H42b0M": {
+                                          "content": "Commit the folder’s files as the first commit"
+                                        },
+                                        "gsvsq": {
+                                          "content": "Adds 214 files. The .gitignore in the folder is honoured: what it lists stays out of git."
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "bAKMC",
+                                      "type": "ref",
+                                      "ref": "Imh8O",
+                                      "name": "Option · Start with an empty first commit",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "qa1NQ": {
+                                          "icon": "circle-dashed"
+                                        },
+                                        "ldQGh": {
+                                          "content": "Start with an empty first commit"
+                                        },
+                                        "wOeJ8": {
+                                          "content": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s 214 files until you commit them."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "qijCO",
+                                  "name": "Line",
+                                  "width": "fill_container",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "rymb7",
+                                      "name": "Icon slot",
+                                      "width": 14,
+                                      "height": 18,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "HT3QS",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "eye",
+                                          "library": "lucide",
+                                          "fill": "$text_muted"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ykml5",
+                                      "name": "Text",
+                                      "fill": "$text_muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Review the files git will add; a .gitignore keeps files out.",
+                                      "lineHeight": 1.5,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "icAxL",
+                                  "name": "Error",
+                                  "width": "fill_container",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "I1AuYl",
+                                      "name": "Icon slot",
+                                      "width": 13,
+                                      "height": 17,
+                                      "justifyContent": "center",
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "icon",
+                                          "id": "J28lu",
+                                          "name": "Icon",
+                                          "width": 13,
+                                          "height": 13,
+                                          "icon": "circle-alert",
+                                          "library": "lucide",
+                                          "fill": "$danger"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "nHh0j",
+                                      "name": "Error text",
+                                      "fill": "$danger",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Couldn’t create the repository: E:\\projects\\kontur can’t be written (permission denied). Choose a folder you can write to, or change its permissions, then try again.",
+                                      "lineHeight": 1.45,
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 12,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "aWgpi",
+                                  "name": "Actions",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "id": "yZuCT",
+                                      "type": "ref",
+                                      "ref": "yJ2jo",
+                                      "name": "Try again",
+                                      "descendants": {
+                                        "SUTVv": {
+                                          "icon": "rotate-ccw"
+                                        },
+                                        "P8aXN": {
+                                          "content": "Try again"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "YrP4E",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Choose another folder…",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "folder-open"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Choose another folder…"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "id": "MQYso",
+                                      "type": "ref",
+                                      "ref": "Dswcx",
+                                      "name": "Check again",
+                                      "descendants": {
+                                        "umW23": {
+                                          "icon": "refresh-cw"
+                                        },
+                                        "Y6DIM": {
+                                          "content": "Check again"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "UPatL",
+                                  "name": "Fallback · terminal",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 6,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "FpXqS",
+                                      "name": "Fallback intro",
+                                      "fill": "$text_muted",
+                                      "content": "Or in a terminal: run git init and make a first commit, then check again.",
+                                      "fontFamily": "$font_sans",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "id": "LX59i",
+                                      "type": "ref",
+                                      "ref": "PEnj5",
+                                      "name": "Command · git init",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "t30w57": {
+                                          "content": "git init"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AJfjm",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NXSCW",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "The project folder must be a git repository to continue.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "t1SyYy",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "B4oVhS",
+                  "name": "Cell · (d) Failed · the other error lines, in the place of the line",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BEHMe",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(d) Failed · the other error lines, in the place of the line in the cell at the left · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "U4SpZQ",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "dC9Ye",
+                          "name": "Error lines",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "SoAcY",
+                              "name": "Sub caption",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "git is gone since the folder was checked",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Qedvi",
+                              "name": "Error",
+                              "width": "fill_container",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Et7pN",
+                                  "name": "Icon slot",
+                                  "width": 13,
+                                  "height": 17,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "SuOsa",
+                                      "name": "Icon",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle-alert",
+                                      "library": "lucide",
+                                      "fill": "$danger"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Tjs66",
+                                  "name": "Error text",
+                                  "fill": "$danger",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "git could not be started: it is no longer found on this computer. Install git, then check again.",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "eI7jn",
+                              "name": "Sub caption",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "git init failed · git’s own words follow the line, as in the first-commit failure in row 2",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "uhi1Q",
+                              "name": "Error",
+                              "width": "fill_container",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "FkuI7",
+                                  "name": "Icon slot",
+                                  "width": 13,
+                                  "height": 17,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "wXKOZ",
+                                      "name": "Icon",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle-alert",
+                                      "library": "lucide",
+                                      "fill": "$danger"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "XMJwj",
+                                  "name": "Error text",
+                                  "fill": "$danger",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "git init failed. git said:",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "SanTT",
+                              "name": "git output",
+                              "width": "fill_container",
+                              "fill": "$code_bg",
+                              "cornerRadius": 6,
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "RBLuM",
+                                  "name": "Output",
+                                  "fill": "$text_secondary",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "fatal: cannot mkdir .git: Read-only file system",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$font_mono",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "NuCkv",
+                              "name": "Sub caption",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "git add failed on a file it can’t read · nothing is committed; the repository is kept",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rYlsk",
+                              "name": "Error",
+                              "width": "fill_container",
+                              "gap": 6,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "CFNs6",
+                                  "name": "Icon slot",
+                                  "width": 13,
+                                  "height": 17,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "SwmCO",
+                                      "name": "Icon",
+                                      "width": 13,
+                                      "height": 13,
+                                      "icon": "circle-alert",
+                                      "library": "lucide",
+                                      "fill": "$danger"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "D4bAVM",
+                                  "name": "Error text",
+                                  "fill": "$danger",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "git add failed. git said:",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "g3xual",
+                              "name": "git output",
+                              "width": "fill_container",
+                              "fill": "$code_bg",
+                              "cornerRadius": 6,
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "h463Td",
+                                  "name": "Output",
+                                  "fill": "$text_secondary",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "error: open(\"logs/locked.log\"): Permission denied\nerror: unable to index file 'logs/locked.log'\nfatal: adding files failed",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$font_mono",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "w2dP5",
+                              "name": "Sub caption",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "After a failure the choices are offered again; Try again repeats only what didn’t happen.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KsWqe",
+                  "name": "Cell · (e) git is not installed · Create a git repository here is u",
+                  "width": 640,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Jrtyb",
+                      "name": "Caption",
+                      "fill": "$text_muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "(e) git is not installed · Create a git repository here is unavailable; how to install it, for this platform · proposed copy",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font_sans",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ouejt",
+                      "name": "Stack",
+                      "width": 640,
+                      "layout": "vertical",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "mGcnX",
+                          "name": "GitHub detection · git not found",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 10,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 12,
+                          "padding": 16,
+                          "children": [
+                            {
+                              "id": "ukWhK",
+                              "type": "ref",
+                              "ref": "XGo48",
+                              "name": "Head",
+                              "width": "fill_container",
+                              "descendants": {
+                                "yFgXP": {
+                                  "content": "git is not installed on this computer"
+                                },
+                                "k8dHM": {
+                                  "icon": "circle-x",
+                                  "fill": "$danger"
+                                },
+                                "y9aWl": {
+                                  "content": "git not found",
+                                  "fill": "$danger"
+                                },
+                                "CiyhG": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Fi0HJ",
+                              "name": "Properties",
+                              "width": "fill_container",
+                              "layout": "vertical",
+                              "children": [
+                                {
+                                  "id": "kwohx",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Folder",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Folder",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "E:\\projects\\kontur",
+                                      "fontFamily": "$font_mono",
+                                      "fontSize": 11.5
+                                    }
+                                  }
+                                },
+                                {
+                                  "id": "s7IcEb",
+                                  "type": "ref",
+                                  "ref": "vhBEA",
+                                  "name": "Row · Git",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "X7na6R": {
+                                      "content": "Git",
+                                      "width": 128
+                                    },
+                                    "UtQHq": {
+                                      "content": "Not found on this computer",
+                                      "fill": "$danger"
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "b5Cd2c",
+                              "name": "Note",
+                              "fill": "$text_secondary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Orchester runs git to read the folder and to create a repository, and runs work in git worktrees. Install git, then check again.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vKjBg",
+                              "name": "Create a git repository here",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "top": 1
+                              },
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 10,
+                              "padding": [
+                                14,
+                                0,
+                                0,
+                                0
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "JVNfI",
+                                  "name": "Section title",
+                                  "opacity": 0.4,
+                                  "fill": "$text_primary",
+                                  "content": "Create a git repository here",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ief3H",
+                                  "name": "Unavailable action",
+                                  "width": "fill_container",
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "sfEji",
+                                      "name": "Actions",
+                                      "gap": 8,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "id": "UPweh",
+                                          "type": "ref",
+                                          "ref": "yJ2jo",
+                                          "name": "Create a git repository here · unavailable",
+                                          "opacity": 0.4,
+                                          "descendants": {
+                                            "SUTVv": {
+                                              "icon": "git-branch-plus"
+                                            },
+                                            "P8aXN": {
+                                              "content": "Create a git repository here"
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "id": "ioxAk",
+                                          "type": "ref",
+                                          "ref": "Dswcx",
+                                          "name": "Check again",
+                                          "descendants": {
+                                            "umW23": {
+                                              "icon": "refresh-cw"
+                                            },
+                                            "Y6DIM": {
+                                              "content": "Check again"
+                                            }
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "LrtD1",
+                                      "type": "ref",
+                                      "ref": "QR1ER",
+                                      "name": "Unavailable reason",
+                                      "descendants": {
+                                        "Cvxzc": {
+                                          "content": "Create a git repository here needs git on this computer."
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "d51h0",
+                                  "name": "Fix intro",
+                                  "fill": "$text_muted",
+                                  "content": "Install git in a terminal, then check again:",
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "id": "L7JC5M",
+                                  "type": "ref",
+                                  "ref": "PEnj5",
+                                  "name": "Command · winget install --id Git.Git -e --source winget",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "t30w57": {
+                                      "content": "winget install --id Git.Git -e --source winget"
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "d6HRD",
+                                  "name": "Sub caption",
+                                  "fill": "$text_muted",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "On macOS the command is xcode-select --install (Apple’s command line tools, which include git).",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font_sans",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "INP3P",
+                          "name": "Action bar",
+                          "width": 640,
+                          "fill": "$surface_panel",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "gap": 16,
+                          "padding": [
+                            10,
+                            14
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OT93E",
+                              "name": "Status",
+                              "fill": "$text_muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Install git to continue: runs work in git worktrees.",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font_sans",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "oJ5ET",
+                              "type": "ref",
+                              "ref": "yJ2jo",
+                              "name": "Create project & continue",
+                              "opacity": 0.5,
+                              "descendants": {
+                                "SUTVv": {
+                                  "icon": "arrow-right"
+                                },
+                                "P8aXN": {
+                                  "content": "Create project & continue"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },
