@@ -1,8 +1,7 @@
 //! A decision goes to the project's runner, which records it and carries it out: approving or asking for
 //! changes to a plan, raising a limit, allowing a retry, returning the work or stopping the run. While
-//! its request is under way the decision's buttons wait; what it decides leaves every *Needs you* in the
-//! press's frame; the runner's refusal brings it back and is said where the person decided. A runner that
-//! is not connected refuses too, in so many words.
+//! its request is under way the decision's buttons wait; the runner's refusal is said where the person
+//! decided. A runner that is not connected refuses too, in so many words.
 
 use lurq::app::{
   component::DevtoolsInspectable,
@@ -11,7 +10,7 @@ use lurq::app::{
 use orchester_ipc::Command;
 use orchester_workspace::{messages::Message, tasks::run::control_message, workspace::OpenProject};
 
-use crate::{project::Projects, services::Services};
+use crate::services::Services;
 
 /// A request to the runner, `T` naming which decision it carries so its button can show it under way.
 pub type DecisionAction<T> = FutureAction<(T, Command), T, Message>;
@@ -22,15 +21,17 @@ where
   T: Clone + PartialEq + Send + Sync + DevtoolsInspectable + 'static,
 {
   let runners = Services::of(ctx).runners;
-  let feed = Projects::of(ctx).feed(project.project.id());
   ctx.future_action(move |(choice, command): (T, Command)| {
-    let sent = runners.control_run_in(&project, command);
-    feed.answer_sent();
+    let (runners, project) = (runners.clone(), project.clone());
     async move {
-      sent.await.map(|()| choice).map_err(|error| {
-        tracing::warn!(%error, "the runner did not take the decision");
-        control_message(&error)
-      })
+      runners
+        .control_run_in(&project, command)
+        .await
+        .map(|()| choice)
+        .map_err(|error| {
+          tracing::warn!(%error, "the runner did not take the decision");
+          control_message(&error)
+        })
     }
   })
 }

@@ -25,15 +25,11 @@ use orchester_workspace::{
   background,
   decisions::DecisionKind,
   messages::{self, Message},
-  runner::AnswerMark,
-  tasks::{
-    answering::Answered,
-    conversation::{
-      composer::ComposerMode,
-      follow::{RunnerOf, Sent, Stored, follow_seen, tell},
-      outgoing::{Action, Context, Prepared, Way, plan_changes, prepare_in, store_answer_in},
-      send_after_turn_as,
-    },
+  tasks::conversation::{
+    composer::ComposerMode,
+    follow::{RunnerOf, Sent, Stored, follow_seen, tell},
+    outgoing::{Action, Context, Prepared, Way, plan_changes, prepare_in, store_answer_in},
+    send_after_turn_as,
   },
   workspace::OpenProject,
 };
@@ -42,7 +38,7 @@ use super::kept;
 use crate::{
   mcp::input_gate::InputGate,
   navigation::Navigation,
-  project::{ProjectFeed, Projects, ShownProject},
+  project::{ProjectFeed, ShownProject},
   routes::{ProjectPage, Route, TaskView},
   services::Services,
 };
@@ -268,14 +264,9 @@ impl ComposerState {
 
 fn send_action(ctx: &mut Ctx) -> SendAction {
   let services = Services::of(ctx);
-  let projects = Projects::of(ctx);
   ctx.future_action(move |request: Request| {
     let services = services.clone();
     let runtime = services.runtime.clone();
-    let mark = answering(&services, &request);
-    if mark.is_some() {
-      projects.feed(request.project.project.id()).answer_sent();
-    }
     async move {
       // On the runtime, not in the screen's future: a send under way ends even once nothing shows it, and a
       // page opened again meanwhile shows it busy.
@@ -284,9 +275,6 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
       let sending = async move {
         let sent = send(services, request).await;
         kept::end(task, flight);
-        if let Some(mark) = mark {
-          mark.settle(taken(&sent));
-        }
         sent
       };
       runtime.spawn(sending).await.map_err(|error| {
@@ -295,26 +283,6 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
       })?
     }
   })
-}
-
-/// Marks what `request` answers, if it answers what its run waits for (the agent's question, the plan's changes, a
-/// continuation's decision) and may be sent: it leaves every *Needs you* as the person presses (`tasks::answering`).
-fn answering(services: &Services, request: &Request) -> Option<AnswerMark> {
-  request.by?;
-  let answered = Answered::of_action(request.expected, request.written_for?)?;
-  Some(services.runners.answering(&request.project.repo_root, answered))
-}
-
-/// Whether the runner took what a send answered: a message queued, or waiting for a raised limit, was not.
-const fn taken(sent: &Result<Outcome, Message>) -> bool {
-  matches!(
-    sent,
-    Ok(Outcome::PlanChanges { .. }
-      | Outcome::Message {
-        sent: Sent::Taken | Sent::Started(_),
-        ..
-      })
-  )
 }
 
 /// Reads the task again, stores the message as its latest run's state offers now, and lets what follows

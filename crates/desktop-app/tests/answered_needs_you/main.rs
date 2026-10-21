@@ -10,7 +10,6 @@
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 mod kontur;
 mod places;
-mod refusal;
 #[path = "../support/mod.rs"]
 mod support;
 
@@ -243,13 +242,6 @@ impl Page {
       thread::sleep(Duration::from_millis(2));
     }
     let took = pressed.elapsed();
-    let runners = self.window.launch.services().expect("the session started").runners.clone();
-    while !runners.answers_now(&self.repo).is_empty() {
-      assert!(Instant::now() < deadline, "timed out waiting for the runner to record {label}");
-      self.window.tree.tick_futures();
-      self.window.pass();
-      thread::sleep(Duration::from_millis(2));
-    }
     let read = pressed.elapsed();
     assert!(!self.lists(item), "{label}: the runner took it, and the reading after it no longer lists it");
     eprintln!(

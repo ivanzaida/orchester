@@ -20,7 +20,6 @@ use super::state::{RunnerEvent, RunnerState};
 use crate::{
   activity::{Activity, Place, Target},
   messages::Message,
-  tasks::answering::PendingAnswers,
 };
 
 /// A project's runner, as the UI shows it.
@@ -165,8 +164,6 @@ pub(super) struct RunCounters {
   pub(super) changes: watch::Sender<u64>,
   /// A conversation of the Orchestrator chat changed.
   pub(super) chats: watch::Sender<u64>,
-  /// The answers sent from this window that the project's tasks were not read back with yet.
-  pub(super) answers: watch::Sender<PendingAnswers>,
 }
 
 impl Shared {
@@ -180,7 +177,6 @@ impl Shared {
         states: watch::Sender::new(0),
         changes: watch::Sender::new(0),
         chats: watch::Sender::new(0),
-        answers: watch::Sender::new(PendingAnswers::default()),
       })
       .clone()
   }
