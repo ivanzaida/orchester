@@ -29,7 +29,12 @@ pub const WIDTH: f32 = 720.0;
 pub const CONTROL_WIDTH: f32 = 300.0;
 
 /// Project settings on `tab`, showing `body`, with the save state at the right of the title (`Save state` `uTF2N`).
-pub fn settings(ctx: &mut Ctx, (project, tab): (&ShownProject, Tab), status: &Signal<Status>, body: Element) -> Element {
+pub fn settings(
+  ctx: &mut Ctx,
+  (project, tab): (&ShownProject, Tab),
+  status: &Signal<Status>,
+  body: Element,
+) -> Element {
   let save_status = save_status(ctx, status);
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();

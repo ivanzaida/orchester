@@ -1,7 +1,7 @@
 //! The page Settings and Project settings share (`Content · Settings` `kdqHp` in `oD7hy`, `S6bgdX` in `hUaXB`): the
-//! title over what the page holds, the page's action or save state at their right (`Actions` `hZ6Lu`), the tabs on
-//! their line under them (`Tabs` `tMANw`) and the open tab under the tabs, all from the content's left edge. A tab's
-//! form scrolls under the tabs, [`FORM_WIDTH`] wide at most (`Form` `dpkR7`).
+//! title with the page's action or save state at its right (`Actions` `hZ6Lu`, `Save status` in `vDbwd`) over what
+//! the page holds, the tabs on their line under them (`Tabs` `tMANw`) and the open tab under the tabs, all from the
+//! content's left edge. A tab's form scrolls under the tabs, [`FORM_WIDTH`] wide at most (`Form` `dpkR7`).
 
 use std::sync::Arc;
 
@@ -60,27 +60,31 @@ impl SettingsPage {
 
 impl From<SettingsPage> for Element {
   fn from(page: SettingsPage) -> Element {
-    let title = Column::new()
-      .flex(1.0)
-      .spacing(ExtraSpacing::Snug.role())
+    // The action shares the title's line (`Title row` `vDbwd`), so the line under it keeps the page's whole width
+    // and wraps alike on every tab, with an action or without.
+    let title = Row::new()
+      .id("settings-title-row")
+      .width(Dimension::Pct(100.0))
+      .align_items(Alignment::Center)
+      .spacing(SpacingSize::Lg)
       .child(
         Text::new(&page.title)
           .id("settings-title")
-          .variant(ExtraTypography::Display.role()),
+          .variant(ExtraTypography::Display.role())
+          .flex(1.0),
       )
+      .with_children(page.action);
+    let head = Column::new()
+      .id("settings-head")
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(title)
       .child(
         Text::new(&page.sub)
           .id("settings-sub")
           .variant(SettingsText::Lead.role())
           .width(Dimension::Pct(100.0)),
       );
-    let head = Row::new()
-      .id("settings-head")
-      .width(Dimension::Pct(100.0))
-      .align_items(Alignment::End)
-      .spacing(SpacingSize::Lg)
-      .child(title)
-      .with_children(page.action);
     Column::new()
       .id(page.id.to_string())
       .width(Dimension::Pct(100.0))

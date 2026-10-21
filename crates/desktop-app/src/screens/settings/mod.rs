@@ -93,7 +93,8 @@ impl Component for SettingsScreen {
         .child(ctx.mount_keyed::<orchester::connect::ConnectPage>(
           "settings-orchester-connect",
           orchester::connect::Props { server: view.server },
-        ));
+        ))
+        .into();
     }
     let workspace = Services::of(ctx).workspace;
     let loaded = ctx
