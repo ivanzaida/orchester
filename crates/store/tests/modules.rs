@@ -1,5 +1,6 @@
-//! Modules of a project's tasks (ORC-48): made with distinct names and valid dates, changed in place, and each move
-//! of a task into, between and out of modules kept in order; a task reads its module back.
+//! Modules of a project's tasks (ORC-48): made with distinct names and valid dates, changed in place over the details
+//! read (not over a change made since), and each move of a task into, between and out of modules kept in order; a
+//! task reads its module back.
 
 mod support;
 
@@ -38,16 +39,41 @@ fn modules_are_made_with_distinct_names_and_changed_in_place() {
     [checkout.id(), billing.id()]
   );
   let closed = db
-    .update_module(checkout.id(), details("Checkout v2", ModuleState::Closed))
+    .update_module(
+      checkout.id(),
+      checkout.details(),
+      details("Checkout v2", ModuleState::Closed),
+    )
     .expect("update");
   assert_eq!(db.module(checkout.id()).expect("read"), Some(closed.clone()));
   assert_eq!(closed.details().description(), "Payments");
   assert!(matches!(
-    db.update_module(billing.id(), details("CHECKOUT V2", ModuleState::Open)),
+    db.update_module(
+      checkout.id(),
+      checkout.details(),
+      details("Checkout v3", ModuleState::Open)
+    ),
+    Err(StoreError::Module(ModuleError::ChangedMeanwhile))
+  ));
+  assert_eq!(
+    db.module(checkout.id()).expect("read"),
+    Some(closed),
+    "a change over details read before another one is refused"
+  );
+  assert!(matches!(
+    db.update_module(
+      billing.id(),
+      billing.details(),
+      details("CHECKOUT V2", ModuleState::Open)
+    ),
     Err(StoreError::Module(ModuleError::DuplicateName))
   ));
   assert!(matches!(
-    db.update_module(ModuleId::generate(), details("Other", ModuleState::Open)),
+    db.update_module(
+      ModuleId::generate(),
+      billing.details(),
+      details("Other", ModuleState::Open)
+    ),
     Err(StoreError::Module(ModuleError::NotFound(_)))
   ));
 }

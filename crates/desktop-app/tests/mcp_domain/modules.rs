@@ -1,6 +1,6 @@
 //! Modules through the domain tools (ORC-48): `create_module` and `update_module` make and change one, `create_task`
 //! and `update_task` put tasks in it and take them out, and `list_modules` and `get_module` read its progress, its
-//! tasks and its burndown by day, with links the router opens.
+//! tasks and its burndown by day (at most a year of them), with links the router opens.
 
 use serde_json::json;
 
@@ -57,6 +57,7 @@ fn domain_modules_group_tasks_and_read_their_burndown() {
   let page = served.ok("get_module", &json!({ "project": "Kontur", "module": "Checkout" }));
   assert_eq!(page["tasks"].as_array().map(Vec::len), Some(2), "{page}");
   let days = page["burndown"]["days"].as_array().expect("days");
+  assert_eq!(days.len(), 366, "a far-off target shows a year of days");
   assert_eq!(days[0]["remaining"], 2, "{page}");
   assert_eq!(days[0]["added"], 2, "{page}");
   assert!(

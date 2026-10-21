@@ -180,7 +180,9 @@ pub async fn update_module(services: &Services, args: UpdateModule) -> Result<Va
     };
     let details = form_details(&form)?;
     let mut writer = TaskWriter::open(&open.repo_root, &services.servers).map_err(write_error)?;
-    let module = writer.update_module(module.id(), details).map_err(write_error)?;
+    let module = writer
+      .update_module(module.id(), current, details)
+      .map_err(write_error)?;
     services.changes.record(open.project.id(), Outside::Tasks);
     Ok(json!({ "module": module_json(open.project.id(), &module) }))
   })

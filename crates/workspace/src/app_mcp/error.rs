@@ -130,6 +130,7 @@ impl From<StoreError> for ToolError {
       }
       StoreError::Organization(_) => "invalid_organization",
       StoreError::Module(orchester_core::module::ModuleError::NotFound(_)) => "module_not_found",
+      StoreError::Module(orchester_core::module::ModuleError::ChangedMeanwhile) => "module_changed",
       StoreError::Module(_) => "invalid_module",
       StoreError::TaskNotEditable { .. } => "task_not_editable",
       StoreError::SharedTask(_) | StoreError::SharedProject | StoreError::NotSharedTask(_) => "shared_task",

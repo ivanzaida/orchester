@@ -11,7 +11,7 @@ use orchester_core::{
   id::TaskId,
   task::organization::WorkflowStatus,
   time::Timestamp,
-  usage::{DayRange, day_start},
+  usage::{DayRange, day_start, local_date},
 };
 
 use super::measure::WorkUnit;
@@ -87,8 +87,12 @@ pub struct Burndown {
   pub start_scope: u32,
 }
 
+/// The most days a chart shows: a year.
+pub const MAX_CHART_DAYS: u64 = 366;
+
 /// When the chart's days are: from the module's start (or the day it got its first task, or was made), through
-/// today or its target date, whichever is later.
+/// today or its target date, whichever is later, and at most [`MAX_CHART_DAYS`] of them. A longer module shows its
+/// first year while today is in it, and the year up to today after that; a far-off target date is cut off.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ChartDays {
   pub first: NaiveDate,
@@ -98,8 +102,12 @@ pub struct ChartDays {
 
 impl ChartDays {
   fn range(self) -> DayRange {
-    let last = self.today.max(self.target.unwrap_or(self.today)).max(self.first);
-    DayRange::new(self.first, last).expect("the last day is never before the first")
+    let span = Days::new(MAX_CHART_DAYS - 1);
+    let wanted = self.today.max(self.target.unwrap_or(self.today)).max(self.first);
+    let first_year = self.first.checked_add_days(span).unwrap_or(NaiveDate::MAX);
+    let last = wanted.min(first_year.max(self.today));
+    let first = last.checked_sub_days(span).unwrap_or(NaiveDate::MIN).max(self.first);
+    DayRange::new(first, last).expect("the last day is never before the first")
   }
 }
 
@@ -119,6 +127,25 @@ impl Tracks<'_> {
 
   fn scope(&self, at: Timestamp) -> u32 {
     self.sum(at, &[Standing::Remaining, Standing::Done])
+  }
+
+  /// The first day from `days.first` through today that ends with work in scope, also when it is before the shown
+  /// days. Scope only changes when a task moves or changes status, so only the days of those changes are read.
+  fn begins(&self, days: ChartDays) -> Option<NaiveDate> {
+    let mut dates: Vec<NaiveDate> = self
+      .0
+      .iter()
+      .flat_map(|track| {
+        let moves = track.membership.iter().map(|(at, _)| *at);
+        moves.chain(track.statuses.iter().map(|(at, _)| *at))
+      })
+      .map(|at| local_date(at).max(days.first))
+      .chain([days.first])
+      .filter(|date| *date <= days.today)
+      .collect();
+    dates.sort_unstable();
+    dates.dedup();
+    dates.into_iter().find(|date| self.scope(end_of(*date)) > 0)
   }
 
   /// The work that was in scope (`from`) or not at the start of `date`, and is (`to`) or not at its end.
@@ -142,11 +169,7 @@ impl Burndown {
     let tracks = Tracks(tracks);
     // The line starts on the first day the module had work: a module whose tasks came after its start date
     // burns down from them, not from nothing.
-    let begins = range
-      .dates()
-      .take_while(|date| *date <= days.today)
-      .find(|date| tracks.scope(end_of(*date)) > 0)
-      .unwrap_or(range.first());
+    let begins = tracks.begins(days).unwrap_or(range.first());
     let start_scope = tracks.scope(end_of(begins));
     let shown = range
       .dates()

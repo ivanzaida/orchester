@@ -24,7 +24,7 @@ use orchester_core::{
 };
 use orchester_workspace::modules::{
   ModuleFilter,
-  burndown::{Burndown, ChartDays, TaskTrack},
+  burndown::{Burndown, ChartDays, MAX_CHART_DAYS, TaskTrack},
   data::{ModulePage, summaries},
   form::ModuleForm,
   measure::WorkUnit,
@@ -153,6 +153,51 @@ fn modules_burndown_starts_on_the_first_day_the_module_had_work() {
       (Some(1), Some(0.0)),
     ],
     "nothing to burn down before the tasks came"
+  );
+}
+
+#[test]
+fn modules_burndown_shows_at_most_a_year_of_days() {
+  let date = |year, month, day| NaiveDate::from_ymd_opt(year, month, day).expect("a date");
+  let tracks = [
+    track(vec![(day_start(date(2020, 1, 1)), true)], vec![]),
+    track(
+      vec![(day_start(date(2020, 1, 1)), true)],
+      vec![(day_start(date(2026, 10, 3)), WorkflowStatus::Done)],
+    ),
+  ];
+  let far = ChartDays {
+    first: day(1),
+    target: Some(date(2206, 10, 1)),
+    today: day(5),
+  };
+  let burndown = Burndown::of(&tracks, WorkUnit::Tasks, far);
+  assert_eq!(
+    burndown.days.len(),
+    MAX_CHART_DAYS as usize,
+    "a far-off target is cut off"
+  );
+  assert_eq!(burndown.days[0].date, day(1));
+  let old = ChartDays {
+    first: date(2020, 1, 1),
+    target: Some(date(2021, 1, 1)),
+    today: day(5),
+  };
+  let burndown = Burndown::of(&tracks, WorkUnit::Tasks, old);
+  assert_eq!(
+    burndown.days.len(),
+    MAX_CHART_DAYS as usize,
+    "an old module shows the year up to today"
+  );
+  assert_eq!(burndown.days.last().map(|day| day.date), Some(day(5)));
+  assert_eq!(
+    burndown.start_scope, 2,
+    "the line still starts where the module got its work"
+  );
+  assert_eq!(burndown.latest().map(|day| day.remaining), Some(Some(1)));
+  assert!(
+    burndown.days.iter().all(|day| day.ideal == Some(0.0)),
+    "the target is long past"
   );
 }
 

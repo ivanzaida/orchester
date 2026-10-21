@@ -1,6 +1,7 @@
 //! The task's module in its header (ORC-48, no frame yet): *Module* and a select of the project's modules and *No
 //! module*, which moves the task as soon as it is chosen, through the project's task writer off the UI thread. A
-//! project without modules shows nothing for a task in none; a move that is refused says why beside the select.
+//! project without modules shows nothing for a task in none; a move that is refused says why beside the select,
+//! which goes back to the module the task is in.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -123,9 +124,14 @@ impl Component for ModuleField {
       }
     });
     let feed = props.feed;
+    let (kept, shown) = (Arc::clone(&stored), chosen.clone());
     ctx.watch(&action.state(), move |state| {
       if state.is_fulfilled() && state.data.is_some() {
         feed.saved();
+      }
+      // A refused move shows the module the task is still in, beside why.
+      if state.is_rejected() {
+        shown.set(ModuleChoice(*kept.lock()));
       }
     });
     Self { chosen, stored, action }

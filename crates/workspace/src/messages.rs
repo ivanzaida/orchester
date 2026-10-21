@@ -59,6 +59,7 @@ pub fn module_error(error: &orchester_core::module::ModuleError) -> Message {
     ModuleError::TargetBeforeStart => "modules.errors.targetBeforeStart",
     ModuleError::DuplicateName => "modules.errors.duplicateName",
     ModuleError::NotFound(_) => "modules.errors.notFound",
+    ModuleError::ChangedMeanwhile => "modules.errors.changedMeanwhile",
   })
 }
 

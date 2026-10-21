@@ -59,11 +59,20 @@ impl ProjectDb {
     Ok(module)
   }
 
-  /// Replaces the details of module `id`; its tasks and history stay.
-  pub fn update_module(&mut self, id: ModuleId, details: ModuleDetails) -> Result<Module, StoreError> {
+  /// Replaces the details of module `id`, read as `base`, with `details`; its tasks and history stay. Details that
+  /// are no longer `base` are not replaced ([`ModuleError::ChangedMeanwhile`]).
+  pub fn update_module(
+    &mut self,
+    id: ModuleId,
+    base: &ModuleDetails,
+    details: ModuleDetails,
+  ) -> Result<Module, StoreError> {
     let transaction = self.connection.transaction()?;
     super::sharing::ensure_local_project(&transaction)?;
     let module = load(&transaction, id)?.ok_or(ModuleError::NotFound(id))?;
+    if module.details() != base {
+      return Err(ModuleError::ChangedMeanwhile.into());
+    }
     unique_name(&transaction, details.name(), Some(id))?;
     transaction.execute(
       "UPDATE modules SET name = ?2, normalized = ?3, description = ?4, start_date = ?5, target_date = ?6, \

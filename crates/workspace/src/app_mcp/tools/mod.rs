@@ -339,7 +339,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_module",
-    description: "One module, as its page shows it: its details, progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date: scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person.",
+    description: "One module, as its page shows it: its details, progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person.",
     schema: schema_for_type::<modules::GetModule>,
     read_only: true,
   },

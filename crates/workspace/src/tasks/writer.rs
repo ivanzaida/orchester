@@ -247,8 +247,14 @@ impl TaskWriter {
     self.local()?.change(|db| db.create_module(details, at))
   }
 
-  pub fn update_module(&mut self, id: ModuleId, details: ModuleDetails) -> Result<Module, WriteError> {
-    self.local()?.change(|db| db.update_module(id, details))
+  /// Replaces the details of module `id`, read as `base`; refused when they changed since.
+  pub fn update_module(
+    &mut self,
+    id: ModuleId,
+    base: &ModuleDetails,
+    details: ModuleDetails,
+  ) -> Result<Module, WriteError> {
+    self.local()?.change(|db| db.update_module(id, base, details))
   }
 
   /// Puts `task` in `module`, or in none, as `actor` asked; whether it moved.
@@ -260,6 +266,14 @@ impl TaskWriter {
   ) -> Result<bool, WriteError> {
     let at = Timestamp::now();
     self.local()?.change(|db| db.set_task_module(task, module, actor, at))
+  }
+
+  /// Refuses what changes modules in a shared project, which has none, before anything else is changed.
+  pub fn ensure_modules(&self) -> Result<(), WriteError> {
+    match self {
+      Self::Local(_) => Ok(()),
+      Self::Shared(_) => Err(WriteError::Store(StoreError::SharedProject)),
+    }
   }
 
   /// The local project's tasks; a shared project's modules are refused.

@@ -103,10 +103,10 @@ impl Component for ModuleScreen {
       module,
       (revision, self.retry.get()),
     );
-    let content = match (&read.data, &read.error) {
-      (Some(Read(Some(page))), _) => self.page(ctx, &project, page),
-      (Some(Read(None)), _) => vec![missing(ctx)],
-      (None, Some(ReadFailed(message))) if read.is_rejected() => {
+    // A failed read keeps the page read before it: it is not shown (nor edited) as if it were current.
+    let failed = read.error.as_ref().filter(|_| read.is_rejected());
+    let content = match (failed, &read.data) {
+      (Some(ReadFailed(message)), _) => {
         let retry = self.retry.clone();
         let body = message_text(ctx, message);
         vec![load_error(
@@ -118,7 +118,9 @@ impl Component for ModuleScreen {
           },
         )]
       }
-      _ => vec![loading("module-loading", &ctx.t("modules.page.reading")).into()],
+      (None, Some(Read(Some(page)))) => self.page(ctx, &project, page),
+      (None, Some(Read(None))) => vec![missing(ctx)],
+      (None, None) => vec![loading("module-loading", &ctx.t("modules.page.reading")).into()],
     };
     let page = Column::new()
       .width(Dimension::Pct(100.0))

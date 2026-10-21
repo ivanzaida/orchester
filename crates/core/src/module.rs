@@ -36,6 +36,8 @@ pub enum ModuleError {
   DuplicateName,
   #[error("module {0} does not exist")]
   NotFound(ModuleId),
+  #[error("the module was changed since it was read")]
+  ChangedMeanwhile,
 }
 
 /// What a person sets of a module.

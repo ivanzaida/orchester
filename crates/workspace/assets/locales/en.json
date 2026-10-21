@@ -4,6 +4,7 @@
       "targetBeforeStart": "The target date can't be before the start date.",
       "duplicateName": "Another module already has this name.",
       "notFound": "This module no longer exists.",
+      "changedMeanwhile": "This module was changed since you opened it. Close the editor and open it again to see the change.",
       "invalidDate": "Write the date as YYYY-MM-DD."
     }
   },

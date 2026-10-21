@@ -16,10 +16,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  id::ModuleId,
-  module::{Module, ModuleDetails, ModuleState},
-};
+use orchester_core::module::{Module, ModuleDetails, ModuleState};
 use orchester_workspace::{
   background,
   messages::Message,
@@ -68,11 +65,11 @@ pub struct StatePick(pub ModuleState);
 
 impl DevtoolsInspectable for StatePick {}
 
-/// What a save writes, and where.
+/// What a save writes, and where: over the module as the editor read it, or as a new one.
 #[derive(Clone)]
 pub struct SaveModule {
   root: PathBuf,
-  module: Option<ModuleId>,
+  module: Option<Arc<Module>>,
   details: ModuleDetails,
 }
 
@@ -86,13 +83,20 @@ pub struct Refused(pub Message);
 
 impl DevtoolsInspectable for Refused {}
 
+/// The module as the fields were filled from it, which a save changes; `None` for a new module.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Seeded(pub Option<Arc<Module>>);
+
+impl DevtoolsInspectable for Seeded {}
+
 pub struct ModuleEditor {
   name: Signal<String>,
   description: Signal<String>,
   start: Signal<String>,
   target: Signal<String>,
   state: Signal<StatePick>,
-  seeded: Signal<bool>,
+  /// `None` until the fields are filled.
+  seeded: Signal<Option<Seeded>>,
   /// Field errors are shown once a save was asked for.
   tried: Signal<bool>,
   save: FutureAction<SaveModule, Saved, Refused>,
@@ -121,7 +125,7 @@ impl Component for ModuleEditor {
       start: ctx.signal(String::new()),
       target: ctx.signal(String::new()),
       state: ctx.signal(StatePick::default()),
-      seeded: ctx.signal(false),
+      seeded: ctx.signal(None),
       tried: ctx.signal(false),
       save,
     }
@@ -129,7 +133,7 @@ impl Component for ModuleEditor {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<EditorProps>().clone();
-    self.seed(props.module.as_deref());
+    self.seed(props.module.as_ref());
     let (name, description, start, target) = (
       self.name.get(),
       self.description.get(),
@@ -168,12 +172,12 @@ impl Component for ModuleEditor {
 }
 
 impl ModuleEditor {
-  /// Fills the fields from the module edited, once.
-  fn seed(&self, module: Option<&Module>) {
-    if self.seeded.get_untracked() {
+  /// Fills the fields from the module edited, once, and keeps it as what a save changes.
+  fn seed(&self, module: Option<&Arc<Module>>) {
+    if self.seeded.get_untracked().is_some() {
       return;
     }
-    self.seeded.set(true);
+    self.seeded.set(Some(Seeded(module.cloned())));
     let Some(module) = module else {
       return;
     };
@@ -259,9 +263,10 @@ impl ModuleEditor {
   fn actions(&self, ctx: &mut Ctx, props: &EditorProps, details: Option<ModuleDetails>) -> Column {
     let state = self.save.state().get();
     let (save, tried) = (self.save.clone(), self.tried.clone());
+    let base = self.seeded.get_untracked().and_then(|Seeded(module)| module);
     let args = details.map(|details| SaveModule {
       root: props.project.open.repo_root.clone(),
-      module: props.module.as_ref().map(|module| module.id()),
+      module: base,
       details,
     });
     let label = ctx.t(if props.module.is_some() {
@@ -307,15 +312,16 @@ impl ModuleEditor {
   }
 }
 
-/// Creates or changes the module through the project's task writer.
+/// Creates or changes the module through the project's task writer; a change is refused when the module changed
+/// since the editor read it.
 fn write(args: &SaveModule, servers: &Servers) -> Result<Saved, Refused> {
   let refused = |error: &orchester_workspace::tasks::writer::WriteError| {
     tracing::warn!(%error, "the module was not saved");
     Refused(error.message())
   };
   let mut writer = TaskWriter::open(&args.root, servers).map_err(|error| refused(&error))?;
-  let module = match args.module {
-    Some(id) => writer.update_module(id, args.details.clone()),
+  let module = match &args.module {
+    Some(base) => writer.update_module(base.id(), base.details(), args.details.clone()),
     None => writer.create_module(args.details.clone()),
   }
   .map_err(|error| refused(&error))?;

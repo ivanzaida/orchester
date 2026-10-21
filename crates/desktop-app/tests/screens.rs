@@ -324,7 +324,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   all
 }
 
-/// The Modules list and a module's page (ORC-48); their own tests read what they show.
+/// The Modules list and a module's page (ORC-48); `tests/modules` reads what they show.
 fn module_screens() -> [(Route, Vec<&'static str>); 2] {
   [
     (at(ProjectPage::Modules), Vec::new()),

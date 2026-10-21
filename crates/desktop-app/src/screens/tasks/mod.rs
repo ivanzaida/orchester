@@ -292,17 +292,7 @@ impl TasksScreen {
         organization: &organization,
         separator,
       };
-      let mut rows = browse::rows(tasks, header::workspace_tab(key.tab), query, key.sort);
-      if key.module != ModuleFilter::Any {
-        let kept: std::collections::HashSet<_> = tasks
-          .tasks
-          .iter()
-          .filter(|task| key.module.keeps(task))
-          .map(|task| task.id())
-          .collect();
-        rows.retain(|row| kept.contains(&row.id));
-      }
-      rows
+      browse::rows_in(tasks, header::workspace_tab(key.tab), (query, key.module), key.sort)
     })
   }
 }
