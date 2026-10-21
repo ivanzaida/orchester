@@ -4,7 +4,7 @@
 
 use super::{
   report::DailyReport,
-  resume::{AGAIN_WITHIN, Continuing},
+  resume::{AGAIN_WITHIN, CONTENTION_BRAKE, Continuing},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
 };
 use crate::{id::ProjectId, run::RunLimit};
@@ -65,9 +65,10 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      proposes sending it back to an agent step that may write (an optional step and note), which merges the base \
      branch in and resolves them.\n\
      - resume_run resumes a run a pause stopped. It continues a run a crash, the runner going away or Quit now \
-     interrupted, from its last checkpoint, only when the person turned on Let the Orchestrator continue interrupted \
-     runs. A run stopped at a limit, one the person canceled, one the runner could not record and one whose worktree \
-     is gone are the person's.\n\
+     interrupted, or one the runner stopped because the project database stayed busy (get_run's status reason \
+     runner_failed with runner_failure storage_contention), from its last checkpoint, only when the person turned on \
+     Let the Orchestrator continue interrupted runs. A run stopped at a limit, one the person canceled, one the runner \
+     could not record for any other reason and one whose worktree is gone are the person's.\n\
      - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
      person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n\
      \n\
@@ -178,6 +179,16 @@ fn continuing_todo(continuing: Continuing) -> String {
        {minutes} minutes of the time before, so it is left to the person: do not continue it. Read the run first \
        (get_run, get_conversation), then tell the person it was interrupted twice in a short time and the choices \
        they have on the task's Summary, with the link. Start, resume, cancel, continue or merge nothing.",
+      minutes = AGAIN_WITHIN.as_secs() / 60,
+    ),
+    Continuing::StorageContention => format!(
+      "The person turned on Let the Orchestrator continue interrupted runs, but the runner stopped this run because \
+       the project database stayed busy, and more than {brake} runs of the project were stopped so within {minutes} \
+       minutes: the database is under contention, so no such run is continued by itself: do not continue it. Tell \
+       the person the database is under contention, suggest running fewer agents at once (the agent slots in the \
+       project's settings), and that they can continue the run on the task's Summary, with the link. Start, resume, \
+       cancel, continue or merge nothing.",
+      brake = CONTENTION_BRAKE,
       minutes = AGAIN_WITHIN.as_secs() / 60,
     ),
   }

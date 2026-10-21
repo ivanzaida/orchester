@@ -8,8 +8,8 @@ use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
   run::{
-    AttemptReason, BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber,
-    StepExecutor,
+    AttemptReason, BranchName, Checkpoint, EventSequence, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind,
+    RunNumber, RunnerFailure, StepExecutor,
   },
   sharing::TaskRevision,
   store::RunStore,
@@ -178,14 +178,14 @@ impl RunStore for ProjectDb {
   }
 
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
-    self.append(run, events, None)
+    self.append(run, events, With::Nothing)
   }
 
   fn append_events_with_plan(&mut self, run: &Run, events: &[RunEvent], plan: &Plan) -> Result<(), RunStoreError> {
     if plan.run != run.id() {
       return Err(RunStoreError::EventsMismatch("the plan belongs to another run"));
     }
-    self.append(run, events, Some(plan))
+    self.append(run, events, With::Plan(plan))
   }
 
   fn plans(&self, run: RunId) -> Result<Vec<Plan>, RunStoreError> {
@@ -253,13 +253,22 @@ impl RunStore for ProjectDb {
   }
 }
 
+/// What is stored with a run's events, in their transaction.
+#[derive(Clone, Copy)]
+pub(super) enum With<'a> {
+  Nothing,
+  Plan(&'a Plan),
+  /// Why the runner failed, kept with its interruption, the event at this sequence.
+  RunnerFailure(EventSequence, RunnerFailure),
+}
+
 impl ProjectDb {
-  /// Appends `events` and stores `run`, and `plan` if given, in one transaction, run again while the
-  /// database is busy ([`retried`]).
-  fn append(&mut self, run: &Run, events: &[RunEvent], plan: Option<&Plan>) -> Result<(), RunStoreError> {
+  /// Appends `events` and stores `run`, and what comes `with` them, in one transaction, run again while
+  /// the database is busy ([`retried`]).
+  pub(super) fn append(&mut self, run: &Run, events: &[RunEvent], with: With<'_>) -> Result<(), RunStoreError> {
     check_events(run, events)?;
     retried(&mut self.connection, "append run events", |transaction| {
-      append_in(transaction, run, events, plan)
+      append_in(transaction, run, events, with)
     })
   }
 }
@@ -269,7 +278,7 @@ fn append_in(
   transaction: &Transaction<'_>,
   run: &Run,
   events: &[RunEvent],
-  plan: Option<&Plan>,
+  with: With<'_>,
 ) -> Result<(), RunStoreError> {
   let continues = events.iter().any(|event| event.kind().starts_execution());
   // Transactions take the write lock before they read (`migrate`), so a continuation and a removal
@@ -319,8 +328,12 @@ fn append_in(
       super::organization::automatic(transaction, run.task(), status, event.at())?;
     }
   }
-  if let Some(plan) = plan {
-    plans::save(transaction, plan)?;
+  match with {
+    With::Nothing => {}
+    With::Plan(plan) => plans::save(transaction, plan)?,
+    With::RunnerFailure(sequence, failure) => {
+      super::runner_failures::insert(transaction, run.id(), sequence, failure)?;
+    }
   }
   Ok(())
 }

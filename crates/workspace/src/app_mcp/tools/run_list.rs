@@ -123,7 +123,7 @@ fn run_json(project: ProjectId, task: &Task, record: &RunRecord, translate: &Tra
     "number": record.number.map(RunNumber::get),
     "task": { "key": task.key().to_string(), "title": task.details().title.as_str() },
     "phase": record.phase.map(wire::phase),
-    "status": run.map(|run| wire::run_status(run.status())),
+    "status": run.map(|run| wire::run_status(run.status(), record.runner_failure)),
     "detail": translate.text(&record.detail),
     "tokens": run.map(|run| json!({ "used": run.used().get(), "budget": run.budget().map(TokenBudget::get) })),
     "created_at": run.map(|run| wire::time(run.created_at())),
