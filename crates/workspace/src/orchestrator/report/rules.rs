@@ -186,7 +186,7 @@ fn merged_by(facts: &DayFacts, run: RunId) -> MergedBy {
         MergedBy::Orchestrator
       }
     })
-    .last()
+    .next_back()
     .unwrap_or_default()
 }
 

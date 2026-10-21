@@ -102,13 +102,13 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
   .await
 }
 
+/// What a conversation reads of its latest run: its timeline, the chat's proposals, and the chat's merge of it.
+type ReadRun = (Vec<Item>, Vec<Proposal>, Option<ChatMerge>);
+
 /// The latest run's timeline as the Conversation tab builds it, the answers and messages the Orchestrator chat
 /// proposed for the run, and its merge of the run when it carried one out; without a run, the messages that wait for
 /// one.
-fn items(
-  root: &std::path::Path,
-  detail: &TaskDetail,
-) -> Result<(Vec<Item>, Vec<Proposal>, Option<ChatMerge>), ToolError> {
+fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<ReadRun, ToolError> {
   let conversation = conversation_of(detail, false);
   let Some(run) = &detail.run else {
     let waiting = conversation
