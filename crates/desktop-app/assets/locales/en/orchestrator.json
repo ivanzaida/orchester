@@ -473,6 +473,7 @@
         "why": {
           "retries": "used up its {{count}} retries",
           "retriesOne": "used up its retry",
+          "noRoute": "reported the work failed",
           "brokeAgain": "broke again",
           "unverified": "waits unverified",
           "unchanged": "waits unchanged"
@@ -625,6 +626,7 @@
         "failed": "- Failed: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}}; return it to an earlier step or run it again on its Summary",
         "retries": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} used up its retries; allow one more or return it on its Summary",
         "brokeAgain": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} broke again; allow a retry or return it on its Summary",
+        "noRoute": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} reported the work failed with no step to return it to; decide on its Summary",
         "unverified": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} could not check everything; accept, retry or return it on its Summary",
         "unchanged": "- Waits for you: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{step}} was not run again on unchanged work; accept, retry or return it on its Summary",
         "limitTokens": "- At a limit: [{{task}} · {{title}}]({{link}}) — run #{{run}} used its token budget; raise it on its Summary",

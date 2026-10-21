@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::task::organization::TaskOrganization;
-use orchester_workspace::tasks::data::SaveTarget;
+use orchester_workspace::{modules::ModuleChoice, tasks::data::SaveTarget};
 
 use super::{
   actions::{RunAction, RunArgs, SaveAction, SaveArgs, SaveOutcome, Saved, Started},
@@ -66,6 +66,7 @@ impl TaskForm {
         .and_then(|(_, _, values)| values.task_form(&separator).details().ok()),
       details,
       organization: (organization.clone(), edited.clone()),
+      module: view.module,
     });
     let (ask, keep) = (self.confirming_discard.clone(), self.confirming_discard.clone());
     Handlers {
@@ -122,6 +123,7 @@ impl TaskForm {
       base: Some(current.details().clone()),
       details,
       organization: (organization, edited),
+      module: view.module,
     };
     Some(press(save, args, &self.dismissed))
   }
@@ -140,10 +142,13 @@ impl TaskForm {
     let (kept_at, confirming) = (self.kept_at.clone(), self.confirming_discard.clone());
     let (kept, written) = (self.kept.clone(), self.written.clone());
     Arc::new(move || {
-      let values = base.get_untracked().map_or_else(Values::default, |base| base.values);
+      let base = base.get_untracked();
+      let module = base.as_ref().and_then(Base::module);
+      let values = base.map_or_else(Values::default, |base| base.values);
       kept.remove();
       *written.lock() = Written::Nothing;
       fields.fill(&values);
+      fields.module.set(ModuleChoice(module));
       kept_at.set(None);
       confirming.set(false);
     })
@@ -192,6 +197,7 @@ impl TaskForm {
       kept.remove();
       *written.lock() = Written::Nothing;
       fields.fill(&stored.values);
+      fields.module.set(ModuleChoice(stored.module()));
       base.set(Some(stored));
       dismissed.set(true);
       conflict.set(None);

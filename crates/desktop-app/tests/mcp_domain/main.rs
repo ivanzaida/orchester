@@ -27,6 +27,7 @@ mod live;
 mod mcp_servers;
 mod merge;
 mod merged_outside;
+mod modules;
 mod orchestrator_auto_merge;
 mod orchestrator_chat;
 mod orchestrator_continue;
@@ -44,6 +45,7 @@ mod pull_requests;
 mod reads;
 mod reads_setup;
 mod resolve;
+mod return_ended;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
 #[path = "../support/signed_in.rs"]

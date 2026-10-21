@@ -1,6 +1,6 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS, files::FILES,
-  project_screen_path,
+  ADD_PROJECT, CONNECTIONS, EDIT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS, SETTINGS, TASKS,
+  files::FILES, project_screen_path,
 };
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
@@ -16,6 +16,8 @@ pub enum Screen {
   NewTask,
   EditTask,
   Task,
+  /// The Modules list and a module's page.
+  Modules,
   MergeQueue,
   PullRequests,
   Usage,
@@ -35,7 +37,7 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 26] = [
     Self::AllProjects,
     Self::AddProject,
     Self::Settings,
@@ -46,6 +48,7 @@ impl Screen {
     Self::NewTask,
     Self::EditTask,
     Self::Task,
+    Self::Modules,
     Self::MergeQueue,
     Self::PullRequests,
     Self::Usage,
@@ -62,12 +65,13 @@ impl Screen {
     Self::ProjectSettings,
     Self::Files,
   ];
-  /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`), and Files
-  /// under Usage (`Nav · Files` `E0b2rn` in `o1Uea4`).
-  pub const PROJECT_MAIN: [Self; 7] = [
+  /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`), Modules under
+  /// Tasks (ORC-48, no frame yet), and Files under Usage (`Nav · Files` `E0b2rn` in `o1Uea4`).
+  pub const PROJECT_MAIN: [Self; 8] = [
     Self::Overview,
     Self::Orchestrator,
     Self::Tasks,
+    Self::Modules,
     Self::MergeQueue,
     Self::PullRequests,
     Self::Usage,
@@ -98,6 +102,7 @@ impl Screen {
       Self::NewTask => "new_task",
       Self::EditTask => "edit_task",
       Self::Task => "task",
+      Self::Modules => "modules",
       Self::MergeQueue => "merge_queue",
       Self::PullRequests => "pull_requests",
       Self::Usage => "usage",
@@ -133,6 +138,7 @@ impl Screen {
       Self::NewTask => "shell.screens.newTask",
       Self::EditTask => "shell.screens.editTask",
       Self::Task => "shell.screens.task",
+      Self::Modules => "shell.screens.modules",
       Self::MergeQueue => "shell.screens.mergeQueue",
       Self::PullRequests => "shell.screens.pullRequests",
       Self::Usage => "shell.screens.usage",
@@ -167,6 +173,7 @@ impl Screen {
       | Self::OrchestratorSettings => None,
       Self::Orchestrator => Some(ORCHESTRATOR),
       Self::Tasks => Some(TASKS),
+      Self::Modules => Some(MODULES),
       Self::MergeQueue => Some("merge-queue"),
       Self::PullRequests => Some(PULL_REQUESTS),
       Self::Usage => Some("usage"),

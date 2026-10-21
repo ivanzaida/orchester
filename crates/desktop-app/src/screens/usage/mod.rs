@@ -12,7 +12,8 @@
 //! off it too, again whenever the query or the usage read changes.
 
 mod breakdown;
-mod card;
+// The card, the canvas plot, the table and the words are shared with the Modules page's burndown (ORC-48).
+pub(crate) mod card;
 mod custom_range;
 mod efficiency;
 mod expensive;
@@ -24,12 +25,12 @@ mod limits_draw;
 mod limits_legend;
 mod line_draw;
 mod place;
-mod plot;
+pub(crate) mod plot;
 mod read;
 mod series;
 mod states;
 mod summary;
-mod table;
+pub(crate) mod table;
 mod threshold;
 mod tokens;
 mod tokens_draw;
@@ -37,7 +38,7 @@ mod tokens_legend;
 mod tokens_table;
 mod toolbar;
 mod tooltip;
-mod words;
+pub(crate) mod words;
 
 use std::sync::Arc;
 

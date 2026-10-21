@@ -99,6 +99,10 @@ define_id!(
 define_id!(TaskId);
 define_id!(TagId);
 define_id!(
+  /// A module of a project's tasks (`crate::module`): an epic, a milestone or a sprint.
+  ModuleId
+);
+define_id!(
   /// One tenure of a shared task's holder.
   ClaimId
 );

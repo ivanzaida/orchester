@@ -15,6 +15,8 @@ use thiserror::Error;
 pub enum StoreError {
   #[error(transparent)]
   Organization(#[from] orchester_core::task::organization::OrganizationError),
+  #[error(transparent)]
+  Module(#[from] orchester_core::module::ModuleError),
   #[error("database error: {0}")]
   Sqlite(#[from] rusqlite::Error),
   #[error("cannot access {path}: {source}")]

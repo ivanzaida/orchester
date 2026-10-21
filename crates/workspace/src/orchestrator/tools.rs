@@ -45,18 +45,23 @@ use crate::{
 };
 
 /// The tools of the chat, by name: reading every project's work, setup and tasks' conversations, task drafts and
-/// drafts of what agents run on, pausing and resuming a run, holding and releasing new starts, and what waits for the
-/// person or the person's switch: starting a run, publishing a draft, canceling and merging a run, answering an
-/// agent's question, sending a run's agents a message and continuing a run that waits for a person's decision.
-/// Approvals, plan decisions, project setup, connections, MCP servers, the environment and what removes work are not
-/// among them. A name whose tool the app does not have (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 54] = [
+/// drafts of what agents run on, making and changing modules (drafts-level: they only organize tasks), pausing and
+/// resuming a run, holding and releasing new starts, and what waits for the person or the person's switch: starting
+/// a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's agents a
+/// message and continuing a run that waits for a person's decision. Approvals, plan decisions, project setup,
+/// connections, MCP servers, the environment and what removes work are not among them. A name whose tool the app
+/// does not have (yet) is not listed ([`listed`]).
+pub const TOOLS: [&str; 58] = [
   "list_projects",
   "get_project",
   "list_tasks",
   "get_task",
   "create_task",
   "update_task",
+  "list_modules",
+  "get_module",
+  "create_module",
+  "update_module",
   "list_runs",
   "get_run",
   "get_changes",

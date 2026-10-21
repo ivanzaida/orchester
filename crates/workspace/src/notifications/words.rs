@@ -76,6 +76,7 @@ fn title(event: &Event, others: usize) -> Message {
 const fn decision(why: DecisionWhy) -> &'static str {
   match why {
     DecisionWhy::RetriesExhausted => "notifications.title.retries",
+    DecisionWhy::NoRoute => "notifications.title.noRoute",
     DecisionWhy::BrokeAgain => "notifications.title.brokeAgain",
     DecisionWhy::Unverified => "notifications.title.unverified",
     DecisionWhy::Unchanged => "notifications.title.unchanged",

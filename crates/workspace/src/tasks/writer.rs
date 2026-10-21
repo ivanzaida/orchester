@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use orchester_api::client::ServerAddress;
 use orchester_core::{
-  id::{IdempotencyKey, TagId, TaskId},
+  id::{IdempotencyKey, ModuleId, TagId, TaskId},
+  module::{Module, ModuleDetails},
   name::Name,
   sharing::TaskRevision,
   store::TaskStore,
@@ -237,6 +238,49 @@ impl TaskWriter {
         let deleted = store.delete_tag(id);
         shared(store, deleted)
       }
+    }
+  }
+
+  /// A new module. A shared project has none: its tasks change on the server, which has no modules.
+  pub fn create_module(&mut self, details: ModuleDetails) -> Result<Module, WriteError> {
+    let at = Timestamp::now();
+    self.local()?.change(|db| db.create_module(details, at))
+  }
+
+  /// Replaces the details of module `id`, read as `base`; refused when they changed since.
+  pub fn update_module(
+    &mut self,
+    id: ModuleId,
+    base: &ModuleDetails,
+    details: ModuleDetails,
+  ) -> Result<Module, WriteError> {
+    self.local()?.change(|db| db.update_module(id, base, details))
+  }
+
+  /// Puts `task` in `module`, or in none, as `actor` asked; whether it moved.
+  pub fn set_task_module(
+    &mut self,
+    task: TaskId,
+    module: Option<ModuleId>,
+    actor: ChangeActor,
+  ) -> Result<bool, WriteError> {
+    let at = Timestamp::now();
+    self.local()?.change(|db| db.set_task_module(task, module, actor, at))
+  }
+
+  /// Refuses what changes modules in a shared project, which has none, before anything else is changed.
+  pub fn ensure_modules(&self) -> Result<(), WriteError> {
+    match self {
+      Self::Local(_) => Ok(()),
+      Self::Shared(_) => Err(WriteError::Store(StoreError::SharedProject)),
+    }
+  }
+
+  /// The local project's tasks; a shared project's modules are refused.
+  fn local(&mut self) -> Result<&mut LocalTasks, WriteError> {
+    match self {
+      Self::Local(local) => Ok(local),
+      Self::Shared(_) => Err(WriteError::Store(StoreError::SharedProject)),
     }
   }
 }

@@ -155,6 +155,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
     "tags": tag_names,
+    "module": task.module().map(|module| module.to_string()),
     "blocked_reason": task.organization().blocked_reason(),
     "blocked_by": &detail.blocked_by,
     "no_automatic_merge": task.organization().no_automatic_merge(),

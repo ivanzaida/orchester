@@ -130,6 +130,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::NewTask => ProjectPage::NewTask,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
+    Screen::Modules => module_page(args)?,
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => pull_requests_page(args)?,
     Screen::Usage => match string(args, "project")? {
@@ -170,6 +171,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::Usage => &["project", "query"],
+    Screen::Modules => &["project", "module"],
     Screen::NewTask
     | Screen::MergeQueue
     | Screen::Pipelines
@@ -180,6 +182,20 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     | Screen::OrchestratorSettings
     | Screen::ProjectSettings => &["project"],
   }
+}
+
+/// The Modules list, or with `module` (its id) that module's page.
+fn module_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let Some(module) = string(args, "module")? else {
+    return Ok(ProjectPage::Modules);
+  };
+  module
+    .parse()
+    .map(ProjectPage::Module)
+    .map_err(|error| ToolError::InvalidParam {
+      param: "module",
+      reason: error.to_string(),
+    })
 }
 
 fn files_view(args: &Map<String, Value>) -> Result<FilesView, ToolError> {

@@ -33,7 +33,7 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-pub use self::decisions::decisions;
+pub use self::decisions::{decisions, returnable};
 use self::runs::Runs;
 use super::{PageState, TaskContext, sharing};
 use crate::{
@@ -116,7 +116,10 @@ impl Component for TaskSummary {
     };
     let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
-      Some(run) if run.run.status().is_terminal() => run_details::run_details(ctx, &props.task, run, section),
+      Some(run) if run.run.status().is_terminal() => {
+        let lead = decisions::return_card(ctx, &props.task);
+        run_details::run_details(ctx, &props.task, run, (lead, section))
+      }
       Some(run) => this_run::this_run(ctx, run, (&root, props.task.lost()), (None, section)),
       None => this_task(ctx, &props.task, section),
     };

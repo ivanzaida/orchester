@@ -5,10 +5,13 @@
 
 use std::sync::Arc;
 
-use orchester_workspace::tasks::{
-  browse::{PipelineFilter, TaskSort},
-  data::ProjectTasks,
-  list::{TaskRow, TaskTab},
+use orchester_workspace::{
+  modules::ModuleFilter,
+  tasks::{
+    browse::{PipelineFilter, TaskSort},
+    data::ProjectTasks,
+    list::{TaskRow, TaskTab},
+  },
 };
 use parking_lot::Mutex;
 
@@ -43,6 +46,7 @@ pub(super) struct RowsKey {
   pub not_shared: bool,
   pub search: String,
   pub pipeline: PipelineFilter,
+  pub module: ModuleFilter,
   pub sort: TaskSort,
 }
 

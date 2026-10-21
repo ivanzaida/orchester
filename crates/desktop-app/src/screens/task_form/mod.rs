@@ -22,6 +22,7 @@ mod head;
 mod kept;
 mod limits;
 mod merging;
+mod module;
 mod plan;
 mod state;
 mod unbuilt;
@@ -73,6 +74,7 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject) -> Element {
     separator: ctx.t("task_form.number.groupSeparator"),
     pipelines: Some(tasks.pipelines),
     missing_pipeline: None,
+    modules: tasks.modules,
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}", project.open.project.id()), props)
 }
@@ -105,6 +107,7 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
       .missing_pipelines
       .get(&task_id)
       .map(|slug| Arc::from(slug.as_str())),
+    modules: tasks.modules.clone(),
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
 }

@@ -1,6 +1,8 @@
-//! The form's fields as signals the sections type into, read together as [`Values`].
+//! The form's fields as signals the sections type into, read together as [`Values`]; the task's module beside
+//! them, which is not one of the task's details: it is saved after them and is no part of a version's conflict.
 
 use lurq::{app::ctx::Ctx, core::Signal};
+use orchester_workspace::modules::ModuleChoice;
 
 use super::{
   criteria::{Criterion, texts},
@@ -17,6 +19,7 @@ pub struct Fields {
   pub budget: Signal<String>,
   pub time_limit: Signal<String>,
   pub no_automatic_merge: Signal<bool>,
+  pub module: Signal<ModuleChoice>,
 }
 
 impl Fields {
@@ -29,6 +32,7 @@ impl Fields {
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
       no_automatic_merge: ctx.signal(false),
+      module: ctx.signal(ModuleChoice::default()),
     }
   }
 

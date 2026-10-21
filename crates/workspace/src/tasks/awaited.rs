@@ -25,14 +25,17 @@ pub struct AwaitedDecision {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecisionWhy {
   RetriesExhausted,
+  /// A follow-up's step reported the work failed where the pipeline has no route ([`Run::waits_without_route`]).
+  NoRoute,
   BrokeAgain,
   Unverified,
   Unchanged,
 }
 
 impl DecisionWhy {
-  const fn of(stuck: &Stuck) -> Self {
+  fn of(run: &Run, stuck: &Stuck) -> Self {
     match stuck {
+      Stuck::RetriesExhausted(_) if run.waits_without_route() => Self::NoRoute,
       Stuck::RetriesExhausted(_) => Self::RetriesExhausted,
       Stuck::BrokeAgain(_) => Self::BrokeAgain,
       Stuck::Unverified(_) => Self::Unverified,
@@ -55,14 +58,15 @@ impl AwaitedDecision {
         .step(step)
         .map_or_else(|| step.as_str().into(), |pinned| pinned.name.as_str().into()),
       retries: run.automatic_retries_taken(step),
-      why: DecisionWhy::of(stuck),
+      why: DecisionWhy::of(run, stuck),
     })
   }
 
-  /// "Review still fails after 2 retries", "Implement stopped again without a result", "Verify could not
-  /// check everything" or "Verify was not run again: nothing changed".
+  /// "Review still fails after 2 retries", "Verify reported the work failed", "Implement stopped again without a
+  /// result", "Verify could not check everything" or "Verify was not run again: nothing changed".
   pub fn title(&self) -> Message {
     let key = match (self.why, self.retries) {
+      (DecisionWhy::NoRoute, _) => "runs.retryLimit.noRouteTitle",
       (DecisionWhy::BrokeAgain, _) => "runs.retryLimit.brokeTitle",
       (DecisionWhy::Unverified, _) => "runs.retryLimit.unverifiedTitle",
       (DecisionWhy::Unchanged, _) => "runs.retryLimit.unchangedTitle",

@@ -10,7 +10,7 @@ pub mod requirements;
 use thiserror::Error;
 
 use crate::{
-  id::{ResourceId, TaskId},
+  id::{ModuleId, ResourceId, TaskId},
   name::Name,
   project::TaskKey,
   resource::VersionNumber,
@@ -177,6 +177,8 @@ pub struct Task {
   pipeline_version: Option<VersionNumber>,
   created_at: Timestamp,
   organization: organization::TaskOrganization,
+  /// The module the task belongs to ([`crate::module`]), if any.
+  module: Option<ModuleId>,
   revision: TaskRevision,
 }
 
@@ -223,6 +225,7 @@ impl Task {
       pipeline_version,
       created_at,
       organization: organization::TaskOrganization::default(),
+      module: None,
       revision: TaskRevision::FIRST,
     }
   }
@@ -250,6 +253,17 @@ impl Task {
   /// Attaches persisted user metadata; run prompt details remain separate.
   pub fn with_organization(mut self, value: organization::TaskOrganization) -> Self {
     self.organization = value;
+    self
+  }
+
+  pub const fn module(&self) -> Option<ModuleId> {
+    self.module
+  }
+
+  /// Attaches the module the task is stored in.
+  #[must_use]
+  pub const fn with_module(mut self, module: Option<ModuleId>) -> Self {
+    self.module = module;
     self
   }
 

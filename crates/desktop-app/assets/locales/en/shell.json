@@ -54,6 +54,7 @@
       "orchestrator": "Orchestrator",
       "orchestratorSettings": "Orchestrator settings",
       "tasks": "Tasks",
+      "modules": "Modules",
       "newTask": "New task",
       "editTask": "Edit task",
       "editTaskOf": "Edit {{key}}",

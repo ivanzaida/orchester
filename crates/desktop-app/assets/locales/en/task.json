@@ -16,15 +16,21 @@
       "notFoundBody": "It may have been deleted, or its key changed. The task list shows the project's tasks.",
       "toTasks": "Open the task list"
     },
+    "module": {
+      "label": "Module",
+      "none": "No module"
+    },
     "crumbs": {
       "tasks": "Tasks",
       "notShared": "Not shared"
     },
     "edit": "Edit",
     "removeWorktree": "Remove worktree",
+    "returnToStep": "Return to a step",
     "status": {
       "step": "{{number}} {{step}}",
       "retriesUsed": "retries used",
+      "failed": "reported failed",
       "unverified": "could not check everything",
       "unchanged": "not run again",
       "conflict": "conflict"

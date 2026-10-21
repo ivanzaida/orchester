@@ -14,7 +14,13 @@ use crate::{screens::task::TaskContext, ui::detail_row::DetailValue};
 
 const MILLIS_PER_MINUTE: i64 = 60_000;
 
-pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView, section: Option<Element>) -> Element {
+/// *Run details* of `run`, `lead` above it (returning its work to a step), the task's own `section` above its title.
+pub fn run_details(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (lead, section): (Option<Element>, Option<Element>),
+) -> Element {
   let project = task.project.open.project.name().as_str().to_owned();
   let mut rows = vec![
     row(ctx, "summary.runDetails.project", &project, DetailValue::Text),
@@ -46,7 +52,7 @@ pub fn run_details(ctx: &mut Ctx, task: &TaskContext, run: &RunView, section: Op
     "task-run-details",
     &ctx.t("summary.runDetails.title"),
     rows,
-    (None, section),
+    (lead, section),
   )
 }
 
