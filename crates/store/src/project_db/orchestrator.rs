@@ -5,6 +5,7 @@
 //! ([`super::orchestrator_waits`]).
 
 use orchester_core::{
+  attachment::NewAttachment,
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId, ConnectionId},
   orchestrator::{
@@ -16,7 +17,10 @@ use orchester_core::{
 };
 use rusqlite::{OptionalExtension, Row, params};
 
-use super::ProjectDb;
+use super::{
+  ProjectDb,
+  attachments::{self, AttachmentOwner},
+};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -126,7 +130,19 @@ impl ProjectDb {
   pub fn keep_chat_message(
     &mut self,
     chat: &Chat,
+    message: (ChatMessageId, &MessageBody),
+    at: Timestamp,
+  ) -> Result<bool, StoreError> {
+    self.keep_chat_message_with(chat, message, &[], at)
+  }
+
+  /// [`Self::keep_chat_message`] with `attachments`, whose copies are written before the rows and removed again when
+  /// the message is not kept now; a message kept before keeps the attachments it was kept with.
+  pub fn keep_chat_message_with(
+    &mut self,
+    chat: &Chat,
     (message, text): (ChatMessageId, &MessageBody),
+    attachments: &[NewAttachment],
     at: Timestamp,
   ) -> Result<bool, StoreError> {
     let transaction = self.connection.transaction()?;
@@ -144,12 +160,19 @@ impl ProjectDb {
         message.to_string()
       ],
     )?;
+    if kept == 0 {
+      transaction.commit()?;
+      return Ok(false);
+    }
+    let (written, attached) = attachments::write(&self.directory, attachments)?;
+    attachments::insert(&transaction, AttachmentOwner::ChatMessage(message), &attached, at)?;
     transaction.commit()?;
-    Ok(kept == 1)
+    written.keep();
+    Ok(true)
   }
 
-  /// Forgets the person's message `message`, which the runner never took: its draft is kept by the app, and a
-  /// conversation it alone started goes with it.
+  /// Forgets the person's message `message`, which the runner never took, with its attachments: its draft is kept
+  /// by the app, and a conversation it alone started goes with it.
   pub fn forget_chat_message(&mut self, message: ChatMessageId) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     let chat: Option<String> = transaction
@@ -159,7 +182,9 @@ impl ProjectDb {
         |row| row.get(0),
       )
       .optional()?;
+    let mut copies = Vec::new();
     if let Some(chat) = chat {
+      copies = attachments::forget(&transaction, &self.directory, AttachmentOwner::ChatMessage(message))?;
       transaction.execute(
         "DELETE FROM orchestrator_entries WHERE message_id = ?1",
         [message.to_string()],
@@ -171,6 +196,7 @@ impl ProjectDb {
       )?;
     }
     transaction.commit()?;
+    attachments::remove_copies(&copies);
     Ok(())
   }
 

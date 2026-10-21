@@ -10,6 +10,9 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+# Images and PDFs a person attached, as the content blocks agents take them in (`attachment::input`); already
+# built for the runner.
+base64.workspace = true
 # Where the local day starts, for the daily project budget; std has no local time.
 chrono.workspace = true
 serde.workspace = true

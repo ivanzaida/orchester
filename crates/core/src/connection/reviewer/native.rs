@@ -33,10 +33,7 @@ pub fn native_request(input: &ReviewInput, model: &ModelId, effort: Option<Strin
     max_output: NATIVE_MAX_OUTPUT,
     system: REVIEW_INSTRUCTIONS.to_owned(),
     tools: ToolSet::none(),
-    items: vec![Item::User {
-      text: review_prompt(input),
-      origin: UserOrigin::Task,
-    }],
+    items: vec![Item::user(review_prompt(input), UserOrigin::Task)],
     cache_key: ConversationId::generate(),
   }
 }

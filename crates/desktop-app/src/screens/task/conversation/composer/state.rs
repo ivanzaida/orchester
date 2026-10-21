@@ -16,6 +16,7 @@ use lurq::{
   core::Signal,
 };
 use orchester_core::{
+  attachment::NewAttachment,
   id::{IdempotencyKey, MessageId, RunId, TaskId},
   project::TaskKey,
   run::{Answerer, PlanVersion},
@@ -26,7 +27,7 @@ use orchester_workspace::{
   decisions::DecisionKind,
   messages::{self, Message},
   tasks::conversation::{
-    composer::ComposerMode,
+    composer::{ComposerMode, Then},
     follow::{RunnerOf, Sent, Stored, follow_seen, tell},
     outgoing::{Action, Context, Prepared, Way, plan_changes, prepare_in, store_answer_in},
     send_after_turn_as,
@@ -41,6 +42,7 @@ use crate::{
   project::{ProjectFeed, ShownProject},
   routes::{ProjectPage, Route, TaskView},
   services::Services,
+  ui::attachments::draft::DraftAttachments,
 };
 
 /// A message to send: for `task`'s latest run as the person saw it (`written_for`), sent `way` to do what
@@ -57,13 +59,15 @@ pub(super) struct Request {
   pub(super) expected: Action,
   pub(super) key: IdempotencyKey,
   pub(super) text: String,
+  /// The files the person attached.
+  pub(super) attachments: Vec<NewAttachment>,
   /// Captured before the event handler yields; None refuses a synthetic decision without consent.
   pub(super) by: Option<Answerer>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Request {}
 
-/// What a send did, with the words it sent.
+/// What a send did, with the words and files it sent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Outcome {
   /// The message `id` was stored in `mode`, and what followed it.
@@ -72,6 +76,7 @@ pub(super) enum Outcome {
     sent: Sent,
     mode: &'static str,
     text: String,
+    attachments: Vec<NewAttachment>,
   },
   /// The plan's changes were told to the runner.
   PlanChanges { text: String },
@@ -111,11 +116,13 @@ pub(super) struct Handled(pub(super) Vec<MessageId>);
 
 impl lurq::app::component::DevtoolsInspectable for Handled {}
 
-/// The composer's draft, the context the person left, and its sends, kept by the task's page.
+/// The composer's draft and its files, the context the person left, and its sends, kept by the task's page.
 #[derive(Clone)]
 pub struct ComposerState {
   task: TaskId,
   pub(super) draft: Signal<String>,
+  /// The files the draft holds, and why the last ones given were not taken.
+  pub(super) attached: DraftAttachments,
   /// Set to put the focus in the message field.
   pub(super) focus: Signal<bool>,
   /// The question's or the plan's mode the person left with its line's × or Esc: while the run's state
@@ -141,6 +148,7 @@ impl ComposerState {
     let state = Self {
       task,
       draft: ctx.signal(kept::draft(task)),
+      attached: DraftAttachments::new(ctx, kept::attachments(task)),
       focus: ctx.signal(false),
       left: ctx.signal(None),
       handled: ctx.signal(Handled(kept::handled(task))),
@@ -162,8 +170,10 @@ impl ComposerState {
       let Some(outcome) = result.data.as_ref().filter(|_| result.is_fulfilled()) else {
         return;
       };
-      let (Outcome::Message { text, .. } | Outcome::PlanChanges { text }) = outcome;
-      done.stored(text);
+      match outcome {
+        Outcome::Message { text, attachments, .. } => done.stored(text, attachments),
+        Outcome::PlanChanges { text } => done.stored(text, &[]),
+      }
       feed.saved();
       // The message waits for the raised limit, which the person sets on the Summary.
       if let Outcome::Message {
@@ -174,15 +184,7 @@ impl ComposerState {
         navigation.go(summary.clone());
       }
     });
-    let handled = state.handled.clone();
-    ctx.watch(&state.draft, move |text| {
-      kept::set_draft(task, text);
-      // Words put back and taken out again: their message offers again.
-      let now = Handled(kept::handled(task));
-      if handled.get_untracked() != now {
-        handled.set(now);
-      }
-    });
+    state.keep_drafts(ctx);
     let feed = project.feed.clone();
     ctx.watch(&state.after_turn.state(), move |result| {
       if result.is_fulfilled() {
@@ -190,6 +192,20 @@ impl ComposerState {
       }
     });
     state
+  }
+
+  /// The draft and its files are kept beyond the page as they change.
+  fn keep_drafts(&self, ctx: &mut Ctx) {
+    let (task, handled) = (self.task, self.handled.clone());
+    ctx.watch(&self.draft, move |text| {
+      kept::set_draft(task, text);
+      // Words put back and taken out again: their message offers again.
+      let now = Handled(kept::handled(task));
+      if handled.get_untracked() != now {
+        handled.set(now);
+      }
+    });
+    ctx.watch(&self.attached.attached, move |held| kept::set_attachments(task, &held.0));
   }
 
   /// While a send that an earlier page of the task started runs, the composer is busy; once it ends, the
@@ -216,20 +232,24 @@ impl ComposerState {
       if self.draft.get_untracked() != kept {
         self.draft.set(kept);
       }
+      self.attached.replace(kept::attachments(self.task));
       self.feed.saved();
     }
   }
 
-  /// `text` was stored: the draft empties unless the person typed on meanwhile.
-  fn stored(&self, text: &str) {
+  /// `text` and `attachments` were stored: the draft empties unless the person typed on meanwhile, and loses the
+  /// files sent.
+  fn stored(&self, text: &str, attachments: &[NewAttachment]) {
     if self.draft.get_untracked() == text {
       self.draft.set(String::new());
     }
+    self.attached.sent(attachments);
   }
 
-  /// The key `text`, sent `how`, is stored under: the one of the last attempt when neither changed.
-  pub(super) fn key_for(&self, text: &str, how: (Way, Action)) -> IdempotencyKey {
-    kept::key_for(self.task, text, how)
+  /// The key `text` and `attachments`, sent `how`, are stored under: the one of the last attempt when nothing
+  /// changed.
+  pub(super) fn key_for(&self, message: (&str, &[NewAttachment]), how: (Way, Action)) -> IdempotencyKey {
+    kept::key_for(self.task, message, how)
   }
 
   /// Puts `text`, the refused message `message`, into the composer, with the focus there; after what is
@@ -285,6 +305,33 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
   })
 }
 
+/// Stores the message of `request` with its files as `prepared` offers, off the UI thread: the task as read and
+/// what follows the stored message.
+async fn store(
+  request: &Request,
+  prepared: Prepared,
+  by: Answerer,
+) -> Result<(Prepared, (Then, orchester_core::conversation::Message)), Message> {
+  let (root, text, attachments, key, way) = (
+    request.project.repo_root.clone(),
+    request.text.clone(),
+    request.attachments.clone(),
+    request.key,
+    request.way,
+  );
+  background::run(move || {
+    let stored = store_answer_in(&root, &prepared, (key, way), (&text, &attachments), by);
+    (prepared, stored)
+  })
+  .await
+  .and_then(|(prepared, stored)| {
+    let stored = stored.map_err(|error| {
+      tracing::warn!(?error, "the message was not stored");
+      error.message()
+    })?;
+    Ok((prepared, stored))
+  })
+}
 /// Reads the task again, stores the message as its latest run's state offers now, and lets what follows
 /// it follow; or tells the runner the plan's changes.
 async fn send(services: Services, request: Request) -> Result<Outcome, Message> {
@@ -314,26 +361,10 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     return send_plan_changes(&services, request, &prepared, (by, version)).await;
   }
   let mode = super::mode_name(&prepared.mode);
-  let (root, text, key, way) = (
-    request.project.repo_root.clone(),
-    request.text.clone(),
-    request.key,
-    request.way,
-  );
-  let (prepared, (then, stored)) = background::run(move || {
-    let stored = store_answer_in(&root, &prepared, (key, way), &text, by);
-    (prepared, stored)
-  })
-  .await
-  .and_then(|(prepared, stored)| {
-    let stored = stored.map_err(|error| {
-      tracing::warn!(?error, "the message was not stored");
-      error.message()
-    })?;
-    Ok((prepared, stored))
-  })?;
+  let key = request.key;
+  let (prepared, (then, stored)) = store(&request, prepared, by).await?;
   let id = stored.id();
-  kept::stored(request.task, key, &request.text);
+  kept::stored(request.task, key, (&request.text, &request.attachments));
   // Before the task has a run, its first step takes the message.
   let Some(run) = prepared.run() else {
     return Ok(Outcome::Message {
@@ -341,6 +372,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
       sent: Sent::Taken,
       mode,
       text: request.text,
+      attachments: request.attachments,
     });
   };
   let pipeline = prepared
@@ -368,15 +400,21 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     sent,
     mode,
     text: request.text,
+    attachments: request.attachments,
   })
 }
 
+/// Tells the runner the plan's changes, which are words only: a request with attached files is refused, keeping
+/// them in the draft.
 async fn send_plan_changes(
   services: &Services,
   request: Request,
   prepared: &Prepared,
   (by, version): (Answerer, PlanVersion),
 ) -> Result<Outcome, Message> {
+  if !request.attachments.is_empty() {
+    return Err(Message::new("attachments.planChanges"));
+  }
   let command = plan_changes(prepared, &request.text, (by, Some(version))).map_err(|error| error.message())?;
   services
     .runners
@@ -386,7 +424,7 @@ async fn send_plan_changes(
       tracing::warn!(%error, "the runner did not take the plan's changes");
       orchester_workspace::tasks::run::control_message(&error)
     })?;
-  kept::stored(request.task, request.key, &request.text);
+  kept::stored(request.task, request.key, (&request.text, &[]));
   Ok(Outcome::PlanChanges { text: request.text })
 }
 

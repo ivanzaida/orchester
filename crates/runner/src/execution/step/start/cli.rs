@@ -10,6 +10,7 @@ use std::{
 
 use orchester_core::{
   agent_files::skills::RepositorySkills,
+  attachment::input::AttachedFile,
   command::Command,
   connection::{
     AgentConnection, AgentProvider, ConnectionAccount,
@@ -111,13 +112,14 @@ impl RunTask {
     })
   }
 
-  /// The CLI's command with `prompt`, the MCP servers of `setup` and the Orchester tools of `tools`; Claude
-  /// Code's MCP configuration file, or what the runner tells Codex App Server once it runs.
+  /// The CLI's command with `prompt` and the files people attached to the messages it delivers (`attached`), the MCP
+  /// servers of `setup` and the Orchester tools of `tools`; Claude Code's MCP configuration file, or what the runner
+  /// tells Codex App Server once it runs.
   pub(super) fn cli_command(
     &self,
     cli: &Cli<'_>,
     setup: McpSetup,
-    prompt: String,
+    (prompt, attached): (String, Vec<AttachedFile>),
     tools: Arc<ToolHost>,
   ) -> Result<CliCommand, RunnerProblem> {
     tools
@@ -133,7 +135,7 @@ impl RunTask {
         } else {
           mcp.without_exemptions()
         };
-        let (command, app) = self.app_server_command(cli, &mcp, prompt)?;
+        let (command, app) = self.app_server_command(cli, &mcp, (prompt, attached))?;
         Ok(CliCommand {
           command,
           mcp_file: None,
@@ -142,7 +144,7 @@ impl RunTask {
         })
       }
       McpSetup::Claude(servers) => {
-        let (command, mcp_file) = self.claude_command(cli, servers, &prompt)?;
+        let (command, mcp_file) = self.claude_command(cli, servers, (&prompt, &attached))?;
         Ok(CliCommand {
           command,
           mcp_file,
@@ -154,12 +156,13 @@ impl RunTask {
   }
 
   /// Codex App Server with the MCP servers `mcp`, Orchester's among them, and what the runner tells it
-  /// once it runs: the prompt, the thread's settings and the approvals it may ask a person for.
+  /// once it runs: the prompt and its attached files, the thread's settings and the approvals it may ask a person
+  /// for.
   fn app_server_command(
     &self,
     cli: &Cli<'_>,
     mcp: &CodexMcp,
-    prompt: String,
+    (prompt, attached): (String, Vec<AttachedFile>),
   ) -> Result<(Command, AppServerSetup), RunnerProblem> {
     let mut expected_servers = mcp.servers().iter().map(ToString::to_string).collect::<BTreeSet<_>>();
     expected_servers.insert(SERVER.to_owned());
@@ -191,6 +194,7 @@ impl RunTask {
       command,
       AppServerSetup {
         prompt,
+        attached,
         model: cli.model.as_str().to_owned(),
         effort: cli.effort.map(str::to_owned),
         worktree: cli.worktree.to_path_buf(),
@@ -210,13 +214,13 @@ impl RunTask {
     ))
   }
 
-  /// Claude Code's command with `prompt` on its standard input and the MCP servers `servers`, and the
-  /// configuration file it reads them from, if any.
+  /// Claude Code's command with `prompt` and its attached files on its standard input and the MCP servers
+  /// `servers`, and the configuration file it reads them from, if any.
   fn claude_command(
     &self,
     cli: &Cli<'_>,
     servers: Option<ClaudeServers>,
-    prompt: &str,
+    prompt: (&str, &[AttachedFile]),
   ) -> Result<(Command, Option<PrivateFile>), RunnerProblem> {
     let command = ClaudeInvocation {
       executable: cli.executable,

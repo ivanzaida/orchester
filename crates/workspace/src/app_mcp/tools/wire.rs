@@ -1,6 +1,7 @@
 //! How the tools name Orchester's states: snake_case words, the same in arguments and results.
 
 use orchester_core::{
+  attachment::Attachment,
   id::ProjectId,
   project::TaskKey,
   run::{RunStatus, StepStatus, TaskPhase},
@@ -158,6 +159,25 @@ pub fn task_link(project: ProjectId, key: &str, page: TaskPage) -> Option<String
 /// Milliseconds since the Unix epoch.
 pub const fn time(at: Timestamp) -> i64 {
   at.unix_millis()
+}
+
+/// The files attached to a message, as the tools give them: each one's id, name, media type, size in bytes, an
+/// image's size and the link to where the app shows it; never their content.
+pub fn attachments(attachments: &[Attachment], link: &str) -> Value {
+  let attachments: Vec<Value> = attachments
+    .iter()
+    .map(|attachment| {
+      json!({
+        "id": attachment.id().to_string(),
+        "name": attachment.name().as_str(),
+        "media_type": attachment.media().as_str(),
+        "size": attachment.size(),
+        "dimensions": attachment.dimensions().map(|size| json!({ "width": size.width, "height": size.height })),
+        "link": link,
+      })
+    })
+    .collect();
+  Value::Array(attachments)
 }
 
 /// Plain data of core (reasons, causes), as its own serde form writes it.

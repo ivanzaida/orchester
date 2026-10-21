@@ -3,9 +3,10 @@
 //! project, with the turn it started by itself, if it started one. What is kept while a turn runs belongs to that
 //! turn, even when a wait kept meanwhile shows under it.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use orchester_core::{
+  attachment::{Attachment, is_names_only},
   id::ChatMessageId,
   orchestrator::{AgentWait, ChatAction, ChatEntry, ChatEvent, EntryKind, TurnState},
   resource::ModelId,
@@ -45,8 +46,10 @@ impl Part {
 pub(super) struct Turn {
   /// `None` while it is being sent and not kept yet, and for a wait that started no turn.
   pub(super) message: Option<ChatMessageId>,
-  /// The person's words; empty for a wait.
+  /// The person's words; empty for a wait, and for a message of attachments only.
   pub(super) text: Arc<str>,
+  /// The files the person attached to the message.
+  pub(super) attachments: Arc<[Attachment]>,
   /// The wait that opens the row instead of a person's message.
   pub(super) wait: Option<Box<AgentWait>>,
   /// Its entry in the conversation; `None` while it is being sent.
@@ -66,6 +69,7 @@ impl Turn {
     Self {
       message: None,
       text: Arc::from(text),
+      attachments: Arc::from([]),
       wait: None,
       seq: None,
       at: None,
@@ -104,9 +108,10 @@ impl Turn {
   }
 }
 
-/// The turns of `entries`, oldest first. What comes before the first message or wait belongs to no turn and is left
-/// out; a reply, action or event belongs to the newest row with a turn.
-pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
+/// The turns of `entries`, with the files attached to the person's messages (`attached`), oldest first. What comes
+/// before the first message or wait belongs to no turn and is left out; a reply, action or event belongs to the newest
+/// row with a turn.
+pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Vec<Attachment>>) -> Vec<Turn> {
   let mut turns: Vec<Turn> = Vec::new();
   for entry in entries {
     let part = match &entry.kind {
@@ -116,9 +121,13 @@ pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
         turn,
         ended,
       } => {
+        let attachments: Arc<[Attachment]> = attached.get(message).map_or_else(|| Arc::from([]), |files| files.as_slice().into());
+        // A message of attachments only was kept with their names: it shows by its files alone.
+        let words = if is_names_only(text.as_str(), &attachments) { "" } else { text.as_str() };
         turns.push(Turn {
           message: Some(*message),
-          text: Arc::from(text.as_str()),
+          text: Arc::from(words),
+          attachments,
           wait: None,
           seq: Some(entry.seq),
           at: Some(entry.at),
@@ -132,6 +141,7 @@ pub(super) fn turns(entries: &[ChatEntry]) -> Vec<Turn> {
         turns.push(Turn {
           message: turn.as_ref().map(|turn| turn.message),
           text: Arc::from(""),
+          attachments: Arc::from([]),
           wait: Some(Box::new(wait.clone())),
           seq: Some(entry.seq),
           at: Some(entry.at),

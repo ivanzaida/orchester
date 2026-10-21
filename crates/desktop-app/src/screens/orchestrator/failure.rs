@@ -56,20 +56,24 @@ pub(super) fn failure_notice(ctx: &mut Ctx, row: &TurnRow, failure: &TurnFailure
   let mut notice = Notice::new("orchestrator-failure", NoticeTone::Danger, title)
     .icon(Icon::CloudOff)
     .body(body);
-  let ask = row.env.ask_again.clone();
-  let words = row.turn.text.clone();
-  let mut retry = ActionButton::new(
-    "orchestrator-retry",
-    ButtonKind::Secondary,
-    ctx.t("orchestrator.failure.retry"),
-  )
-  .icon(Icon::RotateCcw);
-  retry = if row.can_ask {
-    retry.on_click(move || ask(words.clone()))
-  } else {
-    retry.disabled()
-  };
-  notice = notice.action(retry);
+  // *Retry* sends the words once more: a message with attached files, which it would send without them, is sent
+  // again from the composer instead.
+  if row.turn.attachments.is_empty() {
+    let ask = row.env.ask_again.clone();
+    let words = row.turn.text.clone();
+    let mut retry = ActionButton::new(
+      "orchestrator-retry",
+      ButtonKind::Secondary,
+      ctx.t("orchestrator.failure.retry"),
+    )
+    .icon(Icon::RotateCcw);
+    retry = if row.can_ask {
+      retry.on_click(move || ask(words.clone()))
+    } else {
+      retry.disabled()
+    };
+    notice = notice.action(retry);
+  }
   if let Some(open) = fix.button(ctx, row.env.project) {
     notice = notice.action(open);
   }

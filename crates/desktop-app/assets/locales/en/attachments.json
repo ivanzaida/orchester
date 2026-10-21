@@ -1,0 +1,30 @@
+{
+  "attachments": {
+    "attach": "Attach files",
+    "attachHint": "Attach images, PDFs or text files. You can also paste or drop them here.",
+    "pickerTitle": "Attach files",
+    "pastedText": "Pasted text.txt",
+    "pastedImage": "Pasted image.png",
+    "adding": "Reading files…",
+    "dropHere": "Drop to attach",
+    "remove": "Remove {{name}}",
+    "preview": "Preview {{name}}",
+    "open": "Open {{name}}",
+    "openFile": "Open",
+    "closePreview": "Close preview",
+    "putBack": "Put back in the message",
+    "list": "Attachments",
+    "openFailed": "{{name}} couldn't be opened.",
+    "unreadable": "{{name}} couldn't be read from the project's data.",
+    "size": {
+      "bytes": "{{size}} B",
+      "kilobytes": "{{size}} KB",
+      "megabytes": "{{size}} MB"
+    },
+    "kind": {
+      "image": "Image",
+      "pdf": "PDF",
+      "text": "Text"
+    }
+  }
+}

@@ -150,7 +150,7 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
       Some(step.to_string()),
       json!({ "text": &**text }),
     ),
-    ItemKind::Message(message) => ("message", sender(message), step_of(), message_body(message)),
+    ItemKind::Message(message) => ("message", sender(message), step_of(), message_body(message, link)),
     ItemKind::Question { entry, step } => (
       "agent_question",
       sender(entry),
@@ -258,8 +258,8 @@ fn continued_body(mark: &Mark) -> Value {
   })
 }
 
-/// A message's text and where it stands.
-fn message_body(message: &MessageEntry) -> Value {
+/// A message's text, where it stands, and the files attached to it: what each is, never its content.
+fn message_body(message: &MessageEntry, link: &str) -> Value {
   let state = match &message.state {
     EntryState::Queued(_) => "queued",
     EntryState::Delivered { .. } => "delivered",
@@ -267,7 +267,8 @@ fn message_body(message: &MessageEntry) -> Value {
     EntryState::Reply { .. } => "reply",
     EntryState::Question { .. } => "question",
   };
-  json!({ "text": &*message.body, "state": state })
+  let text = if message.attachments_only() { "" } else { &message.body };
+  json!({ "text": text, "state": state, "attachments": wire::attachments(&message.attachments, link) })
 }
 
 /// A question with suggested answers: its questions and options, where it stands, and who answered it; for the

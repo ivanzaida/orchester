@@ -69,7 +69,7 @@ pub fn redact_secrets(text: &str, secrets: &[SecretVariable]) -> String {
 
 /// A program to run to completion. Everything that differs from the calling process is spelled
 /// out here: arguments, working directory, environment changes and standard input.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Command {
   program: PathBuf,
   args: Vec<String>,
@@ -81,6 +81,23 @@ pub struct Command {
   inherit_env: bool,
   stdin: Option<String>,
   interactive_stdin: bool,
+}
+
+/// Standard input shows as its size only: it holds a person's messages and the files they attached.
+impl fmt::Debug for Command {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("Command")
+      .field("program", &self.program)
+      .field("args", &self.args)
+      .field("current_dir", &self.current_dir)
+      .field("env", &self.env)
+      .field("env_removed", &self.env_removed)
+      .field("secret_env", &self.secret_env)
+      .field("inherit_env", &self.inherit_env)
+      .field("stdin_bytes", &self.stdin.as_ref().map(String::len))
+      .field("interactive_stdin", &self.interactive_stdin)
+      .finish()
+  }
 }
 
 impl Command {

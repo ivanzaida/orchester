@@ -23,14 +23,14 @@
 use std::{io, time::Duration};
 
 use orchester_core::{
-  connection::invocation::input_line,
+  attachment::input::{AttachedFile, claude_content, codex_items, taken_text, user_line},
   conversation::{Arrival, Delivery, Message, Undelivered},
   id::MessageId,
   store::ConversationStore,
   time::Timestamp,
 };
 use orchester_ipc::Event;
-use orchester_store::StoreError;
+use orchester_store::{AttachmentOwner, StoreError};
 
 use super::{
   super::app_server::{AppServerSession, STEER_REQUEST, SteerAnswer},
@@ -55,11 +55,21 @@ pub(in super::super) struct Steering {
 
 struct Sent {
   message: Message,
+  /// The text the CLI shows it took the message by: its words, and the lines of the files attached to it.
+  taken: String,
   /// The turns Claude Code had ended when the message was written: one taken after more ended
   /// arrived at a turn's end.
   results_before: usize,
   /// Codex accepted it for its running turn.
   accepted: bool,
+}
+
+/// What was written of a message to the CLI: whether it was, the turns Claude Code had ended, and the text the CLI
+/// shows it took it by.
+struct Written {
+  written: io::Result<()>,
+  results_before: usize,
+  taken: String,
 }
 
 impl Steering {
@@ -85,26 +95,33 @@ impl Steering {
     accepted
   }
 
-  /// The message whose text is `text`, no longer waiting.
+  /// The message the CLI shows it took by `text`, no longer waiting.
   fn take_text(&mut self, text: &str) -> Option<Sent> {
     let at = self
       .sent
       .iter()
-      .position(|sent| sent.message.body().as_str() == text.trim())?;
+      .position(|sent| sent.taken.trim() == text.trim())?;
     Some(self.sent.remove(at))
   }
 }
 
 impl Worker {
-  /// Hands `messages` to the CLI for its running turn. One that cannot be written in time is not
-  /// delivered; one for a turn that already ended stays queued.
+  /// Hands `messages`, with the files attached to them, to the CLI for its running turn. One that cannot be written
+  /// in time, or whose attached files cannot be read, is not delivered; one for a turn that already ended stays
+  /// queued.
   pub(super) async fn steer(&mut self, watch: &mut Watch, messages: Vec<Message>) -> Result<(), StoreError> {
     for message in messages {
       if self.app_server().is_some_and(AppServerSession::awaits_turn) {
         watch.steering.early.push(message);
         continue;
       }
-      let Some((written, results_before)) = self.write(&message).await else {
+      let attached = watch.db.attached_files(AttachmentOwner::Message(message.id()))?;
+      let Some(Written {
+        written,
+        results_before,
+        taken,
+      }) = self.write(&message, &attached).await
+      else {
         tracing::info!(message = %message.id(), "the turn ended before the message; it is read at its end");
         continue;
       };
@@ -112,6 +129,7 @@ impl Worker {
       // A message that took too long may still reach the CLI: it stays known until it ends.
       watch.steering.sent.push(Sent {
         message,
+        taken,
         results_before,
         accepted: false,
       });
@@ -132,23 +150,44 @@ impl Worker {
     self.steer(watch, early).await
   }
 
-  /// Writes `message` to the CLI for its running turn, with the turns Claude Code had ended; `None`
-  /// when no turn runs that could take it.
-  async fn write(&self, message: &Message) -> Option<(io::Result<()>, usize)> {
+  /// Writes `message` and its `attached` files to the CLI for its running turn: Codex gets them as `turn/steer`
+  /// input items, Claude Code as one stream-json user message; `None` when no turn runs that could take it.
+  async fn write(&self, message: &Message, attached: &[AttachedFile]) -> Option<Written> {
     let text = message.body().as_str();
     let Driver::Process { transport, process } = &self.driver else {
       return None;
     };
+    let unread = |error: io::Error| Written {
+      written: Err(error),
+      results_before: 0,
+      taken: text.to_owned(),
+    };
     match transport {
       Transport::AppServer(app) if app.turn_working() => {
         let id = format!("{STEER_REQUEST}{}", message.id());
-        let written = tokio::time::timeout(WRITE_TIME, app.steer(process, &id, text)).await;
-        Some((in_time(written), 0))
+        let input = match codex_items(text, attached) {
+          Ok(input) => input,
+          Err(error) => return Some(unread(error)),
+        };
+        let written = tokio::time::timeout(WRITE_TIME, app.steer(process, &id, &input)).await;
+        Some(Written {
+          written: in_time(written),
+          results_before: 0,
+          taken: taken_text(&input),
+        })
       }
       Transport::Claude(claude) if process.takes_input() => {
-        let results = claude.results();
-        let written = tokio::time::timeout(WRITE_TIME, process.send_line(input_line(text))).await;
-        Some((in_time(written), results))
+        let content = match claude_content(text, attached) {
+          Ok(content) => content,
+          Err(error) => return Some(unread(error)),
+        };
+        let (results_before, taken) = (claude.results(), taken_text(&content));
+        let written = tokio::time::timeout(WRITE_TIME, process.send_line(user_line(&content))).await;
+        Some(Written {
+          written: in_time(written),
+          results_before,
+          taken,
+        })
       }
       Transport::AppServer(_) | Transport::Claude(_) => None,
     }

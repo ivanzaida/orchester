@@ -118,13 +118,14 @@ pub async fn send_message(
   }
   let key = IdempotencyKey::generate();
   let (root, text) = (project.repo_root.clone(), args.text.clone());
-  let (prepared, then) = blocking(move || {
+  let (prepared, then, message) = blocking(move || {
+    // An MCP client and the Orchester chat attach no files: they only read the ones people attached.
     let stored = match by.chat() {
-      None => store_answer_in(&root, &prepared, (key, way), &text, by.answerer()),
+      None => store_answer_in(&root, &prepared, (key, way), (&text, &[]), by.answerer()),
       Some(chat) => store_by_orchestrator_in(&root, &prepared, (key, way), (&text, chat, by.answerer())),
     };
-    let (then, _) = stored.map_err(refusal)?;
-    Ok((prepared, then))
+    let (then, message) = stored.map_err(refusal)?;
+    Ok((prepared, then, message.id()))
   })
   .await?;
   // An open Conversation of the task reads the stored message in place.
@@ -144,7 +145,9 @@ pub async fn send_message(
   };
   let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
   let sent = follow(runner, &stored, then).await;
-  reply(&project, run, (action(&prepared.mode, way), sent), translate).await
+  let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
+  result["message"] = json!({ "id": message.to_string(), "attachments": [] });
+  Ok(result)
 }
 
 /// Why the message was refused, as the tool says it.
@@ -156,6 +159,7 @@ pub fn refusal(error: OutgoingError) -> ToolError {
     OutgoingError::Closed(_) => ToolError::refused("no_agent_reads", vec![reason]),
     OutgoingError::Send(SendError::Blank) => ToolError::refused("blank_message", vec![reason]),
     OutgoingError::Send(SendError::NotAllowed) => ToolError::refused("automation_not_allowed", vec![reason]),
+    OutgoingError::Send(SendError::Attachments(_)) => ToolError::refused("attachments_refused", vec![reason]),
     OutgoingError::Changed
     | OutgoingError::NoSecondWay
     | OutgoingError::NoPlan

@@ -18,6 +18,24 @@
   "common": {
     "listSeparator": ", "
   },
+  "attachments": {
+    "refused": {
+      "empty": "{{name}} is empty, so it wasn't attached.",
+      "tooLarge": "{{name}} is larger than {{limit}} MB, so it wasn't attached.",
+      "unsupported": "{{name}} wasn't attached: only images (PNG, JPEG, GIF, WebP), PDFs and text files are supported yet.",
+      "folder": "{{name}} is a folder, so it wasn't attached. Attach the files in it instead.",
+      "shortcut": "{{name}} is a shortcut, so it wasn't attached. Attach the file it points to instead.",
+      "unreadable": "{{name}} couldn't be read, so it wasn't attached.",
+      "tooMany": "{{name}} wasn't attached: a message holds at most {{limit}} files.",
+      "totalTooLarge": "{{name}} wasn't attached: a message's files hold at most {{limit}} MB together.",
+      "notTaken": {
+        "image": "Not sent · an agent this message may reach can't take images ({{name}}). Remove it first.",
+        "pdf": "Not sent · an agent this message may reach runs on Codex, which can't take PDF files ({{name}}). Remove it first.",
+        "text": "Not sent · an agent this message may reach can't take text files ({{name}}). Remove it first."
+      }
+    },
+    "planChanges": "A plan's changes are words only. Remove the attachments first."
+  },
   "notifications": {
     "title": {
       "command": "A command waits for your approval",

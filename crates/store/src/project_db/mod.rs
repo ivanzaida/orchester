@@ -2,6 +2,7 @@ mod activity;
 mod agent_files;
 mod always_allow;
 mod approval_rules;
+mod attachments;
 mod auto_mode;
 mod automatic_status;
 mod base_notices;
@@ -79,6 +80,7 @@ use rusqlite::{Connection, params};
 
 pub use self::{
   approval_rules::DecisionCounts,
+  attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,

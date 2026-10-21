@@ -304,6 +304,9 @@ impl RunTask {
     };
     let AssembledPrompt { text: prompt, sources } = self.prompt(parts)?;
     let prompt = told_of_tools(prompt, &tools, (&setup, claude_approvals.is_some(), continuation));
+    let attached = self
+      .attached_to(&continuation.messages)
+      .map_err(|error| problem(format!("cannot read the messages' attachments: {error}")))?;
     let mut secrets = setup.claude_secrets();
     let (claude_exemptions, unapplied) = setup.claude_exemptions(enforced.permissions().interactive_tool_approvals());
     let checks = tools.checks().to_vec();
@@ -325,7 +328,7 @@ impl RunTask {
       approvals: claude_approvals.as_ref().map(ClaudeApprovals::config),
       checks: &checks,
     };
-    let started = self.cli_command(&cli, setup, prompt, tools)?;
+    let started = self.cli_command(&cli, setup, (prompt, attached), tools)?;
     let mut left_out = left_out;
     left_out.extend(index.problems(provider).into_iter().chain(unapplied));
     Ok(AgentStart {

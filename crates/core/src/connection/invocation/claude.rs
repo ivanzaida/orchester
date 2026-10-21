@@ -67,6 +67,7 @@ use uuid::Uuid;
 
 use super::{InvocationError, agent_command, unicode_folders};
 use crate::{
+  attachment::input::{AttachedFile, claude_line},
   command::Command,
   connection::{
     claude_approval::{ClaudeApprovalScope, PROMPT_TOOL},
@@ -272,11 +273,12 @@ impl ClaudeInvocation<'_> {
     }
   }
 
-  /// The command that runs the step: in the worktree, with `prompt` as the first line of its
-  /// input, the allowed part of `environment` and the variables the project adds (`project`).
+  /// The command that runs the step: in the worktree, with `prompt` and the files people attached to the messages it
+  /// delivers (`attached`) as the first line of its input, the allowed part of `environment` and the variables the
+  /// project adds (`project`).
   pub fn command(
     &self,
-    prompt: &str,
+    (prompt, attached): (&str, &[AttachedFile]),
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
@@ -295,10 +297,21 @@ impl ClaudeInvocation<'_> {
       self.executable,
       self.args(),
       self.worktree,
-      input_line(prompt),
+      first_line(prompt, attached)?,
       (environment, project, &[]),
     )
   }
+}
+
+/// `text` as a stream-json user message, with the files of `attached` after it.
+pub fn first_line(text: &str, attached: &[AttachedFile]) -> Result<String, InvocationError> {
+  if attached.is_empty() {
+    return Ok(input_line(text));
+  }
+  claude_line(text, attached).map_err(|_| {
+    let unread = attached.iter().find(|file| !file.path.is_file()).or(attached.first());
+    InvocationError::AttachmentUnreadable(unread.map(|file| file.path.clone()).unwrap_or_default())
+  })
 }
 
 /// `permission` with `rules` added to its `--allowedTools` list ([`add_to_list`]).

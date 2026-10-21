@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use orchester_core::{
+  attachment::{AttachmentRefusal, NewAttachment, limits, names_text, support},
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, TurnFailure, TurnState},
@@ -17,6 +18,7 @@ use orchester_store::ProjectDb;
 
 use super::settings::OrchestratorSetup;
 use crate::{
+  attachments::Refused,
   background,
   messages::{self, Message},
   runner::{RequestError, RunRequestError, Runners},
@@ -24,12 +26,13 @@ use crate::{
 };
 
 /// A message the person sends: the conversation it goes to (a new one gets its id here too), its own id, given once
-/// for the draft, and its text.
+/// for the draft, its text and the files the person attached.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing {
   pub chat: ChatId,
   pub message: ChatMessageId,
   pub text: String,
+  pub attachments: Vec<NewAttachment>,
 }
 
 /// Why a message did not reach the Orchester's agent.
@@ -131,12 +134,35 @@ pub async fn stop(runners: &Runners, project: &OpenProject, chat: ChatId) -> Res
     .map_err(|_| Message::new("orchestrator.stop.failed"))
 }
 
-/// Keeps `outgoing` in the project at `root`, starting its conversation when it is new; refused while the
-/// Orchestrator has nothing it can run on. Blocks on SQLite.
+/// Keeps `outgoing` in the project at `root`, with its attachments, starting its conversation when it is new;
+/// refused while the Orchestrator has nothing it can run on, and when its attachments break the message's limits or
+/// the Orchestrator's connection could not read one. A message of attachments only is kept with their names. Blocks
+/// on SQLite.
 pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
-  let text = MessageBody::new(&outgoing.text).map_err(|_| Message::new("orchestrator.send.blank"))?;
-  if !OrchestratorSetup::load_in(root)?.readiness().is_ready() {
+  let attached = &outgoing.attachments;
+  let named = names_text(attached.iter().map(NewAttachment::name));
+  let words = if outgoing.text.trim().is_empty() && !attached.is_empty() {
+    &named
+  } else {
+    &outgoing.text
+  };
+  let text = MessageBody::new(words).map_err(|_| Message::new("orchestrator.send.blank"))?;
+  let setup = OrchestratorSetup::load_in(root)?;
+  if !setup.readiness().is_ready() {
     return Err(Message::new("orchestrator.send.notReady"));
+  }
+  let refused = |refusal: AttachmentRefusal| {
+    let name = attached.last().map(|attachment| attachment.name().as_str().to_owned());
+    Refused::new(name.unwrap_or_default(), refusal).message()
+  };
+  limits::check_message(attached).map_err(refused)?;
+  if let Some(provider) = setup.provider()
+    && let Some(new) = attached
+      .iter()
+      .find(|new| !support::takes(provider, new.media().kind()))
+  {
+    let kind = new.media().kind();
+    return Err(Refused::new(new.name().as_str(), AttachmentRefusal::NotTaken { kind, by: provider }).message());
   }
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let now = Timestamp::now();
@@ -144,7 +170,7 @@ pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
     .chat(outgoing.chat)
     .map_err(|error| messages::store_error(&error))?
     .unwrap_or_else(|| Chat::start(outgoing.chat, &text, now));
-  db.keep_chat_message(&chat, (outgoing.message, &text), now)
+  db.keep_chat_message_with(&chat, (outgoing.message, &text), attached, now)
     .map(drop)
     .map_err(|error| messages::store_error(&error))
 }

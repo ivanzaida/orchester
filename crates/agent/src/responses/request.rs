@@ -5,6 +5,7 @@
 //! items in order, so the provider's prefix cache (keyed by `prompt_cache_key`) keeps hitting.
 
 use orchester_core::{
+  attachment::{MediaType, input::AttachedFile},
   connection::WireApi,
   native::{
     item::Item,
@@ -87,6 +88,14 @@ fn input(items: &[Item], strip_before: usize) -> Result<Value, ModelError> {
 fn entry(item: &Item, strip: bool) -> Result<Option<Value>, ModelError> {
   let message = |role: &str, text: &str| json!({"type": "message", "role": role, "content": text});
   let entry = match item {
+    Item::User {
+      text,
+      attached: Some(file),
+      ..
+    } => json!({"type": "message", "role": "user", "content": [
+      {"type": "input_text", "text": text},
+      attached_part(file),
+    ]}),
     Item::User { text, .. } | Item::Compaction { summary: text } if !text.is_empty() => message("user", text),
     Item::Assistant { text } if !text.is_empty() => message("assistant", text),
     Item::User { .. } | Item::Compaction { .. } | Item::Assistant { .. } => return Ok(None),
@@ -112,6 +121,21 @@ fn entry(item: &Item, strip: bool) -> Result<Option<Value>, ModelError> {
     Item::Reasoning { .. } => return Ok(None),
   };
   Ok(Some(entry))
+}
+
+/// The input part of an attached image (`input_image`) or PDF (`input_file`) as a data URL; a copy that cannot be read
+/// is said in text instead, so the model is not told of a file it never sees.
+fn attached_part(file: &AttachedFile) -> Value {
+  let media = file.attachment.media();
+  let Ok(data) = file.base64() else {
+    return json!({"type": "input_text", "text": "The attachment above could not be read from the project's data."});
+  };
+  let url = format!("data:{};base64,{data}", media.as_str());
+  if media == MediaType::Pdf {
+    json!({"type": "input_file", "filename": file.attachment.name().as_str(), "file_data": url})
+  } else {
+    json!({"type": "input_image", "image_url": url})
+  }
 }
 
 /// A stored reasoning item as it is sent back: its summary and encrypted content, without its id and

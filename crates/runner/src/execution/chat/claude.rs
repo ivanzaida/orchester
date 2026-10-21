@@ -105,7 +105,7 @@ impl Turn {
       denied: &denied,
       denied_files: &denied_files,
     }
-    .command(self.text.as_str(), std::env::vars_os(), &prepared.environment)
+    .command((self.text.as_str(), &self.attached), std::env::vars_os(), &prepared.environment)
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::ClaudeCodeCli))
     .map_err(|error| cannot(error.to_string()))?;
     Ok(Started {

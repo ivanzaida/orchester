@@ -65,6 +65,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    attachments::tray::{self, PutBack},
     chat::follow::Follow,
     composer::message_scrollbar,
     icon::{Icon, icon},
@@ -74,6 +75,8 @@ use crate::{
 
 /// The most lines the message grows to before its lines scroll.
 const MAX_LINES: usize = 6;
+/// What names the composer's attachments, in tools and tests.
+const ATTACHMENTS: &str = "composer";
 
 /// A press of the send button, of a send menu's way, of a key or of a link.
 pub(super) type Press = Arc<dyn Fn() + Send + Sync>;
@@ -248,6 +251,7 @@ impl Composer {
     };
     let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
+    let attached = &composing.state.attached;
     let bar = controls::bar(
       ctx,
       &Bar {
@@ -257,6 +261,7 @@ impl Composer {
         sending: presses.clone(),
         menu: &self.menu,
         anchor: &self.anchor,
+        attached,
       },
     );
     let stroke = if self.focused.get() {
@@ -264,6 +269,9 @@ impl Composer {
     } else {
       PaletteColor::BorderStrong
     };
+    let draft = composing.state.draft.clone();
+    let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));
+    let chips = tray::tray(ctx, ATTACHMENTS, attached, &put_back);
     let composer = Column::new()
       .id("composer-box")
       .describe("mode", mode_name(&mode))
@@ -274,13 +282,16 @@ impl Composer {
       .background(PaletteColor::SurfaceInput)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Lg)
+      .with_children(chips)
       .child(field)
       .child(bar);
+    let refused = tray::refusals(ctx, ATTACHMENTS, attached);
     let feedback = feedback::line(ctx, &composing.state, (&props.conversation, mode_name(&mode)), &presses);
     let note = words::note(ctx, &mode, &props.conversation).map(|note| quiet(&note));
     context::line(ctx, composing, (&mode, recipient), leave)
       .into_iter()
-      .chain(std::iter::once(composer.into()))
+      .chain(std::iter::once(tray::drop_target(composer, attached).into()))
+      .chain(refused)
       .chain(feedback)
       .chain(note)
       .collect()
@@ -298,7 +309,8 @@ impl Composer {
     }
   }
 
-  /// The message field: it grows with its lines up to [`MAX_LINES`].
+  /// The message field: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or long text
+  /// attaches them instead of pasting words.
   fn field(
     &self,
     ctx: &Ctx,
@@ -331,6 +343,7 @@ impl Composer {
       .on_focus(move || gained.set(true))
       .on_blur(move || lost.set(false))
       .on_key_down(keys)
+      .on_paste(props.composing.state.attached.on_paste())
       .into()
   }
 }
