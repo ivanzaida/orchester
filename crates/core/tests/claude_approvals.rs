@@ -344,7 +344,7 @@ fn claude_approvals_invocation_gets_the_prompt_and_leaves_open_what_a_person_dec
       "{args}"
     );
     invocation.approvals = None;
-    let command = invocation.command("", Vec::new(), &CommandEnvironment::default());
+    let command = invocation.command(("", &[]), Vec::new(), &CommandEnvironment::default());
     assert_eq!(command.err(), Some(InvocationError::NoPermissionPrompt));
   }
 }

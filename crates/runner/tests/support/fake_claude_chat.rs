@@ -104,7 +104,11 @@ fn log(args: &[String], server: Option<&ChatServer>) {
     .and_then(|path| fs::read_to_string(path).ok())
     .and_then(|text| text.lines().next().map(str::to_owned))
     .unwrap_or_default();
-  let mut lines = vec![format!("argv: {}", args.join(" ")), format!("system-prompt: {prompt}")];
+  let mut lines = vec![
+    format!("argv: {}", args.join(" ")),
+    format!("system-prompt: {prompt}"),
+    format!("input-blocks: {}", crate::fake_claude_input::blocks()),
+  ];
   if let Some(server) = server {
     lines.push(format!("mcp-url: {}", server.url));
     if server.token.is_some() {

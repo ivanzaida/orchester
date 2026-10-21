@@ -112,6 +112,8 @@ pub fn codex_items(text: &str, files: &[AttachedFile]) -> io::Result<Vec<Value>>
         items.push(text_block(&not_given(attachment, AgentProvider::CodexCli)));
       }
       _ => {
+        // App Server reads the image itself: a copy that is gone fails here, as the other kinds do.
+        fs::metadata(&file.path)?;
         items.push(text_block(&header(attachment)));
         items.push(json!({"type": "localImage", "path": file.path}));
       }
