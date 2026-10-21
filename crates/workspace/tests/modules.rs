@@ -126,7 +126,10 @@ fn modules_burndown_takes_a_task_done_before_it_joined_as_done() {
   let mut done = track(vec![(at(2, 9), true)], vec![]);
   done.first_status = WorkflowStatus::Done;
   let burndown = chart(&[done], (1, Some(2), 2));
-  assert_eq!(burndown.start_scope, 1, "the line starts on the day the module had work");
+  assert_eq!(
+    burndown.start_scope, 1,
+    "the line starts on the day the module had work"
+  );
   assert_eq!((burndown.days[1].scope, burndown.days[1].remaining), (Some(1), Some(0)));
   assert_eq!(burndown.days[1].added, 1);
 }
