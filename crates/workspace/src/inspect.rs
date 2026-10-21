@@ -55,6 +55,10 @@ macro_rules! markers {
     impl $inspect for crate::memory::read::ProjectMemory {}
     impl $inspect for crate::memory::read::TaskMemory {}
     impl $inspect for crate::messages::Message {}
+    impl $inspect for crate::modules::ModuleChoice {}
+    impl $inspect for crate::modules::ModuleFilter {}
+    impl $inspect for crate::modules::data::ModulePage {}
+    impl $inspect for crate::modules::data::ModuleSummary {}
     impl $inspect for crate::orchestrator::chat::ChatView {}
     impl $inspect for crate::orchestrator::chat::History {}
     impl $inspect for crate::orchestrator::send::Outgoing {}

@@ -56,6 +56,7 @@
       "brief": "Brief",
       "context": "Context",
       "pipeline": "Pipeline",
+      "module": "Module",
       "limits": "Limits",
       "instructions": "Instructions"
     },
@@ -87,6 +88,11 @@
         "none": "No published pipelines in this project",
         "open": "Open Pipelines ↗",
         "missingKept": "Saving keeps it as the task's pipeline; choosing one here replaces it for every member."
+      },
+      "module": {
+        "label": "Module",
+        "description": "The epic, milestone or sprint the task counts toward.",
+        "none": "No module"
       },
       "budget": {
         "label": "Run budget",

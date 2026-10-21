@@ -1,32 +1,16 @@
 //! `git` in one directory, for integration: the user's checkout or a run's worktree. Commands run
-//! with git's messages in English, without optional locks ([`git_command`]) and without variables
-//! that locate another repository ([`LOCATING`]); a failure is git's message without credentials.
+//! with git's messages in English, without optional locks and without variables that locate another
+//! repository ([`local_git_command`]); a failure is git's message without credentials.
 
 use std::path::Path;
 
 use super::GitError;
 use crate::{
   command::{CommandOutput, CommandRunner},
-  diff::git::git_command,
+  diff::git::local_git_command,
   repository::redact_userinfo,
   run::BranchName,
 };
-
-/// Variables that would point git at another repository, index, object store or ref namespace than
-/// the folder it runs in, or give it configuration of the caller's, e.g. ones a hook that started
-/// Orchester's process passed on. Without `GIT_CONFIG_COUNT`, git reads no `GIT_CONFIG_KEY_<n>` or
-/// `GIT_CONFIG_VALUE_<n>`.
-const LOCATING: [&str; 9] = [
-  "GIT_DIR",
-  "GIT_WORK_TREE",
-  "GIT_INDEX_FILE",
-  "GIT_OBJECT_DIRECTORY",
-  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-  "GIT_COMMON_DIR",
-  "GIT_NAMESPACE",
-  "GIT_CONFIG_PARAMETERS",
-  "GIT_CONFIG_COUNT",
-];
 
 pub(super) struct Git<'a, R: CommandRunner> {
   runner: &'a R,
@@ -50,10 +34,7 @@ impl<'a, R: CommandRunner> Git<'a, R> {
   }
 
   pub(super) fn output(&self, args: &[&str]) -> Result<CommandOutput, GitError> {
-    let command = LOCATING.iter().fold(
-      git_command(self.program, self.dir, args.iter().copied()),
-      |command, name| command.without_env(name),
-    );
+    let command = local_git_command(self.program, self.dir, args.iter().copied());
     Ok(self.runner.run(&command)?)
   }
 

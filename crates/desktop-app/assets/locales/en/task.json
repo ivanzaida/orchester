@@ -16,6 +16,10 @@
       "notFoundBody": "It may have been deleted, or its key changed. The task list shows the project's tasks.",
       "toTasks": "Open the task list"
     },
+    "module": {
+      "label": "Module",
+      "none": "No module"
+    },
     "crumbs": {
       "tasks": "Tasks",
       "notShared": "Not shared"

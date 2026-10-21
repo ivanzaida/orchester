@@ -1,14 +1,14 @@
 use std::num::NonZeroU64;
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ModuleId, ResourceId},
   project::TaskKey,
   resource::VersionNumber,
 };
 use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, NEW, NewConnection,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, MODULES, NEW, NewConnection,
   ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS,
   Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
@@ -39,6 +39,10 @@ pub enum ProjectPage {
   /// A task kept *Not shared* when the project joined, by its kept key, which a shared task may have too (`R4elt`).
   KeptTask(TaskKey, TaskView),
   Task(TaskKey, TaskView),
+  /// The Modules list, with each module's progress.
+  Modules,
+  /// A module's page: its tasks and its burndown.
+  Module(ModuleId),
   MergeQueue,
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
@@ -120,6 +124,7 @@ impl ProjectPage {
       Screen::OrchestratorSettings => Self::OrchestratorSettings,
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
+      Screen::Modules => Self::Modules,
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
       Screen::Usage => Self::Usage(Box::default()),
@@ -146,6 +151,7 @@ impl ProjectPage {
       Self::NewTask => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) | Self::KeptTask(..) => Screen::Task,
+      Self::Modules | Self::Module(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
       Self::Usage(_) => Screen::Usage,
@@ -182,6 +188,7 @@ impl ProjectPage {
       Self::EditTask(key) => format!("{tasks}/{key}/{EDIT}"),
       Self::Task(key, view) => view.path(&format!("{tasks}/{key}")),
       Self::KeptTask(key, view) => view.path(&format!("{tasks}/{KEPT}/{key}")),
+      Self::Module(id) => format!("{project_root}/{MODULES}/{id}"),
       Self::Skills(filter) => with_query(segment(Screen::Skills), &[filter.param()]),
       Self::NewSkill => with_query(format!("{project_root}/skills"), &[("skill", Some("new"))]),
       Self::Skill(id) => with_query(format!("{project_root}/skills"), &[("skill", Some(&id.to_string()))]),
@@ -308,6 +315,7 @@ impl ProjectPage {
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
+      [MODULES, id] => id.parse().map(Self::Module).map_err(|_| RouteError::NoScreen),
       [segment] => Screen::ALL
         .into_iter()
         .find(|screen| screen.segment() == Some(*segment))

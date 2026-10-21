@@ -35,6 +35,7 @@ use lurq::{
 };
 use orchester_core::{project::TaskKey, task::organization::TaskFilter};
 use orchester_workspace::{
+  modules::ModuleFilter,
   runner::{RunnerStatus, state::RunnerState},
   tasks::{
     browse::{self, PipelineFilter, Query, TaskSort},
@@ -96,6 +97,7 @@ impl Component for TasksScreen {
       choices: Choices {
         search,
         pipeline: ctx.signal(PipelineFilter::default()),
+        module: ctx.signal(ModuleFilter::default()),
         sort: ctx.signal(TaskSort::default()),
       },
       view: ListView::default(),
@@ -175,20 +177,12 @@ impl TasksScreen {
       not_shared: shown.not_shared,
       search: list.search().unwrap_or_default().to_owned(),
       pipeline: self.choices.pipeline.get(),
+      module: self.choices.module.get(),
       sort: self.choices.sort.get(),
     };
-    let filtered = !key.search.trim().is_empty() || key.pipeline.0.is_some();
+    let filtered = !key.search.trim().is_empty() || key.pipeline.0.is_some() || key.module != ModuleFilter::Any;
     let separator = ctx.t("tasks.listSeparator");
-    let rows = self.view.rows(key.clone(), |tasks| {
-      let organization = TaskFilter::default();
-      let query = Query {
-        text: &key.search,
-        pipeline: key.pipeline,
-        organization: &organization,
-        separator: &separator,
-      };
-      browse::rows(tasks, header::workspace_tab(key.tab), query, key.sort)
-    });
+    let rows = self.read_rows(&key, &separator);
     let kept = shown.not_shared.then(|| {
       let name = project.open.project.name().as_str();
       not_shared::notice(ctx, (&shown.source.not_shared, name), shown.shared)
@@ -280,9 +274,25 @@ impl TasksScreen {
       return states::empty_tab(ctx, &word, tab == TaskListTab::NeedsYou);
     }
     let (search, pipeline) = (self.choices.search.clone(), self.choices.pipeline.clone());
+    let module = self.choices.module.clone();
     states::no_matches(ctx, (&word, count), move || {
       search.set(String::new());
       pipeline.set(PipelineFilter::default());
+      module.set(ModuleFilter::default());
+    })
+  }
+
+  /// The rows `key` asks for: the tab's tasks as searched, narrowed to a pipeline and a module, and ordered.
+  fn read_rows(&self, key: &RowsKey, separator: &str) -> std::sync::Arc<Vec<TaskRow>> {
+    self.view.rows(key.clone(), |tasks| {
+      let organization = TaskFilter::default();
+      let query = Query {
+        text: &key.search,
+        pipeline: key.pipeline,
+        organization: &organization,
+        separator,
+      };
+      browse::rows_in(tasks, header::workspace_tab(key.tab), (query, key.module), key.sort)
     })
   }
 }

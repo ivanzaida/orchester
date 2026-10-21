@@ -43,6 +43,9 @@ serde_json.workspace = true
 # Digests: a draft's revision for automation (`drafts`) and the code viewer's reads (`files::Digest`).
 sha2.workspace = true
 syntect.workspace = true
+# A scratch repository outside the folder, to count what a first commit would add without making anything there
+# (`repository::init`); also writability probes.
+tempfile.workspace = true
 thiserror.workspace = true
 # Reads the repository's discovery file `orchester.toml` (docs/architecture/server.md, decision 11).
 toml.workspace = true

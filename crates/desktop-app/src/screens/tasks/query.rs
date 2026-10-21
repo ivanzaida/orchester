@@ -14,9 +14,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::tasks::{
-  browse::{PipelineFilter, TaskSort},
-  data::ProjectTasks,
+use orchester_workspace::{
+  modules::ModuleFilter,
+  tasks::{
+    browse::{PipelineFilter, TaskSort},
+    data::ProjectTasks,
+  },
 };
 
 use crate::{
@@ -29,7 +32,8 @@ use crate::{
   },
 };
 
-/// `Search` `YDswQ`, `Pipeline filter` `hEEE0` and `Sort` `qkzdc`.
+/// `Search` `YDswQ`, `Pipeline filter` `hEEE0` and `Sort` `qkzdc`; the module filter (ORC-48, no frame yet) is as
+/// wide as the pipeline filter.
 const SEARCH_WIDTH: f32 = 300.0;
 const PIPELINE_WIDTH: f32 = 180.0;
 const SORT_WIDTH: f32 = 160.0;
@@ -38,7 +42,30 @@ const SORT_WIDTH: f32 = 160.0;
 pub(super) struct Choices {
   pub search: Signal<String>,
   pub pipeline: Signal<PipelineFilter>,
+  pub module: Signal<ModuleFilter>,
   pub sort: Signal<TaskSort>,
+}
+
+/// The module filter: every module, no module, or one of the project's modules once the tasks are read.
+fn module_filter(ctx: &Ctx, choices: &Choices, tasks: Option<&ProjectTasks>) -> Element {
+  let mut modules = vec![
+    SelectOption::new(ModuleFilter::Any, ctx.t("tasks.query.allModules")),
+    SelectOption::new(ModuleFilter::None, ctx.t("tasks.query.noModule")),
+  ];
+  modules.extend(
+    tasks
+      .into_iter()
+      .flat_map(|tasks| tasks.modules.iter())
+      .map(|module| SelectOption::new(ModuleFilter::In(module.id()), module.name().as_str())),
+  );
+  SelectField::new(
+    "tasks-module-filter",
+    ctx.t("tasks.query.module"),
+    choices.module.clone(),
+    modules,
+  )
+  .width(Dimension::Px(PIPELINE_WIDTH))
+  .render(ctx)
 }
 
 /// The search, the pipeline filter with the project's published pipelines, the sort and the note on
@@ -87,6 +114,7 @@ pub(super) fn query(ctx: &mut Ctx, choices: &Choices, tasks: Option<&ProjectTask
     .align_items(Alignment::Center)
     .child(search)
     .child(pipeline)
+    .child(module_filter(ctx, choices, tasks))
     .child(sort)
     .child(Spacer::new().flex(1.0))
     .child(
