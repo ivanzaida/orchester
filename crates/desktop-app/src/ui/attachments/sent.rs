@@ -20,14 +20,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  attachment::{Attachment, AttachmentKind},
-  id::AttachmentId,
-};
+use orchester_core::attachment::{Attachment, AttachmentKind};
 use orchester_store::attachment_file;
 use orchester_workspace::{attachments::copy_unreadable, background};
 
 use super::{
+  Opened,
   chip::AttachmentChip,
   image_key,
   preview::{Preview, Shown},
@@ -74,7 +72,7 @@ struct NotOpened(Option<Arc<str>>);
 impl DevtoolsInspectable for NotOpened {}
 
 struct SentAttachments {
-  open: Signal<Option<AttachmentId>>,
+  open: Signal<Opened>,
   failed: Signal<NotOpened>,
 }
 
@@ -83,14 +81,14 @@ impl Component for SentAttachments {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      open: ctx.signal(None),
+      open: ctx.signal(Opened::default()),
       failed: ctx.signal(NotOpened::default()),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let opened = self.open.get().and_then(|open| {
+    let opened = self.open.get().0.and_then(|open| {
       props
         .attachments
         .iter()
@@ -171,7 +169,7 @@ impl SentAttachments {
       format!("{}-attachment-{}", props.id, attachment.id()),
       (name, attachment.media(), attachment.size()),
     )
-    .opened(self.open.get() == Some(attachment.id()));
+    .opened(self.open.get() == Opened(Some(attachment.id())));
     if attachment.media().kind() == AttachmentKind::Image {
       chip = chip.thumbnail(ImageSource::File(path.clone()), image_key(attachment.id()));
     }
@@ -187,9 +185,7 @@ impl SentAttachments {
       let (open, id) = (self.open.clone(), attachment.id());
       chip.opens(
         ctx.t_args("attachments.preview", [("name", name.to_owned())]),
-        move || {
-          open.update(|shown| *shown = if *shown == Some(id) { None } else { Some(id) });
-        },
+        move || open.update(|shown| shown.toggle(id)),
       )
     };
     chip.render(ctx)
@@ -220,7 +216,7 @@ impl SentAttachments {
       format!("{}-attachment-preview", props.id),
       (&name, attachment.media(), attachment.size()),
       shown,
-      move || close.set(None),
+      move || close.set(Opened::default()),
     )
     .opens(move || open_file(path.clone(), name.clone(), failed.clone()))
     .render(ctx)

@@ -11,13 +11,26 @@ pub mod preview;
 pub mod sent;
 pub mod tray;
 
-use lurq::app::ctx::Ctx;
+use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
 use orchester_core::{
   attachment::{AttachmentKind, MediaType},
   id::AttachmentId,
 };
 
 use super::icon::Icon;
+
+/// The file whose preview is open, if any: a signal's value, which lurq's DevTools need marked (core's ids are not).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Opened(pub Option<AttachmentId>);
+
+impl DevtoolsInspectable for Opened {}
+
+impl Opened {
+  /// Opens the preview of `id`, or closes it when it is the one open.
+  pub fn toggle(&mut self, id: AttachmentId) {
+    self.0 = if self.0 == Some(id) { None } else { Some(id) };
+  }
+}
 
 /// The side of a chip's thumbnail or icon tile.
 pub(crate) const TILE: f32 = 32.0;

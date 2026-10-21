@@ -153,7 +153,7 @@ fn a_message_of_attachments_only_is_kept_with_their_names() {
     (4, hash()),
     None,
   );
-  let both = [shot.clone(), notes.clone()];
+  let both = [shot.clone(), notes];
   let text = names_text(both.iter().map(Attachment::name));
   assert_eq!(text, "shot.png\nnotes.txt");
   assert!(is_names_only(&text, &both));

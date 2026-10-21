@@ -25,6 +25,7 @@ use orchester_workspace::{
 };
 use tokio::runtime::Handle;
 
+use super::Opened;
 use crate::services::{Services, attachment_picker::AttachmentPicker};
 
 /// The files a draft holds, in the order they were attached.
@@ -62,7 +63,7 @@ pub struct DraftAttachments {
   /// Files and pastes being read, which the composer shows until they are added.
   pub reading: Signal<usize>,
   /// The file whose preview is open over the box.
-  pub preview: Signal<Option<AttachmentId>>,
+  pub preview: Signal<Opened>,
   runtime: Handle,
   names: PastedNames,
 }
@@ -78,7 +79,7 @@ impl DraftAttachments {
       attached: ctx.signal(Attached(kept)),
       refused: ctx.signal(Refusals::default()),
       reading: ctx.signal(0),
-      preview: ctx.signal(None),
+      preview: ctx.signal(Opened::default()),
       runtime: Services::of(ctx).runtime,
       names,
     }
@@ -95,14 +96,14 @@ impl DraftAttachments {
       self.attached.set(Attached(files));
     }
     self.refused.set(Refusals::default());
-    self.preview.set(None);
+    self.preview.set(Opened::default());
   }
 
   /// Drops the file `id`.
   pub fn remove(&self, id: AttachmentId) {
     self.attached.update(|held| held.0.retain(|file| file.id() != id));
-    if self.preview.get_untracked() == Some(id) {
-      self.preview.set(None);
+    if self.preview.get_untracked() == Opened(Some(id)) {
+      self.preview.set(Opened::default());
     }
   }
 

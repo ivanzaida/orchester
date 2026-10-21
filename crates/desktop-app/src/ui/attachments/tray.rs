@@ -19,6 +19,7 @@ use lurq::{
 use orchester_core::attachment::{MediaType, NewAttachment};
 
 use super::{
+  Opened,
   chip::AttachmentChip,
   draft::DraftAttachments,
   image_key,
@@ -54,7 +55,7 @@ pub fn tray(ctx: &mut Ctx, id: &str, draft: &DraftAttachments, put_back: &PutBac
   if held.is_empty() && !reading {
     return None;
   }
-  let opened = draft.preview.get();
+  let opened = draft.preview.get().0;
   let preview = opened
     .and_then(|open| held.iter().find(|file| file.id() == open))
     .map(|file| preview(ctx, id, (draft, file), put_back));
@@ -97,7 +98,7 @@ fn chip(ctx: &Ctx, id: &str, draft: &DraftAttachments, file: &NewAttachment) -> 
     let (preview, open) = (draft.preview.clone(), file.id());
     chip = chip.opens(
       ctx.t_args("attachments.preview", [("name", name.to_owned())]),
-      move || preview.update(|shown| *shown = if *shown == Some(open) { None } else { Some(open) }),
+      move || preview.update(|shown| shown.toggle(open)),
     );
   }
   let (remover, gone) = (draft.clone(), file.id());
@@ -118,7 +119,7 @@ fn preview(ctx: &mut Ctx, id: &str, (draft, file): (&DraftAttachments, &NewAttac
     format!("{id}-attachment-preview"),
     (file.name().as_str(), file.media(), file.size()),
     shown,
-    move || close.set(None),
+    move || close.set(Opened::default()),
   );
   let preview = match file.text() {
     Some(text) => {
