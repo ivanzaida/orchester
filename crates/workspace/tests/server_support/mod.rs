@@ -299,6 +299,13 @@ impl TestServer {
     self.admin_request("PATCH", &format!("{path}/{id}"), &body);
   }
 
+  /// The organization changes of task `task` of the project with id `project`, oldest first, as the first admin
+  /// reads them.
+  pub fn task_history(&self, project: impl std::fmt::Display, task: impl std::fmt::Display) -> Value {
+    let path = format!("/projects/{project}/tasks/{task}/history");
+    self.admin_request("GET", &path, &Value::Null)["changes"].take()
+  }
+
   /// An invite to `project` as a member by email, which the cloud routes; returns its id.
   pub fn project_email_invite(&self, email: &str, project: &SharedProject) -> String {
     let invite = self.admin_request(
