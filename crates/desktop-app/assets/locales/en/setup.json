@@ -35,7 +35,10 @@
       "needsRepository": "The project folder must be a git repository to continue.",
       "explanation": "Creates the project in the repository’s .orchester folder and opens it.",
       "create": "Create project & continue",
-      "creating": "Creating project…"
+      "creating": "Creating project…",
+      "creatingRepository": "Creating the git repository…",
+      "needsCommit": "The project folder needs a first commit to continue.",
+      "needsGit": "Install git to continue: runs work in git worktrees."
     },
     "unnamed": "This project",
     "github": {
@@ -140,6 +143,110 @@
         "accessTitle": "Add access",
         "accessDetail": "Orchester needs the {{scope}} scope. If gh doesn’t have it, add it.",
         "runHint": "Run these in a terminal, then check again."
+      }
+    },
+    "git": {
+      "status": {
+        "notFound": "git not found",
+        "noCommits": "No commits"
+      },
+      "heading": {
+        "notFound": "git is not installed on this computer",
+        "commitFailed": "The first commit failed",
+        "noCommits": "This repository has no commits yet"
+      },
+      "note": {
+        "notRepository": "Runs work in git worktrees, so the project folder must be a git repository. Orchester can create one here, or you can choose another folder.",
+        "notFound": "Orchester runs git to read the folder and to create a repository, and runs work in git worktrees. Install git, then check again.",
+        "commitFailed": "Runs branch from a commit, so the project folder needs one. The repository is kept: Try again makes only the first commit.",
+        "noCommits": "Runs branch from a commit, so the project folder needs one. Orchester can make the first commit here."
+      },
+      "property": {
+        "files": "Files"
+      },
+      "value": {
+        "notFound": "Not found on this computer",
+        "counting": "Counting files…",
+        "filesIgnored": "{{count}} files · a .gitignore is in the folder",
+        "fileIgnored": "1 file · a .gitignore is in the folder",
+        "files": "{{count}} files",
+        "file": "1 file",
+        "noFiles": "None · the folder is empty",
+        "filesUnknown": "Couldn’t count the files",
+        "noCommits": "Git repository · {{branch}} · no commits",
+        "noCommitsDetached": "Git repository · no commits",
+        "commits": "Git repository · {{branch}} · {{count}} commits",
+        "commit": "Git repository · {{branch}} · 1 commit",
+        "commitsDetached": "Git repository · {{count}} commits",
+        "commitDetached": "Git repository · 1 commit",
+        "commitsUncounted": "Git repository · {{branch}}",
+        "repository": "Git repository"
+      },
+      "create": {
+        "title": "Create a git repository here",
+        "branchConfigured": "git init on the branch {{branch}}, the name your git setting init.defaultBranch gives.",
+        "branchDefault": "git init on the branch {{branch}}: git’s default, since init.defaultBranch is not set.",
+        "branchChecking": "git init on the branch your git setting init.defaultBranch names, or main.",
+        "then": "Then a first commit, “Initial commit”, by the author git is set up with. Runs branch from a commit, and a new repository has none.",
+        "firstCommit": "FIRST COMMIT",
+        "files": "Commit the folder’s files as the first commit",
+        "filesDetailIgnored": "Adds {{count}} files. The .gitignore in the folder is honoured: what it lists stays out of git.",
+        "fileDetailIgnored": "Adds 1 file. The .gitignore in the folder is honoured: what it lists stays out of git.",
+        "filesDetail": "Adds {{count}} files.",
+        "fileDetail": "Adds 1 file.",
+        "filesDetailUnknown": "Adds the folder’s files.",
+        "filesEmpty": "The folder is empty: there are no files to commit.",
+        "empty": "Start with an empty first commit",
+        "emptyDetail": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s {{count}} files until you commit them.",
+        "emptyDetailOne": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents don’t see the folder’s file until you commit it.",
+        "emptyDetailUnknown": "Nothing of the folder is committed yet. Runs start from this empty commit, so agents see none of the folder’s files until you commit them.",
+        "emptyDetailEmptyFolder": "The repository starts with one commit that holds no files, for runs to branch from.",
+        "review": "Review the files git will add; a .gitignore keeps files out.",
+        "create": "Create a git repository here",
+        "creating": "Creating repository…",
+        "commit": "Make the first commit",
+        "committing": "Making the first commit…",
+        "tryAgain": "Try again",
+        "chooseAnother": "Choose another folder…",
+        "unavailable": "Create a git repository here needs git on this computer.",
+        "fallback": "Or in a terminal: run git init and make a first commit, then check again.",
+        "fallbackCommit": "Or in a terminal: make a first commit, then check again."
+      },
+      "progress": {
+        "initializing": "Creating the repository on {{branch}}…",
+        "initializingUnknown": "Creating the repository…",
+        "initialized": "Created the repository on {{branch}}",
+        "committingFiles": "Committing {{count}} files as the first commit…",
+        "committingFile": "Committing 1 file as the first commit…",
+        "committingUnknown": "Committing the folder’s files as the first commit…",
+        "committingEmpty": "Making an empty first commit…"
+      },
+      "done": {
+        "files": "Created here with a first commit of {{count}} files.",
+        "file": "Created here with a first commit of 1 file.",
+        "empty": "Created here with an empty first commit."
+      },
+      "error": {
+        "gitMissing": "git could not be started: it is no longer found on this computer. Install git, then check again.",
+        "notWritable": "Couldn’t create the repository: {{folder}} can’t be written (permission denied). Choose a folder you can write to, or change its permissions, then try again.",
+        "alreadyRepository": "The folder is a git repository already. Check again.",
+        "notRepository": "The folder is no longer a git repository. Check again.",
+        "hasCommits": "The repository has a commit already. Check again.",
+        "initFailed": "git init failed. git said:",
+        "addFailed": "git add failed. git said:",
+        "commitFailed": "git commit failed. git said:",
+        "initStopped": "git init did not finish. Try again.",
+        "addStopped": "git add did not finish. Try again.",
+        "commitStopped": "git commit did not finish. Try again."
+      },
+      "identity": {
+        "intro": "Tell git who you are in a terminal, then try again. Orchester never changes git’s settings.",
+        "name": "git config --global user.name \"Your Name\"",
+        "email": "git config --global user.email \"you@example.com\""
+      },
+      "install": {
+        "intro": "Install git in a terminal, then check again:",
+        "unsupported": "Install git with this system’s package manager, then check again."
       }
     }
   }

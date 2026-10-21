@@ -9,7 +9,7 @@ use orchester_core::{
   connection::{GitHubCheckResult, GitHubLogin, REQUIRED_SCOPE},
   repository::{Detection, DetectionState, GitHubDetection, GitHubRepo},
 };
-use orchester_workspace::display;
+use orchester_workspace::{display, repository::init::LocalRepository};
 
 use crate::ui::icon::Icon;
 
@@ -169,19 +169,16 @@ pub(super) struct Property {
   pub look: Value,
 }
 
-/// What detection knows of the folder's repository, its remote and the account (`Properties` `Mcur1`).
+/// What detection knows of the folder's repository, its remote and the account (`Properties` `Mcur1`); a
+/// repository without a remote also says its folder and what git sees there (`FQxGH` in `Tz5KP`).
 pub(super) fn properties(
   ctx: &Ctx,
-  detection: Option<&Detection>,
+  (detection, local): (Option<&Detection>, Option<&LocalRepository>),
   state: Option<&DetectionState>,
   expected: Option<&GitHubLogin>,
   folder: &Path,
 ) -> Vec<Property> {
-  let prop = |key: &str, value: Arc<str>, look| Property {
-    label: ctx.t(&format!("setup.github.property.{key}")),
-    value,
-    look,
-  };
+  let prop = |key: &str, value: Arc<str>, look| property(ctx, key, value, look);
   let (Some(detection), Some(state)) = (detection, state) else {
     let checking = ctx.t("setup.github.value.checking");
     return vec![
@@ -191,11 +188,7 @@ pub(super) fn properties(
   };
   match detection {
     Detection::NotAGitRepository | Detection::GitFailed(_) => {
-      let mut rows = vec![prop(
-        "folder",
-        display::shorten_path(folder, PATH_CHARS).into(),
-        Value::Mono,
-      )];
+      let mut rows = vec![folder_property(ctx, folder)];
       if matches!(state, DetectionState::NotAGitRepository) {
         rows.push(prop(
           "git",
@@ -205,11 +198,19 @@ pub(super) fn properties(
       }
       rows
     }
-    Detection::NoRemote(remote) => vec![prop(
-      "remote",
-      ctx.t_args("setup.github.value.noRemote", [("remote", remote.as_str())]),
-      Value::Text(PaletteColor::TextSecondary),
-    )],
+    Detection::NoRemote(remote) => {
+      let mut rows = Vec::new();
+      if let Some(git) = local.and_then(|local| git_value(ctx, local)) {
+        rows.push(folder_property(ctx, folder));
+        rows.push(prop("git", git, Value::Text(PaletteColor::TextPrimary)));
+      }
+      rows.push(prop(
+        "remote",
+        ctx.t_args("setup.github.value.noRemote", [("remote", remote.as_str())]),
+        Value::Text(PaletteColor::TextSecondary),
+      ));
+      rows
+    }
     Detection::NotGitHub(remote) => vec![prop(
       "remote",
       remote_value(ctx, remote.name().as_str(), display::remote_address(remote.url())),
@@ -219,6 +220,52 @@ pub(super) fn properties(
       .into_iter()
       .map(|(key, value, look)| prop(key, value, look))
       .collect(),
+  }
+}
+
+/// The property `setup.github.property.<key>` with `value`.
+pub(super) fn property(ctx: &Ctx, key: &str, value: Arc<str>, look: Value) -> Property {
+  Property {
+    label: ctx.t(&format!("setup.github.property.{key}")),
+    value,
+    look,
+  }
+}
+
+/// The chosen folder, cut in its middle when it is long.
+pub(super) fn folder_property(ctx: &Ctx, folder: &Path) -> Property {
+  property(
+    ctx,
+    "folder",
+    display::shorten_path(folder, PATH_CHARS).into(),
+    Value::Mono,
+  )
+}
+
+/// What git sees of a repository: its branch and how many commits it has (`WD3IS`, `g6z6w`); `None` for a
+/// folder that is none, or one git could not read.
+pub(super) fn git_value(ctx: &Ctx, local: &LocalRepository) -> Option<Arc<str>> {
+  Some(match local {
+    LocalRepository::NoCommits { branch: Some(branch) } => {
+      ctx.t_args("setup.git.value.noCommits", [("branch", branch.as_str())])
+    }
+    LocalRepository::NoCommits { branch: None } => ctx.t("setup.git.value.noCommitsDetached"),
+    LocalRepository::Commits { branch, count } => commits(ctx, branch.as_deref(), *count),
+    LocalRepository::GitMissing | LocalRepository::NotRepository | LocalRepository::Unread => return None,
+  })
+}
+
+fn commits(ctx: &Ctx, branch: Option<&str>, count: Option<u64>) -> Arc<str> {
+  match (branch, count) {
+    (Some(branch), Some(1)) => ctx.t_args("setup.git.value.commit", [("branch", branch)]),
+    (Some(branch), Some(count)) => ctx.t_args(
+      "setup.git.value.commits",
+      [("branch", branch.to_owned()), ("count", count.to_string())],
+    ),
+    (Some(branch), None) => ctx.t_args("setup.git.value.commitsUncounted", [("branch", branch)]),
+    (None, Some(1)) => ctx.t("setup.git.value.commitDetached"),
+    (None, Some(count)) => ctx.t_args("setup.git.value.commitsDetached", [("count", count.to_string())]),
+    (None, None) => ctx.t("setup.git.value.repository"),
   }
 }
 

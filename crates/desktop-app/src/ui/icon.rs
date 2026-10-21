@@ -133,6 +133,7 @@ icons! {
   Folders => '\u{e33f}',
   Gauge => '\u{e1bf}',
   GitBranch => '\u{e0e2}',
+  GitBranchPlus => '\u{e1f4}',
   GitCommitHorizontal => '\u{e0e3}',
   GitCompare => '\u{e359}',
   GitCompareArrows => '\u{e553}',

@@ -14,6 +14,7 @@ use orchester_app::{
   mcp::{McpKind, McpLink, McpSettings, McpStatus},
   root::{Root, RootProps},
   services::path_picker::PathPicker,
+  startup::Launch,
   ui::code_box::Copier,
 };
 use parking_lot::Mutex;
@@ -87,6 +88,11 @@ impl Window {
   /// The window `data` starts, with the stand-ins.
   pub fn with_stand_ins(data: Data) -> (Self, StandIns) {
     let launch = data.launch();
+    Self::launched_with_stand_ins(data, launch)
+  }
+
+  /// The window `launch` starts on `data`, with the stand-ins.
+  pub fn launched_with_stand_ins(data: Data, launch: Launch) -> (Self, StandIns) {
     let mut window = Self::of(data, launch);
     let stand_ins = StandIns::default();
     let props = HostProps {
