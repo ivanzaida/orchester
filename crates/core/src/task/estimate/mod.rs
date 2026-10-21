@@ -219,6 +219,9 @@ pub enum EstimateOutcome {
   /// An estimate from the brief and criteria as they are was tried already and failed: it is tried again once they
   /// change.
   TriedBefore,
+  /// The brief or criteria changed while the estimator worked: its points were not kept, and the request the change
+  /// made asks from them as they are.
+  Outdated,
   /// The estimator gave no points, for this reason.
   Failed { failure: ReviewFailure },
 }

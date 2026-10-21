@@ -10,7 +10,7 @@ use orchester_core::{
   store::SettingsStore,
   task::{
     Task, TaskDetails,
-    estimate::StoryPoints,
+    estimate::{StoryPoints, check_automation},
     organization::{ChangeActor, TaskOrganization},
   },
   time::Timestamp,
@@ -297,15 +297,15 @@ fn with_points(
   match set_automation_points(&mut db, &task, points) {
     Ok(()) => {}
     Err(PointsError::Store(error)) => return Err(error.into()),
-    Err(PointsError::Refused(_)) => {
-      return Err(ToolError::refused(
-        "persons_points",
-        vec![Message::new("appMcp.errors.personsPoints")],
-      ));
-    }
+    Err(PointsError::Refused(_)) => return Err(persons_points()),
   }
   let estimate = db.story_estimate(task.id())?;
   Ok(task.with_estimate(estimate))
+}
+
+/// Automation's points refused: a person set the task's.
+fn persons_points() -> ToolError {
+  ToolError::refused("persons_points", vec![Message::new("appMcp.errors.personsPoints")])
 }
 
 /// `task` put in `module`, or in none, when it is not there already; the move is recorded as automation's.
@@ -324,6 +324,10 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
   let db = ProjectDb::open(&root)?;
   let published = published_pipelines(&db)?;
   let task = find_task(&db, &args.key)?;
+  // Points over a person's are refused before anything of the edit is saved.
+  if points.is_some() && check_automation(task.estimate()).is_err() {
+    return Err(persons_points());
+  }
   let module = match &args.module {
     Some(Some(named)) => Some(Some(find_module(&db, named)?.id())),
     Some(None) => Some(None),

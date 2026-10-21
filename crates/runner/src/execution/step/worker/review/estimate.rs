@@ -3,7 +3,7 @@
 //! of a native connection's client with its key from the keychain), with the estimate's instructions and schema. A
 //! task a person sized, or one whose points were made or asked from its brief and criteria as they are, asks nothing.
 //! A request that asked a model is recorded with what it spent ([`EstimateRecord`]); points are stored only where no
-//! person's value is.
+//! person's value is, and only while the task's brief and criteria are still those they were made from.
 
 use std::{
   path::{Path, PathBuf},
@@ -26,7 +26,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Rejection;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{AutomationPoints, ProjectDb, StoreError};
 use tokio::runtime::Handle;
 
 use super::{
@@ -116,11 +116,11 @@ fn estimate_blocking(
     }
   };
   let estimate = StoryEstimate::automation(answer.points, Some(&answer.reason), basis, ended_at);
-  if db.set_automation_points(task.id(), &estimate).map_err(failed)? {
-    Ok(EstimateOutcome::Estimated { points: answer.points })
-  } else {
-    Ok(EstimateOutcome::PersonsValue)
-  }
+  Ok(match db.set_automation_points(task.id(), &estimate).map_err(failed)? {
+    AutomationPoints::Stored => EstimateOutcome::Estimated { points: answer.points },
+    AutomationPoints::PersonsValue => EstimateOutcome::PersonsValue,
+    AutomationPoints::Outdated => EstimateOutcome::Outdated,
+  })
 }
 
 /// How a request that gave no points is recorded.

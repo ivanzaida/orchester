@@ -86,6 +86,7 @@ pub use self::{
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,
+  estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_reports::KeptReport,

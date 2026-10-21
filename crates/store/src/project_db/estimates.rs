@@ -8,13 +8,24 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokensUsed,
 };
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
-use super::{ProjectDb, connections::provider_text};
+use super::{ProjectDb, connections::provider_text, tasks::load_task};
 use crate::{
   StoreError,
   rows::{corrupt, tokens_column},
 };
+
+/// What became of automation's points ([`ProjectDb::set_automation_points`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AutomationPoints {
+  /// They are the task's points now.
+  Stored,
+  /// A person set the task's points: they stay.
+  PersonsValue,
+  /// The task's brief or criteria changed since the estimate was made from them: it was not kept.
+  Outdated,
+}
 
 impl ProjectDb {
   /// The story points of `task`; `None` while it has none.
@@ -45,9 +56,24 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// Automation's `estimate` of `task`, unless a person set its points: whether it was stored.
-  pub fn set_automation_points(&mut self, task: TaskId, estimate: &StoryEstimate) -> Result<bool, StoreError> {
-    let stored = self.connection.execute(
+  /// Automation's `estimate` of `task`, unless a person set its points or the task's brief and criteria are no
+  /// longer those the estimate was made from: an estimate that took a while never replaces one of a later brief.
+  pub fn set_automation_points(
+    &mut self,
+    task: TaskId,
+    estimate: &StoryEstimate,
+  ) -> Result<AutomationPoints, StoreError> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let current = load_task(&transaction, self.project.key(), task)?;
+    if estimate
+      .basis()
+      .is_some_and(|basis| *basis != EstimateBasis::of(current.details()))
+    {
+      return Ok(AutomationPoints::Outdated);
+    }
+    let stored = transaction.execute(
       "INSERT INTO task_estimates (task_id, points, source, reason, basis, set_at) \
        VALUES (?1, ?2, 'automation', ?3, ?4, ?5) \
        ON CONFLICT (task_id) DO UPDATE SET points = ?2, source = 'automation', reason = ?3, basis = ?4, set_at = ?5 \
@@ -60,7 +86,12 @@ impl ProjectDb {
         estimate.at().unix_millis(),
       ],
     )?;
-    Ok(stored == 1)
+    transaction.commit()?;
+    Ok(if stored == 1 {
+      AutomationPoints::Stored
+    } else {
+      AutomationPoints::PersonsValue
+    })
   }
 
   /// Keeps what one request to the estimator spent.

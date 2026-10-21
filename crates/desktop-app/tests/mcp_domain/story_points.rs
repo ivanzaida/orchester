@@ -1,5 +1,6 @@
 //! Story points through the task tools (ORC-49): `create_task` and `update_task` record the points given as
 //! automation's, `get_task` and `list_tasks` show them with who set them, a person's points are never changed by a
+//! tool (and an update that would is refused before any of it is saved),
 //! tool, points off the scale are refused, and `get_story_point_calibration` reads the merged tasks.
 
 use orchester_core::{store::TaskStore, task::estimate::StoryPoints, time::Timestamp};
@@ -41,13 +42,14 @@ fn domain_story_points_are_automations_and_never_over_a_persons() {
     .expect("a person's points");
   let refused = served.refused(
     "update_task",
-    &json!({ "project": "Kontur", "key": key, "story_points": 2 }),
+    &json!({ "project": "Kontur", "key": key, "brief": "Jitter of up to a second.", "story_points": 2 }),
   );
   assert_eq!(refused["code"], "persons_points", "{refused}");
 
   let read = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
   assert_eq!(read["story_points"]["points"], 13, "{read}");
   assert_eq!(read["story_points"]["set_by"], "person", "{read}");
+  assert_eq!(read["brief"], "", "a refused update saves none of its edit: {read}");
   let listed = served.ok("list_tasks", &json!({ "project": "Kontur" }));
   let row = listed["tasks"]
     .as_array()

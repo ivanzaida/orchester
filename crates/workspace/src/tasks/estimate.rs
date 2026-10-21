@@ -7,6 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   id::TaskId,
+  store::TaskStore,
   task::{
     Task,
     estimate::{
@@ -15,7 +16,7 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{AutomationPoints, ProjectDb, StoreError};
 
 use super::outside::{Outside, OutsideChanges};
 use crate::{
@@ -37,10 +38,15 @@ pub enum PointsError {
 pub fn set_automation_points(db: &mut ProjectDb, task: &Task, points: StoryPoints) -> Result<(), PointsError> {
   check_automation(task.estimate())?;
   let estimate = StoryEstimate::automation(points, None, EstimateBasis::of(task.details()), Timestamp::now());
-  if !db.set_automation_points(task.id(), &estimate)? {
-    return Err(PointsRefused::PersonsValue.into());
+  match db.set_automation_points(task.id(), &estimate)? {
+    AutomationPoints::Stored => Ok(()),
+    AutomationPoints::PersonsValue => Err(PointsRefused::PersonsValue.into()),
+    // `task` was read before its brief or criteria changed again: the points are the caller's all the same.
+    AutomationPoints::Outdated => {
+      let current = db.task(task.id())?.ok_or(StoreError::TaskNotFound(task.id()))?;
+      set_automation_points(db, &current, points)
+    }
   }
-  Ok(())
 }
 
 /// Stores a person's `points` for the saved `task` of the project at `repo_root` (`None`: Automatic) when they

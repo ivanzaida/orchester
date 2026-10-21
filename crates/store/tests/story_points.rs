@@ -1,5 +1,6 @@
 //! Story points kept beside tasks (ORC-49): a person's points are never replaced by automation's, even by a write
-//! that raced the person's; a person's *Automatic* leaves automation's points; points come back with the task; the
+//! that raced the person's; an estimate of an earlier brief is not kept; a person's *Automatic* leaves automation's
+//! points; points come back with the task; the
 //! estimator's requests are their own kind of usage; and *Let Orchester estimate story points* is off until a person
 //! turns it on. `cargo test -p orchester-store --test story_points story_points`.
 
@@ -7,13 +8,17 @@ mod support;
 
 use orchester_core::{
   connection::AgentProvider,
+  id::IdempotencyKey,
   resource::ModelId,
   run::TokenUsage,
   store::TaskStore,
-  task::estimate::{EstimateBasis, EstimateRecord, EstimateSource, StoryEstimate, StoryPoints},
+  task::{
+    TaskDetails, TaskUpdate,
+    estimate::{EstimateBasis, EstimateRecord, EstimateSource, StoryEstimate, StoryPoints},
+  },
   time::Timestamp,
 };
-use orchester_store::AppDb;
+use orchester_store::{AppDb, AutomationPoints};
 use support::{at, started_run};
 
 fn points(value: u32) -> StoryPoints {
@@ -26,17 +31,20 @@ fn story_points_of_a_person_are_never_replaced_by_automation() {
   let task = db.task(run.task()).expect("read").expect("task");
   let basis = EstimateBasis::of(task.details());
   let automation = StoryEstimate::automation(points(3), Some("Small."), basis.clone(), at(1));
-  assert!(db.set_automation_points(task.id(), &automation).expect("stored"));
+  assert_eq!(
+    db.set_automation_points(task.id(), &automation).expect("stored"),
+    AutomationPoints::Stored
+  );
   let read = db.task(task.id()).expect("read").expect("task");
   assert_eq!(read.estimate(), Some(&automation), "points come back with the task");
 
   db.set_person_points(task.id(), Some(points(8)), at(2))
     .expect("the person's");
   let later = StoryEstimate::automation(points(1), None, basis, at(3));
-  assert!(
-    !db
-      .set_automation_points(task.id(), &later)
+  assert_eq!(
+    db.set_automation_points(task.id(), &later)
       .expect("refused, not failed"),
+    AutomationPoints::PersonsValue,
     "automation never writes over a person's points"
   );
   let estimate = db.story_estimate(task.id()).expect("read").expect("points");
@@ -47,7 +55,10 @@ fn story_points_of_a_person_are_never_replaced_by_automation() {
 
   db.set_person_points(task.id(), None, at(4)).expect("Automatic");
   assert_eq!(db.story_estimate(task.id()).expect("read"), None);
-  assert!(db.set_automation_points(task.id(), &later).expect("stored"));
+  assert_eq!(
+    db.set_automation_points(task.id(), &later).expect("stored"),
+    AutomationPoints::Stored
+  );
   db.set_person_points(task.id(), None, at(5)).expect("Automatic again");
   assert_eq!(
     db.story_estimate(task.id())
@@ -56,6 +67,42 @@ fn story_points_of_a_person_are_never_replaced_by_automation() {
     Some(points(1)),
     "Automatic keeps automation's points"
   );
+}
+
+#[test]
+fn story_points_made_from_an_earlier_brief_are_not_kept() {
+  let (_repo, mut db, run, _) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  let draft = |brief: &str| TaskDetails {
+    brief: brief.to_owned(),
+    ..task.details().clone()
+  };
+  let created = db
+    .create_tasks(IdempotencyKey::generate(), vec![draft("Brief A.")], at(1))
+    .expect("task")
+    .remove(0);
+  let basis_a = EstimateBasis::of(created.details());
+  let TaskUpdate::Saved(edited) = db
+    .update_task(created.id(), created.revision(), draft("Brief B."))
+    .expect("edited")
+  else {
+    panic!("no conflict");
+  };
+  let basis_b = EstimateBasis::of(edited.details());
+
+  let of_b = StoryEstimate::automation(points(5), Some("From B."), basis_b, at(2));
+  assert_eq!(
+    db.set_automation_points(edited.id(), &of_b).expect("stored"),
+    AutomationPoints::Stored
+  );
+  let of_a = StoryEstimate::automation(points(2), Some("From A."), basis_a, at(3));
+  assert_eq!(
+    db.set_automation_points(edited.id(), &of_a)
+      .expect("not kept, not failed"),
+    AutomationPoints::Outdated,
+    "an estimate of an earlier brief that ends last does not replace the current one"
+  );
+  assert_eq!(db.story_estimate(edited.id()).expect("read"), Some(of_b));
 }
 
 #[test]
