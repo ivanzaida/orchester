@@ -7,7 +7,6 @@
 //! worktree, with the note [`conflict_note`] words and the conflicts as data.
 
 use orchester_core::{
-  permission::RepositoryAccess,
   resource::StepKey,
   run::{Answerer, AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus, StuckDecision},
 };
@@ -81,35 +80,39 @@ pub fn targets(view: &RunView) -> Vec<StepKey> {
   }
 }
 
-/// The steps of [`targets`] whose agent may write in the worktree in its next invocation, as the run's pinned
-/// pipeline version, its profile version and any change of its permissions for this run give them.
+/// The steps of [`targets`] whose agent may write in the worktree in its next invocation ([`StepView::writes`]).
 pub fn writing_targets(view: &RunView) -> Vec<&StepView> {
   let targets = targets(view);
   view
     .steps
     .iter()
     .filter(|step| targets.contains(&step.key))
-    .filter(|step| {
-      step
-        .permissions
-        .as_ref()
-        .is_some_and(|permissions| permissions.permissions.repository() == RepositoryAccess::Write)
-    })
+    .filter(|step| step.writes())
     .collect()
 }
 
-/// The writing step a conflict goes back to unless the person picks another: the one whose work the run's last
-/// checkpoint holds, which implemented what conflicts; else the last writing step.
+/// The writing step a conflict goes back to unless the person picks another, among the steps the run's pipeline has
+/// merge the base when it moves (`Pipeline::takes_base_moves`, so that a merge's conflicts and a base move go to
+/// the same step; all writing steps when none of them does): the one whose work the run's last checkpoint holds, which
+/// implemented what conflicts; else the last of them. Git-ignored files a step wrote, such as Verify's build output and
+/// QA files, are in no checkpoint, so they never make it that step.
 pub fn implementing_step(view: &RunView) -> Option<StepKey> {
   let writing = writing_targets(view);
+  let pipeline = view.run.snapshot().body();
+  let merging: Vec<&StepView> = writing
+    .iter()
+    .copied()
+    .filter(|step| pipeline.takes_base_moves(&step.key))
+    .collect();
+  let candidates = if merging.is_empty() { writing } else { merging };
   let checkpointed = view
     .run
     .last_checkpoint()
     .and_then(|checkpoint| view.run.execution(checkpoint.execution()))
     .map(|execution| execution.step().clone());
   checkpointed
-    .filter(|step| writing.iter().any(|view| view.key == *step))
-    .or_else(|| writing.last().map(|view| view.key.clone()))
+    .filter(|step| candidates.iter().any(|view| view.key == *step))
+    .or_else(|| candidates.last().map(|view| view.key.clone()))
 }
 
 /// The command that returns `view`'s work to `step` with `note`, to resolve `conflicts` when that is what it is for,

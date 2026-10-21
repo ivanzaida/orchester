@@ -1,13 +1,15 @@
 //! The notices that the run's base branch moved (ORC-54, `orchester_core::base_move`) as the timeline shows them: an
 //! Orchester event, *master moved to 1a2b3c4 · 2 tasks landed · merge requested*, with where the notice stands. One
-//! that waits sits with the messages that wait for a step; one delivered sits in the step whose agent read it.
+//! that waits sits with the messages that wait for a step; one delivered sits in the step whose agent read it. Only a
+//! step that implements the change takes it (ORC-65, `orchester_core::resource::Pipeline::takes_base_moves`): a run
+//! past those steps, with only Review or Verify ahead, keeps it until its work goes back to one of them.
 
 use std::sync::Arc;
 
 use orchester_core::{base_move::BaseNotice, id::StepExecutionId, run::RunStatus};
 
 use super::{Item, ItemKind};
-use crate::tasks::detail::RunView;
+use crate::tasks::detail::{RunView, StepView};
 
 /// A notice and where it stands.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -19,11 +21,15 @@ pub struct BaseMovedMark {
 /// Where a notice stands, as its event says.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NoticeState {
-  /// It waits for the run's next agent of a writing step: the one at work after its turn, or the next to start.
+  /// It waits for the run's next agent of a step that merges the base: the one at work after its turn, or the next to
+  /// start.
   WritingStep,
+  /// The run's steps that merge the base are done in this attempt and only steps that do not are ahead: it waits until
+  /// the work goes back to `step` (a return, a failure route, or *Ask an agent to resolve*).
+  WorkGoesBack { step: Arc<str> },
   /// It is kept until the run goes on: it is paused, stopped at a limit, waits for a person or was interrupted.
   RunGoesOn,
-  /// The run is ready for review: a follow-up that asks an agent of a writing step reads it.
+  /// The run is ready for review: a follow-up that asks an agent of a step that merges the base reads it.
   FollowUp,
   /// The agent `agent` of step `step` read it.
   Delivered { agent: Arc<str>, step: Arc<str> },
@@ -65,6 +71,30 @@ fn waiting(run: &RunView) -> NoticeState {
   match run.run.status() {
     RunStatus::Succeeded => NoticeState::FollowUp,
     RunStatus::Paused(_) | RunStatus::WaitingForPerson(_) | RunStatus::Interrupted(_) => NoticeState::RunGoesOn,
-    RunStatus::Pending | RunStatus::Running | RunStatus::Failed(_) | RunStatus::Cancelled => NoticeState::WritingStep,
+    RunStatus::Running => past_merging_steps(run).map_or(NoticeState::WritingStep, |step| NoticeState::WorkGoesBack {
+      step: step.name.clone(),
+    }),
+    RunStatus::Pending | RunStatus::Failed(_) | RunStatus::Cancelled => NoticeState::WritingStep,
   }
+}
+
+/// The first of `run`'s steps that merge the base when it moves, when the run's current attempt has none of them
+/// ahead or at work: each ran, and only steps that never take the notice, such as Review and Verify, are left.
+/// `None` while one is ahead, or when the pipeline has none.
+fn past_merging_steps(run: &RunView) -> Option<&StepView> {
+  let pipeline = run.run.snapshot().body();
+  let mut merging = run
+    .steps
+    .iter()
+    .filter(|step| step.writes() && pipeline.takes_base_moves(&step.key))
+    .peekable();
+  let first = *merging.peek()?;
+  let attempt = run.run.current_attempt()?;
+  let ahead = merging.any(|step| {
+    attempt
+      .executions()
+      .iter()
+      .any(|execution| execution.step() == &step.key && execution.status().is_open())
+  });
+  (!ahead).then_some(first)
 }

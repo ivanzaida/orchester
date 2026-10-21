@@ -12,11 +12,12 @@ use crate::tasks::{
   },
 };
 
-/// `mark`'s fields.
+/// `mark`'s fields; one that waits until the work goes back names the step it goes back to (`waits_for_step`).
 pub(super) fn shown(mark: &BaseMovedMark) -> Value {
   let notice = &mark.notice;
   let (state, agent, step) = match &mark.state {
     NoticeState::WritingStep => ("waits_for_writing_step", None, None),
+    NoticeState::WorkGoesBack { step } => ("waits_until_work_goes_back", None, Some(&**step)),
     NoticeState::RunGoesOn => ("kept_until_run_goes_on", None, None),
     NoticeState::FollowUp => ("waits_for_follow_up", None, None),
     NoticeState::Delivered { agent, step } => ("delivered", Some(&**agent), Some(&**step)),
@@ -39,6 +40,7 @@ pub(super) fn shown(mark: &BaseMovedMark) -> Value {
     "overlapping_files": &notice.overlapping,
     "state": state,
     "delivered_to": agent.map(|agent| json!({ "agent": agent, "step": step })),
+    "waits_for_step": agent.is_none().then_some(step).flatten(),
     "noticed_at": wire::time(notice.noticed_at),
     "delivered_at": notice.delivered().map(|(_, at)| wire::time(at)),
   })

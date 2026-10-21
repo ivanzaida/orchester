@@ -8,6 +8,8 @@
 //!
 //! `cargo test -p orchester-desktop --test shared_projects shared_`
 
+#[path = "shared_projects/automation.rs"]
+mod automation;
 #[path = "server_support/mod.rs"]
 mod server_support;
 #[path = "sharing_support/project.rs"]

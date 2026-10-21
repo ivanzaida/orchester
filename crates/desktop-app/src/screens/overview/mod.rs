@@ -9,9 +9,8 @@
 //! feed's as they stand with the runner, so a run that lost its agent is interrupted. The line over the
 //! title names the repository and branch as git tells them (`orchester_workspace::tasks::checkout`, read
 //! off the UI thread). How long each thing waits and *Completed today* are taken again every [`TICK`].
-//! Not built here: Import resources and reviewing memory records (both visibly
-//! unavailable), and answering a request or a question in place: each card opens its task where it is
-//! answered.
+//! Not built here: Import resources (visibly unavailable), and answering a request or a question in place:
+//! each card opens its task where it is answered, and the project's memory records open its Memory page.
 
 mod activity;
 mod header;

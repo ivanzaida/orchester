@@ -13,6 +13,7 @@
         "one": "{{branch}} moved to {{revision}} · 1 task landed · merge requested · {{state}}",
         "other": "{{branch}} moved to {{revision}} · {{count}} tasks landed · merge requested · {{state}}"
       },
+      "workGoesBack": "waits until the work goes back to {{step}}",
       "writingStep": "waits for a writing step"
     },
     "change": {

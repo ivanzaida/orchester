@@ -27,6 +27,7 @@ mod run_list;
 mod run_task;
 mod runs;
 pub mod setup;
+mod task_organization;
 mod task_write;
 mod tasks;
 mod usage;
@@ -120,25 +121,25 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_tasks",
-    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
+    description: "A project's tasks, as its task list finds them: key, title, workflow status, priority, tags, blocked_reason (the manual Blocked's reason, or null), held_by_blocking_tasks (whether unfinished blocking tasks keep it from running), pipeline, where the task stands, and its link in the app (its page). Without `project`, every project's, each naming its project, as stored: git is asked which runs were merged outside Orchester only for a project named; unreadable_projects lists the projects that could not be read, with why (project_not_opened_yet for one this version has not opened: list tools only read, and never update a project's data).",
     schema: schema_for_type::<tasks::ListTasks>,
     read_only: true,
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, tags, blocked_reason, blocked_by, pipeline, limits, where it stands, its runs, and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task).",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task). Its organization is checked as the task form checks it: blocked_reason marks it Blocked (informational: it keeps no run from starting, but the Orchestrator chat does not start the task) and must not be blank (invalid_organization); blocked_by lists the project's tasks that block it, by key or id, each with its gate (merge, the form's, when left out); a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags are names matched ignoring case, a new name created as a tag as the form's tag picker does. The task's history records the organization as automation's.",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one).",
+    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one). blocked_reason sets the manual Blocked with its reason (not blank: invalid_organization) and null clears it; it is informational, but the Orchestrator chat does not start a task marked Blocked. blocked_by is the whole list of the project's blocking tasks, by key or id, each with its gate (merge, the form's, when left out), and [] clears it; a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags is the whole list of tag names, matched ignoring case, a new name created as a tag as the form's tag picker does, and [] clears them. The task's history records the organization changes as automation's.",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
   },
@@ -160,8 +161,10 @@ const SPECS: &[Spec] = &[
                   holds the run's commits), not_merged, nothing_to_merge, or null for a run that has not succeeded. \
                   base_moved lists Orchester's notices that the run's base branch moved (kind base_moved): the \
                   branch and revision, the tasks and commits that landed, the files both sides changed, and its \
-                  state (waits_for_writing_step, kept_until_run_goes_on, waits_for_follow_up, or delivered with the \
-                  agent and step that read it). The run's link is its task's page; the waiting approvals, \
+                  state (waits_for_writing_step, waits_until_work_goes_back with waits_for_step when only steps \
+                  that never merge the base such as Review or Verify are left, kept_until_run_goes_on, \
+                  waits_for_follow_up, or delivered with the agent and step that read it). The run's link is its \
+                  task's page; the waiting approvals, \
                   questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,

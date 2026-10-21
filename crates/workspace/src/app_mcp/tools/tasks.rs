@@ -89,6 +89,10 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
     browse::rows(data, TaskTab::All, query, TaskSort::Manual)
       .iter()
       .map(|row| {
+        let held = data
+          .blocking
+          .get(&row.id)
+          .is_some_and(|unfinished| !unfinished.is_empty());
         json!({
           "key": &*row.key,
           "id": row.id.to_string(),
@@ -96,6 +100,8 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
           "workflow_status": Workflow::from(row.organization.status()),
           "priority": Rank::from(row.organization.priority()),
           "tags": row.tags.iter().map(|tag| &**tag).collect::<Vec<_>>(),
+          "blocked_reason": row.organization.blocked_reason(),
+          "held_by_blocking_tasks": held,
           "pipeline": translate.text(&row.pipeline.message()),
           "phase": row.phase.map(wire::phase),
           "detail": translate.text(&row.detail),

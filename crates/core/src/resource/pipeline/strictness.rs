@@ -94,7 +94,9 @@ fn narrowing_no_weaker(old: &StepPermissions, new: &StepPermissions) -> bool {
       after.entries().iter().all(|command| before.entries().contains(command))
     }
   };
+  // Which step merges the base is a person's choice either way: it is not proven no weaker unless it is kept.
   commands
     && (old.network == StepNetwork::AsProfile || new.network == StepNetwork::Off)
     && (!old.interactive_tool_approvals || new.interactive_tool_approvals)
+    && old.takes_base_moves == new.takes_base_moves
 }

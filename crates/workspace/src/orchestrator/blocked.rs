@@ -1,17 +1,40 @@
-//! A start auto mode could not take because the task waits for the tasks that block it (`Ee2JE`): the refusal names
-//! the task and those tasks, as they stood when the queue refused it.
+//! A start the chat does not take because the task is blocked. A task a person or the chat marked Blocked is never
+//! started from the chat, proposed or not (ORC-58): the manual Blocked keeps no run from starting, so the person still
+//! starts it in the app. A start auto mode could not take because the task waits for the tasks that block it
+//! (`Ee2JE`): the refusal names the task and those tasks, as they stood when the queue refused it.
 
 use orchester_core::store::TaskStore;
 use orchester_store::ProjectDb;
 
 use super::tools::ChatScope;
 use crate::{
-  app_mcp::{ToolError, blocking},
+  app_mcp::{ToolError, blocking, find_task},
   messages::Message,
 };
 
 /// What the queue says when unfinished blocking tasks keep a task from running.
 const BLOCKED: &str = "tasks.blocked.runUnavailable";
+
+/// Refuses (`task_blocked`) the chat's start of task `key` of `scope`'s project when it is marked Blocked, naming its
+/// reason. A call that names no task is left to the start's own refusal.
+pub(super) async fn marked(scope: &ChatScope, key: Option<&str>) -> Result<(), ToolError> {
+  let Some(named) = key.map(str::to_owned) else {
+    return Ok(());
+  };
+  let root = scope.root.clone();
+  let task = blocking(move || find_task(&ProjectDb::open(&root)?, &named)).await?;
+  match task.organization().blocked_reason() {
+    Some(reason) => Err(ToolError::refused(
+      "task_blocked",
+      vec![
+        Message::new("orchestrator.start.markedBlocked")
+          .with("task", task.key().to_string())
+          .with("reason", reason.to_owned()),
+      ],
+    )),
+    None => Ok(()),
+  }
+}
 
 /// `error`, naming task `key` and the tasks that block it when it is the queue's refusal of a blocked task. The
 /// queue's own refusal stays when they cannot be read.

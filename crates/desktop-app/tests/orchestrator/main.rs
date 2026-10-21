@@ -11,6 +11,7 @@ mod chat;
 mod continuation;
 mod decisions;
 mod drafts;
+mod follow;
 mod harness;
 mod history;
 mod links;
