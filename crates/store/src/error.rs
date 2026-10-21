@@ -15,6 +15,8 @@ use thiserror::Error;
 pub enum StoreError {
   #[error(transparent)]
   Organization(#[from] orchester_core::task::organization::OrganizationError),
+  #[error(transparent)]
+  Module(#[from] orchester_core::module::ModuleError),
   /// A lock's error names its extended code (`SQLITE_BUSY_SNAPSHOT`), which its message does not.
   #[error("database error: {}{}", .0, lock_code(.0))]
   Sqlite(#[from] rusqlite::Error),

@@ -309,6 +309,7 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::Tasks | Screen::Task => Icon::ListChecks,
     Screen::NewTask => Icon::ListPlus,
     Screen::EditTask => Icon::Pencil,
+    Screen::Modules => Icon::Target,
     Screen::MergeQueue => Icon::GitMerge,
     Screen::PullRequests => Icon::GitPullRequest,
     Screen::Usage => Icon::ChartColumn,

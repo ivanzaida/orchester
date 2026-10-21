@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
+  id::ModuleId,
   task::{MissingDetail, Task, TaskDetails, TaskStatus},
   time::Timestamp,
 };
@@ -109,8 +110,10 @@ pub struct View {
   pub ready: Option<TaskDetails>,
   /// What a run still needs that the values do not have.
   pub missing: Vec<MissingDetail>,
-  /// The values differ from what is stored (New task: from an empty form).
+  /// The values or the module differ from what is stored (New task: from an empty form).
   pub changed: bool,
+  /// The module chosen for the task, saved after its details.
+  pub module: Option<ModuleId>,
   /// The published pipelines; `None` while the project's tasks are read.
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for: saving keeps it.

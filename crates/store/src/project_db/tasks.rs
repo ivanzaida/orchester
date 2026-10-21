@@ -26,7 +26,8 @@ use crate::{
 /// own pipeline and the key it had before the project joined (`kept_key`).
 const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN \
   (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) \
-  ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key \
+  ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
+  (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id) \
   FROM tasks";
 
 struct RunTaskSnapshot {
@@ -101,6 +102,7 @@ impl ProjectDb {
         task.created_at(),
       )
       .with_organization(organization)
+      .with_module(task.module())
       .with_revision(task.revision()),
     ))
   }
@@ -384,6 +386,7 @@ struct TaskRow {
   pipeline_version: Option<i64>,
   revision: i64,
   kept_key: Option<String>,
+  module: Option<String>,
 }
 
 impl TaskRow {
@@ -401,6 +404,7 @@ impl TaskRow {
       pipeline_version: row.get(9)?,
       revision: row.get(10)?,
       kept_key: row.get(11)?,
+      module: row.get(12)?,
     })
   }
 
@@ -422,6 +426,7 @@ impl TaskRow {
       Some(kept) => ProjectKey::new(kept).map_err(|error| corrupt("kept task key", error))?,
       None => project.clone(),
     };
+    let module = self.module.as_deref().map(|id| parse("module id", id)).transpose()?;
     Ok(
       Task::from_stored(
         parse("task id", &self.id)?,
@@ -431,6 +436,7 @@ impl TaskRow {
         pipeline_version,
         Timestamp::from_unix_millis(self.created_at),
       )
+      .with_module(module)
       .with_revision(revision_value(self.revision)?),
     )
   }

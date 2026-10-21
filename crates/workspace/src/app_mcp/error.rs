@@ -29,6 +29,7 @@ pub enum Missing {
   McpServer,
   Account,
   PullRequest,
+  Module,
 }
 
 impl Missing {
@@ -50,6 +51,7 @@ impl Missing {
       Self::McpServer => "mcp_server_not_found",
       Self::Account => "account_not_found",
       Self::PullRequest => "pull_request_not_found",
+      Self::Module => "module_not_found",
     }
   }
 }
@@ -127,6 +129,9 @@ impl From<StoreError> for ToolError {
         "stop_run_first"
       }
       StoreError::Organization(_) => "invalid_organization",
+      StoreError::Module(orchester_core::module::ModuleError::NotFound(_)) => "module_not_found",
+      StoreError::Module(orchester_core::module::ModuleError::ChangedMeanwhile) => "module_changed",
+      StoreError::Module(_) => "invalid_module",
       StoreError::TaskNotEditable { .. } => "task_not_editable",
       StoreError::SharedTask(_) | StoreError::SharedProject | StoreError::NotSharedTask(_) => "shared_task",
       StoreError::PipelineNotPublished(_) => "pipeline_not_published",
