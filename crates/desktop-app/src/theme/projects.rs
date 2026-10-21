@@ -43,10 +43,16 @@ pub enum ProjectsText {
   StepLocked,
   /// 12.5/600 `text_primary`: a section of *Change GitHub account or access* (`uLTTq`).
   SectionTitle,
+  /// 12.5/500 `text_primary`: *Create a git repository here* in the GitHub block (`iUlxQ` in `OdlXb`).
+  CreateTitle,
+  /// 10.5/600 `text_muted`: the label over the first commit's choices, *FIRST COMMIT* (`T33T76`).
+  ChoiceLabel,
+  /// Geist Mono 11.5 `text_secondary`, 1.5: what git wrote when it failed (`gpVqf`).
+  GitOutput,
 }
 
 impl ProjectsText {
-  pub const ALL: [Self; 14] = [
+  pub const ALL: [Self; 17] = [
     Self::Eyebrow,
     Self::WelcomeTitle,
     Self::WelcomeLead,
@@ -61,6 +67,9 @@ impl ProjectsText {
     Self::Step,
     Self::StepLocked,
     Self::SectionTitle,
+    Self::CreateTitle,
+    Self::ChoiceLabel,
+    Self::GitOutput,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -83,6 +92,9 @@ impl ProjectsText {
       Self::Step => "projects_step",
       Self::StepLocked => "projects_step_locked",
       Self::SectionTitle => "projects_section_title",
+      Self::CreateTitle => "projects_create_title",
+      Self::ChoiceLabel => "projects_choice_label",
+      Self::GitOutput => "projects_git_output",
     }
   }
 
@@ -103,6 +115,9 @@ impl ProjectsText {
       Self::Step => sans(13.0, FontWeight::Medium, 1.35, palette.text_primary),
       Self::StepLocked => sans(13.0, FontWeight::Normal, 1.35, palette.text_muted),
       Self::SectionTitle => sans(12.5, FontWeight::SemiBold, 1.3, palette.text_primary),
+      Self::CreateTitle => sans(12.5, FontWeight::Medium, 1.3, palette.text_primary),
+      Self::ChoiceLabel => sans(10.5, FontWeight::SemiBold, 1.3, palette.text_muted),
+      Self::GitOutput => mono(sans(11.5, FontWeight::Normal, 1.5, palette.text_secondary)),
     }
   }
 }

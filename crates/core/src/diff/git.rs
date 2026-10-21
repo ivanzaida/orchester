@@ -183,6 +183,32 @@ pub fn git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Ite
     .with_env("GIT_OPTIONAL_LOCKS", "0")
 }
 
+/// Variables that would point git at another repository, index, object store or ref namespace than
+/// the folder it runs in, or give it configuration of the caller's, e.g. ones a hook that started
+/// Orchester's process passed on. Without `GIT_CONFIG_COUNT`, git reads no `GIT_CONFIG_KEY_<n>` or
+/// `GIT_CONFIG_VALUE_<n>`.
+pub const LOCATING: [&str; 9] = [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+  "GIT_CONFIG_PARAMETERS",
+  "GIT_CONFIG_COUNT",
+];
+
+/// [`git_command`] without the caller's [`LOCATING`] variables: git works on what it finds from
+/// `directory` only.
+pub fn local_git_command<'a>(git: &Path, directory: &Path, args: impl IntoIterator<Item = &'a str>) -> Command {
+  LOCATING
+    .iter()
+    .fold(git_command(git, directory, args), |command, name| {
+      command.without_env(name)
+    })
+}
+
 /// `git diff --numstat` of `revisions` (a range's two ends, or the one a worktree is compared
 /// with) in `directory`.
 pub fn git_numstat_command(git: &Path, directory: &Path, revisions: &[&str]) -> Command {

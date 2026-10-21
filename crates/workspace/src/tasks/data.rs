@@ -75,6 +75,8 @@ pub struct PipelineChoice {
 pub struct ProjectTasks {
   pub updated: Arc<std::collections::HashMap<TaskId, Timestamp>>,
   pub tags: Arc<Vec<orchester_core::task::organization::Tag>>,
+  /// The project's modules, oldest first; each task names its own (`Task::module`).
+  pub modules: Arc<Vec<orchester_core::module::Module>>,
   pub blocking: Arc<std::collections::HashMap<TaskId, Vec<TaskId>>>,
   pub tasks: Arc<Vec<Task>>,
   /// The tasks kept *Not shared* when the project joined a server project, out of `tasks`.
@@ -234,6 +236,7 @@ impl ProjectTasks {
           .collect::<Result<_, _>>()?,
       ),
       tags: Arc::new(db.project_tags()?),
+      modules: Arc::new(db.modules()?),
       blocking: Arc::new(
         tasks
           .iter()
@@ -525,6 +528,7 @@ pub fn save_draft<S: TaskStore>(
     task.created_at(),
   )
   .with_organization(task.organization().clone())
+  .with_module(task.module())
   .with_revision(task.revision());
   store.save_task(&edited)
 }

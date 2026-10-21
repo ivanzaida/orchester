@@ -6,10 +6,12 @@
 //! welcome, else the seed's `task-states` Kontur and projects in each state of the list) and the folders Add
 //! project is shown with. The window runs in a child process whose `PATH` starts with a stand-in `gh` (built with
 //! `rustc` from `gh.rs`) answering as the state's GitHub state, and leaves out every folder holding a real `gh`, so
-//! no real GitHub sign-in is read. The system's pickers are replaced: a folder picker hands over the state's folder
-//! and the file picker (*Choose program…*) the stand-in `gh`; Copy writes to `copied.txt` in the QA folder, never the
-//! clipboard. The verifier connects through the discovery file in `.tmp/qa/projects/mcp/`
-//! (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
+//! no real GitHub sign-in is read. git reads the settings file of the QA folder only (`GIT_CONFIG_GLOBAL`, no system
+//! settings, no repository above the QA folder), with a QA author except in `setup-git-no-author`;
+//! `setup-git-not-found` leaves every folder holding git off the `PATH`. The system's pickers are replaced: a folder
+//! picker hands over the state's folder and the file picker (*Choose program…*) the stand-in `gh`; Copy writes to
+//! `copied.txt` in the QA folder, never the clipboard. The verifier connects through the discovery file in
+//! `.tmp/qa/projects/mcp/` (`tools/lurq-mcp-client.py --discovery .tmp/qa/projects/mcp`).
 
 #[path = "../seed/kontur/mod.rs"]
 mod kontur;
@@ -66,7 +68,7 @@ enum State {
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 17] = [
+  const ALL: [(&'static str, Self); 20] = [
     ("welcome", Self::Welcome),
     ("list", Self::List),
     ("empty", Self::Empty),
@@ -84,6 +86,9 @@ impl State {
     ("setup-unrecognized", Self::Detected("unrecognized")),
     ("setup-missing-scope", Self::Detected("missing-scope")),
     ("setup-not-repository", Self::Detected("not-repository")),
+    ("setup-git-empty", Self::Detected("git-empty")),
+    ("setup-git-no-author", Self::Detected("git-no-author")),
+    ("setup-git-not-found", Self::Detected("git-not-found")),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -93,10 +98,10 @@ impl State {
       .map(|(_, state)| *state)
   }
 
-  /// How the stand-in `gh` answers.
-  const fn github(self) -> &'static str {
+  /// How the stand-in `gh` answers; the states of *Create a git repository here* never reach it.
+  fn github(self) -> &'static str {
     match self {
-      Self::Detected(github) => github,
+      Self::Detected(github) if !github.starts_with("git-") => github,
       _ => "detected",
     }
   }
@@ -107,7 +112,8 @@ impl State {
       Self::Welcome | Self::List | Self::Empty | Self::Failed | Self::OpenFolder => "scratch",
       Self::Detected("local-only") => "local",
       Self::Detected("not-github") => "other-host",
-      Self::Detected("not-repository") => "kontur-notes",
+      Self::Detected("not-repository" | "git-no-author" | "git-not-found") => "kontur-notes",
+      Self::Detected("git-empty") => "kontur-empty",
       Self::Setup | Self::Detected(_) => "kontur",
     }
   }
@@ -136,6 +142,7 @@ fn start(state: State) -> Result<(), Box<dyn Error>> {
   };
   data::stand_in(&folders, state.github())?;
   data::folders(&folders)?;
+  data::git_settings(&folders, state != State::Detected("git-no-author"))?;
   let seeded = match state {
     State::Welcome => data::empty(&folders)?,
     _ => data::projects(&folders)?,
@@ -144,10 +151,18 @@ fn start(state: State) -> Result<(), Box<dyn Error>> {
   if state.github() != "gh-not-found" {
     path.push(folders.path());
   }
-  path.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()).filter(|folder| !holds_gh(folder)));
+  let no_git = state == State::Detected("git-not-found");
+  path.extend(
+    env::split_paths(&env::var_os("PATH").unwrap_or_default())
+      .filter(|folder| !(holds_gh(folder) || (no_git && holds_git(folder)))),
+  );
   let mut child = Command::new(env::current_exe()?)
     .args(env::args().skip(1))
     .env("PATH", env::join_paths(path)?)
+    .env("GIT_CONFIG_GLOBAL", folders.git_settings())
+    .env("GIT_CONFIG_NOSYSTEM", "1")
+    // The QA folders are inside this checkout's repository, which git would otherwise find around them.
+    .env("GIT_CEILING_DIRECTORIES", root.path())
     .env(CHILD, root.path())
     .env(DATABASE, &seeded.database)
     .spawn()?;
@@ -178,6 +193,13 @@ fn qa_folder() -> Result<PathBuf, &'static str> {
 /// Whether `folder` holds a real `gh`, which the window must not find.
 fn holds_gh(folder: &Path) -> bool {
   ["gh", "gh.exe", "gh.cmd", "gh.bat"]
+    .iter()
+    .any(|program| folder.join(program).is_file())
+}
+
+/// Whether `folder` holds git, which the window must not find in `setup-git-not-found`.
+fn holds_git(folder: &Path) -> bool {
+  ["git", "git.exe", "git.cmd"]
     .iter()
     .any(|program| folder.join(program).is_file())
 }

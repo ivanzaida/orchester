@@ -226,6 +226,9 @@ const fn end_todo(end: RunEnd) -> &'static str {
 fn why_words(why: StopReason) -> String {
   match why {
     StopReason::RetriesExhausted { retries } => format!("its step used up its {retries} retries"),
+    StopReason::NoRoute => "a follow-up of its step reported the work failed, and its pipeline has no route for that \
+                            failure"
+      .to_owned(),
     StopReason::BrokeAgain => "its step broke again".to_owned(),
     StopReason::Unverified => "its step could not check everything".to_owned(),
     StopReason::Unchanged => "its step was not run again on unchanged work".to_owned(),

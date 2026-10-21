@@ -187,6 +187,7 @@ fn why_words(ctx: &Ctx, why: StopReason) -> Arc<str> {
       "orchestrator.change.facts.why.retries",
       [("count", retries.to_string())],
     ),
+    StopReason::NoRoute => ctx.t("orchestrator.change.facts.why.noRoute"),
     StopReason::BrokeAgain => ctx.t("orchestrator.change.facts.why.brokeAgain"),
     StopReason::Unverified => ctx.t("orchestrator.change.facts.why.unverified"),
     StopReason::Unchanged => ctx.t("orchestrator.change.facts.why.unchanged"),

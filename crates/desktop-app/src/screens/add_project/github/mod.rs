@@ -4,9 +4,11 @@
 //! *Use this account* when `gh` acts as another account than the project expects —, with the command that fixes
 //! the state to run in a terminal. Orchester never runs those commands. Before a folder is chosen, a notice says
 //! GitHub is detected from it (`Notice · GitHub is detected from the folder` `dhX0E`). GitHub is optional:
-//! only a folder that is not a git repository holds Create back ([`super::bar`]).
+//! only git holds Create back ([`super::bar`]) — a folder that is not a git repository, a repository without a
+//! commit, git not installed —, and the block offers to fix that in place ([`git_init`]).
 
 mod access;
+pub(super) mod git_init;
 mod words;
 
 use std::{path::Path, sync::Arc};
@@ -47,8 +49,6 @@ use crate::{
 const LABEL_WIDTH: f32 = 128.0;
 const PROPERTY_HEIGHT: f32 = 28.0;
 const GLYPH_TILE: f32 = 28.0;
-/// The command that makes a folder a git repository (`git init` in `gutA8`). Orchester never runs it.
-const GIT_INIT: &str = "git init";
 
 /// The block for the chosen folder, or the notice while none is chosen.
 pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Option<&Detection>) -> Option<Element> {
@@ -64,6 +64,10 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
       .into(),
     );
   };
+  let local = actions.local(Some(&folder));
+  if let Some(shown) = git_init::Shown::of(local.as_ref()) {
+    return Some(git_init::block(ctx, form, actions, &shown, &folder));
+  }
   let expected = detection.and_then(|detection| form.expected_for(detection));
   let state = detection.map(|detection| detection.state(expected.as_ref()));
   let found = detection.and_then(Detection::github);
@@ -71,23 +75,17 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
   let project = name
     .as_ref()
     .map_or_else(|| ctx.t("setup.unnamed").to_string(), |name| name.as_str().to_owned());
-  let properties = words::properties(ctx, detection, state.as_ref(), expected.as_ref(), &folder);
-  let mut block = Column::new()
-    .id("github-detection")
-    .describe("state", state.as_ref().map_or("checking", state_name))
-    .width(Dimension::Pct(100.0))
-    .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfacePanel)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(head(ctx, state.as_ref(), found))
-    .child(
-      Column::new()
-        .id("github-detection-properties")
-        .width(Dimension::Pct(100.0))
-        .with_children(properties.into_iter().map(property)),
-    )
+  let properties = words::properties(
+    ctx,
+    (detection, local.as_ref()),
+    state.as_ref(),
+    expected.as_ref(),
+    &folder,
+  );
+  let mut block = frame(state.as_ref().map_or("checking", state_name))
+    .child(head(ctx, Head::of(ctx, state.as_ref(), found)))
+    .child(properties_column(properties))
+    .with_children(git_init::created_line(ctx, form, &folder))
     .child(
       Text::new(&words::note(
         ctx,
@@ -116,9 +114,48 @@ pub(super) fn block(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Op
   Some(block.into())
 }
 
+/// The block around what it says of the folder in `state` (`GitHub detection` `iyZCd`).
+fn frame(state: &'static str) -> Column {
+  Column::new()
+    .id("github-detection")
+    .describe("state", state)
+    .width(Dimension::Pct(100.0))
+    .padding(SpacingSize::Lg)
+    .spacing(SpacingSize::Md)
+    .background(PaletteColor::SurfacePanel)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Lg)
+}
+
+/// What the head says (`Head` `ph3Wf`): the status's icon in `mark`, its word's key in `color`, the title, and
+/// whether GitHub, which is optional, is what the block is about.
+struct Head {
+  glyph: Icon,
+  mark: PaletteColor,
+  color: PaletteColor,
+  status: &'static str,
+  title: Arc<str>,
+  optional: bool,
+}
+
+impl Head {
+  /// The head of a detection in `state`; `None` while detecting.
+  fn of(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&GitHubDetection>) -> Self {
+    let (glyph, mark, color, status) = words::status(state);
+    Self {
+      glyph,
+      mark,
+      color,
+      status,
+      title: words::heading(ctx, state, found),
+      // GitHub is optional, but a folder that is no repository is not (`gutA8`).
+      optional: !matches!(state, Some(DetectionState::NotAGitRepository)),
+    }
+  }
+}
+
 /// The glyph, the title with the status under it, and *Optional* (`Head` `ph3Wf`).
-fn head(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&GitHubDetection>) -> Row {
-  let (glyph, mark, color, key) = words::status(state);
+fn head(ctx: &Ctx, head: Head) -> Row {
   let tile = Row::new()
     .width(Dimension::Px(GLYPH_TILE))
     .height(Dimension::Px(GLYPH_TILE))
@@ -131,11 +168,15 @@ fn head(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&GitHubDetectio
     .child(github_mark(ctx, IconSize::Md, PaletteColor::TextSecondary));
   let status = Row::new()
     .id("github-detection-status")
-    .describe("status", key)
+    .describe("status", head.status)
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, mark))
-    .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Label).color(color));
+    .child(icon(head.glyph, IconSize::Sm, head.mark))
+    .child(
+      Text::new(&ctx.t(head.status))
+        .variant(TypographyStyle::Label)
+        .color(head.color),
+    );
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
@@ -147,17 +188,25 @@ fn head(ctx: &Ctx, state: Option<&DetectionState>, found: Option<&GitHubDetectio
         .min_width(Dimension::Px(0.0))
         .spacing(ExtraSpacing::Tight.role())
         .child(
-          Text::new(&words::heading(ctx, state, found))
+          Text::new(&head.title)
             .id("github-detection-heading")
             .variant(ProjectsText::Heading.role()),
         )
         .child(status),
     )
-    // GitHub is optional, but a folder that is no repository is not (`gutA8`).
     .with_children(
-      (!matches!(state, Some(DetectionState::NotAGitRepository)))
+      head
+        .optional
         .then(|| Text::new(&ctx.t("setup.github.optional")).variant(TypographyStyle::Caption)),
     )
+}
+
+/// The block's properties (`Properties` `Mcur1`).
+fn properties_column(properties: Vec<Property>) -> Column {
+  Column::new()
+    .id("github-detection-properties")
+    .width(Dimension::Pct(100.0))
+    .with_children(properties.into_iter().map(property))
 }
 
 /// What a property is, and its value (`Row · Repository` `Y7zqv`).
@@ -190,7 +239,6 @@ fn fix(ctx: &mut Ctx, state: &DetectionState, detection: Option<&Detection>) -> 
     .and_then(Detection::github)
     .map(|found| found.repo().host().clone());
   let (id, command, introduced) = match state {
-    DetectionState::NotAGitRepository => ("git-init-command", GIT_INIT.to_owned(), true),
     DetectionState::NotSignedIn => ("github-command-login", GhAdvice::Login.command(host.as_ref()?), false),
     DetectionState::WrongAccount { expected, .. } => (
       "github-command-switch",
