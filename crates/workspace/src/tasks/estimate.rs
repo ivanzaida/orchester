@@ -18,7 +18,10 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::outside::{Outside, OutsideChanges};
-use crate::{runner::Runners, workspace::OpenProject, workspace::Workspace};
+use crate::{
+  runner::Runners,
+  workspace::{OpenProject, Workspace},
+};
 
 /// Why points were not set.
 #[derive(Debug, thiserror::Error)]
