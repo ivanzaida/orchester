@@ -4,7 +4,7 @@ use orchester_core::{
   id::IdempotencyKey,
   integration::{MergeKind, RunMerge},
   revision::Revision,
-  run::BranchName,
+  run::{BranchName, StepFailure},
   store::{MergeStore, RunStore, TaskStore},
   task::{
     TaskUpdate,
@@ -369,7 +369,6 @@ fn prepare_restart(
   execution: orchester_core::id::StepExecutionId,
   restart: Restart,
 ) {
-  use orchester_core::run::StepFailure;
   if matches!(restart, Restart::Resume) {
     let events = run.pause(at(10)).expect("pause");
     db.append_events(run, &events).expect("pause persisted");
@@ -395,7 +394,6 @@ fn prepare_restart(
 
 #[test]
 fn organization_failed_follow_up_restores_review_and_retains_transition_history() {
-  use orchester_core::run::StepFailure;
   let (_repo, mut db, mut run, execution) = started_run();
   prepare_restart(&mut db, &mut run, execution, Restart::FollowUp);
   let events = run
