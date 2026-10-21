@@ -163,6 +163,7 @@ impl SecretVault for PausedVault {
 }
 
 fn concurrent_binding(write: impl Fn(&mut ProjectDb, &Secret) -> Result<(), orchester_store::StoreError>) {
+  give_up_on_held_writes_soon();
   let (repo, mut second_db) = project_db();
   let active = secret("CONCURRENT_KEY");
   second_db.create_secret(&active).expect("metadata");
@@ -177,8 +178,8 @@ fn concurrent_binding(write: impl Fn(&mut ProjectDb, &Secret) -> Result<(), orch
     entered_recv
       .recv_timeout(Duration::from_secs(10))
       .expect("replacement reached vault");
-    // The second handle attempts a real write while credential mutation is paused. Its SQLite
-    // busy timeout must expire, rather than committing a binding before the vault is released.
+    // The second handle attempts a real write while credential mutation is paused. Its wait for the
+    // lock must run out, rather than committing a binding before the vault is released.
     let result = write(&mut second_db, &active);
     release_send.send(()).expect("release replacement");
     assert_eq!(

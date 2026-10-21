@@ -871,6 +871,36 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-74 · Runs don't fail on "database is locked" · branch `orchester/orc-74-run-1` (implemented 2026-10-21; pipeline
+Check and Review follow). The rules are in `docs/architecture/storage.md`, "Concurrency".
+- **Cause.** Every connection had `busy_timeout` 5 s and wrote in `BEGIN IMMEDIATE` transactions; no transaction ran
+  long SQL. The write lock was saturated: in WAL mode with SQLite's default `synchronous = FULL` each commit flushed
+  the log while holding the lock, and on Windows a flush waits for what the whole drive still has to write. With six
+  or seven runs and their agents' builds on the drive of the project, writers queued past five seconds and got
+  `SQLITE_BUSY` ("database is locked"), which interrupted the runs with `runner_failed`. Measured with the new stress
+  test (`crates/runner/tests/db_contention.rs`: eight fake-Codex runs of Implement and Review flooding their
+  transcripts, the app's, chat's, base-move follower's and plan-limit reads, settings writes and a build writing and
+  flushing beside them) on drive H:, like the real project: before, write transactions held the lock 39–61 % of the
+  time, the longest 24–135 ms (`INSERT runs`, `INSERT agent_events`), and a writer waited up to 1.1 s (an earlier
+  measurement that still counted checkpoints as holds: 72–81 %, 269–278 ms, 2.5 s); on C: the holds were only
+  4–6 ms. No deferred transaction wrote and no connection lacked a timeout.
+- **Fix.** `synchronous = NORMAL` on every connection that writes: after, 7 % of the time, the longest hold 14 ms,
+  the longest wait 33 ms, and the eight runs settle in 5.4 s instead of 6–8 s. Every connection's busy handler
+  (`orchester_store::busy`) waits for a lock with short growing pauses for up to a minute; the run's log (events
+  with step results and checkpoints, transcript, invocations, step outputs) also restarts its whole transaction on
+  a busy error after it began (`SQLITE_BUSY_SNAPSHOT`, `SQLITE_BUSY`) within that minute, logged as warnings. Past
+  it a write fails with `StoreError::Unavailable`, and the run is interrupted with that reason. Store errors name
+  the lock's extended code. Blob files of diffs are written before their transaction begins. Each transaction's
+  hold of the write lock, each lasting wait, each retry and checkpoints that readers held back are logged under
+  `orchester_store::lock` (`lock_watch`).
+- **Not done.** The app shows no "busy, retrying" state (a visual change, left for a task with its design): its
+  writes wait for the lock up to the minute in whatever state they show while working, then show that the database
+  is locked as before. The secret replacement writes the OS keychain inside its write transaction (by design,
+  ORC-7); it is quick but not SQL.
+- Tests: `cargo test -p orchester-runner --features test-agent --test db_contention db_contention`, `--test
+  db_unavailable db_unavailable`, `--test store_refusal store_refusal`; `cargo test -p orchester-store --test
+  busy_writes busy_writes`, `--test lock_budget lock_budget`, `--test contention contention`.
+
 ORC-62 · Loader spinner turns at 24 frames a second instead of 12 · branch `orchester/orc-62-run-1` (implemented
 2026-10-20; pipeline Check and Review follow). `LOADER_STEPS` is 24 with `LOADER_TURN` kept at 1 s: 24 poses 15° apart,
 still stepped (`JumpEnd`) on lurq's one in-phase clock for every loader of every window, and a window without a loader

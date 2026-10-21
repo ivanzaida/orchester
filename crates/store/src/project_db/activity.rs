@@ -16,9 +16,12 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, code_index, invocation_prompts, native, orchestrator_usage, reviewer_usage, step_outputs};
+use super::{
+  ProjectDb, code_index, invocation_prompts, native, orchestrator_usage, reviewer_usage, step_outputs,
+  write_transaction::retried,
+};
 use crate::{
-  StoreError,
+  StoreError, busy,
   rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
@@ -46,7 +49,7 @@ impl ActivityStore for ProjectDb {
     now: Timestamp,
   ) -> Result<Invocation, StoreError> {
     let kind = InvocationKind::Agent { model: model.clone() };
-    start(&mut self.connection, run, execution, kind, now)
+    start(&mut self.connection, run, execution, &kind, now)
   }
 
   fn start_command_invocation(
@@ -55,7 +58,7 @@ impl ActivityStore for ProjectDb {
     execution: StepExecutionId,
     now: Timestamp,
   ) -> Result<Invocation, StoreError> {
-    start(&mut self.connection, run, execution, InvocationKind::Command, now)
+    start(&mut self.connection, run, execution, &InvocationKind::Command, now)
   }
 
   fn save_invocation(&mut self, invocation: &Invocation) -> Result<(), StoreError> {
@@ -64,21 +67,28 @@ impl ActivityStore for ProjectDb {
       .as_ref()
       .map(|outcome| encode_json("invocation outcome", OUTCOME_SCHEMA, outcome))
       .transpose()?;
-    let changed = self.connection.execute(
-      "UPDATE invocations SET session_id = ?2, ended_at = ?3, input_tokens = ?4, cached_input_tokens = ?5, \
-       output_tokens = ?6, outcome = ?7, inactive_ms = ?8, waiting_since = ?9 WHERE id = ?1",
-      params![
-        invocation.id.to_string(),
-        invocation.session,
-        invocation.ended_at.map(Timestamp::unix_millis),
-        count_column(invocation.usage.input)?,
-        count_column(invocation.usage.cached_input)?,
-        count_column(invocation.usage.output)?,
-        outcome,
-        count_column(invocation.timing.inactive_ms())?,
-        invocation.timing.waiting_since().map(Timestamp::unix_millis),
-      ],
-    )?;
+    // One statement, run again while the database is busy. It stays outside a transaction, so what
+    // a trigger that fails it with `RAISE(FAIL)` changed before is kept, as it always was.
+    let changed = busy::retry("save invocation", || {
+      self
+        .connection
+        .execute(
+          "UPDATE invocations SET session_id = ?2, ended_at = ?3, input_tokens = ?4, cached_input_tokens = ?5, \
+           output_tokens = ?6, outcome = ?7, inactive_ms = ?8, waiting_since = ?9 WHERE id = ?1",
+          params![
+            invocation.id.to_string(),
+            invocation.session,
+            invocation.ended_at.map(Timestamp::unix_millis),
+            count_column(invocation.usage.input)?,
+            count_column(invocation.usage.cached_input)?,
+            count_column(invocation.usage.output)?,
+            outcome,
+            count_column(invocation.timing.inactive_ms())?,
+            invocation.timing.waiting_since().map(Timestamp::unix_millis),
+          ],
+        )
+        .map_err(StoreError::from)
+    })?;
     if changed == 0 {
       return Err(StoreError::InvocationNotFound(invocation.id));
     }
@@ -160,9 +170,8 @@ impl ActivityStore for ProjectDb {
     invocation: &Invocation,
     events: &[(Timestamp, AgentEvent)],
   ) -> Result<u64, StoreError> {
-    let transaction = self.connection.transaction()?;
-    let mut last = last_sequence(&transaction, invocation.run)?;
-    {
+    retried(&mut self.connection, "append transcript", |transaction| {
+      let mut last = last_sequence(transaction, invocation.run)?;
       let mut insert = transaction.prepare_cached(
         "INSERT INTO agent_events (run_id, sequence, step_execution_id, invocation_id, at, kind, payload) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -179,9 +188,8 @@ impl ActivityStore for ProjectDb {
           encode_json("agent event", EVENT_SCHEMA, event)?,
         ])?;
       }
-    }
-    transaction.commit()?;
-    Ok(last)
+      Ok(last)
+    })
   }
 
   fn last_agent_message(&self, run: RunId, execution: StepExecutionId) -> Result<Option<(u64, String)>, StoreError> {
@@ -295,7 +303,9 @@ impl ActivityStore for ProjectDb {
   }
 
   fn save_step_output(&mut self, output: &StepOutput) -> Result<(), StoreError> {
-    step_outputs::save(&self.connection, output)
+    retried(&mut self.connection, "save step output", |transaction| {
+      step_outputs::save(transaction, output)
+    })
   }
 
   fn step_outputs(&self, run: RunId) -> Result<Vec<StepOutput>, StoreError> {
@@ -308,47 +318,47 @@ fn start(
   connection: &mut Connection,
   run: RunId,
   execution: StepExecutionId,
-  kind: InvocationKind,
+  kind: &InvocationKind,
   now: Timestamp,
 ) -> Result<Invocation, StoreError> {
-  let transaction = connection.transaction()?;
-  let previous: i64 = transaction.query_row(
-    "SELECT COALESCE(MAX(number), 0) FROM invocations WHERE step_execution_id = ?1",
-    [execution.to_string()],
-    |row| row.get(0),
-  )?;
-  let (kind_column, model) = match &kind {
+  let (kind_column, model) = match kind {
     InvocationKind::Agent { model } => (AGENT, model.as_str().to_owned()),
     InvocationKind::Command => (COMMAND, String::new()),
   };
-  let invocation = Invocation {
-    id: InvocationId::generate(),
-    run,
-    execution,
-    number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
-    kind,
-    permissions: None,
-    session: None,
-    started_at: now,
-    ended_at: None,
-    usage: TokenUsage::default(),
-    outcome: None,
-    timing: InvocationTiming::default(),
-  };
-  transaction.execute(
-    "INSERT INTO invocations (id, run_id, step_execution_id, number, kind, model, started_at, input_tokens,      cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, 0)",
-    params![
-      invocation.id.to_string(),
-      run.to_string(),
-      execution.to_string(),
-      invocation.number,
-      kind_column,
-      model,
-      now.unix_millis(),
-    ],
-  )?;
-  transaction.commit()?;
-  Ok(invocation)
+  retried(connection, "start invocation", |transaction| {
+    let previous: i64 = transaction.query_row(
+      "SELECT COALESCE(MAX(number), 0) FROM invocations WHERE step_execution_id = ?1",
+      [execution.to_string()],
+      |row| row.get(0),
+    )?;
+    let invocation = Invocation {
+      id: InvocationId::generate(),
+      run,
+      execution,
+      number: u32::try_from(previous + 1).map_err(|_| corrupt("invocation number", previous))?,
+      kind: kind.clone(),
+      permissions: None,
+      session: None,
+      started_at: now,
+      ended_at: None,
+      usage: TokenUsage::default(),
+      outcome: None,
+      timing: InvocationTiming::default(),
+    };
+    transaction.execute(
+      "INSERT INTO invocations (id, run_id, step_execution_id, number, kind, model, started_at, input_tokens,      cached_input_tokens, output_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 0, 0)",
+      params![
+        invocation.id.to_string(),
+        run.to_string(),
+        execution.to_string(),
+        invocation.number,
+        kind_column,
+        model,
+        now.unix_millis(),
+      ],
+    )?;
+    Ok(invocation)
+  })
 }
 
 fn last_sequence(connection: &Connection, run: RunId) -> Result<u64, StoreError> {

@@ -11,19 +11,26 @@ workspace = true
 
 [dependencies]
 orchester-core.workspace = true
-rusqlite.workspace = true
+# The longest write-lock holds, kept for the contention tests (`test-support`).
+parking_lot = { workspace = true, optional = true }
+# `trace` and `hooks`: each connection times how long its write transactions hold the write lock, and
+# its checkpoints apart from them (`lock_watch`).
+rusqlite = { workspace = true, features = ["hooks", "trace"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+# Waits for a lock, long write-lock holds and restarted transactions go to the process's log.
+tracing.workspace = true
 zstd.workspace = true
 
 [features]
 # `ProjectDb::create_at_version` and `AppDb::create_at_version` for the store's own migration tests,
 # which enable it below; also a fixture busy handler that observes write-lock contention.
 # A database at an older schema version, for a test to fill with the rows that
-# version wrote.
-test-support = []
+# version wrote. Also a shorter lock budget, injected busy errors and the longest write-lock holds, for
+# the contention tests.
+test-support = ["dep:parking_lot"]
 
 [dev-dependencies]
 orchester-store = { workspace = true, features = ["test-support"] }

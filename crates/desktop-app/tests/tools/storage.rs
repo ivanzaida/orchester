@@ -10,6 +10,9 @@ fn tools_database_lock_shows_actionable_cause_and_retry_recovers() {
   let before = t.entry(id);
   t.go(ProjectPage::Tools);
   let sqlite = rusqlite::Connection::open(t.repo.join(".orchester/orchester.db")).expect("db");
+  // The read gives up once it waited for the lock five seconds instead of a minute (process-wide, for
+  // every test of this binary).
+  orchester_store::set_lock_budget_for_test(std::time::Duration::from_secs(5));
   // Rollback-journal exclusive locks block readers as well as writers, on both platforms.
   sqlite
     .execute_batch("PRAGMA journal_mode = DELETE; BEGIN EXCLUSIVE")

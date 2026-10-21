@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, time::Duration};
 
 use orchester_core::{
   id::{
@@ -15,8 +15,13 @@ use thiserror::Error;
 pub enum StoreError {
   #[error(transparent)]
   Organization(#[from] orchester_core::task::organization::OrganizationError),
-  #[error("database error: {0}")]
+  /// A lock's error names its extended code (`SQLITE_BUSY_SNAPSHOT`), which its message does not.
+  #[error("database error: {}{}", .0, lock_code(.0))]
   Sqlite(#[from] rusqlite::Error),
+  /// Other connections held the database for `waited`, the whole time a write may wait for it (a
+  /// minute, `busy`), so it gave up; nothing was changed.
+  #[error("the database stayed locked for {:.1} s, so the write gave up: {source}{}", waited.as_secs_f32(), lock_code(source))]
+  Unavailable { waited: Duration, source: rusqlite::Error },
   #[error("cannot access {path}: {source}")]
   Io { path: PathBuf, source: io::Error },
   #[error("{0} is not the root of a git repository")]
@@ -164,11 +169,14 @@ pub enum StoreError {
 impl StoreError {
   /// Whether another database connection holds a lock that prevents this operation.
   pub fn is_locked(&self) -> bool {
-    matches!(
-      self,
-      Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _))
-        if matches!(failure.code, rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
-    )
+    match self {
+      Self::Unavailable { .. } => true,
+      Self::Sqlite(rusqlite::Error::SqliteFailure(failure, _)) => matches!(
+        failure.code,
+        rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+      ),
+      _ => false,
+    }
   }
 
   /// Whether the database file is damaged or is not a database at all, as opposed to one that is busy,
@@ -231,5 +239,15 @@ pub enum RunStoreError {
 impl From<rusqlite::Error> for RunStoreError {
   fn from(error: rusqlite::Error) -> Self {
     Self::Store(StoreError::Sqlite(error))
+  }
+}
+
+/// ` (SQLITE_BUSY_SNAPSHOT)` when `error` says the database or a table is locked, else nothing.
+fn lock_code(error: &rusqlite::Error) -> String {
+  match error {
+    rusqlite::Error::SqliteFailure(failure, _) => {
+      crate::busy::code_name(failure.extended_code).map_or_else(String::new, |name| format!(" ({name})"))
+    }
+    _ => String::new(),
   }
 }

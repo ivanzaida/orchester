@@ -39,6 +39,13 @@ fn project_db() -> (TempDir, ProjectDb) {
   (repo, db)
 }
 
+/// Makes a write give up after five seconds instead of a minute while another connection holds the
+/// database, so the tests that hold it see the write fail in time. Process-wide, for every test of this
+/// binary.
+fn give_up_on_held_writes_soon() {
+  orchester_store::set_lock_budget_for_test(std::time::Duration::from_secs(5));
+}
+
 fn secret(name: &str) -> Secret {
   Secret::new(
     SecretId::generate(),

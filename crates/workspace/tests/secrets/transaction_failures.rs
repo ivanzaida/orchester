@@ -113,6 +113,7 @@ fn secrets_replacement_commit_failure_reports_stored_value_and_releases_writer()
 
 #[test]
 fn secrets_replacement_begin_failure_does_not_claim_or_store_a_new_value() {
+  give_up_on_held_writes_soon();
   let (repo, mut db) = project_db();
   let active = secret("API_KEY");
   db.create_secret(&active).expect("metadata");

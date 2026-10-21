@@ -551,7 +551,8 @@ Task and project memory (`docs/design/orchester-workspace.md`, "Task and project
 | `revision_diffs` | base revision, head revision, diff blob, read at — the diff between two commits read with git, e.g. a run's changes up to a checkpoint (a cache, desktop-written) |
 
 Files are written to a temporary name and renamed after the hash is verified; the row is
-inserted after the file exists. Blobs are never deleted (full retention).
+inserted after the file exists, by the transaction that refers to the blob, which begins only once the
+file is written. Blobs are never deleted (full retention).
 
 ## Write ownership
 
@@ -566,6 +567,49 @@ SQLite serializes writes between the two processes; ownership keeps meaning unam
   continue) is an IPC command; the runner applies it and records the event. An answer to an agent's
   question with suggested answers is one too (`AnswerQuestion`): the runner records it, and for a
   question that ended its step it also writes the person's message that carries the answer to the agent.
+
+## Concurrency
+
+One project database has many connections at once: each run's task and each of its agents' workers in the
+runner, the app's reads and writes (a connection per operation), the Orchestrator chat, the MCP servers, the
+base-move follower, the plan-limit reads and the notifier. SQLite lets one of them write at a time. Every
+connection is opened by `orchester_store`'s `migrate` (there is no other `Connection::open` in production
+code), so these rules hold for all of them:
+
+- **WAL, commits without a flush.** The databases are in WAL mode with `synchronous = NORMAL`: a commit
+  appends to the log and lets go of the write lock without waiting for the disk; a checkpoint flushes. A
+  crash of Orchester loses nothing committed; a power cut can lose the last commits, never consistency. With
+  `FULL`, each commit flushed the log while holding the write lock, and on Windows a flush waits for what the
+  whole drive still has to write, the agents' builds included: in ORC-74's stress test (eight runs, readers,
+  a build writing beside them, on the drive of the real project) write transactions held the lock 39–61 % of
+  the time over 6–8 s, the longest 24–135 ms, and a writer waited up to 1.1 s; on 2026-10-21 six or seven
+  runs working for hours pushed that past the five seconds a writer then waited, and their writes failed with
+  `SQLITE_BUSY` ("database is locked"), interrupting them. With `NORMAL` the same test holds the lock 7 % of
+  the time, the longest 14 ms, and no writer waits more than 33 ms.
+- **Write transactions are `IMMEDIATE` and short.** Every connection that may write (all but those opened
+  only to read another project's database) begins its transactions with
+  `BEGIN IMMEDIATE`: a transaction takes the write lock before it reads, so it waits for the lock at its start
+  and never fails later on a read it upgrades (`SQLITE_BUSY_SNAPSHOT`, which SQLite does not wait for). A
+  transaction holds only SQL: no git, file, process or network work runs while it is open (a blob's file is
+  written before its transaction begins). A read outside a transaction ends with its statement, so no idle
+  connection keeps a read open that holds checkpoints back.
+- **Waiting for a lock.** Each connection's busy handler (`busy::wait_for_lock`) waits for a lock with short,
+  growing pauses (1 ms up to 50 ms) for up to a minute in total before the statement fails with `SQLITE_BUSY`.
+  This is the retry of every write, the app's (answers, merges, settings) as much as the runner's: nothing has
+  run in the transaction yet when it waits. The run's log (events with step results and checkpoints,
+  transcript, invocations, step outputs) also runs its whole transaction again when a busy error reaches it
+  after it began, with doubling pauses, within the same minute (`busy::retry`).
+- **Past the minute.** A write that still finds the database locked gives up: the run-log writes with
+  `StoreError::Unavailable` ("the database stayed locked for 60.0 s, so the write gave up: database is locked
+  (SQLITE_BUSY)"), the others with the SQLite error, whose message names its extended code. The runner
+  interrupts the run with `runner_failed` and that reason in its activity, as for any other storage failure
+  (a damaged database, a full disk, a schema it does not know), which are never retried; the app shows that
+  the database is locked.
+- **What the log tells.** Every write transaction's hold of the write lock is logged at debug level under the
+  target `orchester_store::lock` with the transaction's first write (`INSERT agent_events`) and how long it
+  waited; a hold of a second or more, a wait that passes a second (then every ten seconds), a wait given up,
+  a retried transaction and a deferred transaction that wrote are warnings, with the waiting statement and
+  its thread, in the log of the process (runner or app) that met them.
 
 ## State machines
 

@@ -55,15 +55,16 @@ impl BlobHash {
   }
 }
 
-/// Stores `content` of `media_type` under `orchester` (`<repo>/.orchester`) unless a blob with
-/// the same content exists, and returns its hash.
-pub(super) fn put(
-  connection: &Connection,
-  orchester: &Path,
-  media_type: &str,
-  content: &[u8],
-  now: Timestamp,
-) -> Result<BlobHash, StoreError> {
+/// A blob's file, written; its row is not recorded yet.
+pub(super) struct WrittenBlob {
+  pub(super) hash: BlobHash,
+  size: i64,
+  stored_size: i64,
+}
+
+/// Writes the file of `content` under `orchester` (`<repo>/.orchester`) unless a blob with the same
+/// content exists: what a transaction that refers to the blob records ([`WrittenBlob::record`]).
+pub(super) fn write(orchester: &Path, content: &[u8]) -> Result<WrittenBlob, StoreError> {
   let hash = BlobHash::of(content);
   let path = hash.path(orchester);
   if !path.is_file() {
@@ -71,17 +72,28 @@ pub(super) fn put(
   }
   let stored_size = fs::metadata(&path).map_err(StoreError::io(&path))?.len();
   let size = |value: u64| i64::try_from(value).map_err(|_| StoreError::Unrepresentable("blob size"));
-  connection.execute(
-    "INSERT OR IGNORE INTO blobs (sha256, size, stored_size, media_type, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-    params![
-      hash.as_str(),
-      size(content.len() as u64)?,
-      size(stored_size)?,
-      media_type,
-      now.unix_millis()
-    ],
-  )?;
-  Ok(hash)
+  Ok(WrittenBlob {
+    size: size(content.len() as u64)?,
+    stored_size: size(stored_size)?,
+    hash,
+  })
+}
+
+impl WrittenBlob {
+  /// Records the blob's row, as of `media_type`, unless it is recorded already.
+  pub(super) fn record(&self, connection: &Connection, media_type: &str, now: Timestamp) -> Result<(), StoreError> {
+    connection.execute(
+      "INSERT OR IGNORE INTO blobs (sha256, size, stored_size, media_type, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+      params![
+        self.hash.as_str(),
+        self.size,
+        self.stored_size,
+        media_type,
+        now.unix_millis()
+      ],
+    )?;
+    Ok(())
+  }
 }
 
 /// The content of the blob `hash`, checked against its hash.
@@ -141,8 +153,9 @@ impl BlobStore for ProjectDb {
   type Error = StoreError;
 
   fn put_blob(&mut self, media_type: &str, content: &[u8]) -> Result<ContentHash, StoreError> {
-    let hash = put(&self.connection, &self.directory, media_type, content, Timestamp::now())?;
-    ContentHash::new(hash.as_str()).map_err(|error| corrupt("blob hash", error))
+    let blob = write(&self.directory, content)?;
+    blob.record(&self.connection, media_type, Timestamp::now())?;
+    ContentHash::new(blob.hash.as_str()).map_err(|error| corrupt("blob hash", error))
   }
 
   fn blob(&self, hash: &ContentHash) -> Result<Vec<u8>, StoreError> {

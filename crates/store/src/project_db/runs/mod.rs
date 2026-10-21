@@ -29,6 +29,7 @@ use super::{
   ProjectDb, plans,
   resources::version_number,
   tasks::{has_revision, is_queued, snapshot_new_run},
+  write_transaction::retried,
 };
 use crate::{
   RunStoreError, StoreError,
@@ -253,64 +254,75 @@ impl RunStore for ProjectDb {
 }
 
 impl ProjectDb {
-  /// Appends `events` and stores `run`, and `plan` if given, in one transaction.
+  /// Appends `events` and stores `run`, and `plan` if given, in one transaction, run again while the
+  /// database is busy ([`retried`]).
   fn append(&mut self, run: &Run, events: &[RunEvent], plan: Option<&Plan>) -> Result<(), RunStoreError> {
     check_events(run, events)?;
-    let continues = events.iter().any(|event| event.kind().starts_execution());
-    // Transactions take the write lock before they read (`migrate`), so a continuation and a removal
-    // of the run's worktrees (`WorktreeStore::begin_worktree_removal`) each see the other.
-    let transaction = self.connection.transaction()?;
-    if continues && super::worktree_removals::removal(&transaction, run.id())?.is_some() {
-      return Err(RunStoreError::WorktreeRemoved(run.id()));
-    }
-    if continues && super::resolutions::resolution(&transaction, run.id())?.is_some() {
-      return Err(RunStoreError::Resolving(run.id()));
-    }
-    // Work returned after the run ended goes on only while it is not merged: the merge stands for what the run did.
-    if events.iter().any(returns_after_end) && super::merges::merged(&transaction, run.id())? {
-      return Err(RunStoreError::Merged(run.id()));
-    }
-    let stored: Option<i64> = transaction
-      .query_row(
-        "SELECT last_sequence FROM runs WHERE id = ?1",
-        [run.id().to_string()],
-        |row| row.get(0),
-      )
-      .optional()?;
-    let stored = stored.ok_or(RunStoreError::RunNotFound(run.id()))?;
-    let expected = u64::try_from(stored).map_err(|error| corrupt("run sequence", error))? + 1;
-    let found = events[0].sequence().get();
-    if found != expected {
-      return Err(RunStoreError::SequenceConflict {
-        run: run.id(),
-        expected,
-        found,
-      });
-    }
-    if continues {
-      super::organization::check_readiness(&transaction, run.task())?;
-    }
-    update_run(&transaction, run)?;
-    write_attempts(&transaction, run)?;
-    for event in events {
-      insert_event(&transaction, event)?;
-      let status = match event.kind() {
-        kind if kind.starts_execution() => Some(orchester_core::task::organization::WorkflowStatus::InProgress),
-        RunEventKind::Succeeded | RunEventKind::FollowUpFailed => {
-          Some(orchester_core::task::organization::WorkflowStatus::InReview)
-        }
-        _ => None,
-      };
-      if let Some(status) = status {
-        super::organization::automatic(&transaction, run.task(), status, event.at())?;
-      }
-    }
-    if let Some(plan) = plan {
-      plans::save(&transaction, plan)?;
-    }
-    transaction.commit()?;
-    Ok(())
+    retried(&mut self.connection, "append run events", |transaction| {
+      append_in(transaction, run, events, plan)
+    })
   }
+}
+
+/// [`ProjectDb::append`] in `transaction`.
+fn append_in(
+  transaction: &Transaction<'_>,
+  run: &Run,
+  events: &[RunEvent],
+  plan: Option<&Plan>,
+) -> Result<(), RunStoreError> {
+  let continues = events.iter().any(|event| event.kind().starts_execution());
+  // Transactions take the write lock before they read (`migrate`), so a continuation and a removal
+  // of the run's worktrees (`WorktreeStore::begin_worktree_removal`) each see the other.
+  if continues && super::worktree_removals::removal(transaction, run.id())?.is_some() {
+    return Err(RunStoreError::WorktreeRemoved(run.id()));
+  }
+  if continues && super::resolutions::resolution(transaction, run.id())?.is_some() {
+    return Err(RunStoreError::Resolving(run.id()));
+  }
+  // Work returned after the run ended goes on only while it is not merged: the merge stands for what the run did.
+  if events.iter().any(returns_after_end) && super::merges::merged(transaction, run.id())? {
+    return Err(RunStoreError::Merged(run.id()));
+  }
+  let stored: Option<i64> = transaction
+    .query_row(
+      "SELECT last_sequence FROM runs WHERE id = ?1",
+      [run.id().to_string()],
+      |row| row.get(0),
+    )
+    .optional()?;
+  let stored = stored.ok_or(RunStoreError::RunNotFound(run.id()))?;
+  let expected = u64::try_from(stored).map_err(|error| corrupt("run sequence", error))? + 1;
+  let found = events[0].sequence().get();
+  if found != expected {
+    return Err(RunStoreError::SequenceConflict {
+      run: run.id(),
+      expected,
+      found,
+    });
+  }
+  if continues {
+    super::organization::check_readiness(transaction, run.task())?;
+  }
+  update_run(transaction, run)?;
+  write_attempts(transaction, run)?;
+  for event in events {
+    insert_event(transaction, event)?;
+    let status = match event.kind() {
+      kind if kind.starts_execution() => Some(orchester_core::task::organization::WorkflowStatus::InProgress),
+      RunEventKind::Succeeded | RunEventKind::FollowUpFailed => {
+        Some(orchester_core::task::organization::WorkflowStatus::InReview)
+      }
+      _ => None,
+    };
+    if let Some(status) = status {
+      super::organization::automatic(transaction, run.task(), status, event.at())?;
+    }
+  }
+  if let Some(plan) = plan {
+    plans::save(transaction, plan)?;
+  }
+  Ok(())
 }
 
 /// `events` must be the consecutive events of `run` that end in its current state.
