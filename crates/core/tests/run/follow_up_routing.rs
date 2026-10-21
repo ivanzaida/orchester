@@ -6,6 +6,7 @@
 
 use orchester_core::{
   id::StepExecutionId,
+  orchestrator::StopReason,
   run::{AttemptReason, AttemptStatus, ReviewNote, Run, RunStatus, StepFailure, Stuck, StuckDecision},
 };
 
@@ -91,6 +92,11 @@ fn follow_up_routing_waits_for_a_person_once_the_routes_retries_are_used() {
     &RunStatus::WaitingForPerson(Stuck::RetriesExhausted(key("checks")))
   );
   assert_eq!(logged.run.retry_from(), Some(&key("implement")));
+  assert!(!logged.run.waits_without_route());
+  assert_eq!(
+    StopReason::of_run(&logged.run),
+    Some(StopReason::RetriesExhausted { retries: 1 })
+  );
   assert_eq!(Run::replay(&logged.log), Ok(logged.run));
 }
 
@@ -102,6 +108,9 @@ fn follow_up_routing_without_a_route_waits_with_the_return_choices() {
     logged.run.status(),
     &RunStatus::WaitingForPerson(Stuck::RetriesExhausted(key("review")))
   );
+  // It took no retry: people are told the step failed, not that its retries ran out.
+  assert!(logged.run.waits_without_route());
+  assert_eq!(StopReason::of_run(&logged.run), Some(StopReason::NoRoute));
   assert_eq!(
     logged.run.return_targets(),
     ["research", "plan", "implement", "review"].map(key)

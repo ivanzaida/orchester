@@ -26,6 +26,7 @@
     "status": {
       "step": "{{number}} {{step}}",
       "retriesUsed": "retries used",
+      "failed": "reported failed",
       "unverified": "could not check everything",
       "unchanged": "not run again",
       "conflict": "conflict"

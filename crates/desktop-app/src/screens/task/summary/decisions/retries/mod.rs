@@ -82,8 +82,7 @@ fn notice(ctx: &Ctx, props: &TaskContext, run: &RunView, stuck: &Stuck) -> Notic
     ("target", target.name.to_string()),
     ("count", count.to_string()),
   ];
-  // Without a route, one more retry runs the failed step itself again.
-  let (title, body) = if target.key == *step {
+  let (title, body) = if run.run.waits_without_route() {
     (
       "decisions.retries.noRouteNoticeTitle",
       "decisions.retries.noRouteNoticeBody",

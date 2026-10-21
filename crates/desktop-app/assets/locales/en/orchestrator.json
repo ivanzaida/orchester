@@ -470,6 +470,7 @@
         "why": {
           "retries": "used up its {{count}} retries",
           "retriesOne": "used up its retry",
+          "noRoute": "reported the work failed",
           "brokeAgain": "broke again",
           "unverified": "waits unverified",
           "unchanged": "waits unchanged"

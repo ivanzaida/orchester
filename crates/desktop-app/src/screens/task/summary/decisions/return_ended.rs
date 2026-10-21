@@ -60,15 +60,19 @@ pub struct Returning;
 
 impl lurq::app::component::DevtoolsInspectable for Returning {}
 
-/// The card of `props`' latest run, when it ended so its work can go back to one of its agent steps and was not merged:
-/// mounted afresh as the run changes, so a note written for it does not outlive it.
-pub fn return_card(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
+/// `props`' latest run, when it ended so its work can go back to one of its agent steps and was not merged. A Not
+/// shared task is read-only: its run goes back to no step either.
+pub fn returnable(props: &TaskContext) -> Option<&RunView> {
   let run = props.detail.run.as_ref()?;
   let merged =
     props.detail.merge.as_ref().is_some_and(|merge| merge.run == run.id()) || props.jobs.run(run.id()).merged.is_some();
-  if merged || return_work::targets(run).is_empty() || !run.run.can_return_ended() {
-    return None;
-  }
+  let refused = props.detail.not_shared() || merged || return_work::targets(run).is_empty();
+  (!refused && run.run.can_return_ended()).then_some(run)
+}
+
+/// The card of the [`returnable`] run: mounted afresh as the run changes, so a note written for it does not outlive it.
+pub fn return_card(ctx: &mut Ctx, props: &TaskContext) -> Option<Element> {
+  let run = returnable(props)?;
   let key = format!("return-ended-{}-{}", run.id(), run.run.last_sequence().get());
   Some(ctx.mount_keyed::<ReturnEnded>(&key, props.clone()))
 }

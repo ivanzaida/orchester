@@ -33,7 +33,7 @@ use lurq::{
 };
 use orchester_core::time::Timestamp;
 
-pub use self::decisions::decisions;
+pub use self::decisions::{decisions, returnable};
 use self::runs::Runs;
 use super::{PageState, TaskContext, sharing};
 use crate::{
@@ -117,10 +117,7 @@ impl Component for TaskSummary {
     let root = props.task.project.open.repo_root.clone();
     let panel = match &detail.run {
       Some(run) if run.run.status().is_terminal() => {
-        // A Not shared task is read-only: its run goes back to no step either.
-        let lead = (!detail.not_shared())
-          .then(|| decisions::return_card(ctx, &props.task))
-          .flatten();
+        let lead = decisions::return_card(ctx, &props.task);
         run_details::run_details(ctx, &props.task, run, (lead, section))
       }
       Some(run) => this_run::this_run(ctx, run, (&root, props.task.lost()), (None, section)),

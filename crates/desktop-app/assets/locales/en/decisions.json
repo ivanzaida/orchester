@@ -112,6 +112,7 @@
       "runAgain": "Run {{step}} again",
       "runAgainMeaning": "Runs {{step}} again on the same revision, as you ask.",
       "retryMeaning": "Runs {{step}} once more, then {{failed}} again.",
+      "noRouteMeaning": "Runs {{step}} once more, with what it reported.",
       "restartMeaning": "Restarts {{step}} once more.",
       "returnTo": "Return the work to",
       "defaultTarget": "{{step}} · default",

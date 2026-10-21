@@ -27,7 +27,7 @@ use crate::{
     press::OpenIn,
   },
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  screens::task::{PageState, RemovalPlace, sharing},
+  screens::task::{PageState, RemovalPlace, sharing, summary},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -214,10 +214,10 @@ fn return_button(ctx: &mut Ctx, props: &HeaderProps) -> Option<ActionButton> {
   }
   let card = match run.run.status() {
     RunStatus::WaitingForPerson(_) => PointedCard::Retries,
-    _ if !run.run.can_return_ended() => return None,
-    _ if detail.merge.as_ref().is_some_and(|merge| merge.run == run.id()) => return None,
-    _ if props.task.jobs.run(run.id()).merged.is_some() => return None,
-    _ => PointedCard::Return,
+    _ => {
+      summary::returnable(&props.task)?;
+      PointedCard::Return
+    }
   };
   let project = props.task.project.open.project.id();
   let route = Route::Project(project, props.task.page(TaskView::of(TaskTab::Summary)));

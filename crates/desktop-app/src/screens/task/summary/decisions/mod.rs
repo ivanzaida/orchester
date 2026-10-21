@@ -28,6 +28,7 @@ use orchester_core::run::{PauseReason, RunLimit, RunStatus};
 use orchester_workspace::tasks::{delivery::Delivery, detail::StepView, plan::PlanReview};
 
 pub(super) use self::return_ended::return_card;
+pub use self::return_ended::returnable;
 use super::{
   column, layout,
   notice::{self, Said},

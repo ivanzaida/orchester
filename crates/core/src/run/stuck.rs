@@ -175,6 +175,20 @@ impl Run {
     self.retries_taken(step).min(allowed)
   }
 
+  /// Whether the run waits because a follow-up's step reported the work failed where the pipeline has no route for
+  /// that failure (the project task ORC-44). It waits as after used-up retries, but took none: one more
+  /// retry runs the step itself again, and people are told the step failed, not that its retries ran out.
+  pub fn waits_without_route(&self) -> bool {
+    let RunStatus::WaitingForPerson(Stuck::RetriesExhausted(step)) = self.status() else {
+      return false;
+    };
+    self
+      .snapshot()
+      .body()
+      .step(step)
+      .is_some_and(|pinned| pinned.on_failure.is_none())
+  }
+
   /// The step one more retry of a waiting run starts from: the failure route's target after used-up
   /// retries, the step itself after it broke again, or after a follow-up of a step without a route failed.
   /// `None` for a run that does not wait.
