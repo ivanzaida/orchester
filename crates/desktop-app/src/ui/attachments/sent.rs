@@ -12,6 +12,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, Text},
@@ -65,9 +66,27 @@ struct Read(Option<Arc<str>>);
 
 impl DevtoolsInspectable for Read {}
 
-/// The name of a file that could not be opened or read.
+/// A file that was not opened in its default program, and why.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-struct NotOpened(Option<Arc<str>>);
+enum NotOpened {
+  #[default]
+  No,
+  /// Its program did not start.
+  Failed(Arc<str>),
+  /// Synthetic input pressed to open it.
+  PersonOnly(Arc<str>),
+}
+
+impl NotOpened {
+  /// The message that says why, and the file's name.
+  fn why(&self) -> Option<(&'static str, &Arc<str>)> {
+    match self {
+      Self::No => None,
+      Self::Failed(name) => Some(("attachments.openFailed", name)),
+      Self::PersonOnly(name) => Some(("attachments.openPersonOnly", name)),
+    }
+  }
+}
 
 impl DevtoolsInspectable for NotOpened {}
 
@@ -102,16 +121,13 @@ impl Component for SentAttachments {
       .map(|attachment| self.chip(ctx, &props, attachment))
       .collect();
     let preview = opened.map(|attachment| self.preview(ctx, &props, &attachment, text));
-    let failed = self.failed.get().0.map(|name| {
+    let failed = self.failed.get().why().map(|(key, name)| {
       Row::new()
         .id(format!("{}-attachments-failed", props.id))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::TextMuted))
-        .child(
-          Text::new(&ctx.t_args("attachments.openFailed", [("name", name.to_string())]))
-            .variant(ExtraTypography::Note.role()),
-        )
+        .child(Text::new(&ctx.t_args(key, [("name", name.to_string())])).variant(ExtraTypography::Note.role()))
     });
     Column::new()
       .id(format!("{}-attachments", props.id))
@@ -155,7 +171,11 @@ impl SentAttachments {
         })
     });
     let state = read.state().get();
-    if state.error.is_some() && !state.is_pending() {
+    // While another file is read, the one read before is not shown as its text.
+    if state.is_pending() {
+      return None;
+    }
+    if state.error.is_some() {
       return Some(Err(()));
     }
     state.data.and_then(|read| read.0).map(Ok)
@@ -223,14 +243,20 @@ impl SentAttachments {
   }
 }
 
-/// Hands the project's copy at `path` to its default program off the UI thread; one that does not open is named in
+/// Hands the project's copy at `path` to its default program off the UI thread, when a person asked: synthetic input
+/// (an MCP client driving the window) starts no program, and `failed` says so. One that does not open is named in
 /// `failed`.
 fn open_file(path: PathBuf, name: Arc<str>, failed: Signal<NotOpened>) {
-  failed.set(NotOpened(None));
+  if is_synthetic_input() {
+    tracing::warn!("synthetic input pressed to open an attached file; not opened");
+    failed.set(NotOpened::PersonOnly(name));
+    return;
+  }
+  failed.set(NotOpened::No);
   std::thread::spawn(move || {
     if let Err(error) = orchester_exec::external::open_path(&path) {
       tracing::warn!(%error, "an attached file could not be opened");
-      failed.set(NotOpened(Some(name)));
+      failed.set(NotOpened::Failed(name));
     }
   });
 }

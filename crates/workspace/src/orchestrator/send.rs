@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  attachment::{AttachmentRefusal, NewAttachment, limits, names_text, support},
+  attachment::{NewAttachment, names_text},
   conversation::MessageBody,
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, TurnFailure, TurnState},
@@ -18,8 +18,7 @@ use orchester_store::ProjectDb;
 
 use super::settings::OrchestratorSetup;
 use crate::{
-  attachments::Refused,
-  background,
+  attachments, background,
   messages::{self, Message},
   runner::{RequestError, RunRequestError, Runners},
   workspace::OpenProject,
@@ -151,19 +150,8 @@ pub fn keep_in(root: &Path, outgoing: &Outgoing) -> Result<(), Message> {
   if !setup.readiness().is_ready() {
     return Err(Message::new("orchestrator.send.notReady"));
   }
-  let refused = |refusal: AttachmentRefusal| {
-    let name = attached.last().map(|attachment| attachment.name().as_str().to_owned());
-    Refused::new(name.unwrap_or_default(), refusal).message()
-  };
-  limits::check_message(attached).map_err(refused)?;
-  if let Some(provider) = setup.provider()
-    && let Some(new) = attached
-      .iter()
-      .find(|new| !support::takes(provider, new.media().kind()))
-  {
-    let kind = new.media().kind();
-    return Err(Refused::new(new.name().as_str(), AttachmentRefusal::NotTaken { kind, by: provider }).message());
-  }
+  let providers: Vec<_> = setup.provider().into_iter().collect();
+  attachments::check_message(&providers, attached).map_err(|refused| refused.message())?;
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   let now = Timestamp::now();
   let chat = db

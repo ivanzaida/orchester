@@ -251,10 +251,11 @@ pub struct Attachment {
 }
 
 impl Attachment {
-  /// `new` as kept, under the hash of its content.
+  /// `new` as kept with one message, under the hash of its content. It gets an id of its own, not the draft's: the
+  /// same draft file sent again is kept again for its new message, so no message's copy is another's.
   pub fn kept(new: &NewAttachment, hash: ContentHash) -> Self {
     Self {
-      id: new.id,
+      id: AttachmentId::generate(),
       name: new.name.clone(),
       media: new.media,
       size: new.size(),

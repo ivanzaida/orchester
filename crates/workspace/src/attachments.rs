@@ -156,14 +156,9 @@ pub fn reachable_providers(run: &RunView, recipient: Recipient) -> Vec<AgentProv
   providers
 }
 
-/// Refuses `attachments` for a message to `recipient` in `run`, when the message's limits do not hold or an agent it
-/// may reach could not read one of them. Without a run, the agents are not known yet: the runner names a file it could
-/// not give when the message is delivered.
-pub fn check_message(
-  run: Option<&RunView>,
-  recipient: Recipient,
-  attachments: &[NewAttachment],
-) -> Result<(), Refused> {
+/// Refuses `attachments` for a message, when the message's limits do not hold or one of `providers`, the connections
+/// of the agents it may reach, could not read one of them.
+pub fn check_message(providers: &[AgentProvider], attachments: &[NewAttachment]) -> Result<(), Refused> {
   let named = |refusal: AttachmentRefusal, at: usize| {
     let name = attachments
       .get(at)
@@ -171,10 +166,7 @@ pub fn check_message(
     Refused::new(name.unwrap_or_default(), refusal)
   };
   limits::check_message(attachments).map_err(|refusal| named(refusal, attachments.len().saturating_sub(1)))?;
-  let Some(run) = run else {
-    return Ok(());
-  };
-  for provider in reachable_providers(run, recipient) {
+  for &provider in providers {
     if let Some(at) = attachments
       .iter()
       .position(|attachment| !support::takes(provider, attachment.media().kind()))

@@ -112,6 +112,29 @@ fn a_chat_message_keeps_its_files_and_forgets_them_with_it() {
 }
 
 #[test]
+fn the_same_draft_file_sent_again_keeps_both_messages_copies() {
+  let (repo, mut db, _run, _execution) = started_run();
+  let chat = ChatId::generate();
+  let (first, second) = (ChatMessageId::generate(), ChatMessageId::generate());
+  let started = Chat::start(chat, &body("Look"), at(10));
+  let files = [file("shot.png", png())];
+  assert!(
+    db.keep_chat_message_with(&started, (first, &body("Look")), &files, at(10))
+      .expect("first")
+  );
+  // The first send came back lost but stays stored; the person edits the words and sends the same files again.
+  assert!(
+    db.keep_chat_message_with(&started, (second, &body("Look here")), &files, at(20))
+      .expect("second")
+  );
+  let kept = db.chat_attachments(chat).expect("read");
+  let (one, two) = (&kept[&first][0], &kept[&second][0]);
+  assert_ne!(one.id(), two.id(), "each message keeps its own copy");
+  assert!(attachment_file(repo.path(), one).is_file(), "the first copy survives");
+  assert!(attachment_file(repo.path(), two).is_file());
+}
+
+#[test]
 fn a_message_without_files_keeps_none() {
   let (repo, mut db, run, _execution) = started_run();
   let message = Message::from_person(run.task(), Some(run.id()), Recipient::Orchestrator, body("Hi"), at(10));

@@ -4,12 +4,9 @@
 
 use std::fs;
 
-use orchester_core::{
-  attachment::{
-    AttachmentRefusal, MediaType,
-    limits::{MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS},
-  },
-  conversation::Recipient,
+use orchester_core::attachment::{
+  AttachmentRefusal, MediaType,
+  limits::{MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS},
 };
 use orchester_workspace::attachments::{Refused, add, check_message, pasted, read_file, read_files};
 
@@ -101,10 +98,10 @@ fn a_message_holds_the_files_its_limits_allow() {
     refused[0].refusal,
     AttachmentRefusal::TooMany { limit: MAX_ATTACHMENTS }
   );
-  assert_eq!(check_message(None, Recipient::Orchestrator, &held), Ok(()));
+  assert_eq!(check_message(&[], &held), Ok(()));
   held.push(pasted("extra.txt", b"x".to_vec()).expect("text"));
   assert_eq!(
-    check_message(None, Recipient::Orchestrator, &held).map_err(|refused| refused.refusal),
+    check_message(&[], &held).map_err(|refused| refused.refusal),
     Err(AttachmentRefusal::TooMany { limit: MAX_ATTACHMENTS })
   );
 }

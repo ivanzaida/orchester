@@ -15,6 +15,7 @@
     "putBack": "Put back in the message",
     "list": "Attachments",
     "openFailed": "{{name}} couldn't be opened.",
+    "openPersonOnly": "Only a person's click opens {{name}} in another program: input from an MCP client is refused.",
     "unreadable": "{{name}} couldn't be read from the project's data.",
     "size": {
       "bytes": "{{size}} B",

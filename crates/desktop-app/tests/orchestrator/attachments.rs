@@ -1,10 +1,11 @@
 //! Files in the Orchestrator's composer (ORC-57): *Attach* hands the picker's files to the draft and what the message
 //! cannot take is refused under the box with why, a drop and a paste attach too, the draft keeps its files through
-//! another screen, and a message sent with a file is kept with it, shows it, and reaches the agent as a content block.
+//! another screen, and a message sent with a file is kept with it, shows it, and reaches the agent as a content block;
+//! synthetic input never opens a sent file in another program.
 
 use std::{fs, path::Path};
 
-use lurq::app::events::{ClipboardContent, ClipboardImage, DraggedPaths};
+use lurq::app::events::{ClipboardContent, ClipboardImage, DraggedPaths, with_synthetic_input};
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::attachment::MediaType;
 
@@ -122,4 +123,34 @@ fn orchestrator_a_message_with_a_file_is_kept_shown_and_reaches_the_agent() {
     agent.contains("image:image/png"),
     "the image reached the agent: {agent}"
   );
+}
+
+#[test]
+fn orchestrator_a_synthetic_press_on_a_sent_pdf_opens_no_program() {
+  let (mut screen, stand_ins) = Orchestrator::with_stand_ins(Setup::Ready);
+  let folder = tempfile::tempdir().expect("a folder");
+  let pdf = folder.path().join("spec.pdf");
+  fs::write(&pdf, b"%PDF-1.7\n...").expect("written");
+  stand_ins.attach(vec![pdf]);
+  screen.go(OrchestratorChat::New);
+  screen.click("orchestrator-attach");
+  until_chip(&mut screen, "spec.pdf");
+  screen.send("Read the spec");
+  screen.until("the answer", |screen| {
+    screen.text("orchestrator-conversation").contains("Noted:") && !screen.exists("orchestrator-thinking")
+  });
+  let db = screen.db();
+  let chat = db.chats().expect("chats").remove(0).chat.id();
+  let (message, attached) = db
+    .chat_attachments(chat)
+    .expect("read")
+    .into_iter()
+    .next()
+    .expect("the message's files");
+  let files = format!("orchestrator-message-{message}-attachments");
+  let chip = format!("orchestrator-message-{message}-attachment-{}", attached[0].id());
+  with_synthetic_input(|| screen.click(&chip));
+  screen.until("the refusal", |screen| {
+    screen.text(&format!("{files}-failed")).contains("Only a person")
+  });
 }
