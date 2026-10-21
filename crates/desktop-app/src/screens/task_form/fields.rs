@@ -16,6 +16,7 @@ pub struct Fields {
   pub pipeline: Signal<Pick>,
   pub budget: Signal<String>,
   pub time_limit: Signal<String>,
+  pub no_automatic_merge: Signal<bool>,
 }
 
 impl Fields {
@@ -27,6 +28,7 @@ impl Fields {
       pipeline: ctx.signal(Pick(None)),
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
+      no_automatic_merge: ctx.signal(false),
     }
   }
 
@@ -39,6 +41,7 @@ impl Fields {
       pipeline: self.pipeline.get().0,
       budget: self.budget.get(),
       time_limit: self.time_limit.get(),
+      no_automatic_merge: self.no_automatic_merge.get(),
     }
   }
 
@@ -55,6 +58,7 @@ impl Fields {
       pipeline: self.pipeline.get_untracked().0,
       budget: self.budget.get_untracked(),
       time_limit: self.time_limit.get_untracked(),
+      no_automatic_merge: self.no_automatic_merge.get_untracked(),
     }
   }
 
@@ -65,5 +69,6 @@ impl Fields {
     self.pipeline.set(Pick(values.pipeline));
     self.budget.set(values.budget.clone());
     self.time_limit.set(values.time_limit.clone());
+    self.no_automatic_merge.set(values.no_automatic_merge);
   }
 }

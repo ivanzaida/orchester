@@ -9,6 +9,7 @@ use std::time::Duration;
 pub mod change;
 pub mod chat;
 pub mod instructions;
+pub mod merging;
 pub mod proposal;
 pub mod resume;
 pub mod sent;
@@ -20,6 +21,7 @@ pub use self::{
     ActionOutcome, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, HeldWork, SessionChange,
     TurnFailure, TurnState, WaitTurn,
   },
+  merging::{MergeLeft, Merging},
   resume::{ChatResume, Continuing, PersonsStop},
   sent::{FromOrchestrator, SentWay},
   settings::{OrchestratorSettings, codex_held_back, runs_orchestrator},

@@ -3,7 +3,8 @@
 //! out, sent by the chat while the person's switch let it, or proposed by the chat and applied by the person
 //! ([`orchester_core::orchestrator::FromOrchestrator`]). So is a decision on how a run that stopped goes on
 //! (`continue_run`: one more retry, a return with a note, a return to resolve conflicts): the return or restart it
-//! started is the chat's ([`continued`]). An answer or a message it proposed and no one applied yet
+//! started is the chat's ([`continued`]); and so is a merge of the run, also one the chat carried out on its own
+//! ([`merged_by`], ORC-69). An answer or a message it proposed and no one applied yet
 //! waits for the person in the conversation too, with the same proposal behind it in the chat: applying or dismissing
 //! it in either place decides both ([`crate::orchestrator::proposal::decide`]). One applying would refuse now is
 //! stale: a message the run would no longer take as it was checked (`send_message`'s own check), or an answer to a
@@ -155,13 +156,40 @@ fn continuation(kept: &[KeptAction], attempt: u32) -> Option<FromOrchestrator> {
     let Change::Continue { attempt: stopped, .. } = kept.action.change.as_ref()?.change else {
       return None;
     };
-    let way = match kept.action.outcome {
-      ActionOutcome::Applied => SentWay::AppliedByPerson,
-      ActionOutcome::Done => SentWay::Direct,
-      _ => return None,
-    };
-    (stopped.checked_add(1) == Some(attempt)).then(|| FromOrchestrator::new(kept.chat, way))
+    (stopped.checked_add(1) == Some(attempt)).then(|| carried_out(kept)).flatten()
   })
+}
+
+/// A merge of the run the Orchestrator chat carried out (ORC-69): its conversation and how it went out, and whether
+/// the chat merged it on its own, in a turn the run's success started, because the person lets it merge finished runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChatMerge {
+  pub from: FromOrchestrator,
+  pub on_its_own: bool,
+}
+
+/// The chat's merge of the run among `kept`, the chat's actions on it, when one was carried out: by the chat itself
+/// or applied by the person. A proposal no one applied, or a merge refused, merged nothing.
+pub fn merged_by(kept: &[KeptAction]) -> Option<ChatMerge> {
+  kept.iter().rev().find_map(|kept| {
+    let Change::Merge { .. } = kept.action.change.as_ref()?.change else {
+      return None;
+    };
+    carried_out(kept).map(|from| ChatMerge {
+      from,
+      on_its_own: kept.action.on_its_own,
+    })
+  })
+}
+
+/// The chat's action `kept` as the Orchestrator's, when it was carried out: done by the chat or applied by the person.
+fn carried_out(kept: &KeptAction) -> Option<FromOrchestrator> {
+  let way = match kept.action.outcome {
+    ActionOutcome::Applied => SentWay::AppliedByPerson,
+    ActionOutcome::Done => SentWay::Direct,
+    _ => return None,
+  };
+  Some(FromOrchestrator::new(kept.chat, way))
 }
 
 fn proposed(change: &Change) -> Option<Proposed> {

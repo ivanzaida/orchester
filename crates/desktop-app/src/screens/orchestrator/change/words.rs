@@ -120,13 +120,33 @@ pub(super) struct Accept {
 pub(super) struct Words {
   pub(super) glyph: Icon,
   pub(super) title: Arc<str>,
-  /// It was done without asking because auto mode is on: the *Auto mode* chip.
-  pub(super) auto_mode: bool,
+  /// The chip beside the title of what was done without asking: *Auto mode*, or *On its own* for a finished run the
+  /// Orchestrator merged on its own.
+  pub(super) chip: Option<Chip>,
   pub(super) state: State,
   pub(super) effect: Arc<str>,
   pub(super) accept: Option<Accept>,
   /// What a refused click by automation says.
   pub(super) person_only: &'static str,
+}
+
+/// Why the chat did something without asking, as the chip beside the card's title names it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Chip {
+  /// Auto mode is on for the project (`{id}-auto-mode`).
+  AutoMode,
+  /// The person lets the Orchestrator merge finished runs on its own (`{id}-on-its-own`).
+  OnItsOwn,
+}
+
+impl Chip {
+  /// The chip's element id suffix and its words.
+  pub(super) const fn parts(self) -> (&'static str, &'static str) {
+    match self {
+      Self::AutoMode => ("auto-mode", "orchestrator.change.start.autoMode"),
+      Self::OnItsOwn => ("on-its-own", "orchestrator.change.merge.onItsOwn"),
+    }
+  }
 }
 
 /// What the card of `view` says.
@@ -266,7 +286,7 @@ fn publish(ctx: &Ctx, view: &View, (of, version, name): (Publishing, u32, &str))
   Words {
     glyph: publish_glyph(of),
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, "orchestrator.change.publish.byYou"),
     effect,
     accept: Some(Accept {
@@ -308,7 +328,7 @@ fn cancel(ctx: &Ctx, view: &View, number: u32) -> Words {
   Words {
     glyph: Icon::CircleStop,
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, "orchestrator.change.cancel.byYou"),
     effect,
     accept: Some(Accept {
@@ -346,9 +366,16 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
     Stands::Merged { revision, .. } => Some(revision.as_str()),
     _ => None,
   });
+  // A finished run the Orchestrator merged on its own says so (ORC-69), with the revision it moved its branch to.
+  let on_its_own = view.action.on_its_own && view.phase() == Phase::Done;
   let effect = match (view.phase(), into, merged) {
     (Phase::Waits | Phase::Applying, Some(_), _) => ctx.t_args("orchestrator.change.merge.effectWaitsInto", args),
     (Phase::Waits | Phase::Applying, None, _) => ctx.t("orchestrator.change.merge.effectWaits"),
+    (Phase::Done, Some(into), Some(revision)) if on_its_own => ctx.t_args(
+      "orchestrator.change.merge.effectOnItsOwn",
+      [("into", into), ("revision", revision)],
+    ),
+    (Phase::Done, ..) if on_its_own => ctx.t("orchestrator.change.merge.effectOnItsOwnPlain"),
     (Phase::Applied | Phase::Done, Some(into), Some(revision)) => ctx.t_args(
       "orchestrator.change.merge.effectMerged",
       [("into", into), ("revision", revision)],
@@ -364,7 +391,7 @@ fn merge(ctx: &Ctx, view: &View, (number, into): (u32, Option<&str>)) -> Words {
   Words {
     glyph: Icon::GitMerge,
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: on_its_own.then_some(Chip::OnItsOwn),
     state: state(ctx, view, "orchestrator.change.merge.byYou"),
     effect,
     accept: Some(Accept {
@@ -384,7 +411,7 @@ fn merged_outside(ctx: &Ctx, view: &View, (number, into): (u32, &str)) -> Words 
   Words {
     glyph: Icon::GitMerge,
     title: ctx.t_args("orchestrator.change.merge.outsideTitle", args),
-    auto_mode: false,
+    chip: None,
     state: State {
       glyph: Icon::CircleCheck,
       color: PaletteColor::Success,
@@ -420,7 +447,7 @@ fn start(ctx: &Ctx, view: &View) -> Words {
   Words {
     glyph,
     title,
-    auto_mode: view.action.auto_mode,
+    chip: view.action.auto_mode.then_some(Chip::AutoMode),
     state: state(ctx, view, "orchestrator.action.confirmed"),
     effect,
     accept: None,

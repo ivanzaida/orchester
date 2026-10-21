@@ -32,6 +32,7 @@ use super::{
   head::{head, no_run_notice},
   kept::KeptEdits,
   limits::{LimitFields, limits_section},
+  merging::merging_section,
   plan::pipeline_section,
   state::{Phase, Subject, View},
   unbuilt::{context_section, instructions_section},
@@ -221,6 +222,7 @@ impl TaskForm {
       .child(context_section(ctx))
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
       .child(limits_section(ctx, view, &limit_fields, separator))
+      .child(merging_section(ctx, view, &self.fields.no_automatic_merge))
       .child(instructions_section(ctx))
   }
 

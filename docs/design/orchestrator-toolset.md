@@ -3,7 +3,8 @@
 Status: decided by the person on 2026-10-15; decision 5 and the waits changed by the person on 2026-10-17 (ORC-42);
 continuing a stopped run and the ends of runs added to decision 5 on 2026-10-19 (proposed, conservative; see there);
 continuing interrupted runs behind *Let the Orchestrator continue interrupted runs* decided by the person on
-2026-10-20 (ORC-53).
+2026-10-20 (ORC-53); merging finished runs on its own behind *Let the Orchestrator merge finished runs on its own*
+decided by the person on 2026-10-21 (ORC-69).
 This is the contract the parallel work streams share. Implementation notes and file ownership are at the end.
 
 The Orchestrator chat (ORC-17) gives its agent a part of Orchester's domain MCP tools (`crates/workspace/src/
@@ -49,13 +50,39 @@ person can click.
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.
    - The chat may merge a run (`merge_run`): a proposal card by default; with the person-only switch *Let the
-     Orchestrator merge runs* it merges at once, only a run the person asked it to merge. The merge keeps all of
+     Orchestrator merge runs* it merges at once, only a run the person asked it to merge, or a finished run it merges
+     on its own (below). The merge keeps all of
      `merge_run`'s rules: only a task's latest run that succeeded, only when the main checkout needs no local
      integration, else refused (`needs_decision`, `merge_failed`); conflict choices and approving the merged result
      stay the person's, on the Local integration page. The merge is kept in the conversation as an action. A
      `merge_failed` of the chat's merge names the next step: for a merge that stopped at conflicting files, proposing
      `continue_run` `resolve_conflicts` (below), naming the files; otherwise the Local integration page.
-   - Both switches are off until a person turns them on; synthetic input cannot flip them (the same rule as *Let
+   - The chat merges a finished run on its own behind the person-only switch *Let the Orchestrator merge finished
+     runs on its own* (Settings › What automation may do; decided by the person on 2026-10-21, ORC-69). It needs *Let
+     the Orchestrator merge runs* and *answer agents* on too, and the switch's row says so. With all three on, the turn
+     a task's run success starts by itself (below) merges the run with `merge_run`, directly, only when all of these
+     hold (one rule, `orchester_workspace::orchestrator::auto_merge`): it is the task's latest run and succeeded, and
+     every step of its pipeline passed — a step a person accepted as it was counts as passed, one automation accepted
+     does not; the task is not marked Blocked and no unfinished task blocks it (ORC-58); new starts are not held for
+     its reviewed group or the project (`hold_queue`); the task does not say *Don't merge automatically*, a task
+     organization flag set in the task form or with `create_task`/`update_task` (`no_automatic_merge`); and the run is
+     not the chat's own doing in a loop (`raised_by_own`: such an end starts no turn). `merge_run`'s own rules hold on
+     top: a main checkout that needs local integration is refused (`needs_decision`, `scoped_integration_required`).
+     The rule is read when the end is kept (the entry says whether the turn merges the run or why it is left to the
+     person, `merging`) and again when the turn calls `merge_run`: a run it leaves to the person by then is refused
+     (`left_to_person`), naming why. One automatic merge attempt per run end: the turn merges only the run whose
+     success started it, once, and a second `merge_run` in that turn is only proposed. A `merge_failed` at conflicts
+     leads the turn to propose `continue_run` `resolve_conflicts` (a card, as for any merge of the chat's); after the
+     agent resolved them and the run succeeded again, that is a new end, merged again under the same rule. Any other
+     refusal is told to the person with its reason and the merge left to them. Runs that end close together are merged
+     one at a time in the order they ended: a turn that merges its run does not start while one that ended before, in
+     any conversation, still waits for its turn or thinks (ORC-54's base-moved notices may then go to other runs). Each
+     such merge is an action in the conversation, *merged by the Orchestrator on its own* with the revision it moved
+     the base branch to and the task's link (`ChatAction::on_its_own`); the task's Conversation shows the
+     Orchestrator's row under the run's end with the way back to the chat's conversation (ORC-45's attribution), and
+     `get_conversation` names the Orchestrator as the merge's author. OS notifications treat it as a merge the chat
+     carried out itself (no notification of its own, ORC-56), as will the daily report (ORC-47) once it exists.
+   - These switches are off until a person turns them on; synthetic input cannot flip them (the same rule as *Let
      automation change agent permissions* and *Let the Orchestrator publish drafts*).
    - The chat may propose how a run that waits for a person's decision goes on (`continue_run`): only `allow_retry`
      (one more retry of the step that used up its retries or broke again, or the step that waits unverified or
@@ -127,14 +154,18 @@ person can click.
      a decision the turn reads the run, tells the person what happened and the choices, and may propose a retry or a
      return (`continue_run`). For a failure, a limit or an interruption the turn reads the run and tells the person
      what happened and the choices they have on the task's Summary, which are theirs. Such a turn starts, resumes,
-     cancels and merges nothing itself, with one exception (ORC-53): with *Let the Orchestrator continue interrupted
+     cancels and merges nothing itself, with two exceptions. ORC-53: with *Let the Orchestrator continue interrupted
      runs* on too, the turn of an interrupted run's end the chat may continue (a crash; the runner going away and
      *Quit now* are no followed ends) continues that run once with `resume_run`, from its last checkpoint, and tells
      the person. Only the run whose end started the turn, and never in a loop: a run interrupted again within 10
      minutes of the interruption before is left to the person, its turn told why and `resume_run` refused
-     (`interrupted_again`); a run the chat continued that is interrupted again starts no turn (`raised_by_own`). Each
-     turn's wait keeps what it may do (`continuing`), and the tool checks it again when it is called.
-   - In a turn a wait or an end started by itself nobody asked for anything, so `merge_run`, `run_task`,
+     (`interrupted_again`); a run the chat continued that is interrupted again starts no turn (`raised_by_own`).
+     ORC-69: with *Let the Orchestrator merge finished runs on its own* and *merge runs* on too, the turn of a run's
+     success merges that run once with `merge_run` when the rule above lets it, else tells the person why it is left
+     to them; such turns start one at a time in the order the runs ended. Each turn's wait keeps what it may do
+     (`continuing`, `merging`), and the tool checks it again when it is called.
+   - In a turn a wait or an end started by itself nobody asked for anything, so `merge_run` (but the one merge of the
+     run whose success started the turn, above), `run_task`,
      `pause_run`, `resume_run` (of a run a pause stopped, or an interrupted run but the one above), `release_queue` and
      every publication only propose, or for an interrupted run are refused (`person_only`),
      whatever *Let the Orchestrator merge runs*, *publish drafts* and auto mode say; the person applies the card. This
@@ -170,8 +201,8 @@ project.
 | Area | Read | Change (draft / free) | Proposed (person clicks, or switch) |
 |---|---|---|---|
 | Projects | `list_projects`, `get_project` (existing) | — | — |
-| Tasks | `list_tasks` (existing; with each task's `blocked_reason` and `held_by_blocking_tasks`, ORC-58), `get_task` (existing); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged) | `create_task`, `update_task` (existing; ORC-58: also the manual Blocked's `blocked_reason` — `null` clears it —, the whole list of blocking tasks `blocked_by` by key or id with the form's gate, and `tags` by name, a new name created as the tag picker does; checked as the task form checks them, refused with its reasons (`invalid_organization` for a blank reason or a cycle, `task_not_found` for a task not of the project), recorded in the task's history as automation's. Free organization changes, like the title or priority: a manual Blocked is informational and widens nothing, but the chat's `run_task` refuses a task marked Blocked as `task_blocked`, naming the reason; the person can still start it in the app) | — |
-| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; a run a pause stopped, and with *Let the Orchestrator continue interrupted runs* a run a crash, the runner going away or *Quit now* interrupted, from its last checkpoint; never a run at a limit, canceled, failed by the runner or without its worktree; both, and `release_queue`, only proposed in a turn Orchester started, but for the interrupted run whose end started the turn, continued once under both that switch and *answer agents*) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
+| Tasks | `list_tasks` (existing; with each task's `blocked_reason` and `held_by_blocking_tasks`, ORC-58), `get_task` (existing; also `no_automatic_merge`, ORC-69); `get_conversation` (new, ORC-42: a task's conversation as its Conversation tab shows it, paged; a run's end merged by the chat names the Orchestrator as its author, with `on_its_own`) | `create_task`, `update_task` (existing; ORC-58: also the manual Blocked's `blocked_reason` — `null` clears it —, the whole list of blocking tasks `blocked_by` by key or id with the form's gate, and `tags` by name, a new name created as the tag picker does; checked as the task form checks them, refused with its reasons (`invalid_organization` for a blank reason or a cycle, `task_not_found` for a task not of the project), recorded in the task's history as automation's. Free organization changes, like the title or priority: a manual Blocked is informational and widens nothing, but the chat's `run_task` refuses a task marked Blocked as `task_blocked`, naming the reason; the person can still start it in the app. ORC-69: also *Don't merge automatically*, `no_automatic_merge`, which keeps the chat from merging the task's runs on its own) | — |
+| Runs | `get_run`, `get_changes` (existing); `list_runs` (new: a task's or project's runs, newest first, with phase and links) | `pause_run`, `resume_run` (existing; a run a pause stopped, and with *Let the Orchestrator continue interrupted runs* a run a crash, the runner going away or *Quit now* interrupted, from its last checkpoint; never a run at a limit, canceled, failed by the runner or without its worktree; both, and `release_queue`, only proposed in a turn Orchester started, but for the interrupted run whose end started the turn, continued once under both that switch and *answer agents*) | `run_task` (direct in auto mode, never in a turn Orchester started), `cancel_run`, `merge_run` (direct with *Let the Orchestrator merge runs*, never in a turn Orchester started but for the run whose success started it: merged once with *Let the Orchestrator merge finished runs on its own* when the chat's rule lets it, else refused `left_to_person`, ORC-69; its `merge_failed` names the next step), `continue_run` (`allow_retry`, `return_to` and `resolve_conflicts` only, always proposed) |
 | Waits | `list_approvals` (existing); `list_questions` (with the steps waiting for a message and what their agents wrote last), `get_plan` (new, read only) | — | `answer_question`, `send_message` (direct with *Let the Orchestrator answer agents*; a message that moves a run is always proposed) |
 | Queue | — | `hold_queue`, `release_queue` (existing) | — |
 | Pipelines | `list_pipelines`, `get_pipeline` (existing) | `save_pipeline_draft`, `create_pipeline`, `duplicate_pipeline` (existing) | `publish_pipeline` |

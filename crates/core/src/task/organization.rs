@@ -90,6 +90,9 @@ pub struct TaskOrganization {
   blocked_reason: Option<String>,
   dependencies: Vec<BlockingTask>,
   tags: Vec<TagId>,
+  /// *Don't merge automatically* (ORC-69): the Orchestrator never merges a run of the task on its own; the turn a
+  /// run's success starts only tells the person.
+  no_automatic_merge: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -99,6 +102,8 @@ struct StoredOrganization {
   blocked_reason: Option<String>,
   dependencies: Vec<BlockingTask>,
   tags: Vec<TagId>,
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  no_automatic_merge: bool,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -145,6 +150,7 @@ impl TaskOrganization {
         .map(|(task, gate)| BlockingTask { task, gate })
         .collect(),
       tags,
+      no_automatic_merge: false,
     })
   }
 
@@ -162,6 +168,10 @@ impl TaskOrganization {
   }
   pub fn tags(&self) -> &[TagId] {
     &self.tags
+  }
+  /// Whether the task says *Don't merge automatically*: the Orchestrator never merges its runs on its own.
+  pub const fn no_automatic_merge(&self) -> bool {
+    self.no_automatic_merge
   }
 
   pub fn check_tags(&self, known: &std::collections::HashSet<TagId>) -> Result<(), OrganizationError> {
@@ -183,6 +193,11 @@ impl TaskOrganization {
     tags.sort();
     tags.dedup();
     self.tags = tags;
+    self
+  }
+  #[must_use]
+  pub const fn with_no_automatic_merge(mut self, no_automatic_merge: bool) -> Self {
+    self.no_automatic_merge = no_automatic_merge;
     self
   }
 
@@ -259,6 +274,11 @@ impl TaskOrganization {
       blocked_reason: pick(&self.blocked_reason, &base.blocked_reason, &current.blocked_reason),
       dependencies,
       tags: Vec::new(),
+      no_automatic_merge: pick(
+        &self.no_automatic_merge,
+        &base.no_automatic_merge,
+        &current.no_automatic_merge,
+      ),
     }
     .with_tags(current.clone().remove_tags(&removed_tags).add_tags(&added_tags).tags)
   }
@@ -277,12 +297,15 @@ impl TaskOrganization {
 impl TryFrom<StoredOrganization> for TaskOrganization {
   type Error = OrganizationError;
   fn try_from(value: StoredOrganization) -> Result<Self, Self::Error> {
-    Self::new(
-      value.status,
-      value.priority,
-      value.blocked_reason,
-      value.dependencies,
-      value.tags,
+    Ok(
+      Self::new(
+        value.status,
+        value.priority,
+        value.blocked_reason,
+        value.dependencies,
+        value.tags,
+      )?
+      .with_no_automatic_merge(value.no_automatic_merge),
     )
   }
 }
@@ -295,6 +318,7 @@ impl From<TaskOrganization> for StoredOrganization {
       blocked_reason: value.blocked_reason,
       dependencies: value.dependencies,
       tags: value.tags,
+      no_automatic_merge: value.no_automatic_merge,
     }
   }
 }

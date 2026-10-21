@@ -1,12 +1,13 @@
 //! New task (`New task · empty · dark` `s7jKkA`, `New task · filled · dark` `fJ4v9`) and Edit task (`Edit
 //! task · draft · no changes · dark` `Qp1B0`, `Edit task · already ran` `v2c76`), one page in the layer
-//! `New task` (`ZLTEI`): the brief, the pipeline with its execution plan, the limits, and the action bar.
+//! `New task` (`ZLTEI`): the brief, the pipeline with its execution plan, the limits, *Don't merge
+//! automatically* (ORC-69, [`merging`]), and the action bar.
 //! *Create* saves a draft and opens Tasks with the new row highlighted; *Create & run* saves, queues and
 //! starts the run, and a run the runner did not start keeps the form with *Retry run* (`H8GYVZ`,
 //! `t0fDw`). Edit task saves changes in place, discards them in place (`LVI8K`), and keeps them on this
 //! computer when the page is left (`Fd1ai`). A newer version saved meanwhile is put under the edits, and
 //! where both changed a field the person chooses (`Edit task · conflict · newer version` `PenUu`). The
-//! Organization section is left out of the dogfood build (D4).
+//! rest of the Organization section is left out of the dogfood build (D4).
 
 mod actions;
 mod bar;
@@ -20,6 +21,7 @@ mod handlers;
 mod head;
 mod kept;
 mod limits;
+mod merging;
 mod plan;
 mod state;
 mod unbuilt;

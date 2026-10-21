@@ -103,6 +103,11 @@
       "cancelled": "Run {{run}} was canceled · {{time}}",
       "failed": "Run {{run}} failed at {{step}} · {{time}}",
       "merged": "Run {{run}} was merged into {{branch}} · {{time}}",
+      "mergedBy": {
+        "onItsOwn": "Merged on its own: you let the Orchestrator merge finished runs.",
+        "direct": "Merged by the Orchestrator, as you let it merge runs.",
+        "applied": "Proposed by the Orchestrator · merged when you applied it."
+      },
       "ready": "Run {{run}} is ready for your review · {{time}}"
     },
     "engine": "{{provider}} / {{model}}",

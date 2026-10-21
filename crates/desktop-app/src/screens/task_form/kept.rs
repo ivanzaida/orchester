@@ -240,6 +240,7 @@ fn encode_values(values: &Values) -> Value {
     "pipeline": values.pipeline.map(|pipeline| pipeline.to_string()),
     "budget": values.budget,
     "time_limit": values.time_limit,
+    "no_automatic_merge": values.no_automatic_merge,
   })
 }
 
@@ -266,6 +267,11 @@ fn decode_values(value: &Value) -> Option<Values> {
     .iter()
     .map(|criterion| criterion.as_str().map(str::to_owned))
     .collect::<Option<Vec<_>>>()?;
+  // Edits kept before the form had *Don't merge automatically* did not change it.
+  let no_automatic_merge = match value.get("no_automatic_merge") {
+    None => false,
+    Some(flag) => flag.as_bool()?,
+  };
   Some(Values {
     title: text("title")?,
     brief: text("brief")?,
@@ -273,6 +279,7 @@ fn decode_values(value: &Value) -> Option<Values> {
     pipeline,
     budget: text("budget")?,
     time_limit: text("time_limit")?,
+    no_automatic_merge,
   })
 }
 

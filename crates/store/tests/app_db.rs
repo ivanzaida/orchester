@@ -257,6 +257,24 @@ fn orchestrator_continues_interrupted_runs_only_once_a_person_turned_it_on() {
 }
 
 #[test]
+fn orchestrator_merges_finished_runs_only_once_a_person_turned_it_on() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert!(!db.orchestrator_merges_finished().expect("read"), "off until turned on");
+  db.set_orchestrator_merges_finished(true).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  assert!(db.orchestrator_merges_finished().expect("read"));
+  assert!(
+    !db.orchestrator_merges_runs().expect("read") && !db.orchestrator_answers_agents().expect("read"),
+    "a setting of its own: merge runs and answer agents stay as they are"
+  );
+  db.set_orchestrator_merges_finished(false).expect("store");
+  assert!(!db.orchestrator_merges_finished().expect("read"));
+}
+
+#[test]
 fn notification_settings_start_as_agreed_and_are_kept() {
   let dir = tempfile::tempdir().expect("temporary directory");
   let path = dir.path().join("orchester.db");

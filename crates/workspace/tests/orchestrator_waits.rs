@@ -99,7 +99,7 @@ fn follow(fixture: &Fixture, answers: bool) -> Followed {
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
   let switches = Switches {
     answers,
-    continues: false,
+    ..Switches::default()
   };
   follow_in((root, project(fixture), &programs), &checks, (switches, true)).expect("followed")
 }
@@ -312,7 +312,7 @@ fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
   ask(&mut fixture, &mut run);
   let answering = Switches {
     answers: true,
-    continues: false,
+    ..Switches::default()
   };
   let detached = follow_in(
     (fixture.repo.path(), project(&fixture), &Programs::processes()),

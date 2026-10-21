@@ -89,7 +89,7 @@ pub(super) fn continuation(ctx: &Ctx, view: &View, (number, choice): (u32, &Cont
   Words {
     glyph,
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, "orchestrator.change.continue.byYou"),
     effect,
     accept: Some(Accept {

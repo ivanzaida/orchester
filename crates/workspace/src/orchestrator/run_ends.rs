@@ -221,6 +221,7 @@ fn ended_wait(project: ProjectId, task: &Task, run: &Run, end: RunEnd) -> AgentW
     own: false,
     automatic: false,
     continuing: None,
+    merging: None,
   }
 }
 

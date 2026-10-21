@@ -29,7 +29,7 @@ use orchester_workspace::{
   tasks::{
     conflict::{Edit, EditConflict, EditSaved, save_edit},
     data::SaveTarget,
-    run::{StartOutcome, queue_in, start_messages},
+    run::{StartOutcome, queue_in, queue_organized_in, start_messages},
     writer::{TaskWriter, WriteError},
   },
 };
@@ -43,8 +43,9 @@ pub struct SaveArgs {
   /// The details of the version the edits were made on, for an edit: what the person changed is put
   /// on a version stored meanwhile (`tasks::conflict::save_edit`).
   pub base: Option<TaskDetails>,
-  /// The task's organization, unchanged: the form does not edit it yet.
-  pub organization: TaskOrganization,
+  /// The task's organization as the edits were made on it and as the form leaves it: the form changes only *Don't
+  /// merge automatically* (ORC-69); the store puts that change on an organization changed meanwhile.
+  pub organization: (TaskOrganization, TaskOrganization),
 }
 
 /// The task a save stored.
@@ -98,7 +99,7 @@ fn write_problem(error: &WriteError) -> Problems {
 /// meanwhile when no field both changed, else a conflict for the person.
 fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
   let mut writer = TaskWriter::open(&args.repo_root, servers).map_err(|error| write_problem(&error))?;
-  let organization = (&args.organization, &args.organization);
+  let organization = (&args.organization.0, &args.organization.1);
   let (task, details) = match args.target {
     SaveTarget::New(_) => {
       let task = match writer
@@ -206,7 +207,8 @@ pub fn run_action(ctx: &mut Ctx, services: RunServices) -> RunAction {
   })
 }
 
-/// Saves and queues the task; nothing is queued when the run could not start with its configuration.
+/// Saves and queues the task, with the organization the form changed; nothing is queued when the run could not
+/// start with its configuration.
 async fn queue(
   services: &RunServices,
   save: Box<SaveArgs>,
@@ -219,9 +221,15 @@ async fn queue(
   };
   let servers = services.servers.clone();
   let (repo_root, target) = (save.repo_root.clone(), save.target);
-  let queued = background::run(move || queue_in(&save.repo_root, &servers, save.target, save.details, version))
-    .await
-    .map_err(|message| not_queued(Arc::from([message])))?;
+  let queued = background::run(move || {
+    let (base, edited) = &save.organization;
+    if base == edited {
+      return queue_in(&save.repo_root, &servers, save.target, save.details, version);
+    }
+    queue_organized_in(&save.repo_root, &servers, save.target, save.details, (base, edited), version)
+  })
+  .await
+  .map_err(|message| not_queued(Arc::from([message])))?;
   let queued = match queued {
     Ok(queued) => queued,
     Err(failure) => {

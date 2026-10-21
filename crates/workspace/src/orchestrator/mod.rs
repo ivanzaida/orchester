@@ -3,6 +3,7 @@
 //! the domain tools its agent gets, and the waits of the project's agents and the ends of its runs it follows. The
 //! project's runner runs the agent; the app serves its tools.
 
+pub mod auto_merge;
 mod blocked;
 mod change;
 pub mod chat;
@@ -15,6 +16,7 @@ pub mod recover;
 mod run_ends;
 pub mod send;
 pub mod settings;
+mod told;
 pub mod tools;
 pub mod waits;
 mod widening;

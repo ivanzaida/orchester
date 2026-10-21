@@ -1,13 +1,14 @@
 //! *What automation may do* (`Form section title` `De1nE`) with a row (`Form row` `XaNIz` with a switch) per consent
 //! only a person gives: *Let automation change agent permissions*, *Let the Orchestrator publish drafts*, *Let the
-//! Orchestrator answer agents*, *Let the Orchestrator merge runs* and *Let the Orchestrator continue interrupted runs*
-//! (the same row; `docs/design/orchestrator-toolset.md`, "Decisions" 3 and 5). Each is an application setting that is
-//! off until a person turns it on here. While the first is off, the MCP server's setup tools refuse whatever would
-//! widen what agents may do (`person_only`), including matching window confirmations; while one of the Orchestrator's
-//! is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted run, leaves it to the
-//! person. A setting is read and saved off the UI thread; while either runs, its switch cannot be flipped. While a row
-//! is mounted, the app's MCP server refuses window input (`mcp::input_gate`), and the row refuses lurq's synthetic
-//! input, so only a person flips it.
+//! Orchestrator answer agents*, *Let the Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its
+//! own* (ORC-69; its description says it needs *merge runs* and *answer agents* too) and *Let the Orchestrator
+//! continue interrupted runs* (the same row; `docs/design/orchestrator-toolset.md`, "Decisions" 3 and 5). Each is an
+//! application setting that is off until a person turns it on here. While the first is off, the MCP server's setup
+//! tools refuse whatever would widen what agents may do (`person_only`), including matching window confirmations; while
+//! one of the Orchestrator's is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted
+//! or finished run, leaves it to the person. A setting is read and saved off the UI thread; while either runs, its
+//! switch cannot be flipped. While a row is mounted, the app's MCP server refuses window input (`mcp::input_gate`),
+//! and the row refuses lurq's synthetic input, so only a person flips it.
 
 use lurq::{
   app::{
@@ -69,6 +70,7 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::PublishDrafts) => "settings-publish-drafts",
       Self::Orchestrator(OrchestratorConsent::AnswerAgents) => "settings-answer-agents",
       Self::Orchestrator(OrchestratorConsent::MergeRuns) => "settings-merge-runs",
+      Self::Orchestrator(OrchestratorConsent::MergeFinished) => "settings-merge-finished",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "settings-continue-interrupted",
     }
   }
@@ -103,6 +105,13 @@ impl Consent {
         not_saved: "settings.automation.mergeRuns.notSaved",
         blocked: "settings.automation.mergeRuns.blocked",
       },
+      Self::Orchestrator(OrchestratorConsent::MergeFinished) => Words {
+        title: "settings.automation.mergeFinished.title",
+        description: "settings.automation.mergeFinished.description",
+        unreadable: "settings.automation.mergeFinished.unreadable",
+        not_saved: "settings.automation.mergeFinished.notSaved",
+        blocked: "settings.automation.mergeFinished.blocked",
+      },
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => Words {
         title: "settings.automation.continueInterrupted.title",
         description: "settings.automation.continueInterrupted.description",
@@ -120,6 +129,7 @@ impl Consent {
       Self::Orchestrator(OrchestratorConsent::PublishDrafts) => "Let the Orchestrator publish drafts",
       Self::Orchestrator(OrchestratorConsent::AnswerAgents) => "Let the Orchestrator answer agents",
       Self::Orchestrator(OrchestratorConsent::MergeRuns) => "Let the Orchestrator merge runs",
+      Self::Orchestrator(OrchestratorConsent::MergeFinished) => "Let the Orchestrator merge finished runs on its own",
       Self::Orchestrator(OrchestratorConsent::ContinueInterrupted) => "Let the Orchestrator continue interrupted runs",
     }
   }
@@ -154,6 +164,10 @@ pub fn section(ctx: &mut Ctx) -> Element {
       Consent::Orchestrator(OrchestratorConsent::AnswerAgents),
     ),
     ("merge-runs", Consent::Orchestrator(OrchestratorConsent::MergeRuns)),
+    (
+      "merge-finished",
+      Consent::Orchestrator(OrchestratorConsent::MergeFinished),
+    ),
     (
       "continue-interrupted",
       Consent::Orchestrator(OrchestratorConsent::ContinueInterrupted),

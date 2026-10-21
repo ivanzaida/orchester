@@ -84,6 +84,10 @@ pub struct CreateTask {
   /// Tag names, matched ignoring case; a name the project has no tag of is created as a tag.
   #[serde(default)]
   pub tags: Vec<String>,
+  /// Don't merge automatically: `true` keeps the Orchestrator from merging the task's runs on its own, even while
+  /// the person lets it merge finished runs; left out, `false`.
+  #[serde(default)]
+  pub no_automatic_merge: bool,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -125,6 +129,10 @@ pub struct UpdateTask {
   /// created as a tag. `[]` clears them.
   #[serde(default)]
   pub tags: Option<Vec<String>>,
+  /// Don't merge automatically: `true` keeps the Orchestrator from merging the task's runs on its own, even while
+  /// the person lets it merge finished runs; `false` lets it again.
+  #[serde(default)]
+  pub no_automatic_merge: Option<bool>,
 }
 
 impl CreateTask {
@@ -135,6 +143,7 @@ impl CreateTask {
       blocked_reason: self.blocked_reason.as_deref().map(Some),
       blocked_by: Some(&self.blocked_by),
       tags: Some(&self.tags),
+      no_automatic_merge: Some(self.no_automatic_merge),
     }
   }
 }
@@ -147,6 +156,7 @@ impl UpdateTask {
       blocked_reason: self.blocked_reason.as_ref().map(Option::as_deref),
       blocked_by: self.blocked_by.as_deref(),
       tags: self.tags.as_deref(),
+      no_automatic_merge: self.no_automatic_merge,
     }
   }
 }
@@ -321,6 +331,7 @@ fn saved(task: &Task) -> Value {
     "workflow_status": Workflow::from(task.organization().status()),
     "priority": Rank::from(task.organization().priority()),
     "blocked_reason": task.organization().blocked_reason(),
+    "no_automatic_merge": task.organization().no_automatic_merge(),
   })
 }
 

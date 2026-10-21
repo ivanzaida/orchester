@@ -176,6 +176,7 @@ fn turn_of_end(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): (&Seeded, &
     own: false,
     automatic: true,
     continuing: None,
+    merging: None,
   };
   let conversation = db.chat(scope.chat).expect("read").expect("the conversation");
   let key = format!("end:{}:test", run.id());

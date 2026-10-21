@@ -2,7 +2,11 @@
 //! with what is stored to know whether something changed, and kept on this computer while it is not
 //! saved (`kept`).
 
-use orchester_core::{id::ResourceId, task::TaskDetails, tokens::grouped};
+use orchester_core::{
+  id::ResourceId,
+  task::{Task, TaskDetails, organization::TaskOrganization},
+  tokens::grouped,
+};
 use orchester_workspace::{budget::minutes_text, tasks::form::TaskForm};
 
 /// The fields' values. Criteria are one entry per row, blank rows included.
@@ -16,12 +20,22 @@ pub struct Values {
   pub budget: String,
   /// Whole minutes as typed; empty for no limit.
   pub time_limit: String,
+  /// *Don't merge automatically* (ORC-69), a part of the task's organization.
+  pub no_automatic_merge: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Values {}
 
 impl Values {
   /// The fields of a stored task, its budget grouped with `separator`.
+  pub fn of_task(task: &Task, separator: &str) -> Self {
+    Self {
+      no_automatic_merge: task.organization().no_automatic_merge(),
+      ..Self::of_details(task.details(), separator)
+    }
+  }
+
+  /// The fields of stored details, its budget grouped with `separator`; *Don't merge automatically* off.
   pub fn of_details(details: &TaskDetails, separator: &str) -> Self {
     Self {
       title: details.title.as_str().to_owned(),
@@ -34,7 +48,20 @@ impl Values {
         .map(|budget| grouped(budget.get(), separator))
         .unwrap_or_default(),
       time_limit: minutes_text(details.limits.max_duration()),
+      no_automatic_merge: false,
     }
+  }
+
+  /// The organization a save stores, given the one the edits were made on (`base`, as these values were filled from
+  /// `base_values`) and the one stored now (`current`): *Don't merge automatically* as the person set it, or as it is
+  /// stored now when they left it as it was.
+  pub fn organization(&self, base_values: &Self, current: &TaskOrganization) -> TaskOrganization {
+    let flag = if self.no_automatic_merge == base_values.no_automatic_merge {
+      current.no_automatic_merge()
+    } else {
+      self.no_automatic_merge
+    };
+    current.clone().with_no_automatic_merge(flag)
   }
 
   /// The values as the workspace checks them. Limits are optional and have no maximum (the person's
@@ -68,6 +95,7 @@ impl Values {
       pipeline: self.pipeline,
       budget: digits(&self.budget),
       time_limit: self.time_limit.trim().to_owned(),
+      no_automatic_merge: self.no_automatic_merge,
     }
   }
 

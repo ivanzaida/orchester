@@ -57,6 +57,7 @@
       "context": "Context",
       "pipeline": "Pipeline",
       "limits": "Limits",
+      "merging": "Merging",
       "instructions": "Instructions"
     },
     "project": {
@@ -106,6 +107,10 @@
           "one": "= 1 minute of active agent time",
           "other": "= {{count}} minutes of active agent time"
         }
+      },
+      "noAutomaticMerge": {
+        "label": "Don't merge automatically",
+        "description": "The Orchestrator never merges this task's runs on its own, even when you let it merge finished runs: it tells you a run is ready and the merge stays yours."
       },
       "context": {
         "label": "Attach context",

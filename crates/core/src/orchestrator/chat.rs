@@ -206,6 +206,10 @@ pub struct ChatAction {
   /// The chat acted without asking because auto mode is on for the project.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub auto_mode: bool,
+  /// The chat merged a run whose success started its turn, in a turn nobody asked for, because the person lets the
+  /// Orchestrator merge finished runs on its own (ORC-69): *merged by the Orchestrator on its own*.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub on_its_own: bool,
   /// When a person settled the proposal: started, applied or dismissed it, or it was refused then.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub settled: Option<Timestamp>,
@@ -233,6 +237,7 @@ impl ChatAction {
       started: None,
       resumed: None,
       auto_mode: false,
+      on_its_own: false,
       settled: None,
       claimed: None,
     }

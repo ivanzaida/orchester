@@ -32,7 +32,7 @@ use orchester_workspace::{
   tasks::{
     conversation::{
       Conversation, PanelState,
-      orchestrator::{continued, message_offer, proposals},
+      orchestrator::{continued, merged_by, message_offer, proposals},
     },
     detail::RunView,
     timeline::{
@@ -195,6 +195,7 @@ impl ConversationTab {
       working: working_invocations(run, live),
       pending: loaded.pending.clone(),
       decided: loaded.decided.clone(),
+      merged_by: merged_by(&loaded.orchestrated),
     });
     // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
     let offered = message_offer(&task.detail, run.id());
