@@ -175,7 +175,8 @@ pub(super) fn write(orchester: &Path, attachments: &[NewAttachment]) -> Result<(
   let mut written = Written { paths: Vec::new() };
   let mut kept = Vec::with_capacity(attachments.len());
   for new in attachments {
-    let hash = ContentHash::new(BlobHash::of(new.content()).as_str()).map_err(|error| corrupt("attachment hash", error))?;
+    let hash =
+      ContentHash::new(BlobHash::of(new.content()).as_str()).map_err(|error| corrupt("attachment hash", error))?;
     let attachment = Attachment::kept(new, hash);
     let target = folder.join(attachment.file_name());
     let temporary = folder.join(format!("{}.{}.tmp", attachment.file_name(), process::id()));

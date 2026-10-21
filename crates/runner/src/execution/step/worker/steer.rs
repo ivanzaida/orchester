@@ -97,10 +97,7 @@ impl Steering {
 
   /// The message the CLI shows it took by `text`, no longer waiting.
   fn take_text(&mut self, text: &str) -> Option<Sent> {
-    let at = self
-      .sent
-      .iter()
-      .position(|sent| sent.taken.trim() == text.trim())?;
+    let at = self.sent.iter().position(|sent| sent.taken.trim() == text.trim())?;
     Some(self.sent.remove(at))
   }
 }

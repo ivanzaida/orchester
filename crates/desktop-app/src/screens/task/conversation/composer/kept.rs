@@ -87,7 +87,11 @@ pub(super) fn set_attachments(task: TaskId, attachments: &[NewAttachment]) {
 
 /// The key `text` and `attachments` of `task`, sent `how`, are stored under: the one of the last attempt when
 /// neither the words, the files nor how they are sent changed.
-pub(super) fn key_for(task: TaskId, (text, attachments): (&str, &[NewAttachment]), how: (Way, Action)) -> IdempotencyKey {
+pub(super) fn key_for(
+  task: TaskId,
+  (text, attachments): (&str, &[NewAttachment]),
+  how: (Way, Action),
+) -> IdempotencyKey {
   KEPT.change(task, |kept| match &kept.attempt {
     Some(attempt) if attempt.text == text && attempt.attachments == attachments && attempt.how == how => attempt.key,
     _ => {

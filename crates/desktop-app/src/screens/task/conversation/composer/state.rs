@@ -205,7 +205,9 @@ impl ComposerState {
         handled.set(now);
       }
     });
-    ctx.watch(&self.attached.attached, move |held| kept::set_attachments(task, &held.0));
+    ctx.watch(&self.attached.attached, move |held| {
+      kept::set_attachments(task, &held.0)
+    });
   }
 
   /// While a send that an earlier page of the task started runs, the composer is busy; once it ends, the
@@ -413,7 +415,7 @@ async fn send_plan_changes(
   (by, version): (Answerer, PlanVersion),
 ) -> Result<Outcome, Message> {
   if !request.attachments.is_empty() {
-    return Err(Message::new("attachments.planChanges"));
+    return Err(orchester_workspace::attachments::plan_changes_refused());
   }
   let command = plan_changes(prepared, &request.text, (by, Some(version))).map_err(|error| error.message())?;
   services

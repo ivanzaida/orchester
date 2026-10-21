@@ -5,7 +5,10 @@
 use std::fs;
 
 use orchester_core::{
-  attachment::{AttachmentRefusal, MediaType, limits::{MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS}},
+  attachment::{
+    AttachmentRefusal, MediaType,
+    limits::{MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS},
+  },
   conversation::Recipient,
 };
 use orchester_workspace::attachments::{Refused, add, check_message, pasted, read_file, read_files};
@@ -45,7 +48,10 @@ fn folders_shortcuts_binaries_and_large_files_are_refused_with_why() {
   let paths = [inner, shortcut, binary, empty, large, missing];
   let (taken, refused) = read_files(&paths);
   assert!(taken.is_empty());
-  let why: Vec<(String, AttachmentRefusal)> = refused.into_iter().map(|refused| (refused.name, refused.refusal)).collect();
+  let why: Vec<(String, AttachmentRefusal)> = refused
+    .into_iter()
+    .map(|refused| (refused.name, refused.refusal))
+    .collect();
   assert_eq!(
     why,
     [
@@ -53,7 +59,12 @@ fn folders_shortcuts_binaries_and_large_files_are_refused_with_why() {
       ("report.lnk".to_owned(), AttachmentRefusal::Shortcut),
       ("tool.exe".to_owned(), AttachmentRefusal::Unsupported),
       ("empty.txt".to_owned(), AttachmentRefusal::Empty),
-      ("huge.txt".to_owned(), AttachmentRefusal::TooLarge { limit: MAX_ATTACHMENT_BYTES }),
+      (
+        "huge.txt".to_owned(),
+        AttachmentRefusal::TooLarge {
+          limit: MAX_ATTACHMENT_BYTES
+        }
+      ),
       ("gone.txt".to_owned(), AttachmentRefusal::Unreadable),
     ]
   );
@@ -61,7 +72,13 @@ fn folders_shortcuts_binaries_and_large_files_are_refused_with_why() {
 
 #[test]
 fn refusals_name_the_file_and_the_limit() {
-  let too_large = Refused::new("huge.txt", AttachmentRefusal::TooLarge { limit: MAX_ATTACHMENT_BYTES }).message();
+  let too_large = Refused::new(
+    "huge.txt",
+    AttachmentRefusal::TooLarge {
+      limit: MAX_ATTACHMENT_BYTES,
+    },
+  )
+  .message();
   assert_eq!(too_large.key, "attachments.refused.tooLarge");
   assert_eq!(
     too_large.args,
@@ -80,7 +97,10 @@ fn a_message_holds_the_files_its_limits_allow() {
   let refused = add(&mut held, files);
   assert_eq!(held.len(), MAX_ATTACHMENTS);
   assert_eq!(refused.len(), 1);
-  assert_eq!(refused[0].refusal, AttachmentRefusal::TooMany { limit: MAX_ATTACHMENTS });
+  assert_eq!(
+    refused[0].refusal,
+    AttachmentRefusal::TooMany { limit: MAX_ATTACHMENTS }
+  );
   assert_eq!(check_message(None, Recipient::Orchestrator, &held), Ok(()));
   held.push(pasted("extra.txt", b"x".to_vec()).expect("text"));
   assert_eq!(

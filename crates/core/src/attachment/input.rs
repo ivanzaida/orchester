@@ -1,8 +1,8 @@
 //! How an agent is given a message's attachments, each after a line that names it (its name, kind and size), in the
 //! order the person attached them:
 //!
-//! - Claude Code: one stream-json user message whose content holds the message's text, then for each file its line
-//!   and an `image` or `document` block of its content in base64, or for text a text block of the line and the text.
+//! - Claude Code: one stream-json user message whose content holds the message's text, then for each file its line and
+//!   an `image` or `document` block of its content in base64, or for text a text block of the line and the text.
 //! - Codex App Server: text input items as for Claude Code, and an image as a `localImage` item naming the project's
 //!   copy, which App Server reads itself.
 //!

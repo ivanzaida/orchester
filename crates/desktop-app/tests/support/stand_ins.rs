@@ -1,5 +1,6 @@
-//! The window with the system's pickers and clipboard replaced: a picker that hands over the path a test chose,
-//! and a copier that keeps what was copied, so no native dialog opens and the person's clipboard is left alone.
+//! The window with the system's pickers and clipboard replaced: a picker that hands over the path a test chose, an
+//! *Attach* picker that hands over the files a test chose, and a copier that keeps what was copied, so no native
+//! dialog opens and the person's clipboard is left alone.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -13,7 +14,7 @@ use lurq::{
 use orchester_app::{
   mcp::{McpKind, McpLink, McpSettings, McpStatus},
   root::{Root, RootProps},
-  services::path_picker::PathPicker,
+  services::{attachment_picker::AttachmentPicker, path_picker::PathPicker},
   startup::Launch,
   ui::code_box::Copier,
 };
@@ -21,10 +22,11 @@ use parking_lot::Mutex;
 
 use super::{Data, Window};
 
-/// What the stand-in picker hands over next, and what the stand-in copier was given.
+/// What the stand-in pickers hand over next, and what the stand-in copier was given.
 #[derive(Clone, Default)]
 pub struct StandIns {
   pub next: Arc<Mutex<Option<PathBuf>>>,
+  pub attach: Arc<Mutex<Vec<PathBuf>>>,
   pub copied: Arc<Mutex<Vec<String>>>,
 }
 
@@ -34,9 +36,22 @@ impl StandIns {
     *self.next.lock() = path;
   }
 
+  /// *Attach*'s picker hands over `files` the next times it is opened; none closes it without a choice.
+  pub fn attach(&self, files: Vec<PathBuf>) {
+    *self.attach.lock() = files;
+  }
+
   fn picker(&self) -> PathPicker {
     let next = self.next.clone();
     PathPicker::new(move |_, _| {
+      let chosen = next.lock().clone();
+      Box::pin(async move { chosen })
+    })
+  }
+
+  fn attach_picker(&self) -> AttachmentPicker {
+    let next = self.attach.clone();
+    AttachmentPicker::new(move |_| {
       let chosen = next.lock().clone();
       Box::pin(async move { chosen })
     })
@@ -55,6 +70,7 @@ impl StandIns {
 struct HostProps {
   root: RootProps,
   picker: PathPicker,
+  attach: AttachmentPicker,
   copier: Copier,
 }
 
@@ -79,6 +95,7 @@ impl Component for Host {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<HostProps>().clone();
     ctx.provide(props.picker);
+    ctx.provide(props.attach);
     ctx.provide(props.copier);
     ctx.mount_keyed::<Root>("app", props.root)
   }
@@ -102,6 +119,7 @@ impl Window {
         start: window.launch.start(),
       },
       picker: stand_ins.picker(),
+      attach: stand_ins.attach_picker(),
       copier: stand_ins.copier(),
     };
     window.tree.mount_root::<Host>(&mut window.app, props);

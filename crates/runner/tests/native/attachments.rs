@@ -38,10 +38,21 @@ async fn native_attachments_reach_the_model_with_the_prompt() {
       let blocks = first_message(&request.json());
       let kinds: Vec<&str> = blocks.iter().filter_map(|block| block["type"].as_str()).collect();
       assert_eq!(kinds, ["text", "text", "image", "text"], "{blocks:#?}");
-      assert!(blocks[1]["text"].as_str().is_some_and(|line| line.starts_with("[Attachment: shot.png")));
-      assert_eq!(blocks[2]["source"], json!({"type": "base64", "media_type": "image/png",
-        "data": base64_png()}));
-      assert!(blocks[3]["text"].as_str().is_some_and(|text| text.ends_with("\nremember the milk")));
+      assert!(
+        blocks[1]["text"]
+          .as_str()
+          .is_some_and(|line| line.starts_with("[Attachment: shot.png"))
+      );
+      assert_eq!(
+        blocks[2]["source"],
+        json!({"type": "base64", "media_type": "image/png",
+        "data": base64_png()})
+      );
+      assert!(
+        blocks[3]["text"]
+          .as_str()
+          .is_some_and(|text| text.ends_with("\nremember the milk"))
+      );
     })
     .reply_sse(finish("toolu_finish"));
   let server = serve(script).await;
@@ -49,7 +60,11 @@ async fn native_attachments_reach_the_model_with_the_prompt() {
   let root = project.repo.path();
   let files = [
     NewAttachment::new(AttachmentName::new("shot.png").expect("a name"), png()).expect("an image"),
-    NewAttachment::new(AttachmentName::new("notes.txt").expect("a name"), b"remember the milk".to_vec()).expect("text"),
+    NewAttachment::new(
+      AttachmentName::new("notes.txt").expect("a name"),
+      b"remember the milk".to_vec(),
+    )
+    .expect("text"),
   ];
   let body = MessageBody::new("Use these").expect("text");
   let message = Message::from_person(project.task, None, Recipient::Orchestrator, body, Timestamp::now());

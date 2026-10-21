@@ -90,7 +90,10 @@ async fn attachments_reach_codex_as_local_images_and_text() {
     provider: AgentProvider::CodexCli,
     ..Setup::new("Append one line.")
   });
-  queue(&project, &[file("shot.png", png()), file("notes.md", b"# Notes".to_vec())]);
+  queue(
+    &project,
+    &[file("shot.png", png()), file("notes.md", b"# Notes".to_vec())],
+  );
   assert_eq!(first_input(&project).await, "text,text,localImage:there,text");
 }
 
@@ -131,7 +134,9 @@ async fn attachments_reach_the_orchestrator_chat() {
       events.recv().await.expect("the scheduler notifies");
     }
   };
-  let turn = tokio::time::timeout(PATIENCE, ended).await.expect("the turn ends in time");
+  let turn = tokio::time::timeout(PATIENCE, ended)
+    .await
+    .expect("the turn ends in time");
   assert_eq!(turn, TurnState::Answered);
   let log = fs::read_to_string(Path::new(root).join(".orchester").join("fake-chat.log")).expect("logged");
   assert!(log.contains("input-blocks: text,text,image:image/png"), "{log}");

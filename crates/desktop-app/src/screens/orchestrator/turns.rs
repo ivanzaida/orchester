@@ -147,9 +147,15 @@ pub(super) fn turns(entries: &[ChatEntry], attached: &BTreeMap<ChatMessageId, Ve
         turn,
         ended,
       } => {
-        let attachments: Arc<[Attachment]> = attached.get(message).map_or_else(|| Arc::from([]), |files| files.as_slice().into());
+        let attachments: Arc<[Attachment]> = attached
+          .get(message)
+          .map_or_else(|| Arc::from([]), |files| files.as_slice().into());
         // A message of attachments only was kept with their names: it shows by its files alone.
-        let words = if is_names_only(text.as_str(), &attachments) { "" } else { text.as_str() };
+        let words = if is_names_only(text.as_str(), &attachments) {
+          ""
+        } else {
+          text.as_str()
+        };
         turns.push(Turn {
           message: Some(*message),
           text: Arc::from(words),

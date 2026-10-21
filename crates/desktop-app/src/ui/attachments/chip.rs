@@ -110,7 +110,12 @@ impl AttachmentChip {
       .align_items(Alignment::Center)
       .child(self.tile())
       .child(words)
-      .with_children(self.remove.clone().map(|(label, remove)| cross(&self.id, label, remove)));
+      .with_children(
+        self
+          .remove
+          .clone()
+          .map(|(label, remove)| cross(&self.id, label, remove)),
+      );
     let chip = match self.open.clone() {
       Some((label, open)) => pressable(move || open())
         .describe("a11y_name", label)

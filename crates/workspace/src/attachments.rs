@@ -69,12 +69,23 @@ impl Refused {
   }
 }
 
+/// Why a plan's requested changes cannot carry attachments: they are words for the plan's agent only.
+pub const fn plan_changes_refused() -> Message {
+  Message::new("attachments.planChanges")
+}
+
+/// Why the stored copy of the attached file `name` could not be read back.
+pub fn copy_unreadable(name: impl Into<String>) -> Message {
+  Message::new("attachments.copyUnreadable").with("name", name.into())
+}
+
 /// The file at `path` the person picked or dropped, read and checked. A folder, or a link or shortcut to anything, is
 /// refused without being followed; a file over [`MAX_ATTACHMENT_BYTES`] without being read.
 pub fn read_file(path: &Path) -> Result<NewAttachment, Refused> {
-  let shown = path
-    .file_name()
-    .map_or_else(|| path.display().to_string(), |name| name.to_string_lossy().into_owned());
+  let shown = path.file_name().map_or_else(
+    || path.display().to_string(),
+    |name| name.to_string_lossy().into_owned(),
+  );
   let refused = |refusal| Refused::new(shown.clone(), refusal);
   let name = AttachmentName::new(&shown).ok_or_else(|| refused(AttachmentRefusal::Unreadable))?;
   let metadata = fs::symlink_metadata(path).map_err(|_| refused(AttachmentRefusal::Unreadable))?;
@@ -154,7 +165,9 @@ pub fn check_message(
   attachments: &[NewAttachment],
 ) -> Result<(), Refused> {
   let named = |refusal: AttachmentRefusal, at: usize| {
-    let name = attachments.get(at).map(|attachment| attachment.name().as_str().to_owned());
+    let name = attachments
+      .get(at)
+      .map(|attachment| attachment.name().as_str().to_owned());
     Refused::new(name.unwrap_or_default(), refusal)
   };
   limits::check_message(attachments).map_err(|refusal| named(refusal, attachments.len().saturating_sub(1)))?;

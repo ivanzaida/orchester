@@ -84,13 +84,17 @@ pub(super) fn main(
       .map(|readiness| not_ready(ctx, project, readiness)),
   };
   // The message being sent, by its words, or its files' names when it has none.
-  let pending = sending.is_pending().then(|| view.outgoing.get()).flatten().map(|outgoing| {
-    if outgoing.text.trim().is_empty() {
-      names_text(outgoing.attachments.iter().map(NewAttachment::name))
-    } else {
-      outgoing.text
-    }
-  });
+  let pending = sending
+    .is_pending()
+    .then(|| view.outgoing.get())
+    .flatten()
+    .map(|outgoing| {
+      if outgoing.text.trim().is_empty() {
+        names_text(outgoing.attachments.iter().map(NewAttachment::name))
+      } else {
+        outgoing.text
+      }
+    });
   match &reads.shown {
     Shown::New if pending.is_none() => {
       let boxed = ComposerBox {

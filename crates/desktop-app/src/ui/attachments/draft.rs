@@ -161,7 +161,9 @@ impl DraftAttachments {
     let draft = self.clone();
     self.runtime.spawn_blocking(move || {
       let (read, mut refused) = draft.read(given);
-      draft.attached.update(|held| refused.extend(attachments::add(&mut held.0, read)));
+      draft
+        .attached
+        .update(|held| refused.extend(attachments::add(&mut held.0, read)));
       draft
         .refused
         .set(Refusals(refused.iter().map(Refused::message).collect()));

@@ -33,7 +33,7 @@ use orchester_core::{
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::workspace::OrchestratorConsent;
 
-use super::support::{Data, Window, add_project, runner_programs::programs};
+use super::support::{Data, Window, add_project, runner_programs::programs, stand_ins::StandIns};
 
 pub fn git(repo: &Path, args: &[&str]) {
   let output = Command::new("git")
@@ -77,6 +77,16 @@ pub struct Orchestrator {
 
 impl Orchestrator {
   pub fn new(setup: Setup) -> Self {
+    Self::started(setup, false).0
+  }
+
+  /// As [`Orchestrator::new`], with the system's pickers and clipboard replaced (`support::stand_ins`).
+  pub fn with_stand_ins(setup: Setup) -> (Self, StandIns) {
+    let (screen, stand_ins) = Self::started(setup, true);
+    (screen, stand_ins.expect("the stand-ins"))
+  }
+
+  fn started(setup: Setup, stand_ins: bool) -> (Self, Option<StandIns>) {
     let programs = programs();
     let (runner, fake, fake_codex) = (programs.runner.clone(), &programs.fake_claude, &programs.fake_codex);
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
@@ -119,12 +129,19 @@ impl Orchestrator {
       let settings = OrchestratorSettings::new(on, ModelId::new("haiku").expect("model"), None);
       db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
     }
-    Self {
+    let (window, stand_ins) = if stand_ins {
+      let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
+      (window, Some(stand_ins))
+    } else {
+      (Window::of(data, launch), None)
+    };
+    let screen = Self {
       project,
-      window: Window::of(data, launch),
+      window,
       root: open.repo_root,
       claude: claude.id(),
-    }
+    };
+    (screen, stand_ins)
   }
 
   pub fn go(&mut self, chat: OrchestratorChat) {

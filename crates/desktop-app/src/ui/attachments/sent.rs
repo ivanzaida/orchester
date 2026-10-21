@@ -25,7 +25,7 @@ use orchester_core::{
   id::AttachmentId,
 };
 use orchester_store::attachment_file;
-use orchester_workspace::{background, messages::Message};
+use orchester_workspace::{attachments::copy_unreadable, background};
 
 use super::{
   chip::AttachmentChip,
@@ -90,10 +90,13 @@ impl Component for SentAttachments {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let opened = self
-      .open
-      .get()
-      .and_then(|open| props.attachments.iter().find(|attachment| attachment.id() == open).cloned());
+    let opened = self.open.get().and_then(|open| {
+      props
+        .attachments
+        .iter()
+        .find(|attachment| attachment.id() == open)
+        .cloned()
+    });
     let text = self.text_of(ctx, &props, opened.as_ref());
     let chips: Vec<Element> = props
       .attachments
@@ -135,9 +138,14 @@ impl SentAttachments {
   fn text_of(&self, ctx: &mut Ctx, props: &Props, opened: Option<&Attachment>) -> Option<Result<Arc<str>, ()>> {
     let reading = opened
       .filter(|attachment| attachment.media().kind() == AttachmentKind::Text)
-      .map(|attachment| attachment_file(&props.root, attachment));
-    let read = ctx.future(reading, |path| async move {
-      let Some(path) = path else {
+      .map(|attachment| {
+        (
+          attachment_file(&props.root, attachment),
+          attachment.name().as_str().to_owned(),
+        )
+      });
+    let read = ctx.future(reading, |reading| async move {
+      let Some((path, name)) = reading else {
         return Ok(Read(None));
       };
       background::run(move || std::fs::read_to_string(&path))
@@ -145,7 +153,7 @@ impl SentAttachments {
         .map(|text| Read(Some(Arc::from(text))))
         .map_err(|error| {
           tracing::warn!(%error, "an attached file's copy could not be read");
-          Message::new("errors.storage")
+          copy_unreadable(name)
         })
     });
     let state = read.state().get();
@@ -169,14 +177,20 @@ impl SentAttachments {
     }
     let chip = if attachment.media().kind() == AttachmentKind::Pdf {
       let (failed, name) = (self.failed.clone(), Arc::<str>::from(name));
-      chip.opens(ctx.t_args("attachments.open", [("name", name.to_string())]), move || {
-        open_file(path.clone(), name.clone(), failed.clone());
-      })
+      chip.opens(
+        ctx.t_args("attachments.open", [("name", name.to_string())]),
+        move || {
+          open_file(path.clone(), name.clone(), failed.clone());
+        },
+      )
     } else {
       let (open, id) = (self.open.clone(), attachment.id());
-      chip.opens(ctx.t_args("attachments.preview", [("name", name.to_owned())]), move || {
-        open.update(|shown| *shown = if *shown == Some(id) { None } else { Some(id) });
-      })
+      chip.opens(
+        ctx.t_args("attachments.preview", [("name", name.to_owned())]),
+        move || {
+          open.update(|shown| *shown = if *shown == Some(id) { None } else { Some(id) });
+        },
+      )
     };
     chip.render(ctx)
   }

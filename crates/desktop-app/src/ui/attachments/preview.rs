@@ -104,12 +104,7 @@ impl Preview {
     let head = self.head(ctx);
     let reading = ctx.t("attachments.adding");
     let body: Element = match self.shown {
-      Shown::Text(text) => CodeBox::new(
-        format!("{}-text", self.id),
-        ctx.t("attachments.kind.text"),
-        text,
-      )
-      .render(ctx),
+      Shown::Text(text) => CodeBox::new(format!("{}-text", self.id), ctx.t("attachments.kind.text"), text).render(ctx),
       Shown::Image(source, key) => Image::from_source(source, key)
         .id(format!("{}-image", self.id))
         .downscale_to(PREVIEW_PIXELS, PREVIEW_PIXELS)
@@ -158,14 +153,10 @@ impl Preview {
       .on_click(move || open())
     });
     let close = self.close.clone();
-    let close = IconButton::new(
-      format!("{}-close", self.id),
-      Icon::X,
-      ctx.t("attachments.closePreview"),
-    )
-    .small()
-    .on_click(move || close())
-    .render(ctx);
+    let close = IconButton::new(format!("{}-close", self.id), Icon::X, ctx.t("attachments.closePreview"))
+      .small()
+      .on_click(move || close())
+      .render(ctx);
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)

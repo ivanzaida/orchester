@@ -57,7 +57,10 @@ fn detect_tells_images_pdfs_and_text_by_content() {
     Ok((MediaType::Webp, Some(Dimensions { width: 10, height: 5 })))
   );
   assert_eq!(detect(b"%PDF-1.7\n..."), Ok((MediaType::Pdf, None)));
-  assert_eq!(detect("fn main() {}\n// ünïcode".as_bytes()), Ok((MediaType::Text, None)));
+  assert_eq!(
+    detect("fn main() {}\n// ünïcode".as_bytes()),
+    Ok((MediaType::Text, None))
+  );
   // A file named like an image but holding text is text.
   assert_eq!(detect(b"name,size\na,1\n"), Ok((MediaType::Text, None)));
 }
@@ -71,7 +74,10 @@ fn detect_refuses_binaries_and_shortcuts() {
     0x46, 0x9B,
   ];
   assert_eq!(detect(&lnk), Err(AttachmentRefusal::Shortcut));
-  assert_eq!(detect(b"book\0\0\0\0mark\0\0\0\0rest"), Err(AttachmentRefusal::Shortcut));
+  assert_eq!(
+    detect(b"book\0\0\0\0mark\0\0\0\0rest"),
+    Err(AttachmentRefusal::Shortcut)
+  );
 }
 
 #[test]
@@ -83,7 +89,9 @@ fn a_new_attachment_is_checked_and_never_shows_its_content() {
   let big = vec![b'a'; usize::try_from(MAX_ATTACHMENT_BYTES).expect("fits") + 1];
   assert_eq!(
     NewAttachment::new(name("big.txt"), big).err(),
-    Some(AttachmentRefusal::TooLarge { limit: MAX_ATTACHMENT_BYTES })
+    Some(AttachmentRefusal::TooLarge {
+      limit: MAX_ATTACHMENT_BYTES
+    })
   );
   let secret = NewAttachment::new(name("notes.md"), b"token=hunter2".to_vec()).expect("text");
   assert_eq!(secret.text(), Some("token=hunter2"));
@@ -109,7 +117,12 @@ fn a_message_holds_ten_files_and_fifty_megabytes() {
   let size = usize::try_from(MAX_ATTACHMENT_BYTES).expect("fits");
   let large = |n: usize| NewAttachment::new(name(&format!("{n}.txt")), vec![b'a'; size]).expect("text");
   let held: Vec<NewAttachment> = (0..2).map(large).collect();
-  assert_eq!(limits::check_adding(&held, &large(2)), Err(AttachmentRefusal::TotalTooLarge { limit: MAX_MESSAGE_BYTES }));
+  assert_eq!(
+    limits::check_adding(&held, &large(2)),
+    Err(AttachmentRefusal::TotalTooLarge {
+      limit: MAX_MESSAGE_BYTES
+    })
+  );
   assert_eq!(limits::check_message(&held), Ok(()));
   assert!(limits::is_long_paste(&"x".repeat(limits::LONG_PASTE_CHARS + 1)));
   assert!(!limits::is_long_paste(&"x".repeat(limits::LONG_PASTE_CHARS)));
@@ -214,16 +227,16 @@ fn an_unreadable_copy_fails_the_input_instead_of_leaving_it_out() {
 #[test]
 fn native_agents_get_a_user_item_per_file() {
   let folder = tempfile::tempdir().expect("a folder");
-  let files = kept(
-    folder.path(),
-    &[("shot.png", png()), ("notes.txt", b"hello".to_vec())],
-  );
+  let files = kept(folder.path(), &[("shot.png", png()), ("notes.txt", b"hello".to_vec())]);
   let items = Item::attached(&files, UserOrigin::Task).expect("readable copies");
   let Item::User { text, attached, .. } = &items[0] else {
     panic!("a user item");
   };
   assert!(text.starts_with("[Attachment: shot.png"));
-  assert_eq!(attached.as_ref().map(|file| file.attachment.media()), Some(MediaType::Png));
+  assert_eq!(
+    attached.as_ref().map(|file| file.attachment.media()),
+    Some(MediaType::Png)
+  );
   let Item::User { text, attached, .. } = &items[1] else {
     panic!("a user item");
   };

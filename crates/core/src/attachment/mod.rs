@@ -129,11 +129,7 @@ impl AttachmentName {
   /// to [`NAME_CHARS`] characters; `None` when nothing is left.
   pub fn new(name: &str) -> Option<Self> {
     let last = name.rsplit(['/', '\\']).next().unwrap_or(name);
-    let clean: String = last
-      .chars()
-      .filter(|c| !c.is_control())
-      .take(NAME_CHARS)
-      .collect();
+    let clean: String = last.chars().filter(|c| !c.is_control()).take(NAME_CHARS).collect();
     let clean = clean.trim();
     (!clean.is_empty()).then(|| Self(clean.to_owned()))
   }

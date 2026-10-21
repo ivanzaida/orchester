@@ -72,10 +72,12 @@ fn blocks_of(line: &str) -> String {
     .as_array()
     .into_iter()
     .flatten()
-    .map(|block| match (block["type"].as_str(), block["source"]["media_type"].as_str()) {
-      (Some(kind), Some(media)) => format!("{kind}:{media}"),
-      (kind, _) => kind.unwrap_or("?").to_owned(),
-    })
+    .map(
+      |block| match (block["type"].as_str(), block["source"]["media_type"].as_str()) {
+        (Some(kind), Some(media)) => format!("{kind}:{media}"),
+        (kind, _) => kind.unwrap_or("?").to_owned(),
+      },
+    )
     .collect::<Vec<_>>()
     .join(",")
 }

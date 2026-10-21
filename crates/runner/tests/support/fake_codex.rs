@@ -509,7 +509,10 @@ fn input_blocks(input: &Value) -> String {
     .flatten()
     .map(|item| match (item["type"].as_str(), item["path"].as_str()) {
       (Some("localImage"), Some(path)) => {
-        format!("localImage:{}", if Path::new(path).is_file() { "there" } else { "missing" })
+        format!(
+          "localImage:{}",
+          if Path::new(path).is_file() { "there" } else { "missing" }
+        )
       }
       (kind, _) => kind.unwrap_or("?").to_owned(),
     })

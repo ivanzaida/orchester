@@ -43,7 +43,8 @@
         "text": "Not sent · an agent this message may reach can't take text files ({{name}}). Remove it first."
       }
     },
-    "planChanges": "A plan's changes are words only. Remove the attachments first."
+    "planChanges": "A plan's changes are words only. Remove the attachments first.",
+    "copyUnreadable": "{{name}} couldn't be read from the project's data."
   },
   "notifications": {
     "title": {
