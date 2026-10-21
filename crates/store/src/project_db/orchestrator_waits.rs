@@ -90,12 +90,12 @@ impl ProjectDb {
       .collect()
   }
 
-  /// Gives wait `seq` of `chat` its turn, thinking, under `message`; only while it has none and no other turn of the
-  /// conversation thinks. Whether it was given.
+  /// Gives wait or daily report `seq` of `chat` its turn, thinking, under `message`; only while it has none and no
+  /// other turn of the conversation thinks. Whether it was given.
   pub fn start_wait_turn(&mut self, (chat, seq): (ChatId, i64), message: ChatMessageId) -> Result<bool, StoreError> {
     let changed = self.connection.execute(
       "UPDATE orchestrator_entries SET message_id = ?3, turn = 'thinking'
-       WHERE seq = ?2 AND chat_id = ?1 AND kind = 'wait' AND message_id IS NULL
+       WHERE seq = ?2 AND chat_id = ?1 AND kind IN ('wait', 'report') AND message_id IS NULL
          AND NOT EXISTS (SELECT 1 FROM orchestrator_entries WHERE chat_id = ?1 AND turn = 'thinking')",
       params![chat.to_string(), seq, message.to_string()],
     )?;

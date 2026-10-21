@@ -6,6 +6,7 @@ use orchester_core::{
   id::{ProjectId, ServerId, UserId},
   name::Name,
   notification::{NotificationSettings, QuietHours},
+  orchestrator::{ReportSchedule, ReportTime},
   project::{Project, ProjectKey},
   time::Timestamp,
   usage::limits::WarningThreshold,
@@ -254,6 +255,34 @@ fn orchestrator_continues_interrupted_runs_only_once_a_person_turned_it_on() {
   );
   db.set_orchestrator_continues_interrupted(false).expect("store");
   assert!(!db.orchestrator_continues_interrupted().expect("read"));
+}
+
+#[test]
+fn daily_report_is_off_until_turned_on_and_keeps_since_when_its_time_changes() {
+  let dir = tempfile::tempdir().expect("temporary directory");
+  let path = dir.path().join("orchester.db");
+  let mut db = AppDb::open(&path).expect("open");
+  assert_eq!(db.daily_report_schedule().expect("read"), None, "off until turned on");
+  let six = ReportTime::new(18 * 60).expect("a time");
+  db.set_daily_report(Some(six), at(1_000)).expect("store");
+  let later = ReportTime::new(20 * 60 + 30).expect("a time");
+  db.set_daily_report(Some(later), at(9_000)).expect("store");
+  drop(db);
+  let mut db = AppDb::open(&path).expect("reopen");
+  let expected = ReportSchedule {
+    time: later,
+    since: at(1_000),
+  };
+  assert_eq!(
+    db.daily_report_schedule().expect("read"),
+    Some(expected),
+    "on since it was turned on"
+  );
+  db.set_daily_report(None, at(10_000)).expect("store");
+  assert_eq!(db.daily_report_schedule().expect("read"), None);
+  db.set_daily_report(Some(six), at(20_000)).expect("store");
+  let schedule = db.daily_report_schedule().expect("read").expect("on");
+  assert_eq!(schedule.since, at(20_000), "on again from then");
 }
 
 #[test]

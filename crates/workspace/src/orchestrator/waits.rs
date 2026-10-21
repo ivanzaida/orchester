@@ -10,8 +10,9 @@
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. With *Let the Orchestrator continue
 //! interrupted runs* on too, the turn of an interrupted run's end continues the run, unless it was interrupted again
-//! soon. The app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns
-//! [`follow_in`] gives, with the chat's tools served for them.
+//! soon. A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry first. The
+//! app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns [`follow_in`] gives,
+//! with the chat's tools served for them.
 
 use std::{collections::HashSet, path::Path};
 
@@ -223,28 +224,33 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
   })
 }
 
-/// The waits of every conversation that start a turn by themselves, have none and still wait (their keys among
-/// `waiting`), oldest first.
-fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<KeptWait>, StoreError> {
-  Ok(
-    db.automatic_waits_without_turn()?
-      .into_iter()
-      .filter(|kept| waiting.contains(kept.key.as_str()))
-      .collect(),
-  )
+/// The entries of every conversation that start a turn by themselves and have none, each by its conversation and
+/// `seq`, oldest first: the waits that still wait (their keys among `waiting`), and the daily reports
+/// (`super::report`), whose turn adds a summary to what they tell.
+fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<(ChatId, i64)>, StoreError> {
+  let mut next: Vec<(ChatId, i64)> = db
+    .automatic_waits_without_turn()?
+    .into_iter()
+    .filter(|kept| waiting.contains(kept.key.as_str()))
+    .map(|kept: KeptWait| (kept.chat, kept.seq))
+    .chain(
+      db.automatic_reports_without_turn()?
+        .into_iter()
+        .map(|kept| (kept.chat, kept.seq)),
+    )
+    .collect();
+  next.sort_by_key(|(_, seq)| *seq);
+  Ok(next)
 }
 
 /// Gives the oldest of `next` whose conversation has no turn thinking its turn, in that conversation; none while a
 /// turn thinks in each of theirs.
-fn start(db: &mut ProjectDb, next: &[KeptWait]) -> Result<Option<WaitTurn>, StoreError> {
-  for kept in next {
+fn start(db: &mut ProjectDb, next: &[(ChatId, i64)]) -> Result<Option<WaitTurn>, StoreError> {
+  for (chat, seq) in next {
     let message = ChatMessageId::generate();
-    // Refused while another turn of its conversation thinks: the wait keeps no turn and starts once that one ended.
-    if db.start_wait_turn((kept.chat, kept.seq), message)? {
-      return Ok(Some(WaitTurn {
-        chat: kept.chat,
-        message,
-      }));
+    // Refused while another turn of its conversation thinks: the entry keeps no turn and starts once that one ended.
+    if db.start_wait_turn((*chat, *seq), message)? {
+      return Ok(Some(WaitTurn { chat: *chat, message }));
     }
   }
   Ok(None)

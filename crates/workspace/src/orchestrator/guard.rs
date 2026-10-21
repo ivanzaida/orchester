@@ -1,13 +1,14 @@
 //! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5), so that it never
 //! takes up its own doing in a loop and never decides what is the person's: in a turn a wait or a run's end started by
 //! itself ([`super::tools::ChatScope::on_its_own`]) nobody asked for anything, so a merge, a start, a pause, a resume,
-//! a release of new starts and a publication are only proposed, whatever the person's switches and auto mode; a
-//! message that moves a run none of whose agents waits or works (a follow-up, a continuation, a resume, the task run
-//! again) is always proposed; a run stopped at a limit, canceled, or interrupted with its worktree gone or by the
-//! runner failing to record it is resumed or continued by the person only; and one a crash, the runner going away or
-//! *Quit now* interrupted is continued from the chat only under *Let the Orchestrator continue interrupted runs*: in a
-//! turn nobody asked for, only the run whose interruption started the turn, once, and not when it was interrupted
-//! again soon after the time before.
+//! a release of new starts and a publication are only proposed, whatever the person's switches and auto mode; in one a
+//! day's report started (ORC-47) the chat changes nothing at all: every change a card carries is proposed, whatever
+//! the person's switches, and any other is refused; a message that moves a run none of whose agents waits or works (a
+//! follow-up, a continuation, a resume, the task run again) is always proposed; a run stopped at a limit, canceled, or
+//! interrupted with its worktree gone or by the runner failing to record it is resumed or continued by the person
+//! only; and one a crash, the runner going away or *Quit now* interrupted is continued from the chat only under *Let
+//! the Orchestrator continue interrupted runs*: in a turn nobody asked for, only the run whose interruption started
+//! the turn, once, and not when it was interrupted again soon after the time before.
 
 use orchester_core::{
   id::RunId,
@@ -23,8 +24,8 @@ use rmcp::model::JsonObject;
 use serde_json::Value;
 
 use super::{
-  change::control::{PAUSE_RUN, RELEASE_QUEUE},
-  tools::{ChatScope, MERGE_RUN},
+  change::control::{PAUSE_RUN, RELEASE_QUEUE, RESUME_RUN},
+  tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, RUN_TASK, SEND_MESSAGE},
 };
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
@@ -33,9 +34,51 @@ use crate::{
 };
 
 /// Whether the chat's call of `name` in `scope` is only proposed as a change because nobody asked for anything in its
-/// turn; a start is then proposed as a start ([`super::tools`]), and a resume as [`resume_as`] tells.
-pub(super) fn proposed_on_its_own(scope: &ChatScope, name: &str) -> bool {
-  scope.on_its_own && (matches!(name, MERGE_RUN | PAUSE_RUN | RELEASE_QUEUE) || Publishing::of_tool(name).is_some())
+/// turn; a start is then proposed as a start ([`super::tools`]), and a resume as [`resume_as`] tells. In a turn a
+/// day's report started, every change a card carries is proposed, and any other is refused (`report_turn`): a task, a
+/// draft, a copy of a pipeline or a hold of new starts.
+pub(super) async fn only_proposed(scope: &ChatScope, name: &str) -> Result<bool, ToolError> {
+  if !scope.on_its_own {
+    return Ok(false);
+  }
+  // A start is proposed by `run_task` itself in any turn nobody asked for.
+  if name != RUN_TASK && in_report_turn(scope).await? {
+    return if card_carries(name) {
+      Ok(true)
+    } else {
+      Err(ToolError::refused(
+        "report_turn",
+        vec![Message::new("orchestrator.tools.reportChangesNothing")],
+      ))
+    };
+  }
+  Ok(matches!(name, MERGE_RUN | PAUSE_RUN | RELEASE_QUEUE) || Publishing::of_tool(name).is_some())
+}
+
+/// Whether the turn under way in `scope`'s conversation is the one a day's report started by itself.
+pub(super) async fn in_report_turn(scope: &ChatScope) -> Result<bool, ToolError> {
+  if !scope.on_its_own {
+    return Ok(false);
+  }
+  let (root, chat) = (scope.root.clone(), scope.chat);
+  blocking(move || Ok(thinking_report(&ProjectDb::open(&root)?.chat_entries(chat)?))).await
+}
+
+/// Whether the person applies a change of the chat's tool `name` from a card ([`super::change::subject`]).
+fn card_carries(name: &str) -> bool {
+  matches!(
+    name,
+    MERGE_RUN | CANCEL_RUN | CONTINUE_RUN | ANSWER_QUESTION | SEND_MESSAGE | PAUSE_RUN | RESUME_RUN | RELEASE_QUEUE
+  ) || Publishing::of_tool(name).is_some()
+}
+
+/// Whether the turn that thinks now among a conversation's `entries` is one a day's report started.
+fn thinking_report(entries: &[ChatEntry]) -> bool {
+  entries
+    .iter()
+    .rev()
+    .find(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()))
+    .is_some_and(|entry| matches!(entry.kind, EntryKind::Report { .. }))
 }
 
 /// What the chat's `resume_run` does.

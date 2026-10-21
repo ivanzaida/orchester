@@ -10,7 +10,7 @@ mod usage;
 use std::num::NonZeroU64;
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, ModuleId, ProjectId, ResourceId},
+  id::{AgentAccountId, ChatId, ConnectionId, ModuleId, ProjectId, ResourceId},
   project::TaskKey,
 };
 
@@ -69,6 +69,8 @@ pub enum Link {
   Modules(ProjectId),
   /// A module's page, with its tasks and its burndown.
   Module(ProjectId, ModuleId),
+  /// A conversation of the project's Orchestrator chat.
+  Orchestrator(ProjectId, ChatId),
 }
 
 /// The tab of a task's page a link opens.
@@ -140,6 +142,10 @@ impl Link {
       Self::UsageEverywhere(query) => with_usage_query(format!("/{USAGE}"), query),
       Self::Modules(project) => format!("{}/{MODULES}", root(*project)),
       Self::Module(project, id) => format!("{}/{MODULES}/{id}", root(*project)),
+      Self::Orchestrator(project, chat) => with_query(
+        format!("{}/orchestrator", root(*project)),
+        &[("chat", Some(&chat.to_string()))],
+      ),
     }
   }
 }
