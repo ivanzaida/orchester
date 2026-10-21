@@ -8,7 +8,7 @@ use orchester_app::{i18n, mcp::chat::ChatServers, startup::Launch};
 use orchester_core::id::{ChatId, ChatMessageId, ProjectId};
 use orchester_workspace::{
   app_mcp,
-  orchestrator::tools::{ChatScope, TOOLS},
+  orchestrator::tools::{CHAT_TOOLS, ChatScope, TOOLS},
 };
 use serde_json::{Value, json};
 
@@ -125,7 +125,7 @@ fn the_chat_server_declines_the_newer_revision_and_lists_its_tools_on_2025_11_25
 }
 
 /// What the chat's agent is served over the wire is every name of `TOOLS` the app has a tool for, `continue_run`
-/// among them, and nothing else.
+/// among them, and the chat's own (`CHAT_TOOLS`), and nothing else.
 #[test]
 fn the_chat_server_lists_every_chat_tool_the_app_has() {
   let data = Data::new();
@@ -140,6 +140,7 @@ fn the_chat_server_lists_every_chat_tool_the_app_has() {
   let mut expected: Vec<String> = TOOLS
     .iter()
     .filter(|name| app.iter().any(|tool| tool == *name))
+    .chain(CHAT_TOOLS.iter())
     .map(|name| (*name).to_owned())
     .collect();
   served.sort();
@@ -151,6 +152,7 @@ fn the_chat_server_lists_every_chat_tool_the_app_has() {
     "hold_queue",
     "release_queue",
     "publish_pipeline",
+    "init_repository",
   ] {
     assert!(served.iter().any(|tool| tool == name), "{name} is served: {served:?}");
   }

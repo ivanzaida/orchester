@@ -1,11 +1,12 @@
 //! The Orchestrator chat's tools (`docs/design/orchestrator-toolset.md`): one list of names, of which the chat lists
-//! those the app has, so a name whose tool another change still builds is not listed and breaks nothing; what only a
-//! person decides is not among them; and the tools that wait for the person, or the person's switch, say so.
+//! those the app has, so a name whose tool another change still builds is not listed and breaks nothing, and the
+//! chat's own; what only a person decides is not among them; and the tools that wait for the person, or the
+//! person's switch, say so.
 
 use orchester_core::orchestrator::change::Publishing;
 use orchester_workspace::{
   app_mcp,
-  orchestrator::tools::{TOOLS, listed},
+  orchestrator::tools::{CHAT_TOOLS, TOOLS, listed},
 };
 
 /// The names of every tool of the app, of both its lists.
@@ -24,7 +25,11 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
     .iter()
     .copied()
     .filter(|name| app.iter().any(|tool| tool == name))
+    .chain(CHAT_TOOLS)
     .collect();
+  for name in CHAT_TOOLS {
+    assert!(!app.iter().any(|tool| tool == name), "{name} is the chat's own");
+  }
   let mut shown: Vec<String> = listed().into_iter().map(|tool| tool.name.to_string()).collect();
   let mut wanted: Vec<String> = expected.iter().map(|name| (*name).to_owned()).collect();
   shown.sort();
@@ -271,6 +276,32 @@ fn orchestrator_tools_say_a_duplicate_is_saved_as_a_draft() {
     .and_then(|tool| tool.description.map(|description| description.to_string()))
     .expect("duplicate_pipeline is listed");
   assert!(told.contains("saves the copy as a draft"), "{told}");
+}
+
+#[test]
+fn orchestrator_tools_say_init_repository_is_always_the_persons_to_apply() {
+  let tool = listed()
+    .into_iter()
+    .find(|tool| tool.name == "init_repository")
+    .expect("init_repository is listed");
+  assert_eq!(
+    tool.annotations.and_then(|hints| hints.read_only_hint),
+    Some(false),
+    "it writes to the project's folder"
+  );
+  let told = tool.description.map(|told| told.into_owned()).unwrap_or_default();
+  for part in [
+    "always a card the person applies",
+    "whatever auto mode and the person's switches say",
+    "never adds a remote, pushes or changes git's settings",
+    "has_commits",
+    "git_not_found",
+    "folder_not_writable",
+    "git_failed",
+    "author_unknown",
+  ] {
+    assert!(told.contains(part), "init_repository says {part}: {told}");
+  }
 }
 
 fn app_tools_listed() -> Vec<rmcp::model::Tool> {

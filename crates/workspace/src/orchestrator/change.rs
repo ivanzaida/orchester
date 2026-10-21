@@ -29,6 +29,7 @@ use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
 use super::{
+  repository::{self, INIT_REPOSITORY},
   tools::{ANSWER_QUESTION, CANCEL_RUN, CONTINUE_RUN, ChatScope, MERGE_RUN, SEND_MESSAGE, app_tool},
   widening,
 };
@@ -78,6 +79,11 @@ pub(super) async fn subject(
       let (name, arguments) = (name.to_owned(), arguments.clone());
       let project = scope.name.clone();
       blocking(move || control::control_change((&root, &project), &name, &arguments)).await?
+    }
+    (None, INIT_REPOSITORY) => {
+      let (arguments, programs, project) = (arguments.clone(), services.programs().clone(), scope.name.clone());
+      let proposed = blocking(move || repository::propose(programs.runner(), (&root, &project), &arguments)).await?;
+      (proposed, None)
     }
     (None, _) => {
       let (named, cancel) = (text("run")?, name == CANCEL_RUN);
@@ -185,6 +191,11 @@ pub(super) async fn apply(
       let (tool, arguments) = tool_arguments(scope, change);
       answer_for_orchestrator(services, translate, tool, arguments, (scope.chat, by, None)).await
     }
+    // Checked again where it is made: a repository with a commit since is never touched.
+    Change::InitRepository { .. } => {
+      let (programs, change) = (services.programs().clone(), change.change.clone());
+      blocking(move || repository::apply(programs.git_work(), &root, &change)).await
+    }
   }
 }
 
@@ -225,6 +236,8 @@ pub(super) fn tool_arguments(scope: &ChatScope, change: &ProposedChange) -> (&'s
     Change::Pause { run, .. } => (control::PAUSE_RUN, "run", run.to_string()),
     Change::Resume { run, .. } => (control::RESUME_RUN, "run", run.to_string()),
     Change::Release { task } => return control::release_arguments(scope.project, task.as_deref()),
+    // The chat's own tool, carried out by [`repository::apply`]: it acts on the project only.
+    Change::InitRepository { .. } => (INIT_REPOSITORY, "project", scope.project.to_string()),
   };
   let mut arguments = JsonObject::new();
   arguments.insert("project".to_owned(), Value::String(scope.project.to_string()));
@@ -453,6 +466,12 @@ pub(super) fn told(translate: &Translate, change: &ProposedChange) -> Value {
     } => (
       Message::new("orchestrator.tools.continueWaits").with("run", number.to_string()),
       json!({ "continue": { "run": number, "task": subject, "step": step, "choice": choice } }),
+    ),
+    Change::InitRepository { branch, .. } => (
+      Message::new("orchestrator.tools.initWaits")
+        .with("project", subject)
+        .with("branch", branch.clone()),
+      json!({ "init_repository": &change.change }),
     ),
   };
   json!({

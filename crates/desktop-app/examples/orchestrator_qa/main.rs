@@ -24,6 +24,7 @@ mod data;
 mod links;
 mod proposals;
 mod refused;
+mod repository;
 mod resolve;
 #[path = "../../tests/support/signed_in.rs"]
 mod signed_in;
@@ -98,10 +99,13 @@ enum State {
   /// `sXEjJ`: a run sent back to resolve its conflicts, proposed by the chat with a long note and waiting for the
   /// person ([`resolve`]).
   Resolve,
+  /// The chat's `init_repository` cards (ORC-72, on the pattern of `ExRt1` / `k80K3d`): waiting, applied, dismissed
+  /// and refused ([`repository`]).
+  Repository,
 }
 
 impl State {
-  const ALL: [(&'static str, Self); 19] = [
+  const ALL: [(&'static str, Self); 20] = [
     ("new", Self::New),
     ("conversation", Self::Conversation),
     ("stopped", Self::Stopped),
@@ -121,6 +125,7 @@ impl State {
     ("proposals", Self::Proposals),
     ("messages-applied", Self::MessagesApplied),
     ("resolve", Self::Resolve),
+    ("repository", Self::Repository),
   ];
 
   fn named(name: &str) -> Option<Self> {
@@ -202,9 +207,12 @@ fn route(prepared: &data::Prepared, state: State, chat: Option<ChatId>) -> Route
     State::History => ProjectPage::Orchestrator(OrchestratorChat::Latest),
     State::Links => ProjectPage::Orchestrator(OrchestratorChat::Chat(prepared.links)),
     State::Settings | State::SettingsNoConnection => ProjectPage::OrchestratorSettings,
-    State::Continue | State::ContinueApplied | State::Proposals | State::MessagesApplied | State::Resolve => {
-      ProjectPage::Orchestrator(OrchestratorChat::Latest)
-    }
+    State::Continue
+    | State::ContinueApplied
+    | State::Proposals
+    | State::MessagesApplied
+    | State::Resolve
+    | State::Repository => ProjectPage::Orchestrator(OrchestratorChat::Latest),
   };
   Route::Project(prepared.project, page)
 }
@@ -226,6 +234,7 @@ fn seeded_chat(
     State::Proposals => proposals::conversation(prepared, i18n)?,
     State::MessagesApplied => applied::conversation(runtime, (services, i18n.clone()), prepared)?,
     State::Resolve => resolve::conversation(prepared)?,
+    State::Repository => repository::conversation(prepared, i18n)?,
     _ => return Ok(None),
   }))
 }
