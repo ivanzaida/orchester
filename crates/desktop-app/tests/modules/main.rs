@@ -162,8 +162,17 @@ fn modules_editor_refuses_a_change_over_one_made_meanwhile_and_a_failed_read_is_
     .expect("the project database opens")
     .execute("ALTER TABLE module_changes RENAME TO module_changes_gone", [])
     .expect("the moves are out of reach");
+  // A reading of the tasks under way since before the rename may stand for this one: ask again until a reading
+  // made after it reaches the page.
+  let mut asked = std::time::Instant::now();
   seeded.read_again();
-  seeded.until("the read's failure", |seeded| seeded.shows("module-load-error"));
+  seeded.until("the read's failure", |seeded| {
+    if asked.elapsed() > std::time::Duration::from_millis(200) {
+      asked = std::time::Instant::now();
+      seeded.read_again();
+    }
+    seeded.shows("module-load-error")
+  });
   assert!(!seeded.shows("module-header") && !seeded.shows("module-edit"));
 }
 
