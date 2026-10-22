@@ -6,6 +6,7 @@ mod capture;
 mod commit;
 mod commit_copy;
 mod commit_hooks;
+mod discard;
 mod execute;
 pub mod family;
 mod files;
@@ -20,6 +21,7 @@ mod sync_preview;
 
 use std::path::{Path, PathBuf};
 
+pub use discard::{DiscardError, Take};
 pub use files::{
   copy_untracked_file, executable, file_hash, file_probe, owned_directory, owned_store, prepare_scratch, read_regular,
   set_executable, write_regular,

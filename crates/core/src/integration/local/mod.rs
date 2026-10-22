@@ -1,5 +1,6 @@
 //! Durable local checkout integration. Editing a result and approving its checked identity are separate decisions.
 
+mod discard;
 mod draft;
 mod hook;
 mod path;
@@ -9,6 +10,7 @@ mod record;
 mod recovery;
 mod resolution;
 
+pub use discard::Discard;
 pub use draft::{ConflictKind, DraftChoice, DraftIdentity, DraftRecord, EditorCandidate};
 pub use hook::HookChange;
 pub use path::LocalPath;

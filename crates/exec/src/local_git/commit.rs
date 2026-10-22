@@ -207,20 +207,9 @@ impl LocalGit {
       return Err(LocalError::Stale.into());
     }
     for file in reviewed.files.iter().filter(|file| paths.contains(&file.path)) {
-      if self.text(&["rev-parse", "HEAD"])? != reviewed.head
-        || self.operation()?.is_some()
-        || super::file_hash(&self.root, &file.path)? != file.working
-        || self.index_entries()?.get(&file.path) != file.staged.as_ref()
-        || super::executable(&self.root, &file.path)? != file.executable
-      {
-        return Err(LocalError::Stale.into());
-      }
+      self.ensure_file(reviewed, file)?;
       if let Some(entry) = &file.head {
-        let bytes = self.checkout_blob(&reviewed.head, &file.path)?;
-        super::write_regular(&self.root, &file.path, file.working.as_ref(), Some(&bytes))?;
-        let hash = super::digest(&bytes);
-        super::set_executable(&self.root, &file.path, &hash, entry.mode == 0o100755)?;
-        self.set_index(&file.path, Some(entry), None)?;
+        self.restore_head(reviewed, file, entry)?;
       } else {
         super::write_regular(&self.root, &file.path, file.working.as_ref(), None)?;
         self.set_index(&file.path, None, None)?;
@@ -237,5 +226,28 @@ impl LocalGit {
       return Err(LocalError::Reconcile.into());
     }
     Ok(clean)
+  }
+
+  /// Refused as stale unless `file` is still as `reviewed` recorded it: the same HEAD, no Git operation under way,
+  /// and its content, index entry and executable bit unchanged.
+  pub(super) fn ensure_file(&self, reviewed: &Checkout, file: &LocalFile) -> Result<(), LocalGitError> {
+    if self.text(&["rev-parse", "HEAD"])? != reviewed.head
+      || self.operation()?.is_some()
+      || super::file_hash(&self.root, &file.path)? != file.working
+      || self.index_entries()?.get(&file.path) != file.staged.as_ref()
+      || super::executable(&self.root, &file.path)? != file.executable
+    {
+      return Err(LocalError::Stale.into());
+    }
+    Ok(())
+  }
+
+  /// Puts HEAD's `entry` of `file` back, in the checkout and the index, over the content `reviewed` recorded.
+  pub(super) fn restore_head(&self, reviewed: &Checkout, file: &LocalFile, entry: &IndexEntry) -> Result<(), LocalGitError> {
+    let bytes = self.checkout_blob(&reviewed.head, &file.path)?;
+    super::write_regular(&self.root, &file.path, file.working.as_ref(), Some(&bytes))?;
+    let hash = super::digest(&bytes);
+    super::set_executable(&self.root, &file.path, &hash, entry.mode == 0o100755)?;
+    self.set_index(&file.path, Some(entry), None)
   }
 }
