@@ -13,6 +13,8 @@ use super::{LocalGit, LocalGitError, files::hold_directory, owned::OwnedFile};
 const COPIES: &str = "discarded";
 /// How much of a copy's digest names its folder: enough to keep two versions or two files of one name apart.
 const COPY_FOLDER: usize = 16;
+/// What the copy of a file's staged version adds to the file's name.
+pub const STAGED: &str = ".staged";
 
 /// Moves a file to where the person can restore it, or says why the system would not.
 pub type Take<'a> = &'a dyn Fn(&Path) -> io::Result<()>;
@@ -49,40 +51,60 @@ impl LocalGit {
       return Err(LocalError::Unsupported.into());
     }
     self.ensure_file(reviewed, file)?;
-    let head = file.head.as_ref();
-    match (file.discard(), head) {
+    // Copies first, of every version that would otherwise be lost, before the checkout or the index changes.
+    if file.keeps_staged_copy() {
+      let staged = file.staged.as_ref().ok_or(LocalError::Stale)?;
+      let bytes = self.blob(&staged.object)?;
+      self.trash_copy(file, &format!("{}{STAGED}", name(file)), &bytes, take)?;
+    }
+    match (file.discard(), file.head.as_ref()) {
       (Discard::Trash, _) => {
         let expected = file.working.as_ref().ok_or(LocalError::Stale)?;
         hand_over(&self.root, &file.path, expected, take)?;
         if file.staged.is_some() {
+          self.ensure_index(file)?;
           self.set_index(&file.path, None, None)?;
         }
       }
-      (Discard::Unstage, _) => self.set_index(&file.path, None, None)?,
+      (Discard::Unstage, _) => {
+        self.ensure_index(file)?;
+        self.set_index(&file.path, None, None)?;
+      }
       (Discard::RestoreKeepingCopy, Some(head)) => {
-        self.trash_copy(file, take)?;
+        let bytes = self.file(&file.path)?.ok_or(LocalError::Stale)?;
+        if file.working.as_ref() != Some(&super::digest(&bytes)) {
+          return Err(LocalError::Stale.into());
+        }
+        self.trash_copy(file, name(file), &bytes, take)?;
+        self.ensure_index(file)?;
         self.restore_head(reviewed, file, head)?;
       }
-      (Discard::Restore, Some(head)) => self.restore_head(reviewed, file, head)?,
+      (Discard::Restore, Some(head)) => {
+        self.ensure_index(file)?;
+        self.restore_head(reviewed, file, head)?;
+      }
       (Discard::RestoreKeepingCopy | Discard::Restore, None) => return Err(LocalError::Stale.into()),
     }
     Ok(())
   }
 
-  /// Puts a copy of the person's version of `file`, under the file's own name, in this checkout's scratch folder and
-  /// hands it to `take`.
-  fn trash_copy(&self, file: &LocalFile, take: Take<'_>) -> Result<(), DiscardError> {
-    let bytes = self.file(&file.path)?.ok_or(LocalError::Stale)?;
-    let hash = super::digest(&bytes);
-    if file.working.as_ref() != Some(&hash) {
+  /// Refused as stale unless the index still holds the entry of `file` the review saw: checked right before the index
+  /// is written, after the copies went to the trash.
+  fn ensure_index(&self, file: &LocalFile) -> Result<(), LocalGitError> {
+    if self.index_entries()?.get(&file.path) != file.staged.as_ref() {
       return Err(LocalError::Stale.into());
     }
-    let name = file.path.as_str().rsplit('/').next().unwrap_or(file.path.as_str());
+    Ok(())
+  }
+
+  /// Puts `bytes`, a version of `file`, as `name` in this checkout's scratch folder and hands it to `take`.
+  fn trash_copy(&self, file: &LocalFile, name: &str, bytes: &[u8], take: Take<'_>) -> Result<(), DiscardError> {
+    let hash = super::digest(bytes);
     let copy = LocalPath::new(name)?;
-    let key = super::digest(format!("{}\0{}", file.path, hash.as_str()).as_bytes());
+    let key = super::digest(format!("{}\0{name}\0{}", file.path, hash.as_str()).as_bytes());
     let folder =
       hold_directory(&self.scratch, &[COPIES, &key.as_str()[..COPY_FOLDER]], true)?.ok_or(LocalGitError::Io)?;
-    match super::write_regular(folder.path(), &copy, None, Some(&bytes)) {
+    match super::write_regular(folder.path(), &copy, None, Some(bytes)) {
       Ok(()) => {}
       // An earlier attempt left this copy when the trash refused it: the same version of the same file.
       Err(LocalGitError::State(LocalError::Collision))
@@ -92,6 +114,11 @@ impl LocalGit {
     // The emptied folder stays in Orchester's own scratch folder, as its other scratch files do.
     hand_over(folder.path(), &copy, &hash, take)
   }
+}
+
+/// The file's own name, which its copies carry.
+fn name(file: &LocalFile) -> &str {
+  file.path.as_str().rsplit('/').next().unwrap_or(file.path.as_str())
 }
 
 /// Hands the regular file `path` of `root`, which must still hold `expected`, to `take`, its folders held while it

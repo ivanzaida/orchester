@@ -90,24 +90,139 @@ fn local_integration_discard_restores_a_deleted_file_from_head() {
 }
 
 #[test]
-fn local_integration_discard_unstages_staged_changes_and_keeps_what_they_held() {
+fn local_integration_discard_unstages_staged_changes_and_keeps_every_version() {
   let (fixture, bin) = (Fixture::new(false), Bin::new());
-  fs::write(fixture.root().join("local.txt"), "staged\n").expect("edit");
+  fs::write(
+    fixture.root().join("local.txt"),
+    "staged
+",
+  )
+  .expect("edit");
   git(fixture.root(), &["add", "local.txt"]);
-  fs::write(fixture.root().join("local.txt"), "staged then edited\n").expect("edit");
-  fs::write(fixture.root().join("added.txt"), "new and staged\n").expect("new");
+  fs::write(
+    fixture.root().join("local.txt"),
+    "staged then edited
+",
+  )
+  .expect("edit");
+  fs::write(
+    fixture.root().join("added.txt"),
+    "new and staged
+",
+  )
+  .expect("new");
   git(fixture.root(), &["add", "added.txt"]);
+  fs::write(
+    fixture.root().join("fresh.txt"),
+    "first staged
+",
+  )
+  .expect("new");
+  git(fixture.root(), &["add", "fresh.txt"]);
+  fs::write(
+    fixture.root().join("fresh.txt"),
+    "then edited
+",
+  )
+  .expect("edit");
   let mut session = fixture.open();
   let report = session
-    .discard(&[path("local.txt"), path("added.txt")], &bin.trash())
+    .discard(&[path("local.txt"), path("added.txt"), path("fresh.txt")], &bin.trash())
     .expect("discard");
   assert!(report.complete());
   assert_eq!(report.files()[1].discard, Discard::Trash);
   assert_eq!(git(fixture.root(), &["show", ":local.txt"]), "base");
-  assert_eq!(fs::read(fixture.root().join("local.txt")).expect("restored"), b"base\n");
-  assert!(!fixture.root().join("added.txt").exists());
-  assert_eq!(bin.holds("local.txt").as_deref(), Some(&b"staged then edited\n"[..]));
-  assert_eq!(bin.holds("added.txt").as_deref(), Some(&b"new and staged\n"[..]));
+  assert_eq!(
+    fs::read(fixture.root().join("local.txt")).expect("restored"),
+    b"base
+"
+  );
+  assert!(!fixture.root().join("added.txt").exists() && !fixture.root().join("fresh.txt").exists());
+  // Both versions of a file staged and then edited are kept; a staged version equal to the file needs no copy.
+  assert_eq!(
+    bin.holds("local.txt").as_deref(),
+    Some(
+      &b"staged then edited
+"[..]
+    )
+  );
+  assert_eq!(
+    bin.holds("local.txt.staged").as_deref(),
+    Some(
+      &b"staged
+"[..]
+    )
+  );
+  assert_eq!(
+    bin.holds("added.txt").as_deref(),
+    Some(
+      &b"new and staged
+"[..]
+    )
+  );
+  assert_eq!(bin.holds("added.txt.staged"), None);
+  assert_eq!(
+    bin.holds("fresh.txt").as_deref(),
+    Some(
+      &b"then edited
+"[..]
+    )
+  );
+  assert_eq!(
+    bin.holds("fresh.txt.staged").as_deref(),
+    Some(
+      &b"first staged
+"[..]
+    )
+  );
+  assert!(clean(&fixture));
+}
+
+#[test]
+fn local_integration_discard_keeps_a_staged_version_whose_file_was_deleted() {
+  let (fixture, bin) = (Fixture::new(false), Bin::new());
+  fs::write(
+    fixture.root().join("local.txt"),
+    "staged
+",
+  )
+  .expect("edit");
+  git(fixture.root(), &["add", "local.txt"]);
+  fs::remove_file(fixture.root().join("local.txt")).expect("delete");
+  fs::write(
+    fixture.root().join("gone.txt"),
+    "staged only
+",
+  )
+  .expect("new");
+  git(fixture.root(), &["add", "gone.txt"]);
+  fs::remove_file(fixture.root().join("gone.txt")).expect("delete");
+  let mut session = fixture.open();
+  let report = session
+    .discard(&[path("local.txt"), path("gone.txt")], &bin.trash())
+    .expect("discard");
+  assert!(report.complete());
+  assert_eq!(report.files()[0].discard, Discard::Restore);
+  assert_eq!(report.files()[1].discard, Discard::Unstage);
+  assert_eq!(
+    fs::read(fixture.root().join("local.txt")).expect("restored"),
+    b"base
+"
+  );
+  assert_eq!(
+    bin.holds("local.txt.staged").as_deref(),
+    Some(
+      &b"staged
+"[..]
+    )
+  );
+  assert_eq!(
+    bin.holds("gone.txt.staged").as_deref(),
+    Some(
+      &b"staged only
+"[..]
+    )
+  );
   assert!(clean(&fixture));
 }
 
@@ -235,4 +350,34 @@ fn local_integration_discard_says_why_a_file_in_use_stayed_and_tries_again() {
   let again = session.discard(&report.failed(), &bin.trash()).expect("try again");
   assert!(again.complete());
   assert_eq!(session.operation().phase(), LocalPhase::Prepared);
+}
+
+/// A trash on a drive whose bin would not keep what it is given refuses before anything moves: the changed file is
+/// neither copied away nor restored, and the page is told why.
+struct NoBin;
+
+impl orchester_workspace::accounts::trash::Trash for NoBin {
+  fn take(&self, _path: &std::path::Path) -> std::io::Result<()> {
+    Err(orchester_exec::trash::TrashRefusal::NoBin.into())
+  }
+}
+
+#[test]
+fn local_integration_discard_changes_nothing_where_no_bin_keeps_it() {
+  let fixture = Fixture::new(false);
+  fs::write(fixture.root().join("local.txt"), "my version\n").expect("edit");
+  fs::write(fixture.root().join("junk.log"), "junk").expect("junk");
+  let mut session = fixture.open();
+  let report = session
+    .discard(&[path("local.txt"), path("junk.log")], &NoBin)
+    .expect("discard");
+  for file in report.files() {
+    assert_eq!(file.failure, Some(DiscardFailure::NoBin));
+  }
+  assert_eq!(
+    fs::read(fixture.root().join("local.txt")).expect("kept"),
+    b"my version\n"
+  );
+  assert_eq!(fs::read(fixture.root().join("junk.log")).expect("kept"), b"junk");
+  assert_eq!(session.operation().phase(), LocalPhase::Review);
 }

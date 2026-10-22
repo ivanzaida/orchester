@@ -127,6 +127,58 @@ fn local_integration_discard_says_which_file_stayed_and_tries_again() {
   assert!(page.root().join(JUNK).exists());
   drop(held);
   page.click("local-discard-again");
+  page.ready("local-discard-confirm");
+  assert!(
+    page
+      .window
+      .text("local-discard-files")
+      .contains("du.exe.stackdump moves to the")
+  );
+  page.click("local-discard-confirm");
   page.ready("local-sync");
   assert!(!page.root().join(JUNK).exists());
+}
+
+/// A path selected only in part: discarding takes the whole file, so the confirmation says to select both and can't
+/// be pressed.
+#[test]
+fn local_integration_discard_refuses_a_path_selected_in_part() {
+  let fixture = Fixture::new(false);
+  fs::write(
+    fixture.root().join("local.txt"),
+    b"staged
+",
+  )
+  .expect("edit");
+  super::domain_support::git(fixture.root(), &["add", "local.txt"]);
+  fs::write(
+    fixture.root().join("local.txt"),
+    b"staged then edited
+",
+  )
+  .expect("edit");
+  let mut page = Page::new(fixture);
+  page.ready("local-review-discard");
+  page.click("local-select-local_integration.unstaged-local.txt");
+  page.click("local-review-discard");
+  page.ready("local-discard-confirm");
+  assert!(
+    page
+      .window
+      .text("local-discard-files")
+      .contains("select its staged and its unstaged change both")
+  );
+  page.click("local-discard-confirm");
+  assert!(!page.has("local-working"), "nothing runs");
+  assert_eq!(
+    fs::read(page.root().join("local.txt")).expect("kept"),
+    b"staged then edited
+"
+  );
+  page.click("local-discard-keep");
+  page.ready("local-review-discard");
+  page.click("local-select-local_integration.staged-local.txt");
+  page.click("local-review-discard");
+  page.ready("local-discard-staged-local.txt");
+  assert!(page.window.text("local-discard-files").contains("local.txt.staged"));
 }

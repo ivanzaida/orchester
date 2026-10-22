@@ -25,4 +25,10 @@ impl LocalFile {
       (true, false) => Discard::Restore,
     }
   }
+
+  /// Whether the index holds a version of its own, neither HEAD's nor the checkout's: discarding keeps a copy of it
+  /// too, before the index changes.
+  pub fn keeps_staged_copy(&self) -> bool {
+    self.staged.is_some() && self.staged != self.head && self.unstaged
+  }
 }
