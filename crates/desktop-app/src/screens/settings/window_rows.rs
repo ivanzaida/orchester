@@ -1,8 +1,9 @@
 //! What *What automation may do* says of the window (`oD7hy`, its states `HNQBR`): *Look at the window*, which every
 //! client with the token may always do, so its switch is on and fixed beside a lock and *Always on* (`Row · Look at
 //! the window` `baK0O`), and the hint under *Agents can control this window* (`Hint` `iqm0X`): the app reads window
-//! control when it starts, so the hint says what this run has — the build's default, a choice that applies from the
-//! next start, or what `ORCHESTER_APP_MCP_WINDOW_CONTROL` decided for this run (`McpSettings::this_run`).
+//! control when it starts, so the hint says what this run has — the build's default, the person's stored choice, a
+//! choice that applies from the next start, or what `ORCHESTER_APP_MCP_WINDOW_CONTROL` decided for this run
+//! (`McpSettings::this_run`).
 
 use lurq::{
   app::{
@@ -57,8 +58,10 @@ pub fn window_control_hint(ctx: &mut Ctx, chosen: bool) -> String {
     .map_or_else(McpSettings::of_build, |link| link.status().settings);
   let variable = [("variable", WINDOW_CONTROL_VARIABLE)];
   let words = match settings.this_run(chosen) {
-    ThisRun::AsStarted if cfg!(debug_assertions) => ctx.t("settings.automation.windowControl.buildDevelopment"),
-    ThisRun::AsStarted => ctx.t("settings.automation.windowControl.buildRelease"),
+    ThisRun::AsBuilt if cfg!(debug_assertions) => ctx.t("settings.automation.windowControl.buildDevelopment"),
+    ThisRun::AsBuilt => ctx.t("settings.automation.windowControl.buildRelease"),
+    ThisRun::AsChosen(true) => ctx.t("settings.automation.windowControl.chosenOn"),
+    ThisRun::AsChosen(false) => ctx.t("settings.automation.windowControl.chosenOff"),
     ThisRun::NextStart(true) => ctx.t("settings.automation.windowControl.nextStartOn"),
     ThisRun::NextStart(false) => ctx.t("settings.automation.windowControl.nextStartOff"),
     ThisRun::Environment(true) => ctx.t_args("settings.automation.windowControl.environmentOn", variable),

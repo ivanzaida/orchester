@@ -15,6 +15,7 @@ mod notifications;
 pub mod orchester;
 mod page;
 mod save_state;
+mod serial;
 mod server;
 mod window_rows;
 

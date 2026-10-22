@@ -53,6 +53,8 @@
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
         "buildRelease": "Build default: off in release builds like this one; development builds start with it on. A change applies when Orchester starts again.",
         "buildDevelopment": "Build default: on in development builds like this one, so design checks can drive the window; release builds start with it off. A change applies when Orchester starts again.",
+        "chosenOn": "Your choice: on for this run. A change applies when Orchester starts again.",
+        "chosenOff": "Your choice: off for this run. A change applies when Orchester starts again.",
         "nextStartOn": "On from the next start. Until Orchester starts again, agents can't click or type in this window.",
         "nextStartOff": "Off from the next start. Until Orchester starts again, agents can still click and type in this window.",
         "environmentOn": "This run: on, set by {{variable}}=on. The setting here applies when Orchester starts without that variable.",

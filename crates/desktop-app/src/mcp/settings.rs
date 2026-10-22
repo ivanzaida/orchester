@@ -133,12 +133,13 @@ impl McpSettings {
   }
 
   /// What applies to this run while the setting shows `chosen`: the variable decides, a choice waits for the next
-  /// start, or the setting is what this run started with.
+  /// start, or the setting is what this run started with, the build's default or the person's choice.
   pub const fn this_run(self, chosen: bool) -> ThisRun {
     match self.source {
       WindowControlSource::Environment => ThisRun::Environment(self.window_control),
       _ if chosen != self.window_control => ThisRun::NextStart(chosen),
-      _ => ThisRun::AsStarted,
+      WindowControlSource::Build => ThisRun::AsBuilt,
+      WindowControlSource::Stored => ThisRun::AsChosen(self.window_control),
     }
   }
 }
@@ -147,8 +148,10 @@ impl McpSettings {
 /// `HNQBR`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThisRun {
-  /// This run has what the setting shows.
-  AsStarted,
+  /// This run has what the setting shows: the build's default, as no choice was stored when it started.
+  AsBuilt,
+  /// This run has what the setting shows: the person's choice, stored when it started.
+  AsChosen(bool),
   /// The setting changed to this value since the start; it applies when Orchester starts again.
   NextStart(bool),
   /// [`WINDOW_CONTROL_VARIABLE`] gave this run this value, whatever the setting says.

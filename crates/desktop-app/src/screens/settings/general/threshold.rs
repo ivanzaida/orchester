@@ -2,14 +2,14 @@
 //! project's Usage counts its limits as nearly used, a whole percentage from 1 to 100, kept for Orchester rather than a
 //! project because limits belong to accounts. The frame draws it as planned; the person chose a working field here
 //! (2026-10-22), the same setting Usage › Plan limits' menu changes. It is read when the row shows, and a value that is
-//! a percentage saves as it is typed, off the UI thread.
+//! a percentage saves as it is typed, off the UI thread, one save at a time and the newest last.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::{Ctx, FutureAction, FutureState},
     theme::SpacingSize,
   },
   components::Column,
@@ -24,7 +24,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use crate::{
-  screens::settings::save_state::{Outcome, SaveState},
+  screens::settings::{save_state::SaveState, serial::Serial},
   services::Services,
   ui::{
     field::{FieldInput, field_error},
@@ -42,15 +42,25 @@ struct Read(WarningThreshold);
 
 impl DevtoolsInspectable for Read {}
 
-type SaveAction = FutureAction<WarningThreshold, (), Message>;
+type Saves = Serial<WarningThreshold, (), Message>;
+
+/// What the row knows of the stored threshold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Known {
+  /// Not read yet: nothing typed is saved.
+  Unread,
+  /// The threshold as read, or the newest one asked to be saved.
+  Asked(WarningThreshold),
+  /// A save failed: the next percentage typed is saved, even the one that failed.
+  Unsure,
+}
 
 pub struct ThresholdRow {
   text: Signal<String>,
   /// A typed value that is not a whole percentage.
   invalid: Signal<bool>,
-  /// The threshold as last read or saved; `None` until it is read, when nothing typed is saved.
-  last: Arc<Mutex<Option<WarningThreshold>>>,
-  save: SaveAction,
+  known: Arc<Mutex<Known>>,
+  saves: Saves,
 }
 
 impl Component for ThresholdRow {
@@ -58,7 +68,7 @@ impl Component for ThresholdRow {
 
   fn create(ctx: &mut Ctx) -> Self {
     let workspace = Services::of(ctx).workspace;
-    let save: SaveAction = ctx.future_action(move |threshold: WarningThreshold| {
+    let action: FutureAction<WarningThreshold, (), Message> = ctx.future_action(move |threshold: WarningThreshold| {
       let workspace = workspace.clone();
       async move {
         background::run(move || workspace.set_usage_warning_threshold(threshold))
@@ -69,28 +79,35 @@ impl Component for ThresholdRow {
           })
       }
     });
+    let saves = Serial::new(ctx, action);
     let row = Self {
       text: ctx.signal(String::new()),
       invalid: ctx.signal(false),
-      last: Arc::default(),
-      save: save.clone(),
+      known: Arc::new(Mutex::new(Known::Unread)),
+      saves: saves.clone(),
     };
-    // Saves on change, whatever changed the field's text; an unchanged value is not saved again.
-    let (invalid, last) = (row.invalid.clone(), Arc::clone(&row.last));
+    // Saves on change, whatever changed the field's text; a value already asked for is not saved again.
+    let (invalid, known) = (row.invalid.clone(), Arc::clone(&row.known));
     ctx.watch(&row.text, move |typed: &String| {
-      let mut last = last.lock();
-      let Some(saved) = *last else {
+      let mut known = known.lock();
+      if *known == Known::Unread {
         return;
-      };
+      }
       match WarningThreshold::parse(typed) {
         Ok(threshold) => {
           invalid.set(false);
-          if saved != threshold {
-            *last = Some(threshold);
-            save.run(threshold);
+          if *known != Known::Asked(threshold) {
+            *known = Known::Asked(threshold);
+            saves.save(threshold);
           }
         }
         Err(_) => invalid.set(true),
+      }
+    });
+    let known = Arc::clone(&row.known);
+    ctx.watch(&row.saves.state(), move |state: &FutureState<(), Message>| {
+      if state.is_rejected() {
+        *known.lock() = Known::Unsure;
       }
     });
     row
@@ -99,16 +116,16 @@ impl Component for ThresholdRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let read = self.stored(ctx);
     if let Some(Read(threshold)) = read.data {
-      let mut last = self.last.lock();
-      if last.is_none() {
-        *last = Some(threshold);
-        drop(last);
+      let mut known = self.known.lock();
+      if *known == Known::Unread {
+        *known = Known::Asked(threshold);
+        drop(known);
         self.text.set(threshold.percent().to_string());
       }
     }
-    let state = self.save.state().get();
+    let state = self.saves.state().get();
     if let Some(saves) = SaveState::of(ctx) {
-      saves.report(ID, Outcome::of(&state));
+      saves.report(ID, self.saves.outcome(&state));
     }
     let field = FieldInput::new(
       format!("{ID}-value"),
@@ -135,7 +152,7 @@ impl Component for ThresholdRow {
     } else if let Some(reason) = read
       .error
       .as_ref()
-      .or(state.error.as_ref().filter(|_| !state.is_pending()))
+      .or(state.error.as_ref().filter(|_| !self.saves.busy(&state)))
     {
       let key = if read.error.is_some() {
         "settings.general.threshold.unreadable"

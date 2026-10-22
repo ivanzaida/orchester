@@ -108,6 +108,52 @@ fn settings_general_saves_the_warning_threshold_for_every_project() {
 }
 
 #[test]
+fn settings_general_stores_the_last_threshold_typed_quickly() {
+  let mut window = general();
+  let workspace = window.launch.workspace().expect("the session started").clone();
+  window.until("the stored threshold in the field", |window| {
+    window
+      .tree
+      .get_element_by_id_mut("settings-threshold-value")
+      .and_then(|element| element.as_text_input())
+      .is_some_and(|input| input.value() == "80")
+  });
+  for typed in ["7", "75", "7", "75", "6", "65"] {
+    window.set("settings-threshold-value", typed);
+  }
+  window.until("the saves to settle", |window| {
+    window.text("settings-save-state") == "All changes saved"
+  });
+  assert_eq!(
+    workspace
+      .usage_warning_threshold()
+      .expect("the threshold reads")
+      .percent(),
+    65,
+    "the value shown is the value stored"
+  );
+}
+
+#[test]
+fn settings_general_keeps_the_last_theme_pressed_quickly() {
+  let mut window = general();
+  let workspace = window.launch.workspace().expect("the session started").clone();
+  for theme in ["light", "dark", "system", "light"] {
+    window.press(&format!("settings-theme-{theme}"));
+  }
+  window.until("the saves to settle", |window| {
+    window.text("settings-save-state") == "All changes saved"
+  });
+  assert_eq!(workspace.theme().expect("the theme reads"), ThemeSetting::Light);
+  let appearance = window.link.appearance().expect("the window has its appearance");
+  assert_eq!(
+    appearance.setting(),
+    ThemeSetting::Light,
+    "the window has what is stored"
+  );
+}
+
+#[test]
 fn settings_general_opens_from_its_tab_and_the_save_state_leaves_on_accounts() {
   let mut window = Window::open();
   window.navigation().go(Route::Settings);

@@ -363,11 +363,17 @@ fn window_control_settings_show_the_next_start_and_what_this_run_has() {
   );
   assert!(!McpSettings::next_start(Some(false)));
   let started_on = McpSettings::with_window_control(true);
-  assert_eq!(started_on.this_run(true), ThisRun::AsStarted);
+  assert_eq!(started_on.this_run(true), ThisRun::AsBuilt);
   assert_eq!(
     started_on.this_run(false),
     ThisRun::NextStart(false),
     "a change applies from the next start"
+  );
+  let chosen_off = McpSettings::with_window_control(true).with_stored(Some(false));
+  assert_eq!(
+    chosen_off.this_run(false),
+    ThisRun::AsChosen(false),
+    "a stored choice is the person's, not the build's"
   );
   let by_variable = started_on.overridden_by(|name| (name == WINDOW_CONTROL_VARIABLE).then(|| "off".to_owned()));
   assert_eq!(

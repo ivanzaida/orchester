@@ -1,8 +1,8 @@
 //! *Theme* (`Row · Theme` `BDAwf` in `hUaXB`): Dark, Light or System in a segmented control (`Segmented/text`
 //! `S5Fsve`), the honest note that System keeps the appearance the operating system had when Orchester started
 //! (`Honest note` `A9YKqx`), and, when a choice could not be kept, that nothing changed (`DygwC` in `g9i0n` of
-//! `HNQBR`). The choice is kept off the UI thread through the window's [`Appearance`], which `set_theme` shares; the
-//! window takes its colors once it is kept.
+//! `HNQBR`). The choice is kept off the UI thread through the window's [`Appearance`], which `set_theme` shares, one
+//! at a time and the newest last; the window takes its colors once one is kept.
 
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ use orchester_workspace::{
 
 use crate::{
   appearance::{Appearance, AppearanceError, ThemeSetting},
-  screens::settings::save_state::{Outcome, SaveState},
+  screens::settings::{save_state::SaveState, serial::Serial},
   theme::Mode,
   ui::{
     field::field_error,
@@ -61,12 +61,12 @@ struct Chosen(Option<ThemeSetting>);
 
 impl DevtoolsInspectable for Chosen {}
 
-type KeepAction = FutureAction<ThemeSetting, Kept, NotKept>;
+type Keeps = Serial<ThemeSetting, Kept, NotKept>;
 
 pub struct ThemeRow {
   /// The window's colors, which a window without one cannot change here.
   appearance: Option<Appearance>,
-  keep: KeepAction,
+  keep: Keeps,
   /// The choice being kept, shown chosen until it is.
   chosen: Signal<Chosen>,
 }
@@ -77,7 +77,7 @@ impl Component for ThemeRow {
   fn create(ctx: &mut Ctx) -> Self {
     let appearance = ctx.use_context::<Appearance>();
     let keeper = appearance.clone();
-    let keep: KeepAction = ctx.future_action(move |setting: ThemeSetting| {
+    let action: FutureAction<ThemeSetting, Kept, NotKept> = ctx.future_action(move |setting: ThemeSetting| {
       let appearance = keeper.clone();
       async move {
         let appearance = appearance.ok_or(NotKept::NoDatabase)?;
@@ -94,6 +94,7 @@ impl Component for ThemeRow {
           })
       }
     });
+    let keep = Serial::new(ctx, action);
     // Kept off the UI thread, shown on it: the window takes the mode as soon as the choice is in the database.
     let (shower, theme) = (appearance.clone(), ctx.theme().clone());
     ctx.watch(&keep.state(), move |state| {
@@ -114,11 +115,12 @@ impl Component for ThemeRow {
     ctx.theme();
     let state = self.keep.state().get();
     if let Some(saves) = SaveState::of(ctx) {
-      saves.report(ID, Outcome::of(&state));
+      saves.report(ID, self.keep.outcome(&state));
     }
+    let busy = self.keep.busy(&state);
     let current = self.appearance.as_ref().map(Appearance::setting);
     let shown = match self.chosen.get() {
-      Chosen(Some(chosen)) if state.is_pending() => Some(chosen),
+      Chosen(Some(chosen)) if busy => Some(chosen),
       _ => current,
     };
     let control = self.control(ctx, shown);
@@ -130,10 +132,8 @@ impl Component for ThemeRow {
     );
     let problem = match (&state.error, &self.appearance) {
       (_, None) => Some(ctx.t("settings.general.theme.unavailable").to_string()),
-      (Some(NotKept::NoDatabase), _) if !state.is_pending() => {
-        Some(ctx.t("settings.general.theme.noDatabase").to_string())
-      }
-      (Some(NotKept::NotSaved(reason)), _) if !state.is_pending() => {
+      (Some(NotKept::NoDatabase), _) if !busy => Some(ctx.t("settings.general.theme.noDatabase").to_string()),
+      (Some(NotKept::NotSaved(reason)), _) if !busy => {
         let reason = message_text(ctx, reason);
         Some(
           ctx
@@ -170,7 +170,7 @@ impl ThemeRow {
         shown == Some(setting),
         move || {
           chosen.set(Chosen(Some(setting)));
-          keep.run(setting);
+          keep.save(setting);
         },
       )
     });
