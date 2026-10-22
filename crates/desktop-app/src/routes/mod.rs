@@ -2,7 +2,8 @@
 //! history keeps, so everything a person can go back to is part of it, its query included.
 //!
 //! Paths: `/` is All projects, `/add-project` Add project (`?folder=` the folder it starts with) and
-//! `/settings` the app's settings. A project's screens start at
+//! `/settings` the app's settings (`?tab=general`, `accounts` or `orchester`; Automation without one). A project's
+//! screens start at
 //! `/project/<id>`, its Overview (`?tab=` the tab of its task list), and add the screen's segment, e.g.
 //! `/project/<id>/pipelines`. The Tasks list is `/project/<id>/tasks` (`?tab=`, `?q=` the search,
 //! `?highlight=` the task a Create just added) and New task `/project/<id>/tasks/new`. A task's page is
@@ -101,6 +102,8 @@ const NEW: &str = "new";
 const EDIT: &str = "edit";
 /// The query parameter of a screen's tab.
 const TAB: &str = "tab";
+/// Settings' General tab.
+const GENERAL: &str = "general";
 /// Settings' Accounts tab.
 const ACCOUNTS: &str = "accounts";
 /// Settings' Orchester tab.
@@ -158,7 +161,10 @@ pub enum Route {
   Usage(Box<UsageQuery>),
   /// Add project, with the folder it starts with, e.g. one Open folder… found no project in.
   AddProject(Option<RouteFolder>),
+  /// Settings › Automation, where Settings opens.
   Settings,
+  /// Settings › General (`hUaXB`): the theme, the plan limits' warning threshold and this computer.
+  General,
   /// Settings › Accounts, with the account it shows and its panel.
   Accounts(AccountsView),
   /// Settings › Orchester, with the account or server it shows, or *Connect a server*.
@@ -191,7 +197,7 @@ impl Route {
     match self {
       Self::AllProjects | Self::Usage(_) => Screen::AllProjects,
       Self::AddProject(_) => Screen::AddProject,
-      Self::Settings | Self::Accounts(_) | Self::Orchester(_) | Self::Invite(_) => Screen::Settings,
+      Self::Settings | Self::General | Self::Accounts(_) | Self::Orchester(_) | Self::Invite(_) => Screen::Settings,
       Self::Project(_, page) => page.screen(),
     }
   }
@@ -209,6 +215,7 @@ impl Route {
       | Self::Usage(_)
       | Self::AddProject(_)
       | Self::Settings
+      | Self::General
       | Self::Accounts(_)
       | Self::Orchester(_)
       | Self::Invite(_) => None,
@@ -234,6 +241,7 @@ impl Route {
         &[(FOLDER, folder.as_ref().map(RouteFolder::as_str))],
       ),
       Self::Settings => format!("/{SETTINGS}"),
+      Self::General => with_query(format!("/{SETTINGS}"), &[(TAB, Some(GENERAL))]),
       Self::Accounts(view) => view.path(format!("/{SETTINGS}"), (TAB, ACCOUNTS)),
       Self::Orchester(view) => view.path(format!("/{SETTINGS}"), (TAB, ORCHESTER)),
       Self::Invite(target) => {
@@ -282,10 +290,11 @@ impl Route {
 }
 
 impl Route {
-  /// Settings at the tab its query names: Automation, Accounts with the account it shows, or Orchester.
+  /// Settings at the tab its query names: Automation, General, Accounts with the account it shows, or Orchester.
   fn settings(params: &mut Params) -> Result<Self, RouteError> {
     match params.take(TAB)?.as_deref() {
       None => Ok(Self::Settings),
+      Some(GENERAL) => Ok(Self::General),
       Some(ACCOUNTS) => AccountsView::take(params).map(Self::Accounts),
       Some(ORCHESTER) => OrchesterView::take(params).map(Self::Orchester),
       Some(other) => Err(RouteError::InvalidParam {

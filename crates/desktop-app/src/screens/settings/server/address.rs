@@ -22,6 +22,7 @@ use orchester_core::app_mcp::McpPort;
 use super::{Change, change, enabled::refused, outcome, port_text};
 use crate::{
   mcp::{AppMcp, ServerState, endpoint},
+  screens::settings::save_state::{Outcome, SaveState},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -79,6 +80,9 @@ impl Component for AddressRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let action: Change<McpPort> = change(ctx, props.server.clone(), AppMcp::use_port);
+    if let Some(saves) = SaveState::of(ctx) {
+      saves.report("settings-mcp-port", Outcome::of(&action.state().get()));
+    }
     // The field follows the stored port whenever it changes, e.g. once it is first read.
     let stored = props.port.map(McpPort::get);
     if self.seeded.get() != stored {

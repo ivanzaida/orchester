@@ -50,7 +50,7 @@ pub fn tool(link: WindowLink) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, accounts, orchester, connect; \
+    "The screen's tab, the one it opens on when left out: settings automation, general, accounts, orchester, connect; \
      overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
@@ -351,11 +351,12 @@ fn tab<T: Default>(
   })
 }
 
-/// Settings at its `tab`: automation (the default), accounts, orchester, or connect (*Connect a server*).
+/// Settings at its `tab`: automation (the default), general, accounts, orchester, or connect (*Connect a server*).
 fn settings(args: &Map<String, Value>) -> Result<Route, ToolError> {
-  const TABS: [&str; 4] = ["automation", "accounts", "orchester", "connect"];
+  const TABS: [&str; 5] = ["automation", "general", "accounts", "orchester", "connect"];
   match string(args, "tab")? {
     None | Some("automation") => Ok(Route::Settings),
+    Some("general") => Ok(Route::General),
     Some("accounts") => Ok(Route::Accounts(AccountsView::default())),
     Some("orchester") => Ok(Route::Orchester(OrchesterView::default())),
     Some("connect") => Ok(Route::Orchester(OrchesterView::connect())),

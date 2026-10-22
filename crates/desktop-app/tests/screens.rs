@@ -1,5 +1,5 @@
 //! Every route's path shows its screen's own element, `screen-<name>`: an honest placeholder until the
-//! screen is built (`BUILT`; Settings, built in part, is `tests/settings.rs`). A path that names nothing shows
+//! screen is built (`BUILT`; Settings is `tests/settings`). A path that names nothing shows
 //! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
 //! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
 //! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
@@ -22,8 +22,9 @@ use lurq::{
 };
 use orchester_app::{
   i18n,
-  mcp::{McpKind, McpLink, McpSettings, McpStatus},
+  mcp::{InputGate, McpKind, McpLink, McpSettings, McpStatus},
   navigation::{Navigation, tabs::TabSet},
+  notifications::{Chosen, NotificationPrefs},
   project::{ProjectState, Projects},
   root::Start,
   routes::{
@@ -76,6 +77,7 @@ const BUILT: &[Screen] = &[
   Screen::ProjectSettings,
   Screen::PullRequests,
   Screen::Secrets,
+  Screen::Settings,
   Screen::Skills,
   Screen::Tasks,
   Screen::Tools,
@@ -107,6 +109,8 @@ struct ScreensRoot {
   projects: Projects,
   needs_you: PanelOpen,
   links: ChatLinks,
+  gate: InputGate,
+  notifications: NotificationPrefs,
 }
 
 impl Component for ScreensRoot {
@@ -127,6 +131,8 @@ impl Component for ScreensRoot {
       ),
       needs_you: PanelOpen::new(ctx.signal(false)),
       links,
+      gate: InputGate::default(),
+      notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
     }
   }
 
@@ -136,6 +142,10 @@ impl Component for ScreensRoot {
       McpKind::Installation,
       McpSettings::of_build(),
     )));
+    // Settings' person-only rows mark themselves on the window's gate, and its notification rows show the window's
+    // choices.
+    ctx.provide(self.gate.clone());
+    ctx.provide(self.notifications.clone());
     ctx.provide(self.navigation.clone());
     ctx.provide(self.projects.clone());
     ctx.provide(self.needs_you.clone());
@@ -238,6 +248,18 @@ fn key(key: &str) -> orchester_core::project::TaskKey {
   key.parse().expect("a task key")
 }
 
+/// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`.
+fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
+  [
+    Route::AllProjects,
+    Route::AddProject(None),
+    Route::Settings,
+    Route::General,
+  ]
+  .map(|route| (route, Vec::new()))
+  .to_vec()
+}
+
 /// A route of every screen, with what it shows: a placeholder's title and that it is not built, or what
 /// a built screen shows first.
 fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
@@ -246,8 +268,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   ));
   let placeholder = |title| vec![title, NOT_BUILT];
   let pull_request = NonZeroU64::new(142).expect("a pull request number");
-  // Settings is built in part; `tests/settings.rs` shows it.
-  let mut all = vec![(Route::AllProjects, Vec::new()), (Route::AddProject(None), Vec::new())];
+  let mut all = home_screens();
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (
@@ -344,7 +365,7 @@ fn screens_each_route_mounts_its_own_placeholder() {
   let routes = every_screen();
   for screen in Screen::ALL {
     assert!(
-      screen == Screen::Settings || routes.iter().any(|(route, _)| route.screen() == screen),
+      routes.iter().any(|(route, _)| route.screen() == screen),
       "{screen:?} is covered"
     );
   }

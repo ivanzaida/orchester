@@ -24,6 +24,7 @@ use orchester_workspace::{
 use super::{
   automation::row,
   notifications::{TIME_WIDTH, clock, minute, show, time_options},
+  save_state::{Outcome, SaveState},
 };
 use crate::{
   services::Services,
@@ -66,7 +67,11 @@ impl Component for DailyReportSection {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let save = save_action(ctx);
-    let failed = save.state().get().error;
+    let state = save.state().get();
+    if let Some(saves) = SaveState::of(ctx) {
+      saves.report(ID, Outcome::of(&state));
+    }
+    let failed = state.error;
     let read = stored(ctx);
     if self.shown.get_untracked().is_none()
       && let Some(Setting(stored)) = read.data
