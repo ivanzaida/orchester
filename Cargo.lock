@@ -2587,9 +2587,9 @@ dependencies = [
 
 [[package]]
 name = "lurq"
-version = "0.49.1"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab82b1e919042c15045fcf2c6908b2f42d0c7de542c5b30ac917f8a33705a19"
+checksum = "3261f2ad0e9870fe08ffe01f8e3e0efab6a8cfa77182c2a081f5de58594d1d46"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -3356,7 +3356,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
- "lurq 0.49.1",
+ "lurq 0.50.0",
  "objc2 0.6.4",
  "objc2-foundation 0.3.2",
  "orchester-api",
@@ -3606,7 +3606,7 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "lurq 0.42.0",
- "lurq 0.49.1",
+ "lurq 0.50.0",
  "orchester-api",
  "orchester-core",
  "orchester-exec",
