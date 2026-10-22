@@ -266,10 +266,5 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     tab(TaskTab::Artifacts, ctx.t(TaskTab::Artifacts.title_key())),
     tab(TaskTab::Memory, memory),
   ];
-  let tabs = if props.tab == TaskTab::LocalIntegration {
-    tabs.into_iter().take(5).collect()
-  } else {
-    tabs
-  };
   page_tabs(ctx, "task-tabs", tabs).into()
 }

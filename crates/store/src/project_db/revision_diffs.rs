@@ -13,21 +13,16 @@ impl RevisionDiffStore for ProjectDb {
   type Error = StoreError;
 
   fn save_revision_diff(&mut self, diff: &RevisionDiff) -> Result<(), StoreError> {
+    let blob = blobs::write(&self.directory, diff.text.as_bytes())?;
     let transaction = self.connection.transaction()?;
-    let blob = blobs::put(
-      &transaction,
-      &self.directory,
-      DIFF_MEDIA_TYPE,
-      diff.text.as_bytes(),
-      diff.read_at,
-    )?;
+    blob.record(&transaction, DIFF_MEDIA_TYPE, diff.read_at)?;
     transaction.execute(
       "INSERT INTO revision_diffs (base_sha, head_sha, diff_blob, read_at) VALUES (?1, ?2, ?3, ?4) \
        ON CONFLICT (base_sha, head_sha) DO UPDATE SET diff_blob = excluded.diff_blob, read_at = excluded.read_at",
       params![
         diff.base.as_str(),
         diff.head.as_str(),
-        blob.as_str(),
+        blob.hash.as_str(),
         diff.read_at.unix_millis()
       ],
     )?;
