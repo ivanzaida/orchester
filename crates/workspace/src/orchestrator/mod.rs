@@ -4,6 +4,7 @@
 //! project's agents and the ends of its runs it follows, and the project's daily report. The project's runner runs
 //! the agent; the app serves its tools.
 
+pub mod auto_merge;
 mod blocked;
 mod change;
 pub mod chat;
@@ -19,6 +20,7 @@ pub mod repository;
 mod run_ends;
 pub mod send;
 pub mod settings;
+mod told;
 pub mod tools;
 pub mod waits;
 mod widening;

@@ -8,7 +8,8 @@
 use orchester_core::{
   id::{ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, Continuing, EntryKind, RunEnd, StopReason, WaitKind,
+    ActionOutcome, AgentWait, ChatAction, ChatEntry, Continuing, EntryKind, MergeLeft, Merging, RunEnd, StopReason,
+    WaitKind,
     change::{Change, ContinueChoice, MessageThen, ProposedChange, StepName},
     instructions::{system_prompt, wait_prompt},
     wait::raised_by_own,
@@ -36,6 +37,7 @@ fn ended(run: RunId, end: RunEnd) -> AgentWait {
     own: false,
     automatic: false,
     continuing: None,
+    merging: None,
   }
 }
 
@@ -376,4 +378,63 @@ fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
   ] {
     assert!(prompt.contains(rule), "the system prompt says: {rule}");
   }
+}
+
+#[test]
+fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the_person() {
+  let run = RunId::generate();
+  let merging = AgentWait {
+    automatic: true,
+    merging: Some(Merging::Merges),
+    ..ended(run, RunEnd::Succeeded)
+  };
+  let prompt = wait_prompt(&merging);
+  for part in [
+    "Let the Orchestrator merge finished runs on its own",
+    "merge this run once with merge_run (run #3)",
+    "propose continue_run with resolve_conflicts for this run",
+    "do not call merge_run again",
+    "needs_decision or scoped_integration_required",
+    "leave the merge to them",
+  ] {
+    assert!(prompt.contains(part), "{part} in {prompt}");
+  }
+  assert!(
+    !prompt.contains("Never merge a run nobody asked you to merge"),
+    "{prompt}"
+  );
+  let left = AgentWait {
+    merging: Some(Merging::Left {
+      why: MergeLeft::BlockedByTasks {
+        tasks: vec!["KON-3".to_owned(), "KON-4".to_owned()],
+      },
+    }),
+    ..merging.clone()
+  };
+  let prompt = wait_prompt(&left);
+  for part in [
+    "this run is left to them: unfinished tasks block its task (KON-3, KON-4)",
+    "Do not merge it",
+    "why it was not merged on its own",
+    "Start, resume, cancel, continue or merge nothing",
+  ] {
+    assert!(prompt.contains(part), "{part} in {prompt}");
+  }
+  let opted_out = AgentWait {
+    merging: Some(Merging::Left {
+      why: MergeLeft::OptedOut,
+    }),
+    ..merging
+  };
+  assert!(
+    wait_prompt(&opted_out).contains("its task says Don't merge automatically"),
+    "{}",
+    wait_prompt(&opted_out)
+  );
+  let system = system_prompt("Kontur", ProjectId::generate());
+  assert!(
+    system
+      .contains("with one exception: when the person turned on Let the Orchestrator merge finished runs on its own"),
+    "{system}"
+  );
 }

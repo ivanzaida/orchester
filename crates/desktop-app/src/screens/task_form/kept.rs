@@ -242,6 +242,7 @@ fn encode_values(values: &Values) -> Value {
     "budget": values.budget,
     "time_limit": values.time_limit,
     "points": values.points.map(StoryPoints::get),
+    "no_automatic_merge": values.no_automatic_merge,
   })
 }
 
@@ -273,6 +274,11 @@ fn decode_values(value: &Value) -> Option<Values> {
     None | Some(Value::Null) => None,
     Some(points) => Some(StoryPoints::new(u32::try_from(points.as_u64()?).ok()?).ok()?),
   };
+  // Edits kept before the form had *Don't merge automatically* did not change it.
+  let no_automatic_merge = match value.get("no_automatic_merge") {
+    None => false,
+    Some(flag) => flag.as_bool()?,
+  };
   Some(Values {
     title: text("title")?,
     brief: text("brief")?,
@@ -281,6 +287,7 @@ fn decode_values(value: &Value) -> Option<Values> {
     budget: text("budget")?,
     time_limit: text("time_limit")?,
     points,
+    no_automatic_merge,
   })
 }
 

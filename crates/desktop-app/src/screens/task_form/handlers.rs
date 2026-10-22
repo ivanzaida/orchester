@@ -48,6 +48,11 @@ impl TaskForm {
       .as_ref()
       .and_then(|base| Some((base.task.clone()?, base.revision?, base.values.clone())));
     let separator = props.separator.clone();
+    let organization = made_on
+      .as_ref()
+      .map_or_else(TaskOrganization::default, |(task, ..)| task.organization().clone());
+    let base_values = base.map(|base| base.values).unwrap_or_default();
+    let edited = view.values.organization(&base_values, &organization);
     let args = view.ready.clone().map(|details| SaveArgs {
       repo_root: props.project.open.repo_root.clone(),
       // On the version the edits were made on: a change made meanwhile is met, never overwritten.
@@ -60,9 +65,7 @@ impl TaskForm {
         .as_ref()
         .and_then(|(_, _, values)| values.task_form(&separator).details().ok()),
       details,
-      organization: made_on
-        .as_ref()
-        .map_or_else(TaskOrganization::default, |(task, ..)| task.organization().clone()),
+      organization: (organization.clone(), edited.clone()),
       points: view.values.points,
       module: view.module,
     });
@@ -112,12 +115,15 @@ impl TaskForm {
     let conflict = view.conflict.as_ref()?;
     let details = conflict.resolved(&view.choices)?;
     let current = &conflict.0.current;
+    let base_values = self.base.get_untracked().map(|base| base.values).unwrap_or_default();
+    let organization = current.organization().clone();
+    let edited = view.values.organization(&base_values, &organization);
     let args = SaveArgs {
       repo_root: props.project.open.repo_root.clone(),
       target: SaveTarget::Task(current.id(), current.revision()),
       base: Some(current.details().clone()),
       details,
-      organization: current.organization().clone(),
+      organization: (organization, edited),
       points: view.values.points,
       module: view.module,
     };

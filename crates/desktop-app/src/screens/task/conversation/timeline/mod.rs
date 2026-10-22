@@ -32,7 +32,7 @@ use orchester_core::{
   run::{DecidedBy, DecidedToolApproval, PendingToolApproval, ToolApprovalDecision},
 };
 use orchester_workspace::tasks::{
-  conversation::orchestrator::Proposal,
+  conversation::orchestrator::{ChatMerge, Proposal},
   detail::TaskDetail,
   timeline::{
     Item, ItemKind,
@@ -78,6 +78,8 @@ pub(super) struct Timeline {
   /// The run's tool requests that wait for the person, and those decided.
   pub(super) pending: Arc<Vec<PendingToolApproval>>,
   pub(super) decided: Arc<Vec<DecidedToolApproval>>,
+  /// The Orchestrator chat's merge of the run, when it carried one out (ORC-69).
+  pub(super) merged_by: Option<ChatMerge>,
 }
 
 impl Timeline {

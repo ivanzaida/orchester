@@ -10,6 +10,8 @@
 
 #[path = "shared_projects/automation.rs"]
 mod automation;
+#[path = "shared_projects/merging.rs"]
+mod merging;
 #[path = "server_support/mod.rs"]
 mod server_support;
 #[path = "sharing_support/project.rs"]

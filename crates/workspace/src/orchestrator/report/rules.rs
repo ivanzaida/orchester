@@ -2,7 +2,8 @@
 //! whether the day had any activity, and which days' reports are due. Nothing here reads the database or invents a
 //! fact: a run is told as it stands in its record, an action as its entry kept it.
 //!
-//! - *Merged*: the tasks whose run Orchester merged that day, in the order they were merged.
+//! - *Merged*: the tasks whose run Orchester merged that day, in the order they were merged, each with who merged it:
+//!   the Orchestrator chat when it carried the merge out itself (on its own, ORC-69, or as asked), else a person.
 //! - *Ready*, *stopped*, *at work*: each task's latest run as it stands when the report is read: succeeded and not
 //!   merged; failed, stopped at a limit, waiting for a decision or interrupted, with how; or running. A pause the
 //!   person asked for and a cancel are neither.
@@ -15,11 +16,11 @@
 
 use chrono::{Days, NaiveDate};
 use orchester_core::{
-  id::{ChatId, ProjectId},
+  id::{ChatId, ProjectId, RunId},
   orchestrator::{
     ActionOutcome, ChatAction, DailyReport, EntryKind, ReportSchedule, RunEnd, StopReason,
     change::{Change, Publishing, StepName},
-    report::{ActionWay, MergedTask, ReportAction, ReportRun, ReportTask, StoppedRun},
+    report::{ActionWay, MergedBy, MergedTask, ReportAction, ReportRun, ReportTask, StoppedRun},
   },
   project::TaskKey,
   run::{PauseReason, Run, RunStatus},
@@ -34,6 +35,7 @@ use super::{
 };
 use crate::{
   links::{Link, TaskPage},
+  notifications::merged_by_chat,
   orchestrator::run_ends::stopped_step,
 };
 
@@ -140,7 +142,7 @@ fn report_task(project: ProjectId, task: &Task) -> ReportTask {
   }
 }
 
-/// The tasks whose run Orchester merged on `day`, in the order they were merged.
+/// The tasks whose run Orchester merged on `day`, in the order they were merged, each with who merged it.
 fn merged(facts: &DayFacts, project: ProjectId, day: Day) -> Vec<MergedTask> {
   let mut merged: Vec<MergedTask> = facts
     .tasks
@@ -158,12 +160,34 @@ fn merged(facts: &DayFacts, project: ProjectId, day: Day) -> Vec<MergedTask> {
             number: run.number().get(),
             at: merge.merged_at,
             link: Link::Task(project, task.task.key().clone(), TaskPage::Summary).path(),
+            by: merged_by(facts, run.id()),
           })
         })
     })
     .collect();
   merged.sort_by_key(|task| task.at);
   merged
+}
+
+/// Who merged `run`: the Orchestrator chat when it carried out a merge of it itself (on its own, ORC-69, or as the
+/// person asked it), else a person, on the task's page or applying the chat's proposal.
+fn merged_by(facts: &DayFacts, run: RunId) -> MergedBy {
+  let chats = facts.chats.iter().flat_map(|(_, entries)| entries);
+  let merge = chats.filter_map(|entry| match &entry.kind {
+    EntryKind::Action(action) => Some(action),
+    _ => None,
+  });
+  merge
+    .filter(|action| merged_by_chat(action) == Some(run))
+    .map(|action| {
+      if action.on_its_own {
+        MergedBy::OrchestratorOnItsOwn
+      } else {
+        MergedBy::Orchestrator
+      }
+    })
+    .next_back()
+    .unwrap_or_default()
 }
 
 /// What the Orchestrator did on `day`, itself or applied by the person, in the order it was done.

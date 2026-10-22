@@ -200,6 +200,28 @@ fn organization_rebase_keeps_changes_made_meanwhile() {
   assert_eq!(saved.dependencies(), [link(second)]);
 }
 
+/// *Don't merge automatically* (ORC-69) is kept with the organization, off for organizations stored before it, and a
+/// form's save keeps it as stored unless the person changed it.
+#[test]
+fn organization_no_automatic_merge_is_kept_and_rebased() {
+  let base = TaskOrganization::default();
+  assert!(!base.no_automatic_merge(), "off until set");
+  let opted_out = base.clone().with_no_automatic_merge(true);
+  let json = serde_json::to_string(&opted_out).expect("stored");
+  let read: TaskOrganization = serde_json::from_str(&json).expect("read");
+  assert!(read.no_automatic_merge());
+  let before = r#"{"status":"Todo","priority":"None","blocked_reason":null,"dependencies":[],"tags":[]}"#;
+  let old: TaskOrganization = serde_json::from_str(before).expect("an organization stored before the flag");
+  assert!(!old.no_automatic_merge());
+  // Set meanwhile elsewhere (update_task), left as it was in the form: it stays set.
+  assert!(base.rebase(&base, &opted_out).no_automatic_merge());
+  // Set by the person in the form while something else changed meanwhile.
+  let current = base.clone().with_priority(Priority::High);
+  let saved = opted_out.rebase(&base, &current);
+  assert!(saved.no_automatic_merge());
+  assert_eq!(saved.priority(), Priority::High);
+}
+
 /// The hold and the refusal a blocked task causes cross the runner's IPC as JSON.
 #[test]
 fn organization_blocked_hold_and_refusal_round_trip() {

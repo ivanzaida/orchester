@@ -69,6 +69,13 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
+      "mergeFinished": {
+        "title": "Let the Orchestrator merge finished runs on its own",
+        "description": "When a task's run succeeds, the Orchestrator's chat merges it without your click: only the task's latest run whose every step passed (a step you accepted as it was counts, one automation accepted does not), never a task marked Blocked or blocked by unfinished tasks, while new starts are held, or for a task that says Don't merge automatically, and only when the main checkout needs no local integration. It tries each run once, one at a time in the order they finished; conflicts it proposes to send back to an agent, anything else it leaves to you. Needs Let the Orchestrator merge runs and Let the Orchestrator answer agents on too. Off: it tells you a run is ready and the merge stays yours. Only you can change this, here in the window.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
       "continueInterrupted": {
         "title": "Let the Orchestrator continue interrupted runs",
         "description": "Lets the Orchestrator's chat continue a run that a crash, the runner going away or quitting the app interrupted, from its last checkpoint, without your Continue. With Let the Orchestrator answer agents also on, it continues such a run once when it is interrupted, but leaves one interrupted again within 10 minutes to you. Off: continuing stays yours, on the task's Summary. Runs stopped at a limit, runs you canceled and runs whose worktree is gone stay yours. Only you can change this, here in the window.",

@@ -114,14 +114,16 @@ impl Component for ChangeCard {
     let Words {
       glyph,
       title,
-      auto_mode,
+      chip,
       state,
       effect,
       accept,
       person_only,
     } = words::words(ctx, &view);
-    let chip =
-      auto_mode.then(|| TagChip::new(format!("{id}-auto-mode"), ctx.t("orchestrator.change.start.autoMode")).into());
+    let chip = chip.map(|chip| {
+      let (suffix, words) = chip.parts();
+      TagChip::new(format!("{id}-{suffix}"), ctx.t(words)).into()
+    });
     let head = card::head(id, (glyph, &title), chip, state);
     let (facts, diff): (Option<Column>, Option<Element>) =
       match view.action.change.as_ref().map(|change| &change.change) {
@@ -152,6 +154,7 @@ impl Component for ChangeCard {
       _ => None,
     };
     card::frame(id, view.phase().name())
+      .describe("on_its_own", props.action.on_its_own.to_string())
       .child(head)
       .with_children(facts)
       .with_children(diff)

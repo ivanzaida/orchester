@@ -13,6 +13,7 @@ mod harness;
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod merging;
 #[path = "../support/mod.rs"]
 mod support;
 mod versions;
