@@ -98,8 +98,8 @@ pub struct ProjectChanges {
   pub remote_hint: Option<String>,
 }
 
-/// `POST /projects/{id}/link`: a checkout linked to the project uploads its tasks and its modules. Into a project with no
-/// tasks they keep their numbers; otherwise they are imported with new ones.
+/// `POST /projects/{id}/link`: a checkout linked to the project uploads its tasks and its modules. Into a project with
+/// no tasks they keep their numbers; otherwise they are imported with new ones.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectLink {

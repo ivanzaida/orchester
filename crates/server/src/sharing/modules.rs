@@ -1,7 +1,7 @@
-//! A shared project's modules (`docs/architecture/server.md`, "Modules"): core's module rules (`orchester_core::module`)
-//! over the project's modules, each under a revision; names are unique in the project without regard to case. Which
-//! module a task is in is a field of the task, and every move is kept (`module_changes`) for each desktop's burndown.
-//! A module create or change is answered once per idempotency key.
+//! A shared project's modules (`docs/architecture/server.md`, "Modules"): core's module rules
+//! (`orchester_core::module`) over the project's modules, each under a revision; names are unique in the project
+//! without regard to case. Which module a task is in is a field of the task, and every move is kept (`module_changes`)
+//! for each desktop's burndown. A module create or change is answered once per idempotency key.
 
 use std::collections::HashMap;
 
