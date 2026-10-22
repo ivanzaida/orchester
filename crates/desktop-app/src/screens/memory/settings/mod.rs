@@ -3,7 +3,7 @@
 //! project memory, each a choice of two cards that saves when chosen; how many records and tokens each agent
 //! invocation gets, saved when its field is left; and its save state at the end of its note, worded as Project
 //! settings words it. A save rebases what it changed onto the stored settings (`memory::settings::save_in`), and the
-//! page reads its memory again after it.
+//! page reads its memory again after it. Only a person saves: an MCP client's window input is refused.
 
 mod form;
 
@@ -13,6 +13,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -78,6 +79,8 @@ pub struct SettingsTab {
   seen: Signal<Option<Kept>>,
   /// The settings the running save asked for.
   submitted: Signal<Option<Kept>>,
+  /// Synthetic input asked for the last save, which was not taken.
+  refused: Signal<bool>,
   save: Save,
   separator: Arc<str>,
 }
@@ -92,6 +95,7 @@ impl Component for SettingsTab {
       base: ctx.signal(None),
       seen: ctx.signal(None),
       submitted: ctx.signal(None),
+      refused: ctx.signal(false),
       save: action(ctx),
       separator: ctx.t("memory.groupSeparator"),
     };
@@ -216,8 +220,17 @@ impl SettingsTab {
     self.submit(repo, base, asked);
   }
 
+  /// Saves `asked` over `base`. Called in a handler: only a person changes these settings, as they decide whether
+  /// agents' records reach every later agent without approval and how much each agent gets. lurq's synthetic input
+  /// (an MCP client driving the window) is refused, and the tab says so under its head.
   fn submit(&self, repo: PathBuf, base: MemorySettings, asked: MemorySettings) {
     if asked == base || self.save.state().get_untracked().is_pending() {
+      return;
+    }
+    let synthetic = is_synthetic_input();
+    self.refused.set(synthetic);
+    if synthetic {
+      tracing::warn!("synthetic input asked to change the memory settings; not taken");
       return;
     }
     self.submitted.set(Some(Kept(asked)));

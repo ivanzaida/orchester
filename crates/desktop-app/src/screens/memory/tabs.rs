@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_core::{id::ProjectId, memory::Memory};
+use orchester_core::id::ProjectId;
 use orchester_workspace::memory::{listing::StatusFilter, read::ProjectMemory};
 
 use crate::{
@@ -105,7 +105,7 @@ pub fn strip(ctx: &mut Ctx, project: ProjectId, (memory, order): (&ProjectMemory
   let navigation = Navigation::of(ctx);
   let tab = |ctx: &Ctx, tab: MemoryTab| {
     let id = format!("memory-tab-{}", tab.name());
-    let count = count(tab, memory);
+    let count = statuses(tab).map_or(0, |status| memory.count(status));
     let label = match tab {
       MemoryTab::Waiting | MemoryTab::Settings => name(ctx, tab),
       _ if count == 0 => name(ctx, tab),

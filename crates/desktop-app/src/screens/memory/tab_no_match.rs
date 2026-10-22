@@ -28,7 +28,7 @@ pub fn tab_no_match(
   (memory, tab, order): (&ProjectMemory, MemoryTab, tabs::Order),
   filters: &Filters,
 ) -> Element {
-  let records = tabs::pool(tab, memory);
+  let records = memory.pool(filters.status);
   let mut empty = Centered::new(
     "memory-no-match",
     Icon::SearchX,
@@ -99,11 +99,14 @@ fn title(ctx: &Ctx, tab: MemoryTab, filters: &Filters) -> Arc<str> {
       ],
     ),
     (false, None) => {
-      let status = tabs::name(ctx, tab).to_lowercase();
-      ctx.t_args(
-        "memory.noMatch.statusSearch",
-        [("status", status.as_str()), ("query", query)],
-      )
+      let key = match tab {
+        MemoryTab::Waiting => "memory.noMatch.tabSearch.waiting",
+        MemoryTab::Active => "memory.noMatch.tabSearch.active",
+        MemoryTab::Deprecated => "memory.noMatch.tabSearch.deprecated",
+        MemoryTab::Superseded => "memory.noMatch.tabSearch.superseded",
+        MemoryTab::Rejected | MemoryTab::Settings => "memory.noMatch.tabSearch.rejected",
+      };
+      ctx.t_args(key, [("query", query)])
     }
     (true, _) => ctx.t("memory.noMatch.filters"),
   }
@@ -122,7 +125,7 @@ fn elsewhere(memory: &ProjectMemory, tab: MemoryTab, order: tabs::Order, filters
         status,
         ..filters.clone()
       };
-      let count = listing::shown(tabs::pool(other, memory), &in_other);
+      let count = listing::shown(memory.pool(status), &in_other);
       (count > 0).then_some((other, count))
     })
     .collect()

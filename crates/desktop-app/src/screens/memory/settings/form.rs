@@ -29,6 +29,7 @@ use crate::{
     message::message_text,
     notice::{Notice, NoticeTone},
     option_card::OptionCard,
+    tinted_note::person_only,
   },
 };
 
@@ -158,8 +159,14 @@ fn head(ctx: &Ctx, status: Status, project: &str) -> Row {
     )
 }
 
-/// Why the last save did nothing, under the head.
+/// Why the last save did nothing, under the head: synthetic input asked for it, or it failed.
 fn failure(ctx: &Ctx, tab: &SettingsTab) -> Option<Row> {
+  if tab.refused.get() {
+    return Some(person_only(
+      "memory-settings-person-only",
+      &ctx.t("memory.settings.personOnly"),
+    ));
+  }
   let state = tab.save.state().get();
   if state.is_pending() {
     return None;

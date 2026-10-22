@@ -60,7 +60,8 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
   let Some(statuses) = tabs::statuses(tab) else {
     return column;
   };
-  let listed: Vec<Memory> = tabs::pool(tab, memory)
+  let listed: Vec<Memory> = memory
+    .pool(statuses)
     .iter()
     .filter(|record| statuses.shows(record.status()))
     .cloned()

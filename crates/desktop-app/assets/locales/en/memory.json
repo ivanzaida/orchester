@@ -72,7 +72,8 @@
       "savingNow": "Saving…",
       "unsaved": "Changes not saved",
       "invalid": "Not saved · fix the marked field",
-      "failed": "Not saved · Orchester couldn't write the settings"
+      "failed": "Not saved · Orchester couldn't write the settings",
+      "personOnly": "Only a person changes these settings: input from an MCP client is refused, as they decide what reaches every later agent. Clients can still read this page."
     },
     "latestHandoff": "Latest · given to every agent",
     "separator": " · ",
@@ -218,7 +219,13 @@
     },
     "noMatch": {
       "search": "No records match “{{query}}”",
-      "statusSearch": "No {{status}} records match “{{query}}”",
+      "tabSearch": {
+        "waiting": "No records waiting for approval match “{{query}}”",
+        "active": "No active records match “{{query}}”",
+        "deprecated": "No deprecated records match “{{query}}”",
+        "superseded": "No superseded versions match “{{query}}”",
+        "rejected": "No rejected records match “{{query}}”"
+      },
       "kindSearch": "No {{kind}} match “{{query}}”",
       "filters": "No records match these filters",
       "lexical": "Search finds words and parts of words in the text, keys and tags of records. It doesn't know synonyms, so try another word.",

@@ -1,7 +1,8 @@
 //! The project's Memory page's Settings tab (`U2teQq`) on the `memory` scenario, where both memories save agents'
 //! records after approval: a saving card saves when chosen, a limit when its field is left, and a value that is not
-//! one is said under its field and not saved.
+//! one is said under its field and not saved. Only a person saves: an MCP client's input is refused.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::MemoryTab;
 use orchester_core::memory::{MemorySettings, MemoryStore, WritePolicy};
 use orchester_store::ProjectDb;
@@ -95,4 +96,29 @@ fn memory_settings_tab_says_why_a_limit_is_not_saved() {
     "Not saved · fix the marked field"
   );
   assert_eq!(page.db().memory_settings().expect("the settings").limits.records(), 8);
+}
+
+#[test]
+fn memory_settings_tab_refuses_an_mcp_clients_input() {
+  let mut page = settings();
+  let before = page.db().memory_settings().expect("the settings");
+  assert_eq!(before.project_writes, WritePolicy::AfterApproval);
+  with_synthetic_input(|| page.window.press("memory-settings-project-automatic"));
+  page.until("the person-only note", |window| {
+    window.texts("memory-settings-person-only").is_some()
+  });
+  assert!(
+    page
+      .text("memory-settings-person-only")
+      .contains("Only a person changes these settings")
+  );
+  page.focus("memory-settings-tokens-field");
+  page.window.set("memory-settings-tokens-field", "20000");
+  with_synthetic_input(|| page.focus("memory-settings-records-field"));
+  assert_eq!(page.text("memory-settings-status-label"), "Changes not saved");
+  assert_eq!(
+    page.db().memory_settings().expect("the settings"),
+    before,
+    "neither automatic saving nor a higher limit is stored"
+  );
 }
