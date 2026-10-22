@@ -140,8 +140,9 @@ impl OrchestratorText {
 pub enum OrchestratorSpacing {
   /// 20: between the start's intro, composer and suggestions (`Start` `ktXkH`).
   Start,
-  /// 40: the settings page's sides (`Head` `b8gGj`, `Page body` `WAGD4`).
-  SettingsPage,
+  /// 40: the sides of both Orchestrator pages, their head and what is under it, as Settings' (`Head` `b8gGj`,
+  /// `Page body` `WAGD4`; the chat's `nKHIi` drew 32).
+  PageSide,
   /// 18: over a day's label in History after the first (`kPs8W`: about 30 from the row before).
   HistoryDay,
   /// 12: a labelled link's label, link and detail apart (`Link row · Task` `z7af5` in `w262B`).
@@ -149,7 +150,7 @@ pub enum OrchestratorSpacing {
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 4] = [Self::Start, Self::SettingsPage, Self::HistoryDay, Self::LinkColumns];
+  pub const ALL: [Self; 4] = [Self::Start, Self::PageSide, Self::HistoryDay, Self::LinkColumns];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -158,7 +159,7 @@ impl OrchestratorSpacing {
   const fn name(self) -> &'static str {
     match self {
       Self::Start => "orchestrator_start",
-      Self::SettingsPage => "orchestrator_settings_page",
+      Self::PageSide => "orchestrator_page_side",
       Self::HistoryDay => "orchestrator_history_day",
       Self::LinkColumns => "orchestrator_link_columns",
     }
@@ -167,7 +168,7 @@ impl OrchestratorSpacing {
   pub const fn value(self) -> f32 {
     match self {
       Self::Start => 20.0,
-      Self::SettingsPage => 40.0,
+      Self::PageSide => 40.0,
       Self::HistoryDay => 18.0,
       Self::LinkColumns => 12.0,
     }

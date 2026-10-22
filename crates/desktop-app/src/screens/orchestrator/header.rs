@@ -1,4 +1,4 @@
-//! The Orchestrator's header (`Header` `nKHIi`): 16 over, 32 at its sides and 12 under, 8 apart, over a `border`
+//! The Orchestrator's header (`Header` `nKHIi`), in the head it shares with its settings (`page`), over a `border`
 //! line: the breadcrumb, the conversation's title (20/600) with *History*, *Manage context* and *New conversation*,
 //! and the coordinator's line (`Coordinator` `CUWYM`): a 20 avatar with `waypoints`, *Orchestrator* and what it
 //! runs on, *Settings*, and at the end whether the conversation is kept and since when.
@@ -8,14 +8,14 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{orchestrator::Chat, time::Timestamp};
 use orchester_workspace::{display, orchestrator::settings::Readiness};
 
-use super::View;
+use super::{View, page::PageHead};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -72,21 +72,11 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
   };
   let history = view.history.clone();
   let start_new = new_conversation(ctx, head, &navigation);
-  let title_row = Row::new()
-    .id("orchestrator-title-row")
-    .width(Dimension::Pct(100.0))
+  let actions = Row::new()
+    .id("orchestrator-actions")
+    .flex_shrink(0.0)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(
-      Text::new(&title)
-        .id("orchestrator-title")
-        .variant(TypographyStyle::Heading)
-        .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0))
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
-    )
-    .child(Spacer::new().flex(1.0))
     .child(
       ActionButton::new("orchestrator-history", ButtonKind::Ghost, ctx.t("orchestrator.history"))
         .icon(Icon::History)
@@ -102,21 +92,10 @@ pub(super) fn header(ctx: &mut Ctx, view: &View, head: &Head<'_>) -> Element {
       .unavailable(ctx.t("orchestrator.manageContextUnavailable")),
     )
     .child(start_new);
-  Column::new()
-    .id("orchestrator-header")
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(SpacingSize::Lg)
-        .bottom(SpacingSize::Md)
-        .left(SpacingSize::Section)
-        .right(SpacingSize::Section),
-    )
-    .spacing(SpacingSize::Sm)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(crumbs)
-    .child(title_row)
-    .child(coordinator(ctx, head))
+  PageHead::new("orchestrator-header", crumbs, ("orchestrator-title", title))
+    .actions(Some(actions.into()))
+    .line(coordinator(ctx, head))
+    .ruled()
     .into()
 }
 
