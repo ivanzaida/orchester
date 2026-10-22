@@ -69,7 +69,7 @@ fn agent_step(
   Ok((Some(role), reached, permissions))
 }
 
-fn reached(db: &ProjectDb, connection: ConnectionId) -> Result<Reached, StoreError> {
+pub(super) fn reached(db: &ProjectDb, connection: ConnectionId) -> Result<Reached, StoreError> {
   let Some(connection) = db.connection(connection)? else {
     return Ok(Reached::default());
   };

@@ -69,7 +69,7 @@ fn app_mcp_token_variable_is_not_passed_to_claude() {
     let permissions = enforced(RepositoryAccess::Write, allowed(&["git"]), NetworkAccess::On, platform);
     let command = invocation(&permissions)
       .command(
-        "Do it",
+        ("Do it", &[]),
         environment.map(|(name, value)| (OsString::from(name), OsString::from(value))),
         &CommandEnvironment::default(),
       )

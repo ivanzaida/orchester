@@ -170,6 +170,50 @@ fn outgoing_before_a_run_the_message_is_for_the_first_agent_of_the_pipeline() {
 }
 
 #[test]
+fn outgoing_before_a_run_a_file_its_agent_cannot_read_is_refused_with_why() {
+  use orchester_core::{
+    attachment::{AttachmentKind, AttachmentRefusal},
+    connection::AgentProvider,
+  };
+  use orchester_workspace::{attachments::pasted, tasks::conversation::outgoing::store_answer_in};
+
+  let mut fixture = Fixture::new();
+  let task = fixture.queued_task("Add login", at(10));
+  fixture.connect_builder(AgentProvider::CodexCli);
+  let root = fixture.repo.path().to_path_buf();
+  let prepared = prepare_in(&root, (task, None), (false, None)).expect("prepared");
+  let pdf = pasted("spec.pdf", b"%PDF-1.7\n...".to_vec()).expect("a PDF");
+  let refused = store_answer_in(
+    &root,
+    &prepared,
+    (IdempotencyKey::generate(), Way::Primary),
+    ("Read the spec.", &[pdf]),
+    Answerer::Person,
+  );
+  let Err(OutgoingError::Send(SendError::Attachments(why))) = refused else {
+    panic!("a PDF for a Codex agent is refused: {refused:?}");
+  };
+  assert_eq!(why.name, "spec.pdf");
+  assert_eq!(
+    why.refusal,
+    AttachmentRefusal::NotTaken {
+      kind: AttachmentKind::Pdf,
+      by: AgentProvider::CodexCli
+    }
+  );
+  assert!(fixture.db.messages(task).expect("read").is_empty(), "nothing is kept");
+  let notes = pasted("notes.md", b"# Notes".to_vec()).expect("text");
+  store_answer_in(
+    &root,
+    &prepared,
+    (IdempotencyKey::generate(), Way::Primary),
+    ("Read the notes.", &[notes]),
+    Answerer::Person,
+  )
+  .expect("text goes to Codex");
+}
+
+#[test]
 fn outgoing_messages_that_reach_a_waiting_step_require_question_consent() {
   use orchester_core::{id::ResourceId, run::WaitReason};
   use orchester_workspace::decisions::DecisionKind;

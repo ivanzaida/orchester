@@ -40,8 +40,8 @@ struct Source {
 pub(super) struct BuiltTimeline(Mutex<Option<(Source, Built)>>);
 
 impl BuiltTimeline {
-  /// The timeline of `run`, the latest run of `detail`'s task, from `loaded` with `conversation` and the rows the person
-  /// `open`ed or folded: the one built last when it was built from the same.
+  /// The timeline of `run`, the latest run of `detail`'s task, from `loaded` with `conversation` and the rows the
+  /// person `open`ed or folded: the one built last when it was built from the same.
   pub(super) fn of(
     &self,
     (run, detail): (&RunView, &Arc<TaskDetail>),

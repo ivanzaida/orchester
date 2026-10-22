@@ -97,6 +97,26 @@ pipeline_base_moves base_moves`, `orchester-runner --features test-agent --test 
 **Open:** design verification of the editor switch and the Conversation wording (no Pencil frame of its own); the
 deprecated desktop's editor neither shows nor changes the choice (its edits change the other fields only).
 
+### D5 · Attachments in chats (ORC-57) · branch `orchester/orc-57-run-1` (implemented 2026-10-21, waiting for review and design verification)
+
+Both chats' composers (the Orchestrator's and a task's Conversation) take files: *Attach* (an rfd picker,
+`services::attachment_picker`), a paste of an image or of text over 2,000 characters (a *Pasted text.txt* chip that
+can be put back into the message), and a drop on the box, which highlights while files are over it. Chips show a
+thumbnail or kind icon, name, size and remove; an image or text chip opens a preview (`ui::attachments`). At most 10
+files a message, 20 MB each, 50 MB together; a folder, a shortcut, an empty file or another kind is refused under the
+box with why (`orchester_workspace::attachments`). A message may be files only; drafts keep their files. Kinds are told
+by content (`orchester_core::attachment`); the store keeps a copy in `.orchester/attachments/` and a row in
+`attachments` (`docs/architecture/storage.md`). Sent messages show their files through `ui::chat`; a PDF opens in the
+default program. Delivery: Claude Code as stream-json image and document blocks (the Orchestrator chat too), Codex App
+Server as image items (no PDF: refused before sending), native agents as content blocks; a kind a connection cannot
+take refuses the send with why. `send_message` and `get_conversation` carry the files' metadata, never their bytes.
+*Ask again* and *Retry* are not offered for a turn with files. Tests: `orchester-core --test attachments`,
+`orchester-store --test attachments`, `orchester-workspace --test attachments`, `orchester-runner --features test-agent
+--test attachments` and `--test native native_attachments`, `orchester-app --test composer composer_attach` /
+`composer_a_`, `orchester-app --test orchestrator attachments`.
+**Open:** no Pencil frames exist for the chips, the drop highlight, the refusals or the previews; design verification
+against the composer (`QQ2ZM`) and message (`mr4lC`) frames only. Not checked on macOS.
+
 ## A · New app (`crates/desktop-app`) — the path to developing Orchester in it
 
 Merged on 2026-10-09/10 (see *Done*): F1, T1, F2, P1, N1, P2, C1, C2, C3, D1, I1, M1, LIM, M12 and its follow-ups. Still

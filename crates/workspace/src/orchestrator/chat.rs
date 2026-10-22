@@ -1,8 +1,10 @@
-//! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries.
+//! The Orchestrator chat's conversations as the screen reads them: History's list and one conversation's entries,
+//! with the files the person attached to their messages.
 
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
+  attachment::Attachment,
   id::{ChatId, ChatMessageId},
   orchestrator::{Chat, ChatEntry, TurnState},
 };
@@ -29,6 +31,8 @@ pub fn history_in(root: &Path) -> Result<History, Message> {
 pub struct ChatView {
   pub chat: Chat,
   pub entries: Vec<ChatEntry>,
+  /// The files attached to the person's messages, by message, in the order they were attached.
+  pub attachments: BTreeMap<ChatMessageId, Vec<Attachment>>,
 }
 
 impl ChatView {
@@ -39,7 +43,19 @@ impl ChatView {
       return Ok(None);
     };
     let entries = db.chat_entries(chat).map_err(|error| messages::store_error(&error))?;
-    Ok(Some(Self { chat: found, entries }))
+    let attachments = db
+      .chat_attachments(chat)
+      .map_err(|error| messages::store_error(&error))?;
+    Ok(Some(Self {
+      chat: found,
+      entries,
+      attachments,
+    }))
+  }
+
+  /// The files attached to the person's message `message`.
+  pub fn attachments_of(&self, message: ChatMessageId) -> &[Attachment] {
+    self.attachments.get(&message).map_or(&[], Vec::as_slice)
   }
 
   /// The last turn and where it stands: a person's message's, or one a wait of an agent started by itself.

@@ -57,7 +57,7 @@ pub(super) fn control(ctx: &Ctx, view: &View, (control, number, group): (Control
   Words {
     glyph,
     title: ctx.t_args(&title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, by_you(control)),
     effect,
     accept: Some(Accept {

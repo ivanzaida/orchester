@@ -63,10 +63,19 @@ impl ProjectDb {
 
   /// The waits of every conversation that start a turn by themselves (`automatic`) and have none, oldest first.
   pub fn automatic_waits_without_turn(&self) -> Result<Vec<KeptWait>, StoreError> {
-    let mut statement = self.connection.prepare(
-      "SELECT chat_id, seq, wait_key, body FROM orchestrator_entries
-       WHERE kind = 'wait' AND message_id IS NULL AND json_extract(body, '$.automatic') = 1 ORDER BY seq",
-    )?;
+    self.kept_waits("message_id IS NULL AND json_extract(body, '$.automatic') = 1")
+  }
+
+  /// The waits of every conversation whose turn thinks now, oldest first.
+  pub fn waits_thinking(&self) -> Result<Vec<KeptWait>, StoreError> {
+    self.kept_waits("turn = 'thinking'")
+  }
+
+  /// The waits that hold for `condition`, a fixed SQL condition on their entries, oldest first.
+  fn kept_waits(&self, condition: &'static str) -> Result<Vec<KeptWait>, StoreError> {
+    let mut statement = self.connection.prepare(&format!(
+      "SELECT chat_id, seq, wait_key, body FROM orchestrator_entries WHERE kind = 'wait' AND {condition} ORDER BY seq"
+    ))?;
     let rows = statement
       .query_map([], |row| {
         Ok((

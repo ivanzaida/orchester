@@ -52,7 +52,7 @@ pub(super) fn words(ctx: &Ctx, view: &View, (branch, exists): (&str, bool)) -> W
   Words {
     glyph: Icon::GitBranchPlus,
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, "orchestrator.change.repository.byYou"),
     effect,
     accept: Some(Accept {

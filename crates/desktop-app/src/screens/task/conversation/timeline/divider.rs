@@ -4,7 +4,7 @@
 //! icon and 11/500 `text_secondary` words, 8 apart, and a link in `accent_text`): finished steps in a row
 //! folded into one (*01–04 · 4 steps done · 16:20–16:24 · Show them*, `list-collapse`), the steps a failure
 //! kept from starting, a return or restart (*Review returned the work to 03 Implement · attempt 2 · 16:31*,
-//! `corner-down-left`) and the run's end.
+//! `corner-down-left`) and the run's end, with the Orchestrator's row under a merge its chat carried out.
 
 use std::sync::Arc;
 
@@ -19,6 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   connection::{AgentProvider, EndpointPreset, EngineVendor},
+  orchestrator::{FromOrchestrator, SentWay},
   time::Timestamp,
   tokens::compact_tokens,
 };
@@ -424,8 +425,10 @@ pub(super) fn base_moved(ctx: &Ctx, key: &str, mark: &BaseMovedMark) -> Element 
   event(format!("conversation-{key}"), Icon::GitBranch, &text, None)
 }
 
-/// The run's end.
-pub(super) fn end(ctx: &Ctx, timeline: &Timeline, end: &RunEnd, at: Timestamp) -> Element {
+/// The run's end. A merge the Orchestrator chat carried out (ORC-69) has the Orchestrator's row under it: how it
+/// merged the run (on its own, as the person let it merge runs, or applied by the person) and the way back to the
+/// chat's conversation.
+pub(super) fn end(ctx: &mut Ctx, timeline: &Timeline, end: &RunEnd, at: Timestamp) -> Element {
   let (number, time) = (timeline.run_number().to_string(), display::clock(at));
   let (run, time) = (("run", number.as_str()), ("time", time.as_str()));
   let (glyph, text) = match end {
@@ -440,5 +443,31 @@ pub(super) fn end(ctx: &Ctx, timeline: &Timeline, end: &RunEnd, at: Timestamp) -
     ),
     RunEnd::Cancelled => (Icon::Square, ctx.t_args("conversation.end.cancelled", [run, time])),
   };
-  event("conversation-end".into(), glyph, &text, None)
+  let line = event("conversation-end".into(), glyph, &text, None);
+  let (RunEnd::Merged(_), Some(merged)) = (end, timeline.merged_by) else {
+    return line;
+  };
+  let how: Arc<str> = ctx.t(match (merged.on_its_own, merged.from.way) {
+    (true, _) => "conversation.end.mergedBy.onItsOwn",
+    (false, Some(SentWay::AppliedByPerson)) => "conversation.end.mergedBy.applied",
+    (false, _) => "conversation.end.mergedBy.direct",
+  });
+  // The row says how the chat merged it; its line under it only leads back to the chat's conversation.
+  let from = FromOrchestrator {
+    way: None,
+    ..merged.from
+  };
+  let under = orchestrator_note(
+    ctx,
+    "conversation-end-merged-by",
+    (timeline.project, from),
+    (Some(&how), Some(at)),
+  );
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Md)
+    .describe("on_its_own", merged.on_its_own.to_string())
+    .child(line)
+    .child(under)
+    .into()
 }

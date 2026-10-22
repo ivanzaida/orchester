@@ -36,6 +36,7 @@ use super::{
   head::{head, no_run_notice},
   kept::KeptEdits,
   limits::{LimitFields, limits_section},
+  merging::merging_section,
   module::module_section,
   plan::pipeline_section,
   points::points_section,
@@ -54,6 +55,8 @@ pub struct FormProps {
   pub missing_pipeline: Option<Arc<str>>,
   /// The project's modules, which the task may go in.
   pub modules: Arc<Vec<Module>>,
+  /// Whether the project is shared on a server, which keeps no *Don't merge automatically*.
+  pub shared: bool,
   /// The project's tasks, whose kept edits stay; those of other tasks are removed.
   pub tasks: Arc<[TaskId]>,
   /// When the task was last saved, as the project's tasks were read.
@@ -241,6 +244,12 @@ impl TaskForm {
       .with_children(module_section(ctx, view, &props.modules, &self.fields.module))
       .child(limits_section(ctx, view, &limit_fields, separator))
       .child(points_section(ctx, view, &self.fields.points))
+      .with_children(merging_section(
+        ctx,
+        view,
+        props.shared,
+        &self.fields.no_automatic_merge,
+      ))
       .child(instructions_section(ctx))
   }
 

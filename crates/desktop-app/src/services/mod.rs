@@ -30,6 +30,7 @@ use orchester_workspace::{
 use tokio::{runtime::Handle, task::JoinHandle};
 
 pub mod accounts;
+pub mod attachment_picker;
 pub mod links;
 pub mod path_picker;
 pub mod plan_limits;

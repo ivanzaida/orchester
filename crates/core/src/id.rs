@@ -170,3 +170,7 @@ define_id!(
   /// One message a person wrote in the Orchestrator chat, given when it is first sent so a retry stores it once.
   ChatMessageId
 );
+define_id!(
+  /// One file a person attached to a message (`crate::attachment`).
+  AttachmentId
+);

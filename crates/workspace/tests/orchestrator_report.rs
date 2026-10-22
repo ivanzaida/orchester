@@ -23,7 +23,8 @@ use orchester_core::{
   orchestrator::{
     ActionOutcome, Chat, ChatAction, DailyReport, EntryKind, OrchestratorSettings, ReportSchedule, ReportTime, RunEnd,
     TurnState,
-    report::{ActionWay, PersonWaitKind},
+    change::{Change, ProposedChange},
+    report::{ActionWay, MergedBy, PersonWaitKind},
   },
   resource::ModelId,
   revision::Revision,
@@ -268,6 +269,55 @@ fn report_of_a_busy_day_tells_what_was_done_and_how_the_work_stands() {
   );
 }
 
+/// The chat's merge of `run`, carried out itself, on its own when `on_its_own` (ORC-69).
+fn merged_by_chat(run: &Run, on_its_own: bool) -> ChatAction {
+  ChatAction {
+    change: Some(Box::new(ProposedChange {
+      subject: "Sign in".to_owned(),
+      change: Change::Merge {
+        run: run.id(),
+        number: run.number().get(),
+        checkpoint: Some("a".repeat(40)),
+        into: Some("main".to_owned()),
+      },
+    })),
+    on_its_own,
+    ..ChatAction::new("merge_run", None, ActionOutcome::Done)
+  }
+}
+
+#[test]
+fn report_names_the_orchestrator_as_who_merged_what_it_merged_itself() {
+  let mut fixture = Fixture::new();
+  let mut on_its_own = started(&mut fixture, "Sign in", at(8));
+  fixture.succeed(&mut on_its_own, at(9));
+  merge(&mut fixture, &on_its_own, at(10));
+  let mut asked = started(&mut fixture, "Sign out", at(8));
+  fixture.succeed(&mut asked, at(9));
+  merge(&mut fixture, &asked, at(11));
+  let mut by_person = started(&mut fixture, "Delivery log", at(8));
+  fixture.succeed(&mut by_person, at(9));
+  merge(&mut fixture, &by_person, at(12));
+  conversation(
+    &mut fixture,
+    at(8),
+    &[
+      (merged_by_chat(&on_its_own, true), at(10)),
+      (merged_by_chat(&asked, false), at(11)),
+    ],
+  );
+  let read = report(&fixture, at(18));
+  let by: Vec<(&str, MergedBy)> = read.merged.iter().map(|task| (task.task.as_str(), task.by)).collect();
+  assert_eq!(
+    by,
+    [
+      ("ORC-1", MergedBy::OrchestratorOnItsOwn),
+      ("ORC-2", MergedBy::Orchestrator),
+      ("ORC-3", MergedBy::Person),
+    ]
+  );
+}
+
 #[test]
 fn report_of_an_empty_day_is_not_delivered() {
   let mut fixture = Fixture::new();
@@ -433,7 +483,7 @@ fn report_with_answer_agents_on_starts_one_turn_that_only_proposes() {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let switches = Switches {
     answers: true,
-    continues: false,
+    ..Switches::default()
   };
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
   let project = fixture.db.project().id();

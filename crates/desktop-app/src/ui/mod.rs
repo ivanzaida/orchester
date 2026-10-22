@@ -4,6 +4,7 @@
 //! be used stays in place, visibly unavailable with a reason (`unavailable`).
 
 pub mod add_slot;
+pub mod attachments;
 pub mod avatar;
 pub mod breadcrumb;
 pub mod button;

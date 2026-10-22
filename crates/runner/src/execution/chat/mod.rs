@@ -15,7 +15,7 @@ use orchester_core::{
   orchestrator::TIME_LIMIT,
 };
 use orchester_ipc::{ChatTools, Event, Rejection};
-use orchester_store::ProjectDb;
+use orchester_store::{AttachmentOwner, ProjectDb};
 use parking_lot::Mutex;
 use tokio::{sync::oneshot, task::JoinHandle};
 
@@ -89,6 +89,9 @@ impl Scheduler {
       .ok_or(Rejection::NoOrchestrator)?;
     // The chat's tokens count toward the daily budget: a used one refuses a turn as it refuses a run.
     check_daily_budget(&db)?;
+    let attached = db
+      .attached_files(AttachmentOwner::ChatMessage(message))
+      .map_err(|error| failed("cannot read the chat message's attachments", &error))?;
     let chat = kept.chat.id();
     let mut running = self.inner.chats.running.lock();
     running.retain(|_, turn| !turn.task.is_finished());
@@ -105,6 +108,7 @@ impl Scheduler {
       chat: kept.chat,
       message,
       text: kept.text,
+      attached,
       settings,
       tools,
       time_limit: self.inner.chats.time_limit(),

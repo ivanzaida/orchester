@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use super::{
   change::Change,
   chat::{ChatAction, ChatEntry, EntryKind},
+  merging::Merging,
   resume::Continuing,
 };
 use crate::{
@@ -138,6 +139,11 @@ pub struct AgentWait {
   /// interrupted again soon. `None` otherwise: the turn only tells the person.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub continuing: Option<Continuing>,
+  /// For a run's success that starts a turn while *Let the Orchestrator merge finished runs on its own* and *merge
+  /// runs* were on too: whether that turn merges the run, or leaves it to the person and why. `None` otherwise: the
+  /// turn only tells the person.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub merging: Option<Merging>,
 }
 
 /// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,

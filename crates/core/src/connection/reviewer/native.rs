@@ -38,10 +38,7 @@ pub(super) fn one_request((system, text): (&str, String), model: &ModelId, effor
     max_output: NATIVE_MAX_OUTPUT,
     system: system.to_owned(),
     tools: ToolSet::none(),
-    items: vec![Item::User {
-      text,
-      origin: UserOrigin::Task,
-    }],
+    items: vec![Item::user(text, UserOrigin::Task)],
     cache_key: ConversationId::generate(),
   }
 }

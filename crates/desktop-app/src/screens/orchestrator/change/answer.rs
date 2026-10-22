@@ -35,7 +35,7 @@ pub(super) fn answer(ctx: &Ctx, view: &View, (number, answer): (u32, &str)) -> W
   Words {
     glyph: Icon::Reply,
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, "orchestrator.change.answer.byYou"),
     effect,
     accept: Some(Accept {
@@ -88,7 +88,7 @@ pub(super) fn message(ctx: &Ctx, view: &View, (number, text, then): (u32, &str, 
   Words {
     glyph: Icon::MessageSquareText,
     title: ctx.t_args(title, args),
-    auto_mode: false,
+    chip: None,
     state: state(ctx, view, "orchestrator.change.message.byYou"),
     effect,
     accept: Some(Accept {

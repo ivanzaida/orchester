@@ -210,11 +210,11 @@ pub(super) fn nothing_yet(ctx: &Ctx, run: &RunView) -> Element {
   )
 }
 
-/// A task of `project` without a run that can be shown: its latest run cannot be read, or it has none yet, with the
-/// messages that wait for its run to start.
+/// A task of `project` (with its folder) without a run that can be shown: its latest run cannot be read, or it has
+/// none yet, with the messages that wait for its run to start.
 pub(super) fn without_run(
   ctx: &mut Ctx,
-  (project, detail): (ProjectId, &TaskDetail),
+  (project, detail): ((ProjectId, &std::path::Path), &TaskDetail),
   conversation: &Conversation,
 ) -> Element {
   if let Some(unreadable) = &detail.latest_unreadable {

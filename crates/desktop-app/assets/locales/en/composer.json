@@ -1,6 +1,5 @@
 {
   "composer": {
-    "attach": "Attaching files is not available yet.",
     "closed": {
       "unreadable": "The latest run’s record cannot be read, so messages cannot reach its agents."
     },
