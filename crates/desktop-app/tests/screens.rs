@@ -248,6 +248,13 @@ fn key(key: &str) -> orchester_core::project::TaskKey {
   key.parse().expect("a task key")
 }
 
+/// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`.
+fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
+  [Route::AllProjects, Route::AddProject(None), Route::Settings, Route::General]
+    .map(|route| (route, Vec::new()))
+    .to_vec()
+}
+
 /// A route of every screen, with what it shows: a placeholder's title and that it is not built, or what
 /// a built screen shows first.
 fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
@@ -255,12 +262,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
   let placeholder = |title| vec![title, NOT_BUILT];
-  let mut all = vec![
-    (Route::AllProjects, Vec::new()),
-    (Route::AddProject(None), Vec::new()),
-    (Route::Settings, Vec::new()),
-    (Route::General, Vec::new()),
-  ];
+  let mut all = home_screens();
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (
