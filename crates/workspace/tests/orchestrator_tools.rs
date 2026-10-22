@@ -259,7 +259,9 @@ fn orchestrator_tools_judge_what_every_person_only_publication_widens() {
     let Some(tool) = app_tools_listed().into_iter().find(|tool| tool.name == kind.tool()) else {
       continue;
     };
-    let person_only = tool.description.as_deref().unwrap_or_default().contains("person_only");
+    let told = tool.description.as_deref().unwrap_or_default();
+    // A rule for what reaches agents' prompts is covered for the chat by Let the Orchestrator publish drafts.
+    let person_only = told.contains("person_only") && !told.contains("lets the Orchestrator publish drafts");
     assert!(
       !person_only || kind.can_widen(),
       "{} refuses what widens as person_only, so the chat must judge what its drafts widen (Publishing::can_widen \

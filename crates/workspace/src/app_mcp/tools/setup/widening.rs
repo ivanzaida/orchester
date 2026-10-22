@@ -3,7 +3,9 @@
 //! that change what programs load) is refused as `person_only` unless a person turned on *Let automation
 //! change agent permissions* in the window, or the person decided the call themselves (they applied a proposal of
 //! the Orchestrator chat, `Services::decided_by_person`): then exactly what they were shown widens is taken, and
-//! anything else is refused. No tool changes that switch.
+//! anything else is refused. What changes agents' prompts ([`crate::prompt_changes`]) is refused the same way,
+//! unless the person applied it or lets the Orchestrator chat publish drafts ([`prompt_allowed`]). No tool changes
+//! those switches.
 
 use orchester_core::{
   connection::AgentProvider,
@@ -27,6 +29,20 @@ pub(in crate::app_mcp::tools) fn allowed(services: &Services, mut reasons: Vec<M
     return Ok(());
   }
   reasons.insert(0, Message::new("appMcp.errors.personOnly"));
+  Err(ToolError::refused("person_only", reasons))
+}
+
+/// Refused as `person_only` unless nothing reaches agents' prompts (`reasons`, what would), a person decided the
+/// publication (they applied it, or the Orchestrator chat publishes under their switch), or a person lets
+/// automation change agent permissions.
+pub(in crate::app_mcp::tools) fn prompt_allowed(
+  services: &Services,
+  mut reasons: Vec<Message>,
+) -> Result<(), ToolError> {
+  if reasons.is_empty() || services.prompt_decided() || services.workspace.automation_changes_permissions()? {
+    return Ok(());
+  }
+  reasons.insert(0, Message::new("appMcp.errors.promptPersonOnly"));
   Err(ToolError::refused("person_only", reasons))
 }
 

@@ -217,6 +217,10 @@ pub async fn set_agent_files(services: &Services, args: SetAgentFiles) -> Result
   blocking(move || {
     let open = services.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
+    // Turning them on puts what the repository says in every agent's prompt; turning them off is always taken.
+    if args.enabled && !db.repository_agent_files()?.is_on() {
+      widening::prompt_allowed(&services, vec![crate::prompt_changes::repository_agent_files()])?;
+    }
     db.save_repository_agent_files(setting)?;
     services
       .changes

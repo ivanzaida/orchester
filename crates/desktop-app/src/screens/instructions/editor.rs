@@ -31,6 +31,7 @@ use super::{
   work::{self, Change, Failure, Write},
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::ShownProject,
   theme::ExtraSpacing,
   ui::{
@@ -42,6 +43,16 @@ use crate::{
 
 // Editor header f4Slyn.
 const EDITOR_HEADER_HEIGHT: f32 = 56.0;
+
+/// Whether the input being delivered may publish an instruction (ORC-30): a person's always; an MCP client's only
+/// under *Let automation change agent permissions*, as `publish_instruction` takes it.
+fn may_publish(gate: Option<&InputGate>) -> bool {
+  let may = input_may_decide(gate, Guarded::PermissionWidening);
+  if !may {
+    tracing::warn!("synthetic input pressed Publish on an instruction; not taken");
+  }
+  may
+}
 
 #[derive(Clone)]
 pub struct Props {
@@ -76,6 +87,8 @@ pub struct Editor {
   choice: Signal<PreviewChoice>,
   panel: SidePanel,
   published: Signal<Option<u32>>,
+  /// Publishing reaches agents' prompts: lurq's synthetic input publishes only under the person's consent.
+  gate: Option<InputGate>,
 }
 impl Component for Editor {
   type Props = Props;
@@ -94,6 +107,7 @@ impl Component for Editor {
       choice: ctx.signal(PreviewChoice::default()),
       panel: SidePanel::new(ctx.signal(props.panel), props.selection.clone()),
       published: published.clone(),
+      gate: ctx.use_context::<InputGate>(),
     };
     let (selection, reloads) = (props.selection.clone(), props.reloads.clone());
     let fields = editor.fields.clone();
@@ -268,12 +282,15 @@ impl Editor {
     else {
       return body;
     };
-    let retry = self.work.clone();
+    let (retry, gate) = (self.work.clone(), self.gate.clone());
     let candidate = self.work.retry(&self.fields);
     let valid = candidate.is_some();
     let retry =
       ActionButton::new("instruction-retry", ButtonKind::Secondary, ctx.t("instructions.retry")).on_click(move || {
-        if let Some(candidate) = &candidate {
+        let Some(candidate) = &candidate else {
+          return;
+        };
+        if !matches!(candidate.change(), Some(Change::Publish(..))) || may_publish(gate.as_ref()) {
           retry.run(candidate.clone());
         }
       });
@@ -357,12 +374,16 @@ impl Editor {
   }
   fn header(&self, ctx: &Ctx, saved: Option<&InstructionEntry>, dirty: bool, busy: bool) -> Element {
     let state = saved.map_or(VersionState::Draft { published: None }, |e| e.state);
+    // The draft as automation saved it over the MCP server (ORC-30): who wrote it shows before the person publishes.
+    let automated = !busy && !dirty && saved.is_some_and(|entry| ctx.props::<Props>().data.by_automation(entry));
     let status = if busy {
       ctx.t("instructions.saving")
     } else if self.fields.instruction().is_err() {
       ctx.t("instructions.notSaved")
     } else if dirty {
       ctx.t("instructions.unsaved")
+    } else if automated {
+      words::automation_version(ctx, state)
     } else {
       words::editor_version(ctx, state)
     };
@@ -401,6 +422,8 @@ impl Editor {
               Icon::CircleAlert
             } else if !dirty && !state.has_draft() {
               Icon::CircleCheck
+            } else if automated {
+              Icon::Bot
             } else if state.published().is_none() {
               Icon::CircleDashed
             } else {
@@ -444,7 +467,7 @@ impl Editor {
         .icon(Icon::Eye)
         .on_click(move || panel.choose(Panel::Preview));
       }
-      let entry = entry.clone();
+      let (entry, gate) = (entry.clone(), self.gate.clone());
       let publish = ActionButton::new(
         "instruction-publish",
         ButtonKind::Primary,
@@ -452,7 +475,7 @@ impl Editor {
       )
       .icon(Icon::Upload)
       .on_click(move || {
-        if publication::missing(entry.body.text(), entry.body.events()).is_empty() {
+        if may_publish(gate.as_ref()) && publication::missing(entry.body.text(), entry.body.events()).is_empty() {
           work.run(Change::Publish(entry.clone()).into());
         }
       });

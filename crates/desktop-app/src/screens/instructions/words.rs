@@ -103,6 +103,16 @@ pub fn editor_version(ctx: &Ctx, state: VersionState) -> Arc<str> {
     _ => version(ctx, state),
   }
 }
+/// [`editor_version`] of a draft automation saved over Orchester's MCP server.
+pub fn automation_version(ctx: &Ctx, state: VersionState) -> Arc<str> {
+  match state {
+    VersionState::Draft { published: Some(v) } => {
+      ctx.t_args("instructions.automationDraftSaved", [("version", v.get().to_string())])
+    }
+    VersionState::Draft { published: None } => ctx.t("instructions.automationNewDraft"),
+    _ => version(ctx, state),
+  }
+}
 pub fn editor_scope(
   ctx: &Ctx,
   tab: Tab,

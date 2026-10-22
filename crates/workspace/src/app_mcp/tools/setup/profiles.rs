@@ -33,6 +33,7 @@ use crate::{
   drafts::revision_of,
   links::Link,
   messages::{self, Message},
+  prompt_changes,
   workspace::OpenProject,
 };
 
@@ -100,7 +101,8 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     let agents = ProjectAgents::load_in(&open.repo_root)?;
     let entry = profile_named(&agents, &args.profile)?;
     let id = entry.id;
-    services.draft_decided::<orchester_core::resource::AgentProfile>(&ProjectDb::open(&open.repo_root)?, id)?;
+    let db = ProjectDb::open(&open.repo_root)?;
+    services.draft_decided::<orchester_core::resource::AgentProfile>(&db, id)?;
     if let Some(connection) = agent_by_id(&agents.connections, entry.profile.connection()) {
       // The editor offers no Publish on a connection that runs no agents.
       if !connection.provider().runs_agents() {
@@ -109,8 +111,10 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
           vec![Message::new("appMcp.errors.connectionRunsNoAgents")],
         ));
       }
-      let db = ProjectDb::open(&open.repo_root)?;
       widening::check_profile(&services, &db, (Some(id), &entry.profile), connection.provider())?;
+    }
+    if entry.state.has_draft() {
+      widening::prompt_allowed(&services, prompt_changes::profile_in(&db, id, &entry.profile)?)?;
     }
     // Published only while the draft is the one just checked.
     publish_checked_in(&open.repo_root, id, &entry.profile).map_err(|error| publish_error(&error))?;

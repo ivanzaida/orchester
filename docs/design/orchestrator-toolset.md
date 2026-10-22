@@ -28,7 +28,13 @@ person can click.
    tool is proposed in the chat as a card the person applies with a click. A new person-only switch in Settings ›
    What automation may do, *Let the Orchestrator publish drafts*, lets the chat publish directly. Synthetic input
    cannot flip it (the same rule as *Let automation change agent permissions*). Widening what agents may do stays
-   behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat.
+   behind *Let automation change agent permissions* in every case. This subsumes ORC-30 for the chat. For every
+   other MCP client (ORC-30, `orchester_workspace::prompt_changes`): publishing an instruction, a profile whose role,
+   responsibilities or role instructions changed, and turning the repository's agent files back on change what
+   agents are told, so they are refused `person_only` unless *Let automation change agent permissions* is on; no
+   separate switch, since the design has none and the risk is the same as widening. lurq's synthetic input on the
+   window's Publish (Instructions, Skills, Agents) follows the same switch. Drafts stay free; an instruction draft
+   automation saved is marked *Draft written by automation* in the editor's header until a person saves it.
 4. **Starting runs: both.** By default a start is a proposal card the person starts (as today). When auto mode is on
    for the project, the chat starts the run directly, through the same scheduling checks; the start is kept in the
    conversation as an action. Its neighbours follow the same pattern behind their own switches: answering agents

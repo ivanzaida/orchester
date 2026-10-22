@@ -21,6 +21,7 @@ use super::{
   work::{self, Change, Saved, Work},
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -233,6 +234,7 @@ impl Editor {
     let entry = entry.cloned();
     let submitted = self.submitted.clone();
     let operation = self.operation.clone();
+    let gate = ctx.use_context::<InputGate>();
     Notice::new("skill-confirm", NoticeTone::Warning, ctx.t("skills.publishQuestion"))
       .body(ctx.t("skills.publishReason"))
       .action(
@@ -252,6 +254,12 @@ impl Editor {
           ),
         )
         .on_click(move || {
+          // A published skill reaches agents' prompts (ORC-30): an MCP client publishes it only under the person's
+          // consent, as for an instruction.
+          if !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+            tracing::warn!("synthetic input confirmed publishing a skill; not taken");
+            return;
+          }
           if let Some(entry) = &entry {
             operation.set(work::Operation::Publish);
             submitted.set(true);

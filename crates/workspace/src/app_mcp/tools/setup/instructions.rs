@@ -3,7 +3,8 @@
 //! saved as its editor saves it, checked with the editor's rules, and published as Publish does, through
 //! the same checked writes (`instructions::editor`). Where an instruction applies and whom it reaches are
 //! chosen from what the editor offers: the roles of the project's profiles, its profiles, its pipelines
-//! and their steps.
+//! and their steps. A draft saved here is marked as automation's on the Instructions page; publishing it reaches
+//! agents' prompts, so it is a person's decision ([`widening::prompt_allowed`], ORC-30).
 
 use std::collections::BTreeSet;
 
@@ -25,6 +26,7 @@ use super::{
     wire,
   },
   profiles::no_draft,
+  widening,
 };
 use crate::{
   agents::data::VersionState,
@@ -39,6 +41,7 @@ use crate::{
   },
   links::Link,
   messages::{self, Message},
+  prompt_changes,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -184,7 +187,12 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
         editor::create_in(&root, name, &body)
       }
     };
-    let id = saved.map_err(|error| write_error(&error))?.id;
+    let saved = saved.map_err(|error| write_error(&error))?;
+    let id = saved.id;
+    // Marked on the Instructions page as automation's until a person saves it or it is published.
+    if let Some(at) = saved.draft_saved_at {
+      ProjectDb::open(&root)?.mark_automation_draft(id, at)?;
+    }
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
@@ -207,6 +215,9 @@ pub async fn publish_instruction(services: &Services, args: InInstruction) -> Re
       &orchester_store::ProjectDb::open(&open.repo_root)?,
       entry.id,
     )?;
+    if entry.state.has_draft() {
+      widening::prompt_allowed(&services, vec![prompt_changes::instruction()])?;
+    }
     let id = editor::publish_in(&open.repo_root, entry)
       .map_err(|error| write_error(&error))?
       .id;
@@ -375,6 +386,7 @@ fn entry_json(data: &ProjectInstructions, entry: &InstructionEntry, project: Pro
     "text": body.text().as_str(),
     "state": state,
     "published_version": entry.state.published().map(|version| version.get()),
+    "draft_by_automation": data.by_automation(entry),
     "link": Link::Instructions(project).path(),
   })
 }

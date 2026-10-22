@@ -143,6 +143,7 @@ fn domain_reads_an_instruction_with_its_versions_and_skills_as_skills_shows_them
     "text": "Write the failing test first.",
   });
   served.ok("save_instruction_draft", &rule);
+  served.let_automation_widen(true);
   served.ok(
     "publish_instruction",
     &json!({ "project": "Kontur", "instruction": "Tests first" }),

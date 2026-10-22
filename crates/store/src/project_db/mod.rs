@@ -5,6 +5,7 @@ mod approval_rules;
 mod attachments;
 mod auto_mode;
 mod automatic_status;
+mod automation_drafts;
 mod base_notices;
 mod blobs;
 mod chat_decisions;
