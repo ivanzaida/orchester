@@ -14,6 +14,8 @@
     "equivalentTree": "Source {{source}} and destination {{target}} have matching trees, without complete ancestry. Recording external integration requires an accepted scoped mapping.",
     "unknownSource": "The relevant source scope {{source}} cannot be established for destination {{target}}. Integration is unavailable until its identity is reconciled.",
     "externalEvidence": "Observed result {{source}} and destination {{target}} have external integration evidence. Complete ancestry, partial ancestry and equivalent patches are distinct; no historical merge is recorded. Review current evidence before continuing.",
+    "staleTitle": "{{branch}} changed after your review",
+    "staleBody": "A hashed check found {{paths}} changed since your review; Git's cached status can miss an edit that kept a file's size and time, so the list may not show it. No action was performed and your index is unchanged. Review identities again before continuing.",
     "review": "Review local changes",
     "reviewBody": "Review exact staged and working-copy snapshots. Ignored files are excluded and retained; a collision pauses delivery.",
     "files": "Local changes",

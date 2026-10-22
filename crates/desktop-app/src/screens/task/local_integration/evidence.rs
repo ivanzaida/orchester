@@ -8,7 +8,7 @@ use lurq::{
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::integration::local::{HookChange, LocalPhase};
+use orchester_core::integration::local::{HookChange, LocalPath, LocalPhase};
 use orchester_workspace::{
   display,
   tasks::local_integration::{IntegrationView, Preview, Snapshot},
@@ -19,6 +19,7 @@ use super::{
   diff::{self, Source},
   files::{self, List},
   notes, resolver, words,
+  work::Refusal,
 };
 use crate::ui::{
   card::CardSurface,
@@ -38,10 +39,7 @@ pub(super) fn column(
   let mode = page.mode.get();
   let outside = view.operation.as_ref().is_some_and(|op| op.merged_outside().is_some());
   // Work found integrated outside Orchester: its card stands for what the page is about (`itt7z`, `pdT4W`, `UWLNj`).
-  let phase_note = view
-    .external
-    .is_none()
-    .then(|| notes::phase(ctx, (phase, outside), &mode, narrow));
+  let phase_note = (!view.found_outside()).then(|| notes::phase(ctx, (phase, outside), &mode, narrow));
   let mut column = Column::new()
     .id("local-evidence")
     .flex(1.0)
@@ -51,8 +49,8 @@ pub(super) fn column(
     .with_children(external_notice(ctx, task, view))
     .with_children(restore_next(ctx, view))
     .with_children(hook_notice(ctx, view, phase));
-  if let Some(problem) = page.work.state().get().error {
-    column = column.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(problem.0)));
+  if let Some(refused) = page.work.state().get().error {
+    column = column.child(refusal(ctx, view, &refused));
   }
   if busy {
     let stopping = page.stop.load(std::sync::atomic::Ordering::Acquire);
@@ -68,10 +66,35 @@ pub(super) fn column(
   if matches!(phase, LocalPhase::TaskConflicts | LocalPhase::RestoreConflicts) || page.editor_dirty.get() {
     return column.child(resolver::mount(ctx, page, task, view, busy, narrow));
   }
-  if view.external.is_some() {
+  if view.found_outside() {
     return column;
   }
   column.with_children(content(ctx, page, view, (busy, narrow)))
+}
+
+/// Why the page's work was refused. A refusal as stale names the paths a hashed check found changed since the
+/// review, which the list may not show when Git's stat cache hides an edit, in the panel of a change made after the
+/// review (`External change notice` `z56AZ` in `i6Cx4`).
+fn refusal(ctx: &Ctx, view: &IntegrationView, refused: &Refusal) -> Element {
+  if refused.changed.is_empty() {
+    return Notice::new("local-work-error", NoticeTone::Danger, ctx.t(refused.problem.0)).into();
+  }
+  let paths = refused
+    .changed
+    .iter()
+    .map(LocalPath::as_str)
+    .collect::<Vec<_>>()
+    .join(&ctx.t("local_integration.separator"));
+  notes::panel(
+    "local-work-error",
+    CardSurface::Pending,
+    &ctx.t_args(
+      "local_integration.staleTitle",
+      [("branch", view.checkout.branch.as_str())],
+    ),
+    &ctx.t_args("local_integration.staleBody", [("paths", paths.as_str())]),
+  )
+  .into()
 }
 
 /// Beside work found whole in the branch, where the record can take that merge and keeps preserved originals: that
@@ -81,17 +104,15 @@ fn restore_next(ctx: &Ctx, view: &IntegrationView) -> Option<Element> {
   // A cancellation put its originals back already: removing the kept ones follows, not a restoration.
   let retained =
     operation.phase() != LocalPhase::Canceled && operation.preservation().is_some_and(|saved| saved.retained);
-  (view.external.as_ref().is_some_and(words::merged_outside) && operation.can_record_merged_outside() && retained).then(
-    || {
-      notes::panel(
-        "local-restore-next",
-        CardSurface::Outline,
-        &ctx.t("local_integration.restoreNext"),
-        &ctx.t("local_integration.restoreBody"),
-      )
-      .into()
-    },
-  )
+  (view.outside_merge_provable() && operation.can_record_merged_outside() && retained).then(|| {
+    notes::panel(
+      "local-restore-next",
+      CardSurface::Outline,
+      &ctx.t("local_integration.restoreNext"),
+      &ctx.t("local_integration.restoreBody"),
+    )
+    .into()
+  })
 }
 
 fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, (busy, narrow): (bool, bool)) -> Vec<Element> {
@@ -110,7 +131,7 @@ fn content(ctx: &mut Ctx, page: &LocalPage, view: &IntegrationView, (busy, narro
       diff::cards(ctx, "local-checked-diff", &view.diff, Source::Diff, None)
     }
     mode => {
-      let locked = busy || mode != Mode::Review || view.external.is_some();
+      let locked = busy || mode != Mode::Review || view.found_outside();
       let title = ctx.t("local_integration.files");
       let mut parts = vec![files::list(ctx, (view, List::Review), signals, &title, locked)];
       if let Some(shown) = page.shown_file.get().0 {
@@ -165,24 +186,24 @@ fn commit_review(
   parts
 }
 
-/// An integration made outside Orchester: merged without Orchester, as the Summary says, or what needs
-/// reconciliation.
+/// An integration made outside Orchester: merged without Orchester into the run's delivery target, as the Summary
+/// says and names it, or what needs reconciliation.
 fn external_notice(ctx: &Ctx, task: &TaskContext, view: &IntegrationView) -> Option<Element> {
-  let evidence = view.external.as_ref()?;
-  if words::merged_outside(evidence) {
+  if let Some(into) = view.merged_outside() {
     let branch = task
       .detail
       .run
       .as_ref()
       .map(|run| run.run.branch().as_str())
       .unwrap_or_default();
-    let (title, body) = words::merged_outside_words(ctx, branch, &view.checkout.branch);
+    let (title, body) = words::merged_outside_words(ctx, branch, into);
     return Some(
       Notice::new("local-external-integration", NoticeTone::Success, title)
         .body(body)
         .into(),
     );
   }
+  let evidence = view.external.as_ref()?;
   Some(
     Notice::new(
       "local-external-integration",
