@@ -25,7 +25,9 @@ fn composer_a_failed_send_after_one_that_went_through_keeps_the_draft() {
   super::key(&mut window, ENTER, (false, false));
   until_stored(&mut window, &seeded, title, 1);
   window.until("the draft emptied", |window| !draft(window).starts_with("First"));
-  // Another writer holds the database: the second store gives up after its busy timeout.
+  // Another writer holds the database: the second store gives up once it has waited longer than a
+  // write may, five seconds here instead of a minute (process-wide, for every test of this binary).
+  orchester_store::set_lock_budget_for_test(std::time::Duration::from_secs(5));
   let database = seeded.repo.join(".orchester").join("orchester.db");
   let holder = Connection::open(&database).expect("the database opens");
   holder.execute_batch("BEGIN EXCLUSIVE").expect("the database is held");
