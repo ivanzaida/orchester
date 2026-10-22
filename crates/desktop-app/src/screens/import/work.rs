@@ -8,7 +8,7 @@ use lurq::app::{
 };
 use orchester_core::{
   import::{Content, CopiedResource, ImportBatch},
-  resource::InstructionScope,
+  resource::{InstructionScope, Resource, ResourceKind},
 };
 use orchester_workspace::{
   activity::operations,
@@ -37,12 +37,8 @@ pub(super) fn work(ctx: &mut Ctx) -> Work {
   ctx.future_action(move |(open, source, batch): Args| {
     let activity = activity.clone();
     async move {
-      let first = batch
-        .copies()
-        .first()
-        .map(|copy| Route::Project(open.project.id(), page_of(copy)))
-        .expect("a batch is built only from a plan that copies something");
-      let spec = operations::import_resources(&open, &source, batch.copies().len());
+      let copies = batch.copies().to_vec();
+      let spec = operations::import_resources(&open, &source, copies.len());
       let mut failure = None;
       let written = activity
         .track(spec, async {
@@ -58,29 +54,48 @@ pub(super) fn work(ctx: &mut Ctx) -> Work {
         })
         .await;
       match written {
-        Ok(_) => Ok(Imported(first)),
+        Ok(created) => {
+          let page = first_page(&created, &copies).unwrap_or(ProjectPage::Overview(Default::default()));
+          Ok(Imported(Route::Project(open.project.id(), page)))
+        }
         Err(reason) => Err(failure.unwrap_or(ImportFailure::Failed(reason))),
       }
     }
   })
 }
 
-/// The page that shows `copy` once it exists: a pipeline's editor, an agent profile, an instruction in its scope's
-/// tab, or a tool.
-fn page_of(copy: &CopiedResource) -> ProjectPage {
-  let id = copy.resource().id();
-  match copy.content() {
-    Content::Pipeline(_) => ProjectPage::Pipeline(id, Default::default()),
-    Content::AgentProfile(_) => ProjectPage::Agent(id, Default::default()),
-    Content::Instruction(instruction) => {
-      let tab = match instruction.scope() {
-        InstructionScope::Project => InstructionsTab::Project,
-        InstructionScope::AgentRole { .. } => InstructionsTab::Roles,
-        InstructionScope::Pipeline { .. } => InstructionsTab::Pipelines,
-        InstructionScope::Step { .. } => InstructionsTab::Steps,
+/// The page of the first resource the store says the import created. After Try again of a write that did commit,
+/// those are the earlier import's resources, whose ids this batch does not have: their copy is found by kind and
+/// slug, which the same choices give again.
+fn first_page(created: &[Resource], copies: &[CopiedResource]) -> Option<ProjectPage> {
+  let resource = created.first()?;
+  let content = copies
+    .iter()
+    .find(|copy| copy.resource().kind() == resource.kind() && copy.resource().slug() == resource.slug())
+    .map(CopiedResource::content);
+  Some(page_of(resource, content))
+}
+
+/// The page that shows `resource`: a pipeline's editor, an agent profile, an instruction in its scope's tab
+/// (Project when its content is not known), a tool, or a skill.
+fn page_of(resource: &Resource, content: Option<&Content>) -> ProjectPage {
+  let id = resource.id();
+  match resource.kind() {
+    ResourceKind::Pipeline => ProjectPage::Pipeline(id, Default::default()),
+    ResourceKind::AgentProfile => ProjectPage::Agent(id, Default::default()),
+    ResourceKind::Instruction => {
+      let tab = match content {
+        Some(Content::Instruction(instruction)) => match instruction.scope() {
+          InstructionScope::Project => InstructionsTab::Project,
+          InstructionScope::AgentRole { .. } => InstructionsTab::Roles,
+          InstructionScope::Pipeline { .. } => InstructionsTab::Pipelines,
+          InstructionScope::Step { .. } => InstructionsTab::Steps,
+        },
+        _ => InstructionsTab::Project,
       };
       ProjectPage::Instructions(InstructionsView::rule(tab, Some(id)))
     }
-    Content::Tool(_) => ProjectPage::Tool(id, Default::default()),
+    ResourceKind::Tool => ProjectPage::Tool(id, Default::default()),
+    ResourceKind::Skill => ProjectPage::Skill(id),
   }
 }

@@ -136,3 +136,22 @@ fn import_source_that_cannot_be_read_says_why_and_tries_again() {
   import.click("import-retry");
   import.until("the notice again", |import| import.exists("import-unreadable"));
 }
+
+#[test]
+fn import_says_it_reads_the_source_until_it_can() {
+  let mut import = Import::new();
+  let source = import.source.as_ref().expect("Personal website").0.clone();
+  // Another Orchester holds Personal website's database: reading it waits.
+  let holder = rusqlite::Connection::open(source.join(".orchester").join("orchester.db")).expect("its database");
+  holder
+    .pragma_update(None, "locking_mode", "EXCLUSIVE")
+    .expect("exclusive locking");
+  holder.execute_batch("BEGIN EXCLUSIVE").expect("the lock");
+  import.open(ImportTab::All);
+  import.until("the reading state", |import| import.exists("import-reading"));
+  assert_eq!(import.text("import-reading-title"), "Reading Personal website…");
+  assert!(!import.shows("import-list"), "nothing to choose yet");
+  holder.execute_batch("ROLLBACK").expect("the lock let go");
+  drop(holder);
+  import.until("the list", |import| import.exists("import-list"));
+}

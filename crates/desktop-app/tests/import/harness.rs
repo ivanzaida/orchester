@@ -188,7 +188,7 @@ impl Import {
   }
 
   /// Adds to Kontur, as another window would, an agent profile `title` with the slug `slug`.
-  pub fn kontur_profile(&self, slug: &str, title: &str) {
+  pub fn kontur_profile(&self, slug: &str, title: &str) -> ResourceId {
     ProjectDb::open(&self.target)
       .expect("Kontur's database")
       .create_resource(
@@ -197,7 +197,52 @@ impl Import {
         &profile(title, ConnectionId::generate()),
         at(9),
       )
-      .expect("Kontur's profile");
+      .expect("Kontur's profile")
+      .id()
+  }
+
+  /// Sets the schema version of Kontur's database, as another Orchester would, and returns the one it had.
+  pub fn kontur_schema(&self, version: u32) -> u32 {
+    let db =
+      rusqlite::Connection::open(self.target.join(".orchester").join("orchester.db")).expect("Kontur's database");
+    let before: u32 = db
+      .pragma_query_value(None, "user_version", |row| row.get(0))
+      .expect("its schema version");
+    db.pragma_update(None, "user_version", version)
+      .expect("schema version set");
+    before
+  }
+
+  /// Adds to Personal website a pipeline Broken release whose two steps are keyed by the ids of Builder and of
+  /// `other`: a valid pipeline there, whose copy has one key twice once Builder is `other` in Kontur.
+  pub fn colliding_pipeline(&self, other: ResourceId) -> ResourceId {
+    let (repo, seeded) = self.source.as_ref().expect("Personal website is there");
+    let step = |key: ResourceId| Step {
+      key: StepKey::new(&key.to_string()).expect("an id is a valid key"),
+      name: name("Build"),
+      kind: StepKind::Agent {
+        profile: Some(seeded.builder),
+        repository: RepositoryAccess::Write,
+        model: None,
+        permissions: StepPermissions::default(),
+      },
+      instructions: PromptText::new("").expect("prompt"),
+      depends_on: BTreeSet::new(),
+      approval_gate: false,
+      on_failure: None,
+      budget: None,
+    };
+    let pipeline = Pipeline::new(vec![step(seeded.builder), step(other)]).expect("distinct keys in Personal website");
+    ProjectDb::open(repo)
+      .expect("Personal website's database")
+      .create_resource(
+        Slug::new("broken-release").expect("slug"),
+        name("Broken release"),
+        &pipeline,
+        at(10),
+      )
+      .expect("Broken release")
+      .id()
   }
 
   /// Goes from Select resources to Create drafts with Preview release selected, Release rules renamed.

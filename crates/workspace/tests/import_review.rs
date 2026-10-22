@@ -6,16 +6,26 @@
 #[allow(dead_code, reason = "the core tests' fixture: these tests use a part of it")]
 mod fixture;
 
+use std::{
+  io,
+  path::{Path, PathBuf},
+};
+
 use fixture::{Source, Target, profile, published, source, target};
 use orchester_core::{
+  id::ResourceId,
   import::{Choice, Choices, Entity, Pick, Plan},
   resource::{ResourceKind, ToolKind},
 };
-use orchester_workspace::import::{
-  data::Catalogs,
-  drafts,
-  review::{self, Blocker, Offer, OfferDetail, Planned, Readiness, Selection, Status, Subject},
-  select::{self, Summary, Users},
+use orchester_store::StoreError;
+use orchester_workspace::{
+  import::{
+    data::{self, Catalogs, ImportFailure, LoadError, LoadNotice},
+    drafts,
+    review::{self, Blocker, Offer, OfferDetail, Planned, Readiness, Selection, Status, Subject},
+    select::{self, Summary, Users},
+  },
+  messages::Message,
 };
 
 fn catalogs(source: &Source, target: &Target) -> Catalogs {
@@ -238,4 +248,79 @@ fn import_review_drafts_list_what_is_created_reused_and_left_unresolved() {
   assert_eq!(drafts.access[0].allowed[0].step, 2);
   assert_eq!(drafts.access[0].allowed[0].tool, "Deploy preview");
   assert_eq!(review::dependencies(&plan), 5);
+}
+
+fn denied(path: &str) -> StoreError {
+  StoreError::Io {
+    path: PathBuf::from(path),
+    source: io::Error::from(io::ErrorKind::PermissionDenied),
+  }
+}
+
+#[test]
+fn import_review_failure_tells_a_changed_project_a_refused_folder_and_anything_else_apart() {
+  let taken = StoreError::DuplicateSlug {
+    kind: ResourceKind::AgentProfile,
+    slug: "builder".into(),
+  };
+  assert_eq!(data::import_failure(&taken), ImportFailure::Changed);
+  assert_eq!(
+    data::import_failure(&StoreError::ResourceNotFound(ResourceId::generate())),
+    ImportFailure::Changed,
+    "something the plan uses is gone"
+  );
+  let folder = Path::new("repo").join(".orchester").display().to_string();
+  assert_eq!(
+    data::import_failure(&denied(&folder)),
+    ImportFailure::Refused { folder }
+  );
+  let missing = StoreError::Io {
+    path: PathBuf::from("repo"),
+    source: io::Error::from(io::ErrorKind::NotFound),
+  };
+  assert_eq!(
+    data::import_failure(&missing),
+    ImportFailure::Failed(Message::new("errors.storage")),
+    "only a refusal is the folder's permissions"
+  );
+  let newer = StoreError::SchemaTooNew {
+    found: 9999,
+    supported: 1,
+  };
+  assert_eq!(
+    data::import_failure(&newer),
+    ImportFailure::Failed(Message::new("errors.newerSchema"))
+  );
+}
+
+#[test]
+fn import_review_load_notice_names_the_project_and_the_refused_folder() {
+  let refused = data::load_notice(&LoadError::Source(denied("site")), "Personal website");
+  assert_eq!(
+    refused,
+    LoadNotice {
+      title: Message::new("projectImport.errors.sourceRefused").with("project", "Personal website".into()),
+      body: Message::new("projectImport.errors.sourceRefusedDetail").with("folder", "site".into()),
+      refused: true,
+    }
+  );
+  let newer = StoreError::SchemaTooNew {
+    found: 9999,
+    supported: 1,
+  };
+  assert_eq!(
+    data::load_notice(&LoadError::Source(newer), "Personal website"),
+    LoadNotice {
+      title: Message::new("projectImport.errors.sourceNewer").with("project", "Personal website".into()),
+      body: Message::new("projectImport.errors.chooseAnother").with("project", "Personal website".into()),
+      refused: false,
+    }
+  );
+  let target = data::load_notice(&LoadError::Target(denied("kontur")), "Personal website");
+  assert_eq!(target.title, Message::new("projectImport.errors.targetUnreadable"));
+  assert!(target.refused, "this project's folder was refused");
+  let missing = StoreError::NotInitialized(PathBuf::from("kontur"));
+  let target = data::load_notice(&LoadError::Target(missing), "Personal website");
+  assert_eq!(target.body, Message::new("errors.projectMissing"));
+  assert!(!target.refused);
 }
