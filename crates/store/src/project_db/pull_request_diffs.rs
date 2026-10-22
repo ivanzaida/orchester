@@ -20,14 +20,9 @@ impl PullRequestDiffStore for ProjectDb {
 
   fn save_pull_request_diff(&mut self, repo: &GitHubRepo, number: u64, diff: &RevisionDiff) -> Result<(), StoreError> {
     let number = stored_number(number)?;
+    let blob = blobs::write(&self.directory, diff.text.as_bytes())?;
     let transaction = self.connection.transaction()?;
-    let blob = blobs::put(
-      &transaction,
-      &self.directory,
-      DIFF_MEDIA_TYPE,
-      diff.text.as_bytes(),
-      diff.read_at,
-    )?;
+    blob.record(&transaction, DIFF_MEDIA_TYPE, diff.read_at)?;
     transaction.execute(
       "INSERT INTO pr_revisions (host, owner, name, number, head_sha, base_sha, diff_blob, synced_at) \
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
@@ -40,7 +35,7 @@ impl PullRequestDiffStore for ProjectDb {
         number,
         diff.head.as_str(),
         diff.base.as_str(),
-        blob.as_str(),
+        blob.hash.as_str(),
         diff.read_at.unix_millis(),
       ],
     )?;

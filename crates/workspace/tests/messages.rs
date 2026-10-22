@@ -13,6 +13,15 @@ fn storage_messages_preserve_busy_and_locked_causes_without_raw_details() {
     assert!(error.is_locked());
     assert_eq!(store_error(&error), Message::new("errors.databaseLocked"));
   }
+  let StoreError::Sqlite(source) = sqlite(rusqlite::ffi::SQLITE_BUSY) else {
+    unreachable!("a SQLite error");
+  };
+  let gave_up = StoreError::Unavailable {
+    waited: std::time::Duration::from_secs(60),
+    source,
+  };
+  assert!(gave_up.is_locked());
+  assert_eq!(store_error(&gave_up), Message::new("errors.databaseLocked"));
 }
 
 #[test]

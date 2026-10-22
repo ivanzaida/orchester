@@ -124,6 +124,9 @@ fn account_changes_tell_of_a_removal_whose_connections_could_not_all_move() {
   let repo = project_on(&workspace, &client);
   let mut changes = workspace.account_changes();
   changes.borrow_and_update();
+  // The connection's move gives up after three seconds instead of a minute while the database is held;
+  // process-wide, and the other test of this binary lets go of it after one.
+  orchester_store::set_lock_budget_for_test(Duration::from_secs(3));
   let held = hold_writes(&repo);
   let refused = workspace.remove_agent_account(client.id(), MoveTo::Account(freelance.id()), false);
   held.execute_batch("ROLLBACK").expect("released");

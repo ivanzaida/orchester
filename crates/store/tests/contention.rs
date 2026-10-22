@@ -21,7 +21,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 use tempfile::TempDir;
 
-/// An open that has not ended after this long waits: it gives up only after five seconds.
+/// An open that has not ended after this long waits: it gives up only after a minute.
 const STILL_WAITING: Duration = Duration::from_millis(300);
 /// An open ends within this once what it waits for is released.
 const PATIENCE: Duration = Duration::from_secs(30);

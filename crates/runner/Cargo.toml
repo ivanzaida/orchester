@@ -295,6 +295,14 @@ required-features = ["test-agent"]
 name = "qa_app_slots"
 required-features = ["test-agent"]
 
+[[test]]
+name = "db_contention"
+required-features = ["test-agent"]
+
+[[test]]
+name = "db_unavailable"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -326,6 +334,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+# The contention tests read the longest write-lock holds and shorten the time a write waits for a lock.
+orchester-store = { workspace = true, features = ["test-support"] }
 # The in-memory keychain of the tests is shared with the scheduler.
 parking_lot.workspace = true
 # Damages a run's row the way an edit outside Orchester would; the store has no API for that.
