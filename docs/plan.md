@@ -935,9 +935,11 @@ are release builds on this machine, a frame being delivering finished futures pl
   Repro: `tests/ui_kit/virtualized_list.rs` (300 rows 100 high, `scroll_to_bottom_pending`: rows 0–63 render on the
   first pass, then the end). Not worked around in the app; misses the targets by ~100–125 ms (first frame) and ~150–175
   ms (longest frame). The screen's own render with 300 turns is ~1 ms; a keystroke frame ~5 ms.
+  **Fixed in lurq 0.50.0 (2026-10-22):** the list renders its last 16 rows on the first pass and none from its top;
+  the repro now asserts that. Release timings not measured again yet.
 - **Idle relayout, lurq's:** a Markdown document with a followed link leaves the layout dirty after every pass, so a chat
   showing a reply with a link lays the window out on every frame (~2–3 ms release, ~2–6 ms debug), forever. Repro:
-  `tests/ui_kit/markdown_link_layout.rs`.
+  `tests/ui_kit/markdown_link_layout.rs`. **Fixed in lurq 0.50.0:** the document settles; the repro asserts 0 dirty passes.
 - **Task Conversation, fixed:** before, the opening frame took 65–67 ms: the tab rendered twice in it (~18 ms each), each
   time building the whole timeline (~1–2 ms) and rendering again every row lurq had bootstrapped, because the tab
   provided `Decisions`, the composer's `Composing` and the rows' `Timeline` as contexts in `render`, and lurq renders
