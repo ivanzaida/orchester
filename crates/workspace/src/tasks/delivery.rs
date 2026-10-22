@@ -38,6 +38,18 @@ pub enum Delivery {
   MergedOutside(Arc<str>),
 }
 
+impl Delivery {
+  /// The branch a person merged the work into without Orchester: the run's delivery target, its base branch,
+  /// whichever branch the checkout has checked out. The Summary and the Local integration page both say merged
+  /// without Orchester by this, and name this branch.
+  pub fn merged_into(&self) -> Option<&str> {
+    match self {
+      Self::MergedOutside(into) => Some(into),
+      Self::Waiting | Self::NothingToMerge => None,
+    }
+  }
+}
+
 /// What became of `run`'s work, a succeeded run that Orchester did not merge, in the checkout at `repo_root`.
 pub fn of_run(programs: &Programs, repo_root: &Path, run: &Run) -> Delivery {
   deliveries(programs, repo_root, &[RunWork::of(run)]).remove(0)

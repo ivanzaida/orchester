@@ -106,6 +106,11 @@ impl EvidenceInputs {
       base,
     })
   }
+
+  /// Whether the run has a merge of Orchester's own, recorded or under way: then nothing was merged outside it.
+  pub(super) const fn merged(&self) -> bool {
+    self.merged
+  }
 }
 
 pub(super) fn contained_result(

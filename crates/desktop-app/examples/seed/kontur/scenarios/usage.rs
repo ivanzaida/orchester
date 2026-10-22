@@ -303,6 +303,7 @@ fn reviewed(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
       invocation: invocation.id,
       approval: request.id,
       provider: AgentProvider::ClaudeCodeCli,
+      account: None,
       model: ModelId::new(REVIEWER_MODEL).expect("a valid model id"),
       started_at: asked,
       ended_at: answered,

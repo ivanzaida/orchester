@@ -5,6 +5,8 @@ mod abort;
 mod acknowledgement;
 #[path = "local_integration/candidates.rs"]
 mod candidates;
+#[path = "local_integration/discard.rs"]
+mod discard;
 #[path = "../../workspace/tests/local_integration/support.rs"]
 mod domain_support;
 #[path = "local_integration/hooks.rs"]
@@ -19,6 +21,8 @@ mod merged_outside;
 mod privacy;
 #[path = "local_integration/release.rs"]
 mod release;
+#[path = "local_integration/stale.rs"]
+mod stale;
 mod support;
 #[path = "local_integration/worktree_removal.rs"]
 mod worktree_removal;

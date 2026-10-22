@@ -3,8 +3,7 @@
 //! a set of chosen values, empty for all; a turn counts when every filter admits it. *Tag* matches a run
 //! whose task has any chosen tag. An agent profile or a pipeline is chosen by its id or its name in any case, a
 //! task by its key or its id. Plan limits follow the CLI filter only. A review of auto mode's reviewer is matched by
-//! the reviewer's CLI and model and by the step whose request it judged; it has no agent profile and no
-//! account.
+//! the reviewer's CLI, model and account and by the step whose request it judged; it has no agent profile.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -49,19 +48,19 @@ impl UsageFilter {
       && self.admits_account(invocation.account)
   }
 
-  /// Whether a review by auto mode's reviewer on `cli` with `model` of a request `invocation` of `run` in
-  /// `project` made counts.
+  /// Whether a review by auto mode's reviewer on `cli` with `model` on `account` of a request `invocation` of `run`
+  /// in `project` made counts.
   pub fn admits_review(
     &self,
     (project, run, invocation): (ProjectId, &RunFacts, &InvocationFacts),
-    (cli, model): (AgentProvider, &Arc<str>),
+    (cli, model, account): (AgentProvider, &Arc<str>, Option<AgentAccountId>),
   ) -> bool {
     self.admits_run(project, run)
       && chosen(&self.clis, Some(&cli))
       && chosen(&self.models, Some(model))
       && chosen(&self.profiles, None)
       && chosen(&self.steps, Some(&invocation.step))
-      && self.admits_account(None)
+      && self.admits_account(account)
   }
 
   /// Whether usage that started on `account` (`None`: on no account) counts: everything while no account is

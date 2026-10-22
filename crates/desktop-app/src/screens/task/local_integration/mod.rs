@@ -34,7 +34,7 @@ use lurq::{
 use orchester_core::run::RunStatus;
 use orchester_workspace::{
   background,
-  tasks::local_integration::{IntegrationView, Preview},
+  tasks::local_integration::{DiscardReport, IntegrationView, Preview},
 };
 use selection::{Selection, ShownFile};
 use work::{Outcome, Problem, Work};
@@ -56,8 +56,15 @@ const NARROW_INSPECTOR_WIDTH: f32 = 248.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Mode {
   Review,
-  Commit { tree: String, preview: Preview },
+  Commit {
+    tree: String,
+    preview: Preview,
+  },
   Preserve,
+  /// The person pressed *Discard selected*: what discarding does to each selected file, to confirm.
+  Discard,
+  /// Discarding left some files as they were: which were discarded, which not and why, to try again.
+  Discarded(DiscardReport),
   Abort,
   Cleanup,
   Cancel,
@@ -133,6 +140,8 @@ impl Component for LocalPage {
     let completed_leave = resolver.leave.clone();
     let navigation = crate::navigation::Navigation::of(ctx);
     let completed_mode = mode.clone();
+    let selected = ctx.signal(Selection::default());
+    let completed_selection = selected.clone();
     let last = refresh::LastRead::default();
     let completed_last = last.clone();
     // The work's own `feed.saved()` already reads the view again once; the last read must not stand in for it.
@@ -149,8 +158,16 @@ impl Component for LocalPage {
             tree: tree.clone(),
             preview: preview.clone(),
           },
-          Outcome::Changed | Outcome::Aborted | Outcome::DraftSaved(_) | Outcome::Resolved(_) => Mode::Review,
+          Outcome::Discarded(report) if !report.complete() => Mode::Discarded(report.clone()),
+          Outcome::Changed
+          | Outcome::Aborted
+          | Outcome::DraftSaved(_)
+          | Outcome::Resolved(_)
+          | Outcome::Discarded(_) => Mode::Review,
         });
+        if let Outcome::Discarded(report) = outcome {
+          completed_selection.update(|selection| selection.forget(report));
+        }
         if let Outcome::DraftSaved(captured) = outcome {
           completed_editor.saved(captured);
           if !completed_editor.dirty() {
@@ -166,7 +183,7 @@ impl Component for LocalPage {
       resolver,
       acknowledgement: controls::AcknowledgementState::new(ctx),
       managed: Arc::new(parking_lot::Mutex::new(None)),
-      selected: ctx.signal(Selection::default()),
+      selected,
       shown_file: ctx.signal(ShownFile(None)),
       mode,
       message: Signal::new(String::new()),
@@ -188,7 +205,7 @@ impl Component for LocalPage {
       return Element::from(Column::new());
     };
     let root = task.project.open.repo_root.clone();
-    let vault = Services::of(ctx).vault;
+    let Services { vault, programs, .. } = Services::of(ctx);
     let last = self.last.clone();
     let read = ctx
       .future(
@@ -200,11 +217,18 @@ impl Component for LocalPage {
           self.shown_file.get(),
         ),
         move |(root, run, _, policy_revision, selected)| {
-          let (vault, last) = (vault.clone(), last.clone());
+          let (vault, programs, last) = (vault.clone(), programs.clone(), last.clone());
           async move {
-            background::run(move || last.read((&root, run), selected.0.as_ref(), policy_revision, vault.get()))
-              .await
-              .map_err(|_| Problem("local_integration.error.io"))?
+            background::run(move || {
+              last.read(
+                (&root, run),
+                selected.0.as_ref(),
+                policy_revision,
+                (vault.get(), &programs),
+              )
+            })
+            .await
+            .map_err(|_| Problem("local_integration.error.io"))?
           }
         },
       )
@@ -265,8 +289,12 @@ impl LocalPage {
       NoticeTone::Danger,
       ctx.t(reason.0),
     ));
-    if let Some(error) = self.work.state().get().error {
-      body = body.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(error.0)));
+    if let Some(refused) = self.work.state().get().error {
+      body = body.child(Notice::new(
+        "local-work-error",
+        NoticeTone::Danger,
+        ctx.t(refused.problem.0),
+      ));
     }
     if self.resolver.editor.dirty() {
       let source = self.resolver.seeded.lock().clone();

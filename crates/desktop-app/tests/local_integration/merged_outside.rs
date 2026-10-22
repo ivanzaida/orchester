@@ -95,6 +95,25 @@ fn local_integration_page_merged_outside_offers_recording_the_merge_for_preserve
   );
 }
 
+/// The tab says merged by the Summary's rule: the run's delivery target holds the work, not the branch checked out.
+#[test]
+fn local_integration_page_merged_outside_names_the_delivery_target_not_the_checked_out_branch() {
+  let fixture = Fixture::new(false);
+  git(fixture.root(), &["checkout", "-b", "feature"]);
+  git(fixture.root(), &["merge", "--no-ff", "--no-edit", "task"]);
+  let mut page = Page::new(fixture);
+  page.ready("local-phase");
+  assert!(
+    !page.has("local-external-integration"),
+    "feature holds the work, but the run delivers into main: the Summary still shows Ready"
+  );
+  git(page.root(), &["branch", "-f", "main", "feature"]);
+  merged_card(&mut page);
+  let said = page.window.texts("local-external-integration").expect("card").join(" ");
+  assert!(said.contains("is in main"), "{said}");
+  assert!(!page.has("local-phase"), "the card stands for what the page is about");
+}
+
 #[test]
 fn local_integration_page_part_merged_outside_reconciles_a_held_commit_then_cancels() {
   let fixture = Fixture::new(false);

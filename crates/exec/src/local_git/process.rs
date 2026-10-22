@@ -59,16 +59,10 @@ impl LocalGit {
     if let Some(action) = &self.ref_action {
       command = command.with_env("GIT_REFLOG_ACTION", action);
     }
-    for name in [
-      "GIT_DIR",
-      "GIT_WORK_TREE",
-      "GIT_COMMON_DIR",
-      "GIT_CONFIG_COUNT",
-      "GIT_CONFIG_PARAMETERS",
-      "GIT_OBJECT_DIRECTORY",
-      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    ] {
-      if self.git_dir.is_none() || !matches!(name, "GIT_DIR" | "GIT_WORK_TREE") {
+    // Every variable that would locate another repository, index or namespace than this checkout's; the index is
+    // named or removed below.
+    for name in orchester_core::diff::git::LOCATING {
+      if name != "GIT_INDEX_FILE" && (self.git_dir.is_none() || !matches!(name, "GIT_DIR" | "GIT_WORK_TREE")) {
         command = command.without_env(name);
       }
     }

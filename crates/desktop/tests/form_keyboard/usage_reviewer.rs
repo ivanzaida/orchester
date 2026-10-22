@@ -91,6 +91,7 @@ fn reviewed_run() -> (Desktop, RunId) {
         ended_at: now,
         usage: Some(spent),
         end: ReviewEnd::Approved,
+        account: None,
       };
       db.record_reviewer_usage(&review).expect("the review's cost");
     }

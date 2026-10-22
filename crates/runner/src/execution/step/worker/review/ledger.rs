@@ -51,6 +51,7 @@ impl ReviewLedger {
       invocation: self.invocation,
       approval: self.approval.clone(),
       provider,
+      account,
       model: cost.model.clone(),
       started_at,
       ended_at: Timestamp::now(),

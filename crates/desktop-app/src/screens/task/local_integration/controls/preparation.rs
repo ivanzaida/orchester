@@ -1,6 +1,7 @@
 //! Preparing the checkout (`Prepare checkout` `hULqu`, at 960 `qr0cN`): how many reviewed snapshots are selected,
-//! *Commit selected changes* (at 960 *Review selected commit*), *Temporarily preserve selected*, cancelling an
-//! operation that holds the checkout, and that nothing changes without the person's reviewed selection.
+//! *Commit selected changes* (at 960 *Review selected commit*), *Temporarily preserve selected*, *Discard selected*
+//! (no design node; in its neighbours' style, as a danger button), cancelling an operation that holds the checkout,
+//! and that nothing changes without the person's reviewed selection.
 
 use lurq::{app::ctx::Ctx, components::Text, node::Element};
 
@@ -70,6 +71,13 @@ impl Inspector {
         ("local-review-preserve", ButtonKind::Secondary),
         "local_integration.preserveReview",
         Mode::Preserve,
+      ))
+      .child(mode_button(
+        ctx,
+        props,
+        ("local-review-discard", ButtonKind::Danger),
+        "local_integration.discardReview",
+        Mode::Discard,
       ));
     if props.view.checkout.clean() {
       panel = panel.child(button(

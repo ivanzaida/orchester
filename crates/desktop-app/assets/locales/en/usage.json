@@ -180,7 +180,7 @@
       "otherHeading": "Other",
       "count": "{{count}} accounts",
       "none": "No account",
-      "noneInfo": "Usage that didn't start on a connected account: auto mode's reviewer, native agents, command tools, and runs from before Orchester recorded accounts.",
+      "noneInfo": "Usage that didn't start on a connected account: native agents, command tools, runs from before Orchester recorded accounts, and auto mode's reviewer on an API key or in reviews from before Orchester recorded its account.",
       "noneDetail": "Auto mode's reviewer, native agents, command tools, runs from before accounts were recorded",
       "codex": "Codex",
       "claudeCode": "Claude Code"

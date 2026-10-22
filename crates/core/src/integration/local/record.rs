@@ -1,4 +1,5 @@
 mod abort;
+mod discard;
 mod drafts;
 mod outside;
 mod preservation;
