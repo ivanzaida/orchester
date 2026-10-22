@@ -1,10 +1,12 @@
 //! The Orchestrator's composer (`Composer` `QQ2ZM` as the Orchestrator draws it, `ZRbgy`, `VP0Fm`): one box —
 //! `surface_input` in a `border_strong` stroke (`border_focus` while the field has the focus), radius 10, 10 by 12
-//! inside, 8 between the message and its row — whose row holds *Attach*, not built, faded with its reason in a
-//! tooltip; the recipient pill *To: Orchestrator* (`waypoints`); what it acts with (a 12 `shield` and 11.5
-//! `text_muted`, 8 in from its sides); and at the end the 28 `accent` square that sends (`arrow-up`), faded while
-//! there is nothing to send. Under the box, 8 apart, the keys: Enter adds a line, Ctrl+Enter (Cmd+Enter on macOS)
-//! sends. The draft stays until its message is kept; a failed send keeps it.
+//! inside, 8 between the message and its row — whose row holds *Attach* (a 26 square with a `paperclip`, which opens
+//! the system's picker); the recipient pill *To: Orchestrator* (`waypoints`); what it acts with (a 12 `shield` and
+//! 11.5 `text_muted`, 8 in from its sides); and at the end the 28 `accent` square that sends (`arrow-up`), faded
+//! while there is nothing to send. The files attached show as chips over the message (`ui::attachments::tray`); a
+//! paste of an image, files or long text attaches them, and so does a drop on the box. Under the box, 8 apart, why
+//! the files last given were not attached, then the keys: Enter adds a line, Ctrl+Enter (Cmd+Enter on macOS) sends.
+//! The draft and its files stay until its message is kept; a failed send keeps them.
 
 use std::sync::Arc;
 
@@ -22,8 +24,10 @@ use lurq::{
 
 use super::View;
 use crate::{
+  services::attachment_picker::AttachmentPicker,
   theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    attachments::tray::{self, PutBack},
     composer::{message_scrollbar, recipient_pill},
     icon::{Icon, icon},
     kbd::key_cap,
@@ -38,6 +42,8 @@ const MAX_LINES: usize = 6;
 const START_LINES: usize = 3;
 /// *Attach*'s square (`hprBf`).
 const ATTACH_SIZE: f32 = 26.0;
+/// What names the composer's attachments, in tools and tests.
+const ATTACHMENTS: &str = "orchestrator-composer";
 
 /// What sending does now.
 #[derive(Clone)]
@@ -50,7 +56,7 @@ pub(super) enum Sending {
     why: Arc<str>,
     press: Arc<dyn Fn() + Send + Sync>,
   },
-  /// The message is being sent.
+  /// The message is being sent, or the files given are still being read.
   Busy,
   Ready(Arc<dyn Fn() + Send + Sync>),
 }
@@ -64,7 +70,7 @@ pub(super) struct ComposerBox<'a> {
   pub(super) focused: &'a Signal<bool>,
 }
 
-/// The box and the keys under it.
+/// The box, and why the files last given were not attached under it.
 pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: &ComposerBox<'_>) -> Column {
   let stroke = if composer.focused.get() {
     PaletteColor::BorderFocus
@@ -77,7 +83,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: &ComposerBox<'_>) -
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(attach(ctx))
+    .child(attach(ctx, view))
     .child(recipient_pill(
       ctx,
       (&ctx.t("orchestrator.composer.recipient"), Icon::Waypoints),
@@ -86,6 +92,9 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: &ComposerBox<'_>) -
     .child(permissions(ctx))
     .child(Spacer::new().flex(1.0))
     .child(send(ctx, composer.sending));
+  let draft = view.draft.clone();
+  let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));
+  let attached = tray::tray(ctx, ATTACHMENTS, &view.attached, &put_back);
   let boxed = Column::new()
     .id("orchestrator-composer")
     .width(Dimension::Pct(100.0))
@@ -95,12 +104,14 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, composer: &ComposerBox<'_>) -
     .background(PaletteColor::SurfaceInput)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
+    .with_children(attached)
     .child(field)
     .child(bar);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(boxed)
+    .child(tray::drop_target(boxed, &view.attached))
+    .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
 }
 
 /// The keys under the box: *Enter adds a line ·* [Ctrl Enter] *sends*.
@@ -128,7 +139,8 @@ pub(super) fn keys(ctx: &Ctx) -> Row {
     )
 }
 
-/// The message field: it grows with its lines up to [`MAX_LINES`].
+/// The message field: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or long text attaches
+/// them instead of pasting words.
 fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
@@ -158,6 +170,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>) -> Element {
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false))
     .on_key_down(move |event: KeyboardEvent| sends(&event, press.as_deref()))
+    .on_paste(view.attached.on_paste())
     .into()
 }
 
@@ -172,19 +185,23 @@ fn sends(event: &KeyboardEvent, press: Option<&(dyn Fn() + Send + Sync)>) {
   }
 }
 
-/// *Attach*: not built, faded, its reason in its tooltip.
-fn attach(ctx: &mut Ctx) -> Element {
-  let reason = ctx.t("orchestrator.composer.attach");
-  let square = inert(Button::empty())
+/// *Attach*: the system's picker, whose files are attached; its tooltip says what can be attached and how else.
+fn attach(ctx: &mut Ctx, view: &View) -> Element {
+  let label = ctx.t("attachments.attach");
+  let press = view
+    .attached
+    .on_attach(AttachmentPicker::of(ctx), ctx.t("attachments.pickerTitle"));
+  let square = pressable(press)
     .id("orchestrator-attach")
-    .describe("state", "unavailable")
-    .describe("reason", reason.clone())
+    .describe("state", "enabled")
+    .describe("a11y_name", label)
     .size(Dimension::Px(ATTACH_SIZE), Dimension::Px(ATTACH_SIZE))
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .opacity(DISABLED_OPACITY)
+    .rounded(RadiusSize::Md)
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::TextSecondary));
-  Tooltip::new("orchestrator-attach", reason).wrap(ctx, square)
+  Tooltip::new("orchestrator-attach", ctx.t("attachments.attachHint")).wrap(ctx, square)
 }
 
 /// What the Orchestrator acts with, and in its tooltip how its actions are checked.

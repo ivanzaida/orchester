@@ -359,6 +359,7 @@ fn sent_now(execution: StepExecutionId, at: Timestamp) -> Item {
       sent_now: true,
       orchestrator: None,
       by_automation: false,
+      attachments: std::sync::Arc::from([]),
     }),
   }
 }
@@ -532,6 +533,7 @@ fn timeline_search_finds_a_question_with_its_step() {
         sent_now: false,
         orchestrator: None,
         by_automation: false,
+        attachments: std::sync::Arc::from([]),
       },
       step: Some("Implement".into()),
     },

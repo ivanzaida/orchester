@@ -159,7 +159,12 @@ pub fn start_with(
   list: &[&str],
 ) -> (NativeLoop, Vec<LoopAction>) {
   let policy = CommandPolicy::new(&allowed(list)).expect("policy");
-  NativeLoop::start(settings, layout.scope(access), policy, "Do the task.".to_owned())
+  NativeLoop::start(
+    settings,
+    layout.scope(access),
+    policy,
+    ("Do the task.".to_owned(), Vec::new()),
+  )
 }
 
 pub fn ok(content: &str) -> ToolOutcome {

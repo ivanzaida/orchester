@@ -172,6 +172,12 @@ impl OrchestratorSetup {
     }
   }
 
+  /// The provider of the published version's connection, which the chat's turns run on; `None` while there is none.
+  pub fn provider(&self) -> Option<AgentProvider> {
+    let settings = self.settings.as_ref()?;
+    Some(self.connection(settings.connection())?.provider())
+  }
+
   fn connection(&self, id: ConnectionId) -> Option<&AgentConnection> {
     self.connections.iter().find(|connection| connection.id() == id)
   }

@@ -1,11 +1,11 @@
-//! The row inside the composer's box (`Bar` `keqaj` in `QQ2ZM`), 6 apart: *Attach*, not built, at half
-//! strength with a lock (`Attach · unavailable` in `mZIqi`: a 15 plus and a 9 lock in a 26 square); the
-//! recipient as a pill (`Recipient` `AOjdU`, `ui::composer::recipient_pill`: a 12 `bot` and the words; a lock at
-//! its end while the recipient is fixed); and at the end the send button: `accent`, radius 6, 28 high, its icon in
-//! `on_accent` — alone in a 28 square while an agent works (`Send button/split` `wPMDa`), else with its words in
-//! 12/500, 10 in from its sides and 6 from the icon (`I4yc5z` in `YhiGC`). Where sending has two ways, a line and a
-//! chevron split the button (`KkfI8`, `ZFD5V`: 1 by 16, then 20 wide, a 12 chevron) and open the send menu
-//! over it. The permissions chip and the recipient menu are not part of this build (D4).
+//! The row inside the composer's box (`Bar` `keqaj` in `QQ2ZM`), 6 apart: *Attach* (a 15 plus in a 26 square,
+//! `hprBf`), which opens the system's picker and attaches the files chosen in it; the recipient as a pill
+//! (`Recipient` `AOjdU`, `ui::composer::recipient_pill`: a 12 `bot` and the words; a lock at its end while the
+//! recipient is fixed); and at the end the send button: `accent`, radius 6, 28 high, its icon in `on_accent` — alone
+//! in a 28 square while an agent works (`Send button/split` `wPMDa`), else with its words in 12/500, 10 in from its
+//! sides and 6 from the icon (`I4yc5z` in `YhiGC`). Where sending has two ways, a line and a chevron split the button
+//! (`KkfI8`, `ZFD5V`: 1 by 16, then 20 wide, a 12 chevron) and open the send menu over it. The permissions chip and
+//! the recipient menu are not part of this build (D4).
 
 use lurq::{
   app::{
@@ -25,10 +25,12 @@ use super::{
   words::{self, Way},
 };
 use crate::{
-  theme::{ComposerColor, ComposerText, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
+  services::attachment_picker::AttachmentPicker,
+  theme::{ComposerColor, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
   ui::{
+    attachments::draft::DraftAttachments,
     composer::recipient_pill,
-    icon::{Icon, glyph, icon},
+    icon::{Icon, icon},
     menu::{MenuItem, menu_panel},
     pressable::{inert, pressable},
     tooltip::Tooltip,
@@ -45,9 +47,9 @@ const DIVIDER_HEIGHT: f32 = 16.0;
 /// How the send button can be pressed now.
 #[derive(Clone)]
 pub(super) enum Sending {
-  /// Nothing is written yet.
+  /// Nothing is written or attached yet.
   Empty,
-  /// The message is being sent.
+  /// The message is being sent, or the files given are still being read.
   Busy,
   /// Pressing sends: the primary way, and the second where the state has one.
   Ready { primary: Press, second: Option<Press> },
@@ -64,6 +66,8 @@ pub(super) struct Bar<'a> {
   /// The send menu's chevron, which opens the menu over it: the menu's end at the button's, the chevron's end
   /// (only the chevron is its trigger, so a press on Send with another dropdown open only closes that one).
   pub(super) anchor: &'a ElementRef,
+  /// The files the draft holds, which *Attach* adds to.
+  pub(super) attached: &'a DraftAttachments,
 }
 
 pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
@@ -80,28 +84,28 @@ pub(super) fn bar(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(attach(ctx))
+    .child(attach(ctx, bar.attached))
     .child(recipient_pill(ctx, (&recipient, recipient_icon(bar.mode)), fixed))
     .child(Spacer::new().flex(1.0))
     .child(send(ctx, bar))
     .into()
 }
 
-/// *Attach*: not built, so it stays at half strength with a lock, and its tooltip says so.
-fn attach(ctx: &mut Ctx) -> Element {
-  let reason = ctx.t("composer.attach");
-  let square = inert(Button::empty())
+/// *Attach*: the system's picker, whose files are attached; its tooltip says what can be attached and how else.
+fn attach(ctx: &mut Ctx, attached: &DraftAttachments) -> Element {
+  let label = ctx.t("attachments.attach");
+  let press = attached.on_attach(AttachmentPicker::of(ctx), ctx.t("attachments.pickerTitle"));
+  let square = pressable(press)
     .id("composer-attach")
-    .describe("state", "unavailable")
-    .describe("reason", reason.clone())
+    .describe("state", "enabled")
+    .describe("a11y_name", label)
     .size(Dimension::Px(ATTACH_SIZE), Dimension::Px(ATTACH_SIZE))
-    .spacing(ExtraSpacing::Hair.role())
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .opacity(DISABLED_OPACITY)
-    .child(icon(Icon::Plus, IconSize::Nav, PaletteColor::TextMuted))
-    .child(Text::new(&glyph(Icon::Lock)).variant(ComposerText::AttachLock.role()));
-  Tooltip::new("composer-attach", reason).wrap(ctx, square)
+    .rounded(RadiusSize::Md)
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .child(icon(Icon::Plus, IconSize::Nav, PaletteColor::TextSecondary));
+  Tooltip::new("composer-attach", ctx.t("attachments.attachHint")).wrap(ctx, square)
 }
 
 /// The recipient's glyph: before the run starts, the compass of the first agent not started yet (`hJC7T`

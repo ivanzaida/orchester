@@ -344,7 +344,7 @@ fn row_content(ctx: &mut Ctx, row: &Row) -> Element {
 /// A person's message, a card, a problem, a return or restart, a step's result or the run's end.
 fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
   match &item.kind {
-    ItemKind::Message(entry) => person_message(ctx, (timeline.project, entry)),
+    ItemKind::Message(entry) => person_message(ctx, ((timeline.project, &timeline.chat_project.root), entry)),
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {
       cards::card(ctx, timeline, item)
     }

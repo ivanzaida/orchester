@@ -10,13 +10,15 @@
 use std::path::Path;
 
 use orchester_core::{
+  attachment::NewAttachment,
+  connection::AgentProvider,
   conversation::{Message, Recipient, Timing},
   id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
   integration::Leftovers,
   run::{Answerer, PlanDecision, PlanVersion, ReviewNote},
 };
 use orchester_ipc::Command;
-use orchester_store::StoreError;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   Conversation, PanelState, SendError,
@@ -24,9 +26,11 @@ use super::{
   send::send_as,
 };
 use crate::{
+  attachments,
   messages::{self, Message as UiMessage},
   tasks::{
     detail::{RunView, TaskDetail},
+    first_agent,
     plan::PlanReview,
   },
 };
@@ -273,37 +277,38 @@ pub fn store_in(
   (key, way): (IdempotencyKey, Way),
   text: &str,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, None, Answerer::Person))
+  store_as(root, prepared, (key, way), ((text, &[]), None, Answerer::Person))
 }
 
 /// [`store_in`] for the project's Orchestrator chat of conversation `chat`, which wrote `text` on the person's side:
 /// the conversation names it as the chat's, sent by the chat itself when `by` is automation, applied by the person
-/// otherwise.
+/// otherwise. The chat attaches no files.
 pub fn store_by_orchestrator_in(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
   (text, chat, by): (&str, ChatId, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, (key, way), (text, Some(chat), by))
+  store_as(root, prepared, (key, way), ((text, &[]), Some(chat), by))
 }
 
-/// Stores a window or MCP client's message with the decider captured before yielding.
+/// Stores a window or MCP client's message with the decider captured before yielding, with the files the person
+/// attached in the window (an MCP client attaches none).
 pub fn store_answer_in(
   root: &Path,
   prepared: &Prepared,
   key_way: (IdempotencyKey, Way),
-  text: &str,
+  (text, attachments): (&str, &[NewAttachment]),
   by: Answerer,
 ) -> Result<(Then, Message), OutgoingError> {
-  store_as(root, prepared, key_way, (text, None, by))
+  store_as(root, prepared, key_way, ((text, attachments), None, by))
 }
 
 fn store_as(
   root: &Path,
   prepared: &Prepared,
   (key, way): (IdempotencyKey, Way),
-  (text, by_orchestrator, by): (&str, Option<ChatId>, Answerer),
+  ((text, attachments), by_orchestrator, by): ((&str, &[NewAttachment]), Option<ChatId>, Answerer),
 ) -> Result<(Then, Message), OutgoingError> {
   let then = match way {
     Way::Primary => prepared.mode.then(),
@@ -319,6 +324,10 @@ fn store_as(
     _ => Timing::AfterTurn,
   };
   let run = prepared.run().filter(|_| !then.for_next_run());
+  // Refused before anything is kept: an agent it may reach could not read what it carries.
+  let providers = reached_providers(root, prepared, run.is_some(), attachments)?;
+  attachments::check_message(&providers, attachments)
+    .map_err(|refused| OutgoingError::Send(SendError::Attachments(refused)))?;
   let recovery_after = prepared
     .conversation
     .recovery_after
@@ -329,10 +338,28 @@ fn store_as(
     key,
     (task, run, recovery_after),
     (prepared.recipient, timing),
-    (text, by_orchestrator, by),
+    ((text, attachments), by_orchestrator, by),
   )
   .map_err(OutgoingError::Send)?;
   Ok((then, stored))
+}
+
+/// The connections of the agents a message with `attachments` may reach: of the run's steps when it goes to the run
+/// (`to_run`), else of the steps of the task's pipeline its next run works with. None for a message without files.
+fn reached_providers(
+  root: &Path,
+  prepared: &Prepared,
+  to_run: bool,
+  attachments: &[NewAttachment],
+) -> Result<Vec<AgentProvider>, OutgoingError> {
+  if attachments.is_empty() {
+    return Ok(Vec::new());
+  }
+  if let Some(run) = prepared.detail.run.as_ref().filter(|_| to_run) {
+    return Ok(attachments::reachable_providers(run, prepared.recipient));
+  }
+  let db = ProjectDb::open(root).map_err(OutgoingError::Store)?;
+  first_agent::next_run_providers(&db, &prepared.detail.task, prepared.recipient).map_err(OutgoingError::Store)
 }
 
 /// *Request changes* with `text` as the changes the plan that waits needs, decided `by`: the command to

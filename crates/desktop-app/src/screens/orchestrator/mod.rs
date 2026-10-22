@@ -57,6 +57,7 @@ use crate::{
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
   ui::{
+    attachments::draft::DraftAttachments,
     chat::{self, follow::Follow},
     markdown::LinkHandler,
   },
@@ -88,6 +89,8 @@ impl DevtoolsInspectable for Props {}
 #[derive(Clone)]
 struct View {
   draft: Signal<String>,
+  /// The files the draft holds, and why the last ones given were not taken.
+  attached: DraftAttachments,
   /// Whose draft `draft` holds; `None` until the screen knows which conversation it shows.
   of: Signal<Option<Conversation>>,
   /// The draft's message this screen sends, shown in the conversation until it is kept.
@@ -117,6 +120,7 @@ impl Component for OrchestratorScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let view = View {
       draft: ctx.signal(String::new()),
+      attached: DraftAttachments::new(ctx, Vec::new()),
       of: ctx.signal(None),
       outgoing: ctx.signal(None),
       history: ctx.signal(false),
@@ -134,6 +138,12 @@ impl Component for OrchestratorScreen {
     ctx.watch(&view.draft, move |text| {
       if let Some(of) = of.get_untracked() {
         draft::set(project, of, text);
+      }
+    });
+    let of = view.of.clone();
+    ctx.watch(&view.attached.attached, move |held| {
+      if let Some(of) = of.get_untracked() {
+        draft::set_attachments(project, of, &held.0);
       }
     });
     let navigation = Navigation::of(ctx);
@@ -234,9 +244,12 @@ impl View {
     }
   }
 
-  /// Words typed before the screen knew which conversation it shows become that one's draft when it has none.
+  /// Words typed and files attached before the screen knew which conversation it shows become that one's draft when
+  /// it has none.
   fn load_draft(&self, project: ProjectId, of: Conversation) {
-    let typed = self.of.get_untracked().is_none().then(|| self.draft.get_untracked());
+    let unknown = self.of.get_untracked().is_none();
+    let typed = unknown.then(|| self.draft.get_untracked());
+    let given = unknown.then(|| self.attached.held());
     self.of.set(Some(of));
     let mut kept = draft::draft(project, of);
     if let Some(typed) = typed.filter(|typed| !typed.is_empty())
@@ -248,6 +261,14 @@ impl View {
     if self.draft.get_untracked() != kept {
       self.draft.set(kept);
     }
+    let mut files = draft::attachments(project, of);
+    if let Some(given) = given.filter(|given| !given.is_empty())
+      && files.is_empty()
+    {
+      draft::set_attachments(project, of, &given);
+      files = given;
+    }
+    self.attached.replace(files);
   }
 
   /// `sent` was kept. The draft it was sent from empties while it still holds the words sent: what the person wrote
@@ -280,19 +301,22 @@ impl View {
     started
   }
 
-  /// Sends the draft, as the message it was last sent as when its words did not change since, to conversation
-  /// `chat` (a new one when `None`).
+  /// Sends the draft with its files, as the message it was last sent as when neither changed since, to conversation
+  /// `chat` (a new one when `None`); nothing while files are still being read.
   /// The chat goes to its end and follows it again (`ui::chat::follow`).
   fn send_draft(&self, project: &ShownProject, chat: Option<ChatId>) -> Arc<dyn Fn() + Send + Sync> {
     let (view, project) = (self.clone(), project.open.clone());
     let from = Conversation::from(chat);
     Arc::new(move || {
       let text = view.draft.get_untracked();
-      if text.trim().is_empty() || view.send.state().get_untracked().is_pending() {
+      let attachments = view.attached.held();
+      let reading = view.attached.reading.get_untracked() > 0;
+      if (text.trim().is_empty() && attachments.is_empty()) || reading || view.send.state().get_untracked().is_pending()
+      {
         return;
       }
       let to = chat.unwrap_or_else(ChatId::generate);
-      let outgoing = draft::sending(project.project.id(), from, (to, text));
+      let outgoing = draft::sending(project.project.id(), from, (to, text, attachments));
       view.outgoing.set(Some(outgoing.clone()));
       view.follow.follow_again();
       view.send.run(Sending {
@@ -303,8 +327,8 @@ impl View {
     })
   }
 
-  /// Sends words once more to conversation `chat`, as a new message; the draft stays as it is. The chat goes to its
-  /// end and follows it again.
+  /// Sends words once more to conversation `chat`, as a new message without files; the draft stays as it is. The
+  /// chat goes to its end and follows it again.
   fn ask_again(&self, project: &ShownProject, chat: ChatId) -> Arc<dyn Fn(Arc<str>) + Send + Sync> {
     let (send, follow, project) = (self.send.clone(), self.follow.clone(), project.open.clone());
     Arc::new(move |text: Arc<str>| {
@@ -318,6 +342,7 @@ impl View {
           chat,
           message: ChatMessageId::generate(),
           text: text.to_string(),
+          attachments: Vec::new(),
         },
         from_draft: false,
       });

@@ -82,37 +82,41 @@ pub struct NativeLoop {
 }
 
 impl NativeLoop {
-  /// A new conversation that starts with the step's prompt.
+  /// A new conversation that starts with the step's prompt, then `attached`: the files people attached to the
+  /// messages it delivers ([`Item::attached`]).
   pub fn start(
     settings: LoopSettings,
     scope: FileScope,
     commands: CommandPolicy,
-    prompt: String,
+    (prompt, attached): (String, Vec<Item>),
   ) -> (Self, Vec<LoopAction>) {
     let task = Item::user(prompt, UserOrigin::Task);
+    let mut items = vec![task.clone()];
+    items.extend(attached);
     let mut actions = vec![
-      LoopAction::Persist(vec![task.clone()]),
+      LoopAction::Persist(items.clone()),
       LoopAction::Emit(vec![events::session(&settings)]),
     ];
-    let mut native = Self::new(settings, scope, commands, task.clone(), vec![task]);
+    let mut native = Self::new(settings, scope, commands, task, items);
     native.next_request(&mut actions);
     (native, actions)
   }
 
   /// The stored conversation `stored` continued: calls left unanswered get [`NOT_RUN`] (a pending
-  /// `ask_question` the person's answer), then `continuation` follows. `changed` holds the files the
-  /// step's earlier invocations changed, as their `FileChanged` Activity recorded them; a compaction
-  /// names them with the files this invocation changes.
+  /// `ask_question` the person's answer), then `continuation` follows, then `attached`. `changed` holds the files
+  /// the step's earlier invocations changed, as their `FileChanged` Activity recorded them; a compaction names them
+  /// with the files this invocation changes.
   pub fn resume(
     settings: LoopSettings,
     scope: FileScope,
     commands: CommandPolicy,
     stored: Vec<Item>,
-    continuation: Continuation,
+    (continuation, attached): (Continuation, Vec<Item>),
     changed: BTreeSet<String>,
   ) -> Result<(Self, Vec<LoopAction>), LoopError> {
     let (task, mut items) = context::latest_segment(stored)?;
-    let appended = context::answer_unanswered(&items, continuation);
+    let mut appended = context::answer_unanswered(&items, continuation);
+    appended.extend(attached);
     items.extend(appended.iter().cloned());
     let mut actions = vec![
       LoopAction::Persist(appended),

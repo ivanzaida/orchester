@@ -380,7 +380,7 @@ fn claude_invocation_refuses_edits_by_rule_on_a_network_share() {
       writable_roots: roots,
       ..invocation(permissions)
     }
-    .command("Do it", Vec::new(), &CommandEnvironment::default())
+    .command(("Do it", &[]), Vec::new(), &CommandEnvironment::default())
     .err()
   };
   let by_rule = enforced(
@@ -528,7 +528,7 @@ fn claude_invocation_command_runs_in_the_worktree_without_the_agent_hosts_variab
     Platform::current(),
   );
   let command = invocation(&permissions)
-    .command("Do it", environment, &CommandEnvironment::default())
+    .command(("Do it", &[]), environment, &CommandEnvironment::default())
     .expect("unicode worktree");
   assert_eq!(command.program(), Path::new("/bin/claude"));
   assert_eq!(command.current_dir(), Some(Path::new("/repo/.orchester/worktrees/run")));
@@ -556,7 +556,7 @@ fn claude_invocation_command_adds_the_project_variables() {
     CommandEnvironment::new(BTreeMap::from([(name, "/repo/.orchester/target".to_owned())])).expect("valid variables");
   let environment = [(OsString::from("PATH"), OsString::from("/usr/bin"))];
   let command = invocation(&permissions)
-    .command("Do it", environment, &project)
+    .command(("Do it", &[]), environment, &project)
     .expect("unicode worktree");
   assert_eq!(
     command.env(),

@@ -42,16 +42,16 @@ pub(super) struct Target {
   pub(super) left: Option<Context>,
 }
 
-/// What sending does in `mode` while something is written and no send is under way: the state's way, and
-/// the second where it has one.
+/// What sending does in `mode` while something is written or attached and no send is under way: the state's way,
+/// and the second where it has one. Files still being read keep it busy: they go with the message.
 pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&ComposerMode, Recipient)) -> Sending {
-  if state.send.state().get().is_pending() || state.in_flight.get() {
+  if state.send.state().get().is_pending() || state.in_flight.get() || state.attached.reading.get() > 0 {
     return Sending::Busy;
   }
   let Some(primary) = Action::of(mode, Way::Primary, to) else {
     return Sending::Empty;
   };
-  if state.draft.get().trim().is_empty() {
+  if state.draft.get().trim().is_empty() && state.attached.attached.get().0.is_empty() {
     return Sending::Empty;
   }
   Sending::Ready {
@@ -60,8 +60,8 @@ pub(super) fn presses(state: &ComposerState, target: &Target, (mode, to): (&Comp
   }
 }
 
-/// A press that sends the draft `way`, to do `expected`. It reads the draft and its key when pressed, and
-/// does nothing while a send is under way: a second run of the action would replace the first mid-way.
+/// A press that sends the draft and its files `way`, to do `expected`. It reads the draft and its key when
+/// pressed, and does nothing while a send is under way: a second run of the action would replace the first mid-way.
 fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action)) -> Press {
   let state = state.clone();
   let (project, task, written_for, revision, reading) = (
@@ -73,7 +73,9 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
   );
   Arc::new(move || {
     let text = state.draft.get_untracked();
-    if text.trim().is_empty() || state.sending() {
+    let attachments = state.attached.held();
+    let still_reading = state.attached.reading.get_untracked() > 0;
+    if (text.trim().is_empty() && attachments.is_empty()) || still_reading || state.sending() {
       return;
     }
     state.send.run(Request {
@@ -84,8 +86,9 @@ fn press(state: &ComposerState, target: &Target, (way, expected): (Way, Action))
       reading,
       way,
       expected,
-      key: state.key_for(&text, (way, expected)),
+      key: state.key_for((&text, &attachments), (way, expected)),
       text,
+      attachments,
       by: expected.decision_kind().map_or_else(
         || {
           Some(if lurq::app::events::is_synthetic_input() {
