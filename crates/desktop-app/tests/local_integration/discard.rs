@@ -144,19 +144,9 @@ fn local_integration_discard_says_which_file_stayed_and_tries_again() {
 #[test]
 fn local_integration_discard_refuses_a_path_selected_in_part() {
   let fixture = Fixture::new(false);
-  fs::write(
-    fixture.root().join("local.txt"),
-    b"staged
-",
-  )
-  .expect("edit");
+  fs::write(fixture.root().join("local.txt"), b"staged\n").expect("edit");
   super::domain_support::git(fixture.root(), &["add", "local.txt"]);
-  fs::write(
-    fixture.root().join("local.txt"),
-    b"staged then edited
-",
-  )
-  .expect("edit");
+  fs::write(fixture.root().join("local.txt"), b"staged then edited\n").expect("edit");
   let mut page = Page::new(fixture);
   page.ready("local-review-discard");
   page.click("local-select-local_integration.unstaged-local.txt");
@@ -172,8 +162,7 @@ fn local_integration_discard_refuses_a_path_selected_in_part() {
   assert!(!page.has("local-working"), "nothing runs");
   assert_eq!(
     fs::read(page.root().join("local.txt")).expect("kept"),
-    b"staged then edited
-"
+    b"staged then edited\n"
   );
   page.click("local-discard-keep");
   page.ready("local-review-discard");

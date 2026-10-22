@@ -89,112 +89,50 @@ fn local_integration_discard_restores_a_deleted_file_from_head() {
   assert!(clean(&fixture));
 }
 
+/// `name` staged as `staged`, then, when `working` says, edited to it.
+fn stage(fixture: &Fixture, name: &str, staged: &str, working: Option<&str>) {
+  fs::write(fixture.root().join(name), staged).expect("staged version");
+  git(fixture.root(), &["add", name]);
+  if let Some(working) = working {
+    fs::write(fixture.root().join(name), working).expect("edited version");
+  }
+}
+
 #[test]
 fn local_integration_discard_unstages_staged_changes_and_keeps_every_version() {
   let (fixture, bin) = (Fixture::new(false), Bin::new());
-  fs::write(
-    fixture.root().join("local.txt"),
-    "staged
-",
-  )
-  .expect("edit");
-  git(fixture.root(), &["add", "local.txt"]);
-  fs::write(
-    fixture.root().join("local.txt"),
-    "staged then edited
-",
-  )
-  .expect("edit");
-  fs::write(
-    fixture.root().join("added.txt"),
-    "new and staged
-",
-  )
-  .expect("new");
-  git(fixture.root(), &["add", "added.txt"]);
-  fs::write(
-    fixture.root().join("fresh.txt"),
-    "first staged
-",
-  )
-  .expect("new");
-  git(fixture.root(), &["add", "fresh.txt"]);
-  fs::write(
-    fixture.root().join("fresh.txt"),
-    "then edited
-",
-  )
-  .expect("edit");
+  stage(&fixture, "local.txt", "staged\n", Some("staged then edited\n"));
+  stage(&fixture, "added.txt", "new and staged\n", None);
+  stage(&fixture, "fresh.txt", "first staged\n", Some("then edited\n"));
   let mut session = fixture.open();
-  let report = session
-    .discard(&[path("local.txt"), path("added.txt"), path("fresh.txt")], &bin.trash())
-    .expect("discard");
+  let paths = [path("local.txt"), path("added.txt"), path("fresh.txt")];
+  let report = session.discard(&paths, &bin.trash()).expect("discard");
   assert!(report.complete());
   assert_eq!(report.files()[1].discard, Discard::Trash);
   assert_eq!(git(fixture.root(), &["show", ":local.txt"]), "base");
-  assert_eq!(
-    fs::read(fixture.root().join("local.txt")).expect("restored"),
-    b"base
-"
-  );
+  assert_eq!(fs::read(fixture.root().join("local.txt")).expect("restored"), b"base\n");
   assert!(!fixture.root().join("added.txt").exists() && !fixture.root().join("fresh.txt").exists());
   // Both versions of a file staged and then edited are kept; a staged version equal to the file needs no copy.
-  assert_eq!(
-    bin.holds("local.txt").as_deref(),
-    Some(
-      &b"staged then edited
-"[..]
-    )
-  );
-  assert_eq!(
-    bin.holds("local.txt.staged").as_deref(),
-    Some(
-      &b"staged
-"[..]
-    )
-  );
-  assert_eq!(
-    bin.holds("added.txt").as_deref(),
-    Some(
-      &b"new and staged
-"[..]
-    )
-  );
-  assert_eq!(bin.holds("added.txt.staged"), None);
-  assert_eq!(
-    bin.holds("fresh.txt").as_deref(),
-    Some(
-      &b"then edited
-"[..]
-    )
-  );
-  assert_eq!(
-    bin.holds("fresh.txt.staged").as_deref(),
-    Some(
-      &b"first staged
-"[..]
-    )
-  );
+  for (name, held) in [
+    ("local.txt", Some("staged then edited\n")),
+    ("local.txt.staged", Some("staged\n")),
+    ("added.txt", Some("new and staged\n")),
+    ("added.txt.staged", None),
+    ("fresh.txt", Some("then edited\n")),
+    ("fresh.txt.staged", Some("first staged\n")),
+  ] {
+    assert_eq!(bin.holds(name), held.map(|text| text.as_bytes().to_vec()), "{name}");
+  }
   assert!(clean(&fixture));
 }
 
 #[test]
 fn local_integration_discard_keeps_a_staged_version_whose_file_was_deleted() {
   let (fixture, bin) = (Fixture::new(false), Bin::new());
-  fs::write(
-    fixture.root().join("local.txt"),
-    "staged
-",
-  )
-  .expect("edit");
+  fs::write(fixture.root().join("local.txt"), "staged\n").expect("edit");
   git(fixture.root(), &["add", "local.txt"]);
   fs::remove_file(fixture.root().join("local.txt")).expect("delete");
-  fs::write(
-    fixture.root().join("gone.txt"),
-    "staged only
-",
-  )
-  .expect("new");
+  fs::write(fixture.root().join("gone.txt"), "staged only\n").expect("new");
   git(fixture.root(), &["add", "gone.txt"]);
   fs::remove_file(fixture.root().join("gone.txt")).expect("delete");
   let mut session = fixture.open();
@@ -204,25 +142,9 @@ fn local_integration_discard_keeps_a_staged_version_whose_file_was_deleted() {
   assert!(report.complete());
   assert_eq!(report.files()[0].discard, Discard::Restore);
   assert_eq!(report.files()[1].discard, Discard::Unstage);
-  assert_eq!(
-    fs::read(fixture.root().join("local.txt")).expect("restored"),
-    b"base
-"
-  );
-  assert_eq!(
-    bin.holds("local.txt.staged").as_deref(),
-    Some(
-      &b"staged
-"[..]
-    )
-  );
-  assert_eq!(
-    bin.holds("gone.txt.staged").as_deref(),
-    Some(
-      &b"staged only
-"[..]
-    )
-  );
+  assert_eq!(fs::read(fixture.root().join("local.txt")).expect("restored"), b"base\n");
+  assert_eq!(bin.holds("local.txt.staged").as_deref(), Some(&b"staged\n"[..]));
+  assert_eq!(bin.holds("gone.txt.staged").as_deref(), Some(&b"staged only\n"[..]));
   assert!(clean(&fixture));
 }
 
