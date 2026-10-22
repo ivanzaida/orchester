@@ -124,14 +124,19 @@ impl Component for ThresholdRow {
       (true, false) => field,
     };
     let row = side_row(
-      Label::new(ID, ctx.t("settings.general.threshold.title")).description(ctx.t("settings.general.threshold.description")),
+      Label::new(ID, ctx.t("settings.general.threshold.title"))
+        .description(ctx.t("settings.general.threshold.description")),
       field.render(ctx),
       Place::Within,
       false,
     );
     let problem = if self.invalid.get() {
       Some(ctx.t("settings.general.threshold.invalid").to_string())
-    } else if let Some(reason) = read.error.as_ref().or(state.error.as_ref().filter(|_| !state.is_pending())) {
+    } else if let Some(reason) = read
+      .error
+      .as_ref()
+      .or(state.error.as_ref().filter(|_| !state.is_pending()))
+    {
       let key = if read.error.is_some() {
         "settings.general.threshold.unreadable"
       } else {

@@ -17,8 +17,8 @@ use orchester_workspace::messages::Message;
 
 use super::{Change, change, state_label, token::STORE_KEY};
 use crate::{
-  screens::settings::save_state::{Outcome, SaveState},
   mcp::{AppMcp, ServerState},
+  screens::settings::save_state::{Outcome, SaveState},
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},

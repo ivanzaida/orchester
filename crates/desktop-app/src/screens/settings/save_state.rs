@@ -6,7 +6,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use lurq::{
-  app::{ctx::Ctx, ctx::FutureState, theme::PaletteColor, theme::TypographyStyle},
+  app::{
+    ctx::{Ctx, FutureState},
+    theme::{PaletteColor, TypographyStyle},
+  },
   components::{Row, Text},
   core::Signal,
   layout::Alignment,

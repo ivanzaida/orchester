@@ -5,7 +5,10 @@
 //! next start, or what `ORCHESTER_APP_MCP_WINDOW_CONTROL` decided for this run (`McpSettings::this_run`).
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor, theme::TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, TypographyStyle},
+  },
   components::{Row, Text},
   layout::Alignment,
   node::Element,

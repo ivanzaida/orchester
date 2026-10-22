@@ -250,9 +250,14 @@ fn key(key: &str) -> orchester_core::project::TaskKey {
 
 /// The screens outside a project, all built; Settings is `tests/settings` and `tests/settings_general`.
 fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
-  [Route::AllProjects, Route::AddProject(None), Route::Settings, Route::General]
-    .map(|route| (route, Vec::new()))
-    .to_vec()
+  [
+    Route::AllProjects,
+    Route::AddProject(None),
+    Route::Settings,
+    Route::General,
+  ]
+  .map(|route| (route, Vec::new()))
+  .to_vec()
 }
 
 /// A route of every screen, with what it shows: a placeholder's title and that it is not built, or what

@@ -55,6 +55,12 @@ enum NotKept {
 
 impl DevtoolsInspectable for NotKept {}
 
+/// The theme last pressed, if any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Chosen(Option<ThemeSetting>);
+
+impl DevtoolsInspectable for Chosen {}
+
 type KeepAction = FutureAction<ThemeSetting, Kept, NotKept>;
 
 pub struct ThemeRow {
@@ -62,7 +68,7 @@ pub struct ThemeRow {
   appearance: Option<Appearance>,
   keep: KeepAction,
   /// The choice being kept, shown chosen until it is.
-  chosen: Signal<Option<ThemeSetting>>,
+  chosen: Signal<Chosen>,
 }
 
 impl Component for ThemeRow {
@@ -99,7 +105,7 @@ impl Component for ThemeRow {
     Self {
       appearance,
       keep,
-      chosen: ctx.signal(None),
+      chosen: ctx.signal(Chosen(None)),
     }
   }
 
@@ -112,7 +118,7 @@ impl Component for ThemeRow {
     }
     let current = self.appearance.as_ref().map(Appearance::setting);
     let shown = match self.chosen.get() {
-      Some(chosen) if state.is_pending() => Some(chosen),
+      Chosen(Some(chosen)) if state.is_pending() => Some(chosen),
       _ => current,
     };
     let control = self.control(ctx, shown);
@@ -124,24 +130,27 @@ impl Component for ThemeRow {
     );
     let problem = match (&state.error, &self.appearance) {
       (_, None) => Some(ctx.t("settings.general.theme.unavailable").to_string()),
-      (Some(NotKept::NoDatabase), _) if !state.is_pending() => Some(ctx.t("settings.general.theme.noDatabase").to_string()),
+      (Some(NotKept::NoDatabase), _) if !state.is_pending() => {
+        Some(ctx.t("settings.general.theme.noDatabase").to_string())
+      }
       (Some(NotKept::NotSaved(reason)), _) if !state.is_pending() => {
         let reason = message_text(ctx, reason);
-        Some(ctx.t_args("settings.general.theme.notSaved", [("reason", &*reason)]).to_string())
+        Some(
+          ctx
+            .t_args("settings.general.theme.notSaved", [("reason", &*reason)])
+            .to_string(),
+        )
       }
       _ => None,
     };
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .child(row)
-      .child(
-        Column::new()
-          .width(Dimension::Pct(100.0))
-          .padding_bottom(SpacingSize::Xs)
-          .spacing(SpacingSize::Sm)
-          .child(note(&format!("{ID}-note"), Icon::Info, &ctx.t(words::NOTE)))
-          .with_children(problem.map(|problem| field_error(&format!("{ID}-error"), &problem))),
-      )
+    Column::new().width(Dimension::Pct(100.0)).child(row).child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding_bottom(SpacingSize::Xs)
+        .spacing(SpacingSize::Sm)
+        .child(note(&format!("{ID}-note"), Icon::Info, &ctx.t(words::NOTE)))
+        .with_children(problem.map(|problem| field_error(&format!("{ID}-error"), &problem))),
+    )
   }
 }
 
@@ -160,7 +169,7 @@ impl ThemeRow {
         SegmentFace::Text(label),
         shown == Some(setting),
         move || {
-          chosen.set(Some(setting));
+          chosen.set(Chosen(Some(setting)));
           keep.run(setting);
         },
       )

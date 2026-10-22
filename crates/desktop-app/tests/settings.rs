@@ -370,7 +370,11 @@ fn settings_window_control_shows_the_next_start_and_only_a_person_changes_it() {
     window.texts(&format!("{WINDOW_CONTROL}-hint")).is_some()
   });
   let default = cfg!(debug_assertions);
-  assert_eq!(switch_on(&mut window, WINDOW_CONTROL), default, "the build's default until set");
+  assert_eq!(
+    switch_on(&mut window, WINDOW_CONTROL),
+    default,
+    "the build's default until set"
+  );
   let build = if default {
     "Build default: on in development builds like this one"
   } else {
@@ -433,7 +437,11 @@ fn settings_only_a_person_lets_automation_answer_approvals_and_off_holds_from_th
   window.until("the stored switch", |window| {
     window.texts(&format!("{APPROVALS}-row")).is_some() && switch_on(window, APPROVALS)
   });
-  window.tree.get_element_by_id_mut(APPROVALS).expect("the switch").click();
+  window
+    .tree
+    .get_element_by_id_mut(APPROVALS)
+    .expect("the switch")
+    .click();
   assert!(
     !workspace.automation_approval_consent(),
     "off holds from the person's click, before the save"

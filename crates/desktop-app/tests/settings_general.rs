@@ -42,7 +42,9 @@ fn settings_general_shows_its_sections_with_the_save_state() {
   );
   let database = window.data.database();
   assert!(
-    window.text("settings-data-path").contains(&*database.display().to_string()),
+    window
+      .text("settings-data-path")
+      .contains(&*database.display().to_string()),
     "the session's database: {}",
     window.text("settings-data-path")
   );
@@ -81,7 +83,11 @@ fn settings_general_saves_the_warning_threshold_for_every_project() {
   });
   window.set("settings-threshold-value", "70");
   window.until("the threshold to be saved", |_| {
-    workspace.usage_warning_threshold().expect("the threshold reads").percent() == 70
+    workspace
+      .usage_warning_threshold()
+      .expect("the threshold reads")
+      .percent()
+      == 70
   });
   window.set("settings-threshold-value", "abc");
   window.until("the field to say why", |window| {
@@ -92,7 +98,10 @@ fn settings_general_saves_the_warning_threshold_for_every_project() {
     "Use a whole percentage from 1 to 100."
   );
   assert_eq!(
-    workspace.usage_warning_threshold().expect("the threshold reads").percent(),
+    workspace
+      .usage_warning_threshold()
+      .expect("the threshold reads")
+      .percent(),
     70,
     "a value that is not a percentage is not saved"
   );

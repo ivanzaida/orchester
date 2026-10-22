@@ -356,7 +356,11 @@ fn window_control_follows_the_stored_setting_then_the_environment() {
 
 #[test]
 fn window_control_settings_show_the_next_start_and_what_this_run_has() {
-  assert_eq!(McpSettings::next_start(None), cfg!(debug_assertions), "the build's default until set");
+  assert_eq!(
+    McpSettings::next_start(None),
+    cfg!(debug_assertions),
+    "the build's default until set"
+  );
   assert!(!McpSettings::next_start(Some(false)));
   let started_on = McpSettings::with_window_control(true);
   assert_eq!(started_on.this_run(true), ThisRun::AsStarted);
