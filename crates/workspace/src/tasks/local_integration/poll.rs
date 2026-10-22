@@ -1,6 +1,8 @@
 //! What a review re-reads every few seconds instead of the whole view: the main checkout's status fingerprint, the
-//! run's journal record, its branch tip and recorded merge, and the task worktree's status while the view shows
-//! it. When the fingerprint is unchanged, the view read with it is still current.
+//! run's journal record, its branch tip, the tip of its delivery target and its recorded merge, and the task
+//! worktree's status while the view shows it. When the fingerprint is unchanged, the view read with it is still
+//! current. Nothing here hashes a file: an edit Git's stat cache hides is found by the hashed check an operation
+//! takes, and named after its refusal ([`super::changed_since_review`]).
 use std::path::Path;
 
 use orchester_core::{
@@ -29,6 +31,12 @@ pub fn fingerprint(root: &Path, run: RunId) -> Result<ContentHash, IntegrationEr
   parts.extend_from_slice(main.status_fingerprint()?.as_str().as_bytes());
   parts.extend(serde_json::to_vec(&operation).expect("a journal record is plain data, which always serializes"));
   parts.extend(format!("{:?}", main.branch_tip(saved_run.branch())?).as_bytes());
+  // A merge into the delivery target while another branch is checked out changes what the page says, too.
+  let target = saved_run
+    .base_branch()
+    .map(|branch| main.branch_tip(branch))
+    .transpose()?;
+  parts.extend(format!("{target:?}").as_bytes());
   parts.extend(format!("{:?}", db.run_merge(run)?.map(|merge| merge.revision)).as_bytes());
   parts.extend(
     format!(
