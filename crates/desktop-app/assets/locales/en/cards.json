@@ -128,7 +128,19 @@
       "deny": "Deny",
       "approveOnce": "Approve once",
       "denyWithMessage": "Deny with a message",
-      "denyWithMessageUnavailable": "Deny with a message is not available yet: the runner cannot add your words to a denial. Deny, then write to {{agent}} in the composer.",
+      "denyWithMessageNative": "Deny with a message is not available for a native agent's command yet: its denial carries no words. Deny, then write to {{agent}} in the composer.",
+      "message": {
+        "label": "Message to {{agent}}",
+        "field": "Message to the agent",
+        "told": "{{agent}} is told: “{{message}}” The step goes on; Deny never fails it.",
+        "toldCodex": "Codex declines it in its own words; then {{agent}} gets your message as the next message of its turn: “{{message}}” The step goes on; Deny never fails it.",
+        "back": "Back",
+        "send": "Deny and send message",
+        "keys": "{{keys}} denies and sends · Esc goes back to the answers",
+        "ctrlEnter": "Ctrl+Enter",
+        "cmdEnter": "⌘ Enter",
+        "tooLong": "At most {{max}} characters: this message has {{count}}."
+      },
       "wider": "Or answer more widely",
       "similar": "Approve similar in this run",
       "similarCommand": "{{words}} commands in {{category}}, until Run {{run}} ends. Packages and flags may differ. Approves this one too.",
@@ -170,7 +182,9 @@
         "deniedAt": "Denied at {{time}}",
         "deniedUntimed": "Denied",
         "approvedUntimed": "Approved",
-        "project": "Approved for every run of this project · by you at {{time}}"
+        "project": "Approved for every run of this project · by you at {{time}}",
+        "note": "Your message: “{{message}}”",
+        "noteByAutomation": "Automation's message: “{{message}}”"
       },
       "firstLine": "{{line}} …",
       "denyTellsCodexLabel": "Deny declines it, and Codex tells {{agent}}:",

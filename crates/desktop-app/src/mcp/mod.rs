@@ -39,7 +39,7 @@ pub use self::{
   link::WindowLink,
   mode::{Build, DISCOVERY_VARIABLE, INSTALLED_BUILD_VARIABLE, McpMode},
   server::{address, endpoint},
-  settings::{McpSettings, WindowControlSource},
+  settings::{McpSettings, ThisRun, WindowControlSource},
   status::{McpKind, McpStatus, SeenClient, ServerState, Taken},
   token::BearerToken,
   view::McpLink,

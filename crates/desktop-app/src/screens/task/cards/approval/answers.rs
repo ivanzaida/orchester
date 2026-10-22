@@ -4,7 +4,8 @@
 //! *Always allow…*, saying what it covers before it is chosen; for Orchester's `start_qa_app` also *Approve for every
 //! run of this project* (the person's decision of 2026-10-18), which keeps a rule of the project while the QA script
 //! is unchanged. An answer the request does not offer stays in
-//! place, faded, with a lock and why. *Always allow…* and *Deny with a message* are not built (D6).
+//! place, faded, with a lock and why. *Always allow…* is not built (D6); *Deny with a message* opens its editor in
+//! place of the answers ([`super::message`]), but for a native agent's command, whose denial carries no words yet.
 //!
 //! A wider answer lets the run's agents do more, so it is a person's (`docs/stable-build.md`): its tile asks in
 //! place under the tiles, as a Connections page asks what a save widens (`In-place confirmation` `RWODj`), and
@@ -13,7 +14,10 @@
 //! *Keep asking* included, takes a client's input, so a client can take the question back. The tile being confirmed
 //! stays marked (`$hover` fill, `$border_focus` stroke) while the question shows.
 
-use std::sync::Arc;
+use std::sync::{
+  Arc,
+  atomic::{AtomicBool, Ordering},
+};
 
 use lurq::{
   app::{
@@ -54,20 +58,22 @@ use crate::{
   },
 };
 
-/// The runner's answer for what the person gave on the card.
+/// The runner's answer for what the person gave on the card, as its kind: a denial with a message is a denial, whose
+/// words its editor sends with it ([`Answering::send_message`]).
 pub(super) const fn approval_answer(given: Given) -> ApprovalAnswer {
   match given {
     Given::ApproveSimilar => ApprovalAnswer::Similar,
     Given::ApproveProject => ApprovalAnswer::SimilarProject,
     Given::ApproveEverything => ApprovalAnswer::ApproveRun,
-    Given::Deny => ApprovalAnswer::Deny,
+    Given::Deny | Given::DenyWithMessage => ApprovalAnswer::Deny,
     Given::ApproveOnce | Given::Answers | Given::ApprovePlan => ApprovalAnswer::Once,
   }
 }
 
 /// What the answers act on: the card's key and element id, the request, its choices once read, the run's
 /// number, the open project its runner takes the answer for, the tab's answers, *Approve once*, which
-/// takes the focus when the tab opens on the card, and the wider answer the card asks to confirm, if any.
+/// takes the focus when the tab opens on the card, the wider answer the card asks to confirm, if any, and the
+/// message editor's state: whether it shows, what is written, its field and whether that takes the focus.
 pub(super) struct Answering<'a> {
   pub(super) card: (RunId, &'a Arc<str>),
   pub(super) id: &'a str,
@@ -78,11 +84,15 @@ pub(super) struct Answering<'a> {
   pub(super) decisions: &'a Decisions,
   pub(super) once: &'a ElementRef,
   pub(super) asking: &'a Signal<Option<Given>>,
+  pub(super) editing: &'a Signal<bool>,
+  pub(super) message: &'a Signal<String>,
+  pub(super) field: &'a ElementRef,
+  pub(super) focus_field: &'a Arc<AtomicBool>,
 }
 
 impl Answering<'_> {
   /// What the card sent last, while it is on its way.
-  fn sending(&self) -> Option<Given> {
+  pub(super) fn sending(&self) -> Option<Given> {
     self
       .decisions
       .outcome(self.card)
@@ -107,7 +117,7 @@ impl Answering<'_> {
   }
 
   /// Whether `given` can be pressed now, and how: loading while it is on its way, held while another is.
-  fn hold(&self, given: Given) -> Result<OpenProject, bool> {
+  pub(super) fn hold(&self, given: Given) -> Result<OpenProject, bool> {
     if self.sending() == Some(given) {
       return Err(true);
     }
@@ -136,16 +146,7 @@ impl Answering<'_> {
 
 pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
   let id = answering.id;
-  let with_message = ActionButton::new(
-    format!("{id}-deny-message"),
-    ButtonKind::Ghost,
-    ctx.t("cards.approval.denyWithMessage"),
-  )
-  .icon(Icon::MessageSquareText)
-  .unavailable(ctx.t_args(
-    "cards.approval.denyWithMessageUnavailable",
-    [("agent", answering.request.agent.as_str())],
-  ));
+  let (with_message, reason) = with_message(ctx, answering);
   let deny = answering.button(
     ctx,
     Given::Deny,
@@ -167,22 +168,45 @@ pub(super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>) -> Element {
     .child(Spacer::new().flex(1.0))
     .child(deny)
     .child(once);
-  let reason = reason_line(
-    &format!("{id}-deny-message-reason"),
-    &ctx.t_args(
-      "cards.approval.denyWithMessageUnavailable",
-      [("agent", answering.request.agent.as_str())],
-    ),
-  );
   let wider = wider(ctx, answering);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(row)
     .with_children((answering.decisions.busy() && answering.sending().is_none()).then(|| held(ctx, id)))
-    .child(reason)
+    .with_children(reason)
     .child(wider)
     .into()
+}
+
+/// *Deny with a message*, which opens its editor; for a native agent's command, whose denial carries no words yet,
+/// locked, with why under the answers.
+fn with_message(ctx: &Ctx, answering: &Answering<'_>) -> (ActionButton, Option<Element>) {
+  let id = answering.id;
+  let button = ActionButton::new(
+    format!("{id}-deny-message"),
+    ButtonKind::Ghost,
+    ctx.t("cards.approval.denyWithMessage"),
+  )
+  .icon(Icon::MessageSquareText)
+  .in_form();
+  if answering.request.native.is_some() {
+    let why = ctx.t_args(
+      "cards.approval.denyWithMessageNative",
+      [("agent", answering.request.agent.as_str())],
+    );
+    let reason = reason_line(&format!("{id}-deny-message-reason"), &why).into();
+    return (button.unavailable(why), Some(reason));
+  }
+  if answering.hold(Given::DenyWithMessage).is_err() {
+    return (button.disabled(), None);
+  }
+  let (editing, focus) = (answering.editing.clone(), answering.focus_field.clone());
+  let button = button.on_click(move || {
+    focus.store(true, Ordering::Relaxed);
+    editing.set(true);
+  });
+  (button, None)
 }
 
 /// *Or answer more widely*: Approve similar, Approve everything in this run, Always allow; then the question
@@ -325,7 +349,7 @@ fn confirm_wider(ctx: &mut Ctx, answering: &Answering<'_>, given: Given, covers:
       "cards.approval.confirm.everythingTitle",
       "cards.approval.confirm.everything",
     ),
-    Given::ApproveOnce | Given::Deny | Given::Answers | Given::ApprovePlan => return None,
+    Given::ApproveOnce | Given::Deny | Given::DenyWithMessage | Given::Answers | Given::ApprovePlan => return None,
   };
   let name = wider_name(given);
   let run = answering.run.to_string();

@@ -22,7 +22,10 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::automation::{row, section_title};
+use super::{
+  automation::{row, section_title},
+  save_state::{Outcome, SaveState},
+};
 use crate::{
   notifications::{
     NotificationPrefs,
@@ -69,7 +72,11 @@ impl Component for NotificationsSection {
     let prefs = NotificationPrefs::of(ctx);
     let settings = prefs.get();
     let save = save_action(ctx);
-    let failed = save.state().get().error;
+    let state = save.state().get();
+    if let Some(saves) = SaveState::of(ctx) {
+      saves.report("settings-notifications", Outcome::of(&state));
+    }
+    let failed = state.error;
     self.follow_times(&prefs, &save, settings);
     let switch = |ctx: &Ctx, (key, on): (&str, bool), change| switch_row(ctx, (&prefs, &save), (key, on), change);
     let mut rows: Vec<Element> = vec![

@@ -28,6 +28,7 @@ use super::{Change, change, enabled::refused, outcome};
 use crate::{
   clipboard::copy_for_a_minute,
   mcp::{AppMcp, ServerState, input_gate::InputGate},
+  screens::settings::save_state::{Outcome, SaveState},
   services::Services,
   theme::ExtraSpacing,
   ui::{
@@ -121,6 +122,9 @@ impl Component for TokenRow {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let rotate: Change<()> = change(ctx, props.server.clone(), |server, ()| server.rotate_token());
+    if let Some(saves) = SaveState::of(ctx) {
+      saves.report("settings-mcp-rotate", Outcome::of(&rotate.state().get()));
+    }
     let read = ready(ctx, &props, self.read_again.get());
     let shown = self.reveal.token();
     let value = value(ctx, shown.as_ref());

@@ -24,6 +24,7 @@ use std::{io, time::Duration};
 
 use orchester_core::{
   attachment::input::{AttachedFile, claude_content, codex_items, taken_text, user_line},
+  connection::app_server::PendingApproval,
   conversation::{Arrival, Delivery, Message, Undelivered},
   id::MessageId,
   store::ConversationStore,
@@ -33,9 +34,10 @@ use orchester_ipc::Event;
 use orchester_store::{AttachmentOwner, StoreError};
 
 use super::{
-  super::app_server::{AppServerSession, STEER_REQUEST, SteerAnswer},
+  super::app_server::{AppServerSession, DENIAL_STEER, STEER_REQUEST, SteerAnswer},
   Driver, Transport, Watch, Worker,
 };
+use crate::supervisor::Supervised;
 
 /// What Codex 0.159.2 answers to `turn/steer` while no turn runs.
 const NO_ACTIVE_TURN: &str = "no active turn";
@@ -190,11 +192,39 @@ impl Worker {
     }
   }
 
+  /// Adds `text`, what a denial with a message tells Codex's model, to the running turn as input before Codex hears
+  /// the decline of `request`, as its decline carries no words. A turn that does not take it is logged, as is Codex's
+  /// refusal ([`Self::steer_answered`]); the request is declined all the same.
+  pub(in super::super) async fn follow_denial(&self, process: &Supervised, request: &PendingApproval, text: &str) {
+    let Some(app) = self.app_server().filter(|app| app.turn_working()) else {
+      tracing::warn!("no Codex turn runs to take a denial's message");
+      return;
+    };
+    let input = match codex_items(text, &[]) {
+      Ok(input) => input,
+      Err(error) => {
+        tracing::warn!(%error, "a denial's message could not be made Codex input");
+        return;
+      }
+    };
+    let id = format!("{DENIAL_STEER}{}", request.request_key());
+    let written = tokio::time::timeout(WRITE_TIME, app.steer(process, &id, &input)).await;
+    if let Err(error) = in_time(written) {
+      tracing::warn!(%error, "a denial's message could not be written to Codex");
+    }
+  }
+
   /// Codex's answers to `turn/steer`: an accepted message waits for its turn to take it, at the latest
   /// as the turn ends; one refused because the turn ended stays queued, any other refusal is not
-  /// delivered.
+  /// delivered. A denial's message is only logged when refused.
   pub(super) fn steer_answered(&self, watch: &mut Watch, answers: Vec<SteerAnswer>) -> Result<(), StoreError> {
     for answer in answers {
+      if answer.id.starts_with(DENIAL_STEER) {
+        if let Some(reason) = &answer.refused {
+          tracing::warn!(request = %answer.id, %reason, "Codex did not add a denial's message to its turn");
+        }
+        continue;
+      }
       let Some(id) = answer
         .id
         .strip_prefix(STEER_REQUEST)

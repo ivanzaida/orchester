@@ -284,7 +284,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "decide_approval",
-    description: "Approves a waiting request once, or denies it. Refused unless a person turned on Let automation answer approvals in the app.",
+    description: "Approves a waiting request once, or denies it; a denial may carry a `message`, which the agent gets as the denial's reason (Codex, whose decline carries no words, as the next message of its turn) and which the decision record keeps. Refused unless a person turned on Let automation answer approvals in the app; invalid_arguments for a message with approve_once, an empty one, or one over 2000 characters.",
     schema: schema_for_type::<approvals::DecideApproval>,
     read_only: false,
   },

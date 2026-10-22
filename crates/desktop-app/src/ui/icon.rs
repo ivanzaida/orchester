@@ -219,6 +219,7 @@ icons! {
   ScrollText => '\u{e45f}',
   Search => '\u{e151}',
   SearchX => '\u{e4ad}',
+  Send => '\u{e152}',
   Server => '\u{e153}',
   ServerCrash => '\u{e1e9}',
   Settings => '\u{e154}',

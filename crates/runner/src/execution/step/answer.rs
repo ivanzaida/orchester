@@ -7,7 +7,10 @@
 //! a person. Otherwise a person answers, and a wider answer first leaves what it promises: a rule, a
 //! profile version or a server setting, or the run's auto-approval. Each answer is recorded with who
 //! gave it, delivered to the one call that asked, and marked in the activity; Deny tells the agent what
-//! [`denial_message`] says and lets it continue.
+//! [`denial_message`] says and lets it continue. A denial with a message tells it the denier's words
+//! ([`denial_with_message`]): Claude Code and Orchester's tools as the denial's reason; Codex, whose decline
+//! carries no words (0.159), as the next input of its turn, sent with the decline. A native agent's denial
+//! carries no words yet, so it is refused with one.
 
 use orchester_core::{
   connection::{mcp::InvocationExemptions, stream::AgentEvent},
@@ -17,9 +20,9 @@ use orchester_core::{
   resource::ApprovalMode,
   run::{
     Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError, DecidedBy,
-    PendingToolApproval, ProjectRuleId, ProjectScope, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach,
-    allowing_tool, answering, answering_in_project, auto_approves, auto_verdict, codex_denial, denial_message,
-    permitted, review::Review,
+    DenialNote, PendingToolApproval, ProjectRuleId, ProjectScope, RuleScope, ToolApprovalDecision, ToolDecision,
+    ToolReach, allowing_tool, answering, answering_in_project, auto_approves, auto_verdict, codex_denial,
+    denial_message, denial_with_message, permitted, review::Review,
   },
   store::McpServerStore,
   time::Timestamp,
@@ -49,6 +52,10 @@ pub(super) struct Settled {
   /// A command that reads a credential location, which its mark names; only a person answers one.
   pub(super) secrets: bool,
   pub(super) told: Option<String>,
+  /// The denier's words, kept with the decision.
+  pub(super) note: Option<DenialNote>,
+  /// What Codex gets as the next input of its turn, as its decline tells its model nothing of the note.
+  pub(super) follow_up: Option<String>,
   /// What auto mode did with the request before it was answered.
   pub(super) review: Option<Review>,
 }
@@ -61,9 +68,17 @@ impl Settled {
       category,
       secrets: false,
       told: None,
+      note: None,
+      follow_up: None,
       review: None,
     }
   }
+}
+
+/// What a denial tells the agent through the call that asked, and what follows it as the next input of a Codex turn.
+struct Told {
+  told: String,
+  follow_up: Option<String>,
 }
 
 impl Worker {
@@ -136,12 +151,12 @@ impl Worker {
     })
   }
 
-  /// Leaves what `answer`, given `by` a person or automation, promises beyond this request, and returns
-  /// how the request itself is answered; a rejection when the answer is not available for it.
+  /// Leaves what `answer`, given `by` a person or automation, promises beyond this request, which waits in
+  /// `awaiting`, and returns how the request itself is answered; a rejection when the answer is not available for it.
   pub(super) fn widen(
     &self,
     watch: &mut Watch,
-    approval: &PendingToolApproval,
+    (approval, awaiting): (&PendingToolApproval, &Awaiting),
     (answer, by): (&ApprovalAnswer, Answerer),
   ) -> Result<Result<Settled, Rejection>, StoreError> {
     let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
@@ -164,16 +179,15 @@ impl Worker {
         }
       }
       ApprovalAnswer::Once => {}
-      ApprovalAnswer::Deny => {
-        // Claude Code hands the agent Orchester's message; Codex tells it in its own words; a native
-        // agent gets the denial result its loop answers the call with.
-        let told = match self.app_server() {
-          Some(_) => codex_denial(approval.command).to_owned(),
-          None if self.is_native() => DENIED.to_owned(),
-          None => denial_message(approval, by),
+      ApprovalAnswer::Deny | ApprovalAnswer::DenyWithMessage { .. } => {
+        let note = answer.denial_note();
+        let Some(Told { told, follow_up }) = self.told(approval, awaiting, (by, note)) else {
+          return Ok(Err(unavailable("Deny with a message")));
         };
         return Ok(Ok(Settled {
           told: Some(told),
+          note: note.cloned(),
+          follow_up,
           ..settled
         }));
       }
@@ -199,6 +213,35 @@ impl Worker {
       }
     }
     Ok(Ok(settled))
+  }
+
+  /// What denying `approval`, which waits in `awaiting`, `by` a person or automation tells the agent, with `note` when
+  /// it carries the denier's words: Claude Code and Orchester's tools get Orchester's words, Codex its own and the
+  /// note as its turn's next input, a native agent the denial result its loop answers the call with. `None` for a
+  /// note to a native agent, whose denial carries no words yet.
+  fn told(
+    &self,
+    approval: &PendingToolApproval,
+    awaiting: &Awaiting,
+    (by, note): (Answerer, Option<&DenialNote>),
+  ) -> Option<Told> {
+    let told = |told: String| Told { told, follow_up: None };
+    match (awaiting, note) {
+      (Awaiting::Native(_), Some(_)) => None,
+      (Awaiting::Native(_), None) => Some(told(DENIED.to_owned())),
+      (Awaiting::Codex(_), note) => Some(Told {
+        told: codex_denial(approval.command).to_owned(),
+        follow_up: note.map(|note| denial_with_message(approval, by, note)),
+      }),
+      (Awaiting::Claude { .. } | Awaiting::Tool { .. }, Some(note)) => {
+        Some(told(denial_with_message(approval, by, note)))
+      }
+      // A call of Orchester's tools refused to Codex reads as Codex's own refusal of an MCP call.
+      (Awaiting::Tool { .. }, None) if self.app_server().is_some() => {
+        Some(told(codex_denial(approval.command).to_owned()))
+      }
+      (Awaiting::Claude { .. } | Awaiting::Tool { .. }, None) => Some(told(denial_message(approval, by))),
+    }
   }
 
   /// Whether `subject` runs a check its access rules approve once per run.
@@ -266,16 +309,8 @@ impl Worker {
     let run = approval.run;
     // A review still under way is no longer wanted: dropping it stops the reviewer.
     self.reviewing = None;
-    if !watch
-      .db
-      .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?
-    {
+    if !claim(watch, approval, &settled)? {
       return Ok(Err(refusal(&watch.db, run, &approval.id)?));
-    }
-    match settled.rule {
-      Some(Answering::Run(rule)) => watch.db.rule_answered(run, rule, &approval.id)?,
-      Some(Answering::Project(rule)) => watch.db.project_rule_answered(rule)?,
-      None => {}
     }
     if settled.decided_by.answered_waiting() {
       self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
@@ -344,6 +379,27 @@ impl Worker {
     self.continue_after_tools(watch).await?;
     Ok(Ok(()))
   }
+}
+
+/// Takes `approval` from the waiting as `settled` answers it, with the rule that answered and a denial's words;
+/// whether it still waited.
+fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -> Result<bool, StoreError> {
+  let run = approval.run;
+  if !watch
+    .db
+    .claim_tool_approval(run, &approval.id, settled.decided_by, Timestamp::now())?
+  {
+    return Ok(false);
+  }
+  match settled.rule {
+    Some(Answering::Run(rule)) => watch.db.rule_answered(run, rule, &approval.id)?,
+    Some(Answering::Project(rule)) => watch.db.project_rule_answered(rule)?,
+    None => {}
+  }
+  if let Some(note) = &settled.note {
+    watch.db.record_denial_note(run, &approval.id, note)?;
+  }
+  Ok(true)
 }
 
 fn category_of(subject: &ApprovalSubject) -> Option<CommandCategory> {

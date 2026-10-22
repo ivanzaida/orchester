@@ -1,6 +1,6 @@
 //! Which colors the window uses: dark, light, or the operating system's choice ([`ThemeSetting`], kept
 //! in the application database through the session's workspace), and the mode that resolved to. The setting can change
-//! while the app runs; nothing in the window offers it yet, the app's MCP server does (`set_theme`).
+//! while the app runs: in Settings › General, and through the app's MCP server (`set_theme`).
 //!
 //! `System` uses the appearance the operating system had when the app started ([`system::mode`]):
 //! lurq reports no later change of it, so the window keeps that mode until the app starts again.
@@ -59,12 +59,23 @@ impl Appearance {
   /// Keeps `setting` in the settings, then gives `theme` its mode, which it returns. Nothing changes
   /// when it cannot be kept.
   pub fn set(&self, theme: &Theme, setting: ThemeSetting) -> Result<Mode, AppearanceError> {
+    let mode = self.keep(setting)?;
+    self.show(theme, setting, mode);
+    Ok(mode)
+  }
+
+  /// Keeps `setting` in the settings and returns the mode it stands for, changing nothing on screen. It blocks on
+  /// SQLite: Settings › General calls it off the UI thread, then [`Self::show`] on it.
+  pub fn keep(&self, setting: ThemeSetting) -> Result<Mode, AppearanceError> {
     let settings = self.settings.as_ref().ok_or(AppearanceError::NoSettings)?;
     settings.set_theme(setting).map_err(AppearanceError::NotSaved)?;
-    let mode = resolve(setting, self.system.get().copied());
+    Ok(resolve(setting, self.system.get().copied()))
+  }
+
+  /// Makes `setting`, which [`Self::keep`] kept, the current one, and gives `theme` its `mode`.
+  pub fn show(&self, theme: &Theme, setting: ThemeSetting, mode: Mode) {
     *self.current.lock() = (setting, mode);
     theme::apply(theme, mode);
-    Ok(mode)
   }
 }
 

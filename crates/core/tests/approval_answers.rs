@@ -9,9 +9,9 @@ use orchester_core::{
   },
   run::{
     AlwaysAllowError, AlwaysUnavailable, Answerer, ApprovalAnswer, ApprovalRule, ApprovalRuleId, ApprovalSubject,
-    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, PendingToolApproval, RuleScope, SimilarUnavailable,
-    ToolReach, allowing_command, allowing_tool, always_prefixes, answering, auto_approves, auto_verdict,
-    denial_message,
+    AutoAsk, AutoVerdict, AutomationAnswerError, DecidedBy, DenialNote, DenialNoteError, PendingToolApproval,
+    RuleScope, SimilarUnavailable, ToolReach, allowing_command, allowing_tool, always_prefixes, answering,
+    auto_approves, auto_verdict, denial_message, denial_with_message,
   },
   time::Timestamp,
 };
@@ -354,6 +354,56 @@ fn approval_answers_deny_tells_the_agent_to_continue() {
       prefix: Some(CommandPrefix::new("cargo add").expect("prefix"))
     }
   );
+}
+
+/// A denial may carry the denier's words (ORC-29): trimmed, not empty, at most 2000 characters; the agent is told who
+/// denied it, then the words. Who may deny may deny with a message, automation too.
+#[test]
+fn approval_answers_deny_with_a_message_tells_the_words() {
+  let note = DenialNote::new("  Use serde_json instead.\n").expect("words");
+  assert_eq!(note.as_str(), "Use serde_json instead.");
+  assert_eq!(DenialNote::new(" \n "), Err(DenialNoteError::Empty));
+  let long = "x".repeat(DenialNote::MAX_CHARS + 1);
+  assert_eq!(
+    DenialNote::new(&long),
+    Err(DenialNoteError::TooLong {
+      chars: DenialNote::MAX_CHARS + 1
+    })
+  );
+  assert!(DenialNote::new(&"ä".repeat(DenialNote::MAX_CHARS)).is_ok());
+  let answer = ApprovalAnswer::DenyWithMessage { message: note.clone() };
+  assert!(!answer.approves());
+  assert_eq!(answer.decided_by(), DecidedBy::PersonDeny);
+  assert_eq!(answer.denial_note(), Some(&note));
+  assert_eq!(ApprovalAnswer::Deny.denial_note(), None);
+  let fixture = Fixture::new();
+  assert_eq!(
+    answer.given_by(Answerer::Automation, &fixture.command("git push --force")),
+    Ok(DecidedBy::AutomationDeny)
+  );
+  assert_eq!(
+    denial_with_message(&approval(true, "command", "cargo add serde"), Answerer::Person, &note),
+    "Denied by the person reviewing this run: Use serde_json instead."
+  );
+  assert_eq!(
+    denial_with_message(&approval(false, "pencil", "batch_design"), Answerer::Person, &note),
+    "The person reviewing this run denied pencil batch_design: Use serde_json instead."
+  );
+  assert_eq!(
+    denial_with_message(
+      &approval(true, "command", "cargo add serde"),
+      Answerer::Automation,
+      &note
+    ),
+    "Denied by automation through Orchester's MCP server: Use serde_json instead."
+  );
+  let wire = serde_json::to_string(&answer).expect("wire");
+  assert_eq!(
+    wire,
+    r#"{"kind":"deny_with_message","message":"Use serde_json instead."}"#
+  );
+  assert_eq!(serde_json::from_str::<ApprovalAnswer>(&wire).expect("read"), answer);
+  assert!(serde_json::from_str::<ApprovalAnswer>(r#"{"kind":"deny_with_message","message":"  "}"#).is_err());
 }
 
 /// A person, automation and auto mode's reviewer answer a request that waited for them; the step's
