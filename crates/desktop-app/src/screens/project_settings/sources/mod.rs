@@ -44,12 +44,14 @@ use crate::{
   },
 };
 
-/// The project's sources as read, where a new one is checked, and when they were read.
+/// The project's sources as read, where a new one is checked, when they were read, and the *Try again* they were read
+/// after.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Read {
   listed: Vec<Listed>,
   place: Place,
   checked: String,
+  retried: u64,
 }
 
 impl DevtoolsInspectable for Read {}
@@ -74,6 +76,8 @@ type Save = FutureAction<(PathBuf, Change), Done, Message>;
 pub(super) struct Sources {
   save: Save,
   revision: Signal<u64>,
+  /// How often *Try again* was pressed after reading failed.
+  retried: Signal<u64>,
   /// The source a person is asked about before it is added.
   asking: Signal<Option<Asked>>,
   /// The source removed last, until the next change.
@@ -87,6 +91,7 @@ impl Component for Sources {
     let tab = Self {
       save: save_action(ctx),
       revision: ctx.signal(0),
+      retried: ctx.signal(0),
       asking: ctx.signal(None),
       removed: ctx.signal(None),
     };
@@ -116,7 +121,14 @@ impl Component for Sources {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let state = self.read(ctx, &props);
-    let Some(read) = state.data.clone() else {
+    // A failed re-read shows its error, not the list read before, which could still be changed; nor does that list
+    // show again while it is retried.
+    let retried = self.retried.get();
+    let Some(read) = state
+      .data
+      .clone()
+      .filter(|read| !state.is_rejected() && read.retried == retried)
+    else {
       return page::scroll(self.pending(ctx, &state));
     };
     if !self.save.state().get().is_pending() && self.save.state().get().error.is_none() {
@@ -144,14 +156,15 @@ impl Sources {
     let revision = self.revision.get() + props.project.feed.outside.get().of(Outside::ProjectSettings);
     ctx
       .future(
-        (props.project.open.repo_root.clone(), revision),
-        |(root, _)| async move {
+        (props.project.open.repo_root.clone(), revision, self.retried.get()),
+        |(root, _, retried)| async move {
           background::run(move || {
             let store = |error: orchester_store::StoreError| messages::store_error(&error);
             Ok(Read {
               listed: project::load_in(&root).map_err(store)?,
               place: project::place_in(&root).map_err(store)?,
               checked: display::clock(Timestamp::now()),
+              retried,
             })
           })
           .await?
@@ -162,9 +175,9 @@ impl Sources {
   }
 
   fn pending(&self, ctx: &Ctx, state: &FutureState<Read, Message>) -> Element {
-    match &state.error {
+    match state.error.as_ref().filter(|_| state.is_rejected()) {
       Some(error) => {
-        let revision = self.revision.clone();
+        let retried = self.retried.clone();
         load_error(
           ctx,
           "settings-sources-load-error",
@@ -172,7 +185,7 @@ impl Sources {
             &ctx.t("project_settings.sourcesTab.loadFailed"),
             &message_text(ctx, error),
           ),
-          move || revision.update(|revision| *revision += 1),
+          move || retried.update(|retried| *retried += 1),
         )
       }
       None => loading("settings-loading", &ctx.t("project_settings.sourcesTab.reading")).into(),

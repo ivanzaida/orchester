@@ -169,7 +169,9 @@
       "projectMeta": "Project",
       "pipelineMeta": "Pipeline · every step",
       "tasksToo": "Each task adds its own sources too. A run reads the union and keeps it until it ends.",
-      "draftOnly": "Changes here are saved in the draft; runs get them once v{{version}} is published."
+      "draftOnly": "Changes here are saved in the draft; runs get them once v{{version}} is published.",
+      "loadFailed": "The project's sources couldn't be read",
+      "loadFailedBody": "{{reason}} Nothing was changed. Sources can be added once the project's are read, since one the project already lists is not added again."
     },
     "delivery": "Delivery",
     "who": "Who can use it",

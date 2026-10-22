@@ -130,6 +130,46 @@ fn form_sources_create_and_run_stores_them_before_the_run_is_asked_to_start() {
 }
 
 #[test]
+fn form_sources_retry_run_stores_the_ones_create_and_run_could_not_before_it_asks_again() {
+  let mut form = Form::seeded("sources");
+  form.new_task();
+  let (_folder, spec) = spec();
+  add(&mut form, &spec);
+  form.window.until("the task's own source", |window| {
+    window.tree.get_element_by_id("task-form-source-0").is_some()
+  });
+  let database = rusqlite::Connection::open(form.repo.join(".orchester").join("orchester.db")).expect("opens");
+  database
+    .execute_batch(
+      "CREATE TRIGGER refuse_sources BEFORE INSERT ON task_sources BEGIN SELECT RAISE(FAIL, 'refused'); END",
+    )
+    .expect("the store refuses task sources");
+  form.set("task-form-title-input", "Add a delivery log");
+  form.set("task-form-brief-input", "Record every delivery attempt.");
+  form.click("task-form-add-criterion");
+  form.set("task-form-criterion-1-input", "Every attempt is stored.");
+  choose(&mut form, "Quick fix");
+  form.click("task-form-run");
+  form.window.until("queued without its sources", |window| {
+    window
+      .texts("task-form-status-label")
+      .is_some_and(|status| status.join("") == "Queued · run not started")
+  });
+  let queued = form.task("KON-2").expect("the task is stored");
+  assert!(form.db().task_sources(queued.id()).expect("read").is_empty());
+  database
+    .execute_batch("DROP TRIGGER refuse_sources")
+    .expect("the store takes them again");
+  form.click("task-form-retry");
+  let repo = form.repo.clone();
+  form.window.until("stored before the run is asked for", |_| {
+    orchester_store::ProjectDb::open(&repo)
+      .and_then(|db| db.task_sources(queued.id()))
+      .is_ok_and(|stored| stored == [source(&spec)])
+  });
+}
+
+#[test]
 fn form_sources_a_stored_task_saves_them_as_they_change() {
   let mut form = Form::seeded("sources");
   let task = form.task("KON-1").expect("the seeded draft").id();
@@ -150,4 +190,51 @@ fn form_sources_a_stored_task_saves_them_as_they_change() {
   });
   assert_eq!(form.db().task_sources(task).expect("read"), [source(&spec)]);
   assert_eq!(form.status(), "Draft saved locally", "sources are no unsaved change");
+}
+
+/// Lists a relative path among the project's sources, which no read takes: the store calls it corrupt.
+fn unreadable(form: &Form, broken: bool) {
+  let sql = if broken {
+    "INSERT INTO project_sources (position, path) VALUES (99, 'docs')"
+  } else {
+    "DELETE FROM project_sources WHERE path = 'docs'"
+  };
+  let changed = rusqlite::Connection::open(form.repo.join(".orchester").join("orchester.db"))
+    .expect("the project database opens")
+    .execute(sql, [])
+    .expect("the sources change");
+  assert_eq!(changed, 1);
+}
+
+#[test]
+fn form_sources_a_failed_read_says_why_with_try_again_never_the_list_read_before() {
+  let mut form = Form::seeded("sources");
+  let task = form.task("KON-1").expect("the seeded draft").id();
+  form.edit("KON-1");
+  form.window.until("the task's own source", |window| {
+    window.tree.get_element_by_id("task-form-source-0").is_some()
+  });
+  unreadable(&form, true);
+  // Removing one stores it, then reads the sources again, which fails now.
+  form.click("task-form-source-0-remove");
+  form.window.until("the failure", |window| {
+    window.tree.get_element_by_id("task-form-sources-load-error").is_some()
+  });
+  assert!(form.db().task_sources(task).expect("read").is_empty());
+  assert!(
+    form
+      .text("task-form-sources-load-error")
+      .starts_with("The sources couldn't be read")
+  );
+  assert!(!form.exists("task-form-source-0"), "the list read before is gone");
+  assert!(!form.exists(PATH), "nothing is added to a list not read");
+  assert!(!form.exists("task-form-sources-summary"));
+  unreadable(&form, false);
+  form.click("task-form-sources-load-error-retry");
+  form
+    .window
+    .until("read again", |window| window.tree.get_element_by_id(PATH).is_some());
+  assert!(!form.exists("task-form-sources-load-error"));
+  assert!(!form.exists("task-form-source-0"));
+  assert_eq!(form.text("task-form-sources-project-count"), "3");
 }

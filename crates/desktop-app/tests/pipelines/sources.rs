@@ -111,3 +111,51 @@ fn pipelines_sources_a_step_lists_its_own_beside_what_it_inherits() {
     drafted(e, id).is_some_and(|body| !body.steps().is_empty() && listed(&body).is_empty())
   });
 }
+
+/// Lists a relative path among the project's sources, which no read takes: the store calls it corrupt.
+fn unreadable(editor: &Editor, broken: bool) {
+  let sql = if broken {
+    "INSERT INTO project_sources (position, path) VALUES (99, 'docs')"
+  } else {
+    "DELETE FROM project_sources WHERE path = 'docs'"
+  };
+  let changed = rusqlite::Connection::open(editor.repo().join(".orchester").join("orchester.db"))
+    .expect("the project database opens")
+    .execute(sql, [])
+    .expect("the sources change");
+  assert_eq!(changed, 1);
+}
+
+#[test]
+fn pipelines_sources_a_failed_read_of_the_projects_says_why_with_try_again_never_an_empty_list() {
+  let mut editor = Editor::new();
+  let id = editor.empty("Review");
+  let docs = folder(1);
+  editor
+    .db()
+    .set_project_sources(&[source(docs.path())])
+    .expect("the project's");
+  unreadable(&editor, true);
+  editor.open(id);
+  editor.click("pipeline-add-step");
+  editor.until("the failure", |e| e.exists("step-sources-load-error"));
+  assert!(
+    editor
+      .text("step-sources-load-error")
+      .starts_with("The project's sources couldn't be read")
+  );
+  assert!(
+    !editor.exists("step-sources-add-path"),
+    "nothing is checked against a list not read"
+  );
+  assert!(
+    !editor.exists("step-sources-title-meta"),
+    "what it inherits is not counted"
+  );
+  assert!(!editor.exists("step-sources-project"));
+  unreadable(&editor, false);
+  editor.click("step-sources-load-error-retry");
+  editor.until("read again", |e| e.exists("step-sources-add-path"));
+  assert_eq!(editor.text("step-sources-title-meta"), "0 own · 1 inherited");
+  assert!(!editor.exists("step-sources-load-error"));
+}

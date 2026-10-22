@@ -122,6 +122,43 @@ fn project_settings_sources_a_missing_one_says_runs_start_without_it_and_is_remo
   assert_eq!(page.db().project_sources().expect("read"), [source(&gone)]);
 }
 
+/// Lists a relative path among the project's sources, which no read takes: the store calls it corrupt.
+fn unreadable(page: &Settings, broken: bool) {
+  let sql = if broken {
+    "INSERT INTO project_sources (position, path) VALUES (99, 'docs')"
+  } else {
+    "DELETE FROM project_sources WHERE path = 'docs'"
+  };
+  let changed = rusqlite::Connection::open(page.repo.join(".orchester").join("orchester.db"))
+    .expect("the project database opens")
+    .execute(sql, [])
+    .expect("the sources change");
+  assert_eq!(changed, 1);
+}
+
+#[test]
+fn project_settings_sources_a_failed_read_says_why_with_try_again_never_the_list_read_before() {
+  let mut page = Settings::new(false);
+  let folder = docs();
+  page.db().set_project_sources(&[source(folder.path())]).expect("listed");
+  page.tab("sources", "settings-source-0");
+  unreadable(&page, true);
+  // A change made elsewhere reads them again, which fails now.
+  page.outside(orchester_workspace::tasks::outside::Outside::ProjectSettings);
+  page.until("the failure", |p| p.exists("settings-sources-load-error"));
+  assert!(
+    page
+      .text("settings-sources-load-error")
+      .starts_with("The sources couldn't be read")
+  );
+  assert!(!page.exists("settings-source-0"), "the list read before is gone");
+  assert!(!page.exists(PATH));
+  unreadable(&page, false);
+  page.click("settings-sources-load-error-retry");
+  page.until("read again", |p| p.exists("settings-source-0"));
+  assert!(!page.exists("settings-sources-load-error"));
+}
+
 /// The path's type (`uixJK` in `Q5DCn`) and the section's spacing (`oCZK1`, `VXZ0x`).
 #[test]
 fn project_settings_sources_theme_roles_resolve_the_design() {

@@ -189,6 +189,8 @@ pub struct QueuedTask {
   pub key: TaskKey,
   /// Whether a failed start certainly made no run.
   pub outcome: StartOutcome,
+  /// A new task's sources that were not stored when it was queued: Retry run stores them before it asks for the run.
+  pub unsourced: Vec<SourcePath>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for QueuedTask {}
@@ -247,7 +249,7 @@ pub fn run_action(ctx: &mut Ctx, services: RunServices) -> RunAction {
     async move {
       let (queued, claim) = match args {
         RunArgs::New { save, version } => queue(&services, save, version).await?,
-        RunArgs::Retry(queued) => (queued, WorkClaim::default()),
+        RunArgs::Retry(queued) => (store_unsourced(&services, queued).await?, WorkClaim::default()),
       };
       start(&services, queued, claim).await
     }
@@ -297,6 +299,7 @@ async fn queue(
   };
   let servers = services.servers.clone();
   let (repo_root, target, points, module) = (save.repo_root.clone(), save.target, save.points, save.module);
+  let sources = save.sources.clone();
   let (queued, unsourced) = background::run(move || queue_with_sources(*save, &servers, version))
     .await
     .map_err(|message| not_queued(Arc::from([message])))?;
@@ -315,13 +318,18 @@ async fn queue(
     task: queued.task.id(),
     key: queued.task.key().clone(),
     outcome: StartOutcome::ConfirmedNotStarted,
+    unsourced: Vec::new(),
   };
   services.queued.set(Some(task.clone()));
   if let Some(message) = unsourced {
-    // The task is queued: the form keeps it, with Retry run, and says why its sources were not stored.
+    // The task is queued: the form keeps it, with Retry run, which stores the sources before it asks for the run,
+    // and says why they were not stored.
     return Err(RunProblems {
       messages: Arc::from([message]),
-      queued: Some(task),
+      queued: Some(QueuedTask {
+        unsourced: sources,
+        ..task
+      }),
       saved: None,
     });
   }
@@ -381,6 +389,27 @@ async fn saved_draft(repo_root: PathBuf, target: SaveTarget) -> Option<Saved> {
     }
     // Background work that did not finish is logged by `background::run`.
     Err(_) => None,
+  }
+}
+
+/// Stores the sources a new task was queued without, before Retry run asks for its run, which snapshots them; the
+/// task stays queued with them when they still cannot be stored.
+async fn store_unsourced(services: &RunServices, queued: QueuedTask) -> Result<QueuedTask, RunProblems> {
+  if queued.unsourced.is_empty() {
+    return Ok(queued);
+  }
+  let (root, task, unsourced) = (services.repo_root.clone(), queued.task, queued.unsourced.clone());
+  let stored = background::run(move || sources::save_new_in(&root, task, &unsourced, true)).await;
+  match stored.and_then(|stored| stored) {
+    Ok(()) => Ok(QueuedTask {
+      unsourced: Vec::new(),
+      ..queued
+    }),
+    Err(message) => Err(RunProblems {
+      messages: Arc::from([message]),
+      queued: Some(queued),
+      saved: None,
+    }),
   }
 }
 

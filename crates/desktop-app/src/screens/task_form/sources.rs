@@ -9,7 +9,7 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::{Ctx, FutureAction, FutureState},
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text},
@@ -45,6 +45,7 @@ use crate::{
     message::message_text,
     pressable::opening,
     source_row::SourceRow,
+    state::load_error,
     unavailable::reason_line,
   },
 };
@@ -96,6 +97,8 @@ impl DevtoolsInspectable for SourcesProps {}
 struct Read {
   own: Vec<Listed>,
   inherited: Inherited,
+  /// The *Try again* it was read after: what was read before a failure does not show again while it is retried.
+  retried: u64,
 }
 
 impl DevtoolsInspectable for Read {}
@@ -118,6 +121,8 @@ type Save = FutureAction<(PathBuf, TaskId, Option<(ResourceId, VersionNumber)>, 
 pub struct TaskSources {
   save: Save,
   revision: Signal<u64>,
+  /// How often *Try again* was pressed after reading failed.
+  retried: Signal<u64>,
   asking: Signal<Option<Asked>>,
 }
 
@@ -139,6 +144,7 @@ impl Component for TaskSources {
     let sources = Self {
       save,
       revision: ctx.signal(0),
+      retried: ctx.signal(0),
       asking: ctx.signal(None),
     };
     let (revision, asking) = (sources.revision.clone(), sources.asking.clone());
@@ -172,7 +178,10 @@ impl Component for TaskSources {
               .width(Dimension::Pct(100.0)),
           ),
       );
-    let Some(read) = read else {
+    if let Some(error) = read.error.clone().filter(|_| read.is_rejected()) {
+      return block.child(self.load_failed(ctx, &error));
+    }
+    let Some(read) = read.data.filter(|read| read.retried == self.retried.get()) else {
       return block;
     };
     let own: Vec<SourcePath> = read.own.iter().map(|listed| listed.path.clone()).collect();
@@ -216,8 +225,8 @@ impl Component for TaskSources {
 
 impl TaskSources {
   /// The task's own sources (the stored task's or the form's) and what it inherits; what was read before stays on
-  /// screen while they are read again.
-  fn read(&self, ctx: &mut Ctx, props: &SourcesProps) -> Option<Read> {
+  /// screen while they are read again, but not once reading them again failed.
+  fn read(&self, ctx: &mut Ctx, props: &SourcesProps) -> FutureState<Read, Message> {
     let drafted = props.task.is_none().then(|| props.drafted.get().0);
     let deps = (
       props.repo_root.clone(),
@@ -225,9 +234,10 @@ impl TaskSources {
       props.pipeline,
       drafted,
       self.revision.get(),
+      self.retried.get(),
     );
     ctx
-      .future(deps, |(root, task, pipeline, drafted, _)| async move {
+      .future(deps, |(root, task, pipeline, drafted, _, retried)| async move {
         background::run(move || {
           let store = |error: orchester_store::StoreError| messages::store_error(&error);
           let own = match (task, drafted) {
@@ -237,13 +247,28 @@ impl TaskSources {
           Ok::<_, Message>(Read {
             own: inspect_all(&own),
             inherited: task::inherited_in(&root, pipeline).map_err(store)?,
+            retried,
           })
         })
         .await?
       })
       .state()
       .get()
-      .data
+  }
+
+  /// Reading the sources failed: why, and *Try again*. Nothing can be added or removed until they are read.
+  fn load_failed(&self, ctx: &Ctx, error: &Message) -> Element {
+    let retried = self.retried.clone();
+    let body = ctx.t_args(
+      "task_form.sources.loadFailedBody",
+      [("reason", message_text(ctx, error).to_string())],
+    );
+    load_error(
+      ctx,
+      "task-form-sources-load-error",
+      (&ctx.t("task_form.sources.loadFailed"), &body),
+      move || retried.update(|retried| *retried += 1),
+    )
   }
 
   fn own_rows(&self, ctx: &mut Ctx, props: &SourcesProps, own: &[Listed], busy: bool) -> Vec<Element> {

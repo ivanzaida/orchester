@@ -13,12 +13,14 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{resource::StepKey, source::SourcePath};
 use orchester_workspace::{
-  background, messages,
+  background,
+  messages::{self, Message},
   pipelines::{
     sources::{self as drafted, Listing},
     write::next_version,
@@ -38,6 +40,7 @@ use crate::{
     inspector, list_entry,
     message::message_text,
     source_row::SourceRow,
+    state::load_error,
   },
 };
 
@@ -69,9 +72,9 @@ impl PartialEq for Props {
 
 impl DevtoolsInspectable for Props {}
 
-/// The project's sources as they are on disk now.
+/// The project's sources as they are on disk now, and the *Try again* they were read after.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct ProjectSources(Vec<Listed>);
+struct ProjectSources(Vec<Listed>, u64);
 
 impl DevtoolsInspectable for ProjectSources {}
 
@@ -99,31 +102,49 @@ pub fn step_section(ctx: &mut Ctx, state: &State, key: &StepKey, locked: bool) -
   )
 }
 
-struct Sources;
+struct Sources {
+  /// Read the project's sources again: *Try again* after reading them failed.
+  revision: Signal<u64>,
+}
 
 impl Component for Sources {
   type Props = Props;
 
-  fn create(_ctx: &mut Ctx) -> Self {
-    Self
+  fn create(ctx: &mut Ctx) -> Self {
+    Self {
+      revision: ctx.signal(0),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let open = ctx.use_context::<EditorProject>().map(|project| project.0);
     let root = open.as_ref().map(|open| open.repo_root.clone());
+    let revision = self.revision.get();
     let read = ctx
-      .future(root, |root| async move {
+      .future((root, revision), |(root, revision)| async move {
         let Some(root) = root else {
           return Ok(None);
         };
-        background::run(move || project::load_in(&root).map(|listed| Some(ProjectSources(listed))))
+        background::run(move || project::load_in(&root).map(|listed| Some(ProjectSources(listed, revision))))
           .await?
           .map_err(|error| messages::store_error(&error))
       })
       .state()
       .get();
-    let project = read.data.flatten().map(|read| read.0);
+    // A failed read shows in place of the project's sources and of *Add*: without them a path cannot be checked
+    // against what the project already lists, and the step's inherited count would be too low. What was read
+    // before it failed does not show again while it is retried.
+    let failure = read
+      .error
+      .clone()
+      .filter(|_| read.is_rejected())
+      .map(|error| self.load_failed(ctx, &props, &error));
+    let project = read
+      .data
+      .flatten()
+      .filter(|read| failure.is_none() && read.1 == revision)
+      .map(|read| read.0);
     let place = open.as_ref().zip(project.as_ref()).map(|(open, listed)| {
       let paths: Vec<SourcePath> = listed.iter().map(|listed| listed.path.clone()).collect();
       drafted::place(
@@ -136,11 +157,36 @@ impl Component for Sources {
     });
     let project = project.unwrap_or_default();
     match &props.step {
-      None => settings(ctx, &props, &project, place),
-      Some(key) => step(ctx, &props, key, &project, place),
+      None => settings(ctx, &props, &project, (place, failure)),
+      Some(key) => step(ctx, &props, key, &project, (place, failure)),
     }
   }
 }
+
+impl Sources {
+  /// Reading the project's sources failed: why, that nothing can be added until they are read, and *Try again*.
+  fn load_failed(&self, ctx: &Ctx, props: &Props, error: &Message) -> Element {
+    let revision = self.revision.clone();
+    let id = if props.step.is_some() {
+      "step-sources-load-error"
+    } else {
+      "pipeline-sources-load-error"
+    };
+    let body = ctx.t_args(
+      "pipelines.sourcesSection.loadFailedBody",
+      [("reason", message_text(ctx, error).to_string())],
+    );
+    load_error(
+      ctx,
+      id,
+      (&ctx.t("pipelines.sourcesSection.loadFailed"), &body),
+      move || revision.update(|revision| *revision += 1),
+    )
+  }
+}
+
+/// Where *Add* checks a path, and why reading the project's sources failed, shown in place of *Add*.
+type Adding = (Option<orchester_workspace::sources::check::Place>, Option<Element>);
 
 fn listing(props: &Props) -> Listing {
   props.step.clone().map_or(Listing::Pipeline, Listing::Step)
@@ -157,12 +203,7 @@ fn remover(props: &Props, path: &SourcePath) -> impl Fn() + Send + Sync + 'stati
   move || state.update(|editing| drafted::remove(&mut editing.edit, &listing, &path))
 }
 
-fn settings(
-  ctx: &mut Ctx,
-  props: &Props,
-  project: &[Listed],
-  place: Option<orchester_workspace::sources::check::Place>,
-) -> Element {
+fn settings(ctx: &mut Ctx, props: &Props, project: &[Listed], (place, failure): Adding) -> Element {
   let edit = props.state.get().shown();
   let mut control = Column::new()
     .id("pipeline-sources-control")
@@ -181,17 +222,20 @@ fn settings(
       remove,
     ));
   }
-  control = control.child(ctx.mount_keyed::<AddSource>(
-    "pipeline-sources-add",
-    AddSourceProps {
-      id: "pipeline-sources-add".into(),
-      place,
-      layout: Layout::Picker,
-      add: ctx.t("pipelines.sourcesSection.addFolder"),
-      locked: props.locked,
-      on_add: adder(props),
-    },
-  ));
+  control = control.child(match failure {
+    Some(failure) => failure,
+    None => ctx.mount_keyed::<AddSource>(
+      "pipeline-sources-add",
+      AddSourceProps {
+        id: "pipeline-sources-add".into(),
+        place,
+        layout: Layout::Picker,
+        add: ctx.t("pipelines.sourcesSection.addFolder"),
+        locked: props.locked,
+        on_add: adder(props),
+      },
+    ),
+  });
   if let Some(read_back) = drafted::steps_read_back(&edit) {
     control = control.child(
       Text::new(&message_text(ctx, &read_back))
@@ -249,29 +293,26 @@ fn project_entry(ctx: &Ctx, index: usize, listed: &Listed) -> Element {
     .into()
 }
 
-fn step(
-  ctx: &mut Ctx,
-  props: &Props,
-  key: &StepKey,
-  project: &[Listed],
-  place: Option<orchester_workspace::sources::check::Place>,
-) -> Element {
+fn step(ctx: &mut Ctx, props: &Props, key: &StepKey, project: &[Listed], (place, failure): Adding) -> Element {
   let editing = props.state.get();
   let edit = editing.shown();
   let own = edit.sources().step(key).to_vec();
   let pipeline = edit.sources().pipeline().to_vec();
-  let meta = ctx.t_args(
-    "pipelines.sourcesSection.counts",
-    [
-      ("own", own.len().to_string()),
-      ("inherited", (project.len() + pipeline.len()).to_string()),
-    ],
-  );
+  // What it inherits is not counted while the project's sources could not be read.
+  let meta = failure.is_none().then(|| {
+    ctx.t_args(
+      "pipelines.sourcesSection.counts",
+      [
+        ("own", own.len().to_string()),
+        ("inherited", (project.len() + pipeline.len()).to_string()),
+      ],
+    )
+  });
   let mut section = inspector::section("step-sources", SpacingSize::Xs)
     .child(inspector::section_title(
       "step-sources-title",
       &ctx.t("pipelines.sources"),
-      Some(&meta),
+      meta.as_deref(),
     ))
     .child(
       Text::new(&ctx.t("pipelines.sourcesSection.stepDetail"))
@@ -299,17 +340,21 @@ fn step(
     };
     own_rows = own_rows.child(row.render(ctx));
   }
-  section = section.child(own_rows).child(ctx.mount_keyed::<AddSource>(
-    &format!("step-sources-add-{key}"),
-    AddSourceProps {
-      id: "step-sources-add".into(),
-      place,
-      layout: Layout::Stacked,
-      add: ctx.t("pipelines.sourcesSection.add"),
-      locked: props.locked,
-      on_add: adder(props),
-    },
-  ));
+  let add = match failure {
+    Some(failure) => failure,
+    None => ctx.mount_keyed::<AddSource>(
+      &format!("step-sources-add-{key}"),
+      AddSourceProps {
+        id: "step-sources-add".into(),
+        place,
+        layout: Layout::Stacked,
+        add: ctx.t("pipelines.sourcesSection.add"),
+        locked: props.locked,
+        on_add: adder(props),
+      },
+    ),
+  };
+  section = section.child(own_rows).child(add);
   section = inherited(ctx, section, project, &pipeline);
   let version = next_version(&editing.opened).map_or_else(String::new, |version| version.get().to_string());
   section
