@@ -356,6 +356,17 @@ fn tools_answer_from_the_window_without_revealing_the_token() {
     tool_value(&moved).0["route"]["path"],
     "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/usage"
   );
+  let delivery = served.call(
+    &session,
+    "navigate",
+    &json!({ "route": "usage", "project": "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b", "view": "delivery", "period": "90d" }),
+  );
+  let (delivery, _) = tool_value(&delivery);
+  assert_eq!(
+    delivery["route"]["path"],
+    "/project/3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b/usage/delivery?period=90d"
+  );
+  assert_eq!(delivery["route"]["params"]["view"], "delivery", "{delivery}");
   let (error, failed) = tool_value(&served.call(&session, "navigate", &json!({ "route": "nowhere" })));
   assert!(failed);
   assert_eq!(error["code"], "unknown_route");

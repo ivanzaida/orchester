@@ -168,6 +168,11 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       format!("{root}/usage?period=30d&group=task&model=gpt%205"),
       json!({ "project": PROJECT, "query": "period=30d&group=task&model=gpt%205" }),
     ),
+    (
+      json!({ "route": "memory", "project": PROJECT, "tab": "waiting" }),
+      format!("{root}/memory?tab=waiting"),
+      json!({ "project": PROJECT, "tab": "waiting" }),
+    ),
   ];
   for (args, path, params) in cases {
     let answer = navigate(&navigation, &args).expect("a valid route");
@@ -222,6 +227,10 @@ fn navigate_refuses_what_names_no_route_with_a_stable_code() {
     (
       json!({ "route": "tasks", "project": PROJECT, "highlight": "kon-1" }),
       "invalid_param",
+    ),
+    (
+      json!({ "route": "memory", "project": PROJECT, "tab": "queue" }),
+      "unknown_tab",
     ),
     (json!({ "route": "tasks", "project": PROJECT, "q": 7 }), "not_a_string"),
     (

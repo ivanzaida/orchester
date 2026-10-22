@@ -14,7 +14,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  listing::Counts,
+  listing::{Counts, StatusFilter, of_status},
   next::{NextAgent, next_agent},
   origin::{Origins, Workplace},
 };
@@ -123,27 +123,19 @@ impl ProjectMemory {
       .map(|(_, count)| *count)
   }
 
-  /// The project's records by status, with every proposal as waiting.
-  pub fn counts(&self) -> Counts {
-    Counts {
-      waiting: self.waiting.len(),
-      ..Counts::of(
-        self
-          .records
-          .iter()
-          .filter(|memory| memory.status() != MemoryStatus::Proposed),
-      )
+  /// The records a tab of the page that lists `status` looks in: every proposal of the project and its tasks while it
+  /// lists the waiting ones, the project's own records otherwise.
+  pub fn pool(&self, status: StatusFilter) -> &[Memory] {
+    if status == StatusFilter::Waiting {
+      &self.waiting
+    } else {
+      &self.records
     }
   }
 
-  /// The proposals that wait, of the project's own memory and of tasks'.
-  pub fn waiting_by_scope(&self) -> (usize, usize) {
-    let project = self
-      .waiting
-      .iter()
-      .filter(|memory| memory.scope() == orchester_core::memory::MemoryScope::Project)
-      .count();
-    (project, self.waiting.len() - project)
+  /// How many records the tab that lists `status` holds before any search or filter: the count beside it.
+  pub fn count(&self, status: StatusFilter) -> usize {
+    of_status(self.pool(status), status)
   }
 }
 

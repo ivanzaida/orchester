@@ -1,10 +1,11 @@
 //! The Memory screens' other states on the `memory` scenario: a reading that failed with *Try again* (`AlQy0`),
-//! records that couldn't be read (`hsIEe`, `zGBYl`), the project's search with no results (`z4t51u`), a restore
-//! refused while the key names another active record (`rKIl1`), a save refused because it holds a secret's value,
-//! a change refused because the record changed meanwhile, and that only a person changes memory: synthetic input
-//! (an MCP client driving the window) is refused in place.
+//! records that couldn't be read (`hsIEe`, `zGBYl`), a restore refused while the key names another active record
+//! (`rKIl1`), a save refused because it holds a secret's value, a change refused because the record changed
+//! meanwhile, and that only a person changes memory: synthetic input (an MCP client driving the window) is refused
+//! in place.
 
 use lurq::app::events::with_synthetic_input;
+use orchester_app::routes::MemoryTab;
 use orchester_core::memory::MemoryStatus;
 
 use super::harness::Page;
@@ -33,11 +34,12 @@ fn memory_project_page_says_it_couldnt_read_and_tries_again() {
   page.edit_outside("ALTER TABLE memories RENAME TO memories_away", None);
   page.project_memory();
   assert!(page.text("memory-load-error").starts_with("Memory couldn't be read"));
+  assert!(!page.has("memory-tabs"), "no tabs before the page has read its records");
   page.edit_outside("ALTER TABLE memories_away RENAME TO memories", None);
   page.press_until("memory-load-error-retry", "the memory read again", |window| {
     window.texts("memory-body").is_some()
   });
-  assert_eq!(page.text("memory-records-count"), "10 active");
+  assert_eq!(page.text("memory-tab-active"), "Active 10");
 }
 
 #[test]
@@ -45,13 +47,14 @@ fn memory_unreadable_records_are_left_out_and_said() {
   let mut page = Page::seeded("memory");
   let layout = page.record("Domain code lives in crates/core").id();
   assert_eq!(page.edit_outside(TWO_LINE_KEY, Some(layout)), 1);
-  page.project_memory();
+  page.memory_tab(MemoryTab::Active);
   assert!(
     page
       .text("memory-unreadable")
       .starts_with("1 record couldn't be read and is left out")
   );
-  assert_eq!(page.text("memory-records-count"), "9 active · 1 left out");
+  assert_eq!(page.text("memory-tab-active"), "Active 9");
+  assert!(page.has("memory-records"));
   assert!(!page.has(&format!("memory-record-{layout}")));
   page.task_memory("KON-12");
   assert!(
@@ -59,28 +62,6 @@ fn memory_unreadable_records_are_left_out_and_said() {
       .text("memory-unreadable")
       .starts_with("1 record couldn't be read and is left out")
   );
-}
-
-#[test]
-fn memory_project_search_with_no_results_names_the_status_it_lists() {
-  let mut page = Page::seeded("memory");
-  page.project_memory();
-  page.window.set("memory-search", "kontur-ci-01");
-  page.until("no match", |window| window.texts("memory-no-match").is_some());
-  let empty = page.text("memory-no-match");
-  assert!(empty.starts_with("No active records match “kontur-ci-01”"), "{empty}");
-  assert!(
-    empty.contains("Search finds words and parts of words, not other wording with the same meaning."),
-    "{empty}"
-  );
-  assert!(empty.contains("1 match among deprecated records"), "{empty}");
-  assert!(page.has("memory-clear-search"));
-  page.press_until("memory-show-status", "the deprecated records", |window| {
-    window.texts("memory-no-match").is_none()
-  });
-  assert_eq!(page.text("memory-filter-status"), "Status · Deprecated");
-  let runner = page.record("CI runs on the self-hosted Windows runner").id();
-  assert!(page.has(&format!("memory-record-{runner}")));
 }
 
 #[test]
@@ -92,9 +73,7 @@ fn memory_restore_is_refused_while_the_key_names_another_active_record() {
     page.edit_outside("UPDATE memories SET key = 'ci.runner' WHERE id = ?1", Some(times)),
     1
   );
-  page.project_memory();
-  page.window.press("memory-filter-status");
-  page.window.press("memory-filter-status-menu-3");
+  page.memory_tab(MemoryTab::Deprecated);
   let row = format!("memory-record-{runner}");
   page.until("the deprecated records", |window| window.texts(&row).is_some());
   page.hover(&row);
@@ -179,9 +158,9 @@ fn memory_synthetic_input_approves_nothing_and_says_only_a_person_changes_memory
       .starts_with("Only a person changes memory here")
   );
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Proposed);
-  assert_eq!(page.text("memory-queue-count"), "4");
+  assert_eq!(page.text("memory-tab-waiting-badge"), "4");
   page.press_until(&format!("{proposal}-approve"), "a person's approval", |window| {
-    window.text("memory-queue-count") == "3"
+    window.text("memory-tab-waiting-badge") == "3"
   });
   assert_eq!(page.stored(typed).expect("kept").status(), MemoryStatus::Active);
 }

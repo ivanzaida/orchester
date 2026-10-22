@@ -19,6 +19,7 @@ use orchester_core::{
   usage::{DayRange, GroupBy, Period},
 };
 use orchester_workspace::{
+  delivery::DeliveryPeriod,
   files::{FilePath, LineRange, Version},
   links::{Link, TaskPage},
   pull_requests::list::PullRequestTab,
@@ -29,7 +30,7 @@ const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 18;
+const KINDS: usize = 19;
 
 /// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
 fn matched(chain: &[RouteMatch]) -> String {
@@ -78,6 +79,7 @@ const fn kind(link: &Link) -> usize {
     Link::Modules(_) => 15,
     Link::Module(..) => 16,
     Link::Orchestrator(..) => 17,
+    Link::Delivery(..) => 18,
   }
 }
 
@@ -180,6 +182,7 @@ fn every_link() -> Vec<(Link, Route)> {
   .into_iter()
   .chain(task_links(project))
   .chain(file_links(project))
+  .chain(DeliveryPeriod::ALL.map(|period| (Link::Delivery(project, period), at(ProjectPage::Delivery(period)))))
   .chain(usage_queries().into_iter().flat_map(|query| {
     let mut everywhere = query.clone();
     everywhere.filter.projects.extend([project, ProjectId::generate()]);
@@ -302,6 +305,14 @@ fn links_have_the_documented_paths() {
         ..UsageQuery::default()
       })),
       "/usage?group=model".to_owned(),
+    ),
+    (
+      Link::Delivery(project(), DeliveryPeriod::Month),
+      format!("{root}/usage/delivery"),
+    ),
+    (
+      Link::Delivery(project(), DeliveryPeriod::Quarter),
+      format!("{root}/usage/delivery?period=90d"),
     ),
   ] {
     assert_eq!(link.path(), path);

@@ -12,6 +12,7 @@ mod base_moved;
 mod basics;
 mod cloud_accounts;
 mod connections_window;
+mod delivery;
 mod drafts;
 mod gates;
 #[path = "../mcp_server/http.rs"]

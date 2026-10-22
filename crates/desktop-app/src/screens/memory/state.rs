@@ -1,6 +1,7 @@
 //! What a Memory screen keeps while it shows: its filters and search, which record is open in an editor or a
-//! delete confirmation, which histories are unfolded, the record its inspector shows, and the change under way.
-//! The task's Memory tab and the project's Memory page each provide one to the parts they mount.
+//! delete confirmation, which histories are unfolded, the record whose details are open in place, and the change
+//! under way. The task's Memory tab and the project's Memory page each provide one to the parts they mount; the
+//! page keeps it across its tabs, so a search stays when another tab opens.
 
 use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
@@ -44,7 +45,7 @@ pub struct Unfolded(pub BTreeSet<MemoryId>);
 
 impl DevtoolsInspectable for Unfolded {}
 
-/// The record the project's inspector shows, if a press chose one.
+/// The record whose details are open in place on the project's page, if a press opened them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Chosen(pub Option<MemoryId>);
 
@@ -231,14 +232,16 @@ impl MemoryState {
     self.histories.with(|open| open.0.contains(&record))
   }
 
-  /// The record the project's inspector shows, if a press chose one.
+  /// The record whose details are open in place, if a press opened them.
   pub fn chosen(&self) -> Option<MemoryId> {
     self.selected.get().0
   }
 
-  /// Shows `record` in the project's inspector.
+  /// Opens `record`'s details in place, closing another record's; closes them when they are open.
   pub fn choose(&self, record: MemoryId) {
-    self.selected.set(Chosen(Some(record)));
+    self.selected.update(|chosen| {
+      chosen.0 = (chosen.0 != Some(record)).then_some(record);
+    });
   }
 
   /// The record the last change asked for was of, once one was asked for.

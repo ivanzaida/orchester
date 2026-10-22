@@ -5,12 +5,17 @@ use orchester_core::{
   project::TaskKey,
   resource::VersionNumber,
 };
-use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
+use orchester_workspace::{
+  delivery::DeliveryPeriod,
+  links::{DELIVERY, PERIOD, USAGE, delivery_path},
+  pull_requests::list::PullRequestTab,
+  usage::UsageQuery,
+};
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, MODULES, NEW, NewConnection,
-  ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab, RouteError, SETTINGS,
-  Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, MODULES, MemoryTab, NEW,
+  NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab,
+  RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
   query::{Params, with_query},
@@ -51,6 +56,8 @@ pub enum ProjectPage {
   PullRequest(NonZeroU64, Option<String>),
   /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
   Usage(Box<UsageQuery>),
+  /// The Delivery view beside Usage, over its period.
+  Delivery(DeliveryPeriod),
   Pipelines,
   NewPipeline,
   NewEmptyPipeline,
@@ -63,7 +70,8 @@ pub enum ProjectPage {
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
   Instructions(InstructionsView),
-  Memory,
+  /// The Memory page on its tab; `None` on the one it opens on.
+  Memory(Option<MemoryTab>),
   /// The Skills library with its filter.
   Skills(SkillsFilter),
   NewSkill,
@@ -131,7 +139,7 @@ impl ProjectPage {
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
       Screen::Instructions => Self::Instructions(InstructionsView::default()),
-      Screen::Memory => Self::Memory,
+      Screen::Memory => Self::Memory(None),
       Screen::Skills => Self::Skills(SkillsFilter::default()),
       Screen::Tools => Self::Tools,
       Screen::Secrets => Self::Secrets(SecretsView::default()),
@@ -154,13 +162,13 @@ impl ProjectPage {
       Self::Modules | Self::Module(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
-      Self::Usage(_) => Screen::Usage,
+      Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) | Self::PipelineVersion(..) => {
         Screen::Pipelines
       }
       Self::Agents | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
-      Self::Memory => Screen::Memory,
+      Self::Memory(_) => Screen::Memory,
       Self::Skills(_) | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
       Self::Tools | Self::NewTool | Self::Tool(..) => Screen::Tools,
       Self::Secrets(_) => Screen::Secrets,
@@ -206,6 +214,7 @@ impl ProjectPage {
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
       Self::Secrets(view) => view.path(segment(Screen::Secrets)),
+      Self::Memory(tab) => with_query(segment(Screen::Memory), &[MemoryTab::param(*tab)]),
       Self::Settings(tab) => with_query(segment(Screen::ProjectSettings), &[tab.param()]),
       Self::PullRequests(tab) => {
         let tab = (*tab != PullRequestTab::default()).then(|| tab.name());
@@ -216,6 +225,7 @@ impl ProjectPage {
         &[(FILE, file.as_deref())],
       ),
       Self::Usage(query) => super::usage::path(project_root, query),
+      Self::Delivery(period) => delivery_path(project_root, *period),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -265,15 +275,7 @@ impl ProjectPage {
         Some("import") => Ok(Self::ImportSkills),
         Some(id) => id.parse().map(Self::Skill).map_err(|_| RouteError::NoScreen),
       },
-      ["tools"] => match params.take("tool")?.as_deref() {
-        None => Ok(Self::Tools),
-        Some("new") => Ok(Self::NewTool),
-        Some(id) => {
-          let id = id.parse().map_err(|_| RouteError::NoScreen)?;
-          let tab = params.take_or_default(TAB, ToolTab::from_name)?;
-          Ok(Self::Tool(id, tab))
-        }
-      },
+      ["tools"] => tools(params),
       ["pipelines", NEW] => match params.take("start")?.as_deref() {
         None | Some("starter") => Ok(Self::NewPipeline),
         Some("empty") => Ok(Self::NewEmptyPipeline),
@@ -302,11 +304,12 @@ impl ProjectPage {
       }
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
+      ["memory"] => MemoryTab::take(params).map(Self::Memory),
       [SETTINGS] => settings(params),
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
       )),
-      [USAGE] => super::usage::take(params).map(|query| Self::Usage(Box::new(query))),
+      [USAGE, rest @ ..] => usage(rest, params),
       [PULL_REQUESTS, number] => {
         let number = number.parse::<NonZeroU64>().map_err(|_| RouteError::NoScreen)?;
         Ok(Self::PullRequest(number, params.take(FILE)?))
@@ -326,11 +329,44 @@ impl ProjectPage {
   }
 }
 
+/// The Usage page with its query, or under it the Delivery view with its period (the one it opens on when the query
+/// names none).
+fn usage(rest: &[&str], params: &mut Params) -> Result<ProjectPage, RouteError> {
+  match rest {
+    [] => super::usage::take(params).map(|query| ProjectPage::Usage(Box::new(query))),
+    [DELIVERY] => {
+      let Some(name) = params.take(PERIOD)? else {
+        return Ok(ProjectPage::Delivery(DeliveryPeriod::default()));
+      };
+      DeliveryPeriod::from_name(&name)
+        .map(ProjectPage::Delivery)
+        .ok_or(RouteError::InvalidParam {
+          param: PERIOD.to_owned(),
+          value: name,
+        })
+    }
+    _ => Err(RouteError::NoScreen),
+  }
+}
+
 fn task_key(value: &str) -> Result<TaskKey, RouteError> {
   value.parse().map_err(|source| RouteError::TaskKey {
     value: value.to_owned(),
     source,
   })
+}
+
+/// The Tools library, a new tool's draft (`tool=new`), or a tool on its tab (`tool=<id>&tab=…`).
+fn tools(params: &mut Params) -> Result<ProjectPage, RouteError> {
+  match params.take("tool")?.as_deref() {
+    None => Ok(ProjectPage::Tools),
+    Some("new") => Ok(ProjectPage::NewTool),
+    Some(id) => {
+      let id = id.parse().map_err(|_| RouteError::NoScreen)?;
+      let tab = params.take_or_default(TAB, ToolTab::from_name)?;
+      Ok(ProjectPage::Tool(id, tab))
+    }
+  }
 }
 
 /// Project settings on the tab the query names, *Make local*'s question on Sharing (`ask=make-local`), or the join

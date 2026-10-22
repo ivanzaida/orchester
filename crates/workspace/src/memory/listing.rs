@@ -7,8 +7,8 @@ use orchester_core::{
   memory::{Memory, MemoryAuthor, MemoryKind, MemoryScope, MemoryStatus},
 };
 
-/// Which statuses a listing shows (the *Status* filter): the task's Memory tab shows the active and the
-/// waiting records at first, the project's page the active ones (its queue holds the waiting).
+/// Which statuses a listing shows: the task's Memory tab's *Status* filter, which shows the active and the waiting
+/// records at first, and the tab of the project's page (one status each, Rejected with the withdrawn proposals).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum StatusFilter {
   #[default]
@@ -19,11 +19,14 @@ pub enum StatusFilter {
   Superseded,
   Rejected,
   Withdrawn,
+  /// The project page's *Rejected* tab: neither was given to an agent, and neither is restored.
+  RejectedOrWithdrawn,
   All,
 }
 
 impl StatusFilter {
-  pub const ALL: [Self; 8] = [
+  /// The choices of the task tab's *Status* filter.
+  pub const CHOICES: [Self; 8] = [
     Self::ActiveAndWaiting,
     Self::Active,
     Self::Waiting,
@@ -43,6 +46,7 @@ impl StatusFilter {
       Self::Superseded => status == MemoryStatus::Superseded,
       Self::Rejected => status == MemoryStatus::Rejected,
       Self::Withdrawn => status == MemoryStatus::Withdrawn,
+      Self::RejectedOrWithdrawn => matches!(status, MemoryStatus::Rejected | MemoryStatus::Withdrawn),
       Self::All => true,
     }
   }
@@ -100,7 +104,7 @@ pub struct Filters {
 }
 
 impl Filters {
-  /// The project page's at first: active records.
+  /// Active records, unnarrowed: the project page's *Active* tab.
   pub fn project() -> Self {
     Self {
       status: StatusFilter::Active,
@@ -173,11 +177,17 @@ pub struct Listed<'a> {
   pub records: Vec<&'a Memory>,
 }
 
+/// The records of `records` that `filters` show in one list, pinned first, then oldest first.
+pub fn flat<'a>(records: &'a [Memory], filters: &Filters) -> Vec<&'a Memory> {
+  let mut shown: Vec<&Memory> = records.iter().filter(|memory| filters.shows(memory)).collect();
+  shown.sort_by_key(|memory| (!memory.is_pinned(), memory.created_at()));
+  shown
+}
+
 /// The records of `records` that `filters` show, grouped: the waiting ones first when `waiting_first`, then one
 /// group per type in [`KIND_ORDER`]; empty groups are left out.
 pub fn grouped<'a>(records: &'a [Memory], filters: &Filters, waiting_first: bool) -> Vec<Listed<'a>> {
-  let mut shown: Vec<&Memory> = records.iter().filter(|memory| filters.shows(memory)).collect();
-  shown.sort_by_key(|memory| (!memory.is_pinned(), memory.created_at()));
+  let shown = flat(records, filters);
   let waiting = |memory: &&Memory| waiting_first && memory.status() == MemoryStatus::Proposed;
   let mut groups = Vec::new();
   let proposals: Vec<&Memory> = shown.iter().copied().filter(waiting).collect();

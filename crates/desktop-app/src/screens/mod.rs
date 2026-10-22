@@ -9,6 +9,7 @@ mod add_project;
 mod agents;
 mod all_projects;
 mod connections;
+mod delivery;
 mod files;
 pub(crate) mod gate;
 mod instructions;
@@ -90,7 +91,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     // Listed in the sidebar as the design draws it (`q9mf0k`); its own task builds it.
     ProjectPage::MergeQueue => placeholder(ctx, page.screen()),
-    ProjectPage::Memory => memory::screen(ctx, project),
+    ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project),
     ProjectPage::EditTask(key) => task_form::edit_task(ctx, project, key),
@@ -101,6 +102,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(ctx, project, *number, file.as_deref()),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
+    ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline => pipelines::new_pipeline(ctx, project),
     ProjectPage::Pipeline(id, panel) => pipelines::editor(ctx, project, *id, (panel.clone(), None)),

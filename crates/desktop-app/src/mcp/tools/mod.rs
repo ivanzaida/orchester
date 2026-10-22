@@ -102,6 +102,7 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::Memory(Some(tab)) => insert("tab", tab.name()),
     ProjectPage::PullRequests(tab) => insert("tab", tab.name()),
     ProjectPage::PullRequest(number, _) => insert("number", &number.to_string()),
     ProjectPage::Usage(query) => {
@@ -109,6 +110,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       if let Some(query) = query.strip_prefix('?') {
         insert("query", query);
       }
+    }
+    ProjectPage::Delivery(period) => {
+      insert("view", "delivery");
+      insert("period", period.name());
     }
     ProjectPage::Connections(view) => {
       insert("tab", view.tab().name());

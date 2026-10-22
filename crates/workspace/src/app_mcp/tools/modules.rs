@@ -259,6 +259,7 @@ fn page_json(project: ProjectId, page: &ModulePage) -> Value {
     "progress": progress_json(page.progress),
     "tasks": tasks,
     "burndown": burndown_json(&page.burndown),
+    "forecast": super::delivery::outlook_json(&page.forecast),
   })
 }
 

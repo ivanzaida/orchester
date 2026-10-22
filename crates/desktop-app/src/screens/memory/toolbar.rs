@@ -1,7 +1,7 @@
 //! The search and filters of a Memory screen's records: *Search text, keys and tags…* and the *Type*, *Status* and
-//! *Author* filters, on the task's tab in its toolbar with the count and *New record* (`Memory toolbar` `yFMam`), on
-//! the project's page above its records with *Tag* too (`Toolbar` `QeOEN`). A filter that chooses something says
-//! what (*Type · Decisions*, *Status · All*).
+//! *Author* filters on the task's tab, in its toolbar with the count and *New record* (`Memory toolbar` `yFMam`); on
+//! the project's page the *Type*, *Author* and *Tag* filters in every status tab, whose tab is the status
+//! (`Toolbar` `kjxv9`). A filter that chooses something says what (*Type · Decisions*, *Status · All*).
 
 use std::sync::Arc;
 
@@ -87,7 +87,12 @@ impl Component for FilterBar {
       .child(search.render(ctx));
     let mut popups = Vec::new();
     for (facet, (open, anchor)) in FACETS.into_iter().zip(&self.menus) {
-      if facet == Facet::Tag && !props.project {
+      let shown = match facet {
+        Facet::Kind | Facet::Author => true,
+        Facet::Status => !props.project,
+        Facet::Tag => props.project,
+      };
+      if !shown {
         continue;
       }
       let (label, active) = button_label(ctx, &filters, facet, props.project);
@@ -168,7 +173,7 @@ fn choices(ctx: &Ctx, filters: &Filters, facet: Facet, tags: &[String]) -> Vec<C
       )
     }))
     .collect(),
-    Facet::Status => StatusFilter::ALL
+    Facet::Status => StatusFilter::CHOICES
       .into_iter()
       .enumerate()
       .map(|(index, status)| {
@@ -233,16 +238,11 @@ fn button_label(ctx: &Ctx, filters: &Filters, facet: Facet, project: bool) -> (A
       (None, false) => (ctx.t("memory.filters.type.all"), false),
     },
     Facet::Status => {
-      let default = if project {
-        StatusFilter::Active
-      } else {
-        StatusFilter::ActiveAndWaiting
-      };
       let words = words::status_filter(ctx, filters.status);
-      match (filters.status == default, project) {
-        (true, false) => (words, false),
-        (true, true) => (chosen(&ctx.t("memory.filters.status.name"), &words), false),
-        (false, _) => (chosen(&ctx.t("memory.filters.status.name"), &words), true),
+      if filters.status == StatusFilter::default() {
+        (words, false)
+      } else {
+        (chosen(&ctx.t("memory.filters.status.name"), &words), true)
       }
     }
     Facet::Author => match (filters.author, project) {

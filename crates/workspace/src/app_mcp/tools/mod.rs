@@ -9,6 +9,7 @@ mod base_moved;
 mod continue_run;
 mod conversation;
 mod daily_report;
+mod delivery;
 mod limits;
 mod message_waits;
 mod messages;
@@ -336,6 +337,12 @@ const SPECS: &[Spec] = &[
     read_only: true,
   },
   Spec {
+    name: "get_delivery",
+    description: "How delivery goes in a project over its last `days` local days (30 when left out, at most 366; today counted up to now), as its Delivery view beside Usage reads it, from what Orchester holds only, in tasks: throughput (tasks merged per day, per week past 31 days, in Orchester or found merged outside it by git, with their story points and how many had none); cycle time (first agent start to merge) and lead time (creation to merge) of each task merged in the range with their median, quartiles and 85th percentile in hours, and its attempts; where agent time goes (active hours per pipeline step, executions, how many were returned by a failure route or a person, the return percent, and attempts per delivered task); cumulative flow (tasks in each workflow status at the end of each day, Canceled left out); and forecasts of when the queued tasks and each open module (only `module`'s, by id or name, beside the queued tasks', when given) are likely delivered: a Monte Carlo over the tasks merged on the project's recent days, giving the 50% and 85% dates, the remaining tasks and the history it rests on (days and tasks merged); not_enough_history instead of dates when the history is too short, nothing_left when no work remains. No money estimates. `link` opens the Delivery view.",
+    schema: schema_for_type::<delivery::GetDelivery>,
+    read_only: true,
+  },
+  Spec {
     name: "get_daily_report",
     description: "A project's report of one local day (today when `day` is left out, up to now), the one its Orchestrator conversation got for that day when it was delivered (delivered: true), else read now from what Orchester holds: the tasks merged that day (key, title, run, when); the tasks' latest runs as they stand, ready to merge, stopped (failed, at a limit, waiting for a decision or interrupted, with `end` telling how and the step) or at work; what waits for the person (tool requests, questions, messages, plans, the Orchestrator's proposals); what the Orchestrator did that day (way: direct, itself, or applied by the person); the day's tokens (spent) and active agent time by task and by account, as get_usage reads them, against the daily budget (null: no limit); and the queued tasks in order. Every item has its app `link`.",
     schema: schema_for_type::<daily_report::GetDailyReport>,
@@ -355,7 +362,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_module",
-    description: "One module, as its page shows it: its details, progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person.",
+    description: "One module, as its page shows it: its details, progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person. `forecast` is when its remaining work is likely delivered, as get_delivery forecasts it (50% and 85% dates, or not_enough_history).",
     schema: schema_for_type::<modules::GetModule>,
     read_only: true,
   },
@@ -455,6 +462,7 @@ async fn dispatch_answers(
     "create_module" => modules::create_module(services, parse(arguments)?).await,
     "update_module" => modules::update_module(services, parse(arguments)?).await,
     "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
+    "get_delivery" => delivery::get_delivery(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }

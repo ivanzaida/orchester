@@ -10,8 +10,8 @@ use std::num::NonZeroU64;
 
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
-  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, NewConnection, OverviewTab, ProjectPage,
-  Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
+  ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, JoinTarget, MemoryTab, NewConnection, OverviewTab,
+  ProjectPage, Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
   id::{ConnectionId, ProjectId},
@@ -113,6 +113,7 @@ fn every_route() -> Vec<Route> {
   all.extend(files_routes());
   all.extend(view_routes());
   all.extend(PullRequestTab::ALL.map(|tab| at(ProjectPage::PullRequests(tab))));
+  all.extend(MemoryTab::ALL.map(|tab| at(ProjectPage::Memory(Some(tab)))));
   all.push(at(ProjectPage::PullRequest(pull_request(), None)));
   all.push(at(ProjectPage::PullRequest(pull_request(), Some(AWKWARD.to_owned()))));
   for source in ChangeSource::ALL {
@@ -219,6 +220,19 @@ fn paths_are_the_documented_ones() {
   for (route, path) in paths {
     assert_eq!(route.path(), path);
   }
+}
+
+/// Memory opens on the tab it chooses without one in its path; another screen opens a tab by naming it, as *Review
+/// records* opens Waiting for approval.
+#[test]
+fn memory_paths_name_their_tab() {
+  let root = format!("/project/{PROJECT}");
+  assert_eq!(at(ProjectPage::Memory(None)).path(), format!("{root}/memory"));
+  assert_eq!(
+    at(ProjectPage::Memory(Some(MemoryTab::Waiting))).path(),
+    format!("{root}/memory?tab=waiting")
+  );
+  assert_eq!(ProjectPage::of(Screen::Memory), Some(ProjectPage::Memory(None)));
 }
 
 #[test]
@@ -399,6 +413,7 @@ fn a_query_holds_only_what_its_screen_takes() {
       format!("{task}/changes?file=a.rs&from=nowhere"),
       invalid("from", "nowhere"),
     ),
+    (format!("/project/{PROJECT}/memory?tab=queue"), invalid("tab", "queue")),
   ];
   for (path, error) in refusals {
     assert_eq!(Route::parse(&path), Err(error), "{path}");

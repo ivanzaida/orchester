@@ -440,9 +440,17 @@ fn memory_project_page_lists_every_proposal_and_the_projects_records() {
     .expect("store");
   let read = ProjectMemory::load_in(fixture.repo.path()).expect("read");
   assert_eq!(read.waiting.len(), 2);
-  assert_eq!(read.waiting_by_scope(), (1, 1));
-  let counts = read.counts();
-  assert_eq!((counts.active, counts.waiting, counts.total()), (1, 2, 3));
+  assert_eq!(
+    read.count(StatusFilter::Waiting),
+    2,
+    "the task's proposal waits on the project's page too"
+  );
+  assert_eq!(read.count(StatusFilter::Active), 1);
+  assert_eq!(
+    read.pool(StatusFilter::Active).len(),
+    2,
+    "the project's own records only"
+  );
   let groups = listing::grouped(&read.records, &Filters::project(), false);
   assert_eq!(groups.len(), 1);
   let written = read.origins.written(&read.waiting[0]).expect("an agent's");

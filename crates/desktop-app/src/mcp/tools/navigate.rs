@@ -6,6 +6,7 @@ use orchester_core::{
   project::{TaskKey, TaskKeyError},
 };
 use orchester_workspace::{
+  delivery::DeliveryPeriod,
   files::{LineRangeError, Version, VersionParseError},
   pull_requests::list::PullRequestTab,
 };
@@ -15,7 +16,7 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, InstructionsView,
+    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, InstructionsView, MemoryTab,
     NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route, Screen,
     SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
   },
@@ -24,14 +25,15 @@ use crate::{
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
-  reports it). overview also takes `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as after \
-  Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
+  reports it). overview and memory also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
+  after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
   (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request; usage takes `query`, the page's query as a link carries it, and \
-  without `project` shows every project's usage. A tab or kind left out is the one the screen opens on. Answers the \
+  without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
+  it. A tab or kind left out is the one the screen opens on. Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -48,12 +50,13 @@ fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, accounts, orchester, connect; \
-     overview {}; tasks {}; task {}; connections {}; pull_requests {}.",
+     overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     ConnectionsTab::ALL.map(ConnectionsTab::name).join(", "),
     PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
+    MemoryTab::ALL.map(MemoryTab::name).join(", "),
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
@@ -82,6 +85,16 @@ fn schema() -> Value {
       "query": {
         "type": "string",
         "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
+      },
+      "view": {
+        "type": "string",
+        "enum": ["usage", "delivery"],
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it.",
+      },
+      "period": {
+        "type": "string",
+        "enum": DeliveryPeriod::ALL.map(DeliveryPeriod::name),
+        "description": "usage with view delivery: the days the Delivery view shows; omitted, 30d.",
       },
       "from": {
         "type": "string",
@@ -140,7 +153,7 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => ProjectPage::Agents,
     Screen::Instructions => ProjectPage::Instructions(InstructionsView::default()),
-    Screen::Memory => ProjectPage::Memory,
+    Screen::Memory => ProjectPage::Memory(memory_tab(args)?),
     Screen::Skills => skills_page(args)?,
     Screen::Tools => tools_page(args)?,
     Screen::Secrets => ProjectPage::Secrets(SecretsView::default()),
@@ -163,6 +176,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],
     Screen::Connections => &["project", "tab", "selected"],
+    Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
@@ -170,18 +184,29 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::PullRequests => &["project", "tab", "number"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
-    Screen::Usage => &["project", "query"],
+    Screen::Usage => &["project", "query", "view", "period"],
     Screen::Modules => &["project", "module"],
     Screen::NewTask
     | Screen::MergeQueue
     | Screen::Pipelines
     | Screen::Agents
     | Screen::Instructions
-    | Screen::Memory
     | Screen::Secrets
     | Screen::OrchestratorSettings
     | Screen::ProjectSettings => &["project"],
   }
+}
+
+/// Memory's tab, or none when left out: the page opens on the one it chooses.
+fn memory_tab(args: &Map<String, Value>) -> Result<Option<MemoryTab>, ToolError> {
+  string(args, "tab")?
+    .map(|name| {
+      MemoryTab::from_name(name).ok_or_else(|| ToolError::UnknownTab {
+        name: name.to_owned(),
+        known: MemoryTab::ALL.map(MemoryTab::name).to_vec(),
+      })
+    })
+    .transpose()
 }
 
 /// The Modules list, or with `module` (its id) that module's page.
@@ -236,8 +261,19 @@ fn tools_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   Ok(ProjectPage::Tool(id, chosen))
 }
 
-/// The Usage page with the query `query` gives, as its path reads it.
+/// The Usage page with the query `query` gives, as its path reads it; with `view` delivery, the Delivery view beside
+/// it over `period`.
 fn usage_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  match string(args, "view")? {
+    None | Some("usage") => {}
+    Some("delivery") => return delivery_page(args),
+    Some(other) => {
+      return Err(ToolError::InvalidParam {
+        param: "view",
+        reason: format!("`{other}` is neither usage nor delivery"),
+      });
+    }
+  }
   let query = string(args, "query")?.unwrap_or_default();
   match Route::parse(&format!("/project/{}/usage?{query}", project(args)?)) {
     Ok(Route::Project(_, page @ ProjectPage::Usage(_))) => Ok(page),
@@ -250,6 +286,19 @@ fn usage_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
       reason: error.to_string(),
     }),
   }
+}
+
+/// The Delivery view over `period` (30d when left out).
+fn delivery_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let Some(name) = string(args, "period")? else {
+    return Ok(ProjectPage::Delivery(DeliveryPeriod::default()));
+  };
+  DeliveryPeriod::from_name(name)
+    .map(ProjectPage::Delivery)
+    .ok_or_else(|| ToolError::InvalidParam {
+      param: "period",
+      reason: format!("`{name}` is not 30d, 90d or 365d"),
+    })
 }
 
 /// Every project's usage with the query `query` gives (All projects' *Usage* tab).

@@ -1873,6 +1873,10 @@
       "gone": "The record no longer exists.",
       "keyTaken": "Another active record of this memory has that key. Choose another key, or edit that record instead.",
       "restoreKeyInUse": "Can't restore: {{key}} already names an active record. Deprecate that one first."
+    },
+    "settings": {
+      "recordsInvalid": "Enter a whole number of records from {{min}} to {{max}}.",
+      "tokensInvalid": "Enter a whole number of tokens from {{min}} to {{max}}."
     }
   }
 }
