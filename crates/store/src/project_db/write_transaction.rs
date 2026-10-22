@@ -23,7 +23,7 @@ where
   busy::retry(what, || {
     let transaction = connection.transaction()?;
     #[cfg(feature = "test-support")]
-    busy::injected_failure()?;
+    busy::injected_failure(what)?;
     let value = write(&transaction)?;
     transaction.commit()?;
     Ok(value)
