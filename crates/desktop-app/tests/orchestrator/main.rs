@@ -14,6 +14,7 @@ mod drafts;
 mod follow;
 mod harness;
 mod history;
+mod layout;
 mod links;
 mod proposal;
 mod queue;

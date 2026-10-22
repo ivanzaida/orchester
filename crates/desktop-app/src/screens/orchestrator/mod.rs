@@ -18,6 +18,7 @@ mod failure;
 mod header;
 mod held;
 mod history;
+mod page;
 mod proposal;
 mod report;
 mod run_end;
