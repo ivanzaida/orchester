@@ -247,7 +247,7 @@ fn bar_row(
         .text_align(lurq::layout::text_style::TextAlign::Right)
         .nowrap(),
     );
-  // Split by account in series order and colours (`k9f4PW`); the reviewer's rows are all No account.
+  // Split by account in series order and colours (`k9f4PW`); a reviewer's row splits by the accounts it ran on.
   let split = dashboard.split(&entry.by_account);
   let parts = AccountSeries::ALL
     .into_iter()
