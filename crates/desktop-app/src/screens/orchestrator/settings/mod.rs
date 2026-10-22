@@ -1,9 +1,9 @@
 //! Orchestrator settings (`Orchestrator settings · Profile` `jmyWu` in `Xir64`): in this version only what the
 //! Orchestrator runs on, its Profile tab's *Connection & model* (`form`), saved as a draft and published as agent
 //! profiles are (`publish`); its other tabs (Actions, Context, Conversations) are not built and show why. The head
-//! (`Head` `b8gGj`: 24 over and 40 at its sides, 12 apart): the breadcrumb, *Orchestrator* (20/600) with what it is
-//! for and, at the end, where the changes stand with *Save draft* and *Publish vN*; a summary of what the published
-//! version runs on and does (`Permission summary` `c7khPh`); and the tabs.
+//! (`Head` `b8gGj`), the one the chat's header shares (`page`): the breadcrumb, *Orchestrator* (20/600) with what it
+//! is for and, at the end, where the changes stand with *Save draft* and *Publish vN*; a summary of what the
+//! published version runs on and does (`Permission summary` `c7khPh`); and the tabs.
 
 mod form;
 mod publish;
@@ -28,6 +28,7 @@ use orchester_workspace::{
 };
 
 use self::publish::{Incomplete, Publishing, Save};
+use super::page::PageHead;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -154,13 +155,14 @@ impl Component for SettingsScreen {
       .child(
         ScrollVertical::new(
           Column::new()
+            .id("orchestrator-settings-body")
             .width(Dimension::Pct(100.0))
             .padding(
               Padding::new()
                 .top(OrchestratorSpacing::Start.role())
                 .bottom(SpacingSize::Section)
-                .left(OrchestratorSpacing::SettingsPage.role())
-                .right(OrchestratorSpacing::SettingsPage.role()),
+                .left(OrchestratorSpacing::PageSide.role())
+                .right(OrchestratorSpacing::PageSide.role()),
             )
             .child(body),
         )
@@ -256,7 +258,8 @@ impl Choices {
 /// The summary's height (`Permission summary` `c7khPh`).
 const SUMMARY_HEIGHT: f32 = 24.0;
 
-/// The head: the breadcrumb, the title with whether the changes are saved, the summary and the tabs.
+/// The head, in the one it shares with the chat (`page`): the breadcrumb, the title with whether the changes are
+/// saved, the summary and the tabs.
 fn head(ctx: &mut Ctx, project: &ShownProject, (publishing, save): (Option<&Publishing<'_>>, &Save)) -> Element {
   let id = project.open.project.id();
   let name = project.open.project.name().as_str();
@@ -277,40 +280,20 @@ fn head(ctx: &mut Ctx, project: &ShownProject, (publishing, save): (Option<&Publ
       Crumb::here(ctx.t("orchestrator.coordinator.settings")),
     ],
   );
-  let title = Row::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Lg)
-    .align_items(Alignment::Start)
-    .child(
-      Column::new()
-        .flex(1.0)
-        .spacing(SpacingSize::Xs)
-        .child(Text::new(&ctx.t("orchestrator.title")).variant(TypographyStyle::Heading))
-        .child(
-          Text::new(&ctx.t_args("orchestrator.settings.description", [("project", name)]))
-            .variant(TypographyStyle::Description),
-        ),
-    )
-    .with_children(publishing.map(|publishing| publish::bar(ctx, save, publishing)));
-  let tabs = tabs(ctx);
-  Column::new()
-    .id("orchestrator-settings-head")
-    .width(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(SpacingSize::Xl)
-        .left(OrchestratorSpacing::SettingsPage.role())
-        .right(OrchestratorSpacing::SettingsPage.role()),
-    )
-    .spacing(SpacingSize::Md)
-    .child(crumbs)
-    .child(title)
-    .child(summary(
-      ctx,
-      publishing.map(|publishing| publishing.setup.readiness()).as_ref(),
-    ))
-    .child(tabs)
-    .into()
+  let description = Text::new(&ctx.t_args("orchestrator.settings.description", [("project", name)]))
+    .variant(TypographyStyle::Description);
+  let bar = publishing.map(|publishing| publish::bar(ctx, save, publishing));
+  let summary = summary(ctx, publishing.map(|publishing| publishing.setup.readiness()).as_ref());
+  PageHead::new(
+    "orchestrator-settings-head",
+    crumbs,
+    ("orchestrator-settings-title", ctx.t("orchestrator.title")),
+  )
+  .sub(description)
+  .actions(bar)
+  .line(summary)
+  .line(tabs(ctx))
+  .into()
 }
 
 /// What the Orchestrator runs on and does (`c7khPh`): each a 13 icon and 12 `text_secondary`, `·` between them.

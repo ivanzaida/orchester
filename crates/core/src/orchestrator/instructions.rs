@@ -3,6 +3,7 @@
 //! of a task's run, started by itself ([`wait_prompt`]), or a daily report did ([`report_prompt`]).
 
 use super::{
+  merging::{MergeLeft, Merging},
   report::DailyReport,
   resume::{AGAIN_WITHIN, CONTENTION_BRAKE, Continuing},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
@@ -93,16 +94,22 @@ pub fn system_prompt(name: &str, project: ProjectId) -> String {
      happened.\n\
      - You never approve tool requests, decide plans, widen what agents may do, read secret values or delete work: \
      tell the person where to do it in the app.\n\
-     - Merge a run only when the person asked in this chat for that run's merge. merge_run keeps its own rules: \
-     only a task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal \
-     (such as needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the \
-     Local integration page. When merge_failed names conflicting files, offer to propose continue_run \
-     resolve_conflicts, or point the person to the Local integration page.\n\
-     - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
-     propose, whatever the person's switches and auto mode.\n\
+     {MERGING_RULES}\n\
      - Always tell the person what you answered, sent or merged, with its link."
   )
 }
+
+/// What the system prompt says about merging runs, and what a turn nobody asked for only proposes.
+const MERGING_RULES: &str = "- Merge a run only when the person asked in this chat for that run's merge, or when \
+  Orchester's message for a run's success tells you to merge it on your own. merge_run keeps its own rules: only a \
+  task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal (such as \
+  needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the Local \
+  integration page. When merge_failed names conflicting files, offer to propose continue_run resolve_conflicts, or \
+  point the person to the Local integration page.\n\
+  - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
+  propose, whatever the person's switches and auto mode, with one exception: when the person turned on Let the \
+  Orchestrator merge finished runs on its own and the message says so, merge_run merges the run whose success \
+  started the turn, once.";
 
 /// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it.
 pub fn wait_prompt(wait: &AgentWait) -> String {
@@ -134,9 +141,11 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
 
 /// The prompt of the Orchestrator turn the end of `wait`'s run (`end`) started by itself: how it ended and what to do.
 /// A run that succeeded is told to the person, and its merge only proposed (a turn nobody asked for proposes every
-/// merge); a run that waits for a decision, or failed, is read and explained, and its retry or return may be
-/// proposed; an interruption the person lets the Orchestrator continue is continued once, unless it came again soon;
-/// any other end is read and explained with the choices the person has, which are the person's.
+/// merge), unless the person lets the Orchestrator merge finished runs on its own: then it is merged once, or told as
+/// left to the person and why ([`Merging`]); a run that waits for a decision, or failed, is read and explained, and
+/// its retry or return may be proposed; an interruption the person lets the Orchestrator continue is continued once,
+/// unless it came again soon; any other end is read and explained with the choices the person has, which are the
+/// person's.
 fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
   let at = wait
     .step
@@ -159,8 +168,9 @@ fn end_prompt(wait: &AgentWait, end: RunEnd) -> String {
     1 => " The same limit stopped 1 more run of the project at once.".to_owned(),
     count => format!(" The same limit stopped {count} more runs of the project at once."),
   };
-  let todo = match (end, wait.continuing) {
-    (RunEnd::Interrupted, Some(continuing)) => continuing_todo(continuing),
+  let todo = match (end, wait.continuing, &wait.merging) {
+    (RunEnd::Interrupted, Some(continuing), _) => continuing_todo(continuing),
+    (RunEnd::Succeeded, _, Some(merging)) => merging_todo(merging, wait.number),
     _ => end_todo(end).to_owned(),
   };
   format!(
@@ -199,6 +209,42 @@ fn continuing_todo(continuing: Continuing) -> String {
       brake = CONTENTION_BRAKE,
       minutes = AGAIN_WITHIN.as_secs() / 60,
     ),
+  }
+}
+
+/// What the turn of run `#number`'s success does while the person lets the Orchestrator merge finished runs on its
+/// own: merge it once, or tell the person why it is left to them.
+fn merging_todo(merging: &Merging, number: u32) -> String {
+  match merging {
+    Merging::Merges => format!(
+      "The person also turned on Let the Orchestrator merge finished runs on its own: merge this run once with \
+       merge_run (run #{number}), then tell the person you merged it on your own, with the revision and the link. If \
+       merge_run refuses with merge_failed naming conflicting files, propose continue_run with resolve_conflicts for \
+       this run, naming the files; do not call merge_run again. For any other refusal (such as needs_decision or \
+       scoped_integration_required), tell the person why in its words and leave the merge to them. Start, resume, \
+       cancel or continue nothing else."
+    ),
+    Merging::Left { why } => format!(
+      "The person turned on Let the Orchestrator merge finished runs on its own, but this run is left to them: {}. Do \
+       not merge it. Tell the person it is ready to merge and why it was not merged on its own, with the link. Start, \
+       resume, cancel, continue or merge nothing.",
+      left_words(why)
+    ),
+  }
+}
+
+/// Why a run that succeeded is left to the person, as the prompt names it.
+fn left_words(why: &MergeLeft) -> String {
+  match why {
+    MergeLeft::NotReady => "it is no longer its task's latest run that succeeded".to_owned(),
+    MergeLeft::StepNotPassed { step } => format!("its step {step} has not passed"),
+    MergeLeft::AcceptedByAutomation { step } => {
+      format!("its step {step} passed only because automation accepted it as it was")
+    }
+    MergeLeft::MarkedBlocked { reason } => format!("its task is marked Blocked ({reason})"),
+    MergeLeft::BlockedByTasks { tasks } => format!("unfinished tasks block its task ({})", tasks.join(", ")),
+    MergeLeft::Held => "new starts are held for its group or the project".to_owned(),
+    MergeLeft::OptedOut => "its task says Don't merge automatically".to_owned(),
   }
 }
 

@@ -46,7 +46,7 @@ fn resume_with(
     layout.scope(RepositoryAccess::Write),
     policy,
     stored,
-    continuation,
+    (continuation, Vec::new()),
     changed,
   )
 }
@@ -59,6 +59,7 @@ fn compaction_note(stored: &[Item]) -> &str {
       Item::User {
         text,
         origin: UserOrigin::Compaction,
+        ..
       } => Some(text.as_str()),
       _ => None,
     })

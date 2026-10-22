@@ -208,6 +208,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "module": task.module().map(|module| module.to_string()),
     "blocked_reason": task.organization().blocked_reason(),
     "blocked_by": &detail.blocked_by,
+    "no_automatic_merge": task.organization().no_automatic_merge(),
     "pipeline": {
       "id": task.details().pipeline.map(|id| id.to_string()),
       "shown": translate.text(&pipeline.message()),

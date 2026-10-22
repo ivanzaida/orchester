@@ -15,6 +15,7 @@ pub use app_db::{
   AcceptedInvite, AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, RegisteredProject,
   ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredServer,
 };
+pub use busy::pause_lock_waits_with;
 #[cfg(feature = "test-support")]
 pub use busy::{fail_next_writes_for_test, set_lock_budget_for_test};
 pub use error::{RunStoreError, StoreError};
@@ -24,8 +25,8 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  AutoModeSave, AutomaticStatus, AutomationPoints, CachedClaim, CachedRunStatus, CachedTask, ChatListing, ChatTurn,
-  DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb,
-  ResolutionStart, ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson, SharedTaskInfo, SharingLink,
-  UnsentStatus, exclude_project_data,
+  AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, CachedClaim, CachedRunStatus, CachedTask,
+  ChatListing, ChatTurn, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NotSent, ProjectDb,
+  ReadOnlyProjectDb, ResolutionStart, ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson,
+  SharedTaskInfo, SharingLink, UnsentStatus, attachment_file, exclude_project_data,
 };

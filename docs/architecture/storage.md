@@ -531,7 +531,8 @@ Task and project memory (`docs/design/orchester-workspace.md`, "Task and project
 | Table | Purpose |
 | --- | --- |
 | `conversations` | *not built yet*: project and pull request thread conversations (scope, title); a task's conversation is its messages |
-| `messages` | task, run, idempotency key (a person's), author (person, agent), kind (an agent's reply or question), recipient profile (a person's; none: Orchestrator), step execution and invocation (delivered to, or written by), body, created, delivered, acknowledged, optional immutable recovery event sequence — what a message says never changes, it is never deleted and its delivery only moves forward; attachments are not built yet |
+| `messages` | task, run, idempotency key (a person's), author (person, agent), kind (an agent's reply or question), recipient profile (a person's; none: Orchestrator), step execution and invocation (delivered to, or written by), body, created, delivered, acknowledged, optional immutable recovery event sequence — what a message says never changes, it is never deleted and its delivery only moves forward; a message of attachments only is kept with their names as its body |
+| `attachments` | the files a person attached to a message (ORC-57): its task message or its Orchestrator chat message (exactly one), position, name, media type (PNG, JPEG, GIF, WebP, PDF, plain text — told by content, not by name), size, sha256, an image's width and height, created; never changed. The copy of the file is `.orchester/attachments/<id>.<extension>`, written before its row and removed when the transaction fails, never a path to the person's own file. An attachment lives as long as its message: a chat message the runner never took is forgotten with its attachments' rows and copies. At most 10 files a message, 20 MB each, 50 MB together; the app's tools give their metadata, never their contents |
 | `questions` | one request of an agent that asks the person questions with suggested answers (ORC-83): run, step execution, invocation, agent role, the questions as JSON (text, optional header, at least two options with optional descriptions, whether several may be picked), whether the agent's turn waits (`in_turn`) or its step ended with it (`step_end`), asked at, state (waiting, answered, interrupted), the answers (labels picked and own text, checked against the questions when read), who answered (person, automation), ended at, and for a step-end answer the person's message it reached the agent in; written by the runner, answered once |
 | `proposals` | conversation, version, proposed task set (not tasks until created) |
 | `pull_requests` | number, title, state, branches, head revision, linked task, synced at |
@@ -601,7 +602,10 @@ code), so these rules hold for all of them:
   This is the retry of every write, the app's (answers, merges, settings) as much as the runner's: nothing has
   run in the transaction yet when it waits. The run's log (events with step results and checkpoints,
   transcript, invocations, step outputs) also runs its whole transaction again when a busy error reaches it
-  after it began, with doubling pauses, within the same minute (`busy::retry`).
+  after it began, with doubling pauses, within the same minute (`busy::retry`). Both pause as the process sets
+  (`pause_lock_waits_with`): the runner, which calls the store from its runtime's two async workers, moves a
+  worker's other tasks off it before each pause (`tokio::task::block_in_place`), so writes waiting for the lock
+  never stop it serving the desktop, the agents' output, the relays and the timers.
 - **Past the minute.** A write that still finds the database locked gives up: the run-log writes with
   `StoreError::Unavailable` ("the database stayed locked for 60.0 s, so the write gave up: database is locked
   (SQLITE_BUSY)"), the others with the SQLite error, whose message names its extended code. The runner

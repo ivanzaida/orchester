@@ -59,6 +59,8 @@ pub(super) struct Changes<'a> {
   pub blocked_by: Option<&'a [Blocker]>,
   /// The whole list of tag names; empty clears it.
   pub tags: Option<&'a [String]>,
+  /// *Don't merge automatically* (ORC-69): the Orchestrator never merges the task's runs on its own.
+  pub no_automatic_merge: Option<bool>,
 }
 
 impl Changes<'_> {
@@ -80,14 +82,15 @@ impl Changes<'_> {
         .collect::<Result<_, ToolError>>()?,
       None => base.dependencies().to_vec(),
     };
-    TaskOrganization::new(
+    let organization = TaskOrganization::new(
       self.status.map_or(base.status(), Into::into),
       self.priority.map_or(base.priority(), Into::into),
       reason,
       dependencies,
       base.tags().to_vec(),
     )
-    .map_err(|error| StoreError::from(error).into())
+    .map_err(StoreError::from)?;
+    Ok(organization.with_no_automatic_merge(self.no_automatic_merge.unwrap_or(base.no_automatic_merge())))
   }
 
   /// `organization` with the tags named, those the project lacks created through `writer`; as it was when no tags

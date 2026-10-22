@@ -11,7 +11,7 @@
 //! and the answer and ending of the turn it started by itself, if any; such a turn ends without *Ask again* or
 //! *Retry*.
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -43,6 +43,7 @@ use super::{
 use crate::{
   theme::{ConversationText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
+    attachments,
     button::{ActionButton, ButtonKind},
     chat::{
       Avatar, agent_text, chat_row, delivery_line,
@@ -61,6 +62,8 @@ use crate::{
 pub(super) struct TurnEnv {
   pub(super) project: ProjectId,
   pub(super) name: Arc<str>,
+  /// The project's folder, whose data keeps the files attached to the messages.
+  pub(super) root: PathBuf,
   /// The name of the connection the Orchestrator runs on, when it has one.
   pub(super) connection: Option<Arc<str>>,
   /// The conversation's tools' scope, once it is kept: proposed starts are decided in it.
@@ -232,7 +235,7 @@ impl Component for TurnView {
   }
 }
 
-/// The person's message that opens `row`'s turn, keyed `key`, with where it stands.
+/// The person's message that opens `row`'s turn, keyed `key`, with the files attached to it and where it stands.
 fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
   let delivery = match row.turn.at {
     None => delivery_line(
@@ -249,13 +252,9 @@ fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
       ),
     ),
   };
-  person_message(
-    ctx,
-    &format!("orchestrator-message-{key}"),
-    (&row.turn.text, row.turn.at),
-    Some(delivery),
-  )
-  .into()
+  let id = format!("orchestrator-message-{key}");
+  let attached = attachments::sent::sent(ctx, &id, &row.env.root, &row.turn.attachments);
+  person_message(ctx, &id, (&row.turn.text, row.turn.at), (attached, Some(delivery))).into()
 }
 
 /// The Orchestrator's answer: its replies and actions, under its name, its model and when it began.
@@ -447,9 +446,11 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Vec<Element> {
   ]
 }
 
-/// `event`, then, for the newest turn a person's message started, *Ask again* and what it does.
+/// `event`, then, for the newest turn a person's message started, *Ask again* and what it does. *Ask again* sends the
+/// words once more, so a message with attached files, which it would send without them, does not offer it: the
+/// person sends them again from the composer.
 fn again(ctx: &Ctx, row: &TurnRow, event: Element) -> Vec<Element> {
-  if !row.last || row.turn.on_its_own() {
+  if !row.last || row.turn.on_its_own() || !row.turn.attachments.is_empty() {
     return vec![event];
   }
   let ask = row.env.ask_again.clone();

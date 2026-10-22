@@ -2,8 +2,9 @@
 //! `docs/design/orchestrator-toolset.md`, "Decisions" 5): in the action card's frame (`Action card` `nQIhx`), as an
 //! agent's wait ([`super::wait`]), its head with how the run ended or stopped, the task and the run (and how many
 //! more runs a shared limit stopped at once), and at its end the end's icon in its color and when it was noticed;
-//! what happens with it (the Orchestrator takes it up by itself while *Let the Orchestrator answer agents* is on, else
-//! it waits for the person); and *Open* the task's Summary.
+//! what happens with it (the Orchestrator takes it up by itself while *Let the Orchestrator answer agents* is on, and
+//! merges a run that succeeded on its own while *merge finished runs on its own* is on too, else it waits for the
+//! person); and *Open* the task's Summary.
 
 use std::sync::Arc;
 
@@ -17,7 +18,7 @@ use lurq::{
 };
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{AgentWait, Continuing, RunEnd},
+  orchestrator::{AgentWait, Continuing, MergeLeft, Merging, RunEnd},
   project::TaskKey,
   run::RunLimit,
   time::Timestamp,
@@ -60,7 +61,7 @@ pub(super) fn card(
     color,
     words: ctx.t_args("orchestrator.end.noticed", [("time", time.as_str())]),
   };
-  let effect = ctx.t(effect(wait, end, turned));
+  let effect = effect(ctx, wait, end, turned);
   card::frame(id, name(end))
     .describe("automatic", wait.automatic.to_string())
     .child(card::head(id, (glyph, &title), None, state))
@@ -122,18 +123,44 @@ const fn title(end: RunEnd, (named, more): (bool, bool)) -> &'static str {
 
 /// What happens with `end` of `wait`'s run: the Orchestrator takes it up by itself (in the turn it `turned`, or after
 /// the turn under way; an interruption it continues once, or leaves to the person when it came again soon or the
-/// database is under contention), the Orchestrator's own decision on the run led to it so it waits for the person, or
-/// the person's switch is off.
-const fn effect(wait: &AgentWait, end: RunEnd, turned: bool) -> &'static str {
-  match (end, wait.automatic, turned, wait.continuing) {
-    (RunEnd::Succeeded, true, true, _) => "orchestrator.end.effectReadyAnswering",
-    (RunEnd::Interrupted, true, true, Some(Continuing::Continues)) => "orchestrator.end.effectContinuing",
-    (RunEnd::Interrupted, true, true, Some(Continuing::InterruptedAgain)) => "orchestrator.end.effectInterruptedAgain",
-    (RunEnd::Interrupted, true, true, Some(Continuing::StorageContention)) => "orchestrator.end.effectContention",
-    (_, true, true, _) => "orchestrator.end.effectAnswering",
-    (_, true, false, _) => "orchestrator.end.effectQueued",
+/// database is under contention; a success it merges on its own, or leaves to the person and says why), the
+/// Orchestrator's own decision on the run led to it so it waits for the person, or the person's switch is off.
+fn effect(ctx: &Ctx, wait: &AgentWait, end: RunEnd, turned: bool) -> Arc<str> {
+  let key = match (end, wait.automatic, turned, wait.continuing, &wait.merging) {
+    (RunEnd::Succeeded, true, true, _, Some(Merging::Merges)) => "orchestrator.end.effectMerging",
+    (RunEnd::Succeeded, true, true, _, Some(Merging::Left { why })) => {
+      let why = left_words(ctx, why);
+      return ctx.t_args("orchestrator.end.effectMergeLeft", [("why", &*why)]);
+    }
+    (RunEnd::Succeeded, true, true, ..) => "orchestrator.end.effectReadyAnswering",
+    (RunEnd::Interrupted, true, true, Some(Continuing::Continues), _) => "orchestrator.end.effectContinuing",
+    (RunEnd::Interrupted, true, true, Some(Continuing::InterruptedAgain), _) => {
+      "orchestrator.end.effectInterruptedAgain"
+    }
+    (RunEnd::Interrupted, true, true, Some(Continuing::StorageContention), _) => "orchestrator.end.effectContention",
+    (_, true, true, ..) => "orchestrator.end.effectAnswering",
+    (_, true, false, ..) => "orchestrator.end.effectQueued",
     (_, false, ..) if wait.own => "orchestrator.end.effectOwn",
     (_, false, ..) => "orchestrator.end.effectWaits",
+  };
+  ctx.t(key)
+}
+
+/// Why a run that succeeded is left to the person, as its card says it.
+fn left_words(ctx: &Ctx, why: &MergeLeft) -> Arc<str> {
+  match why {
+    MergeLeft::NotReady => ctx.t("orchestrator.end.mergeLeft.notReady"),
+    MergeLeft::StepNotPassed { step } => ctx.t_args("orchestrator.end.mergeLeft.stepNotPassed", [("step", step)]),
+    MergeLeft::AcceptedByAutomation { step } => {
+      ctx.t_args("orchestrator.end.mergeLeft.acceptedByAutomation", [("step", step)])
+    }
+    MergeLeft::MarkedBlocked { reason } => ctx.t_args("orchestrator.end.mergeLeft.markedBlocked", [("reason", reason)]),
+    MergeLeft::BlockedByTasks { tasks } => ctx.t_args(
+      "orchestrator.end.mergeLeft.blockedByTasks",
+      [("tasks", tasks.join(", "))],
+    ),
+    MergeLeft::Held => ctx.t("orchestrator.end.mergeLeft.held"),
+    MergeLeft::OptedOut => ctx.t("orchestrator.end.mergeLeft.optedOut"),
   }
 }
 

@@ -93,12 +93,7 @@ pub(super) fn start(
     .id("orchestrator-new")
     .width(Dimension::Pct(100.0))
     .flex(1.0)
-    .padding(
-      Padding::new()
-        .left(SpacingSize::Section)
-        .right(SpacingSize::Section)
-        .bottom(SpacingSize::Lg),
-    )
+    .padding(super::body::side_room().bottom(SpacingSize::Lg))
     .align_items(Alignment::Center)
     .child(Spacer::new().flex(1.0))
     .child(start)

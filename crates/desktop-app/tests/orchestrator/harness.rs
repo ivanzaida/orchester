@@ -34,7 +34,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::workspace::OrchestratorConsent;
 
-use super::support::{Data, Window, add_project, runner_programs::programs};
+use super::support::{Data, Window, add_project, runner_programs::programs, stand_ins::StandIns};
 
 pub fn git(repo: &Path, args: &[&str]) {
   let output = Command::new("git")
@@ -78,11 +78,21 @@ pub struct Orchestrator {
 
 impl Orchestrator {
   pub fn new(setup: Setup) -> Self {
-    Self::with_git(setup, None)
+    Self::started(setup, None, false).0
+  }
+
+  /// As [`Orchestrator::new`], with the system's pickers and clipboard replaced (`support::stand_ins`).
+  pub fn with_stand_ins(setup: Setup) -> (Self, StandIns) {
+    let (screen, stand_ins) = Self::started(setup, None, true);
+    (screen, stand_ins.expect("the stand-ins"))
   }
 
   /// [`Orchestrator::new`] whose window runs git (and gh) with `git_programs` when they are given.
   pub fn with_git(setup: Setup, git_programs: Option<Programs>) -> Self {
+    Self::started(setup, git_programs, false).0
+  }
+
+  fn started(setup: Setup, git_programs: Option<Programs>, stand_ins: bool) -> (Self, Option<StandIns>) {
     let programs = programs();
     let (runner, fake, fake_codex) = (programs.runner.clone(), &programs.fake_claude, &programs.fake_codex);
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
@@ -129,12 +139,19 @@ impl Orchestrator {
       let settings = OrchestratorSettings::new(on, ModelId::new("haiku").expect("model"), None);
       db.publish_orchestrator(&settings, Timestamp::now()).expect("settings");
     }
-    Self {
+    let (window, stand_ins) = if stand_ins {
+      let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
+      (window, Some(stand_ins))
+    } else {
+      (Window::of(data, launch), None)
+    };
+    let screen = Self {
       project,
-      window: Window::of(data, launch),
+      window,
       root: open.repo_root,
       claude: claude.id(),
-    }
+    };
+    (screen, stand_ins)
   }
 
   pub fn go(&mut self, chat: OrchestratorChat) {

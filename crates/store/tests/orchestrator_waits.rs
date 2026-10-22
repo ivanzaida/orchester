@@ -36,6 +36,7 @@ fn wait(run: RunId) -> AgentWait {
     own: false,
     automatic: true,
     continuing: None,
+    merging: None,
   }
 }
 
@@ -329,13 +330,26 @@ fn waits_read_the_answers_and_messages_the_orchestrator_proposed_for_a_run() {
     at(13),
   )
   .expect("kept");
+  let merge = Change::Merge {
+    run: run.id(),
+    number: 1,
+    checkpoint: Some("a".repeat(40)),
+    into: Some("main".to_owned()),
+  };
+  db.add_chat_action(chat.id(), &change(merge.clone()), at(14))
+    .expect("kept");
   let read = db.run_answer_actions(run.id()).expect("read");
-  assert_eq!(read.len(), 1, "only what answers this run's agents: {read:?}");
+  assert_eq!(read.len(), 2, "what answers this run's agents and merges it: {read:?}");
   assert_eq!(read[0].chat, chat.id());
   assert_eq!(read[0].at, at(11));
   assert_eq!(
     read[0].action.change.as_ref().map(|change| &change.change),
     Some(&message)
+  );
+  assert_eq!(
+    read[1].action.change.as_ref().map(|change| &change.change),
+    Some(&merge),
+    "the chat's merge of the run, which its task's conversation attributes (ORC-69)"
   );
 }
 

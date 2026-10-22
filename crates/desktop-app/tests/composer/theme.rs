@@ -2,7 +2,7 @@
 //! `data/orchester2.pen`.
 
 use lurq::{app::App, node::color::Color};
-use orchester_app::theme::{self, ComposerColor, ComposerRadius, ComposerText, Mode};
+use orchester_app::theme::{self, ComposerColor, ComposerRadius, Mode};
 
 #[test]
 fn composer_theme_roles_follow_the_composer_components() {
@@ -13,7 +13,5 @@ fn composer_theme_roles_follow_the_composer_components() {
     theme.palette().get(ComposerColor::SplitDivider.role()),
     Color::from_hex("#00000033")
   );
-  let lock = theme.typography_style(ComposerText::AttachLock.role());
-  assert_eq!((lock.font_size, lock.color), (9.0, Color::from_hex("#8A8A92")));
   assert_eq!(theme.radius_value(ComposerRadius::Context.role()), 8.0);
 }

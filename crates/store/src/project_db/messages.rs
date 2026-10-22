@@ -6,6 +6,7 @@
 use std::num::NonZeroU64;
 
 use orchester_core::{
+  attachment::NewAttachment,
   conversation::{AgentMessage, Arrival, Delivery, Message, MessageBody, Recipient, Sender, Timing, Undelivered},
   id::{IdempotencyKey, RunId, TaskId},
   run::EventSequence,
@@ -14,7 +15,11 @@ use orchester_core::{
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
 
-use super::{ProjectDb, orchestrator_sent::OrchestratorColumns};
+use super::{
+  ProjectDb,
+  attachments::{self, AttachmentOwner},
+  orchestrator_sent::OrchestratorColumns,
+};
 use crate::{
   StoreError,
   rows::{corrupt, parse},
@@ -27,10 +32,16 @@ const COLUMNS: &str = "id, task_id, run_id, author, kind, recipient_profile, ste
                        undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation, \
                        orchestrator_chat";
 
-impl ConversationStore for ProjectDb {
-  type Error = StoreError;
-
-  fn send_message(&mut self, key: IdempotencyKey, message: &Message) -> Result<Message, StoreError> {
+impl ProjectDb {
+  /// Stores a person's `message` with `attachments` once per `key`, as [`ConversationStore::send_message`] does: a
+  /// retry returns the message stored the first time, with the attachments it was stored with. The copies of the
+  /// attachments are written before the rows, and removed again when the message is not stored.
+  pub fn send_message_with(
+    &mut self,
+    key: IdempotencyKey,
+    message: &Message,
+    attachments: &[NewAttachment],
+  ) -> Result<Message, StoreError> {
     let transaction = self.connection.transaction()?;
     let existing = transaction
       .query_row(
@@ -50,9 +61,25 @@ impl ConversationStore for ProjectDb {
     if !task_exists {
       return Err(StoreError::TaskNotFound(message.task()));
     }
+    let (written, kept) = attachments::write(&self.directory, attachments)?;
     insert(&transaction, message, Some(key))?;
+    attachments::insert(
+      &transaction,
+      AttachmentOwner::Message(message.id()),
+      &kept,
+      message.created_at(),
+    )?;
     transaction.commit()?;
+    written.keep();
     Ok(message.clone())
+  }
+}
+
+impl ConversationStore for ProjectDb {
+  type Error = StoreError;
+
+  fn send_message(&mut self, key: IdempotencyKey, message: &Message) -> Result<Message, StoreError> {
+    self.send_message_with(key, message, &[])
   }
 
   fn add_agent_message(&mut self, message: &Message) -> Result<(), StoreError> {

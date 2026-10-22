@@ -30,6 +30,7 @@ fn wait(run: RunId, kind: WaitKind) -> AgentWait {
     own: false,
     automatic: false,
     continuing: None,
+    merging: None,
   }
 }
 

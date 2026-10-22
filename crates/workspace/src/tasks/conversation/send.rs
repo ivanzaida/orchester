@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use orchester_core::{
+  attachment::{NewAttachment, names_text},
   conversation::{Message, MessageBody, MessageError, Recipient, Sender, Timing},
   id::{ChatId, IdempotencyKey, MessageId, RunId, TaskId},
   run::{Answerer, EventSequence},
@@ -15,6 +16,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::outgoing::{after_turn_run, answers_question, conversation_of};
 use crate::{
+  attachments::Refused,
   decisions::DecisionKind,
   messages::{self, Message as UiMessage},
   tasks::detail::TaskDetail,
@@ -31,6 +33,8 @@ pub enum SendError {
   NotReadable,
   /// Automation would decide for the person (answer a waiting question) without the consent for it.
   NotAllowed,
+  /// Its attachments break the message's limits, or an agent it may reach could not read one.
+  Attachments(Refused),
   Store(StoreError),
 }
 
@@ -42,6 +46,7 @@ impl SendError {
       Self::NotUndelivered => UiMessage::new("conversation.errors.notUndelivered"),
       Self::NotReadable => UiMessage::new("conversation.errors.notReadable"),
       Self::NotAllowed => UiMessage::new("appMcp.errors.automationNotAllowed"),
+      Self::Attachments(refused) => refused.message(),
       Self::Store(error) => messages::store_error(error),
     }
   }
@@ -62,19 +67,27 @@ pub fn send_in(
     key,
     (task, run, recovery_after),
     (recipient, timing),
-    (text, None, Answerer::Person),
+    ((text, &[]), None, Answerer::Person),
   )
 }
 
-/// [`send_in`], decided `by`, and for the project's Orchestrator chat when `by_orchestrator` names the conversation
-/// it came from: it wrote `text` on the person's side, and the conversation names it as the chat's.
+/// [`send_in`] with `attachments`, decided `by`, and for the project's Orchestrator chat when `by_orchestrator` names
+/// the conversation it came from: it wrote `text` on the person's side, and the conversation names it as the chat's.
+/// A message of attachments only is kept with their names ([`names_text`]).
 pub(super) fn send_as(
   repo_root: &Path,
   key: IdempotencyKey,
   (task, run, recovery_after): (TaskId, Option<RunId>, Option<EventSequence>),
   (recipient, timing): (Recipient, Timing),
-  (text, by_orchestrator, by): (&str, Option<ChatId>, Answerer),
+  ((text, attachments), by_orchestrator, by): ((&str, &[NewAttachment]), Option<ChatId>, Answerer),
 ) -> Result<Message, SendError> {
+  let named;
+  let text = if text.trim().is_empty() && !attachments.is_empty() {
+    named = names_text(attachments.iter().map(NewAttachment::name));
+    named.as_str()
+  } else {
+    text
+  };
   // A new message's text is only checked for being blank.
   let body = MessageBody::new(text).map_err(|_: MessageError| SendError::Blank)?;
   let message = Message::from_person(task, run, recipient, body, Timestamp::now())
@@ -100,7 +113,8 @@ pub(super) fn send_as(
     None => message,
   };
   let mut db = ProjectDb::open(repo_root).map_err(SendError::Store)?;
-  db.send_message(key, &message).map_err(SendError::Store)
+  db.send_message_with(key, &message, attachments)
+    .map_err(SendError::Store)
 }
 
 /// Queues `task`'s message `id`, which its agent's CLI did not take, again for when its agent's

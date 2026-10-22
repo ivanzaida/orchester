@@ -6,6 +6,7 @@
 //! agent's wait starts by itself. Run with `cargo test -p orchester-app --test orchestrator <filter>`; the first test
 //! builds the runner with its fakes.
 
+mod attachments;
 mod changes;
 mod chat;
 mod continuation;
@@ -14,6 +15,7 @@ mod drafts;
 mod follow;
 mod harness;
 mod history;
+mod layout;
 mod links;
 mod proposal;
 mod queue;

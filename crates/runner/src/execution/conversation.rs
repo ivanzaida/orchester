@@ -16,6 +16,7 @@
 use std::path::Path;
 
 use orchester_core::{
+  attachment::input::AttachedFile,
   conversation::{self, AgentMessage, Arrival, Delivery, Message, MessageBody},
   id::{ResourceId, RunId, StepExecutionId},
   run::{Invocation, Run, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
@@ -23,7 +24,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::{Event, Rejection};
-use orchester_store::ProjectDb;
+use orchester_store::{AttachmentOwner, ProjectDb, StoreError};
 
 use super::{
   Scheduler,
@@ -295,6 +296,15 @@ impl RunTask {
   /// any agent again, its own end first.
   pub(super) fn release_steered(&mut self, execution: StepExecutionId) {
     self.steered.retain(|_, holder| *holder != execution);
+  }
+
+  /// The files people attached to `messages`, in their order, as an agent that reads them is given them.
+  pub(super) fn attached_to(&self, messages: &[Message]) -> Result<Vec<AttachedFile>, StoreError> {
+    let mut attached = Vec::new();
+    for message in messages {
+      attached.extend(self.db.attached_files(AttachmentOwner::Message(message.id()))?);
+    }
+    Ok(attached)
   }
 
   /// `messages` went to `execution`'s agent with `invocation`, which started with them, as

@@ -7,6 +7,7 @@
 //! stays queued; an agent at work (*Send now*, *Send after this turn*) needs a live run (QA's `live`
 //! scenario). Needs `git`.
 
+mod attachments;
 mod keeping;
 #[allow(
   dead_code,

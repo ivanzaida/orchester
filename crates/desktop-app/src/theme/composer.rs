@@ -5,12 +5,11 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, Theme, ThemePalette, TypographyStyle},
-  layout::text_style::{FontWeight, TextStyle},
+  app::theme::{PaletteColor, RadiusSize, Theme},
   node::color::Color,
 };
 
-use super::{Mode, fonts::ICONS, typography::style};
+use super::Mode;
 
 /// Colors of the composer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,36 +36,6 @@ impl ComposerColor {
     match (self, mode) {
       (Self::SplitDivider, Mode::Dark) => Color::from_hex("#00000033"),
       (Self::SplitDivider, Mode::Light) => Color::from_hex("#FFFFFF33"),
-    }
-  }
-}
-
-/// Text of the composer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ComposerText {
-  /// The 9 lock over *Attach*'s plus while attaching is not available (`Lock` `pF1kb` in `mZIqi`).
-  AttachLock,
-}
-
-impl ComposerText {
-  pub const ALL: [Self; 1] = [Self::AttachLock];
-
-  pub fn role(self) -> TypographyStyle {
-    TypographyStyle::extra(self.name())
-  }
-
-  const fn name(self) -> &'static str {
-    match self {
-      Self::AttachLock => "composer_attach_lock",
-    }
-  }
-
-  fn style(self, palette: &ThemePalette) -> TextStyle {
-    match self {
-      Self::AttachLock => TextStyle {
-        font_family: Arc::from(ICONS),
-        ..style(9.0, FontWeight::Normal, 1.0, 0.0, palette.text_muted)
-      },
     }
   }
 }
@@ -102,12 +71,6 @@ pub(super) fn colors(mode: Mode) -> impl Iterator<Item = (Arc<str>, Color)> {
   ComposerColor::ALL
     .into_iter()
     .map(move |color| (Arc::from(color.name()), color.color(mode)))
-}
-
-pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
-  ComposerText::ALL
-    .into_iter()
-    .map(|text| (Arc::from(text.name()), text.style(palette)))
 }
 
 pub(super) fn install(theme: &Theme) {

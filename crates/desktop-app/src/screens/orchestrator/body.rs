@@ -1,5 +1,5 @@
 //! The chat beside History (`Main` in `ZJzV0`, `AJeWg` in `kPs8W`): a new conversation's start, or the conversation
-//! — its turns over the composer, 800 wide at most and 32 in from the panel's sides, the composer 14 over the panel's
+//! — its turns over the composer, 800 wide at most and 40 in from the panel's sides, the composer 14 over the panel's
 //! foot — or why it cannot be shown. A send that failed shows over the composer (`Send problem` `htsjO`), and so does
 //! what keeps the chat from sending (`notReady`).
 
@@ -14,7 +14,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ChatId;
+use orchester_core::{
+  attachment::{NewAttachment, names_text},
+  id::ChatId,
+};
 use orchester_workspace::{
   messages::Message,
   orchestrator::{chat::ChatView, send::SendError, settings::Readiness, tools::ChatScope},
@@ -33,7 +36,9 @@ use crate::{
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
+  theme::{
+    DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText,
+  },
   ui::{
     button::{ActionButton, ButtonKind},
     chat::names::ProjectNames,
@@ -56,11 +61,12 @@ pub(super) fn main(
   let sending = view.send.state().get();
   let thinking = matches!(&reads.shown, Shown::Chat(shown) if shown.thinking());
   let held = held(ctx, (readiness, thinking));
-  let state = if sending.is_pending() {
+  // Files still being read go with the message: it is sent once they are added.
+  let state = if sending.is_pending() || view.attached.reading.get() > 0 {
     Sending::Busy
   } else if let Some(why) = held {
     Sending::Held(why)
-  } else if view.draft.get().trim().is_empty() {
+  } else if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() {
     Sending::Empty {
       why: ctx.t("orchestrator.composer.sendEmpty"),
       press: view.send_draft(project, reads.target),
@@ -79,11 +85,18 @@ pub(super) fn main(
       .filter(|readiness| !readiness.is_ready())
       .map(|readiness| not_ready(ctx, project, readiness)),
   };
+  // The message being sent, by its words, or its files' names when it has none.
   let pending = sending
     .is_pending()
     .then(|| view.outgoing.get())
     .flatten()
-    .map(|outgoing| outgoing.text);
+    .map(|outgoing| {
+      if outgoing.text.trim().is_empty() {
+        names_text(outgoing.attachments.iter().map(NewAttachment::name))
+      } else {
+        outgoing.text
+      }
+    });
   match &reads.shown {
     Shown::New if pending.is_none() => {
       let boxed = ComposerBox {
@@ -160,7 +173,9 @@ fn conversation(
   (project, shown, pending, names): (&ShownProject, Option<&ChatView>, Option<&str>, &ProjectNames),
   (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 2]),
 ) -> Element {
-  let mut all = shown.map(|shown| turns(&shown.entries)).unwrap_or_default();
+  let mut all = shown
+    .map(|shown| turns(&shown.entries, &shown.attachments))
+    .unwrap_or_default();
   let kept = view.outgoing.get().map(|outgoing| outgoing.message);
   if let Some(text) = pending
     && !all.iter().any(|turn| turn.message.is_some() && turn.message == kept)
@@ -224,7 +239,7 @@ fn conversation(
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .padding(Padding::new().left(SpacingSize::Section).right(SpacingSize::Section))
+        .padding(side_room())
         .justify(Justify::Center)
         .child(below),
     );
@@ -238,28 +253,31 @@ fn conversation(
     .into()
 }
 
-/// A turn's room in the scrolling turns: 32 in from the chat area's sides, the column's width at most, centred.
+/// The page's sides, as its head's (`page`), so the column's edge meets the title's when the window is narrow.
+pub(super) fn side_room() -> Padding {
+  Padding::new()
+    .left(OrchestratorSpacing::PageSide.role())
+    .right(OrchestratorSpacing::PageSide.role())
+}
+
+/// A turn's room in the scrolling turns: in from the chat area's sides ([`side_room`]), the column's width at most,
+/// centred.
 pub(super) fn turn_room(turn: Column) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().left(SpacingSize::Section).right(SpacingSize::Section))
+    .padding(side_room())
     .justify(Justify::Center)
     .child(turn.max_width(Dimension::Px(COLUMN_WIDTH)))
 }
 
-/// The chat's room: 32 in from its sides, its foot 14 over the panel's, its content centered.
+/// The chat's room: in from its sides ([`side_room`]), its foot 14 over the panel's, its content centered.
 fn frame(content: Element) -> Element {
   Column::new()
     .id("orchestrator-main")
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .height(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .left(SpacingSize::Section)
-        .right(SpacingSize::Section)
-        .bottom(ExtraSpacing::Section.role()),
-    )
+    .padding(side_room().bottom(ExtraSpacing::Section.role()))
     .align_items(Alignment::Center)
     .child(content)
     .into()
@@ -289,6 +307,7 @@ fn env(
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),
+    root: open.repo_root.clone(),
     connection,
     scope,
     stop: Arc::new(move || {
@@ -420,7 +439,7 @@ fn send_problem(
             .color(PaletteColor::TextSecondary)
         })),
     );
-  if !unconfirmed && !view.draft.get().trim().is_empty() {
+  if !unconfirmed && (!view.draft.get().trim().is_empty() || !view.attached.attached.get().0.is_empty()) {
     row = row.child(
       ActionButton::new(
         "orchestrator-send-retry",

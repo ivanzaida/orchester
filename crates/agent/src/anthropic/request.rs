@@ -4,6 +4,7 @@
 //! streamed (thinking blocks verbatim) and every result of a response in one user message.
 
 use orchester_core::{
+  attachment::MediaType,
   connection::WireApi,
   native::{
     item::Item,
@@ -126,9 +127,10 @@ fn messages(items: &[Item], strip_before: usize) -> Result<Value, ModelError> {
     let Some((role, block)) = block(item, index < strip_before)? else {
       continue;
     };
+    let blocks = std::iter::once(block).chain(attached_block(item));
     match messages.last_mut() {
-      Some((last, blocks)) if *last == role => blocks.push(block),
-      _ => messages.push((role, vec![block])),
+      Some((last, held)) if *last == role => held.extend(blocks),
+      _ => messages.push((role, blocks.collect())),
     }
   }
   let messages = messages
@@ -136,6 +138,26 @@ fn messages(items: &[Item], strip_before: usize) -> Result<Value, ModelError> {
     .map(|(role, content)| json!({"role": role.as_str(), "content": content}));
   Ok(Value::Array(messages.collect()))
 }
+
+/// The image or document block of a file a user item gives, after its line; a copy that cannot be read is said in
+/// a text block instead, so the model is not told of a file it never sees.
+fn attached_block(item: &Item) -> Option<Value> {
+  let Item::User {
+    attached: Some(file), ..
+  } = item
+  else {
+    return None;
+  };
+  let media = file.attachment.media();
+  let kind = if media == MediaType::Pdf { "document" } else { "image" };
+  Some(match file.base64() {
+    Ok(data) => json!({"type": kind, "source": {"type": "base64", "media_type": media.as_str(), "data": data}}),
+    Err(_) => json!({"type": "text", "text": UNREADABLE}),
+  })
+}
+
+/// What the model reads in place of an attached file whose copy cannot be read.
+const UNREADABLE: &str = "The attachment above could not be read from the project's data.";
 
 /// The content block of `item`; `None` for what is not sent: empty text, and thinking that is left out
 /// (`strip`) or came from another wire format.
