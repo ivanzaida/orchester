@@ -192,6 +192,8 @@
     "scopeDraft": "{{scope}} · Draft v{{version}}",
     "editorDraftSaved": "Draft saved · Published v{{version}}",
     "editorNewDraft": "Draft saved · Not published",
+    "automationDraftSaved": "Draft written by automation · Published v{{version}}",
+    "automationNewDraft": "Draft written by automation · Not published",
     "previewPrompt": "Preview prompt",
     "roleNote": "An agent role rule is added to the prompt of every agent with that role, after the profile’s own role instructions.",
     "stepNote": "A step override is added to the prompt of one pipeline step, after the step’s own instructions. {{step}} runs {{role}}.",

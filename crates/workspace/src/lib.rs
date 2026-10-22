@@ -41,6 +41,7 @@ pub mod plan_limits;
 pub mod project_list;
 pub mod project_settings;
 pub mod project_setup;
+pub mod prompt_changes;
 pub mod pull_requests;
 pub mod recovery;
 pub mod repository;

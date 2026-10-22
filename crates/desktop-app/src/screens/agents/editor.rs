@@ -22,6 +22,7 @@ use super::{
   words,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::{ShownProject, own::OwnChanges},
   routes::AgentTab,
   theme::{ExtraSpacing, IconSize, agents::page_spacing},
@@ -77,6 +78,8 @@ pub struct Editor {
   pending: Signal<Pending>,
   busy: Signal<bool>,
   tried: Signal<bool>,
+  /// Who pressed Publish: what it changes in the role's prompts is a person's, or automation's under their consent.
+  gate: Option<InputGate>,
 }
 impl Component for Editor {
   type Props = Props;
@@ -89,6 +92,7 @@ impl Component for Editor {
       pending: ctx.signal(Pending(None)),
       busy: ctx.signal(false),
       tried: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
     };
     editor
       .fields
@@ -320,6 +324,8 @@ impl Editor {
           .clone(),
         action: Action::PublishStale,
         allowed: Vec::new(),
+        // Publishing a stale draft waits for a person's confirmation, which no synthetic input gives.
+        prompt_decided: true,
       };
       publish.on_click(move || pending.set(Pending(Some(request.clone()))))
     } else {
@@ -345,12 +351,13 @@ impl Editor {
     work: &actions::Work,
     profile: Option<&orchester_core::resource::AgentProfile>,
   ) -> ActionButton {
-    let (work, busy, tried) = (work.clone(), self.busy.clone(), self.tried.clone());
+    let (work, busy, tried, gate) = (work.clone(), self.busy.clone(), self.tried.clone(), self.gate.clone());
     let request = profile.map(|profile| Request {
       existing: props.entry.clone(),
       profile: profile.clone(),
       action,
       allowed: Vec::new(),
+      prompt_decided: false,
     });
     button.on_click(move || {
       tried.set(true);
@@ -359,7 +366,12 @@ impl Editor {
       }
       if let Some(request) = &request {
         busy.set(true);
-        work.run(request.clone());
+        // What publishing changes in the role's prompts is the person's (ORC-30): read from the input that pressed it.
+        let prompt_decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
+        work.run(Request {
+          prompt_decided,
+          ..request.clone()
+        });
       }
     })
   }

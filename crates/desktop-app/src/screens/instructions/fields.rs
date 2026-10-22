@@ -1,7 +1,13 @@
 //! Editor fields qSn5T: name, scope, agents, injection timing and prompt.
+use std::sync::{
+  Arc,
+  atomic::{AtomicBool, Ordering},
+};
+
 use lurq::{
   app::{
     ctx::Ctx,
+    events::is_synthetic_input,
     theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, InputEditError, InputToken, InputTokens, Row, ScrollVertical, Select, SelectOption, Text},
@@ -16,7 +22,7 @@ use orchester_workspace::instructions::{
   publication::{self, Unavailable},
 };
 
-use super::{state::Tab, words};
+use super::{state::Tab, words, work::Author};
 use crate::{
   theme::{ExtraRadius, ExtraSpacing, IconSize, instructions},
   ui::{
@@ -55,6 +61,8 @@ pub struct Fields {
   pub targets: Signal<Vec<Target>>,
   pub events: Signal<Events>,
   pub scope: Signal<ScopeChoice>,
+  /// Whether an MCP client's synthetic input edited the fields since the last save: the next draft is automation's.
+  automated: Arc<AtomicBool>,
 }
 impl Fields {
   pub fn new(ctx: &mut Ctx, tab: Tab, entry: Option<&InstructionEntry>) -> Self {
@@ -68,7 +76,7 @@ impl Fields {
       |entry| ScopeChoice::of(entry.body.scope()),
     );
     let targets = ctx.signal(entry.map_or_else(|| vec![Target::All], |entry| Target::of(entry.body.targets())));
-    let before = std::sync::Arc::new(parking_lot::Mutex::new(targets.get_untracked()));
+    let before = Arc::new(parking_lot::Mutex::new(targets.get_untracked()));
     let changed = targets.clone();
     ctx.watch(&targets, move |next| {
       let mut before = before.lock();
@@ -83,7 +91,7 @@ impl Fields {
     });
     let text = ctx.signal(entry.map_or_else(String::new, |e| e.body.text().as_str().to_owned()));
     let input = PromptInput::new(ctx, text.clone());
-    Self {
+    let fields = Self {
       frozen: ctx.signal(false),
       input,
       name: ctx.signal(entry.map_or_else(String::new, |e| e.name.to_string())),
@@ -91,7 +99,38 @@ impl Fields {
       targets,
       scope: ctx.signal(scope),
       events: ctx.signal(entry.map_or(Events::Start, |e| Events::of(e.body.events()))),
+      automated: Arc::new(AtomicBool::new(false)),
+    };
+    // Signals change while lurq delivers the input that changed them, so a client's edit is told from a person's.
+    let automated = fields.automated.clone();
+    let mark = move || {
+      if is_synthetic_input() {
+        automated.store(true, Ordering::SeqCst);
+      }
+    };
+    let watched = mark.clone();
+    ctx.watch(&fields.name, move |_| watched());
+    let watched = mark.clone();
+    ctx.watch(&fields.text, move |_| watched());
+    let watched = mark.clone();
+    ctx.watch(&fields.targets, move |_| watched());
+    let watched = mark.clone();
+    ctx.watch(&fields.events, move |_| watched());
+    ctx.watch(&fields.scope, move |_| mark());
+    fields
+  }
+  /// Who wrote the edits a save takes now: automation when an MCP client's input edited the fields since the last
+  /// save started, or presses the button that saves.
+  pub fn author(&self) -> Author {
+    if self.automated.load(Ordering::SeqCst) || is_synthetic_input() {
+      Author::Automation
+    } else {
+      Author::Person
     }
+  }
+  /// A save started: edits from now on are the next save's.
+  pub fn saving(&self) {
+    self.automated.store(false, Ordering::SeqCst);
   }
   pub fn snapshot(&self) -> Snapshot {
     Snapshot {

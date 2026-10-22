@@ -1,4 +1,5 @@
 //! Instructions in the real headless window; all fixture data stays under .tmp/instructions.
+mod automation;
 mod clipboard;
 mod design_states;
 mod discovery;

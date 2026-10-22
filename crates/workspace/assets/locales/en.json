@@ -1344,6 +1344,7 @@
       "notLatestRun": "Only the task’s latest run can be merged.",
       "mergeNotRecorded": "The merge ended without a record of it; the task page says where the run stands.",
       "personOnly": "This widens what agents may do, which a person decides in Orchester, or lets automation decide by turning on Let automation change agent permissions in Settings › What automation may do.",
+      "promptPersonOnly": "This changes what agents are told, which a person decides in Orchester: they publish it in the window or apply the Orchestrator's proposal, or let automation decide by turning on Let automation change agent permissions in Settings › What automation may do. Saving a draft stays open to automation.",
       "autoApproveNeedsAnswers": "Approving automatically answers requests in a person's place, so it also needs Let automation answer approvals, which a person turns on in the window.",
       "mcpProgramAndUrl": "A server is either a program (program) or a remote server (url), not both.",
       "mcpArgument": "An argument is empty or holds a line break: {{value}}",
@@ -1404,6 +1405,12 @@
       "mcpExemptTools": "{{tools}} would run without asking, where a person is asked now.",
       "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it.",
       "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}."
+    },
+    "prompts": {
+      "instruction": "Publishing the instruction adds its text to the prompts of every agent it applies to.",
+      "profile": "What {{role}}'s agents are told would change: its role, responsibilities or role instructions differ from the latest published version.",
+      "repositoryAgentFiles": "Agents would load the repository's own agent files (AGENTS.md, CLAUDE.md), so what the repository says would reach every agent's prompt.",
+      "agentFilesPersonOnly": "Only a person turns on the repository's agent files here: what the repository says would reach every agent's prompt. Input from an MCP client is taken only while you let automation change agent permissions."
     }
   },
   "statusBar": {

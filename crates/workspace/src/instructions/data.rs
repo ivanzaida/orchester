@@ -4,7 +4,11 @@
 //! drafts are saved as they are edited, by each app. Every function blocks on SQLite; the
 //! UI calls them off the UI thread.
 
-use std::{collections::BTreeSet, path::Path, sync::Arc};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  path::Path,
+  sync::Arc,
+};
 
 use orchester_core::{
   id::ResourceId,
@@ -111,6 +115,8 @@ pub struct ProjectInstructions {
   pub entries: Arc<Vec<InstructionEntry>>,
   pub profiles: Arc<Vec<ProfileChoice>>,
   pub pipelines: Arc<Vec<PipelineChoice>>,
+  /// The drafts automation saved over Orchester's MCP server (ORC-30), with when ([`Self::by_automation`]).
+  pub automation_drafts: Arc<BTreeMap<ResourceId, Timestamp>>,
 }
 
 impl ProjectInstructions {
@@ -119,6 +125,7 @@ impl ProjectInstructions {
       entries: Arc::new(entries(db)?),
       profiles: Arc::new(profiles(db)?),
       pipelines: Arc::new(pipelines(db)?),
+      automation_drafts: Arc::new(db.automation_drafts()?),
     })
   }
 
@@ -128,6 +135,13 @@ impl ProjectInstructions {
 
   pub fn entry(&self, id: ResourceId) -> Option<&InstructionEntry> {
     self.entries.iter().find(|entry| entry.id == id)
+  }
+
+  /// Whether `entry`'s draft is the one automation saved: a draft saved since, by a person, is theirs.
+  pub fn by_automation(&self, entry: &InstructionEntry) -> bool {
+    entry
+      .draft_saved_at
+      .is_some_and(|saved| self.automation_drafts.get(&entry.id) == Some(&saved))
   }
 
   /// The roles of the project's profiles, each once, in name order.

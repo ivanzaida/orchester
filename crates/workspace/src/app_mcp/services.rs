@@ -40,6 +40,9 @@ pub struct Services {
   /// what it widens is theirs to decide, as in the window, not *Let automation change agent permissions*, but only
   /// for the draft they decided on and what they were shown it widens.
   pub(super) person: Option<Arc<PersonDecision>>,
+  /// The Orchestrator chat publishes under the person's *Let the Orchestrator publish drafts*, which covers what a
+  /// publication changes in agents' prompts (`docs/design/orchestrator-toolset.md`, decision 3), never what it widens.
+  pub(super) chat_publishes: bool,
 }
 
 /// What a person decided to publish: the draft saved at `saved`, as version `version`, widening what agents may do
@@ -70,6 +73,7 @@ impl Services {
       jobs,
       pull_request_reads: RecentReads::default(),
       person: None,
+      chat_publishes: false,
     }
   }
 
@@ -79,6 +83,20 @@ impl Services {
   pub(crate) fn decided_by_person(mut self, decision: PersonDecision) -> Self {
     self.person = Some(Arc::new(decision));
     self
+  }
+
+  /// These services for a publication the Orchestrator chat makes itself ([`Self::chat_publishes`]). Only the chat
+  /// asks for it, once it read that the person turned on *Let the Orchestrator publish drafts*.
+  #[must_use]
+  pub(crate) const fn published_by_chat(mut self) -> Self {
+    self.chat_publishes = true;
+    self
+  }
+
+  /// Whether a person decided what the publication changes in agents' prompts: they applied it, or let the chat
+  /// publish it.
+  pub(super) fn prompt_decided(&self) -> bool {
+    self.person.is_some() || self.chat_publishes
   }
 
   /// Refused unless no person decided the call, or the draft of `resource` is the one they decided on: saved when

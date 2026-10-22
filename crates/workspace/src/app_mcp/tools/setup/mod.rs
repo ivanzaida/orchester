@@ -71,7 +71,10 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "set_repository_agent_files",
     description: "Turns on or off whether the project's agents load the repository's own agent files (AGENTS.md, \
-                  CLAUDE.md and the like), as Project settings › General does. Runs that start from now on use it.",
+                  CLAUDE.md and the like), as Project settings › General does. Runs that start from now on use it. \
+                  Turning them off is always taken; turning them on puts what the repository says in every agent's \
+                  prompt, so it is refused as person_only unless a person turned on Let automation change agent \
+                  permissions.",
     schema: schema_for_type::<project::SetAgentFiles>,
     read_only: false,
   },
@@ -259,7 +262,11 @@ const SPECS: &[Spec] = &[
                   it. Refused for a draft started from an older version than the latest, a connection that is gone \
                   or does not run agents, permissions its CLI cannot enforce, as person_only a draft broader than \
                   the latest version while Let automation change agent permissions is off, and as draft_changed a \
-                  draft that changed while it was checked.",
+                  draft that changed while it was checked. A draft whose role, responsibilities or role \
+                  instructions differ from the latest version (a first version: with any responsibilities or role \
+                  instructions) changes what its agents are told, so it is refused as person_only too unless a \
+                  person turned on Let automation change agent permissions, applies the Orchestrator's proposal of \
+                  it, or lets the Orchestrator publish drafts; a person publishes it in the window.",
     schema: schema_for_type::<profiles::InProfile>,
     read_only: false,
   },
@@ -325,8 +332,9 @@ const SPECS: &[Spec] = &[
     name: "list_instructions",
     description: "A project's instructions, which Orchester adds to agents' prompts: id, name, where each applies \
                   (project, agent_role, pipeline or step), which agents it reaches (all, roles or profiles), when \
-                  (start, resume), its text, where it stands (draft, stale_draft or published), and its link in \
-                  the app (Instructions, which opens on its library). Without `project`, every project's, each \
+                  (start, resume), its text, where it stands (draft, stale_draft or published), whether its draft \
+                  is the one automation saved (draft_by_automation), and its link in the app (Instructions, which \
+                  opens on its library). Without `project`, every project's, each \
                   naming its project (unreadable_projects lists the projects that could not be read, with why).",
     schema: schema_for_type::<InProjects>,
     read_only: true,
@@ -346,14 +354,19 @@ const SPECS: &[Spec] = &[
                   `name`. `applies_in` is project, agent_role (with `role`; it then reaches every agent of the \
                   role), pipeline (with `pipeline`) or step (with `pipeline` and `step`); `agents` all, or some \
                   roles or profiles; `events` start, resume or both. The text may use {{variables}} and may be blank \
-                  in a draft. Publish it with publish_instruction.",
+                  in a draft. A draft reaches no agent, so saving is always open; the Instructions page marks it as \
+                  written by automation (draft_by_automation) until a person saves it or it is published. Publish it \
+                  with publish_instruction.",
     schema: schema_for_type::<instructions::SaveInstructionDraft>,
     read_only: false,
   },
   Spec {
     name: "publish_instruction",
     description: "Publishes an instruction's draft as its next version, as Publish does: agents get it from then on. \
-                  Refused for a blank text or a draft started from an older version than the latest.",
+                  Refused for a blank text or a draft started from an older version than the latest. What it \
+                  publishes reaches the prompts of every agent it applies to, so it is refused as person_only \
+                  unless a person turned on Let automation change agent permissions, applies the Orchestrator's \
+                  proposal of it, or lets the Orchestrator publish drafts; a person publishes it in the window.",
     schema: schema_for_type::<instructions::InInstruction>,
     read_only: false,
   },

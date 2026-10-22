@@ -87,6 +87,14 @@ pub fn save_in(root: &Path, expected: &InstructionEntry, body: Instruction) -> R
     matched_latest.as_ref(),
   ))
 }
+/// Records the draft `saved` just wrote as automation's (ORC-30): an MCP tool's save, or the window's under synthetic
+/// input. The Instructions page marks it until a person saves it again or it is published.
+pub fn mark_automation_in(root: &Path, saved: &InstructionEntry) -> Result<(), WriteError> {
+  if let Some(at) = saved.draft_saved_at {
+    ProjectDb::open(root)?.mark_automation_draft(saved.id, at)?;
+  }
+  Ok(())
+}
 /// Publishes exactly the saved draft `expected`, if every variable it uses has a value at each of its
 /// events; a stale draft is refused by the shared lifecycle.
 pub fn publish_in(root: &Path, expected: &InstructionEntry) -> Result<InstructionEntry, WriteError> {

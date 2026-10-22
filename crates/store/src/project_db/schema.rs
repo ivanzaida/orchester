@@ -9,6 +9,7 @@ mod approval_choices;
 mod attachments;
 mod auto_mode;
 mod automation_answers;
+mod automation_drafts;
 mod base_notices;
 mod code_index;
 mod command_approvals;

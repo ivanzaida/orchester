@@ -14,7 +14,7 @@ use orchester_workspace::messages::Message;
 use super::{
   fields::Fields,
   state::Saved,
-  work::{Change, Work},
+  work::{Author, Change, Work},
 };
 
 /// How long the fields rest after an edit before it is saved.
@@ -81,6 +81,7 @@ fn save(fields: &Fields, saved: &Signal<Saved>, work: &Work, published: &Signal<
   };
   if body != entry.body {
     published.set(None);
-    work.run(Change::Save(entry, body).into());
+    // Work::run tells whether an MCP client's input wrote the edits.
+    work.run(Change::Save(entry, body, Author::Person).into());
   }
 }

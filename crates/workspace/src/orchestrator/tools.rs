@@ -460,7 +460,8 @@ fn proposed(translate: &Translate, change: ProposedChange, task: Option<String>)
 }
 
 /// A publication: proposed to the person, unless they let the Orchestrator publish drafts; then published, unless
-/// it widens what agents may do while *Let automation change agent permissions* is off.
+/// it widens what agents may do while *Let automation change agent permissions* is off. Their switch covers what the
+/// publication changes in agents' prompts ([`crate::prompt_changes`]), which the tool otherwise refuses.
 async fn publish(
   (services, translate): (&Services, &Translate),
   scope: &ChatScope,
@@ -476,7 +477,8 @@ async fn publish(
   }
   // The tool is given the draft that was checked, by its id: a name could name another one by now.
   let (tool, arguments) = change::tool_arguments(scope, &change);
-  let result = app_tool((services, translate), tool, arguments).await;
+  let chat = services.clone().published_by_chat();
+  let result = app_tool((&chat, translate), tool, arguments).await;
   Ok(Acted {
     result,
     kept: Kept {

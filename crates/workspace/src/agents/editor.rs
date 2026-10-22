@@ -22,6 +22,9 @@ pub struct Request {
   pub profile: AgentProfile,
   pub action: Action,
   pub allowed: Vec<Message>,
+  /// A person decided what publishing changes in its agents' prompts ([`crate::prompt_changes`]): it is their input,
+  /// or an MCP client's under *Let automation change agent permissions*. Otherwise such a publication is refused.
+  pub prompt_decided: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -68,6 +71,13 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
     &request.profile,
   )?;
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  if let (Some(id), Action::Publish | Action::PublishStale, false) = (id, request.action, request.prompt_decided) {
+    let changes =
+      crate::prompt_changes::profile_in(&db, id, &request.profile).map_err(|error| messages::store_error(&error))?;
+    if !changes.is_empty() {
+      return Err(Message::new("appMcp.errors.promptPersonOnly"));
+    }
+  }
   let reasons = super::widening::reasons(&db, id, &request.profile, connection.provider())
     .map_err(|error| messages::store_error(&error))?;
   if reasons.iter().any(|reason| !request.allowed.contains(reason)) {
