@@ -3,7 +3,7 @@
 //! kept, uploads that keep or map modules by name, and the `modules` event.
 
 use orchester_api::{
-  ErrorCode, ModuleResponse, Modules, SharedModule, SharingErrorDetails, TaskResponse, TasksCreated,
+  ErrorCode, Joined, ModuleResponse, Modules, SharedModule, SharingErrorDetails, TaskResponse, TasksCreated,
 };
 use orchester_core::{
   id::{ModuleId, ProjectId, TaskId},
@@ -243,29 +243,32 @@ async fn modules_task_membership_changes_under_the_task_revision_and_is_kept() {
   let refused = patch(&server, &owner.token, project, &out, json!({"module":foreign.id})).await;
   error(&refused, 422, ErrorCode::Module);
   assert_eq!(refused.json::<Value>()["reason"], "module_not_found");
-  let history = listed(&server, &owner.token, project, 0).await.changes;
-  let moves: Vec<_> = history
+  let expected = [
+    (task.id, None, Some(checkout.id), ChangeActor::Person),
+    (task.id, Some(checkout.id), Some(billing.id), ChangeActor::Orchester),
+    (task.id, Some(billing.id), None, ChangeActor::Person),
+  ];
+  assert_moves_kept(&server, &owner, project, &expected).await;
+  server.finish().await;
+}
+
+type Move = (TaskId, Option<ModuleId>, Option<ModuleId>, ChangeActor);
+
+/// The project's moves are `expected`, each by `owner`, listed after a sequence and append-only.
+async fn assert_moves_kept(server: &TestServer, owner: &Joined, project: ProjectId, expected: &[Move]) {
+  let history = listed(server, &owner.token, project, 0).await.changes;
+  let moves: Vec<Move> = history
     .iter()
     .map(|change| (change.task, change.from, change.to, change.actor))
     .collect();
-  assert_eq!(
-    moves,
-    [
-      (task.id, None, Some(checkout.id), ChangeActor::Person),
-      (task.id, Some(checkout.id), Some(billing.id), ChangeActor::Orchester),
-      (task.id, Some(billing.id), None, ChangeActor::Person),
-    ]
-  );
+  assert_eq!(moves, expected);
   assert!(history.iter().all(|change| change.by.id == owner.user.id));
-  let later = listed(&server, &owner.token, project, history[0].sequence)
-    .await
-    .changes;
+  let later = listed(server, &owner.token, project, history[0].sequence).await.changes;
   assert_eq!(later, history[1..]);
   assert!(
     server.database().execute("DELETE FROM module_changes", []).is_err(),
     "the moves are append-only"
   );
-  server.finish().await;
 }
 
 fn upload_module(id: ModuleId, name: &str) -> Value {
