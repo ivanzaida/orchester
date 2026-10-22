@@ -25,6 +25,7 @@ mod merging;
 mod module;
 mod plan;
 pub(crate) mod points;
+mod sources;
 mod state;
 mod unbuilt;
 mod values;

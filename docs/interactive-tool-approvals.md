@@ -312,10 +312,14 @@ by `read_external_file` and `search_external_file`.
   later edits apply to new runs; every step of the run reads all of them. A call of `read_external_file` or
   `search_external_file` whose resolved file or folder is a source or lies in one runs without asking: the runner
   answers Claude Code's permission prompt itself, and runs a Codex call at once; what the tools refuse anywhere stays
-  refused in a source too. The *# Orchester tools* paragraph names the run's sources. Their screens (Project
-  settings, New task's *Attach context*, the pipeline settings and step inspector; `data/orchester2.pen`, layers
-  *Sources* and *Pipeline settings*) are not built: until then sources are set through the store API (Orchester's
-  domain MCP server of `crates/workspace` does not exist on master yet).
+  refused in a source too. The *# Orchester tools* paragraph names the run's sources. In `orchester-app` (ORC-8;
+  `data/orchester2.pen`, layers *Sources* and *Pipeline settings*) Project settings › Sources lists the project's, New
+  task and Edit task list the task's under Context beside what it inherits, and Pipeline settings and the step
+  inspector list the draft's. A typed or picked path is checked in place before it can be added
+  (`orchester_workspace::sources::check`: it must exist and be readable, lie outside the project's folder and every
+  source it would join, and be nothing these tools refuse); adding one to the project or a task is a person's, asked in
+  place with the window's input locked; a pipeline's or a step's change the draft, and publishing a version that reads
+  more asks as any weaker version does. No domain MCP tool changes sources yet.
 - **Approval, held by the runner.** A call of a tool that asks runs only once approved, whatever the CLI does: an
   approval through Claude Code's permission prompt leaves a grant for one call of that tool with exactly the
   arguments the person saw, and a call that arrives without one is asked about by the runner itself before it runs

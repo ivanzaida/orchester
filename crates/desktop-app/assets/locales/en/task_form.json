@@ -129,10 +129,7 @@
         "description": "The Orchestrator never merges this task's runs on its own, even when you let it merge finished runs: it tells you a run is ready and the merge stays yours."
       },
       "context": {
-        "label": "Attach context",
-        "description": "Files, links and notes for the agents.",
-        "action": "Attach context",
-        "reason": "Attaching context is not available yet."
+        "reason": "Links and notes as context are not available yet."
       },
       "instructions": {
         "label": "Included instructions",
@@ -140,6 +137,29 @@
         "action": "Preview",
         "reason": "Preview is not available yet."
       }
+    },
+    "sources": {
+      "label": "Sources",
+      "description": "Folders and files outside the worktree that this task's agents may read and search without asking. They come on top of the project's and the pipeline steps' sources.",
+      "thisTask": "This task",
+      "fromProject": "From the project",
+      "fromPipeline": "From the pipeline",
+      "editInSettings": "Edit in Project settings",
+      "viewPipeline": "View pipeline",
+      "count": "{{count}}",
+      "folderOwn": "Folder · this task",
+      "fileOwn": "File · this task",
+      "goneOwn": "This task",
+      "folderOf": "Folder · {{origin}}",
+      "fileOf": "File · {{origin}}",
+      "goneOf": "{{origin}}",
+      "add": "Add source",
+      "question": "Let this task's agents read this without asking?",
+      "confirm": "Add source",
+      "keep": "Don't add",
+      "summary": "A run of this task starts with {{count}} sources and keeps them until it ends; a missing one is skipped. Reading anywhere else outside the worktree asks you.",
+      "summaryOne": "A run of this task starts with 1 source and keeps it until it ends; a missing one is skipped. Reading anywhere else outside the worktree asks you.",
+      "summaryNone": "A run of this task starts with no sources. Reading anything outside the worktree asks you."
     },
     "plan": {
       "title": "Execution plan",

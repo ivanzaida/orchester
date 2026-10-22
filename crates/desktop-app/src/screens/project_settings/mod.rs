@@ -1,11 +1,12 @@
-//! Project settings (RExz4): four autosaving sections, with widening questions in place, and Sharing (`bWD9q`), whose
-//! first link opens its own page over the tabs (`KSnOW`).
+//! Project settings (RExz4): four autosaving sections, with widening questions in place, Sources (`kmNiF`), and
+//! Sharing (`bWD9q`), whose first link opens its own page over the tabs (`KSnOW`).
 mod environment;
 mod general;
 mod index;
 mod limits;
 mod page;
 mod sharing;
+mod sources;
 mod work;
 
 use lurq::{
@@ -55,13 +56,20 @@ impl DevtoolsInspectable for Status {}
 /// What the screen says about a tab; the tabs themselves are the route's ([`Tab`]).
 impl Tab {
   /// The tabs before *Memory*, which is not built yet; *Sharing* comes after it.
-  pub(super) const BEFORE_MEMORY: [Self; 4] = [Self::General, Self::Limits, Self::Environment, Self::CodeIndex];
+  pub(super) const BEFORE_MEMORY: [Self; 5] = [
+    Self::General,
+    Self::Limits,
+    Self::Environment,
+    Self::Sources,
+    Self::CodeIndex,
+  ];
   /// The tab's part of its element id (`settings-tab-codeIndex`).
   pub(super) const fn element(self) -> &'static str {
     match self {
       Self::General => "general",
       Self::Limits => "limits",
       Self::Environment => "environment",
+      Self::Sources => "sources",
       Self::CodeIndex => "codeIndex",
       Self::Sharing => "sharing",
     }
@@ -71,6 +79,7 @@ impl Tab {
       Self::General => "project_settings.general",
       Self::Limits => "project_settings.limits",
       Self::Environment => "project_settings.environment",
+      Self::Sources => "project_settings.sources",
       Self::CodeIndex => "project_settings.codeIndex",
       Self::Sharing => "project_settings.sharing",
     }
@@ -80,6 +89,7 @@ impl Tab {
       Self::General => "project_settings.generalDescription",
       Self::Limits => "project_settings.limitsDescription",
       Self::Environment => "project_settings.environmentDescription",
+      Self::Sources => "project_settings.sourcesDescription",
       Self::CodeIndex => "project_settings.codeIndexDescription",
       Self::Sharing => "project_settings.sharingDescription",
     }
@@ -116,6 +126,7 @@ impl Component for SettingsScreen {
       Tab::General => ctx.mount_keyed::<general::General>("project-settings-general", props),
       Tab::Limits => ctx.mount_keyed::<limits::Limits>("project-settings-limits", props),
       Tab::Environment => ctx.mount_keyed::<environment::Environment>("project-settings-environment", props),
+      Tab::Sources => ctx.mount_keyed::<sources::Sources>("project-settings-sources", props),
       Tab::CodeIndex => ctx.mount_keyed::<index::CodeIndex>("project-settings-index", props),
       Tab::Sharing => ctx.mount_keyed::<sharing::Sharing>("project-settings-sharing", props),
     };

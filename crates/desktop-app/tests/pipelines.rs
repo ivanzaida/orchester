@@ -266,3 +266,6 @@ mod publication_notice;
 
 #[path = "pipelines/watch_pileup.rs"]
 mod watch_pileup;
+
+#[path = "pipelines/sources.rs"]
+mod sources;

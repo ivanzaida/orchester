@@ -15,6 +15,7 @@ mod publication;
 mod restore;
 mod settings;
 mod settings_nav;
+mod sources;
 mod state;
 mod step_executor;
 mod step_fields;
