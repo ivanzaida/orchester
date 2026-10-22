@@ -479,6 +479,20 @@ activity (`AgentEvent::ToolDecided`):
   final message (`permission_denials` lists the call); Codex 0.159.2 told its model `user rejected MCP tool call`
   for an MCP call and `exec_command failed: CreateProcess { message: "Rejected(\"rejected by user\")" }` for an
   escalated command (`run::codex_denial`), ran nothing, and the turn completed.
+- **Deny with a message** (ORC-29, `ApprovalAnswer::DenyWithMessage`, IPC protocol 31; design `D2fdTQ`): a denial
+  that carries the denier's words (`run::DenialNote`: trimmed, not empty, at most 2000 characters; the person's
+  text, not a secret). The agent is told who denied it and the words (`run::denial_with_message`: *Denied by the
+  person reviewing this run: …*, *The person reviewing this run denied pencil batch_design: …*, automation's naming
+  automation). Claude Code gets them as the permission prompt's `deny` message, a call of Orchester's tools as its
+  refusal. Codex App Server's answers to a command, a file change and an MCP elicitation take no words (`decline`
+  only, in the schema `codex app-server generate-json-schema` writes), so Codex declines in its own words and the
+  runner adds the person's to the running turn with `turn/steer` just before the decline: the model reads them as
+  the next message of its turn, after the declined call's result; a turn that takes no input any more is logged and
+  the decline goes on without them. A file change outside the writable roots never reaches a person (it is declined
+  at once), so only commands and MCP calls carry words in practice. A native agent's denial carries no words yet:
+  its card keeps *Deny with a message* locked with why, and the runner refuses one. The decision record keeps who
+  denied and the words (`tool_approvals.denial_note`, migration `denial_notes`); the conversation's decided row shows
+  them (*Your message: “…”*). `decide_approval` takes them as `message`, with `deny` only, where automation may deny.
 
 **Auto-approval** (user decisions 2026-10-02 and 2026-10-03) is a run's own choice (*Approve everything in this run*, the switch in
 the run's Summary, *Stop* there, under the task heading or in the status bar) or, while the run has none, the

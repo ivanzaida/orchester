@@ -2,7 +2,12 @@
 //! pill leave in the press's frame, and the runner's record lets them go for good.
 
 use orchester_app::routes::{OverviewTab, ProjectPage, Route, TaskTab};
-use orchester_core::{question::GivenAnswer, run::Answerer};
+use orchester_core::{
+  connection::stream::AgentEvent,
+  question::GivenAnswer,
+  run::{Answerer, DecidedBy, DenialNote},
+  store::ActivityStore,
+};
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 use orchester_workspace::tasks::needs_you::{WaitingItem, WaitingKind};
@@ -69,6 +74,56 @@ fn answered_in_the_panel_leaves_at_once() {
 #[test]
 fn answered_in_the_panel_for_another_tab_leaves_at_once() {
   panel_in_place(true);
+}
+
+/// *Deny with a message* in the panel (ORC-29): the item leaves as the denial is sent, the runner keeps the words with
+/// who denied, and the agent gets them.
+#[test]
+fn denied_with_a_message_in_the_panel_leaves_at_once_and_tells_the_agent() {
+  const WORDS: &str = "Keep the payloads as they are.";
+  let mut page = Page::live();
+  page.start(APPROVAL);
+  let item = page.wait_for("the agent's request", is_approval);
+  let run = item.run.map(|(run, _)| run).expect("the request's run");
+  let card = expand_in_panel(&mut page, APPROVAL, "cards-approval-");
+  let (opener, field) = (format!("{card}-deny-message"), format!("{card}-message"));
+  page.wait("Deny with a message", |window| {
+    window.tree.get_element_by_id(&opener).is_some()
+  });
+  page.click(&opener);
+  page.wait("the editor", |window| window.tree.get_element_by_id(&field).is_some());
+  page
+    .window
+    .tree
+    .get_element_by_id_mut(&field)
+    .and_then(|element| element.as_text_input())
+    .expect("the message field")
+    .set_value(WORDS);
+  page.window.pass();
+  page.window.pass();
+  let send = format!("{card}-message-send");
+  let answered = page.answer("panel, deny with a message", &item, |page| page.click(&send));
+  assert!(answered.at_once, "the item leaves in the press's frame");
+  let decided = ProjectDb::open(&page.repo)
+    .expect("open")
+    .decided_tool_approvals(run)
+    .expect("decided");
+  assert!(
+    decided.iter().any(|decided| {
+      decided.decided_by == Some(DecidedBy::PersonDeny) && decided.note.as_ref().map(DenialNote::as_str) == Some(WORDS)
+    }),
+    "{decided:?}"
+  );
+  let repo = page.repo.clone();
+  page.wait("the agent to get the words", |_| {
+    ProjectDb::open(&repo)
+      .expect("open")
+      .activity(run, 0)
+      .expect("activity")
+      .iter()
+      .any(|entry| matches!(&entry.event, AgentEvent::Raw { line, .. } if line.starts_with("steered: ") && line.ends_with(WORDS)))
+  });
+  page.end();
 }
 
 #[test]

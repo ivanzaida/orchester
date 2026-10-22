@@ -281,6 +281,47 @@ fn domain_automation_cannot_approve_a_network_request() {
   );
 }
 
+/// Automation denies with a message where it may deny (ORC-29): the words go with a denial only, hold words and fit
+/// 2000 characters; the decision record keeps them with who denied.
+#[test]
+fn domain_automation_denies_with_a_message() {
+  let (mut served, repo, fake) = served(false);
+  set_up(&mut served, &repo, &fake);
+  run(&mut served, "Escalate `curl https://example.com`.");
+  let approval = waiting_approval(&mut served);
+  let_automation_answer(&served);
+  let id = approval["id"].as_str().expect("an id").to_owned();
+  let run: orchester_core::id::RunId = approval["run"]["id"]
+    .as_str()
+    .and_then(|run| run.parse().ok())
+    .expect("the run's id");
+  let long = "x".repeat(2001);
+  for (decision, message) in [("approve_once", "Fine."), ("deny", "  "), ("deny", long.as_str())] {
+    let refused = served.refused(
+      "decide_approval",
+      &json!({ "project": "Kontur", "approval": id, "decision": decision, "message": message }),
+    );
+    assert_eq!(refused["code"], "invalid_arguments", "{refused}");
+  }
+  let words = "Ask for network access in the brief first.";
+  let denied = served.ok(
+    "decide_approval",
+    &json!({ "project": "Kontur", "approval": id, "decision": "deny", "message": words }),
+  );
+  assert_eq!(denied["approval"]["decided"], "deny", "{denied}");
+  assert_eq!(denied["approval"]["message"], words, "{denied}");
+  let decided = ProjectDb::open(&repo)
+    .expect("open")
+    .decided_tool_approvals(run)
+    .expect("decided");
+  assert_eq!(decided.len(), 1);
+  assert_eq!(
+    decided[0].decided_by,
+    Some(orchester_core::run::DecidedBy::AutomationDeny)
+  );
+  assert_eq!(decided[0].note.as_ref().map(|note| note.as_str()), Some(words));
+}
+
 /// Git work that waits until the test lets it go, then fails.
 struct Held(Arc<(Mutex<bool>, Condvar)>);
 

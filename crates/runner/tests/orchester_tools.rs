@@ -19,7 +19,7 @@ use orchester_core::{
   id::{IdempotencyKey, RunId},
   orchester_tools::OutputKept,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess},
-  run::{Answerer, ApprovalAnswer, PendingToolApproval, Run, RunStatus},
+  run::{Answerer, ApprovalAnswer, DenialNote, PendingToolApproval, Run, RunStatus},
   source::SourcePath,
 };
 use orchester_exec::run_capped;
@@ -380,6 +380,52 @@ async fn orchester_tools_that_ask_never_run_unapproved() {
     "{calls:#?}"
   );
   assert!(calls[3].contains("protected"), "{calls:#?}");
+}
+
+/// A denial with a message refuses the relay's call with the person's words, which the agent reads as the call's error.
+#[tokio::test(flavor = "multi_thread")]
+async fn orchester_tools_denied_with_a_message_tell_the_call_why() {
+  const WORDS: &str = "Read the vendored copy in the worktree instead.";
+  let project = project(&Setup {
+    provider: AgentProvider::ClaudeCodeCli,
+    permissions: Some(permissions(RepositoryAccess::Write)),
+    ..Setup::new("Use Orchester's tools without asking.")
+  });
+  outside_folders(&project);
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  for number in 0..3 {
+    let request = pending(root, &mut events, id).await;
+    let answer = if number == 0 {
+      ApprovalAnswer::DenyWithMessage {
+        message: DenialNote::new(WORDS).expect("words"),
+      }
+    } else {
+      ApprovalAnswer::Deny
+    };
+    scheduler
+      .decide_tool_approval(id, request.id, answer, Answerer::Person)
+      .await
+      .expect("denied");
+  }
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let calls = reported(&db, id, "orchester-call: ");
+  assert!(
+    calls[0].contains(" error ")
+      && calls[0].contains(&format!(
+        "The person reviewing this run denied Orchester search_external_file: {WORDS}"
+      )),
+    "{calls:#?}"
+  );
+  let decided = db.decided_tool_approvals(id).expect("decided");
+  assert_eq!(decided[0].note.as_ref().map(DenialNote::as_str), Some(WORDS));
+  assert!(decided[1..].iter().all(|decided| decided.note.is_none()));
 }
 
 /// A program's output is read as it comes and kept within the cap, at the end the tool keeps, whatever it

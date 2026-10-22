@@ -201,13 +201,19 @@ fn continued(session: &mut Session, prompt: &str, mut result: StepReport) -> Ste
 
 /// A message sent now (`turn/steer` with `id`): taken after the running command, refused, accepted and
 /// left for the turn's end (answered at once or late), or accepted before the turn is interrupted or
-/// the process dies; then the turn works as usual.
+/// the process dies; then the turn works as usual. While the turn waits for a decision, the input is accepted for
+/// the turn and reported (`steered: <text>`), as Codex accepts input while a call of its turn waits.
 pub fn steered(session: &mut Session, id: &serde_json::Value, params: &serde_json::Value) -> Step {
+  let text = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
+  if session.awaits_message.is_none() && session.approvals.is_some() {
+    eprintln!("steered: {text}");
+    emit(&json!({"id": id, "result": {"turnId": params["expectedTurnId"]}}));
+    return Step::Go;
+  }
   let Some(awaits) = session.awaits_message.take() else {
     emit(&json!({"id": id, "error": {"code": -32600, "message": "no active turn to steer"}}));
     return Step::Go;
   };
-  let text = params["input"][0]["text"].as_str().unwrap_or_default().to_owned();
   let accepted = json!({"id": id, "result": {"turnId": params["expectedTurnId"]}});
   match awaits.answer {
     SteerAnswer::Refuse => {

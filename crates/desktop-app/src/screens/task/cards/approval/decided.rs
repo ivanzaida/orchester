@@ -1,11 +1,14 @@
 //! A tool request once it no longer waits (`Decided · Approved once · by you at 16:45` `E1En3`, `Decided ·
 //! Ended without an answer` `wEBW2`): a quiet row with a glyph, how it was answered, by whom and when, and
-//! under it what was asked in mono.
+//! under it what was asked in mono. A denial with a message says the words it told the agent under that, the
+//! person's denial note in the conversation (no frame draws it: 11 `text_primary` under the row's mono line).
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
@@ -25,11 +28,12 @@ use crate::{
 /// How a request was answered.
 pub(super) enum Decided {
   /// `decision` (`None`: it ended without one) by `by`, at `at`; `at` is `None` for a request the runner
-  /// just said no longer waits, whose end it did not time.
+  /// just said no longer waits, whose end it did not time. `note`: the words a denial with a message told the agent.
   Recorded {
     decision: Option<ToolApprovalDecision>,
     by: Option<DecidedBy>,
     at: Option<Timestamp>,
+    note: Option<Arc<str>>,
   },
   /// The person approved it for every run of the project at `at`, as recorded or as the runner just took it.
   Project { at: Timestamp },
@@ -71,15 +75,40 @@ pub(super) fn row(ctx: &Ctx, id: &str, request: &PendingToolApproval, decided: &
             .id(format!("{id}-asked"))
             .variant(ExtraTypography::MonoKey.role())
             .width(Dimension::Pct(100.0)),
-        ),
+        )
+        .with_children(note(ctx, id, decided)),
     )
     .into()
+}
+
+/// The words a denial with a message told the agent, as whoever denied it wrote them.
+fn note(ctx: &Ctx, id: &str, decided: &Decided) -> Option<Element> {
+  let Decided::Recorded {
+    note: Some(note), by, ..
+  } = decided
+  else {
+    return None;
+  };
+  let key = if *by == Some(DecidedBy::AutomationDeny) {
+    "cards.approval.decided.noteByAutomation"
+  } else {
+    "cards.approval.decided.note"
+  };
+  Some(
+    Text::new(&ctx.t_args(key, [("message", &**note)]))
+      .id(format!("{id}-note"))
+      .variant(TypographyStyle::Caption)
+      .color(PaletteColor::TextPrimary)
+      .selectable(true)
+      .width(Dimension::Pct(100.0))
+      .into(),
+  )
 }
 
 /// The glyph, its color and the words of how `decided` went.
 fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, PaletteColor, std::sync::Arc<str>) {
   let (decision, by, at) = match decided {
-    Decided::Recorded { decision, by, at } => (decision, by, at),
+    Decided::Recorded { decision, by, at, .. } => (decision, by, at),
     Decided::Project { at } => {
       return (
         Icon::ShieldCheck,
