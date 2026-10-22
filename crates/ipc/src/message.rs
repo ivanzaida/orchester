@@ -191,9 +191,9 @@ pub enum Command {
   /// A person's `answer` to one waiting tool request of a Codex or Claude Code agent. Every answer
   /// answers this request only towards the CLI; a wider one also leaves a rule with the run, a profile
   /// version or a server setting, or turns on the run's auto-approval, and Deny tells the agent and
-  /// lets it continue. A stale or already-decided request is rejected. `by` says who answers: the
-  /// person in the app, or automation through Orchester's MCP server, which only approves once or
-  /// denies (protocol 17).
+  /// lets it continue, with the denier's own words when it carries a message (protocol 31). A stale or
+  /// already-decided request is rejected. `by` says who answers: the person in the app, or automation
+  /// through Orchester's MCP server, which only approves once or denies (protocol 17).
   DecideToolApproval {
     run: RunId,
     approval: String,

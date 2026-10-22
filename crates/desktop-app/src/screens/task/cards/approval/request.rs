@@ -58,12 +58,13 @@ pub(super) fn head(ctx: &Ctx, id: &str, request: &PendingToolApproval) -> Elemen
 }
 
 /// Everything between the head and the answers. In the Needs you panel the item already says what the agent
-/// asks, so the card starts at its subject (`YDJsC`).
+/// asks, so the card starts at its subject (`YDJsC`). While a message is written the editor says what the agent is
+/// told (`editing`), so the body does not (`D2fdTQ`).
 pub(super) fn body(
   ctx: &mut Ctx,
   id: &str,
   (place, request): (&Place, &PendingToolApproval),
-  (shown, reviewing): (Option<&ShownApproval>, bool),
+  (shown, reviewing, editing): (Option<&ShownApproval>, bool, bool),
 ) -> Vec<Element> {
   let mut body: Vec<Element> = Vec::new();
   if !place.in_panel {
@@ -94,7 +95,9 @@ pub(super) fn body(
   body.extend(reviewing.then(|| note(&format!("{id}-reviewing"), &ctx.t("cards.approval.reviewing")).into()));
   body.extend(value_box(ctx, id, request));
   body.push(facts(ctx, id, (place, request), shown));
-  body.push(deny_tells(ctx, id, request, shown));
+  if !editing {
+    body.push(deny_tells(ctx, id, request, shown));
+  }
   body
 }
 

@@ -9,6 +9,7 @@
 
 mod always;
 mod auto;
+mod note;
 mod permitted;
 mod project;
 mod rule;
@@ -22,6 +23,7 @@ use thiserror::Error;
 pub use self::{
   always::{AlwaysAllowError, AlwaysUnavailable, allowing_command, allowing_tool, always_prefixes, listing},
   auto::{AutoAsk, AutoVerdict, auto_approves, auto_verdict},
+  note::{DenialNote, DenialNoteError},
   permitted::permitted,
   project::{ProjectRule, ProjectRuleId, ProjectScope, answering_in_project},
   rule::{ApprovalRule, ApprovalRuleId, RuleScope, SimilarUnavailable, answering},
@@ -48,11 +50,22 @@ pub enum ApprovalAnswer {
   ApproveRun,
   /// Not this request: the agent is told ([`denial_message`]) and continues.
   Deny,
+  /// Not this request, and the agent is told why in the denier's own words ([`denial_message`] with `message`), then
+  /// continues. Who may deny may deny with a message.
+  DenyWithMessage { message: DenialNote },
 }
 
 impl ApprovalAnswer {
   pub const fn approves(&self) -> bool {
-    !matches!(self, Self::Deny)
+    !matches!(self, Self::Deny | Self::DenyWithMessage { .. })
+  }
+
+  /// The words a denial with a message tells the agent; `None` for any other answer.
+  pub const fn denial_note(&self) -> Option<&DenialNote> {
+    match self {
+      Self::DenyWithMessage { message } => Some(message),
+      _ => None,
+    }
   }
 
   /// Who answered, when a person gives this answer.
@@ -62,18 +75,18 @@ impl ApprovalAnswer {
       Self::Similar | Self::SimilarProject => DecidedBy::PersonSimilar,
       Self::Always { .. } => DecidedBy::PersonAlways,
       Self::ApproveRun => DecidedBy::PersonRun,
-      Self::Deny => DecidedBy::PersonDeny,
+      Self::Deny | Self::DenyWithMessage { .. } => DecidedBy::PersonDeny,
     }
   }
 
   /// Who answered, when `answerer` gives this answer to a request about `subject`. Automation answers
-  /// one request at a time: it denies any, and approves once only what auto-approval would approve
-  /// ([`auto_verdict`]); what auto-approval leaves to a person, and the wider answers, which change
+  /// one request at a time: it denies any, with a message or without, and approves once only what auto-approval
+  /// would approve ([`auto_verdict`]); what auto-approval leaves to a person, and the wider answers, which change
   /// later requests, stay with a person.
   pub fn given_by(&self, answerer: Answerer, subject: &ApprovalSubject) -> Result<DecidedBy, AutomationAnswerError> {
     match (answerer, self) {
       (Answerer::Person, answer) => Ok(answer.decided_by()),
-      (Answerer::Automation, Self::Deny) => Ok(DecidedBy::AutomationDeny),
+      (Answerer::Automation, Self::Deny | Self::DenyWithMessage { .. }) => Ok(DecidedBy::AutomationDeny),
       (Answerer::Automation, Self::Once) => match auto_verdict(subject) {
         AutoVerdict::Approve(_) => Ok(DecidedBy::Automation),
         AutoVerdict::Ask(ask) => Err(AutomationAnswerError::PersonOnly(ask)),
@@ -257,6 +270,24 @@ pub fn denial_message(approval: &PendingToolApproval, by: Answerer) -> String {
     }
     (Answerer::Automation, false) => format!(
       "Automation denied {} {} through Orchester's MCP server. Continue without it.",
+      approval.server, approval.action
+    ),
+  }
+}
+
+/// What an agent is told when `by` denies `approval` with `message` (*Deny with a message*): who denied it, then
+/// their words, which take the place of *Continue without it*. Claude Code and Orchester's tools hand it to the agent
+/// as the denial's reason; Codex, whose decline carries no words, gets it as the next message of its turn.
+pub fn denial_with_message(approval: &PendingToolApproval, by: Answerer, message: &DenialNote) -> String {
+  match (by, approval.command) {
+    (Answerer::Person, true) => format!("Denied by the person reviewing this run: {message}"),
+    (Answerer::Person, false) => format!(
+      "The person reviewing this run denied {} {}: {message}",
+      approval.server, approval.action
+    ),
+    (Answerer::Automation, true) => format!("Denied by automation through Orchester's MCP server: {message}"),
+    (Answerer::Automation, false) => format!(
+      "Automation denied {} {} through Orchester's MCP server: {message}",
       approval.server, approval.action
     ),
   }

@@ -204,11 +204,14 @@ is on. It is an application setting, off by default, which only a person changes
 click the MCP item in the status bar and turn it on or off in its popover (no tool of Orchester's MCP
 server changes it, and lurq's server of the installed app cannot press it). While it is off,
 `decide_approval` is refused (`automation_not_allowed`). While it is on, a client may deny any
-request, and approve once only what auto-approval would approve: a request auto-approval leaves to a
+request, with a `message` of its own or without, and approve once only what auto-approval would approve: a
+request auto-approval leaves to a
 person (an unreadable or destructive command, a write outside the worktree, a credential read, an
 install, a network command) is refused (`person_only`, with the reason), as are the wider answers
 (`automation_wider`). The run records automation's answers as such: the activity reads *approved by
-automation* or *denied by automation*, and the run's Approvals count them apart from yours.
+automation* or *denied by automation*, and the run's Approvals count them apart from yours. A denial's
+message (at most 2000 characters) reaches the agent as the denial's reason, *Denied by automation through
+Orchester's MCP server:* and the words; the request's card keeps them.
 
 **Decision consent in the new app.** The window and domain tools use `orchester_workspace::decisions::DecisionKind`.
 *Let automation answer approvals* covers approval answers, question answers, every plan decision (including
