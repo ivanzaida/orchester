@@ -186,6 +186,10 @@ thread_local! {
   static INJECTED: std::cell::RefCell<Vec<i32>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// The failures a test injected for the transactions named `what` on any thread of the process, last first.
+#[cfg(feature = "test-support")]
+static INJECTED_BY_NAME: parking_lot::Mutex<Vec<(&'static str, i32)>> = parking_lot::Mutex::new(Vec::new());
+
 /// Makes the next transactions the store runs again on busy errors ([`retry`]) on this thread fail
 /// with `codes`, one each, after they began: as when another connection committed in between.
 #[cfg(feature = "test-support")]
@@ -196,10 +200,25 @@ pub fn fail_next_writes_for_test(codes: &[i32]) {
   });
 }
 
-/// The error a test injected for this attempt, if any.
+/// Makes the next transactions named `what` (`append run events`) that the store runs again on busy
+/// errors fail with `codes`, one each, on whichever thread of the process runs them: for a test whose
+/// writes happen on the runner's threads. Process-wide, so such a test needs a binary of its own.
 #[cfg(feature = "test-support")]
-pub(crate) fn injected_failure() -> Result<(), rusqlite::Error> {
-  match INJECTED.with_borrow_mut(Vec::pop) {
+pub fn fail_next_writes_of_for_test(what: &'static str, codes: &[i32]) {
+  let mut injected = INJECTED_BY_NAME.lock();
+  injected.retain(|(name, _)| *name != what);
+  injected.extend(codes.iter().rev().map(|code| (what, *code)));
+}
+
+/// The error a test injected for this attempt of the transaction named `what`, if any.
+#[cfg(feature = "test-support")]
+pub(crate) fn injected_failure(what: &'static str) -> Result<(), rusqlite::Error> {
+  let by_name = || {
+    let mut injected = INJECTED_BY_NAME.lock();
+    let at = injected.iter().rposition(|(name, _)| *name == what)?;
+    Some(injected.remove(at).1)
+  };
+  match INJECTED.with_borrow_mut(Vec::pop).or_else(by_name) {
     Some(code) => Err(rusqlite::Error::SqliteFailure(
       ffi::Error::new(code),
       Some("injected by the test".to_owned()),

@@ -17,7 +17,7 @@ pub use app_db::{
 };
 pub use busy::pause_lock_waits_with;
 #[cfg(feature = "test-support")]
-pub use busy::{fail_next_writes_for_test, set_lock_budget_for_test};
+pub use busy::{fail_next_writes_for_test, fail_next_writes_of_for_test, set_lock_budget_for_test};
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
 #[cfg(feature = "test-support")]

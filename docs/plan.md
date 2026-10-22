@@ -960,6 +960,34 @@ are release builds on this machine, a frame being delivering finished futures pl
   profiles with `cargo test --release -p orchester-app --features perf_profile --test orchestrator --test conversation
   open_long -- --test-threads=1`.
 
+ORC-76 · A busy project database doesn't interrupt runs · branch `orchester/orc-76-run-2` (implemented 2026-10-22;
+pipeline Check and Review follow). Most of it was on master already; this run adds the missing tests.
+- **Already covered.** Long writers found, timed and shortened by ORC-74 (below): the cause was the log flush each
+  commit made under the write lock (`synchronous = FULL`), not long SQL; the longest hold went from 24–135 ms to
+  14 ms in the stress test, the longest wait from 1.1 s to 33 ms. Every hold is logged at debug level under
+  `orchester_store::lock` with its first write and how long it waited, a hold of 1 s or more as a warning
+  (`lock_watch`). No `VACUUM` or `ANALYZE` runs, the codebase index is files, not rows, blob files are written before
+  their transaction, and a transaction holds only SQL. Retries: every connection's busy handler waits up to 60 s
+  (growing pauses 1–50 ms), and the run's log restarts its whole transaction on a busy error after it began, logged
+  as a warning; only past the minute is a run interrupted (`StoreError::Unavailable`, ORC-75's
+  `storage_contention`, which the Orchestrator may continue). 60 s: thousands of times the longest hold measured
+  under eight runs, so a healthy database never reaches it, and short enough that a lock held for good (a hung
+  process) still surfaces. The runner pauses those waits off its async workers (`claude/db-reconcile`). Checkpoints:
+  each commit checkpoints `PASSIVE` once the log holds 1000 pages, SQLite's default, and logs one that readers held
+  back; a read outside a transaction ends with its statement.
+- **Added.** `orchester_store::fail_next_writes_of_for_test(what, codes)`, a process-wide injected busy error for a
+  named transaction, so a runner test can reach the runner's own threads. Tests: `crates/store/tests/
+  parallel_writers.rs` (six writers in parallel outlast a 6 s holder of the lock and store every line once; a reader
+  that keeps its connection, as the chat does, leaves a `TRUNCATE` checkpoint free to empty the log) and
+  `crates/runner/tests/db_busy_retry.rs` (a run's event write meets `SQLITE_BUSY` then `SQLITE_BUSY_SNAPSHOT`, is
+  retried and logged, and the run succeeds with no runner failure).
+- **Found, not changed.** The status bar's *Stop* auto-approving (`stop_auto_approving_in`) reads every task and its
+  runs inside its `BEGIN IMMEDIATE`, by design so no run starts auto-approving in between; it grows with the project
+  and runs only when a person presses Stop. The runner logs since 2026-10-22 were not read: Orchester's tools refuse
+  `.orchester/logs`.
+- Tests: `cargo test -p orchester-store --test parallel_writers parallel_writers`, `--test busy_writes busy_writes`;
+  `cargo test -p orchester-runner --features test-agent --test db_busy_retry db_busy_retry`.
+
 ORC-74 · Runs don't fail on "database is locked" · branch `orchester/orc-74-run-1` (implemented 2026-10-21; pipeline
 Check and Review follow). The rules are in `docs/architecture/storage.md`, "Concurrency".
 - **Cause.** Every connection had `busy_timeout` 5 s and wrote in `BEGIN IMMEDIATE` transactions; no transaction ran
