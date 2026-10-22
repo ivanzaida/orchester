@@ -19,6 +19,7 @@ use orchester_core::{
     open_pull_request, task_link, task_pull_request,
   },
   repository::{RemoteName, RepositoryError, RepositoryLink, read_git_dir_remotes},
+  revision::Revision,
   run::{BranchName, Run, RunStatus},
   store::{ConnectionStore, PullRequestStore, RepositoryStore, RunStore, TaskStore},
   time::Timestamp,
@@ -190,8 +191,8 @@ pub enum CreateProblem {
   },
   /// The run is not its task's latest run, or did not succeed.
   NotReady,
-  /// The branch carries `commits` commits of the local `base` that `remote` doesn't have, which the pull request
-  /// would include; nothing was pushed. The person pushes `base` first, or creates it anyway.
+  /// The branch carries `commits` commits it started from (the local `base`'s) that `remote`'s `base` doesn't have,
+  /// which the pull request would include; nothing was pushed. The person pushes them first, or creates it anyway.
   BaseNotPushed {
     commits: u64,
     base: BranchName,
@@ -278,7 +279,7 @@ fn open(
     draft,
   };
   if unpushed == UnpushedBase::Refuse {
-    refuse_unpushed_base(programs, repo_root, (&link, &new))?;
+    refuse_unpushed_base(programs, repo_root, (&link, &new, run.base()))?;
   }
   let mut connection =
     github_connection(&db, link.connection()).map_err(|error| CreateProblem::Store(error.message()))?;
@@ -301,16 +302,18 @@ fn open(
     .map_err(|failure| problem(failure, &link))
 }
 
-/// [`CreateProblem::BaseNotPushed`] when `new`'s branch carries commits of the local base `link`'s remote lacks.
+/// [`CreateProblem::BaseNotPushed`] when `new`'s branch carries commits from `start` or the local base that `link`'s
+/// remote lacks.
 fn refuse_unpushed_base(
   programs: &Programs,
   repo_root: &Path,
-  (link, new): (&RepositoryLink, &NewPullRequest),
+  (link, new, start): (&RepositoryLink, &NewPullRequest, &Revision),
 ) -> Result<(), CreateProblem> {
   let check = BaseCheck {
     remote: link.remote(),
     base: &new.base,
     head: &new.head,
+    start,
   };
   match base_on_remote(programs.git_work(), (Path::new(GIT), repo_root), check) {
     Ok(BaseOnRemote::Ahead { commits }) => Err(CreateProblem::BaseNotPushed {

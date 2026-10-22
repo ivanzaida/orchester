@@ -14,22 +14,24 @@ use super::{
 const TITLE: &str = "task-pull-request-unpushed-title";
 const PERSON_ONLY: &str = "task-pull-request-unpushed-person-only";
 
-/// Makes a bare `origin` whose `main` holds none of the local `main`'s commits (one commit of its own); how many
-/// commits of the local `main` the run's branch carries, which `origin` lacks.
-fn origin_behind(page: &Page) -> usize {
+/// Makes a bare `origin` whose `main` holds none of the local `main`'s commits, only one of its own; how many
+/// commits the run's branch carries from where it started and from the local `main`, which `origin` lacks, and
+/// `origin`'s own commit.
+fn origin_behind(page: &Page) -> (usize, String) {
   let origin = page.repo.parent().expect("the seed's folder").join("origin.git");
   let origin = origin.to_str().expect("a path");
   git(page, &["init", "--quiet", "--bare", origin]);
   git(page, &["remote", "add", "origin", origin]);
-  let branch = latest_run(page, READY).branch().to_string();
-  let shared = out(page, &["merge-base", "main", &branch]);
+  let run = latest_run(page, READY);
+  let shared = out(page, &["merge-base", "main", run.branch().as_str()]);
   let empty = out(page, &["hash-object", "-t", "tree", "--stdin", "-w"]);
   let other = out(page, &["commit-tree", &empty, "-m", "origin's own"]);
   git(
     page,
     &["push", "--quiet", "origin", &format!("{other}:refs/heads/main")],
   );
-  out(page, &["rev-list", "--count", &shared]).parse().expect("a count")
+  let carried = out(page, &["rev-list", "--count", &shared, run.base().as_str()]);
+  (carried.parse().expect("a count"), other)
 }
 
 fn out(page: &Page, args: &[&str]) -> String {
@@ -74,22 +76,22 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
   let _checkout = checkout_page();
   let fake = FakeGitHub::new();
   let mut page = linked(&fake);
-  let ahead = origin_behind(&page);
+  let (ahead, other) = origin_behind(&page);
   page.open(READY, "task-create-pull-request");
   ask(&mut page);
   let title = if ahead == 1 {
-    "Local main has 1 commit that isn't on origin".to_owned()
+    "This pull request would carry 1 commit that isn't on origin/main".to_owned()
   } else {
-    format!("Local main has {ahead} commits that aren't on origin")
+    format!("This pull request would carry {ahead} commits that aren't on origin/main")
   };
   assert_eq!(page.text(TITLE), title);
   assert_eq!(
     page.text("task-pull-request-unpushed-include"),
-    "This run's branch was cut from your local main, so its pull request would carry those commits too."
+    "This run's branch started from your local main, which had them and origin doesn't."
   );
   assert_eq!(
     page.text("task-pull-request-unpushed-push"),
-    "Push main to origin first, then create the pull request. Orchester doesn't push main for you."
+    "Push them to origin first, then create the pull request. Orchester doesn't push main for you."
   );
   assert_eq!(fake.pushes(), 0, "nothing was pushed");
   assert!(fake.created.lock().is_none(), "GitHub was asked nothing");
@@ -110,6 +112,17 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
     assert!(page.has(TITLE), "{id} by window automation leaves the question");
   }
   assert_eq!(fake.pushes(), 0);
+  // A person's new press asks anew, without the refusal of the question before.
+  page.window.until("a new question without the refusal", |window| {
+    if window.texts(PERSON_ONLY).is_some()
+      && let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request")
+    {
+      button.click();
+    }
+    window.pass();
+    window.texts(PERSON_ONLY).is_none() && window.texts(TITLE).is_some()
+  });
+  assert_eq!(fake.pushes(), 0);
   page.window.until("Create anyway to push the run's branch", |window| {
     if let Some(mut button) = window.tree.get_element_by_id_mut("task-pull-request-anyway") {
       button.click();
@@ -124,9 +137,9 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
     (&request["base"], &request["head"]),
     (&json!("main"), &json!(run.branch().as_str()))
   );
-  let shared = out(&page, &["merge-base", "main", run.branch().as_str()]);
-  assert!(
-    !out(&page, &["ls-remote", "origin", "refs/heads/main"]).starts_with(&shared),
+  assert_eq!(
+    out(&page, &["ls-remote", "origin", "refs/heads/main"]),
+    format!("{other}\trefs/heads/main"),
     "origin's main stays where it was"
   );
 }

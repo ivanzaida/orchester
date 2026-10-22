@@ -34,7 +34,7 @@ use orchester_workspace::{
 
 use super::{
   super::TaskContext,
-  unpushed::{self, Choices, Unpushed},
+  unpushed::{self, Choices, Refused, Unpushed},
 };
 use crate::{
   services::Services,
@@ -62,8 +62,8 @@ impl DevtoolsInspectable for Read {}
 pub struct PullRequestRead {
   pub readiness: Option<Result<Readiness, Message>>,
   pub draft: Signal<bool>,
-  /// Window automation answered whether to include the base's unpushed commits, which only a person may.
-  pub person_only: Signal<bool>,
+  /// The run whose question about the base's unpushed commits window automation tried to answer.
+  pub person_only: Signal<Option<Refused>>,
 }
 
 /// Whether the task's latest run can have a pull request, read off the UI thread for each run and each time the
@@ -154,6 +154,7 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
         anyway: (state == State::Ready).then(|| start_anyway(ctx, task, run, read)),
         dismiss: Arc::new(move || dismiss.dismiss_unpushed_base()),
         person_only: read.person_only.clone(),
+        run: run.id(),
       };
       Some(unpushed::question(ctx, &unpushed, choices))
     }
@@ -242,7 +243,7 @@ fn start(
   let services = Services::of(ctx);
   let job = task.project.feed.jobs.of(run.id());
   let feed = task.project.feed.clone();
-  let draft = read.draft.clone();
+  let (draft, person_only) = (read.draft.clone(), read.person_only.clone());
   let args = PullRequestArgs {
     open: task.project.open.clone(),
     task: task.detail.task.id(),
@@ -256,6 +257,8 @@ fn start(
     changed: Arc::new(move || feed.saved()),
   };
   Arc::new(move || {
+    // Each press asks anew: a refusal of window automation belongs to the question it answered.
+    person_only.set(None);
     let args = PullRequestArgs {
       draft: draft.get_untracked(),
       ..args.clone()
@@ -372,18 +375,14 @@ fn failure_words(ctx: &Ctx, run: &RunView, problem: &CreateProblem) -> (Arc<str>
     CreateProblem::Store(message) => (not_opened(), message_text(ctx, message)),
     CreateProblem::AlreadyOpen { .. } => (not_opened(), ctx.t("decisions.ready.pullRequest.failure.alreadyOpen")),
     // The card asks this in place (`unpushed::question`); these are its words, should it ever be a failure.
-    CreateProblem::BaseNotPushed { commits, base, remote } => {
-      let count = commits.to_string();
-      let args = [
-        ("base", base.as_str()),
-        ("remote", remote.as_str()),
-        ("count", count.as_str()),
-      ];
-      (
-        ctx.t_args("decisions.ready.pullRequest.unpushed.titleOther", args),
-        ctx.t_args("decisions.ready.pullRequest.unpushed.push", args),
-      )
-    }
+    CreateProblem::BaseNotPushed { commits, base, remote } => unpushed::words(
+      ctx,
+      &Unpushed {
+        commits: *commits,
+        base,
+        remote,
+      },
+    ),
   }
 }
 

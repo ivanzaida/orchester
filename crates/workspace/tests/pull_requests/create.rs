@@ -53,6 +53,11 @@ fn answer(code: i32, stdout: &str, stderr: &str) -> CommandOutput {
   }
 }
 
+/// A commit id as git prints it, on a line of its own.
+fn commit(n: u32) -> String {
+  format!("{n:0>40}\n")
+}
+
 /// GitHub refusing with HTTP 422 because `message`, as `gh api` writes it.
 fn refused(message: &str) -> CommandOutput {
   let body = serde_json::json!({
@@ -126,37 +131,19 @@ impl CommandRunner for FakeGitHub {
       args if args.starts_with("--git-dir ") && args.ends_with(" remote -v") => answer(0, self.remotes, ""),
       args if args.starts_with("auth status") => answer(0, self.auth, ""),
       args if args.starts_with("push ") => self.push.clone(),
-      "fetch --quiet --no-tags origin +refs/heads/main:refs/remotes/origin/main" => answer(0, "", ""),
+      "fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main" => {
+        answer(0, "", "")
+      }
       "rev-parse --verify --quiet --end-of-options refs/remotes/origin/main^{commit}" => match self.base_ahead {
-        Some(_) => answer(
-          0,
-          &format!(
-            "{:0>40}
-",
-            7
-          ),
-          "",
-        ),
+        Some(_) => answer(0, &commit(7), ""),
         None => answer(1, "", ""),
       },
-      args if args.starts_with("merge-base --all --end-of-options refs/heads/main ") => answer(
-        0,
-        &format!(
-          "{:0>40}
-",
-          5
-        ),
-        "",
-      ),
-      args if args.starts_with("rev-list --count ") => answer(
-        0,
-        &format!(
-          "{}
-",
-          self.base_ahead.unwrap_or_default()
-        ),
-        "",
-      ),
+      args if args.starts_with("merge-base --all --end-of-options refs/heads/main ") => answer(0, &commit(5), ""),
+      args if args.starts_with("merge-base --is-ancestor ") => answer(0, "", ""),
+      args if args.starts_with("rev-list --count ") => {
+        let count = self.base_ahead.unwrap_or_default();
+        answer(0, &format!("{count}\n"), "")
+      }
       CREATE => {
         *self.opened.lock() |= self.create.code == Some(0);
         self.create.clone()

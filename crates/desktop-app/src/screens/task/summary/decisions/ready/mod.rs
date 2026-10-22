@@ -41,6 +41,7 @@ use orchester_workspace::{
 use self::{
   pull_request::PullRequestRead,
   resolve::{Asking, Offer, StepChoice},
+  unpushed::Refused,
 };
 use super::{
   super::run_details::run_details, TaskContext, arranged, return_ended::return_card, runs_section, stages::stages,
@@ -53,8 +54,8 @@ const LOOK: Duration = Duration::from_secs(2);
 pub struct ReadyForReview {
   /// *Open as draft*: on until the person turns it off (rule 7).
   draft: Signal<bool>,
-  /// Window input answered whether to create a pull request with the base's unpushed commits.
-  pull_person_only: Signal<bool>,
+  /// The run whose question about the base's unpushed commits window input tried to answer.
+  pull_person_only: Signal<Option<Refused>>,
   /// Counts while a merge waits in the run's worktree, which is read again then: the person resolves it in an editor,
   /// which tells Orchester nothing.
   look: Signal<u64>,
@@ -78,7 +79,7 @@ impl Component for ReadyForReview {
     let looking = ctx.create_interval(LOOK, move || next.update(|tick| *tick += 1));
     Self {
       draft: ctx.signal(true),
-      pull_person_only: ctx.signal(false),
+      pull_person_only: ctx.signal(None),
       look,
       looking,
       step: ctx.signal(StepChoice(None)),
