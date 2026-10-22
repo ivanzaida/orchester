@@ -74,6 +74,9 @@ pub fn route_json(route: &Route) -> Value {
         params.insert("query".to_owned(), json!(query));
       }
     }
+    Route::General => {
+      params.insert("tab".to_owned(), json!("general"));
+    }
     Route::AllProjects
     | Route::AddProject(_)
     | Route::Settings

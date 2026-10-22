@@ -67,6 +67,7 @@ fn every_route() -> Vec<Route> {
     Route::AddProject(None),
     Route::AddProject(RouteFolder::new(std::path::Path::new(AWKWARD))),
     Route::Settings,
+    Route::General,
   ];
   all.extend(Screen::ALL.into_iter().filter_map(ProjectPage::of).map(at));
   all.extend(OverviewTab::ALL.map(|tab| at(ProjectPage::Overview(tab))));
@@ -151,6 +152,7 @@ fn paths_are_the_documented_ones() {
       "/add-project?folder=C%3A/work/a%20b".to_owned(),
     ),
     (Route::Settings, "/settings".to_owned()),
+    (Route::General, "/settings?tab=general".to_owned()),
     (at(ProjectPage::Overview(OverviewTab::Running)), root.clone()),
     (
       at(ProjectPage::Overview(OverviewTab::NeedsYou)),
