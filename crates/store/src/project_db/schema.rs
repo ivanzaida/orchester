@@ -16,6 +16,7 @@ mod command_approvals;
 mod conversation;
 mod creation_snapshots;
 mod decision_authors;
+mod denial_notes;
 mod editor_drafts;
 mod import;
 mod invocation_permissions;

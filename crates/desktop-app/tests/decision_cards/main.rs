@@ -7,6 +7,7 @@
 //! waiting for the person. Needs `git`.
 
 mod answering;
+mod deny_message;
 #[allow(
   dead_code,
   reason = "the seed's report and its database path are the QA tool's; these tests read its tasks"

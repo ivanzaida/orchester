@@ -3,7 +3,10 @@ mod support;
 use orchester_core::{
   id::IdempotencyKey,
   revision::Revision,
-  run::{BranchName, CommandShell, DecidedBy, NativeCommandAsk, NewRun, PendingToolApproval, ToolApprovalDecision},
+  run::{
+    BranchName, CommandShell, DecidedBy, DenialNote, NativeCommandAsk, NewRun, PendingToolApproval,
+    ToolApprovalDecision,
+  },
   store::{ActivityStore, RunStore},
 };
 use support::{at, budget, model, started_run};
@@ -120,6 +123,69 @@ fn one_tool_request_is_decided_once_and_no_longer_pending() {
     !db
       .delivered_tool_approval(run.id(), &approval.id, ToolApprovalDecision::Denied)
       .expect("repeat")
+  );
+}
+
+/// A denial with a message keeps the words with the request it denied, as they were written once; an approval keeps
+/// none (ORC-29).
+#[test]
+fn a_denials_message_is_kept_with_its_request() {
+  let (_repo, mut db, run, execution) = started_run();
+  let invocation = db
+    .start_invocation(run.id(), execution, &model(), at(10))
+    .expect("invocation");
+  let request = |key: u32| PendingToolApproval {
+    id: format!("{}:{key}", invocation.id),
+    run: run.id(),
+    execution,
+    invocation: invocation.id,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "command".to_owned(),
+    action: "cargo add serde".to_owned(),
+    target: None,
+    requested_at: at(11),
+    native: None,
+  };
+  let (denied, approved) = (request(1), request(2));
+  let note = DenialNote::new("Use serde_json instead.").expect("words");
+  for approval in [&denied, &approved] {
+    db.request_tool_approval(approval).expect("request");
+  }
+  assert!(
+    db.claim_tool_approval(run.id(), &approved.id, DecidedBy::Person, at(12))
+      .expect("claim")
+  );
+  assert!(
+    db.record_denial_note(run.id(), &approved.id, &note).is_err(),
+    "an approval keeps no denial's words"
+  );
+  assert!(
+    db.claim_tool_approval(run.id(), &denied.id, DecidedBy::PersonDeny, at(12))
+      .expect("claim")
+  );
+  db.record_denial_note(run.id(), &denied.id, &note).expect("words kept");
+  let other = DenialNote::new("Something else.").expect("words");
+  assert!(
+    db.record_denial_note(run.id(), &denied.id, &other).is_err(),
+    "the words never change"
+  );
+  assert!(
+    db.delivered_tool_approval(run.id(), &denied.id, ToolApprovalDecision::Denied)
+      .expect("delivered")
+  );
+  let decided = db.decided_tool_approvals(run.id()).expect("decided");
+  let kept: Vec<_> = decided
+    .iter()
+    .map(|decided| (decided.request.id.as_str(), decided.decided_by, decided.note.clone()))
+    .collect();
+  assert_eq!(
+    kept,
+    [
+      (denied.id.as_str(), Some(DecidedBy::PersonDeny), Some(note)),
+      (approved.id.as_str(), Some(DecidedBy::Person), None),
+    ]
   );
 }
 

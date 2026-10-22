@@ -2,7 +2,8 @@
 //! `YhiGC`), each a Feature delivery run at work on Implement unless said otherwise: a question its step waits
 //! on; questions with suggested answers waiting (one answer, several answers), answered by the person,
 //! answered by automation and ended before an answer; a command waiting for approval; commands approved once
-//! by the person, denied by the person, approved by automation and ended without an answer; a plan longer
+//! by the person, denied by the person with a message ([`DENIAL_NOTE`]), approved by automation and ended without an
+//! answer; a plan longer
 //! than its card shows waiting (v1), and a plan revised after changes were asked for (v2); Orchester's
 //! `start_qa_app` waiting for approval, which offers *Approve for every run of this project*, with a rule of the
 //! project kept for an earlier version of the QA script (Project settings › Auto mode lists it), made by approving a
@@ -17,7 +18,10 @@
 use orchester_core::{
   orchester_tools::{self, OrchesterTool, QaApproval},
   question::{GivenAnswer, Question, QuestionOption, QuestionRequest, QuestionTurn},
-  run::{Answerer, DecidedBy, Invocation, PendingToolApproval, ProjectScope, Run, ToolApprovalDecision, WaitReason},
+  run::{
+    Answerer, DecidedBy, DenialNote, Invocation, PendingToolApproval, ProjectScope, Run, ToolApprovalDecision,
+    WaitReason,
+  },
   store::{ActivityStore, RunStore},
   task::Task,
   time::Timestamp,
@@ -76,6 +80,8 @@ enum Decision {
 /// The QA script's git blob the waiting `start_qa_app` names, and the one a rule of the project was kept for.
 const QA_SCRIPT: &str = "3f2a1b9c0d4e5f60718293a4b5c6d7e8f9012345";
 const EARLIER_QA_SCRIPT: &str = "77aa0012bb34cc56dd78ee90ff12aa34bb56cc78";
+/// What the person told the agent as they denied its command (*Deny with a message*).
+const DENIAL_NOTE: &str = "Publish it from CI once the version is bumped.";
 
 const CARDS: [(&str, Card, &str); 18] = [
   (
@@ -451,6 +457,11 @@ fn approval(
         ToolApprovalDecision::Denied
       };
       kontur.db.claim_tool_approval(run.id(), &request.id, by, decided)?;
+      // The person's denial says why, as *Deny with a message* sends it.
+      if by == DecidedBy::PersonDeny {
+        let note = DenialNote::new(DENIAL_NOTE).expect("the seed's words fit a denial");
+        kontur.db.record_denial_note(run.id(), &request.id, &note)?;
+      }
       kontur.db.delivered_tool_approval(run.id(), &request.id, decision)?;
     }
     Some(Decision::Ended) => {

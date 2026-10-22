@@ -34,9 +34,18 @@ pub(in super::super) enum Given {
   ApproveProject,
   ApproveEverything,
   Deny,
+  /// Deny with a message: the words go with the command that sends it, the card keeps them while it is sent.
+  DenyWithMessage,
   /// The answers to a question with suggested answers.
   Answers,
   ApprovePlan,
+}
+
+impl Given {
+  /// The answer denies its request.
+  pub(in super::super) const fn denies(self) -> bool {
+    matches!(self, Self::Deny | Self::DenyWithMessage)
+  }
 }
 
 impl lurq::app::component::DevtoolsInspectable for Given {}

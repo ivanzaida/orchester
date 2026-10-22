@@ -4,7 +4,7 @@
 use orchester_core::{
   id::{InvocationId, RunId},
   run::{
-    CommandShell, DecidedBy, DecidedToolApproval, NativeCommandAsk, PendingToolApproval, ProjectScope,
+    CommandShell, DecidedBy, DecidedToolApproval, DenialNote, NativeCommandAsk, PendingToolApproval, ProjectScope,
     ToolApprovalDecision,
   },
   time::Timestamp,
@@ -46,32 +46,34 @@ impl ProjectDb {
   /// interrupted. One whose decision is still on its way to the agent reads as that decision.
   pub fn decided_tool_approvals(&self, run: RunId) -> Result<Vec<DecidedToolApproval>, StoreError> {
     let mut query = self.connection.prepare(&format!(
-      "SELECT {COLUMNS}, state, decided_at, decided_by, review FROM tool_approvals WHERE state != 'pending' \
-       AND run_id = ?1 ORDER BY requested_at, id"
+      "SELECT {COLUMNS}, state, decided_at, decided_by, review, denial_note FROM tool_approvals \
+       WHERE state != 'pending' AND run_id = ?1 ORDER BY requested_at, id"
     ))?;
     let rows = query
       .query_map([run.to_string()], |row| {
-        Ok((
-          StoredApproval::read(row)?,
-          row.get::<_, String>(13)?,
-          row.get::<_, i64>(14)?,
-          row.get::<_, Option<String>>(15)?,
-          row.get::<_, Option<String>>(16)?,
-        ))
+        Ok(Decided {
+          stored: StoredApproval::read(row)?,
+          state: row.get(13)?,
+          decided_at: row.get(14)?,
+          decided_by: row.get(15)?,
+          review: row.get(16)?,
+          note: row.get(17)?,
+        })
       })?
       .collect::<Result<Vec<_>, _>>()?;
     let project_rules = self.project_approval_rules()?;
     rows
       .into_iter()
-      .map(|(stored, state, decided_at, decided_by, review)| {
-        let decision = match state.as_str() {
+      .map(|decided| {
+        let decision = match decided.state.as_str() {
           "approved" | "dispatching_approval" => Some(ToolApprovalDecision::Approved),
           "denied" | "dispatching_denial" => Some(ToolApprovalDecision::Denied),
           "interrupted" => None,
           other => return Err(corrupt("tool approval state", other)),
         };
-        let request = stored.into_pending()?;
-        let decided_by = decided_by
+        let request = decided.stored.into_pending()?;
+        let decided_by = decided
+          .decided_by
           .as_deref()
           .map(|decided_by| parse::<DecidedBy>("approval answer", decided_by))
           .transpose()?;
@@ -81,16 +83,31 @@ impl ProjectDb {
               .iter()
               .any(|rule| rule.made_in == run && rule.made_by == request.id && rule.scope == scope)
           });
+        let note = decided
+          .note
+          .map(|note| DenialNote::new(&note).map_err(|error| corrupt("denial message", error)))
+          .transpose()?;
         Ok(DecidedToolApproval {
           request,
           decision,
           decided_by,
-          decided_at: Timestamp::from_unix_millis(decided_at),
-          review: super::auto_mode::decode_review(review)?,
+          decided_at: Timestamp::from_unix_millis(decided.decided_at),
+          review: super::auto_mode::decode_review(decided.review)?,
           for_project,
+          note,
         })
       })
       .collect()
+  }
+
+  /// Keeps `note`, the words a denial of request `id` of `run` told the agent, once the denial is claimed
+  /// ([`Self::claim_tool_approval`]).
+  pub fn record_denial_note(&mut self, run: RunId, id: &str, note: &DenialNote) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE tool_approvals SET denial_note = ?3 WHERE run_id = ?1 AND id = ?2",
+      params![run.to_string(), id, note.as_str()],
+    )?;
+    Ok(())
   }
 
   /// Creates one pending request. A repeated JSON-RPC request ID is refused rather than
@@ -211,6 +228,16 @@ impl ProjectDb {
     )?;
     Ok(count > 0)
   }
+}
+
+/// A decided `tool_approvals` row as read, before its state and answer are checked.
+struct Decided {
+  stored: StoredApproval,
+  state: String,
+  decided_at: i64,
+  decided_by: Option<String>,
+  review: Option<String>,
+  note: Option<String>,
 }
 
 /// A `tool_approvals` row as read, before its ids and native details are checked.

@@ -65,8 +65,18 @@ fn card_approval_waiting_shows_the_request_whole_and_every_answer() {
   );
   assert_eq!(text(&mut window, &format!("{card}-deny")), "Deny");
   assert_eq!(text(&mut window, &format!("{card}-approve")), "Approve once");
-  assert!(locked(&mut window, &format!("{card}-deny-message")));
-  assert!(text(&mut window, &format!("{card}-deny-message-reason")).contains("Deny, then write to Builder"));
+  assert_eq!(
+    text(&mut window, &format!("{card}-deny-message")),
+    "Deny with a message"
+  );
+  assert!(!locked(&mut window, &format!("{card}-deny-message")));
+  assert!(
+    window
+      .tree
+      .get_element_by_id(&format!("{card}-deny-message-reason"))
+      .is_none(),
+    "a CLI's denial carries words"
+  );
   let similar = text(&mut window, &format!("{card}-similar"));
   assert!(
     similar.starts_with("Approve similar in this run cargo add commands in Network"),
