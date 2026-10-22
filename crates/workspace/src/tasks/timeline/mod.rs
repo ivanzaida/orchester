@@ -123,6 +123,8 @@ pub struct ApprovalCard {
   pub review: Option<orchester_core::run::review::Review>,
   /// The person approved it for every run of the project ([`orchester_core::run::DecidedToolApproval::for_project`]).
   pub for_project: bool,
+  /// The words its denial told the agent, when it was denied with a message.
+  pub note: Option<orchester_core::run::DenialNote>,
 }
 
 /// How a step execution ended, as its result card says.
@@ -410,39 +412,39 @@ fn approval_items(sources: &Sources<'_>, execution: StepExecutionId, step: &Arc<
     .pending
     .iter()
     .filter(|request| request.execution == execution)
-    .map(|request| (request.clone(), None, None, None, (None, false)));
+    .map(|request| ApprovalCard {
+      request: request.clone(),
+      step: step.clone(),
+      decided: None,
+      decided_by: None,
+      decided_at: None,
+      review: None,
+      for_project: false,
+      note: None,
+    });
   let decided = sources
     .decided
     .iter()
     .filter(|decided| decided.request.execution == execution)
     .filter(|decided| decided.decided_by.is_none_or(DecidedBy::answered_waiting))
-    .map(|decided| {
-      (
-        decided.request.clone(),
-        Some(decided.decision),
-        decided.decided_by,
-        Some(decided.decided_at),
-        (decided.review.clone(), decided.for_project),
-      )
+    .map(|decided| ApprovalCard {
+      request: decided.request.clone(),
+      step: step.clone(),
+      decided: Some(decided.decision),
+      decided_by: decided.decided_by,
+      decided_at: Some(decided.decided_at),
+      review: decided.review.clone(),
+      for_project: decided.for_project,
+      note: decided.note.clone(),
     });
   pending
     .chain(decided)
-    .map(
-      |(request, decided, decided_by, decided_at, (review, for_project))| Item {
-        key: approval_key(&request.id),
-        execution: Some(execution),
-        at: request.requested_at,
-        kind: ItemKind::Approval(ApprovalCard {
-          step: step.clone(),
-          request,
-          decided,
-          decided_by,
-          decided_at,
-          review,
-          for_project,
-        }),
-      },
-    )
+    .map(|card| Item {
+      key: approval_key(&card.request.id),
+      execution: Some(execution),
+      at: card.request.requested_at,
+      kind: ItemKind::Approval(card),
+    })
     .collect()
 }
 

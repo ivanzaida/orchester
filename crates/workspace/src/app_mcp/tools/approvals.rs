@@ -5,7 +5,7 @@
 
 use orchester_core::{
   id::ProjectId,
-  run::{Answerer, ApprovalAnswer, Run},
+  run::{Answerer, ApprovalAnswer, DenialNote, Run},
 };
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
@@ -64,6 +64,9 @@ pub struct DecideApproval {
   /// The request's id, as `list_approvals` gives it.
   pub approval: String,
   pub decision: Decision,
+  /// With `deny` only: what the agent is told as the denial's reason, in your words (at most 2000 characters).
+  #[serde(default)]
+  pub message: Option<String>,
 }
 
 pub async fn list_approvals(
@@ -101,6 +104,8 @@ pub async fn list_approvals(
 }
 
 pub async fn decide_approval(services: &Services, args: DecideApproval) -> Result<Value, ToolError> {
+  let answer = answer_of(args.decision, args.message.as_deref())?;
+  let decided = decision_name(args.decision);
   let reading = services.clone();
   let (project, request) = blocking(move || {
     crate::decisions::DecisionKind::Approval.require(&reading.workspace)?;
@@ -114,10 +119,7 @@ pub async fn decide_approval(services: &Services, args: DecideApproval) -> Resul
     Ok((project, request))
   })
   .await?;
-  let answer = match args.decision {
-    Decision::ApproveOnce => ApprovalAnswer::Once,
-    Decision::Deny => ApprovalAnswer::Deny,
-  };
+  let message = answer.denial_note().map(|note| note.as_str().to_owned());
   let command = Command::DecideToolApproval {
     run: request.run,
     approval: request.id.clone(),
@@ -129,7 +131,22 @@ pub async fn decide_approval(services: &Services, args: DecideApproval) -> Resul
     .control_run_in(&project, command)
     .await
     .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
-  Ok(json!({ "approval": { "id": request.id, "decided": decision_name(args.decision) } }))
+  Ok(json!({ "approval": { "id": request.id, "decided": decided, "message": message } }))
+}
+
+/// The answer `decision` gives, with `message` as a denial's words: a message only goes with a denial, and must
+/// hold words and fit [`DenialNote::MAX_CHARS`].
+fn answer_of(decision: Decision, message: Option<&str>) -> Result<ApprovalAnswer, ToolError> {
+  match (decision, message) {
+    (Decision::ApproveOnce, None) => Ok(ApprovalAnswer::Once),
+    (Decision::ApproveOnce, Some(_)) => Err(ToolError::InvalidArguments(
+      "`message` goes with `deny` only".to_owned(),
+    )),
+    (Decision::Deny, None) => Ok(ApprovalAnswer::Deny),
+    (Decision::Deny, Some(message)) => DenialNote::new(message)
+      .map(|message| ApprovalAnswer::DenyWithMessage { message })
+      .map_err(|error| ToolError::InvalidArguments(error.to_string())),
+  }
 }
 
 const fn decision_name(decision: Decision) -> &'static str {

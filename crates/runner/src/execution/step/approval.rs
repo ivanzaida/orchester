@@ -360,7 +360,7 @@ impl Worker {
       return Ok(Err(Rejection::ToolApprovalNotAwaited));
     }
     let (approval, awaiting) = watch.approval.take().expect("the pending approval was matched above");
-    let settled = match self.widen(watch, &approval, (&decision.answer, decision.by))? {
+    let settled = match self.widen(watch, (&approval, &awaiting), (&decision.answer, decision.by))? {
       Ok(settled) => settled,
       Err(rejection) => {
         // The request still waits for an answer that can be given.
@@ -372,15 +372,21 @@ impl Worker {
   }
 
   /// Hands `answer` to the call that asked. An approved Claude Code call is then running until its
-  /// result arrives ([`Watch::approved_calls`]).
+  /// result arrives ([`Watch::approved_calls`]). A Codex denial with a message adds the message to the running turn
+  /// first, so the model reads it after the declined call's result.
   pub(super) async fn deliver(&self, watch: &mut Watch, awaiting: Awaiting, answer: &Settled) -> Result<(), String> {
     let approve = answer.decided_by.approves();
     match awaiting {
       Awaiting::Codex(request) => match self.driver.process() {
-        Some(process) => process
-          .send_line(request.response(approve))
-          .await
-          .map_err(|error| error.to_string()),
+        Some(process) => {
+          if let Some(follow_up) = &answer.follow_up {
+            self.follow_denial(process, &request, follow_up).await;
+          }
+          process
+            .send_line(request.response(approve))
+            .await
+            .map_err(|error| error.to_string())
+        }
         None => Err("Codex has no process".to_owned()),
       },
       Awaiting::Native(call) => match &self.driver {

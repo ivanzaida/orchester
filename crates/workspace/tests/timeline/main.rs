@@ -420,6 +420,7 @@ fn timeline_an_approval_card_between_two_tool_calls_splits_their_group() {
       decided_at: None,
       review: None,
       for_project: false,
+      note: None,
     }),
   };
   assert_eq!(kinds_of(&around(execution, card)), ["tools", "approval", "tools"]);

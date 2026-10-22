@@ -144,6 +144,8 @@ pub struct DecidedToolApproval {
   /// A person's similar answer that made a rule of the project (*Approve for every run of this project*): the rule
   /// names this request as the one it was made with. Who answered names it as any similar answer.
   pub for_project: bool,
+  /// The words a denial with a message told the agent; `decided_by` says who denied it.
+  pub note: Option<super::DenialNote>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
