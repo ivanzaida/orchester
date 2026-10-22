@@ -76,7 +76,10 @@ impl RunJobs {
   /// remote lacks: nothing was pushed, and *Create pull request* asks again when pressed.
   pub fn dismiss_unpushed_base(&self) {
     self.update(|state| {
-      if matches!(state.pull_request, PullRequestJob::Failed(CreateProblem::BaseNotPushed { .. })) {
+      if matches!(
+        state.pull_request,
+        PullRequestJob::Failed(CreateProblem::BaseNotPushed { .. })
+      ) {
         state.pull_request = PullRequestJob::Idle;
       }
     });
@@ -96,7 +99,9 @@ impl RunJobs {
       changed,
     } = args;
     let running = activity.start(run_operations::run_pull_request(&open, task, (&key, number)));
-    let result = catch_unwind(AssertUnwindSafe(|| create_in(&open.repo_root, &programs, (run, draft, unpushed))));
+    let result = catch_unwind(AssertUnwindSafe(|| {
+      create_in(&open.repo_root, &programs, (run, draft, unpushed))
+    }));
     if let Ok(Err(problem)) = &result {
       tracing::warn!(?problem, %run, "no pull request was created for the run");
     }

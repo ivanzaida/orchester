@@ -128,18 +128,35 @@ impl CommandRunner for FakeGitHub {
       args if args.starts_with("push ") => self.push.clone(),
       "fetch --quiet --no-tags origin +refs/heads/main:refs/remotes/origin/main" => answer(0, "", ""),
       "rev-parse --verify --quiet --end-of-options refs/remotes/origin/main^{commit}" => match self.base_ahead {
-        Some(_) => answer(0, &format!("{:0>40}
-", 7), ""),
+        Some(_) => answer(
+          0,
+          &format!(
+            "{:0>40}
+",
+            7
+          ),
+          "",
+        ),
         None => answer(1, "", ""),
       },
-      args if args.starts_with("merge-base --all --end-of-options refs/heads/main ") => {
-        answer(0, &format!("{:0>40}
-", 5), "")
-      }
-      args if args.starts_with("rev-list --count ") => {
-        answer(0, &format!("{}
-", self.base_ahead.unwrap_or_default()), "")
-      }
+      args if args.starts_with("merge-base --all --end-of-options refs/heads/main ") => answer(
+        0,
+        &format!(
+          "{:0>40}
+",
+          5
+        ),
+        "",
+      ),
+      args if args.starts_with("rev-list --count ") => answer(
+        0,
+        &format!(
+          "{}
+",
+          self.base_ahead.unwrap_or_default()
+        ),
+        "",
+      ),
       CREATE => {
         *self.opened.lock() |= self.create.code == Some(0);
         self.create.clone()
@@ -240,7 +257,11 @@ fn pull_request_readiness_needs_the_branch_the_run_started_from() {
     Readiness::Unavailable(Unavailable::NoBaseBranch)
   );
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&fake), (run.id(), true, UnpushedBase::Refuse)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&fake),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::Unavailable(Unavailable::NoBaseBranch))
   );
   assert!(fake.ran_one("push").is_none(), "nothing was pushed");
@@ -252,7 +273,12 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
   let run = finished(&mut fixture);
   link(&mut fixture);
   let fake = Arc::new(FakeGitHub::new(run.branch().as_str()));
-  let created = create_in(fixture.repo.path(), &programs(&fake), (run.id(), true, UnpushedBase::Refuse)).expect("created");
+  let created = create_in(
+    fixture.repo.path(),
+    &programs(&fake),
+    (run.id(), true, UnpushedBase::Refuse),
+  )
+  .expect("created");
   assert_eq!((created.pull_request.number, created.draft), (143, true));
   let branch = run.branch().as_str();
   let push = fake.ran_one("push").expect("the branch was pushed");
@@ -325,13 +351,21 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.create = refused(&format!("No commits between main and {}", run.branch()));
   assert_eq!(
-    create_in(&root, &programs(&Arc::new(fake)), (run.id(), true, UnpushedBase::Refuse)),
+    create_in(
+      &root,
+      &programs(&Arc::new(fake)),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::NoCommits)
   );
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.create = answer(1, "", "gh: Server Error (HTTP 502)\n");
   assert!(matches!(
-    create_in(&root, &programs(&Arc::new(fake)), (run.id(), false, UnpushedBase::Refuse)),
+    create_in(
+      &root,
+      &programs(&Arc::new(fake)),
+      (run.id(), false, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::GitHub(RepositoryError::ServerError {
       status: Some(502),
       ..
@@ -360,7 +394,11 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
   ));
   *fake.opened.lock() = true;
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&Arc::new(fake)), (run.id(), true, UnpushedBase::Refuse)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&Arc::new(fake)),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::AlreadyOpen { number: Some(143) })
   );
   fixture
@@ -379,7 +417,11 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
     .expect("stored");
   let fake = Arc::new(FakeGitHub::new(run.branch().as_str()));
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&fake), (run.id(), true, UnpushedBase::Refuse)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&fake),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::AlreadyOpen { number: Some(141) })
   );
   assert!(
@@ -434,7 +476,11 @@ fn pull_request_creation_asks_before_including_unpushed_base_commits() {
   fake.base_ahead = Some(202);
   let fake = Arc::new(fake);
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&fake), (run.id(), true, UnpushedBase::Refuse)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&fake),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::BaseNotPushed {
       commits: 202,
       base: BranchName::new("main").expect("branch"),
@@ -468,8 +514,12 @@ fn pull_request_creation_goes_on_with_the_base_in_sync() {
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.base_ahead = Some(0);
   let fake = Arc::new(fake);
-  let created = create_in(fixture.repo.path(), &programs(&fake), (run.id(), false, UnpushedBase::Refuse))
-    .expect("created");
+  let created = create_in(
+    fixture.repo.path(),
+    &programs(&fake),
+    (run.id(), false, UnpushedBase::Refuse),
+  )
+  .expect("created");
   assert_eq!((created.pull_request.number, created.draft), (143, false));
   assert!(fake.ran_one("rev-list --count").is_some(), "the base was compared");
 }

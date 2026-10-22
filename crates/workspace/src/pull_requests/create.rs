@@ -4,8 +4,9 @@
 //! that branch into the one the run started from through `gh` (a draft unless the person asks otherwise), then
 //! syncs the pull requests, so the Pull requests list links it to the task and run as it does any branch a run
 //! made. Before it pushes, it stops when the branch would carry commits of the local base its remote doesn't have
-//! ([`super::unpushed`]), unless a person read that and creates it anyway; it never pushes the base. Every function blocks on SQLite, git or `gh`; the UI calls them off the UI thread, and creating runs on
-//! the project's shared operations (`integration_jobs`).
+//! ([`super::unpushed`]), unless a person read that and creates it anyway; it never pushes the base. Every function
+//! blocks on SQLite, git or `gh`; the UI calls them off the UI thread, and creating runs on the project's shared
+//! operations (`integration_jobs`).
 
 use std::path::Path;
 

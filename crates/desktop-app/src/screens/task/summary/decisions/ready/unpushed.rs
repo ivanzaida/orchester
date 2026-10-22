@@ -116,4 +116,3 @@ fn by_a_person(person_only: &Signal<bool>, then: Start) -> impl Fn() + Send + Sy
     then();
   }
 }
-

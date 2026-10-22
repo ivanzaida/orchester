@@ -25,7 +25,10 @@ fn origin_behind(page: &Page) -> usize {
   let shared = out(page, &["merge-base", "main", &branch]);
   let empty = out(page, &["hash-object", "-t", "tree", "--stdin", "-w"]);
   let other = out(page, &["commit-tree", &empty, "-m", "origin's own"]);
-  git(page, &["push", "--quiet", "origin", &format!("{other}:refs/heads/main")]);
+  git(
+    page,
+    &["push", "--quiet", "origin", &format!("{other}:refs/heads/main")],
+  );
   out(page, &["rev-list", "--count", &shared]).parse().expect("a count")
 }
 
@@ -42,24 +45,28 @@ fn out(page: &Page, args: &[&str]) -> String {
 
 /// Presses Create pull request once whether it can be used is read, until the question is shown.
 fn ask(page: &mut Page) {
-  page.window.until("the question about main's unpushed commits", |window| {
-    if let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request") {
-      button.click();
-    }
-    window.texts(TITLE).is_some()
-  });
+  page
+    .window
+    .until("the question about main's unpushed commits", |window| {
+      if let Some(mut button) = window.tree.get_element_by_id_mut("task-create-pull-request") {
+        button.click();
+      }
+      window.texts(TITLE).is_some()
+    });
 }
 
 /// Presses `id` as an MCP client's `lurq_interact` does (lurq marks the input synthetic), until the card says that
 /// only a person decides: *Create anyway* can be pressed once whether a pull request can be created is read again.
 fn press_synthetic(page: &mut Page, id: &str) {
-  page.window.until(&format!("{id} refused to window automation"), |window| {
-    if let Some(mut button) = window.tree.get_element_by_id_mut(id) {
-      with_synthetic_input(|| button.click());
-    }
-    window.pass();
-    window.texts(PERSON_ONLY).is_some()
-  });
+  page
+    .window
+    .until(&format!("{id} refused to window automation"), |window| {
+      if let Some(mut button) = window.tree.get_element_by_id_mut(id) {
+        with_synthetic_input(|| button.click());
+      }
+      window.pass();
+      window.texts(PERSON_ONLY).is_some()
+    });
 }
 
 #[test]
@@ -78,7 +85,7 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
   assert_eq!(page.text(TITLE), title);
   assert_eq!(
     page.text("task-pull-request-unpushed-include"),
-    "This run's branch was cut from your local main, so the pull request would include them too."
+    "This run's branch was cut from your local main, so its pull request would carry those commits too."
   );
   assert_eq!(
     page.text("task-pull-request-unpushed-push"),
@@ -88,7 +95,9 @@ fn decision_create_pull_request_asks_before_including_unpushed_base_commits() {
   assert!(fake.created.lock().is_none(), "GitHub was asked nothing");
   assert!(!page.has("task-pull-request-failure"), "it asks, it doesn't fail");
   page.click("task-pull-request-unpushed-cancel");
-  page.window.until("the question to go", |window| window.texts(TITLE).is_none());
+  page
+    .window
+    .until("the question to go", |window| window.texts(TITLE).is_none());
   assert_eq!(fake.pushes(), 0);
   // Window automation answers neither way.
   ask(&mut page);

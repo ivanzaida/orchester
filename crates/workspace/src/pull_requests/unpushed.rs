@@ -66,7 +66,9 @@ pub fn base_on_remote(
       reason = %failure(&output),
       "cannot fetch the base branch; comparing with its remote-tracking branch as it is"
     ),
-    Err(error) => tracing::warn!(%error, "cannot fetch the base branch; comparing with its remote-tracking branch as it is"),
+    Err(error) => {
+      tracing::warn!(%error, "cannot fetch the base branch; comparing with its remote-tracking branch as it is")
+    }
   }
   let git = |args: &[&str]| -> Result<CommandOutput, UnpushedError> {
     Ok(runner.run(&local_git_command(git, repo_root, args.iter().copied()))?)

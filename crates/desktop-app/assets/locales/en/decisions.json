@@ -181,7 +181,7 @@
         "unpushed": {
           "titleOne": "Local {{base}} has 1 commit that isn't on {{remote}}",
           "titleOther": "Local {{base}} has {{count}} commits that aren't on {{remote}}",
-          "include": "This run's branch was cut from your local {{base}}, so the pull request would include them too.",
+          "include": "This run's branch was cut from your local {{base}}, so its pull request would carry those commits too.",
           "push": "Push {{base}} to {{remote}} first, then create the pull request. Orchester doesn't push {{base}} for you.",
           "anyway": "Create anyway",
           "cancel": "Cancel",
