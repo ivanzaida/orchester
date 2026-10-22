@@ -3,7 +3,7 @@
 //! order Settings lists them by CLI (Codex, then Claude Code; in each, the named accounts as listed, Default
 //! last); the first three keep their colour by that position, whatever the period, filter or project; the
 //! fourth and later share *Other accounts*, with accounts removed from Settings that still have usage; usage
-//! that started on no account (auto mode's reviewer, native agents, command tools, runs from before accounts
+//! that started on no account (native agents and reviewers, command tools, runs and reviews from before accounts
 //! were recorded) is *No account*, always last.
 
 use crate::{

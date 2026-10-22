@@ -119,6 +119,7 @@ fn fixture() -> Fixture {
     at: on(26, 15),
     invocation: review.id,
     cli: AgentProvider::ClaudeCodeCli,
+    account: None,
     model: "claude-haiku-4-5".into(),
     usage: spent(500),
   }];

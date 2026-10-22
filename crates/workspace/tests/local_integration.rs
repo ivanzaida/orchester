@@ -8,6 +8,8 @@ mod base_merged;
 mod cleanup_edits;
 #[path = "local_integration/direct_merge.rs"]
 mod direct_merge;
+#[path = "local_integration/discard.rs"]
+mod discard;
 #[path = "local_integration/drafts.rs"]
 mod drafts;
 #[path = "local_integration/empty_checkpoints.rs"]
