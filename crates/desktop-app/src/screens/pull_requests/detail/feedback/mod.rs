@@ -17,7 +17,12 @@ mod tab;
 mod thread;
 mod words;
 
-use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
+use std::{
+  collections::HashMap,
+  num::NonZeroU64,
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -37,20 +42,22 @@ use orchester_workspace::{
   background,
   messages::Message,
   pull_requests::feedback::{
-    FeedbackBoard, Inputs, NewThread, Slots, dispatch_in, load_board_in, reply_in, resolve_in, retry_in, start_in,
-    tell_runner, withdraw_in,
+    FeedbackBoard, FeedbackError, Inputs, NewThread, Slots, dispatch_in, load_board_in, reply_in, resolve_in, retry_in,
+    start_in, tell_runner, withdraw_in,
   },
-  workspace::OpenProject,
 };
 use parking_lot::Mutex;
 
 pub(super) use self::{
   diff::annotations,
   side::threads,
-  tab::{TabProps, feedback_tab},
+  tab::{TabProps, feedback_tab, read_failed},
   thread::Env,
 };
-use crate::{project::ShownProject, services::Services};
+use crate::{
+  project::{ProjectFeed, ShownProject, feedback_holds},
+  services::Services,
+};
 
 /// Which threads the Agent feedback tab lists.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -252,11 +259,17 @@ pub enum Write {
 /// The composer a write sends from, which closes once it landed.
 type Sent = Option<Composing>;
 
-/// Every write to the pull request's feedback, one at a time: the write, then what Orchester may send at once, then
-/// the runner told of it.
+/// What the hold rules know of the project's runner as a write is asked for ([`feedback_holds`]).
+type Holds = (Option<Slots>, bool);
+
+/// Every write to the pull request's feedback, one at a time: the write, then what Orchester may send at once under
+/// the hold rules the project's follower applies, then the runner told of it. A write asked for while another runs is
+/// refused, so the one in flight is never replaced and its sending never dropped.
 #[derive(Clone)]
 pub struct Writes {
-  action: FutureAction<(Write, Sent), Sent, Message>,
+  action: FutureAction<(Write, Sent, Holds), Sent, Message>,
+  feed: ProjectFeed,
+  root: PathBuf,
 }
 
 impl PartialEq for Writes {
@@ -266,10 +279,10 @@ impl PartialEq for Writes {
 }
 
 impl Writes {
-  pub fn new(ctx: &mut Ctx, (open, number): (&OpenProject, NonZeroU64), state: &FeedbackState) -> Self {
+  pub fn new(ctx: &mut Ctx, (project, number): (&ShownProject, NonZeroU64), state: &FeedbackState) -> Self {
     let services = Services::of(ctx);
-    let open = open.clone();
-    let action = ctx.future_action(move |(write, sent): (Write, Sent)| {
+    let open = project.open.clone();
+    let action = ctx.future_action(move |(write, sent, (slots, lost)): (Write, Sent, Holds)| {
       let (services, open) = (services.clone(), open.clone());
       async move {
         let root = open.repo_root.clone();
@@ -280,7 +293,7 @@ impl Writes {
             error.message()
           })?;
         let root = open.repo_root.clone();
-        match background::run(move || dispatch_in(&root, None, false)).await? {
+        match background::run(move || dispatch_in(&root, slots, lost)).await? {
           Ok(dispatched) => tell_runner(&services.runners, &services.servers, &open, &dispatched).await,
           Err(error) => tracing::warn!(%error, "held feedback was not sent after a write"),
         }
@@ -310,12 +323,20 @@ impl Writes {
         }
       }
     });
-    Self { action }
+    Self {
+      action,
+      feed: project.feed.clone(),
+      root: project.open.repo_root.clone(),
+    }
   }
 
-  /// Runs `write`; `sent`: the composer it was written in.
+  /// Runs `write`, unless another write runs; `sent`: the composer it was written in.
   pub fn run(&self, write: Write, sent: Sent) {
-    self.action.run((write, sent));
+    if self.action.state().get_untracked().is_pending() {
+      return;
+    }
+    let holds = feedback_holds(self.feed.status.get_untracked().as_ref(), &self.root);
+    self.action.run((write, sent, holds));
   }
 
   pub fn busy(&self) -> bool {
@@ -323,11 +344,7 @@ impl Writes {
   }
 }
 
-fn apply(
-  root: &std::path::Path,
-  number: u64,
-  write: Write,
-) -> Result<(), orchester_workspace::pull_requests::feedback::FeedbackError> {
+fn apply(root: &Path, number: u64, write: Write) -> Result<(), FeedbackError> {
   match write {
     Write::Start(key, new) => start_in(root, key, &new).map(drop),
     Write::Reply {
@@ -337,13 +354,14 @@ fn apply(
       text,
       revision,
     } => reply_in(root, key, (number, thread), (kind, &text, &revision)).map(drop),
-    Write::Withdraw(thread, post) => withdraw_in(root, (number, thread), post).map(drop),
+    Write::Withdraw(thread, post) => withdraw_in(root, (number, thread), post),
     Write::Resolve(thread, resolved) => resolve_in(root, (number, thread), resolved).map(drop),
     Write::Retry(thread, message) => retry_in(root, (number, thread), message),
   }
 }
 
-/// The threads as read, and why the latest read failed.
+/// The threads as read, and why the latest read failed: then `board` is the one read before, which the page shows
+/// under that failure.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoardRead {
   pub board: Option<Arc<FeedbackBoard>>,
@@ -365,19 +383,14 @@ pub fn read_board(
 ) -> BoardRead {
   let programs = Services::of(ctx).programs;
   let root = project.open.repo_root.clone();
-  let online = project.feed.runner_online(&root);
-  let slots = project
-    .feed
-    .status
-    .get()
-    .and_then(|status| status.work().map(Slots::of));
+  let (slots, lost) = feedback_holds(project.feed.status.get().as_ref(), &root);
   let live = project.feed.running.get();
   let changes = project.feed.run_changes(live);
   let diff_key = head
     .as_ref()
     .and_then(|(_, diff)| diff.as_ref().map(|diff| Arc::as_ptr(diff) as usize));
   let head_key = head.as_ref().map(|(revision, _)| revision.clone());
-  let deps = (root, number, head_key, diff_key, changes, written, online, slots);
+  let deps = (root, number, head_key, diff_key, changes, written, lost, slots);
   let load = ctx.future(deps, move |(root, number, ..)| {
     let (programs, head) = (programs.clone(), head.clone());
     async move {
@@ -387,7 +400,7 @@ pub fn read_board(
           programs: &programs,
           head: head.as_ref().map(|(revision, diff)| (revision, diff.as_deref())),
           slots,
-          lost: !online,
+          lost,
         };
         load_board_in(&inputs, number.get())
       })

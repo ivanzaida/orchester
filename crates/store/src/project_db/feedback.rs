@@ -44,8 +44,8 @@ impl ProjectDb {
     Ok(thread.clone())
   }
 
-  /// Adds `post` to thread `thread` once per `key`, and returns the thread as stored; a retry adds nothing. A
-  /// resolved thread takes no post.
+  /// Adds `post` to thread `thread` once per `key`, reopening the thread in the same transaction when it is resolved,
+  /// and returns the thread as stored; a retry adds nothing.
   pub fn add_feedback_post(
     &mut self,
     (key, repo, thread): (IdempotencyKey, &GitHubRepo, FeedbackId),
@@ -53,6 +53,10 @@ impl ProjectDb {
   ) -> Result<FeedbackThread, StoreError> {
     let transaction = self.connection.transaction()?;
     if thread_of_key(&transaction, key)?.is_none() {
+      transaction.execute(
+        "UPDATE feedback_threads SET resolved_at = NULL WHERE id = ?1",
+        [thread.to_string()],
+      )?;
       let mut stored = load_thread(&transaction, repo, thread)?;
       stored
         .add(post.clone())

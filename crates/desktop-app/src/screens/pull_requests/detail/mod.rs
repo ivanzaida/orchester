@@ -108,7 +108,7 @@ impl Component for PullRequestScreen {
       failed: ctx.signal(None),
       find: ctx.signal(String::new()),
       refresh: refresh.clone(),
-      writes: Writes::new(ctx, (&project.open, number), &feedback),
+      writes: Writes::new(ctx, (&project, number), &feedback),
       feedback,
     };
     let (latest, failed) = (screen.latest.clone(), screen.failed.clone());
@@ -258,7 +258,7 @@ impl PullRequestScreen {
     let navigation = Navigation::of(ctx);
     let id = project.open.project.id();
     let fixed = board.board.as_deref().map(fixed).unwrap_or_default();
-    let instead = instead(ctx, (project, number), (&self.feedback, head), &fixed);
+    let (instead, instead_failed) = instead(ctx, (project, number), (&self.feedback, head), &fixed);
     let env = board.board.clone().map(|board| Env {
       project: project.clone(),
       number,
@@ -285,6 +285,8 @@ impl PullRequestScreen {
       fixed,
       feedback: env,
       state: self.feedback.clone(),
+      feedback_failed: board.failed.clone(),
+      instead_failed,
     }
   }
 }
@@ -311,13 +313,14 @@ struct Read(Option<Arc<ReadDiff>>);
 impl DevtoolsInspectable for Read {}
 
 /// The diff shown instead of the pull request's latest: what changed since a fix's request when the range asks for
-/// it, else an earlier head when one is pinned or a new thread is being written at one; read off the UI thread.
+/// it, else an earlier head when one is pinned or a new thread is being written at one; read off the UI thread. When
+/// that read failed, none, and why: the latest shows, never what an earlier read returned under the new range.
 fn instead(
   ctx: &mut Ctx,
   (project, number): (&ShownProject, NonZeroU64),
   (state, head): (&FeedbackState, Option<&Revision>),
   fixed: &[Fixed],
-) -> Option<Instead> {
+) -> (Option<Instead>, Option<Message>) {
   let since = state
     .since
     .get()
@@ -326,6 +329,7 @@ fn instead(
     .map(|fixed| (fixed.from.clone(), fixed.to.clone()));
   let earlier = state.shown_head(head).filter(|_| since.is_none());
   let writing = earlier.is_some() && state.pinned.get().0.is_none();
+  let asked = since.is_some() || earlier.is_some();
   let programs = Services::of(ctx).programs;
   let deps = (project.open.repo_root.clone(), number, since.clone(), earlier);
   let load = ctx.future(deps, move |(root, number, since, earlier)| {
@@ -346,13 +350,22 @@ fn instead(
       .map(Read)
     }
   });
-  let read = load.state().get().data.and_then(|Read(read)| read)?;
+  let read = load.state().get();
+  if !asked {
+    return (None, None);
+  }
+  if let Some(error) = read.error {
+    return (None, Some(error));
+  }
+  let Some(Read(Some(read))) = read.data else {
+    return (None, None);
+  };
   let why = if since.is_some() {
     InsteadWhy::Since
   } else {
     InsteadWhy::Earlier { writing }
   };
-  Some(Instead { read, why })
+  (Some(Instead { read, why }), None)
 }
 
 /// The pull request as stored, read once when the page opens.

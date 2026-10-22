@@ -73,13 +73,16 @@ pub fn feedback_tab(ctx: &mut Ctx, props: &TabProps) -> Element {
     .width(Dimension::Pct(100.0))
     .flex(1.0)
     .min_height(Dimension::Px(0.0));
+  // A failed read keeps the threads read before on screen, under why they may be out of date.
+  let read_failure = props.failed.as_ref().map(|error| read_failed(ctx, error));
   let Some(board) = props.board.clone() else {
-    return column
-      .with_children(props.failed.as_ref().map(|error| failure(ctx, error)))
-      .into();
+    return column.with_children(read_failure).into();
   };
   if board.task.is_none() && board.threads.is_empty() {
-    return column.child(no_task(ctx, props.number)).into();
+    return column
+      .with_children(read_failure)
+      .child(no_task(ctx, props.number))
+      .into();
   }
   let panel_open = props.selected.is_some() || props.state.composing.get() == Some(Composing::PullRequest);
   let list = list(ctx, props, &board, panel_open);
@@ -106,14 +109,38 @@ pub fn feedback_tab(ctx: &mut Ctx, props: &TabProps) -> Element {
     }));
   column
     .child(toolbar(ctx, props, &board))
-    .with_children(props.state.failure.get().map(|error| failure(ctx, &error)))
+    .with_children(read_failure)
+    .with_children(props.state.failure.get().map(|error| write_failed(ctx, &error)))
     .with_children(board.task.as_ref().map(|_| strip(ctx, props, &board)))
     .child(body)
     .into()
 }
 
-/// Why the latest read or write failed, under the toolbar.
-fn failure(ctx: &Ctx, error: &Message) -> Element {
+/// Why the latest read of the threads failed, under the toolbar; Files changed shows it above the diff.
+pub fn read_failed(ctx: &Ctx, error: &Message) -> Element {
+  failure(
+    Notice::new(
+      "feedback-read-failure",
+      NoticeTone::Danger,
+      ctx.t("pull_requests.feedback.loadFailed"),
+    )
+    .body(message_text(ctx, error)),
+  )
+}
+
+/// Why the latest write did not land, under the toolbar.
+fn write_failed(ctx: &Ctx, error: &Message) -> Element {
+  failure(
+    Notice::new(
+      "feedback-failure",
+      NoticeTone::Danger,
+      ctx.t("pull_requests.feedback.writeFailed"),
+    )
+    .body(message_text(ctx, error)),
+  )
+}
+
+fn failure(notice: Notice) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .padding(
@@ -122,14 +149,7 @@ fn failure(ctx: &Ctx, error: &Message) -> Element {
         .left(PullRequestsSpacing::Detail.role())
         .right(PullRequestsSpacing::Detail.role()),
     )
-    .child(
-      Notice::new(
-        "feedback-failure",
-        NoticeTone::Danger,
-        ctx.t("pull_requests.feedback.loadFailed"),
-      )
-      .body(message_text(ctx, error)),
-    )
+    .child(notice)
     .into()
 }
 

@@ -307,6 +307,7 @@
         "reason": "Linking a pull request to a task is planned."
       },
       "loadFailed": "Agent feedback could not be read",
+      "writeFailed": "Your change to the feedback wasn’t saved",
       "kind": {
         "question": "Question",
         "fix": "Fix request"
@@ -484,7 +485,8 @@
         "sinceNote": "Opened from the thread · Full PR is {{files}} files",
         "files": "of {{total}} · since your request",
         "choose": "Revision range",
-        "unreadable": "What changed since the request could not be read: {{reason}}"
+        "unreadable": "What changed since the request could not be read: {{reason}}",
+        "readFailed": "That diff couldn’t be read, so the pull request’s latest shows"
       },
       "threads": {
         "heading": "THREADS",

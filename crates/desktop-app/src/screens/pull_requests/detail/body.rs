@@ -73,6 +73,10 @@ pub(super) struct Shown {
   /// The pull request's feedback, once read: drawn into the diff and listed beside the files.
   pub feedback: Option<Env>,
   pub state: feedback::FeedbackState,
+  /// Why the latest read of the feedback failed; `feedback` is then the one read before.
+  pub feedback_failed: Option<Message>,
+  /// Why the diff asked for instead of the latest could not be read; the latest shows.
+  pub instead_failed: Option<Message>,
 }
 
 pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Element {
@@ -94,20 +98,7 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
     )),
     None => column,
   };
-  let notice = view
-    .latest_failure()
-    .map(|failure| detail_notice(ctx, failure, view.synced_at));
-  let column = column.with_children(notice.map(|notice| {
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(SpacingSize::Md)
-          .left(PullRequestsSpacing::Detail.role())
-          .right(PullRequestsSpacing::Detail.role()),
-      )
-      .child(notice)
-  }));
+  let column = column.with_children(notices(ctx, view, shown));
   let content = match (&shown.instead, view.body()) {
     (Some(instead), _) => files(ctx, (&instead.read, view), shown),
     (None, Body::Files(read)) => files(ctx, (&read, view), shown),
@@ -149,6 +140,40 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
     ),
   };
   column.child(content).into()
+}
+
+/// What failed, under the toolbar: the latest read of the pull request, the diff asked for instead of the latest,
+/// and the latest read of its feedback, whose threads shown are then the ones read before.
+fn notices(ctx: &Ctx, view: &PullRequestView, shown: &Shown) -> Vec<Element> {
+  let read = view
+    .latest_failure()
+    .map(|failure| detail_notice(ctx, failure, view.synced_at));
+  let instead = shown.instead_failed.as_ref().map(|error| -> Element {
+    Notice::new(
+      "pull-request-instead-failed",
+      NoticeTone::Danger,
+      ctx.t("pull_requests.feedback.range.readFailed"),
+    )
+    .body(message_text(ctx, error))
+    .into()
+  });
+  let padded = read.into_iter().chain(instead).map(|notice| {
+    Row::new()
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .top(SpacingSize::Md)
+          .left(PullRequestsSpacing::Detail.role())
+          .right(PullRequestsSpacing::Detail.role()),
+      )
+      .child(notice)
+      .into()
+  });
+  let feedback = shown
+    .feedback_failed
+    .as_ref()
+    .map(|error| feedback::read_failed(ctx, error));
+  padded.chain(feedback).collect()
 }
 
 /// Reading the stored pull request failed, or the read could not run at all.

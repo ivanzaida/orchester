@@ -792,6 +792,9 @@
         "noTask": "The pull request isn’t linked to a task, so no agent can be asked.",
         "headMoved": "The pull request is now at {{revision}}. Choose where your request applies before you send it.",
         "blank": "Write what you ask first.",
+        "notAnAgent": "That agent doesn’t work on the task any more. Choose another one.",
+        "closed": "The task doesn’t take requests in its current state; its page says why.",
+        "alreadySent": "The request already went to the agent, so it can’t be withdrawn. Reply in the thread instead.",
         "invalid": "The thread could not be kept as written; the log has the details."
       }
     }

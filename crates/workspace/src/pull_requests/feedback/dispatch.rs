@@ -130,8 +130,9 @@ fn fix_before(
 }
 
 /// Sends every held post of the project at `root` that may go now, oldest first, and returns their runs; `slots`
-/// as the runner last reported them, `lost`: the runner that served the project is gone. Blocks on SQLite.
-pub fn dispatch_in(root: &Path, slots: Option<Slots>, lost: bool) -> Result<Vec<Dispatched>, FeedbackError> {
+/// as the runner last reported them, each follow-up started here taking one, `lost`: the runner that served the
+/// project is gone. Blocks on SQLite.
+pub fn dispatch_in(root: &Path, mut slots: Option<Slots>, lost: bool) -> Result<Vec<Dispatched>, FeedbackError> {
   let mut db = ProjectDb::open(root)?;
   let Some(link) = db.repository_link()? else {
     return Ok(Vec::new());
@@ -151,7 +152,7 @@ pub fn dispatch_in(root: &Path, slots: Option<Slots>, lost: bool) -> Result<Vec<
       continue;
     }
     let detail = TaskDetail::load_in(root, task)?;
-    sent.extend(dispatch_task(&mut db, (&detail, lost), &threads, slots)?);
+    sent.extend(dispatch_task(&mut db, (&detail, lost), &threads, &mut slots)?);
   }
   Ok(sent)
 }
@@ -171,12 +172,13 @@ pub async fn tell_runner(runners: &Runners, servers: &Servers, open: &OpenProjec
   }
 }
 
-/// Sends the held posts of `threads`, all of `detail`'s task, that may go now.
+/// Sends the held posts of `threads`, all of `detail`'s task, that may go now; a follow-up it starts takes one of
+/// `slots`, which the task's other posts then join.
 fn dispatch_task(
   db: &mut ProjectDb,
   (detail, lost): (&TaskDetail, bool),
   threads: &[FeedbackThread],
-  slots: Option<Slots>,
+  slots: &mut Option<Slots>,
 ) -> Result<Option<Dispatched>, FeedbackError> {
   let Some(run) = detail.run.as_ref() else {
     return Ok(None);
@@ -196,34 +198,37 @@ fn dispatch_task(
     })
     .collect();
   held.sort_by_key(|(_, post)| post.written_at());
-  let mut any = false;
+  let free = *slots;
+  let (mut any, mut follow_up) = (false, false);
   for (at, post) in held {
     let task = TaskState {
       conversation: &conversation,
       run: Some(run),
       messages: &messages,
-      slots,
+      slots: free,
     };
     let others: Vec<&FeedbackThread> = threads.iter().collect();
     if hold_of((&threads[at], &post), &task, &others).is_some() {
       continue;
     }
+    let recipient = Recipient::Agent(threads[at].recipient());
     let text = request_text(&threads[at], &post, moved(db, &threads[at], &post)?);
     let body = MessageBody::new(&text).expect("a request names what it is about");
-    let message = Message::from_person(
-      detail.task.id(),
-      Some(run.id()),
-      Recipient::Agent(threads[at].recipient()),
-      body,
-      Timestamp::now(),
-    );
+    let message = Message::from_person(detail.task.id(), Some(run.id()), recipient, body, Timestamp::now());
     if db.send_feedback_post(post.id(), &message)? {
       threads[at]
         .sent(post.id(), message.id())
         .expect("a post held in storage is held here");
       messages.push(message);
       any = true;
+      follow_up |= matches!(
+        ComposerMode::of(&conversation, Some(run), recipient),
+        ComposerMode::FollowUp
+      );
     }
+  }
+  if let Some(slots) = slots.as_mut().filter(|_| follow_up) {
+    slots.working += 1;
   }
   Ok(any.then(|| Dispatched {
     task: detail.task.id(),

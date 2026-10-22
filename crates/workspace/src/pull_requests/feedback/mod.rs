@@ -55,6 +55,12 @@ pub enum FeedbackError {
   HeadMoved(Revision),
   #[error("a request says something")]
   Blank,
+  #[error("the recipient is not one of the task's agents")]
+  NotAnAgent,
+  #[error("the task's conversation takes no more messages")]
+  Closed,
+  #[error("the request went to the agent before it could be withdrawn")]
+  AlreadySent,
   #[error("the message was not sent again")]
   Send(SendError),
 }
@@ -70,6 +76,9 @@ impl FeedbackError {
       Self::HeadMoved(revision) => Message::new("pullRequests.feedback.errors.headMoved")
         .with("revision", crate::display::short_revision(revision.as_str()).to_owned()),
       Self::Blank => Message::new("pullRequests.feedback.errors.blank"),
+      Self::NotAnAgent => Message::new("pullRequests.feedback.errors.notAnAgent"),
+      Self::Closed => Message::new("pullRequests.feedback.errors.closed"),
+      Self::AlreadySent => Message::new("pullRequests.feedback.errors.alreadySent"),
       Self::Send(error) => error.message(),
     }
   }

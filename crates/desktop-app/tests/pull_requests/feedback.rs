@@ -156,6 +156,36 @@ fn feedback_fix_ready_to_verify_is_resolved_and_reopened() {
 }
 
 #[test]
+fn feedback_thread_actions_wait_for_a_write_in_flight() {
+  let mut seeded = Seeded::feedback();
+  // Tall enough that the open thread's reply shows whole beside the list.
+  seeded.window.tree.resize(1440, 2400);
+  let ready = seeded.thread(READY).id();
+  seeded.feedback_of(142, Some(ready));
+  seeded.window.press(&format!("feedback-{ready}-not-fixed"));
+  seeded
+    .window
+    .set(&format!("feedback-{ready}-reply-text"), "The jitter still varies.");
+  // Pressed without delivering the window's futures: the reply is still being written when Resolve is pressed.
+  seeded.window.press(&format!("feedback-{ready}-send-reply"));
+  seeded.window.press(&format!("feedback-{ready}-resolve"));
+  seeded.window.until("the reply to land", |window| {
+    window
+      .tree
+      .get_element_by_id(&format!("feedback-{ready}-reply"))
+      .is_none()
+  });
+  let thread = seeded.thread(READY);
+  assert_eq!(thread.posts().len(), 2, "the reply is kept: {thread:?}");
+  assert_eq!(thread.posts()[1].body().as_str(), "The jitter still varies.");
+  assert_eq!(
+    thread.resolved_at(),
+    None,
+    "Resolve did nothing while the reply was written"
+  );
+}
+
+#[test]
 fn feedback_question_on_the_whole_pull_request_goes_to_the_builder() {
   let mut seeded = Seeded::feedback();
   seeded.feedback_of(142, None);

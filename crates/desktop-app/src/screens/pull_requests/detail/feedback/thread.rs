@@ -226,13 +226,15 @@ pub fn actions(ctx: &Ctx, env: &Env, thread: &ThreadView, panel: bool) -> Vec<El
     ],
     ThreadState::Resolved { .. } => vec![
       act
-        .button(
-          "reopen",
-          ButtonKind::Ghost,
-          "pull_requests.feedback.actions.reopen",
-          Icon::RotateCcw,
+        .writes(
+          act.button(
+            "reopen",
+            ButtonKind::Ghost,
+            "pull_requests.feedback.actions.reopen",
+            Icon::RotateCcw,
+          ),
+          Write::Resolve(thread.id, false),
         )
-        .on_click(act.write(Write::Resolve(thread.id, false)))
         .into(),
     ],
     ThreadState::Withdrawn { .. } => Vec::new(),
@@ -253,9 +255,15 @@ impl Act<'_> {
       .small()
   }
 
-  fn write(&self, write: Write) -> impl Fn() + Send + Sync + 'static {
+  /// `button` running `write`; it cannot be pressed while another write runs.
+  fn writes(&self, button: ActionButton, write: Write) -> ActionButton {
     let writes = self.env.writes.clone();
-    move || writes.run(write.clone(), None)
+    let button = button.on_click(move || writes.run(write.clone(), None));
+    if self.env.writes.busy() {
+      button.disabled()
+    } else {
+      button
+    }
   }
 
   /// Opens the thread's reply, asking `kind`.
@@ -283,9 +291,10 @@ impl Act<'_> {
   }
 
   fn resolve(&self, kind: ButtonKind) -> ActionButton {
-    self
-      .button("resolve", kind, "pull_requests.feedback.actions.resolve", Icon::Check)
-      .on_click(self.write(Write::Resolve(self.thread.id, true)))
+    self.writes(
+      self.button("resolve", kind, "pull_requests.feedback.actions.resolve", Icon::Check),
+      Write::Resolve(self.thread.id, true),
+    )
   }
 
   /// *Withdraw request* while Orchester holds it; *Open … limits* when the task's limit holds it.
@@ -295,13 +304,15 @@ impl Act<'_> {
       .held
       .map(|post| {
         self
-          .button(
-            "withdraw",
-            ButtonKind::Ghost,
-            "pull_requests.feedback.actions.withdraw",
-            Icon::Undo2,
+          .writes(
+            self.button(
+              "withdraw",
+              ButtonKind::Ghost,
+              "pull_requests.feedback.actions.withdraw",
+              Icon::Undo2,
+            ),
+            Write::Withdraw(self.thread.id, post),
           )
-          .on_click(self.write(Write::Withdraw(self.thread.id, post)))
           .into()
       })
       .into_iter()
@@ -335,16 +346,15 @@ impl Act<'_> {
         })
     };
     let retry = match (why, self.thread.undelivered) {
-      (NotDelivered::Cli(_), Some(message)) => Some(
-        self
-          .button(
-            "retry",
-            ButtonKind::Secondary,
-            "pull_requests.feedback.actions.retry",
-            Icon::RefreshCw,
-          )
-          .on_click(self.write(Write::Retry(id, message))),
-      ),
+      (NotDelivered::Cli(_), Some(message)) => Some(self.writes(
+        self.button(
+          "retry",
+          ButtonKind::Secondary,
+          "pull_requests.feedback.actions.retry",
+          Icon::RefreshCw,
+        ),
+        Write::Retry(id, message),
+      )),
       _ => None,
     };
     std::iter::once(edit.into()).chain(retry.map(Into::into)).collect()

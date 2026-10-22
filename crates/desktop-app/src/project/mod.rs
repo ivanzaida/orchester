@@ -23,6 +23,7 @@ use orchester_workspace::workspace::{self, OpenProject, Workspace};
 
 pub use self::{
   feed::{ProjectFeed, TasksState},
+  feedback::feedback_holds,
   host::ProjectsHost,
   known::Projects,
   state::{ProjectState, Unavailable},

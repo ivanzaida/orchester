@@ -6,8 +6,8 @@
 use std::path::Path;
 
 use orchester_core::{
-  conversation::MessageBody,
-  id::{FeedbackId, FeedbackPostId, IdempotencyKey, MessageId, ResourceId},
+  conversation::{MessageBody, Recipient},
+  id::{FeedbackId, FeedbackPostId, IdempotencyKey, MessageId, ResourceId, TaskId},
   pull_request::feedback::{FeedbackAnchor, FeedbackKind, FeedbackPost, FeedbackThread, ThreadParts},
   revision::Revision,
   store::{PullRequestDiffStore, PullRequestStore, RepositoryStore},
@@ -18,7 +18,10 @@ use orchester_store::ProjectDb;
 use super::FeedbackError;
 use crate::{
   pull_requests::linked::linked_tasks,
-  tasks::conversation::{SendError, send_after_turn_in},
+  tasks::{
+    conversation::{SendError, composer::ComposerMode, outgoing::conversation_of, send_after_turn_in},
+    detail::TaskDetail,
+  },
 };
 
 /// A new thread as the person wrote it.
@@ -33,11 +36,13 @@ pub struct NewThread {
   pub recipient: ResourceId,
 }
 
-/// Starts `new` once per `key`; a retry returns the thread stored the first time.
+/// Starts `new` once per `key`; a retry returns the thread stored the first time. Refused when its recipient is not
+/// one of the task's agents or the task takes no more messages ([`takes_requests`]).
 pub fn start_in(root: &Path, key: IdempotencyKey, new: &NewThread) -> Result<FeedbackThread, FeedbackError> {
   let mut db = ProjectDb::open(root)?;
   let (repo, task) = linked(&db, new.number, &new.revision)?;
   let body = MessageBody::new(&new.text).map_err(|_| FeedbackError::Blank)?;
+  takes_requests(root, task, new.recipient)?;
   let now = Timestamp::now();
   let thread = FeedbackThread::new(
     ThreadParts {
@@ -56,7 +61,7 @@ pub fn start_in(root: &Path, key: IdempotencyKey, new: &NewThread) -> Result<Fee
 }
 
 /// Adds the person's `text` to thread `thread` of pull request `number` once per `key`, asking `kind` of the agent at
-/// `revision`, the head they wrote it at; a resolved thread is reopened first.
+/// `revision`, the head they wrote it at; a resolved thread is reopened in the same write.
 pub fn reply_in(
   root: &Path,
   key: IdempotencyKey,
@@ -66,26 +71,28 @@ pub fn reply_in(
   let mut db = ProjectDb::open(root)?;
   let (repo, _) = linked(&db, number, revision)?;
   let body = MessageBody::new(text).map_err(|_| FeedbackError::Blank)?;
-  let stored = thread_of(&db, (&repo, number), thread)?;
-  if stored.resolved_at().is_some() {
-    db.resolve_feedback_thread(thread, None)?;
-  }
+  thread_of(&db, (&repo, number), thread)?;
   let post = FeedbackPost::new(kind, body, revision.clone(), Timestamp::now());
   Ok(db.add_feedback_post((key, &repo, thread), &post)?)
 }
 
-/// Withdraws post `post` of thread `thread`, held by Orchester; `false` when it was sent meanwhile.
+/// Withdraws post `post` of thread `thread`, held by Orchester; refused with [`FeedbackError::AlreadySent`] when it
+/// went to the agent meanwhile.
 pub fn withdraw_in(
   root: &Path,
   (number, thread): (u64, FeedbackId),
   post: FeedbackPostId,
-) -> Result<bool, FeedbackError> {
+) -> Result<(), FeedbackError> {
   let mut db = ProjectDb::open(root)?;
   let repo = repo_of(&db)?;
   if thread_of(&db, (&repo, number), thread)?.post(post).is_none() {
     return Err(FeedbackError::NotFound);
   }
-  Ok(db.withdraw_feedback_post(post, Timestamp::now())?)
+  if db.withdraw_feedback_post(post, Timestamp::now())? {
+    Ok(())
+  } else {
+    Err(FeedbackError::AlreadySent)
+  }
 }
 
 /// Resolves thread `thread` (`resolved`) or reopens it; `false` when it already stood so. It closes the thread in
@@ -113,6 +120,25 @@ pub fn retry_in(root: &Path, (number, thread): (u64, FeedbackId), message: Messa
 
 fn repo_of(db: &ProjectDb) -> Result<orchester_core::repository::GitHubRepo, FeedbackError> {
   Ok(db.repository_link()?.ok_or(FeedbackError::Unlinked)?.repo().clone())
+}
+
+/// Refuses a new thread for agent `recipient` of `task` when it is not one of the task's agents, or when the task's
+/// conversation takes no more messages: what the board's gate says of it ([`super::Gate::Closed`]), the runner taken
+/// as serving the project, so a request its return would let go is kept.
+fn takes_requests(root: &Path, task: TaskId, recipient: ResourceId) -> Result<(), FeedbackError> {
+  let detail = TaskDetail::load_in(root, task)?;
+  let conversation = conversation_of(&detail, detail.lost_its_runner(true));
+  let agent = conversation
+    .recipients
+    .iter()
+    .any(|choice| matches!(choice.recipient, Recipient::Agent(profile) if profile == recipient));
+  if !agent {
+    return Err(FeedbackError::NotAnAgent);
+  }
+  match ComposerMode::of(&conversation, detail.run.as_ref(), Recipient::Agent(recipient)) {
+    ComposerMode::Closed | ComposerMode::RunAgain => Err(FeedbackError::Closed),
+    _ => Ok(()),
+  }
 }
 
 /// The thread `thread` of pull request `number`.

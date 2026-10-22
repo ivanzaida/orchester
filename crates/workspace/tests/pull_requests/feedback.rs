@@ -224,11 +224,14 @@ fn feedback_held_requests_are_withdrawn_and_sent_ones_are_not() {
     .thread(second)
     .and_then(|thread| thread.held)
     .expect("the second is held");
-  assert!(withdraw_in(root(&project), (142, second), held).expect("withdrawn"));
+  withdraw_in(root(&project), (142, second), held).expect("withdrawn");
   let sent = board.thread(first).expect("the first").current().id;
   assert!(
-    !withdraw_in(root(&project), (142, first), sent).expect("read"),
-    "a sent request stays"
+    matches!(
+      withdraw_in(root(&project), (142, first), sent),
+      Err(FeedbackError::AlreadySent)
+    ),
+    "a sent request stays, and the person is told"
   );
   let board = self::board(&project, 142, None);
   assert!(matches!(
@@ -350,6 +353,63 @@ fn feedback_needs_a_linked_task_and_the_head_the_person_saw() {
     start_in(root(&project), IdempotencyKey::generate(), &stale),
     Err(FeedbackError::HeadMoved(moved)) if moved == head(142)
   ));
+  let stranger = NewThread {
+    recipient: ResourceId::generate(),
+    ..new_thread(&project, 142, FeedbackKind::Fix, FeedbackAnchor::PullRequest, "Fix it.")
+  };
+  assert!(matches!(
+    start_in(root(&project), IdempotencyKey::generate(), &stranger),
+    Err(FeedbackError::NotAnAgent)
+  ));
+  assert!(board(&project, 142, None).threads.is_empty(), "nothing refused is kept");
+}
+
+#[test]
+fn feedback_follow_ups_started_in_one_pass_take_a_slot_each() {
+  let mut project = project();
+  let task = project.fixture.task("Split the config loader", at(12));
+  let mut third = project.fixture.started_run(task, at(22));
+  project.fixture.succeed(&mut third, at(31));
+  let stored = [
+    pull_request(142, "orchester/orc-run-1", PullRequestState::Open, None, 900),
+    pull_request(137, "orchester/orc-run-2", PullRequestState::Open, None, 800),
+    pull_request(138, "orchester/orc-run-3", PullRequestState::Open, None, 750),
+  ];
+  project
+    .fixture
+    .db
+    .replace_pull_requests(&repo(), &stored, at(1_001))
+    .expect("the pull requests are stored");
+  let ask = |number, text| {
+    start(
+      &project,
+      &new_thread(
+        &project,
+        number,
+        FeedbackKind::Question,
+        FeedbackAnchor::PullRequest,
+        text,
+      ),
+    )
+  };
+  let (first, second, other) = (ask(137, "Why?"), ask(137, "And why not?"), ask(138, "Why?"));
+  let one_free = Some(Slots { working: 3, slots: 4 });
+  assert_eq!(
+    dispatch_in(root(&project), one_free, false).expect("dispatched").len(),
+    1,
+    "one follow-up for the one free slot"
+  );
+  let delivered = |number, thread| {
+    matches!(
+      board(&project, number, None).thread(thread).expect("thread").state,
+      ThreadState::Delivered(_)
+    )
+  };
+  assert!(
+    delivered(137, first) && delivered(137, second),
+    "both join KON-2's follow-up"
+  );
+  assert!(!delivered(138, other), "KON-3's waits for a slot");
 }
 
 #[test]
