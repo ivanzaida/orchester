@@ -151,3 +151,35 @@ fn revision_diff_is_stored_per_pair_of_commits() {
     Some(stored)
   );
 }
+
+#[test]
+fn threads_storing_the_same_blob_at_once_each_succeed() {
+  const THREADS: usize = 8;
+  let (repo, _db) = project_repo();
+  for round in 0..10 {
+    let text = format!("{DIFF}round {round}\n");
+    let start = std::sync::Arc::new(std::sync::Barrier::new(THREADS));
+    let writers: Vec<_> = (0..THREADS)
+      .map(|writer| {
+        let (root, text, start) = (repo.path().to_path_buf(), text.clone(), std::sync::Arc::clone(&start));
+        std::thread::spawn(move || {
+          let mut db = ProjectDb::open(&root)?;
+          start.wait();
+          let head = char::from_digit(u32::try_from(writer).expect("few threads"), 16).expect("a hex digit");
+          db.save_revision_diff(&diff(head, &text, 1))
+        })
+      })
+      .collect();
+    for writer in writers {
+      writer
+        .join()
+        .expect("the writer does not panic")
+        .expect("each write of the same blob succeeds");
+    }
+  }
+  assert_eq!(
+    blob_files(repo.path()).len(),
+    10,
+    "one file per content, no temporary file left"
+  );
+}

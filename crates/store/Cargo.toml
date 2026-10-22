@@ -11,8 +11,9 @@ workspace = true
 
 [dependencies]
 orchester-core.workspace = true
-# The longest write-lock holds, kept for the contention tests (`test-support`).
-parking_lot = { workspace = true, optional = true }
+# The process's way of pausing a wait for a lock (`busy`), and the longest write-lock holds, kept for the
+# contention tests (`test-support`).
+parking_lot.workspace = true
 # `trace` and `hooks`: each connection times how long its write transactions hold the write lock, and
 # its checkpoints apart from them (`lock_watch`).
 rusqlite = { workspace = true, features = ["hooks", "trace"] }
@@ -30,7 +31,7 @@ zstd.workspace = true
 # A database at an older schema version, for a test to fill with the rows that
 # version wrote. Also a shorter lock budget, injected busy errors and the longest write-lock holds, for
 # the contention tests.
-test-support = ["dep:parking_lot"]
+test-support = []
 
 [dev-dependencies]
 orchester-store = { workspace = true, features = ["test-support"] }
