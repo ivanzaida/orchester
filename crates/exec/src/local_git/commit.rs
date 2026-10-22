@@ -243,7 +243,12 @@ impl LocalGit {
   }
 
   /// Puts HEAD's `entry` of `file` back, in the checkout and the index, over the content `reviewed` recorded.
-  pub(super) fn restore_head(&self, reviewed: &Checkout, file: &LocalFile, entry: &IndexEntry) -> Result<(), LocalGitError> {
+  pub(super) fn restore_head(
+    &self,
+    reviewed: &Checkout,
+    file: &LocalFile,
+    entry: &IndexEntry,
+  ) -> Result<(), LocalGitError> {
     let bytes = self.checkout_blob(&reviewed.head, &file.path)?;
     super::write_regular(&self.root, &file.path, file.working.as_ref(), Some(&bytes))?;
     let hash = super::digest(&bytes);

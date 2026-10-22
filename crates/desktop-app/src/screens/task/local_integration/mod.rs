@@ -56,7 +56,10 @@ const NARROW_INSPECTOR_WIDTH: f32 = 248.0;
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Mode {
   Review,
-  Commit { tree: String, preview: Preview },
+  Commit {
+    tree: String,
+    preview: Preview,
+  },
   Preserve,
   /// The person pressed *Discard selected*: what discarding does to each selected file, to confirm.
   Discard,

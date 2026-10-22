@@ -23,13 +23,7 @@ fn refusal(output: &std::process::Output, fallback: &str) -> io::Error {
 
 #[cfg(target_os = "windows")]
 mod platform {
-  use std::{
-    fs::OpenOptions,
-    io,
-    os::windows::fs::OpenOptionsExt,
-    path::Path,
-    process::Command,
-  };
+  use std::{fs::OpenOptions, io, os::windows::fs::OpenOptionsExt, path::Path, process::Command};
 
   use windows_sys::Win32::Storage::FileSystem::DELETE;
 

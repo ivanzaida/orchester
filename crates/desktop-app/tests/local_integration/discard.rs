@@ -19,7 +19,10 @@ fn junk_page() -> (Page, tempfile::TempDir) {
   fs::write(fixture.root().join(JUNK), b"crash dump").expect("junk");
   let mut page = Page::new(fixture);
   let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
-  let bin = tempfile::Builder::new().prefix("trash-").tempdir_in(scratch).expect("trash");
+  let bin = tempfile::Builder::new()
+    .prefix("trash-")
+    .tempdir_in(scratch)
+    .expect("trash");
   page
     .window
     .launch
@@ -55,7 +58,12 @@ fn local_integration_discard_asks_then_discards_and_delivery_resumes() {
   assert!(page.root().join(JUNK).exists(), "keeping it changes nothing");
   page.click("local-review-discard");
   page.ready("local-discard-confirm");
-  assert!(page.window.text("local-discard-files").contains("du.exe.stackdump moves to the"));
+  assert!(
+    page
+      .window
+      .text("local-discard-files")
+      .contains("du.exe.stackdump moves to the")
+  );
   assert_eq!(page.window.text("local-discard-confirm"), "Discard 1 file");
   assert!(page.root().join(JUNK).exists(), "asking changes nothing");
   page.click("local-discard-confirm");

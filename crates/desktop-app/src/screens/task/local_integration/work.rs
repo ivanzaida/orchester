@@ -13,8 +13,8 @@ use orchester_core::{
   integration::local::{CheckedResult, LocalConflict, LocalError, LocalPath, Placement, Resolution},
 };
 use orchester_workspace::{
-  background, base_moved,
   accounts::trash::Trash,
+  background, base_moved,
   tasks::local_integration::{DiscardReport, IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview},
 };
 

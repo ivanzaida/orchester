@@ -23,7 +23,12 @@ impl Bin {
   fn new() -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
     fs::create_dir_all(&scratch).expect("scratch");
-    Self(tempfile::Builder::new().prefix("trash-").tempdir_in(scratch).expect("trash"))
+    Self(
+      tempfile::Builder::new()
+        .prefix("trash-")
+        .tempdir_in(scratch)
+        .expect("trash"),
+    )
   }
   fn trash(&self) -> FolderTrash {
     FolderTrash::new(self.0.path())
@@ -122,7 +127,13 @@ fn local_integration_discard_keeps_the_rest_of_the_checkout() {
 #[test]
 fn local_integration_discard_refuses_paths_outside_the_reviewed_changes() {
   let (fixture, bin) = (Fixture::new(false), Bin::new());
-  for escape in ["../outside.txt", "a/../../outside.txt", ".git/config", ".orchester/orchester.db", "C:/outside.txt"] {
+  for escape in [
+    "../outside.txt",
+    "a/../../outside.txt",
+    ".git/config",
+    ".orchester/orchester.db",
+    "C:/outside.txt",
+  ] {
     assert!(LocalPath::new(escape).is_err(), "{escape} is no checkout path");
   }
   fs::write(fixture.root().join("junk.log"), "junk").expect("junk");
@@ -130,9 +141,17 @@ fn local_integration_discard_refuses_paths_outside_the_reviewed_changes() {
   let mut session = fixture.open();
   // An ignored file and an unchanged tracked one are no reviewed change: nothing is discarded, not even the junk.
   for outside in ["ignored.txt", "task.txt"] {
-    assert!(session.discard(&[path("junk.log"), path(outside)], &bin.trash()).is_err());
+    assert!(
+      session
+        .discard(&[path("junk.log"), path(outside)], &bin.trash())
+        .is_err()
+    );
   }
-  assert!(session.discard(&[path("junk.log"), path("junk.log")], &bin.trash()).is_err());
+  assert!(
+    session
+      .discard(&[path("junk.log"), path("junk.log")], &bin.trash())
+      .is_err()
+  );
   assert!(session.discard(&[], &bin.trash()).is_err());
   for kept in ["junk.log", "ignored.txt", "task.txt"] {
     assert!(fixture.root().join(kept).exists(), "{kept} stays");
@@ -170,7 +189,11 @@ fn link(target: &std::path::Path, at: &std::path::Path) {
     .args(["/C", "mklink", "/J", &format!(r"{folder}\{name}"), &plain(target)])
     .output()
     .expect("mklink");
-  assert!(output.status.success(), "a junction: {}", String::from_utf8_lossy(&output.stdout));
+  assert!(
+    output.status.success(),
+    "a junction: {}",
+    String::from_utf8_lossy(&output.stdout)
+  );
 }
 
 #[cfg(unix)]
@@ -190,7 +213,11 @@ fn local_integration_discard_says_why_a_file_in_use_stayed_and_tries_again() {
   fs::write(&junk, "held").expect("junk");
   fs::write(fixture.root().join("free.log"), "free").expect("junk");
   // Reading and writing are shared, moving is not.
-  let held = fs::OpenOptions::new().read(true).share_mode(0x1 | 0x2).open(&junk).expect("held");
+  let held = fs::OpenOptions::new()
+    .read(true)
+    .share_mode(0x1 | 0x2)
+    .open(&junk)
+    .expect("held");
   let mut session = fixture.open();
   let report = session
     .discard(&[path("in-use.log"), path("free.log")], &bin.trash())
