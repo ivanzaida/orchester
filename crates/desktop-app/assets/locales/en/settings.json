@@ -40,6 +40,32 @@
     },
     "automation": {
       "section": "What automation may do",
+      "lookAtWindow": {
+        "title": "Look at the window",
+        "description": "Screenshots, the element tree, the app's log and state. Every client with the token may.",
+        "always": "Always on"
+      },
+      "windowControl": {
+        "title": "Agents can control this window",
+        "description": "Click and type in this window, resize it, change pages and the theme. Turn it on to let an agent test Orchester.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Window control could not be kept: {{reason}} This run keeps what it started with.",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window.",
+        "buildRelease": "Build default: off in release builds like this one; development builds start with it on. A change applies when Orchester starts again.",
+        "buildDevelopment": "Build default: on in development builds like this one, so design checks can drive the window; release builds start with it off. A change applies when Orchester starts again.",
+        "nextStartOn": "On from the next start. Until Orchester starts again, agents can't click or type in this window.",
+        "nextStartOff": "Off from the next start. Until Orchester starts again, agents can still click and type in this window.",
+        "environmentOn": "This run: on, set by {{variable}}=on. The setting here applies when Orchester starts without that variable.",
+        "environmentOff": "This run: off, set by {{variable}}=off. The setting here applies when Orchester starts without that variable."
+      },
+      "answerApprovals": {
+        "title": "Let automation answer approvals",
+        "description": "Clients may approve a waiting tool request once or deny it, recorded as answered by automation. Wider answers stay yours. Off until you turn it on.",
+        "on": "Each answer reads approved by automation or denied by automation in the run, with the client's name.",
+        "unreadable": "This setting can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}",
+        "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
+      },
       "changePermissions": {
         "title": "Let automation change agent permissions",
         "description": "Lets tools connected to Orchester widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs and environment variables. Applies to setup tools and permission confirmations in the window; automatic approvals also need Let automation answer approvals. Secret replacement and stale-version decisions stay yours. Only you can change this, here in the window.",
@@ -214,14 +240,60 @@
         "lastSeen": "last request at {{time}}"
       }
     },
+    "general": {
+      "appearance": "Appearance",
+      "planLimits": "Plan limits",
+      "computer": "This computer",
+      "theme": {
+        "title": "Theme",
+        "descriptionWindows": "Dark or light colors, or the appearance Windows has when Orchester starts.",
+        "descriptionMacos": "Dark or light colors, or the appearance macOS has when Orchester starts.",
+        "dark": "Dark",
+        "light": "Light",
+        "system": "System",
+        "noteWindows": "System doesn't follow a change made while Orchester runs yet: if Windows switches between light and dark, the window keeps its colors until Orchester starts again.",
+        "noteMacos": "System doesn't follow a change made while Orchester runs yet: if macOS switches between light and dark, the window keeps its colors until Orchester starts again.",
+        "noDatabase": "The theme could not be kept, so it did not change: the application database is not open.",
+        "notSaved": "The theme could not be kept, so it did not change: {{reason}}",
+        "unavailable": "The theme can't be chosen in this window."
+      },
+      "threshold": {
+        "title": "Warning threshold",
+        "description": "The share of a 5-hour or weekly window at which plan limits count as nearly used. Limits belong to your accounts, so one value serves every project.",
+        "unit": "%",
+        "invalid": "Use a whole percentage from 1 to 100.",
+        "unreadable": "The warning threshold can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}"
+      },
+      "version": {
+        "title": "Version",
+        "release": "Orchester {{version}}, release build.",
+        "development": "Orchester {{version}}, development build.",
+        "value": "v{{version}}"
+      },
+      "data": {
+        "title": "Application data",
+        "description": "Settings, servers and the list of projects. Each project keeps its own data in its folder.",
+        "unknown": "Orchester can't tell where its application database is."
+      },
+      "log": {
+        "title": "App log",
+        "description": "What Orchester did and why something failed. Attach it when you report a problem.",
+        "unknown": "Orchester can't tell where its log is."
+      }
+    },
+    "saveState": {
+      "saved": "All changes saved",
+      "saving": "Saving…",
+      "failed": "A change was not saved"
+    },
     "sub": "Orchester on this computer, in every project. Each change is saved as you make it.",
     "connectServer": "Connect a server",
     "tabs": {
       "general": "General",
       "automation": "Automation",
       "accounts": "Accounts",
-      "orchester": "Orchester",
-      "notBuilt": "Not in this version of the app yet"
+      "orchester": "Orchester"
     }
   }
 }

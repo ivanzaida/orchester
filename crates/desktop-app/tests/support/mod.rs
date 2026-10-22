@@ -9,6 +9,7 @@
 use std::{
   fs,
   path::{Path, PathBuf},
+  sync::Arc,
   thread,
   time::{Duration, Instant},
 };
@@ -18,6 +19,7 @@ use lurq::{
   node::element::ElementRef,
 };
 use orchester_app::{
+  appearance::{Appearance, ThemeSetting},
   i18n,
   mcp::{McpKind, McpLink, McpSettings, McpStatus, WindowLink},
   navigation::Navigation,
@@ -168,6 +170,12 @@ impl Window {
     let mut tree = Tree::new();
     tree.resize(1440, 900);
     let link = WindowLink::default();
+    // The window's colors, kept in the session's database as the app's own window keeps them.
+    link.attach_appearance(Appearance::new(
+      ThemeSetting::Dark,
+      Arc::default(),
+      launch.workspace().cloned(),
+    ));
     tree.mount_root::<Root>(
       &mut app,
       RootProps {

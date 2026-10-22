@@ -122,4 +122,35 @@ impl McpSettings {
       vec![Scope::Observe, Scope::custom(DATA_SCOPE)]
     }
   }
+
+  /// What Settings' *Agents can control this window* shows for the `stored` setting: the stored choice, or the
+  /// build's default until there is one. It is what the next start without [`WINDOW_CONTROL_VARIABLE`] takes.
+  pub const fn next_start(stored: Option<bool>) -> bool {
+    match stored {
+      Some(chosen) => chosen,
+      None => Self::of_build().window_control,
+    }
+  }
+
+  /// What applies to this run while the setting shows `chosen`: the variable decides, a choice waits for the next
+  /// start, or the setting is what this run started with.
+  pub const fn this_run(self, chosen: bool) -> ThisRun {
+    match self.source {
+      WindowControlSource::Environment => ThisRun::Environment(self.window_control),
+      _ if chosen != self.window_control => ThisRun::NextStart(chosen),
+      _ => ThisRun::AsStarted,
+    }
+  }
+}
+
+/// How window control in this run relates to the setting a person sees (Settings · General and Automation · states
+/// `HNQBR`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThisRun {
+  /// This run has what the setting shows.
+  AsStarted,
+  /// The setting changed to this value since the start; it applies when Orchester starts again.
+  NextStart(bool),
+  /// [`WINDOW_CONTROL_VARIABLE`] gave this run this value, whatever the setting says.
+  Environment(bool),
 }

@@ -11,7 +11,7 @@ use lurq::{app::theme::PaletteColor, mcp::Scope, node::color::Color};
 use orchester_app::{
   appearance::{Appearance, ThemeSetting},
   mcp::{
-    McpSettings, WindowLink,
+    McpSettings, ThisRun, WindowLink,
     domain::DATA_SCOPE,
     settings::WINDOW_CONTROL_VARIABLE,
     tools::{ToolError, app_state, hold_reads, navigate, set_theme},
@@ -172,6 +172,11 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
       json!({ "route": "memory", "project": PROJECT, "tab": "waiting" }),
       format!("{root}/memory?tab=waiting"),
       json!({ "project": PROJECT, "tab": "waiting" }),
+    ),
+    (
+      json!({ "route": "settings", "tab": "general" }),
+      "/settings?tab=general".to_owned(),
+      json!({ "tab": "general" }),
     ),
   ];
   for (args, path, params) in cases {
@@ -346,6 +351,25 @@ fn window_control_follows_the_stored_setting_then_the_environment() {
   assert!(
     overridden.window_control(),
     "the environment overrides the stored value for one run"
+  );
+}
+
+#[test]
+fn window_control_settings_show_the_next_start_and_what_this_run_has() {
+  assert_eq!(McpSettings::next_start(None), cfg!(debug_assertions), "the build's default until set");
+  assert!(!McpSettings::next_start(Some(false)));
+  let started_on = McpSettings::with_window_control(true);
+  assert_eq!(started_on.this_run(true), ThisRun::AsStarted);
+  assert_eq!(
+    started_on.this_run(false),
+    ThisRun::NextStart(false),
+    "a change applies from the next start"
+  );
+  let by_variable = started_on.overridden_by(|name| (name == WINDOW_CONTROL_VARIABLE).then(|| "off".to_owned()));
+  assert_eq!(
+    by_variable.this_run(true),
+    ThisRun::Environment(false),
+    "the variable decides this run whatever the setting says"
   );
 }
 

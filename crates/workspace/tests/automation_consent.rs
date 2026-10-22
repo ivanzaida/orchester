@@ -35,6 +35,42 @@ fn automation_consent_is_unknown_until_read_and_separate_from_approvals() {
 }
 
 #[test]
+fn automation_approval_consent_is_off_from_a_persons_revocation_and_back_once_granted() {
+  let dir = tempfile::tempdir().expect("private consent directory");
+  let workspace = Workspace::new(AppDb::open(&dir.path().join("app.db")).expect("private database"));
+  workspace.set_automation_answers_approvals(true).expect("human opt-in");
+  assert!(workspace.automation_approval_consent());
+  // The person's click, before the save runs: off holds even if the save never happens.
+  workspace.revoke_automation_approval_consent();
+  assert!(!workspace.automation_approval_consent());
+  assert!(
+    !workspace.automation_answers_approvals().expect("stored read"),
+    "an old stored grant does not undo the click"
+  );
+  workspace.set_automation_answers_approvals(false).expect("saved off");
+  workspace.set_automation_answers_approvals(true).expect("granted again");
+  assert!(workspace.automation_approval_consent());
+  assert!(workspace.automation_answers_approvals().expect("stored read"));
+}
+
+#[test]
+fn window_control_is_the_builds_until_a_person_chooses_and_the_database_names_its_file() {
+  let dir = tempfile::tempdir().expect("private settings directory");
+  let path = dir.path().join("app.db");
+  let workspace = Workspace::new(AppDb::open(&path).expect("private database"));
+  assert_eq!(workspace.mcp_window_control().expect("read"), None);
+  workspace.set_mcp_window_control(false).expect("a person's choice");
+  assert_eq!(workspace.mcp_window_control().expect("read"), Some(false));
+  workspace.set_mcp_window_control(true).expect("a person's choice");
+  assert_eq!(workspace.mcp_window_control().expect("read"), Some(true));
+  let file = workspace.database_path().expect("a database on disk");
+  assert_eq!(
+    file.canonicalize().expect("the file"),
+    path.canonicalize().expect("the file")
+  );
+}
+
+#[test]
 fn automation_consent_read_or_write_error_invalidates_prior_grant() {
   let dir = tempfile::tempdir().expect("private consent directory");
   let path = dir.path().join("app.db");

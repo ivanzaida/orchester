@@ -1,6 +1,8 @@
-//! Settings › *Let automation change agent permissions* and the Orchestrator's switches (*publish drafts*, *answer
+//! Settings › Automation's *What automation may do*: *Look at the window*, always on; *Agents can control this
+//! window*, the build's default until a person chooses, applying from the next start; and *Let automation answer
+//! approvals*, *Let automation change agent permissions* and the Orchestrator's switches (*publish drafts*, *answer
 //! agents*, *merge runs*): each off until a person turns it on in the window, where it reads the stored value and
-//! saves what the person chooses; synthetic input never flips one.
+//! saves what the person chooses; synthetic input never flips one, and MCP clients' window input is refused meanwhile.
 
 mod support;
 
@@ -57,9 +59,17 @@ fn click(window: &mut Window, id: &str) {
   window.pass();
 }
 
+/// A window tall enough to show *Let automation change agent permissions* under the MCP server's section and the
+/// rows above it, so a pointer reaches its switch where it is drawn.
+fn tall() -> Window {
+  let mut window = Window::open();
+  window.tree.resize(1440, 2400);
+  window
+}
+
 #[test]
 fn settings_a_person_turns_on_automation_changing_agent_permissions() {
-  let mut window = Window::open();
+  let mut window = tall();
   window.navigation().go(Route::Settings);
   window.until("the setting's row", |window| {
     window.texts("settings-automation").is_some()
@@ -78,7 +88,7 @@ fn settings_a_person_turns_on_automation_changing_agent_permissions() {
 
 #[test]
 fn settings_human_revocation_survives_leaving_before_save_dispatch() {
-  let mut window = Window::open();
+  let mut window = tall();
   let workspace = window.launch.workspace().expect("session").clone();
   workspace
     .set_automation_changes_permissions(true)
@@ -116,7 +126,7 @@ fn settings_human_revocation_survives_leaving_before_save_dispatch() {
 #[test]
 fn settings_synthetic_pointer_cannot_change_its_own_opt_in() {
   use lurq::app::events::with_synthetic_input;
-  let mut window = Window::open();
+  let mut window = tall();
   let workspace = window.launch.workspace().expect("session").clone();
   window.navigation().go(Route::Settings);
   window.until("loaded Settings switch", |window| {
@@ -314,4 +324,125 @@ fn settings_daily_report_is_off_until_turned_on_and_comes_at_six_by_default() {
   });
   let texts = window.texts(&format!("{DAILY_REPORT}-at")).expect("the time's row");
   assert!(texts.iter().any(|text| text == "Deliver at"), "{texts:?}");
+}
+
+const LOOK: &str = "settings-look-at-window";
+const WINDOW_CONTROL: &str = "settings-window-control";
+const APPROVALS: &str = "settings-answer-approvals";
+
+#[test]
+fn settings_automation_opens_with_what_automation_may_always_do_and_locks_window_input() {
+  let mut window = Window::open();
+  window.navigation().go(Route::Settings);
+  window.until("the section's rows", |window| {
+    window.texts(&format!("{APPROVALS}-row")).is_some()
+  });
+  let texts = window.texts(&format!("{LOOK}-row")).expect("the row shows");
+  for words in ["Look at the window", "Always on"] {
+    assert!(texts.iter().any(|text| text == words), "{words} in {texts:?}");
+  }
+  assert!(switch_on(&mut window, LOOK), "looking is always on");
+  // The section's rows come in the design's order.
+  let top = |window: &mut Window, id: &str| {
+    window
+      .tree
+      .get_element_by_id_mut(&format!("{id}-row"))
+      .and_then(|element| element.bounds())
+      .unwrap_or_else(|| panic!("{id} is laid out"))
+      .y
+  };
+  let order = [LOOK, WINDOW_CONTROL, APPROVALS, SWITCH, PUBLISH];
+  let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
+  assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "{order:?} at {tops:?}");
+  assert!(
+    window.link.input_gate().protecting(),
+    "while the person's switches show, MCP clients' window input is refused"
+  );
+}
+
+#[test]
+fn settings_window_control_shows_the_next_start_and_only_a_person_changes_it() {
+  use lurq::app::events::with_synthetic_input;
+  let mut window = Window::open();
+  let workspace = window.launch.workspace().expect("session").clone();
+  window.navigation().go(Route::Settings);
+  window.until("the switch", |window| {
+    window.texts(&format!("{WINDOW_CONTROL}-hint")).is_some()
+  });
+  let default = cfg!(debug_assertions);
+  assert_eq!(switch_on(&mut window, WINDOW_CONTROL), default, "the build's default until set");
+  let build = if default {
+    "Build default: on in development builds like this one"
+  } else {
+    "Build default: off in release builds like this one"
+  };
+  assert!(window.text(&format!("{WINDOW_CONTROL}-hint")).starts_with(build));
+  window.until("synthetic input rejected", |window| {
+    with_synthetic_input(|| press_element(window, WINDOW_CONTROL));
+    window.texts(&format!("{WINDOW_CONTROL}-blocked")).is_some()
+  });
+  assert_eq!(workspace.mcp_window_control().expect("read"), None, "nothing stored");
+  window.until("the person's choice to be saved", |window| {
+    let stored = workspace.mcp_window_control().expect("read");
+    if stored.is_none() {
+      press_element(window, WINDOW_CONTROL);
+    }
+    stored.is_some()
+  });
+  assert_eq!(workspace.mcp_window_control().expect("read"), Some(!default));
+  let next = if default {
+    "Off from the next start."
+  } else {
+    "On from the next start."
+  };
+  window.until("the hint to say when it applies", |window| {
+    window.text(&format!("{WINDOW_CONTROL}-hint")).starts_with(next)
+  });
+}
+
+#[test]
+fn settings_only_a_person_lets_automation_answer_approvals_and_off_holds_from_the_click() {
+  use lurq::app::events::with_synthetic_input;
+  let mut window = Window::open();
+  let workspace = window.launch.workspace().expect("session").clone();
+  window.navigation().go(Route::Settings);
+  window.until("the switch", |window| {
+    window.texts(&format!("{APPROVALS}-row")).is_some()
+  });
+  assert!(!switch_on(&mut window, APPROVALS), "off until turned on");
+  window.until("synthetic input rejected", |window| {
+    with_synthetic_input(|| press_element(window, APPROVALS));
+    window.texts(&format!("{APPROVALS}-blocked")).is_some()
+  });
+  assert!(!workspace.automation_answers_approvals().expect("read"));
+  window.until("the person's choice to be saved", |window| {
+    let stored = workspace.automation_answers_approvals().expect("read");
+    if !stored {
+      press_element(window, APPROVALS);
+    }
+    stored
+  });
+  window.until("the switch and its note", |window| {
+    switch_on(window, APPROVALS) && window.texts(&format!("{APPROVALS}-on")).is_some()
+  });
+  assert!(workspace.automation_approval_consent(), "automation may answer now");
+  // Shown again from what is stored, so the person's next click is taken.
+  window.navigation().go(Route::AllProjects);
+  window.pass();
+  window.navigation().go(Route::Settings);
+  window.until("the stored switch", |window| {
+    window.texts(&format!("{APPROVALS}-row")).is_some() && switch_on(window, APPROVALS)
+  });
+  window.tree.get_element_by_id_mut(APPROVALS).expect("the switch").click();
+  assert!(
+    !workspace.automation_approval_consent(),
+    "off holds from the person's click, before the save"
+  );
+  window.until("the choice to be saved", |_| {
+    !workspace.automation_answers_approvals().expect("read")
+  });
+  assert!(
+    !workspace.automation_changes_permissions().expect("read"),
+    "answering approvals turns nothing else on"
+  );
 }

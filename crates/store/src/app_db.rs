@@ -133,6 +133,15 @@ impl AppDb {
     })
   }
 
+  /// The database's file as SQLite opened it; `None` for a database only in memory.
+  pub fn path(&self) -> Option<PathBuf> {
+    self
+      .connection
+      .path()
+      .filter(|path| !path.is_empty())
+      .map(PathBuf::from)
+  }
+
   /// Creates the database at `path` at schema `version`, with only the first `version`
   /// migrations applied, and returns it empty: a migration test fills it with the rows that
   /// version wrote, then [`AppDb::open`] applies the rest.

@@ -3,16 +3,18 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use super::{input_gate::InputGate, tools::ToolError};
-use crate::{navigation::Navigation, project::Projects};
+use crate::{appearance::Appearance, navigation::Navigation, project::Projects};
 
 /// What the window is, for the app's MCP tools, which are registered before the window's root exists:
 /// a started session's window attaches its navigation and the projects its tabs show, a window without
-/// a session the name of the startup screen it shows. Each attaches once.
+/// a session the name of the startup screen it shows. Each attaches once. The window's appearance, which
+/// `set_theme` and Settings › General both change, is attached before the root mounts.
 #[derive(Clone, Default)]
 pub struct WindowLink {
   linked: Arc<Mutex<Option<Linked>>>,
   /// Keeps MCP clients' window input from the window's person-only controls.
   gate: InputGate,
+  appearance: Arc<Mutex<Option<Appearance>>>,
 }
 
 #[derive(Clone)]
@@ -32,6 +34,16 @@ impl WindowLink {
 
   pub fn attach_startup(&self, screen: &'static str) {
     *self.linked.lock() = Some(Linked::Startup(screen));
+  }
+
+  /// The window's colors, which the root hands to its screens.
+  pub fn attach_appearance(&self, appearance: Appearance) {
+    *self.appearance.lock() = Some(appearance);
+  }
+
+  /// The window's colors; `None` in a window that attached none (a test's), where Settings cannot choose them.
+  pub fn appearance(&self) -> Option<Appearance> {
+    self.appearance.lock().clone()
   }
 
   /// The navigation; [`ToolError::NotReady`] before the window attached it, [`ToolError::NoSession`]
