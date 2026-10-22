@@ -22,7 +22,7 @@ use orchester_workspace::instructions::{
   publication::{self, Unavailable},
 };
 
-use super::{state::Tab, work::Author, words};
+use super::{state::Tab, words, work::Author};
 use crate::{
   theme::{ExtraRadius, ExtraSpacing, IconSize, instructions},
   ui::{

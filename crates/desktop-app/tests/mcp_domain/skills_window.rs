@@ -129,11 +129,7 @@ fn skills_window_repository_files_turn_on_by_client_input_only_under_the_persons
 
 /// Whether the element `id`, or one inside it, says `text`.
 fn says(element: lurq::node::element::ElementRef<'_>, text: &str) -> bool {
-  element.text_content() == Some(text)
-    || element
-      .children()
-      .into_iter()
-      .any(|child| says(child, text))
+  element.text_content() == Some(text) || element.children().into_iter().any(|child| says(child, text))
 }
 
 #[test]
@@ -169,7 +165,10 @@ fn project_settings_turn_on_repository_files_by_client_input_only_under_the_pers
   s.until("on", |_| db.repository_agent_files().expect("setting").is_on());
   // Turning them off only takes the repository's words away: a client's input is taken.
   s.until("the switch on", |s| shows_switch(s, ON));
-  assert!(!s.shows("settings-agent-files-person-only"), "a person's press clears the refusal");
+  assert!(
+    !s.shows("settings-agent-files-person-only"),
+    "a person's press clears the refusal"
+  );
   s.click_by_client("settings-agent-files")
     .expect("the click is delivered");
   s.until("off", |_| !db.repository_agent_files().expect("setting").is_on());
@@ -183,7 +182,9 @@ fn project_settings_turn_on_repository_files_by_client_input_only_under_the_pers
   s.until("the switch off again", |s| shows_switch(s, OFF));
   s.click_by_client("settings-agent-files")
     .expect("the click is delivered");
-  s.until("on by the client", |_| db.repository_agent_files().expect("setting").is_on());
+  s.until("on by the client", |_| {
+    db.repository_agent_files().expect("setting").is_on()
+  });
 }
 
 #[test]

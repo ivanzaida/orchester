@@ -142,20 +142,18 @@ impl Work {
       Write::Change(change) => *change,
     };
     let change = match last {
-      Change::Save(expected, _, by) => fields
-        .instruction()
-        .ok()
-        .map(|body| Change::Save(expected, body, by)),
+      Change::Save(expected, _, by) => fields.instruction().ok().map(|body| Change::Save(expected, body, by)),
       Change::Publish(expected) => fields
         .instruction()
         .ok()
         .filter(|body| *body == expected.body)
         .filter(|_| fields.blocked().is_empty())
         .map(|_| Change::Publish(expected)),
-      Change::Create(_, _, by) => fields
-        .instruction()
-        .ok()
-        .and_then(|body| Name::new(&fields.name.get()).ok().map(|name| Change::Create(name, body, by))),
+      Change::Create(_, _, by) => fields.instruction().ok().and_then(|body| {
+        Name::new(&fields.name.get())
+          .ok()
+          .map(|name| Change::Create(name, body, by))
+      }),
     };
     change.map(Write::from)
   }
