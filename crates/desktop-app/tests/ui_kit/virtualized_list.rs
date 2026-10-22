@@ -1,9 +1,7 @@
-//! lurq 0.49.1's `VirtualizedList` as the chats use it (ORC-71), as small as it repeats: a list of 300 rows 100 high
-//! in a 600-high view, asked to open at its end (`scroll_to_bottom_pending`), renders its first 64 rows, from the
-//! top, on its first pass, before it has measured one (`BOOTSTRAP_ROWS`), and only then the rows at its end. A list
-//! whose rows hold long Markdown replies pays for 64 of them at once when a chat opens, and again when it switches to
-//! another conversation (no key survives, which clears its heights and starts over). This is lurq's, reported with
-//! the numbers in `docs/plan.md` (ORC-71); the chats' own tests bound what an opening builds by it.
+//! lurq's `VirtualizedList` as the chats use it (ORC-71): a list of 300 rows 100 high in a 600-high view, asked to
+//! open at its end (`scroll_to_bottom_pending`), renders on its first pass, before it has measured one row, only its
+//! last bootstrap rows (16 since lurq 0.50.0) and none from its top. lurq 0.49.1 rendered its first 64 rows from the
+//! top before the rows at its end, so a chat whose rows hold long Markdown replies paid for 64 of them at once.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -23,7 +21,7 @@ use super::harness::Kit;
 /// Rows in the list.
 const ROWS: usize = 300;
 /// What lurq renders before it has measured a row.
-const BOOTSTRAP_ROWS: usize = 64;
+const BOOTSTRAP_ROWS: usize = 16;
 
 /// A row, and where the rows note that they rendered.
 #[derive(Clone)]
@@ -54,7 +52,7 @@ impl Component for LineView {
 }
 
 #[test]
-fn virtualized_list_opening_at_its_end_renders_its_first_rows_before_any_is_measured() {
+fn virtualized_list_opening_at_its_end_renders_only_its_last_rows_before_any_is_measured() {
   let rendered = Arc::new(Mutex::new(BTreeSet::new()));
   let scroll = ScrollState::new();
   scroll.scroll_to_bottom_pending();
@@ -75,14 +73,9 @@ fn virtualized_list_opening_at_its_end_renders_its_first_rows_before_any_is_meas
   });
   kit.pass();
   let rendered = rendered.lock().clone();
-  let first: BTreeSet<usize> = (0..BOOTSTRAP_ROWS).collect();
-  assert!(
-    rendered.is_superset(&first),
-    "the first {BOOTSTRAP_ROWS} rows render, from the top: {rendered:?}"
-  );
-  assert!(rendered.contains(&(ROWS - 1)), "then those at its end: {rendered:?}");
-  assert!(
-    rendered.len() < BOOTSTRAP_ROWS + 16,
-    "and nothing in between: {rendered:?}"
+  let last: BTreeSet<usize> = (ROWS - BOOTSTRAP_ROWS..ROWS).collect();
+  assert_eq!(
+    rendered, last,
+    "only the last {BOOTSTRAP_ROWS} rows render, none from the top"
   );
 }

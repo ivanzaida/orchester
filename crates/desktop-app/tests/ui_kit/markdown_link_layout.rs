@@ -1,7 +1,6 @@
-//! lurq 0.49.1's Markdown with a link (ORC-71), as small as it repeats: a document that holds one link leaves the
-//! window's layout dirty after every pass, idle, so a window that shows it lays itself out again on every frame,
-//! for as long as it is shown; the same document without a link settles at once. A chat that shows a reply with a
-//! link is laid out on every frame. This is lurq's, reported with the numbers in `docs/plan.md` (ORC-71).
+//! lurq's Markdown with a link (ORC-71): a document that holds one link settles like one without, so a chat that
+//! shows a reply with a link is not laid out again on every idle frame. lurq 0.49.1 left the window's layout dirty
+//! after every pass while a link showed; 0.50.0 fixed it.
 
 use lurq::components::{Markdown, MarkdownProps};
 
@@ -25,10 +24,10 @@ fn markdown_link_layout_a_document_without_a_link_settles() {
 }
 
 #[test]
-fn markdown_link_layout_a_link_leaves_the_layout_dirty_after_every_pass() {
+fn markdown_link_layout_a_document_with_a_link_settles() {
   assert_eq!(
     dirty_passes("See [the run](https://example.invalid/runs/12), which is green."),
-    10,
-    "lurq lays the window out again on every idle pass while a link shows"
+    0,
+    "a link leaves no layout dirty once shown"
   );
 }
