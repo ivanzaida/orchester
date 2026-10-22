@@ -16,7 +16,7 @@ use lurq::{
 use orchester_core::{id::MessageId, run::Answerer};
 use orchester_workspace::tasks::conversation::{Entry, EntryState, PanelState, outgoing::after_turn_run};
 
-use super::{Composing, state::AfterTurn};
+use super::{super::shared::Shared, Composing, state::AfterTurn};
 use crate::ui::{
   button::{ActionButton, ButtonKind},
   field::field_error,
@@ -57,9 +57,7 @@ impl Component for Undelivered {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<UndeliveredProps>().clone();
-    let composing = ctx
-      .use_context::<Composing>()
-      .expect("the Conversation tab provides the composer before its chat");
+    let composing = Shared::<Composing>::of(ctx).expect("the Conversation tab shares the composer before its chat");
     let state = composing.state.after_turn.state().get();
     let (pending, rejected) = (state.is_pending(), state.is_rejected());
     let error = state

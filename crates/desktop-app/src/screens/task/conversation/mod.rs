@@ -12,8 +12,10 @@
 //! the task starts the tab afresh. The step rail, *Show*, the search and Details are not part of this
 //! build (D4): the chat shows every step.
 
+mod built;
 mod composer;
 mod read;
+mod shared;
 mod states;
 mod timeline;
 mod toolbar;
@@ -32,14 +34,10 @@ use orchester_workspace::{
   tasks::{
     conversation::{
       Conversation, PanelState,
-      orchestrator::{continued, message_offer, proposals},
+      orchestrator::{message_offer, proposals},
     },
     detail::RunView,
-    timeline::{
-      self as items, Item, ItemKind, Sources,
-      load::Loaded,
-      view::{self, Choice},
-    },
+    timeline::{self as items, Item, ItemKind, load::Loaded},
     transcript::{Entry, EntryKind},
   },
 };
@@ -47,7 +45,10 @@ use orchester_workspace::{
 pub use self::composer::ComposerState;
 pub(crate) use self::timeline::{links, step_label};
 use self::{
+  built::BuiltTimeline,
+  composer::Composing,
   read::{Transcript, TranscriptRead, Waiting, with_requests},
+  shared::Shared,
   timeline::{ChatProject, Timeline, Toggles},
   toolbar::RunState,
 };
@@ -55,10 +56,7 @@ use super::{super::orchestrator::data::revision as chat_revision, TaskContext, c
 use crate::{
   project::TasksState,
   services::Services,
-  ui::{
-    chat::{follow::Follow, names::ProjectNames},
-    markdown::plain,
-  },
+  ui::chat::{follow::Follow, names::ProjectNames},
 };
 
 /// The tab's content for `task`, as the task page read it. Keyed by the task and its latest run, so a new
@@ -72,12 +70,17 @@ pub fn tab(ctx: &mut Ctx, task: &TaskContext) -> Element {
   ctx.mount_keyed::<ConversationTab>(&format!("task-conversation-{}-{run}", task.key), task.clone())
 }
 
+/// The tab, and what it shares with the parts it mounts: provided once, in `create` (`shared`), so a render of the
+/// tab does not render again every row its chat built.
 struct ConversationTab {
   decisions: Decisions,
+  composing: Shared<Composing>,
+  shown: Shared<Timeline>,
   follow: Follow,
   toggles: Toggles,
   retry: Signal<u64>,
   transcript: TranscriptRead,
+  timeline: BuiltTimeline,
 }
 
 impl Component for ConversationTab {
@@ -85,17 +88,21 @@ impl Component for ConversationTab {
 
   fn create(ctx: &mut Ctx) -> Self {
     let follow = Follow::new(ctx);
+    let decisions = Decisions::new(ctx);
+    ctx.provide(decisions.clone());
     Self {
-      decisions: Decisions::new(ctx),
+      decisions,
+      composing: Shared::provide(ctx),
+      shown: Shared::provide(ctx),
       toggles: Toggles::new(ctx, follow.clone()),
       follow,
       retry: ctx.signal(0),
       transcript: TranscriptRead::default(),
+      timeline: BuiltTimeline::default(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    ctx.provide(self.decisions.clone());
     let task = ctx.props::<TaskContext>().clone();
     let detail = &task.detail;
     // What the latest run left once it ended, as last read: a removed worktree closes the conversation.
@@ -105,7 +112,7 @@ impl Component for ConversationTab {
       .and_then(|run| task.left.as_read(run.id()))
       .and_then(Result::ok);
     let conversation = Conversation::of(detail, task.lost(), leftovers.as_ref());
-    let composer = composer::dock(ctx, &self.follow, &task, &conversation);
+    let composer = composer::dock(ctx, (&self.follow, &self.composing), &task, &conversation);
     // Read once while the tab shows the run, on every pass so the tab's hooks keep their order.
     let workspace = Services::of(ctx).workspace;
     let names = ProjectNames::read(ctx, workspace, 0);
@@ -153,24 +160,18 @@ impl ConversationTab {
       }
       Err(None) => return (states::loading(ctx, run), None),
     };
-    let mut items = items::build(&Sources {
-      run,
-      entries: &loaded.entries,
-      conversation,
-      pending: &loaded.pending,
-      decided: &loaded.decided,
-      questions: &loaded.questions,
-      merge: task.detail.merge.as_ref(),
-    });
-    continued(&mut items, &loaded.orchestrated);
-    let open = |key: &str, default: bool| self.toggles.is_open(key, default);
-    let shown = timeline::without_usage(view::shown(&items, &Choice::default(), &open, &plain::rendered));
+    let built = self.timeline.of(
+      (run, &task.detail),
+      (&loaded, conversation),
+      self.toggles.open_rows(),
+    );
+    let items = &built.items;
     // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
     // does not work: the run waits for the person, so the line under the chat and the chip say so.
     let asking = live && items.iter().any(items::waits_for_you);
     let following = self.follow.following.get();
     let state = RunState::of(conversation, &task.detail, asking).following(following);
-    if shown.rows.is_empty() {
+    if built.rows.is_empty() {
       return (states::nothing_yet(ctx, run), Some(state));
     }
     self.decisions.follow_runner(task.lost());
@@ -181,7 +182,7 @@ impl ConversationTab {
         .map(|item| item.key.clone()),
     );
     let open = &task.project.open;
-    ctx.provide(Timeline {
+    self.shown.set(Timeline {
       project: open.project.id(),
       chat_project: ChatProject {
         id: open.project.id(),
@@ -199,9 +200,9 @@ impl ConversationTab {
     // Stale as applying would find it: what a message sent now meets, as the chat's own Apply reads the run.
     let offered = message_offer(&task.detail, run.id());
     let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
-    let working = working_line(run, conversation, (&items, &loaded.entries), asking);
-    let arrived = arrivals(&items, &loaded.entries) + proposed.len();
-    let chat = timeline::chat(ctx, &self.follow, (&shown, &items, &proposed), (working, arrived));
+    let working = working_line(run, conversation, (items, &loaded.entries), asking);
+    let arrived = arrivals(items, &loaded.entries) + proposed.len();
+    let chat = timeline::chat(ctx, &self.follow, (&built.rows, items, &proposed), (working, arrived));
     (
       states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
       Some(state),

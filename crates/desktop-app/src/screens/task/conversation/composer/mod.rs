@@ -58,7 +58,7 @@ use self::{
   controls::{Bar, Sending},
   presses::Target,
 };
-use super::TaskContext;
+use super::{TaskContext, shared::Shared};
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
@@ -95,6 +95,22 @@ pub(super) struct Composing {
   writable: bool,
 }
 
+/// Compared by what it shows; the composer's state, the page's for as long as it shows the task, by its draft.
+impl PartialEq for Composing {
+  fn eq(&self, other: &Self) -> bool {
+    self.state.draft.id() == other.state.draft.id()
+      && self.follow == other.follow
+      && self.project == other.project
+      && self.key == other.key
+      && self.detail == other.detail
+      && self.lost == other.lost
+      && self.panel == other.panel
+      && self.writable == other.writable
+  }
+}
+
+impl lurq::app::component::DevtoolsInspectable for Composing {}
+
 impl Composing {
   /// What opens `view` of the task where a press asks (`navigation::link`).
   fn open(&self, ctx: &mut Ctx, view: TaskView) -> Open {
@@ -106,9 +122,14 @@ impl Composing {
 }
 
 /// The composer for `task` as the page read it and `conversation` as the tab reads it, under the chat that
-/// `follow` keeps at its end; it also lets the chat's messages reach the composer, so the tab calls it
-/// before the chat.
-pub(super) fn dock(ctx: &mut Ctx, follow: &Follow, task: &TaskContext, conversation: &Conversation) -> Element {
+/// `follow` keeps at its end; it also lets the chat's messages reach the composer (`shared`, the tab's), so the
+/// tab calls it before the chat.
+pub(super) fn dock(
+  ctx: &mut Ctx,
+  (follow, shared): (&Follow, &Shared<Composing>),
+  task: &TaskContext,
+  conversation: &Conversation,
+) -> Element {
   let state = ctx
     .use_context::<ComposerState>()
     .expect("the task page keeps the composer's state before its tabs");
@@ -124,7 +145,7 @@ pub(super) fn dock(ctx: &mut Ctx, follow: &Follow, task: &TaskContext, conversat
     panel: conversation.state,
     writable: open && task.detail.latest_unreadable.is_none(),
   };
-  ctx.provide(composing.clone());
+  shared.set(composing.clone());
   ctx.mount_keyed::<Composer>(
     &format!("composer-{}", task.key),
     DockProps {

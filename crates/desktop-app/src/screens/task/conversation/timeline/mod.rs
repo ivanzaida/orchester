@@ -44,6 +44,7 @@ use orchester_workspace::tasks::{
 };
 
 use self::proposal::{ProposalProps, ProposalRow};
+use super::shared::Shared;
 pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
   message::person_message,
@@ -60,8 +61,9 @@ use crate::{
   },
 };
 
-/// What the chat's rows share: whose timeline it is, and what a person opened or folded in it.
-#[derive(Clone)]
+/// What the chat's rows share: whose timeline it is, and what a person opened or folded in it. The tab shares it
+/// (`super::shared`), so a row renders again when it changed.
+#[derive(Clone, PartialEq)]
 pub(super) struct Timeline {
   pub(super) project: ProjectId,
   /// The project as the Orchestrator chat's proposals are decided in it.
@@ -79,6 +81,8 @@ pub(super) struct Timeline {
   pub(super) pending: Arc<Vec<PendingToolApproval>>,
   pub(super) decided: Arc<Vec<DecidedToolApproval>>,
 }
+
+impl lurq::app::component::DevtoolsInspectable for Timeline {}
 
 impl Timeline {
   /// Whether a request of `invocation` to run `command` (its first line, as a group names it) waits for the
@@ -108,9 +112,7 @@ impl Timeline {
   }
 
   fn of(ctx: &mut Ctx) -> Self {
-    ctx
-      .use_context::<Self>()
-      .expect("the Conversation tab provides its timeline before its rows")
+    Shared::of(ctx).expect("the Conversation tab shares its timeline before its rows")
   }
 
   /// What opens `view` of the task where a press asks (`navigation::link`).
@@ -137,12 +139,25 @@ pub(super) struct OpenRows(HashMap<Arc<str>, bool>);
 
 impl lurq::app::component::DevtoolsInspectable for OpenRows {}
 
+impl OpenRows {
+  pub(super) fn is_open(&self, key: &str, default: bool) -> bool {
+    self.0.get(key).copied().unwrap_or(default)
+  }
+}
+
 /// Open or folded per row key, where a person changed how the row starts.
 #[derive(Clone)]
 pub(super) struct Toggles {
   rows: Signal<OpenRows>,
   /// A row the person opens or folds stays where it is: the chat stops following.
   follow: Follow,
+}
+
+/// The tab's own handles, the same for as long as the tab is mounted; what they hold is read through them.
+impl PartialEq for Toggles {
+  fn eq(&self, other: &Self) -> bool {
+    self.rows.id() == other.rows.id() && self.follow == other.follow
+  }
 }
 
 impl Toggles {
@@ -154,7 +169,12 @@ impl Toggles {
   }
 
   pub(super) fn is_open(&self, key: &str, default: bool) -> bool {
-    self.rows.get().0.get(key).copied().unwrap_or(default)
+    self.rows.get().is_open(key, default)
+  }
+
+  /// What the person opened or folded so far; reading it in a render re-renders it when they open or fold a row.
+  pub(super) fn open_rows(&self) -> OpenRows {
+    self.rows.get()
   }
 
   /// Opens every row of `keys`, as *Show them* does for the steps of a fold.
@@ -180,7 +200,8 @@ impl Toggles {
 /// What a row of the list shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Line {
-  Row(Box<Row>),
+  /// Shared with the tab's built timeline (`super::built`), so a render of the list copies none of it.
+  Row(Arc<Row>),
   /// An answer or a message the Orchestrator chat proposed for the run and no one applied ([`proposal`]).
   Proposal(Box<Proposal>),
   /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
@@ -216,14 +237,14 @@ impl RowProps {
   }
 }
 
-/// The chat of `shown`, the rows of the timeline `items`, then the Orchestrator chat's `proposals` for the run, then
+/// The chat of `rows`, what the timeline `items` show, then the Orchestrator chat's `proposals` for the run, then
 /// `working`, the working line while an agent works; *Jump to latest* under it while it does not follow the run, with
 /// what arrived since (`arrived` counts the transcript's entries, the conversation's messages and the proposals so
 /// far).
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
-  (shown, items, proposals): (&Shown, &[Item], &[Proposal]),
+  (rows, items, proposals): (&[Arc<Row>], &[Item], &[Proposal]),
   (working, arrived): (Option<Working>, usize),
 ) -> Element {
   // Until the person scrolls, the first card that waits for them opens the chat instead of its end.
@@ -231,12 +252,11 @@ pub(super) fn chat(
     .iter()
     .find(|item| waits_for_you(item))
     .map(|item| item.key.to_string());
-  let reveal = follow.follow(shown.rows.len(), arrived, waiting);
+  let reveal = follow.follow(rows.len(), arrived, waiting);
   let rows: Arc<Vec<RowProps>> = Arc::new(
-    shown
-      .rows
+    rows
       .iter()
-      .map(|row| Line::Row(Box::new(row.clone())))
+      .map(|row| Line::Row(row.clone()))
       .chain(
         proposals
           .iter()

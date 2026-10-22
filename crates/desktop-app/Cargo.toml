@@ -18,6 +18,9 @@ workspace = true
 default = []
 # In-app DevTools, opened as a secondary window at startup.
 devtools = ["lurq/devtools"]
+# lurq's frame timing: profile sessions over the MCP server (`lurq_profile_start`) and in headless tests
+# (`tests/orchestrator/open_long.rs`).
+perf_profile = ["lurq/perf_profile"]
 
 [dependencies]
 # The Usage page's days (`orchester_core::usage::DayRange`) read as month, day and weekday; already built

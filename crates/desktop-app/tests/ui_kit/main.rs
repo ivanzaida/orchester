@@ -13,5 +13,7 @@ mod harness;
 mod icons;
 mod labels;
 mod loader;
+mod markdown_link_layout;
 mod prompt_input;
 mod textarea_focus;
+mod virtualized_list;

@@ -6,8 +6,8 @@
 #
 # 1. Builds the QA app (examples/qa_app: the app's own window, signed in to a stand-in Orchester Cloud on loopback
 #    with its token in a keychain in memory, past the sign-in gate; -SignedOut stops at the gate, with that stand-in
-#    as the cloud), the seed example and orchester-runner (-FakeAgents: the runner with its `test-agent` binaries,
-#    orchester-fake-codex among them; -NoRunner: no runner).
+#    as the cloud; with lurq's `perf_profile`, for profile sessions), the seed example and orchester-runner
+#    (-FakeAgents: the runner with its `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
 # 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them; the QA app as
 #    orchester-app-qa.
 # 3. Seeds a new repository .tmp/qa/<task>/repo-<scenario> (examples/seed; -FakeAgents points the
@@ -35,7 +35,7 @@ param(
     # The seed's scenarios (crates/desktop-app/examples/seed/kontur/scenarios/mod.rs), checked before
     # anything under .tmp/qa/<task>/ is replaced.
     [Parameter(Mandatory = $true)]
-    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "usage", "usage-empty", "usage-bare")]
+    [ValidateSet("empty", "tasks", "tasks-memory", "memory-only", "memory", "task-states", "conversation", "long-chats", "changes", "cards", "decisions", "interrupted", "unreadable-db", "tasks-unreadable", "live", "lifecycle", "connections", "api-providers", "agents", "agents-empty", "agents-no-connections", "agents-unreadable", "pipelines", "pipelines-empty", "accounts", "pull-requests", "usage", "usage-empty", "usage-bare")]
     [string]$Scenario,
     [switch]$FakeAgents,
     [switch]$NoRunner,
@@ -104,7 +104,8 @@ if (Test-Path $bin) {
 
 Push-Location $repositoryRoot
 try {
-    cargo build -p orchester-app --example qa_app --example seed
+    # With lurq's frame timing, so a QA copy can be profiled over its MCP server (`lurq_profile_start`).
+    cargo build -p orchester-app --features perf_profile --example qa_app --example seed
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     if ($FakeAgents) {
         cargo build -p orchester-runner --features test-agent --bins

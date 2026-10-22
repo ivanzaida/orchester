@@ -16,6 +16,7 @@ mod jump;
 mod kontur;
 mod links;
 mod long;
+mod open_long;
 mod qa_slot;
 mod references;
 mod states;

@@ -39,6 +39,7 @@ use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
 pub mod link_press;
+pub mod profile;
 pub mod reads;
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 pub mod runner_programs;

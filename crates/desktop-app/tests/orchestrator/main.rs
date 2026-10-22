@@ -15,6 +15,7 @@ mod follow;
 mod harness;
 mod history;
 mod links;
+mod open_long;
 mod proposal;
 mod queue;
 mod references;
