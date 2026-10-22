@@ -1,9 +1,9 @@
 //! A status tab of the project's page: what the tab is (*Waiting for approval* `oX9TR` in `CIThk`, *Active* `UZ2TJ`
 //! in `TeKGM`), the search and the *Type*, *Author* and *Tag* filters, and its records. *Waiting for approval* lists
 //! every proposal of the project and its tasks, oldest first, each with *Reject*, *Edit* and *Approve* in place; the
-//! others list the project's records of their statuses grouped by type, pinned first, each opening its details in
-//! place. A tab without records says so instead, without its search and filters (`ejSHj`); one whose search finds
-//! nothing names the tabs that hold matches (`tab_no_match`).
+//! others list the project's records of their statuses, pinned first, each opening its details in place, *Active*
+//! grouped by type and the rest in one list. A tab without records says so instead, without its search and filters
+//! (`ejSHj`); one whose search finds nothing names the tabs that hold matches (`tab_no_match`).
 
 use std::sync::Arc;
 
@@ -84,7 +84,7 @@ pub fn body(ctx: &mut Ctx, state: &MemoryState, shown: Shown<'_>) -> Column {
   let records = if tab == MemoryTab::Waiting {
     proposals(ctx, state, memory, &filters)
   } else {
-    records(ctx, state, memory, &filters)
+    records(ctx, state, (memory, tab), &filters)
   };
   match records {
     Some(records) => column.child(records),
@@ -154,8 +154,14 @@ fn proposals(ctx: &mut Ctx, state: &MemoryState, memory: &ProjectMemory, filters
   Some(list.into())
 }
 
-/// The project's records `filters` show, grouped by type, pinned first (`Fqhrb`); `None` when they show none.
-fn records(ctx: &mut Ctx, state: &MemoryState, memory: &Arc<ProjectMemory>, filters: &Filters) -> Option<Element> {
+/// The project's records `filters` show, pinned first: *Active* groups them by type (`Fqhrb`), the other tabs list
+/// them without headings (`hxQhj`); `None` when they show none.
+fn records(
+  ctx: &mut Ctx,
+  state: &MemoryState,
+  (memory, tab): (&Arc<ProjectMemory>, MemoryTab),
+  filters: &Filters,
+) -> Option<Element> {
   let input = ListInput {
     records: &memory.records,
     origins: &memory.origins,
@@ -163,7 +169,11 @@ fn records(ctx: &mut Ctx, state: &MemoryState, memory: &Arc<ProjectMemory>, filt
     task_tab: false,
     project: Some(memory),
   };
-  let groups = list::groups(ctx, state, input);
+  let groups = if tab == MemoryTab::Active {
+    list::groups(ctx, state, input)
+  } else {
+    list::flat(ctx, state, input)
+  };
   if groups.is_empty() {
     return None;
   }

@@ -177,11 +177,17 @@ pub struct Listed<'a> {
   pub records: Vec<&'a Memory>,
 }
 
+/// The records of `records` that `filters` show in one list, pinned first, then oldest first.
+pub fn flat<'a>(records: &'a [Memory], filters: &Filters) -> Vec<&'a Memory> {
+  let mut shown: Vec<&Memory> = records.iter().filter(|memory| filters.shows(memory)).collect();
+  shown.sort_by_key(|memory| (!memory.is_pinned(), memory.created_at()));
+  shown
+}
+
 /// The records of `records` that `filters` show, grouped: the waiting ones first when `waiting_first`, then one
 /// group per type in [`KIND_ORDER`]; empty groups are left out.
 pub fn grouped<'a>(records: &'a [Memory], filters: &Filters, waiting_first: bool) -> Vec<Listed<'a>> {
-  let mut shown: Vec<&Memory> = records.iter().filter(|memory| filters.shows(memory)).collect();
-  shown.sort_by_key(|memory| (!memory.is_pinned(), memory.created_at()));
+  let shown = flat(records, filters);
   let waiting = |memory: &&Memory| waiting_first && memory.status() == MemoryStatus::Proposed;
   let mut groups = Vec::new();
   let proposals: Vec<&Memory> = shown.iter().copied().filter(waiting).collect();

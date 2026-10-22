@@ -75,6 +75,15 @@ pub fn groups(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>) -> Vec<E
     .collect()
 }
 
+/// `input`'s records in one list without group headings, as the project page's *Deprecated*, *Superseded* and
+/// *Rejected* tabs show them (`hxQhj` in `C0OJpC`).
+pub fn flat(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>) -> Vec<Element> {
+  listing::flat(input.records, input.filters)
+    .into_iter()
+    .map(|memory| entry(ctx, state, input, (memory, None)))
+    .collect()
+}
+
 fn group(
   ctx: &mut Ctx,
   state: &MemoryState,

@@ -1,7 +1,8 @@
 //! The project's Memory page's tabs (`Memory with tabs` `wMr98`): their order with and without waiting proposals
 //! (`HFISx` in `C0OJpC`), Approve and Reject in *Waiting for approval* moving a record to its tab, a search with no
 //! match in the open tab naming the tab that holds one and opening it with the search kept (`vUhJo`), and nothing
-//! past the window's right edge at 1440 and at 960 wide (`CIThk`, `ghfRl`).
+//! past the window's right edge at 1440 and at 960 wide (`CIThk`, `ghfRl`). Only *Active* groups its records by type;
+//! *Rejected* lists them without headings (`hxQhj`).
 
 use orchester_app::routes::{MemoryTab, ProjectPage, Route};
 use orchester_core::memory::MemoryStatus;
@@ -94,6 +95,28 @@ fn memory_waiting_tab_rejects_in_place_and_the_record_moves_to_rejected() {
   let row = format!("memory-record-{typed}");
   assert!(page.has(&row));
   assert_eq!(page.text(&format!("{row}-status")), "Rejected");
+}
+
+#[test]
+fn memory_rejected_tab_lists_without_type_headings_while_active_groups_by_type() {
+  let mut page = Page::seeded("memory");
+  let engine = page.record("Kontur keeps its data in SQLite");
+  page.memory_tab(MemoryTab::Active);
+  assert!(
+    page.has(&format!("memory-group-{}", engine.content().kind().name())),
+    "Active groups its records by type"
+  );
+  let rejected = page
+    .records()
+    .into_iter()
+    .find(|record| record.status() == MemoryStatus::Rejected)
+    .expect("the seed's rejected record");
+  page.memory_tab(MemoryTab::Rejected);
+  assert!(page.has(&format!("memory-record-{}", rejected.id())));
+  assert!(
+    !page.has(&format!("memory-group-{}", rejected.content().kind().name())),
+    "Rejected is one list without type headings (`hxQhj`)"
+  );
 }
 
 #[test]
