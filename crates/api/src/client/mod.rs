@@ -8,6 +8,7 @@
 mod address;
 mod cloud;
 mod error;
+mod modules;
 mod pinned;
 mod recorded;
 mod sharing;

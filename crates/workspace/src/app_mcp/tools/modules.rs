@@ -1,6 +1,6 @@
 //! `list_modules`, `get_module`, `create_module` and `update_module`: a project's modules as the Modules list and a
 //! module's page show them (progress, tasks, the burndown by local day), and modules made and changed as the module
-//! form does, through the project's [`TaskWriter`]. A shared project has no modules: its tasks change on the server.
+//! form does, through the project's [`TaskWriter`], which makes a shared project's on its server.
 
 use orchester_core::{
   id::ProjectId,

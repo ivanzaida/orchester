@@ -25,8 +25,8 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, CachedClaim, CachedRunStatus, CachedTask,
-  ChatListing, ChatTurn, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport, KeptWait, NotSent, ProjectDb,
-  ReadOnlyProjectDb, ResolutionStart, ResourceUpdate, ReturnedTask, RunBranch, SharedMember, SharedPerson,
-  SharedTaskInfo, SharingLink, UnsentStatus, attachment_file, exclude_project_data,
+  AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, CachedClaim, CachedModule, CachedModuleChange,
+  CachedRunStatus, CachedTask, ChatListing, ChatTurn, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport,
+  KeptWait, NotSent, ProjectDb, ReadOnlyProjectDb, ResolutionStart, ResourceUpdate, ReturnedTask, RunBranch,
+  SharedMember, SharedPerson, SharedTaskInfo, SharingLink, UnsentStatus, attachment_file, exclude_project_data,
 };

@@ -1,6 +1,7 @@
 //! `modules`, `task_modules` and `module_changes`: a project's modules, the module each task is in, and every move
-//! of a task into or out of one (`orchester_core::module`). Modules are made on this computer only: a shared
-//! project's task list and its tasks change on the server, which has no modules.
+//! of a task into or out of one (`orchester_core::module`). These writes are a local project's: a shared project's
+//! modules and its tasks' modules change on the server, and the cache takes what it confirmed
+//! ([`super::shared_modules`]).
 
 use orchester_core::{
   id::{ModuleId, TaskId},
@@ -198,7 +199,7 @@ fn task_module(connection: &Connection, task: TaskId) -> Result<Option<ModuleId>
 }
 
 /// Names are distinct without regard to case, as tags are.
-fn normalized(name: &Name) -> String {
+pub(super) fn normalized(name: &Name) -> String {
   name.as_str().to_lowercase()
 }
 
@@ -218,14 +219,14 @@ fn unique_name(connection: &Connection, name: &Name, except: Option<ModuleId>) -
   Ok(())
 }
 
-const fn state_text(state: ModuleState) -> &'static str {
+pub(super) const fn state_text(state: ModuleState) -> &'static str {
   match state {
     ModuleState::Open => "open",
     ModuleState::Closed => "closed",
   }
 }
 
-const fn actor_text(actor: ChangeActor) -> &'static str {
+pub(super) const fn actor_text(actor: ChangeActor) -> &'static str {
   match actor {
     ChangeActor::Person => "person",
     ChangeActor::Orchester => "orchester",

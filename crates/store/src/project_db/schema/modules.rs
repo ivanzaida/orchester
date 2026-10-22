@@ -2,6 +2,21 @@
 //! every move of a task into or out of a module, which a module's burndown reads its scope changes from. Dates are
 //! local days, `YYYY-MM-DD`.
 
+/// Modules in a shared project (ORC-78, `docs/architecture/server.md`, "Modules"): the cache keeps each module's
+/// server revision (none while the project is local) and each move the server kept by its sequence there. A local
+/// module that joins the server's module of its name takes that module's id, in its moves too: the moves stay
+/// append-only otherwise.
+pub(super) const SHARED_MIGRATION: &str = r"
+ALTER TABLE modules ADD COLUMN revision INTEGER CHECK (revision IS NULL OR revision > 0);
+ALTER TABLE module_changes ADD COLUMN server_sequence INTEGER;
+CREATE UNIQUE INDEX module_changes_server ON module_changes (server_sequence) WHERE server_sequence IS NOT NULL;
+DROP TRIGGER module_changes_no_update;
+CREATE TRIGGER module_changes_no_update BEFORE UPDATE ON module_changes
+WHEN NEW.sequence IS NOT OLD.sequence OR NEW.task_id IS NOT OLD.task_id OR NEW.actor IS NOT OLD.actor
+  OR NEW.changed_at IS NOT OLD.changed_at OR NEW.server_sequence IS NOT OLD.server_sequence
+BEGIN SELECT RAISE(ABORT, 'module changes are append-only'); END;
+";
+
 pub(super) const MIGRATION: &str = r"
 CREATE TABLE modules (
   id TEXT PRIMARY KEY,

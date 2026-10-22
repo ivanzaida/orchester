@@ -1,6 +1,7 @@
 //! *Share* (`docs/architecture/server.md`, "Migration", rows 12 and 49; design 10.11, 10.12): an admin made the
 //! server project, empty, in the server admin; the first checkout linked to it uploads every task with its number,
-//! its organization (tags by name) and its pipeline's slug, in one request, and its `origin` becomes the project's
+//! its organization (tags by name), its module and its pipeline's slug, with every module of the project, in one
+//! request, and its `origin` becomes the project's
 //! remote hint when it has none. Tasks with a run that has not ended are claimed for
 //! the person. The cache then holds what the server confirmed, and the project shares its task list
 //! from here on. The request is idempotent by the key the confirmation was opened with, so a retry
@@ -246,7 +247,14 @@ impl Servers {
         .iter()
         .map(convert::cached)
         .collect::<Result<Vec<_>, _>>()?;
-      let changed = ProjectDb::open(&root)?.start_sharing(&stored, &tags, (&tasks, &uploaded))?;
+      let modules = linked
+        .modules
+        .iter()
+        .map(convert::cached_module)
+        .collect::<Result<Vec<_>, _>>()?;
+      let mut db = ProjectDb::open(&root)?;
+      db.adopt_shared_modules(&modules)?;
+      let changed = db.start_sharing(&stored, &tags, (&tasks, &uploaded))?;
       if let Err(error) = reapply(&servers, &root, changed) {
         tracing::error!(%error, "a run's change made while the project was shared was not sent");
       }
@@ -332,6 +340,7 @@ fn upload(
     idempotency_key: key,
     tasks,
     remote: remote.map(|identity| identity.as_str().to_owned()),
+    modules: db.modules()?.iter().map(convert::upload_module).collect(),
   };
   Ok((link, revisions))
 }
@@ -374,6 +383,7 @@ pub(super) fn upload_task(
       .collect(),
     blocking: organization.blocking,
     blocked_reason: organization.blocked_reason,
+    module: task.module(),
     status: task.status(),
     created_at: task.created_at().unix_millis(),
     claim: db.active_task_run(task.id())?.is_some(),

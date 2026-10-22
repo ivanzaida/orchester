@@ -204,7 +204,7 @@ impl Servers {
       .map_err(failed(Some(false)))?;
     let held = upload.held;
     let mut dropped = Vec::new();
-    if !upload.import.tasks.is_empty() {
+    if !upload.import.tasks.is_empty() || !upload.import.modules.is_empty() {
       let names: HashMap<TaskId, String> = upload
         .import
         .tasks
@@ -256,6 +256,11 @@ impl Servers {
     let tags = self
       .with_token(entry, |client, token| async move { client.tags(&token, project).await })
       .await?;
+    let modules = self
+      .with_token(entry, |client, token| async move {
+        client.modules(&token, project, 0).await
+      })
+      .await?;
     let tasks = self
       .with_token(
         entry,
@@ -278,7 +283,17 @@ impl Servers {
     let open = background::run(move || -> Result<OpenProject, SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
       let cached = tasks.tasks.iter().map(convert::cached).collect::<Result<Vec<_>, _>>()?;
-      let changed = ProjectDb::open(&root)?.join_sharing(&link, (&tags, &cached), (&read.0, &read.1))?;
+      let shared_modules = modules
+        .modules
+        .iter()
+        .map(convert::cached_module)
+        .collect::<Result<Vec<_>, _>>()?;
+      let mut db = ProjectDb::open(&root)?;
+      // The local modules took the server's ids of their names, so the tasks the server has name modules here.
+      db.adopt_shared_modules(&shared_modules)?;
+      let changed = db.join_sharing(&link, (&tags, &cached), (&read.0, &read.1))?;
+      let moves: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
+      db.cache_module_changes(&moves)?;
       if let Err(error) = share::reapply(&servers, &root, changed) {
         tracing::error!(%error, "a run's change made while the project joined was not sent");
       }
@@ -372,6 +387,8 @@ fn upload(
     import: TasksImport {
       idempotency_key: key,
       tasks,
+      // Every module goes up, so none stays only here: one of a name the server project has becomes that one.
+      modules: db.modules()?.iter().map(convert::upload_module).collect(),
     },
     claimed,
     revisions,

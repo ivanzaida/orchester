@@ -5,6 +5,7 @@ pub(crate) mod events;
 pub(crate) mod limits;
 pub(crate) mod managed;
 pub(crate) mod members;
+pub(crate) mod modules;
 pub(crate) mod organization;
 pub(crate) mod projects;
 pub(crate) mod tags;

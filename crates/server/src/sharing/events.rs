@@ -37,10 +37,12 @@ pub fn task(
   )
 }
 
+/// Forgets events, and the first answers kept by idempotency key, older than the retention.
 pub fn prune(db: &Connection, now: i64) -> Result<(), ServerError> {
   let cutoff = now.saturating_sub(RETENTION_MS);
   db.execute("UPDATE projects SET event_floor=MAX(event_floor,COALESCE((SELECT MAX(sequence) FROM events INDEXED BY events_project_retention WHERE project=projects.id AND at<?1),0))",[cutoff])?;
   db.execute("DELETE FROM events WHERE at<?1", [cutoff])?;
+  db.execute("DELETE FROM change_keys WHERE at<?1", [cutoff])?;
   Ok(())
 }
 

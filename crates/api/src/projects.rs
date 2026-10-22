@@ -98,8 +98,8 @@ pub struct ProjectChanges {
   pub remote_hint: Option<String>,
 }
 
-/// `POST /projects/{id}/link`: a checkout linked to the project uploads its tasks. Into a project with no tasks they
-/// keep their numbers; otherwise they are imported with new ones.
+/// `POST /projects/{id}/link`: a checkout linked to the project uploads its tasks and its modules. Into a project with no
+/// tasks they keep their numbers; otherwise they are imported with new ones.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectLink {
@@ -107,6 +107,8 @@ pub struct ProjectLink {
   pub tasks: Vec<UploadTask>,
   /// The checkout's `origin`, the project's `remote_hint` while it has none. Untrusted; may contain credentials.
   pub remote: Option<String>,
+  #[serde(default)]
+  pub modules: Vec<crate::UploadModule>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,6 +116,11 @@ pub struct ProjectLinked {
   pub tasks: Vec<SharedTask>,
   pub dropped_links: Vec<DroppedLink>,
   pub cursor: u64,
+  /// The project's modules after the upload, and the uploaded ones that became a module of their name.
+  #[serde(default)]
+  pub modules: Vec<crate::SharedModule>,
+  #[serde(default)]
+  pub mapped: Vec<crate::MappedModule>,
 }
 
 #[derive(Serialize, Deserialize)]

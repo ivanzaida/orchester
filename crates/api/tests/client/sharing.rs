@@ -35,6 +35,7 @@ fn upload(number: u32, title: &str, claim: bool) -> UploadTask {
     tag_names: vec!["Desktop".into()],
     blocking: Vec::new(),
     blocked_reason: None,
+    module: None,
     status: TaskStatus::Draft,
     created_at: 1,
     claim,

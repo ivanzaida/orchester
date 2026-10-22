@@ -180,10 +180,12 @@ pub(crate) fn status_message(code: ErrorCode) -> (StatusCode, &'static str) {
     | ErrorCode::ClaimNotStale
     | ErrorCode::ClaimChanged
     | ErrorCode::TagExists
-    | ErrorCode::SameTag => (StatusCode::CONFLICT, "Conflicting project state"),
+    | ErrorCode::SameTag
+    | ErrorCode::ModuleExists => (StatusCode::CONFLICT, "Conflicting project state"),
     ErrorCode::NotEditable | ErrorCode::NotQueueable | ErrorCode::Organization => {
       (StatusCode::UNPROCESSABLE_ENTITY, "Task change refused")
     }
+    ErrorCode::Module => (StatusCode::UNPROCESSABLE_ENTITY, "Module change refused"),
     ErrorCode::InvalidIdentity => (StatusCode::UNAUTHORIZED, "Invalid identity token"),
     ErrorCode::InvalidCode => (StatusCode::UNAUTHORIZED, "Invalid code"),
     ErrorCode::NotInvited => (StatusCode::FORBIDDEN, "No account or invite for this identity"),

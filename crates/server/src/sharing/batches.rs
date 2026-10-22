@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use orchester_api::{DroppedLink, ErrorCode, TaskContent, TasksCreated, UploadTask};
+use orchester_api::{DroppedLink, ErrorCode, MappedModule, TaskContent, TasksCreated, UploadModule, UploadTask};
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, TaskId, UserId},
   task::{
@@ -11,7 +11,7 @@ use orchester_core::{
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{
-  claims, decode, encode, events, organization, tags, task_rows,
+  claims, decode, encode, events, modules, organization, tags, task_rows,
   task_write::{self, NewTask},
 };
 use crate::error::ServerError;
@@ -69,6 +69,7 @@ pub fn create(
   let mut tasks = Vec::new();
   for mut content in contents {
     task_write::validate(&mut content)?;
+    modules::check(db, project, content.module)?;
     tasks.push(NewTask {
       id: TaskId::generate(),
       number: u32::try_from(next).map_err(|_| ErrorCode::Invalid)?,
@@ -89,7 +90,7 @@ pub fn create(
       tasks,
       next,
       dropped_links: Vec::new(),
-      uploaded: false,
+      mapped: None,
     },
     now,
   )?;
@@ -102,25 +103,28 @@ pub fn import(
   project: ProjectId,
   user: UserId,
   key: IdempotencyKey,
-  input: Vec<UploadTask>,
+  upload_of: (Vec<UploadTask>, Vec<UploadModule>),
   now: i64,
 ) -> Result<TasksCreated, ServerError> {
   if let Some(response) = repeated(db, project, key)? {
     return Ok(response);
   }
-  let response = upload(db, project, user, input, false, now)?;
+  let response = upload(db, project, user, upload_of, false, now)?;
   remember(db, project, key, user, &response)?;
   Ok(response)
 }
 
+/// Uploads `input` with the `modules` they name: each uploaded module becomes the project's module of its name, or a
+/// new one with its id.
 pub fn upload(
   db: &Connection,
   project: ProjectId,
   user: UserId,
-  input: Vec<UploadTask>,
+  (input, modules): (Vec<UploadTask>, Vec<UploadModule>),
   keep_numbers: bool,
   now: i64,
 ) -> Result<TasksCreated, ServerError> {
+  let module_ids = modules::upload(db, project, user, modules, now)?;
   let mut known: HashSet<_> = task_rows::ids(db, project)?.into_iter().collect();
   let mut incoming = HashSet::new();
   for task in &input {
@@ -163,7 +167,8 @@ pub fn upload(
     if u64::from(number) >= next {
       next = u64::from(number) + 1;
     }
-    let content = upload_content(db, project, task, &known, &mut dropped)?;
+    let mut content = upload_content(db, project, task, &known, &mut dropped)?;
+    content.content.module = modules::resolve(db, project, &module_ids, content.content.module)?;
     tasks.push(NewTask { number, ..content });
   }
   insert(
@@ -174,7 +179,7 @@ pub fn upload(
       tasks,
       next,
       dropped_links: dropped,
-      uploaded: true,
+      mapped: Some(modules::mapped(&module_ids)),
     },
     now,
   )
@@ -214,6 +219,7 @@ fn upload_content(
     tags,
     blocking,
     blocked_reason: task.blocked_reason,
+    module: task.module,
   };
   task_write::validate(&mut content)?;
   if task.status == TaskStatus::Queued || task.claim || task.has_run {
@@ -242,7 +248,8 @@ struct PreparedBatch {
   tasks: Vec<NewTask>,
   next: u64,
   dropped_links: Vec<DroppedLink>,
-  uploaded: bool,
+  /// For an upload: the uploaded modules that became another module of the project.
+  mapped: Option<Vec<MappedModule>>,
 }
 
 fn insert(
@@ -256,8 +263,9 @@ fn insert(
     tasks,
     next,
     dropped_links,
-    uploaded,
+    mapped,
   } = batch;
+  let uploaded = mapped.is_some();
   for task in &tasks {
     task_write::insert(db, project, user, task, now)?;
   }
@@ -312,5 +320,11 @@ fn insert(
   Ok(TasksCreated {
     tasks: snapshots,
     dropped_links,
+    modules: if uploaded {
+      modules::list(db, project)?
+    } else {
+      Vec::new()
+    },
+    mapped: mapped.unwrap_or_default(),
   })
 }

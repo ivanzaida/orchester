@@ -1,6 +1,7 @@
 //! Bringing a shared project's cache up to the server (`docs/architecture/server.md`, "Live
-//! updates"): its project, tags and tasks are read and written to the cache, with when it last
-//! matched. Until the live event stream (S2d) this runs when the project is opened, every minute
+//! updates"): its project, tags, modules and tasks are read and written to the cache, with when it last
+//! matched, then the moves of tasks into and out of modules the cache does not have yet. Until the live event stream
+//! (S2d) this runs when the project is opened, every minute
 //! and when the person asks (*Try now*, *Check again*). A server that answers `404` for the project
 //! no longer has the person as a member (10.44); the cache then says since when. The workflow
 //! statuses this computer's runs reached go to the server then ([`super::automatic`]).
@@ -9,7 +10,7 @@ use orchester_api::ErrorCode;
 use orchester_core::time::Timestamp;
 use orchester_store::ProjectDb;
 
-use super::{ProjectServer, organization::tag, store::RemoteTaskStore};
+use super::{ProjectServer, convert, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
   sharing::{ProjectAddress, SharingError},
@@ -32,6 +33,11 @@ impl ProjectServer {
     let tags = self
       .call(|client, token, project| async move { client.tags(&token, project).await })
       .await?;
+    let root = self.repo_root.clone();
+    let after = background::run(move || ProjectDb::open(&root)?.last_module_change()).await??;
+    let modules = self
+      .call(|client, token, project| async move { client.modules(&token, project, after).await })
+      .await?;
     let tasks = self
       .call(|client, token, project| async move { client.tasks(&token, project).await })
       .await?;
@@ -47,9 +53,17 @@ impl ProjectServer {
     };
     background::run(move || -> Result<(), SharingError> {
       let tags = tags.iter().map(tag).collect::<Result<Vec<_>, _>>()?;
+      let cached = modules
+        .modules
+        .iter()
+        .map(convert::cached_module)
+        .collect::<Result<Vec<_>, _>>()?;
+      let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
       store.db.cache_shared_tags(&tags)?;
+      store.db.cache_shared_modules(&cached)?;
       store.cache(&tasks.tasks, None)?;
+      store.db.cache_module_changes(&changes)?;
       store
         .db
         .record_sharing_state(project.role, Some(Timestamp::now()), None)?;

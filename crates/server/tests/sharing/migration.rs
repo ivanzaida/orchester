@@ -25,7 +25,7 @@ async fn s1b_forward_migration_preserves_account_audit_and_is_idempotent() {
       .database()
       .query_row("SELECT schema_version FROM meta", [], |row| row.get::<_, i64>(0))
       .expect("version"),
-    6
+    7
   );
   assert_eq!(
     server
