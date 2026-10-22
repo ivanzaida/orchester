@@ -67,8 +67,8 @@ pub struct GetUsage {
   /// Only this model.
   #[serde(default)]
   pub model: Option<String>,
-  /// Only usage that started on this CLI account, by its id, or `none` for usage on no account (auto mode's
-  /// reviewer, native agents, command tools, runs from before accounts were recorded).
+  /// Only usage that started on this CLI account, by its id, or `none` for usage on no account (native agents and
+  /// reviewers, command tools, runs and reviews from before accounts were recorded).
   #[serde(default)]
   pub account: Option<String>,
 }

@@ -1,5 +1,5 @@
 //! What auto mode's reviewer spends (decided 2026-10-07): every review that asked a model is recorded
-//! with the request it judged ([`ReviewRecord`]): the provider and model, the tokens its provider
+//! with the request it judged ([`ReviewRecord`]): the provider, account and model, the tokens its provider
 //! reported, when it ran and how it ended. Its tokens count like an agent's turn: toward the run's and
 //! the step's budgets, the project's daily budget and the Usage dashboard. What a review spent but did
 //! not report readably is unknown, never zero: it is recorded as unknown and counts nowhere.
@@ -7,7 +7,7 @@
 use super::{Review, ReviewError, ReviewFailure, ReviewVerdict};
 use crate::{
   connection::{AgentProvider, plan_limits::PlanLimits},
-  id::{InvocationId, RunId, StepExecutionId},
+  id::{AgentAccountId, InvocationId, RunId, StepExecutionId},
   resource::ModelId,
   run::TokenUsage,
   time::Timestamp,
@@ -106,6 +106,9 @@ pub struct ReviewRecord {
   /// The request's id.
   pub approval: String,
   pub provider: AgentProvider,
+  /// The CLI account the reviewer's connection ran on; `None` for a native reviewer, a provider without
+  /// accounts, or a review recorded before the account was kept.
+  pub account: Option<AgentAccountId>,
   pub model: ModelId,
   pub started_at: Timestamp,
   pub ended_at: Timestamp,

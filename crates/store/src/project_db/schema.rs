@@ -44,6 +44,7 @@ mod questions;
 mod queue_holds;
 mod recovery;
 mod returned_after_end;
+mod reviewer_accounts;
 mod reviewer_usage;
 mod run_rebases;
 mod run_resolutions;

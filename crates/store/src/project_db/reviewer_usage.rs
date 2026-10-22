@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  id::RunId,
+  id::{AgentAccountId, RunId},
   resource::ModelId,
   run::{
     TokenUsage,
@@ -26,7 +26,8 @@ use crate::{
 };
 
 const SELECT: &str = "SELECT run_id, step_execution_id, invocation_id, approval_id, provider, model, started_at, \
-                      ended_at, input_tokens, cached_input_tokens, output_tokens, verdict FROM reviewer_usage";
+                      ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id \
+                      FROM reviewer_usage";
 
 impl ProjectDb {
   /// Stores what one review cost.
@@ -39,8 +40,8 @@ impl ProjectDb {
     };
     self.connection.execute(
       "INSERT INTO reviewer_usage (run_id, step_execution_id, invocation_id, approval_id, provider, model, started_at, \
-       ended_at, input_tokens, cached_input_tokens, output_tokens, verdict) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+       ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
       params![
         record.run.to_string(),
         record.execution.to_string(),
@@ -54,6 +55,7 @@ impl ProjectDb {
         tokens(|usage| usage.cached_input)?,
         tokens(|usage| usage.output)?,
         verdict_text(record.end),
+        record.account.map(|account| account.to_string()),
       ],
     )?;
     Ok(())
@@ -86,6 +88,7 @@ impl ProjectDb {
           at: record.ended_at,
           invocation: record.invocation,
           cli: record.provider,
+          account: record.account,
           model: Arc::from(record.model.as_str()),
           usage,
         });
@@ -153,6 +156,7 @@ struct RecordRow {
   ended_at: i64,
   tokens: [Option<i64>; 3],
   verdict: String,
+  account: Option<String>,
 }
 
 impl RecordRow {
@@ -165,6 +169,7 @@ impl RecordRow {
       ended_at: row.get(7)?,
       tokens: [row.get(8)?, row.get(9)?, row.get(10)?],
       verdict: row.get(11)?,
+      account: row.get(12)?,
     })
   }
 
@@ -181,6 +186,10 @@ impl RecordRow {
       invocation: parse("invocation id", &invocation)?,
       approval,
       provider: parse_provider(&self.provider)?,
+      account: self
+        .account
+        .map(|account| parse::<AgentAccountId>("account id", &account))
+        .transpose()?,
       model: ModelId::new(&self.model).map_err(|error| corrupt("reviewer model", error))?,
       started_at: Timestamp::from_unix_millis(self.started_at),
       ended_at: Timestamp::from_unix_millis(self.ended_at),

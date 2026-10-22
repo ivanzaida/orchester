@@ -2,8 +2,8 @@
 //! tokens and active agent time per hour or day, task, pipeline, step, agent profile, model or account.
 //! A turn counts in the group of the invocation it belongs to; a review of auto mode's reviewer counts
 //! under its run's task and pipeline and the step whose request it judged, as its own agent with its model,
-//! and under no account. Active time is the invocations': per hour or day it is each one's part of that
-//! stretch, as the range's is (`report::active_between`).
+//! and under the account it ran on. Active time is the invocations': per hour or day it is each one's part
+//! of that stretch, as the range's is (`report::active_between`).
 
 use std::{
   collections::{HashMap, HashSet},
@@ -62,8 +62,8 @@ pub enum GroupKey {
   Reviewer(Arc<str>),
   /// `None` for command tools.
   Model(Option<Arc<str>>),
-  /// `None` where no account was recorded: a native agent, a command tool, a reviewer, or an invocation
-  /// from before accounts.
+  /// `None` where no account was recorded: a native agent, a command tool, a native reviewer, or an
+  /// invocation or a review from before accounts were kept.
   Account(Option<AgentAccountId>),
 }
 
@@ -205,7 +205,7 @@ fn key_of_turn(turn: &Turn<'_>, facet: Facet) -> GroupKey {
   match (facet, turn.by) {
     (Facet::Agent, Spender::Reviewer { model, .. }) => GroupKey::Reviewer(model.clone()),
     (Facet::Model, _) => GroupKey::Model(turn.model().cloned()),
-    (Facet::Account, Spender::Reviewer { .. }) => GroupKey::Account(None),
+    (Facet::Account, _) => GroupKey::Account(turn.account()),
     _ => key_of_launch(turn.launch, facet),
   }
 }

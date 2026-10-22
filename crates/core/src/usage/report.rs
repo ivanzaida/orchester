@@ -120,7 +120,11 @@ pub(super) enum Spender<'a> {
   /// The invocation's agent.
   Agent,
   /// Auto mode's reviewer of the invocation's requests.
-  Reviewer { cli: AgentProvider, model: &'a Arc<str> },
+  Reviewer {
+    cli: AgentProvider,
+    model: &'a Arc<str>,
+    account: Option<AgentAccountId>,
+  },
 }
 
 /// One turn that counts: an agent's, or a review of its requests.
@@ -145,11 +149,11 @@ impl<'a> Turn<'a> {
     }
   }
 
-  /// The account the tokens' invocation started on; a review of auto mode's reviewer started on none.
+  /// The account the tokens were spent on: the invocation's, or for a review the reviewer's own.
   pub const fn account(&self) -> Option<AgentAccountId> {
     match self.by {
       Spender::Agent => self.launch.invocation.account,
-      Spender::Reviewer { .. } => None,
+      Spender::Reviewer { account, .. } => account,
     }
   }
 
@@ -204,7 +208,7 @@ impl<'a> Matched<'a> {
       }));
       matched.turns.extend(project.facts.reviews.iter().filter_map(|review| {
         let (launch, _) = launches.get(&review.invocation)?;
-        let reviewer = (review.cli, &review.model);
+        let reviewer = (review.cli, &review.model, review.account);
         filter
           .admits_review((project.project, launch.run, launch.invocation), reviewer)
           .then_some(Turn {
@@ -214,6 +218,7 @@ impl<'a> Matched<'a> {
             by: Spender::Reviewer {
               cli: review.cli,
               model: &review.model,
+              account: review.account,
             },
           })
       }));
