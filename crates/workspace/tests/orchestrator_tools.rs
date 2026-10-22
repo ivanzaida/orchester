@@ -48,6 +48,7 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
     "get_conversation",
     "answer_question",
     "send_message",
+    "get_delivery",
   ] {
     assert!(shown.iter().any(|tool| tool == name), "{name} is listed");
   }

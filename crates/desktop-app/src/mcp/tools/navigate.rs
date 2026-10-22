@@ -6,6 +6,7 @@ use orchester_core::{
   project::{TaskKey, TaskKeyError},
 };
 use orchester_workspace::{
+  delivery::DeliveryPeriod,
   files::{LineRangeError, Version, VersionParseError},
   pull_requests::list::PullRequestTab,
 };
@@ -31,7 +32,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request; usage takes `query`, the page's query as a link carries it, and \
-  without `project` shows every project's usage. A tab or kind left out is the one the screen opens on. Answers the \
+  without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
+  it. A tab or kind left out is the one the screen opens on. Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
   a stable `code`: unknown_route (with the known names), missing_param, unexpected_param, invalid_param, \
   unknown_tab (with the screen's tabs), not_a_string, not_an_object, not_ready (the window is starting).";
@@ -83,6 +85,16 @@ fn schema() -> Value {
       "query": {
         "type": "string",
         "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
+      },
+      "view": {
+        "type": "string",
+        "enum": ["usage", "delivery"],
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it.",
+      },
+      "period": {
+        "type": "string",
+        "enum": DeliveryPeriod::ALL.map(DeliveryPeriod::name),
+        "description": "usage with view delivery: the days the Delivery view shows; omitted, 30d.",
       },
       "from": {
         "type": "string",
@@ -172,7 +184,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::PullRequests => &["project", "tab", "number"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
-    Screen::Usage => &["project", "query"],
+    Screen::Usage => &["project", "query", "view", "period"],
     Screen::Modules => &["project", "module"],
     Screen::NewTask
     | Screen::MergeQueue
@@ -249,8 +261,19 @@ fn tools_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   Ok(ProjectPage::Tool(id, chosen))
 }
 
-/// The Usage page with the query `query` gives, as its path reads it.
+/// The Usage page with the query `query` gives, as its path reads it; with `view` delivery, the Delivery view beside
+/// it over `period`.
 fn usage_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  match string(args, "view")? {
+    None | Some("usage") => {}
+    Some("delivery") => return delivery_page(args),
+    Some(other) => {
+      return Err(ToolError::InvalidParam {
+        param: "view",
+        reason: format!("`{other}` is neither usage nor delivery"),
+      });
+    }
+  }
   let query = string(args, "query")?.unwrap_or_default();
   match Route::parse(&format!("/project/{}/usage?{query}", project(args)?)) {
     Ok(Route::Project(_, page @ ProjectPage::Usage(_))) => Ok(page),
@@ -263,6 +286,19 @@ fn usage_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
       reason: error.to_string(),
     }),
   }
+}
+
+/// The Delivery view over `period` (30d when left out).
+fn delivery_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let Some(name) = string(args, "period")? else {
+    return Ok(ProjectPage::Delivery(DeliveryPeriod::default()));
+  };
+  DeliveryPeriod::from_name(name)
+    .map(ProjectPage::Delivery)
+    .ok_or_else(|| ToolError::InvalidParam {
+      param: "period",
+      reason: format!("`{name}` is not 30d, 90d or 365d"),
+    })
 }
 
 /// Every project's usage with the query `query` gives (All projects' *Usage* tab).

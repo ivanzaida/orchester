@@ -5,7 +5,12 @@ use orchester_core::{
   project::TaskKey,
   resource::VersionNumber,
 };
-use orchester_workspace::{links::USAGE, pull_requests::list::PullRequestTab, usage::UsageQuery};
+use orchester_workspace::{
+  delivery::DeliveryPeriod,
+  links::{DELIVERY, PERIOD, USAGE, delivery_path},
+  pull_requests::list::PullRequestTab,
+  usage::UsageQuery,
+};
 
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, MODULES, MemoryTab, NEW,
@@ -51,6 +56,8 @@ pub enum ProjectPage {
   PullRequest(NonZeroU64, Option<String>),
   /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
   Usage(Box<UsageQuery>),
+  /// The Delivery view beside Usage, over its period.
+  Delivery(DeliveryPeriod),
   Pipelines,
   NewPipeline,
   NewEmptyPipeline,
@@ -155,7 +162,7 @@ impl ProjectPage {
       Self::Modules | Self::Module(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
       Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
-      Self::Usage(_) => Screen::Usage,
+      Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) | Self::PipelineVersion(..) => {
         Screen::Pipelines
       }
@@ -218,6 +225,7 @@ impl ProjectPage {
         &[(FILE, file.as_deref())],
       ),
       Self::Usage(query) => super::usage::path(project_root, query),
+      Self::Delivery(period) => delivery_path(project_root, *period),
       Self::Connections(view) => view.path(connections),
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
@@ -301,7 +309,7 @@ impl ProjectPage {
       [PULL_REQUESTS] => Ok(Self::PullRequests(
         params.take_or_default(TAB, PullRequestTab::from_name)?,
       )),
-      [USAGE] => super::usage::take(params).map(|query| Self::Usage(Box::new(query))),
+      [USAGE, rest @ ..] => usage(rest, params),
       [PULL_REQUESTS, number] => {
         let number = number.parse::<NonZeroU64>().map_err(|_| RouteError::NoScreen)?;
         Ok(Self::PullRequest(number, params.take(FILE)?))
@@ -318,6 +326,26 @@ impl ProjectPage {
         .ok_or(RouteError::NoScreen),
       _ => Err(RouteError::NoScreen),
     }
+  }
+}
+
+/// The Usage page with its query, or under it the Delivery view with its period (the one it opens on when the query
+/// names none).
+fn usage(rest: &[&str], params: &mut Params) -> Result<ProjectPage, RouteError> {
+  match rest {
+    [] => super::usage::take(params).map(|query| ProjectPage::Usage(Box::new(query))),
+    [DELIVERY] => {
+      let Some(name) = params.take(PERIOD)? else {
+        return Ok(ProjectPage::Delivery(DeliveryPeriod::default()));
+      };
+      DeliveryPeriod::from_name(&name)
+        .map(ProjectPage::Delivery)
+        .ok_or(RouteError::InvalidParam {
+          param: PERIOD.to_owned(),
+          value: name,
+        })
+    }
+    _ => Err(RouteError::NoScreen),
   }
 }
 

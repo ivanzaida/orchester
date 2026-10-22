@@ -894,6 +894,33 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-50 · Delivery charts and a delivery forecast · branch `orchester/orc-50-run-1` (implemented 2026-10-22; pipeline
+Check and Review follow).
+- **Domain** (`orchester_workspace::delivery`): facts read from the store only (`DeliveryFacts::read`: each task's
+  creation, workflow history, first agent start, latest run merge in Orchester or found merged outside it by git, story
+  points and attempts; each step execution's active time and whether a later attempt returned its work); throughput
+  per day (per week past 31 days) with points, cycle time (first agent start → merge) and lead time (creation → merge)
+  with median, quartiles and 85th percentile, active time and return rate per pipeline step with attempts per merged
+  task, and cumulative flow by workflow status. The forecast (`delivery::forecast`) is a Monte Carlo of 2,000 trials
+  over the tasks merged on each of the project's last 30 whole days (not before its first task), seeded with a fixed
+  seed, giving 50 % and 85 % dates for the queued tasks and each open module; with fewer than 10 days or 3 merged tasks
+  it says *not enough history yet* and how much there is. Counted in tasks, the burndown's unit; no money.
+- **UI**: the Delivery view beside Usage (`/project/<id>/usage/delivery?period=30d|90d|365d`, the *Usage · Delivery*
+  switch in both headers; `navigate` `usage` with `view` and `period`): the forecast table, Throughput beside Cycle
+  time, Where time goes beside Cumulative flow, each with its table view and empty state, built from Usage's cards,
+  plot pieces and tables. A module's burndown draws the 50 % and 85 % lines from today's remaining work and its days
+  run on to the 85 % date; the card says when it is likely done or that history is too short.
+- **Tools**: `get_delivery` (series and forecasts, `module` narrows them; in the Orchestrator chat's tools) and
+  `get_module`'s `forecast`.
+- Tests: `cargo test -p orchester-workspace --test delivery delivery`, `--test modules modules`, `--test
+  orchestrator_tools orchestrator_tools`; `cargo test -p orchester-app --test links links`, `--test screens screens`,
+  `--test modules modules`, `--test mcp_domain -- domain_delivery domain_modules`, `--test mcp_server
+  tools_answer_from_the_window`, `--test i18n -- locales area every_key`.
+- **Open:** no Pencil frames exist: the Delivery view, the *Usage · Delivery* switch in the Usage header and the
+  burndown's forecast lines, legend, table columns and note need frames and a design verification. Points-based
+  throughput is shown, but the forecast and the burndown count tasks (`modules::measure` still counts every module in
+  tasks after ORC-49).
+
 ORC-74 · Runs don't fail on "database is locked" · branch `orchester/orc-74-run-1` (implemented 2026-10-21; pipeline
 Check and Review follow). The rules are in `docs/architecture/storage.md`, "Concurrency".
 - **Cause.** Every connection had `busy_timeout` 5 s and wrote in `BEGIN IMMEDIATE` transactions; no transaction ran

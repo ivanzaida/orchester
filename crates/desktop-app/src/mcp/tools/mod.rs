@@ -111,6 +111,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("query", query);
       }
     }
+    ProjectPage::Delivery(period) => {
+      insert("view", "delivery");
+      insert("period", period.name());
+    }
     ProjectPage::Connections(view) => {
       insert("tab", view.tab().name());
       if let Some(connection) = view.selected() {

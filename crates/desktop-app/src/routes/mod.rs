@@ -9,7 +9,8 @@
 //! `/project/<id>/tasks/<key>/<tab>` (the key as in `KON-12`; `summary`, `conversation` or `changes`, with
 //! `?file=` a changed file and `&from=worktree` for its change that is not checkpointed), written always with
 //! its tab and read without one as its Summary, and `/project/<id>/tasks/<key>/edit` is Edit task.
-//! Modules is `/project/<id>/modules` and a module's page `/project/<id>/modules/<module id>`.
+//! Modules is `/project/<id>/modules` and a module's page `/project/<id>/modules/<module id>`. The Delivery view
+//! beside Usage is `/project/<id>/usage/delivery` (`?period=` 30d, 90d or 365d).
 //! Connections is `/project/<id>/connections` (`?tab=`, `?selected=` the connection its inspector shows), Add
 //! connection `/project/<id>/connections/new` (`?kind=mcp_server` adds an MCP server) and
 //! `/project/<id>/connections/<connection id>/edit` edits an MCP server. The code viewer is
@@ -120,6 +121,8 @@ const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 /// The Modules list's segment (`orchester_workspace::links::MODULES`), and a module's page under it.
 const MODULES: &str = orchester_workspace::links::MODULES;
 const MODULE_PATTERN: &str = "/project/:project/modules/:module";
+/// The Delivery view beside a project's Usage (`orchester_workspace::links::delivery_path`).
+const DELIVERY_PATTERN: &str = "/project/:project/usage/delivery";
 /// A task kept Not shared, by its kept key, on its tab.
 const KEPT_TASK_PATTERN: &str = "/project/:project/tasks/kept/:key/:tab";
 /// A task's path without its tab, which reads as its Summary.
@@ -175,6 +178,7 @@ impl Route {
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::PullRequest(..)) => PULL_REQUEST_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Module(_)) => MODULE_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::Delivery(_)) => DELIVERY_PATTERN.to_owned(),
       Self::Invite(_) => INVITE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::KeptTask(..)) => KEPT_TASK_PATTERN.to_owned(),
       Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),
