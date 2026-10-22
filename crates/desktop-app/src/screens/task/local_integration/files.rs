@@ -20,7 +20,7 @@ use lurq::{
   layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::integration::local::LocalFile;
+use orchester_core::integration::local::{LocalFile, LocalPath};
 use orchester_workspace::{
   display,
   tasks::local_integration::{IntegrationView, ShownSnapshot, Snapshot, SnapshotSize},
@@ -155,6 +155,20 @@ pub(super) fn selected_count(view: &IntegrationView, selection: &Selection) -> u
     .iter()
     .filter(|entry| selection.has(&entry.file.path, entry.group.snapshot()))
     .count()
+}
+
+/// The selected paths with a listed snapshot left unselected: discarding takes a path whole, so it refuses them.
+pub(super) fn partly_selected(view: &IntegrationView, selection: &Selection) -> Vec<LocalPath> {
+  let listed = entries(view, &Selection::default(), List::Review);
+  selection
+    .paths()
+    .into_iter()
+    .filter(|path| {
+      listed
+        .iter()
+        .any(|entry| entry.file.path == *path && !selection.has(path, entry.group.snapshot()))
+    })
+    .collect()
 }
 
 /// The snapshots a commit of `selection` leaves in the checkout, as the remaining notice names them.

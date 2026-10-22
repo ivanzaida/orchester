@@ -332,6 +332,7 @@ fn kontur_reviewed() -> ProjectFacts {
     at: later(on(25, 10), HOUR / 2),
     invocation: builder,
     cli: AgentProvider::ClaudeCodeCli,
+    account: None,
     model: "claude-haiku-4-5".into(),
     usage: usage(1_000, 400, 100),
   });
