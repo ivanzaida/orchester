@@ -34,7 +34,7 @@ use lurq::{
 use orchester_core::run::RunStatus;
 use orchester_workspace::{
   background,
-  tasks::local_integration::{IntegrationView, Preview},
+  tasks::local_integration::{DiscardReport, IntegrationView, Preview},
 };
 use selection::{Selection, ShownFile};
 use work::{Outcome, Problem, Work};
@@ -58,6 +58,10 @@ enum Mode {
   Review,
   Commit { tree: String, preview: Preview },
   Preserve,
+  /// The person pressed *Discard selected*: what discarding does to each selected file, to confirm.
+  Discard,
+  /// Discarding left some files as they were: which were discarded, which not and why, to try again.
+  Discarded(DiscardReport),
   Abort,
   Cleanup,
   Cancel,
@@ -133,6 +137,8 @@ impl Component for LocalPage {
     let completed_leave = resolver.leave.clone();
     let navigation = crate::navigation::Navigation::of(ctx);
     let completed_mode = mode.clone();
+    let selected = ctx.signal(Selection::default());
+    let completed_selection = selected.clone();
     let last = refresh::LastRead::default();
     let completed_last = last.clone();
     // The work's own `feed.saved()` already reads the view again once; the last read must not stand in for it.
@@ -149,8 +155,16 @@ impl Component for LocalPage {
             tree: tree.clone(),
             preview: preview.clone(),
           },
-          Outcome::Changed | Outcome::Aborted | Outcome::DraftSaved(_) | Outcome::Resolved(_) => Mode::Review,
+          Outcome::Discarded(report) if !report.complete() => Mode::Discarded(report.clone()),
+          Outcome::Changed
+          | Outcome::Aborted
+          | Outcome::DraftSaved(_)
+          | Outcome::Resolved(_)
+          | Outcome::Discarded(_) => Mode::Review,
         });
+        if let Outcome::Discarded(report) = outcome {
+          completed_selection.update(|selection| selection.forget(report));
+        }
         if let Outcome::DraftSaved(captured) = outcome {
           completed_editor.saved(captured);
           if !completed_editor.dirty() {
@@ -166,7 +180,7 @@ impl Component for LocalPage {
       resolver,
       acknowledgement: controls::AcknowledgementState::new(ctx),
       managed: Arc::new(parking_lot::Mutex::new(None)),
-      selected: ctx.signal(Selection::default()),
+      selected,
       shown_file: ctx.signal(ShownFile(None)),
       mode,
       message: Signal::new(String::new()),

@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use lurq::app::component::DevtoolsInspectable;
 use orchester_core::integration::local::LocalPath;
-use orchester_workspace::tasks::local_integration::{ShownSnapshot, Snapshot};
+use orchester_workspace::tasks::local_integration::{DiscardReport, ShownSnapshot, Snapshot};
 
 /// The reviewed snapshots the person selected, each on its own.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -33,6 +33,17 @@ impl Selection {
         snapshot,
       });
     }
+  }
+
+  /// Lets go of the paths `report` discarded: they are no longer changes to select.
+  pub(super) fn forget(&mut self, report: &DiscardReport) {
+    let gone = report
+      .files()
+      .iter()
+      .filter(|file| file.failure.is_none())
+      .map(|file| &file.path)
+      .collect::<Vec<_>>();
+    self.0.retain(|chosen| !gone.contains(&&chosen.path));
   }
 
   /// The paths a commit takes: those whose index or new-file snapshot is selected. A working-copy snapshot is
