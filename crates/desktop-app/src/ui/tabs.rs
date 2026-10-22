@@ -232,6 +232,19 @@ pub fn page_tabs_with_end(
   tab_line(ctx, id, row)
 }
 
+/// [`page_tabs`] with `note` at the right end of the line, e.g. why a tab cannot be opened (`NWxZx` in `ptqq0`).
+pub fn page_tabs_with_note(
+  ctx: &mut Ctx,
+  id: &str,
+  tabs: impl IntoIterator<Item = PageTab>,
+  note: impl Into<Element>,
+) -> Stack {
+  let mut row: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
+  row.push(Spacer::new().flex(1.0).into());
+  row.push(note.into());
+  tab_line(ctx, id, row)
+}
+
 fn tab_line(ctx: &Ctx, id: &str, tabs: Vec<Element>) -> Stack {
   let line = ctx.theme().border_size_value(BorderSize::Sm);
   Stack::new()

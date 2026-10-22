@@ -23,6 +23,7 @@ mod files;
 mod fonts;
 mod form;
 mod gate;
+mod import;
 pub mod instructions;
 mod lifecycle;
 mod local_integration;
@@ -69,6 +70,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   gate::{GateSpacing, GateText},
+  import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
   markdown::blank_line_between_blocks,
@@ -142,6 +144,7 @@ pub fn install(app: &mut App, mode: Mode) {
   usage::install(theme);
   memory::install(theme);
   sources::install(theme);
+  import::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

@@ -61,7 +61,7 @@ pub(super) fn header(ctx: &Ctx, project: &ShownProject, view: &View) -> Row {
         .child(
           ActionButton::new("secrets-import", ButtonKind::Secondary, ctx.t("secrets.import"))
             .icon(Icon::Download)
-            .unavailable(ctx.t("secrets.importUnavailable")),
+            .opens(view.import()),
         )
         .child(
           ActionButton::new("secrets-add", ButtonKind::Primary, ctx.t("secrets.add"))

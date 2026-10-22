@@ -119,7 +119,7 @@ fn project_empty(ctx: &Ctx, view: &View) -> Element {
   .action(
     ActionButton::new("secrets-empty-import", ButtonKind::Secondary, ctx.t("secrets.import"))
       .icon(Icon::Download)
-      .unavailable(ctx.t("secrets.importUnavailable")),
+      .opens(view.import()),
   )
   .into()
 }

@@ -4,7 +4,6 @@
     "subtitle": "The steps a task runs through, who does each one and where it waits for you. Runs keep the version they started with.",
     "new": "New pipeline",
     "import": "Import from project",
-    "planned": "Not available in this version.",
     "reading": "Reading pipelines…",
     "loadFailed": "Pipelines could not be read",
     "emptyTitle": "No pipelines yet",
