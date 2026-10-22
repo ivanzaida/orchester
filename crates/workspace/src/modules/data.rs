@@ -19,6 +19,10 @@ use super::{
   burndown::{Burndown, ChartDays, TaskTrack},
   measure::{Measure, WorkUnit},
 };
+use crate::delivery::{
+  self, DeliveryFacts,
+  forecast::{self, Forecast},
+};
 
 /// How far a module's work is now: its scope (its tasks that are not Canceled) and what of it is done.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,13 +89,15 @@ pub fn summaries(modules: &[Module], tasks: &[Task]) -> Vec<ModuleSummary> {
     .collect()
 }
 
-/// A module's page: the module, its tasks in the list's order, its progress and its burndown.
+/// A module's page: the module, its tasks in the list's order, its progress, its burndown and when its remaining work
+/// is likely delivered (`crate::delivery::forecast`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModulePage {
   pub module: Module,
   pub tasks: Arc<Vec<Task>>,
   pub progress: Progress,
   pub burndown: Burndown,
+  pub forecast: Forecast,
 }
 
 impl ModulePage {
@@ -101,6 +107,8 @@ impl ModulePage {
       return Ok(None);
     };
     let all = db.tasks()?;
+    // The forecast rests on the whole project's recent throughput, as the Delivery view's does.
+    let delivered = delivery::history(&DeliveryFacts::read(db, &all, now)?, local_date(now));
     let changes = db.module_changes(id)?;
     // Every task that was ever in the module counts on the days it was in it.
     let tracked: BTreeSet<TaskId> = changes
@@ -140,6 +148,7 @@ impl ModulePage {
     let progress = Progress::of(&members, &measure);
     Ok(Some(Self {
       burndown: Burndown::of(&tracks, measure.unit, days),
+      forecast: Forecast::of(progress.remaining(), &delivered, days.today, forecast::SEED),
       progress,
       tasks: Arc::new(members),
       module,

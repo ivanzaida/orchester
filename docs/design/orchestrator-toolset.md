@@ -229,6 +229,7 @@ project.
 | Secrets | `list_secrets` (new: name, scope, which profiles/tools/connections use it; never a value) | — | — |
 | Connections | `list_connections`, `list_accounts`, `list_models` (existing) | — | — |
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
+| Delivery | `get_delivery` (ORC-50: a project's throughput, cycle and lead time, active time and return rate per step, cumulative flow over its last days, and the 50 % / 85 % delivery dates of its queued tasks and open modules by a Monte Carlo over recent throughput, or *not enough history*; answers "when will module X be done") | — | — |
 | Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
 | Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
 | Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |

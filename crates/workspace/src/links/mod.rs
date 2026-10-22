@@ -21,7 +21,11 @@ pub use self::{
 
 /// The segment of a project's Modules list, and of a module's page under it.
 pub const MODULES: &str = "modules";
+/// The segment of the Delivery view under a project's Usage, and its period's query parameter.
+pub const DELIVERY: &str = "delivery";
+pub const PERIOD: &str = "period";
 use crate::{
+  delivery::DeliveryPeriod,
   files::{FilePath, LineRange, Version},
   pull_requests::list::PullRequestTab,
   usage::UsageQuery,
@@ -65,6 +69,8 @@ pub enum Link {
   Usage(ProjectId, Box<UsageQuery>),
   /// Every project's usage, All projects' *Usage* tab, showing a query.
   UsageEverywhere(Box<UsageQuery>),
+  /// The Delivery view beside a project's Usage, over a period.
+  Delivery(ProjectId, DeliveryPeriod),
   /// A project's Modules list.
   Modules(ProjectId),
   /// A module's page, with its tasks and its burndown.
@@ -140,6 +146,7 @@ impl Link {
       } => files_path(format!("{}/files", root(*project)), Some(path.as_str()), at, *line),
       Self::Usage(project, query) => with_usage_query(format!("{}/{USAGE}", root(*project)), query),
       Self::UsageEverywhere(query) => with_usage_query(format!("/{USAGE}"), query),
+      Self::Delivery(project, period) => delivery_path(&root(*project), *period),
       Self::Modules(project) => format!("{}/{MODULES}", root(*project)),
       Self::Module(project, id) => format!("{}/{MODULES}/{id}", root(*project)),
       Self::Orchestrator(project, chat) => with_query(
@@ -161,6 +168,13 @@ pub fn files_path(files: String, file: Option<&str>, at: &Version, line: Option<
   let at = (*at != Version::Checkout).then(|| at.to_string());
   let line = line.map(|line| line.to_string());
   with_query(path, &[("at", at.as_deref()), ("line", line.as_deref())])
+}
+
+/// The Delivery view's path under a project's `project_root` (`/project/<id>/usage/delivery`), with its period unless
+/// it is the one the view opens on. The router writes its paths with it too.
+pub fn delivery_path(project_root: &str, period: DeliveryPeriod) -> String {
+  let period = (period != DeliveryPeriod::default()).then(|| period.name());
+  with_query(format!("{project_root}/{USAGE}/{DELIVERY}"), &[(PERIOD, period)])
 }
 
 fn root(project: ProjectId) -> String {

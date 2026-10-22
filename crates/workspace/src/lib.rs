@@ -18,6 +18,7 @@ pub mod close;
 pub mod code_index;
 pub mod connections;
 pub mod decisions;
+pub mod delivery;
 pub mod display;
 pub mod drafts;
 pub mod environment;

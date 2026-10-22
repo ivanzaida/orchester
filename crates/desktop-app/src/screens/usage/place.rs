@@ -69,6 +69,11 @@ pub struct Requery {
 }
 
 impl Requery {
+  /// The project whose page it is; `None` on every project's page.
+  pub const fn project(&self) -> Option<ProjectId> {
+    self.project
+  }
+
   pub fn show(&self, query: UsageQuery) {
     let query = Box::new(query);
     self.navigation.go(match self.project {

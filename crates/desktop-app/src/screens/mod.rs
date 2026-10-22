@@ -9,6 +9,7 @@ mod add_project;
 mod agents;
 mod all_projects;
 mod connections;
+mod delivery;
 mod files;
 pub(crate) mod gate;
 mod instructions;
@@ -101,6 +102,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(ctx, project, *number, file.as_deref()),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
+    ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
     ProjectPage::NewPipeline | ProjectPage::NewEmptyPipeline => pipelines::new_pipeline(ctx, project),
     ProjectPage::Pipeline(id, panel) => pipelines::editor(ctx, project, *id, (panel.clone(), None)),

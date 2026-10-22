@@ -66,16 +66,22 @@
       "noTarget": "Set a target date to see the ideal line.",
       "remaining": "Remaining",
       "ideal": "Ideal",
+      "likely": "Forecast 50%",
+      "safe": "Forecast 85%",
       "added": "Added",
       "removed": "Removed",
       "pointValue": "{{remaining}} remaining",
-      "ahead": "—"
+      "ahead": "—",
+      "forecast": "Likely done by {{likely}} (50%) or {{safe}} (85%), forecast from the tasks merged in this project on its last {{days}} days ({{tasks}} merged).",
+      "notEnoughHistory": "Forecast: not enough history yet. The project's last {{days}} days had {{tasks}} tasks merged; a forecast needs 10 days and 3 merged tasks."
     },
     "table": {
       "day": "DAY",
       "scope": "SCOPE",
       "remaining": "REMAINING",
       "ideal": "IDEAL",
+      "likely": "50%",
+      "safe": "85%",
       "added": "ADDED",
       "removed": "REMOVED"
     }

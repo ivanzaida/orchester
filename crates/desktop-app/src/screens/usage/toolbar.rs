@@ -140,6 +140,16 @@ impl Component for UsageToolbar {
             .child(readback)
         }
         .width(Dimension::Pct(100.0));
+        // The Delivery view beside Usage (ORC-50, no frame yet), switched to before the period.
+        let views = props
+          .requery
+          .project()
+          .map(|id| crate::screens::delivery::view_switch(ctx, id, false));
+        let controls = Row::new()
+          .spacing(SpacingSize::Sm)
+          .align_items(Alignment::Center)
+          .with_children(views)
+          .child(controls);
         toolbar
           .padding(
             Padding::new()

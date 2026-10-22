@@ -324,12 +324,19 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   all
 }
 
-/// The Modules list and a module's page (ORC-48); `tests/modules` reads what they show.
-fn module_screens() -> [(Route, Vec<&'static str>); 2] {
+/// The Modules list, a module's page (ORC-48) and the Delivery view beside Usage (ORC-50); `tests/modules` reads what
+/// they show.
+fn module_screens() -> [(Route, Vec<&'static str>); 3] {
   [
     (at(ProjectPage::Modules), Vec::new()),
     (
       at(ProjectPage::Module(CONNECTION.parse().expect("a module id"))),
+      Vec::new(),
+    ),
+    (
+      at(ProjectPage::Delivery(
+        orchester_workspace::delivery::DeliveryPeriod::Quarter,
+      )),
       Vec::new(),
     ),
   ]

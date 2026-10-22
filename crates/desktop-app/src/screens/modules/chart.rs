@@ -2,7 +2,8 @@
 //! its labels, the days on the x axis, the remaining work as a line in the first series color, the ideal line dashed
 //! in `text_muted`, and under them each day's scope changes, work added in the third series color and work removed
 //! in the second, as thin bars from the baseline. A day still to come has no remaining work, so the line stops at
-//! today.
+//! today; from there the delivery forecast's lines (ORC-50) fall to nothing at its 50% date, finely dashed in the first
+//! series color, and at its 85% date in the fourth.
 
 use std::sync::Arc;
 
@@ -27,6 +28,10 @@ const LINE_WIDTH: f32 = 1.5;
 const POINT_SIZE: f32 = 6.0;
 /// The ideal line's dash (as the warning threshold of *Plan limits* is dashed, `bsp8a`).
 const DASH: [f32; 2] = [4.0, 3.0];
+/// The forecast lines' finer dash, apart from the ideal line's.
+const FORECAST_DASH: [f32; 2] = [2.0, 3.0];
+/// The series color of the 85% line (Other accounts' on the Usage page).
+const SAFE_SERIES: usize = 3;
 /// How wide a day's scope change bars are, at most, out of its slot.
 const BAR_SHARE: f32 = 0.25;
 
@@ -36,6 +41,9 @@ pub struct ChartDay {
   pub label: Option<AxisName>,
   pub remaining: Option<u32>,
   pub ideal: Option<f64>,
+  /// The forecast's 50% and 85% lines that day.
+  pub likely: Option<f64>,
+  pub safe: Option<f64>,
   pub added: u32,
   pub removed: u32,
   /// How the day and its remaining work read, for its canvas item.
@@ -141,6 +149,7 @@ fn draw(canvas: &CanvasHandle, plot: &Plot) {
       .enumerate()
       .map(|(index, day)| day.ideal.map(|ideal| (center(index), frame.y(ideal, top as f64)))),
   );
+  draw_forecast(&context, (frame, top as f64), plot, &center);
   context.set_line_dash(&[]);
   context.set_stroke_style(plot.style.series[0]);
   let remaining = days.iter().enumerate().map(|(index, day)| {
@@ -160,6 +169,31 @@ fn draw(canvas: &CanvasHandle, plot: &Plot) {
     }
   }
   canvas.set_items(items);
+}
+
+/// One of a day's forecast lines.
+type Line = fn(&ChartDay) -> Option<f64>;
+
+/// The forecast's 50% and 85% lines, where the days have them.
+fn draw_forecast(
+  context: &lurq::canvas::Context2D,
+  (frame, top): (Frame, f64),
+  plot: &Plot,
+  center: &dyn Fn(usize) -> f32,
+) {
+  let days = &plot.props.days;
+  context.set_line_dash(&FORECAST_DASH);
+  let lines: [(Line, usize); 2] = [(|day| day.safe, SAFE_SERIES), (|day| day.likely, 0)];
+  for (value, series) in lines {
+    context.set_stroke_style(plot.style.series[series]);
+    stroke(
+      context,
+      days
+        .iter()
+        .enumerate()
+        .map(|(index, day)| value(day).map(|left| (center(index), frame.y(left, top)))),
+    );
+  }
 }
 
 /// A day's added and removed work, side by side in its slot from the baseline.

@@ -1,8 +1,9 @@
 //! The Modules screens (ORC-48) on seeded Kontur projects whose modules are made before the window opens: the list
 //! with each module's progress opening its page; the page's progress, tasks and burndown as a chart or a table; the
 //! editor making a module, saying why a module is refused, and refusing a change over one made meanwhile; a failed
-//! read of the page shown as such, not as the page read before it; the module filter of Tasks; and the module field
-//! of the task's header and of the task form. Needs `git`, as the seed does.
+//! read of the page shown as such, not as the page read before it; the module filter of Tasks; the module field
+//! of the task's header and of the task form; and the Delivery view beside Usage forecasting an open module (ORC-50).
+//! Needs `git`, as the seed does.
 
 mod harness;
 #[allow(
@@ -21,6 +22,7 @@ use orchester_core::{
   name::Name,
   task::organization::{ChangeActor, WorkflowStatus},
 };
+use orchester_workspace::delivery::DeliveryPeriod;
 
 /// The rows of a table whose row ids are `<prefix><index>`.
 fn rows(seeded: &mut Seeded, prefix: &str) -> usize {
@@ -65,16 +67,24 @@ fn modules_list_shows_progress_and_the_page_its_tasks_and_burndown() {
     "three days back, today and four ahead"
   );
   let before = seeded.text("module-burndown-row-0");
-  assert!(before.ends_with("— — — — —"), "no work yet three days ago: {before}");
+  assert!(
+    before.ends_with("— — — — — — —"),
+    "no work yet three days ago: {before}"
+  );
   let today = seeded.text("module-burndown-row-3");
   assert!(
-    today.ends_with("3 2 3.0 3 0"),
-    "scope, remaining, ideal, added, removed: {today}"
+    today.ends_with("3 2 3.0 — — 3 0"),
+    "scope, remaining, ideal, the forecast's 50% and 85%, added, removed: {today}"
   );
   let last = seeded.text("module-burndown-row-7");
   assert!(
-    last.ends_with("— — 0.0 — —"),
+    last.ends_with("— — 0.0 — — — —"),
     "a day to come has only its ideal: {last}"
+  );
+  let forecast = seeded.text("module-burndown-forecast");
+  assert!(
+    forecast.contains("not enough history yet"),
+    "nothing merged in the project yet: {forecast}"
   );
   seeded.click("module-burndown-view-chart");
   assert!(seeded.shows("module-burndown-legend") && !seeded.shows("module-burndown-table"));
@@ -244,4 +254,40 @@ fn modules_the_task_form_saves_the_chosen_module() {
   seeded.choose("task-form-module-input", "Checkout");
   seeded.click("task-form-save");
   seeded.until("the save", |seeded| seeded.task("KON-1").module() == Some(module));
+}
+
+#[test]
+fn modules_delivery_view_forecasts_the_open_module_and_reads_its_charts_as_tables() {
+  let mut seeded = Seeded::new("tasks", |db| {
+    module_with(db, details("Checkout", (3, 4)), &[(WorkflowStatus::Todo, 2)]);
+  });
+  seeded.open(ProjectPage::Delivery(DeliveryPeriod::Month), "delivery-forecast-table");
+  assert!(seeded.text("delivery-forecast-row-0").contains("Queued tasks"));
+  let module = seeded.text("delivery-forecast-row-1");
+  assert!(
+    module.contains("Checkout") && module.contains("Not enough history yet"),
+    "the module's two open tasks, without a date while history is short: {module}"
+  );
+  assert!(seeded.text("delivery-forecast-rule").contains("30 whole days"));
+  for card in [
+    "delivery-throughput",
+    "delivery-cycle",
+    "delivery-time",
+    "delivery-flow",
+  ] {
+    assert!(seeded.shows(card), "{card} is shown");
+  }
+  assert!(seeded.shows("delivery-flow-legend"), "the flow's chart shows first");
+  seeded.click("delivery-flow-view-table");
+  assert!(seeded.shows("delivery-flow-table") && !seeded.shows("delivery-flow-legend"));
+  seeded.click("delivery-period-90d");
+  assert_eq!(
+    seeded.route(),
+    Route::Project(seeded.project, ProjectPage::Delivery(DeliveryPeriod::Quarter))
+  );
+  seeded.click("usage-view-usage");
+  assert_eq!(
+    seeded.route(),
+    Route::Project(seeded.project, ProjectPage::Usage(Box::default()))
+  );
 }

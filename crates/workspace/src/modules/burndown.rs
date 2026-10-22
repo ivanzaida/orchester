@@ -15,6 +15,7 @@ use orchester_core::{
 };
 
 use super::measure::WorkUnit;
+use crate::delivery::{Forecast, Outlook};
 
 /// What one task did over time, as far as one module is concerned.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -198,6 +199,64 @@ impl Burndown {
   /// The day the chart reads as now: today's, or the last one before it.
   pub fn latest(&self) -> Option<&BurndownDay> {
     self.days.iter().rev().find(|day| day.remaining.is_some())
+  }
+
+  /// The forecast's lines over the chart's days, then over the days after them through the 85% date, at most
+  /// [`MAX_CHART_DAYS`] more: from the work left on [`Self::latest`] each line falls evenly to nothing on its date.
+  /// Without dates there are no lines and no days are added.
+  pub fn forecast_days(&self, forecast: &Forecast) -> Vec<ForecastDay> {
+    let (Outlook::Dates { likely, safe, .. }, Some(latest)) = (&forecast.outlook, self.latest()) else {
+      return self.days.iter().map(|day| ForecastDay::none(day.date)).collect();
+    };
+    let (likely, safe) = (*likely, *safe);
+    let (from, left) = (latest.date, f64::from(latest.remaining.unwrap_or(0)));
+    let last_shown = self.days.last().map_or(from, |day| day.date);
+    let last = safe.max(last_shown).min(
+      last_shown
+        .checked_add_days(Days::new(MAX_CHART_DAYS))
+        .unwrap_or(NaiveDate::MAX),
+    );
+    let line = |to: NaiveDate, date: NaiveDate| {
+      let span = (to - from).num_days();
+      let gone = (date - from).num_days();
+      (gone >= 0 && date <= to).then(|| {
+        if span <= 0 {
+          0.0
+        } else {
+          left * (span - gone) as f64 / span as f64
+        }
+      })
+    };
+    self
+      .days
+      .first()
+      .map_or(from, |day| day.date)
+      .iter_days()
+      .take_while(|date| *date <= last)
+      .map(|date| ForecastDay {
+        date,
+        likely: line(likely, date),
+        safe: line(safe, date),
+      })
+      .collect()
+  }
+}
+
+/// A day of the burndown with the forecast's 50% and 85% lines; `None` before the latest day and after a line's date.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ForecastDay {
+  pub date: NaiveDate,
+  pub likely: Option<f64>,
+  pub safe: Option<f64>,
+}
+
+impl ForecastDay {
+  const fn none(date: NaiveDate) -> Self {
+    Self {
+      date,
+      likely: None,
+      safe: None,
+    }
   }
 }
 

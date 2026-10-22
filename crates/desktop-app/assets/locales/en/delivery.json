@@ -1,0 +1,106 @@
+{
+  "delivery": {
+    "title": "Delivery",
+    "description": "How {{project}}'s work gets delivered and when open work is likely done, from what Orchester recorded.",
+    "switch": {
+      "usage": "Usage",
+      "delivery": "Delivery"
+    },
+    "period": {
+      "month": "30 days",
+      "quarter": "90 days",
+      "year": "365 days"
+    },
+    "reading": "Reading delivery…",
+    "readFailed": "Delivery couldn't be read",
+    "unreadRuns": {
+      "one": "1 run's record couldn't be read; what it did is left out.",
+      "other": "{{count}} runs' records couldn't be read; what they did is left out."
+    },
+    "count": {
+      "hours": "{{value}} h"
+    },
+    "duration": {
+      "days": "{{days}}d {{hours}}h"
+    },
+    "throughput": {
+      "title": "Throughput",
+      "byDay": "Tasks merged per day, in Orchester or found merged outside it",
+      "byWeek": "Tasks merged per week, in Orchester or found merged outside it",
+      "total": "{{tasks}} tasks · {{points}} points",
+      "totalRow": "Total",
+      "empty": {
+        "title": "Nothing merged",
+        "detail": "No task's work was merged in this period."
+      }
+    },
+    "cycle": {
+      "title": "Cycle time",
+      "unit": "in hours",
+      "subtitle": "From a task's first agent start to the merge; lead time from its creation",
+      "summary": "Median {{median}} · middle half {{lower}} – {{upper}} · 85% within {{p85}}",
+      "lead": "Lead time: median {{median}} · 85% within {{p85}}",
+      "noCycle": "No cycle time: no agent of these tasks started; their work was merged outside a run.",
+      "outside": "—",
+      "taskName": "{{key}} · {{title}}",
+      "empty": {
+        "title": "No task merged",
+        "detail": "Cycle and lead time are measured when a task's work is merged."
+      }
+    },
+    "time": {
+      "title": "Where time goes",
+      "subtitle": "Active agent time per pipeline step, and how often its work was returned",
+      "attempts": "{{value}} attempts per merged task",
+      "noAttempts": "No task merged in this period",
+      "percent": "{{value}}%",
+      "point": "{{hours}} · {{rate}} returned",
+      "empty": {
+        "title": "No agent worked",
+        "detail": "No step of this project's runs started in this period."
+      }
+    },
+    "flow": {
+      "title": "Cumulative flow",
+      "subtitle": "Tasks in each workflow status at the end of each day; canceled tasks are left out",
+      "count": "{{status}} {{count}}",
+      "separator": " · ",
+      "empty": {
+        "title": "No tasks yet",
+        "detail": "The flow starts with the project's first task."
+      }
+    },
+    "forecast": {
+      "title": "Delivery forecast",
+      "subtitle": "When open work is likely done: a Monte Carlo over the tasks merged on recent days",
+      "queued": "Queued tasks",
+      "notEnough": "Not enough history yet",
+      "nothingLeft": "Nothing left",
+      "pastHorizon": "More than ten years",
+      "history": "{{days}} days · {{tasks}} merged",
+      "rule": "A forecast rests on the tasks merged on each of the project's last 30 whole days, not before its first task. With fewer than 10 days or fewer than 3 tasks merged in them it gives no date."
+    },
+    "columns": {
+      "day": "DAY",
+      "week": "WEEK",
+      "tasks": "TASKS",
+      "points": "POINTS",
+      "unpointed": "WITHOUT POINTS",
+      "task": "TASK",
+      "merged": "MERGED",
+      "cycle": "CYCLE",
+      "lead": "LEAD",
+      "attempts": "ATTEMPTS",
+      "step": "STEP",
+      "active": "ACTIVE",
+      "executions": "RUNS OF IT",
+      "returned": "RETURNED",
+      "rate": "RETURN RATE",
+      "work": "WORK",
+      "remaining": "REMAINING",
+      "likely": "50%",
+      "safe": "85%",
+      "basis": "HISTORY"
+    }
+  }
+}
