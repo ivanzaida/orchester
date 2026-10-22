@@ -47,7 +47,7 @@ pub fn reply(ctx: &mut Ctx, props: &ReplyProps) -> Element {
   let id = thread.id;
   let composing = Composing::Reply(id);
   let draft = env.state.drafts.of(&composing, thread.kind);
-  let kind = draft.kind.get();
+  let kind = draft.kind.get().0;
   let ready = !draft.text.get().trim().is_empty() && env.head.is_some() && !env.writes.busy();
   let press: Option<Press> = ready.then(|| {
     let (writes, draft, head) = (env.writes.clone(), draft.clone(), env.head.clone());
@@ -59,7 +59,7 @@ pub fn reply(ctx: &mut Ctx, props: &ReplyProps) -> Element {
         Write::Reply {
           key: draft.key,
           thread: id,
-          kind: draft.kind.get_untracked(),
+          kind: draft.kind.get_untracked().0,
           text: draft.text.get_untracked(),
           revision,
         },

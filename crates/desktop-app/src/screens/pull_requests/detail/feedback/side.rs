@@ -15,7 +15,7 @@ use lurq::{
 };
 use orchester_core::id::FeedbackId;
 
-use super::{Composing, parts::visibility, thread::Env, words};
+use super::{Composing, Held, parts::visibility, thread::Env, words};
 use crate::{
   routes::{ProjectPage, Route},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing, PullRequestsText},
@@ -78,7 +78,7 @@ pub fn threads(ctx: &mut Ctx, env: &Env) -> Element {
     let file = path.rsplit('/').next().unwrap_or(&path).to_owned();
     rows.push(draft_row(ctx, &file, span).into());
   }
-  let reveal = env.state.reveal.get();
+  let Held(reveal) = env.state.reveal.get();
   for thread in open {
     rows.push(thread_row(ctx, env, thread, reveal == Some(thread.id)));
   }
@@ -167,7 +167,7 @@ fn open(env: &Env, (id, path): (FeedbackId, Option<Arc<str>>)) -> Arc<dyn Fn() +
   let navigation = env.navigation.clone();
   let (project, number, reveal) = (env.project.open.project.id(), env.number, env.state.reveal.clone());
   Arc::new(move || {
-    reveal.set(Some(id));
+    reveal.set(Held(Some(id)));
     let page = match &path {
       Some(path) => ProjectPage::PullRequest(number, Some(path.to_string())),
       None => ProjectPage::PullRequestFeedback(number, Some(id)),

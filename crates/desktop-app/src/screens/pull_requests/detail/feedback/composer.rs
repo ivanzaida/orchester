@@ -28,7 +28,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  Composing, Draft, FeedbackState, Write,
+  Composing, Draft, FeedbackState, Held, Write,
   moved::{changed, moved},
   parts::visibility,
   thread::Env,
@@ -69,8 +69,8 @@ pub struct NewProps {
 /// Opens the composer of `composing`, its draft going to `default` unless the person picked another agent.
 pub fn open(state: &FeedbackState, composing: Composing, default: Option<ResourceId>) {
   let draft = state.drafts.of(&composing, FeedbackKind::Question);
-  if draft.target.get_untracked().is_none() {
-    draft.target.set(default);
+  if draft.target.get_untracked().0.is_none() {
+    draft.target.set(Held(default));
   }
   state.follow.set(false);
   state.composing.set(Some(composing));
@@ -82,7 +82,7 @@ pub fn new_thread(ctx: &mut Ctx, props: &NewProps) -> Element {
     return Element::new();
   };
   let draft = env.state.drafts.of(&props.composing, FeedbackKind::Question);
-  let kind = draft.kind.get();
+  let Held(kind) = draft.kind.get();
   let moved = moved(props);
   let send = send_new(env, (&props.composing, anchor(props)), &draft);
   let blocked = blocked(ctx, (&task, &draft), moved.is_some());
@@ -147,7 +147,7 @@ fn send_new(env: &Env, (composing, anchor): (&Composing, Option<FeedbackAnchor>)
   let (writes, number, head) = (env.writes.clone(), env.number.get(), env.head.clone());
   let (composing, draft) = (composing.clone(), draft.clone());
   Arc::new(move || {
-    let (Some(anchor), Some(recipient)) = (anchor.clone(), draft.target.get_untracked()) else {
+    let (Some(anchor), Held(Some(recipient))) = (anchor.clone(), draft.target.get_untracked()) else {
       return;
     };
     let revision = match &composing {
@@ -160,7 +160,7 @@ fn send_new(env: &Env, (composing, anchor): (&Composing, Option<FeedbackAnchor>)
     let new = NewThread {
       number,
       anchor,
-      kind: draft.kind.get_untracked(),
+      kind: draft.kind.get_untracked().0,
       text: draft.text.get_untracked(),
       revision,
       recipient,
@@ -192,11 +192,11 @@ pub(super) fn keys(state: &FeedbackState, press: Option<Press>) -> impl Fn(Keybo
 
 /// What it asks, and to which agent of the task.
 fn head(ctx: &mut Ctx, (task, draft): (&BoardTask, &Draft)) -> Row {
-  let kind = draft.kind.get();
+  let Held(kind) = draft.kind.get();
   let segment = |id: &str, key: &str, value: FeedbackKind| {
     let chosen = draft.kind.clone();
     Segment::new(id.to_owned(), SegmentFace::Text(ctx.t(key)), kind == value, move || {
-      chosen.set(value)
+      chosen.set(Held(value))
     })
   };
   let mode = segmented(
@@ -220,7 +220,7 @@ fn head(ctx: &mut Ctx, (task, draft): (&BoardTask, &Draft)) -> Row {
     .iter()
     .map(|target| {
       SelectOption::new(
-        Some(target.profile),
+        Held(Some(target.profile)),
         ctx.t_args(
           "pull_requests.feedback.composer.target",
           [("agent", target.role.to_string()), ("task", task.key.to_string())],
@@ -281,7 +281,7 @@ fn anchor_row(ctx: &Ctx, props: &NewProps, draft: &Draft) -> Row {
       ctx.t_args("pull_requests.feedback.anchor.whole", [("revision", revision)])
     }
   };
-  let saved = draft.saved_at.get().map(|at| {
+  let saved = draft.saved_at.get().0.map(|at| {
     Row::new()
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
@@ -314,7 +314,7 @@ pub(super) fn words_box(ctx: &mut Ctx, id: &str, (task, draft): (&BoardTask, &Dr
     .and_then(|profile| task.target(profile))
     .map(|target| target.role.to_string())
     .unwrap_or_default();
-  let placeholder = match draft.kind.get() {
+  let placeholder = match draft.kind.get().0 {
     FeedbackKind::Question => "pull_requests.feedback.composer.placeholderQuestion",
     FeedbackKind::Fix => "pull_requests.feedback.composer.placeholderFix",
   };
@@ -327,7 +327,7 @@ pub(super) fn words_box(ctx: &mut Ctx, id: &str, (task, draft): (&BoardTask, &Dr
   .text_area()
   .area_height(AREA_HEIGHT)
   .placeholder(ctx.t_args(placeholder, [("agent", agent)]))
-  .on_typed(move |_| saved.set(Some(Timestamp::now())))
+  .on_typed(move |_| saved.set(Held(Some(Timestamp::now()))))
   .render(ctx)
 }
 
@@ -376,6 +376,7 @@ fn target_role(task: &BoardTask, draft: &Draft) -> String {
   draft
     .target
     .get()
+    .0
     .and_then(|profile| task.target(profile))
     .map(|target| target.role.to_string())
     .unwrap_or_default()
@@ -397,7 +398,7 @@ fn run_line(ctx: &Ctx, env: &Env, (task, draft): (&BoardTask, &Draft)) -> Row {
     })
     .map(|thread| words::short_anchor(ctx, thread).to_string());
   let budget = task.run.as_ref().and_then(|run| run.budget).map(words::budget);
-  let text = match (draft.kind.get(), before, budget) {
+  let text = match (draft.kind.get().0, before, budget) {
     (FeedbackKind::Question, ..) => ctx.t_args(
       "pull_requests.feedback.composer.runQuestion",
       [("agent", agent), ("task", key)],

@@ -15,7 +15,7 @@ use lurq::{
 };
 use orchester_workspace::pull_requests::feedback::{FeedbackBoard, ThreadState, ThreadView};
 
-use super::{Filter, KindFilter, TabProps, parts::status, words};
+use super::{Filter, Held, KindFilter, TabProps, parts::status, words};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
@@ -147,7 +147,7 @@ fn row(
       .icon(Icon::ArrowUpRight)
       .small()
       .on_click(move || {
-        reveal.set(Some(id));
+        reveal.set(Held(Some(id)));
         navigation.replace(Route::Project(
           project,
           ProjectPage::PullRequest(number, Some(path.clone())),

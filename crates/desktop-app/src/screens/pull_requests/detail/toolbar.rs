@@ -21,7 +21,10 @@ use orchester_workspace::{
   pull_requests::{detail::ReadDiff, page::PullRequestView},
 };
 
-use super::{super::labels::grouped, feedback::FeedbackState};
+use super::{
+  super::labels::grouped,
+  feedback::{FeedbackState, Held},
+};
 use crate::{
   theme::{ExtraTypography, IconSize, PullRequestsSpacing},
   ui::{
@@ -78,10 +81,10 @@ pub fn toolbar(ctx: &mut Ctx, range: &Range<'_>) -> Row {
     _ => ctx.t_args("pull_requests.detail.rangeHead", [("head", head)]),
   };
   let since = range.state.map(|state| state.since.clone());
-  let mut options = vec![SelectOption::new(None, full.clone())];
+  let mut options = vec![SelectOption::new(Held(None), full.clone())];
   options.extend(range.fixed.iter().map(|fixed| {
     SelectOption::new(
-      Some(fixed.thread),
+      Held(Some(fixed.thread)),
       ctx.t_args(
         "pull_requests.feedback.range.since",
         [
@@ -91,7 +94,7 @@ pub fn toolbar(ctx: &mut Ctx, range: &Range<'_>) -> Row {
       ),
     )
   }));
-  let width = if since.as_ref().is_some_and(|since| since.get().is_some()) {
+  let width = if since.as_ref().is_some_and(|since| since.get().0.is_some()) {
     SINCE_WIDTH
   } else {
     RANGE_WIDTH
@@ -221,7 +224,7 @@ pub fn head_notice(ctx: &Ctx, (instead, head, state): (&Instead, &Revision, &Fee
         .icon(Icon::RefreshCw)
         .small()
         .on_click(move || {
-          pinned.set(None);
+          pinned.set(Held(None));
           follow.set(true);
         }),
       )

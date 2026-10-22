@@ -18,7 +18,7 @@ use orchester_core::pull_request::feedback::DiffSide;
 use orchester_workspace::pull_requests::feedback::{FeedbackBoard, ThreadState, ThreadView};
 
 use super::{
-  Composing, TabProps,
+  Composing, Held, TabProps,
   composer::{NewProps, new_thread},
   parts::{activity, events, messages, notes, status},
   reply::{ReplyProps, reply},
@@ -153,7 +153,7 @@ fn head(ctx: &mut Ctx, env: &Env, thread: &ThreadView) -> Row {
     .icon(Icon::ArrowUpRight)
     .small()
     .on_click(move || {
-      reveal.set(Some(id));
+      reveal.set(Held(Some(id)));
       navigation.replace(Route::Project(
         project,
         ProjectPage::PullRequest(number, Some(path.clone())),

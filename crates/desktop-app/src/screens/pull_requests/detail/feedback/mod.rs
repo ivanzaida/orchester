@@ -100,15 +100,22 @@ pub enum Composing {
 
 impl DevtoolsInspectable for Composing {}
 
+/// A value of the domain the page keeps in a signal, a select or a read's dependencies: the domain's types know
+/// nothing of DevTools, which shows this one without looking into it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Held<T>(pub T);
+
+impl<T> DevtoolsInspectable for Held<T> {}
+
 /// What a person wrote in one composer: kept until it is sent, also while the composer is closed.
 #[derive(Clone)]
 pub struct Draft {
   pub text: Signal<String>,
-  pub kind: Signal<FeedbackKind>,
+  pub kind: Signal<Held<FeedbackKind>>,
   /// The agent it goes to; `None` until the person picks one: the board's default then.
-  pub target: Signal<Option<ResourceId>>,
+  pub target: Signal<Held<Option<ResourceId>>>,
   /// When it was last changed; `None` while nothing was written.
-  pub saved_at: Signal<Option<Timestamp>>,
+  pub saved_at: Signal<Held<Option<Timestamp>>>,
   /// Sends it once whatever retries it, until it is sent.
   pub key: IdempotencyKey,
 }
@@ -126,9 +133,9 @@ impl Drafts {
       .entry(composing.clone())
       .or_insert_with(|| Draft {
         text: Signal::new(String::new()),
-        kind: Signal::new(kind),
-        target: Signal::new(None),
-        saved_at: Signal::new(None),
+        kind: Signal::new(Held(kind)),
+        target: Signal::new(Held(None)),
+        saved_at: Signal::new(Held(None)),
         key: IdempotencyKey::generate(),
       })
       .clone()
@@ -175,18 +182,18 @@ pub struct FeedbackState {
   pub composing: Signal<Option<Composing>>,
   pub drafts: Drafts,
   /// The thread Files changed scrolls to.
-  pub reveal: Signal<Option<FeedbackId>>,
+  pub reveal: Signal<Held<Option<FeedbackId>>>,
   /// Counts the writes that landed: the threads are read again after each.
   pub written: Signal<u64>,
   /// Why the latest write did not land.
   pub failure: Signal<Option<Message>>,
   /// The head Files changed shows instead of the pull request's latest, one a thread was written at (*Show at*).
-  pub pinned: Signal<Option<Revision>>,
+  pub pinned: Signal<Held<Option<Revision>>>,
   /// Files changed shows the pull request's head although a new thread is being written at an older one: the person
   /// asked to see it (*Show …*, *Show what changed*). Otherwise the head the draft was started at stays shown.
   pub follow: Signal<bool>,
   /// Files changed shows what changed since this thread's request (*Since your request*).
-  pub since: Signal<Option<FeedbackId>>,
+  pub since: Signal<Held<Option<FeedbackId>>>,
 }
 
 impl PartialEq for FeedbackState {
@@ -204,19 +211,19 @@ impl FeedbackState {
       kind: ctx.signal(KindFilter::All),
       composing: ctx.signal(None),
       drafts: Drafts::default(),
-      reveal: ctx.signal(None),
+      reveal: ctx.signal(Held(None)),
       written: ctx.signal(0),
       failure: ctx.signal(None),
-      pinned: ctx.signal(None),
+      pinned: ctx.signal(Held(None)),
       follow: ctx.signal(false),
-      since: ctx.signal(None),
+      since: ctx.signal(Held(None)),
     }
   }
 
   /// The head Files changed shows: one pinned, else the one a new thread is being written at when the pull request
   /// moved on and the person did not ask to follow it; `None`: the pull request's head.
   pub fn shown_head(&self, head: Option<&Revision>) -> Option<Revision> {
-    if let Some(pinned) = self.pinned.get() {
+    if let Held(Some(pinned)) = self.pinned.get() {
       return Some(pinned);
     }
     match self.composing.get() {

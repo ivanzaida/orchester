@@ -321,10 +321,11 @@ fn instead(
   let since = state
     .since
     .get()
+    .0
     .and_then(|thread| fixed.iter().find(|fixed| fixed.thread == thread))
     .map(|fixed| (fixed.from.clone(), fixed.to.clone()));
   let earlier = state.shown_head(head).filter(|_| since.is_none());
-  let writing = earlier.is_some() && state.pinned.get().is_none();
+  let writing = earlier.is_some() && state.pinned.get().0.is_none();
   let programs = Services::of(ctx).programs;
   let deps = (project.open.repo_root.clone(), number, since.clone(), earlier);
   let load = ctx.future(deps, move |(root, number, since, earlier)| {

@@ -77,7 +77,7 @@ pub fn annotations(
     let before = blocks.iter().position(|(line, _)| *line == at).unwrap_or(blocks.len());
     blocks.insert(before, (at, Arc::from(COMPOSER)));
   }
-  let reveal = env.state.reveal.get().and_then(|id| {
+  let reveal = env.state.reveal.get().0.and_then(|id| {
     blocks
       .iter()
       .find(|(at, key)| {

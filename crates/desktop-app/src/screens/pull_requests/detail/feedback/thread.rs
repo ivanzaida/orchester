@@ -21,7 +21,7 @@ use orchester_workspace::pull_requests::feedback::{
 };
 
 use super::{
-  Composing, FeedbackState, Write, Writes,
+  Composing, FeedbackState, Held, Write, Writes,
   parts::{activity, events, messages, notes, status, visibility},
   reply::{ReplyProps, reply},
   words,
@@ -266,7 +266,7 @@ impl Act<'_> {
       self.thread.id,
     );
     move || {
-      drafts.of(&Composing::Reply(id), kind).kind.set(kind);
+      drafts.of(&Composing::Reply(id), kind).kind.set(Held(kind));
       composing.set(Some(Composing::Reply(id)));
     }
   }
@@ -397,8 +397,8 @@ fn show_at(ctx: &Ctx, env: &Env, thread: &ThreadView) -> ActionButton {
   .icon(Icon::History)
   .small()
   .on_click(move || {
-    pinned.set(Some(at.clone()));
-    reveal.set(Some(id));
+    pinned.set(Held(Some(at.clone())));
+    reveal.set(Held(Some(id)));
     navigation.replace(Route::Project(project, ProjectPage::PullRequest(number, path.clone())));
   })
 }
