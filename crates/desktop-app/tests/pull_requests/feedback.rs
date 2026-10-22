@@ -262,6 +262,30 @@ fn feedback_fix_on_lines_starts_from_files_changed() {
 }
 
 #[test]
+fn feedback_threads_sit_under_the_file_rows() {
+  let mut seeded = Seeded::feedback();
+  seeded.window.navigation().go(Route::Project(
+    seeded.project,
+    ProjectPage::PullRequest(nonzero(142), None),
+  ));
+  seeded.window.until("THREADS beside the files", |window| {
+    window.tree.get_element_by_id("feedback-threads").is_some()
+  });
+  let (_, rows_top, _, rows_height) = seeded.bounds("pull-request-file-rows");
+  let (_, threads_top, _, threads_height) = seeded.bounds("feedback-threads-head");
+  let (_, column_top, _, column_height) = seeded.bounds("pull-request-files");
+  assert!(
+    (threads_top - (rows_top + rows_height)).abs() < 1.0,
+    "THREADS right under the six file rows: rows end at {}, THREADS starts at {threads_top}",
+    rows_top + rows_height
+  );
+  assert!(
+    threads_top + threads_height <= column_top + column_height,
+    "THREADS' head is in view"
+  );
+}
+
+#[test]
 fn feedback_on_a_succeeded_run_starts_a_follow_up() {
   let mut seeded = Seeded::feedback();
   seeded.feedback_of(137, None);

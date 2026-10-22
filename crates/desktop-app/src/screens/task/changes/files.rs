@@ -47,6 +47,13 @@ const COUNT_CHAR_WIDTH: f32 = 6.6;
 const CUT_HEAD: usize = 4;
 /// How often the line saying when the worktree was read is brought up to date.
 const AGE_TICK: Duration = Duration::from_secs(1);
+/// The list's padding above and below its rows (`xs`).
+const LIST_PADDING_Y: f32 = 4.0;
+
+/// The height a list of `count` files with no group headings takes, its padding included.
+pub fn rows_height(count: usize) -> f32 {
+  count as f32 * FILE_HEIGHT + 2.0 * LIST_PADDING_Y
+}
 
 /// The letter of a file's change and its color: an added file's in `success`, a deleted one's in
 /// `danger`, any other in `text_secondary` (`F1t7T`).

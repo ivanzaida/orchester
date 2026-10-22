@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, ScrollVertical, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -36,7 +36,7 @@ use crate::{
   screens::task::changes::{
     arrow_keys,
     diff::{CutAction, CutNote, DiffView, DiffViewProps},
-    files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, SelectFile},
+    files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, SelectFile, rows_height},
     listed::FileListing,
   },
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing, PullRequestsText},
@@ -245,20 +245,26 @@ fn files(ctx: &mut Ctx, (read, view): (&Arc<ReadDiff>, &PullRequestView), shown:
     .as_ref()
     .filter(|instead| instead.why == InsteadWhy::Since);
   let total = view.file_count().unwrap_or(all.files.len());
+  let shown_files = items.len();
+  let file_list = ctx.mount_keyed::<FileList>(
+    "pull-request-file-list",
+    FileListProps {
+      items: Arc::new(items),
+      select: select.clone(),
+    },
+  );
   let list = Column::new()
     .id("pull-request-files")
     .width(Dimension::Px(FILE_LIST_WIDTH))
     .height(Dimension::Pct(100.0))
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(files_head(ctx, (all.files.len(), since.map(|_| total)), &shown.find))
-    .child(ctx.mount_keyed::<FileList>(
-      "pull-request-file-list",
-      FileListProps {
-        items: Arc::new(items),
-        select: select.clone(),
-      },
-    ))
-    .with_children(shown.feedback.as_ref().map(|env| feedback::threads(ctx, env)));
+    .child(files_head(ctx, (all.files.len(), since.map(|_| total)), &shown.find));
+  let list = match shown.feedback.as_ref() {
+    Some(env) => list
+      .child(beside_threads(file_list, shown_files))
+      .child(threads_scroll(feedback::threads(ctx, env))),
+    None => list.child(file_list),
+  };
   let latest = match &view.diff {
     orchester_workspace::pull_requests::page::PageDiff::Read(read) => Some(read.diff.clone()),
     _ => None,
@@ -287,6 +293,29 @@ fn files(ctx: &mut Ctx, (read, view): (&Arc<ReadDiff>, &PullRequestView), shown:
         .with_children(diff),
     )
     .into()
+}
+
+/// The least height THREADS keeps under a long file list: its head and a few rows, the rest scrolled.
+const THREADS_MIN_HEIGHT: f32 = 160.0;
+
+/// The file rows as tall as they are, THREADS right under them (`Ti7lQ`, `OmUih`); a list too long for the
+/// column gives up its height and scrolls, so THREADS stays in view.
+fn beside_threads(file_list: Element, count: usize) -> Column {
+  Column::new()
+    .id("pull-request-file-rows")
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(rows_height(count)))
+    .flex_shrink(1.0)
+    .min_height(Dimension::Px(0.0))
+    .child(file_list)
+}
+
+/// THREADS under the file rows: it keeps at least its head and a few rows and scrolls what it cannot show.
+fn threads_scroll(threads: Element) -> ScrollVertical {
+  ScrollVertical::new(threads)
+    .width(Dimension::Pct(100.0))
+    .flex_shrink(1.0)
+    .min_height(Dimension::Px(THREADS_MIN_HEIGHT))
 }
 
 /// The selected file's diff, feedback drawn into it once read.
