@@ -1,5 +1,5 @@
 //! The chat beside History (`Main` in `ZJzV0`, `AJeWg` in `kPs8W`): a new conversation's start, or the conversation
-//! — its turns over the composer, 800 wide at most and 32 in from the panel's sides, the composer 14 over the panel's
+//! — its turns over the composer, 800 wide at most and 40 in from the panel's sides, the composer 14 over the panel's
 //! foot — or why it cannot be shown. A send that failed shows over the composer (`Send problem` `htsjO`), and so does
 //! what keeps the chat from sending (`notReady`).
 
@@ -36,7 +36,9 @@ use crate::{
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
+  theme::{
+    DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText,
+  },
   ui::{
     button::{ActionButton, ButtonKind},
     chat::names::ProjectNames,
@@ -237,7 +239,7 @@ fn conversation(
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
-        .padding(Padding::new().left(SpacingSize::Section).right(SpacingSize::Section))
+        .padding(side_room())
         .justify(Justify::Center)
         .child(below),
     );
@@ -251,28 +253,31 @@ fn conversation(
     .into()
 }
 
-/// A turn's room in the scrolling turns: 32 in from the chat area's sides, the column's width at most, centred.
+/// The page's sides, as its head's (`page`), so the column's edge meets the title's when the window is narrow.
+pub(super) fn side_room() -> Padding {
+  Padding::new()
+    .left(OrchestratorSpacing::PageSide.role())
+    .right(OrchestratorSpacing::PageSide.role())
+}
+
+/// A turn's room in the scrolling turns: in from the chat area's sides ([`side_room`]), the column's width at most,
+/// centred.
 pub(super) fn turn_room(turn: Column) -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().left(SpacingSize::Section).right(SpacingSize::Section))
+    .padding(side_room())
     .justify(Justify::Center)
     .child(turn.max_width(Dimension::Px(COLUMN_WIDTH)))
 }
 
-/// The chat's room: 32 in from its sides, its foot 14 over the panel's, its content centered.
+/// The chat's room: in from its sides ([`side_room`]), its foot 14 over the panel's, its content centered.
 fn frame(content: Element) -> Element {
   Column::new()
     .id("orchestrator-main")
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .height(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .left(SpacingSize::Section)
-        .right(SpacingSize::Section)
-        .bottom(ExtraSpacing::Section.role()),
-    )
+    .padding(side_room().bottom(ExtraSpacing::Section.role()))
     .align_items(Alignment::Center)
     .child(content)
     .into()
