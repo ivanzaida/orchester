@@ -6,11 +6,10 @@ use std::{
 
 use rusqlite::{Connection, OpenFlags, TransactionBehavior, ffi};
 
-use crate::StoreError;
+use crate::{StoreError, busy, lock_watch};
 
-/// How long opening, a read or a write waits for the other process (desktop or runner) to let go
-/// of the database.
-const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long opening waits for a process that went away to unmap the database's shared memory.
+const REOPEN_TIMEOUT: Duration = Duration::from_secs(5);
 /// The pause before opening again while a process that is going away still maps the database's
 /// shared memory.
 const REOPEN_PAUSE: Duration = Duration::from_millis(20);
@@ -49,30 +48,38 @@ pub(crate) fn open_read_only(path: &Path, migrations: &[&str]) -> Result<Connect
   Ok(connection)
 }
 
-/// Opens `path` in WAL mode; see [`connect_with`].
+/// Opens `path` in WAL mode; see [`connect_with`]. A commit does not wait for the disk to flush the
+/// log (`synchronous = NORMAL`): it held the write lock while the flush waited for everything the
+/// drive still had to write, the agents' builds included, so the writes of eight runs took the lock
+/// most of the time (ORC-74, `docs/architecture/storage.md`, "Concurrency"). A checkpoint flushes
+/// instead. The database stays consistent; a power cut, not a crash of Orchester, can lose the last
+/// commits.
 fn connect(path: &Path) -> Result<Connection, rusqlite::Error> {
   let (connection, ()) = connect_with(path, OpenFlags::default(), |connection| {
     connection.pragma_update_and_check(None, "journal_mode", "WAL", |_| Ok(()))
   })?;
+  connection.pragma_update(None, "synchronous", "NORMAL")?;
   Ok(connection)
 }
 
-/// Opens `path` with `flags` and runs `first` on it, waiting at most [`BUSY_TIMEOUT`] while the
-/// other process holds it: SQLite's busy handler waits for its locks, from the first read on. A
-/// process that crashed or was killed lets go of its locks on the shared memory of the write-ahead
-/// log (`-shm`) before Windows unmaps that file from it. The next process to open the database
-/// takes itself for the first one and resets the file, which fails with "disk I/O error" while the
-/// file is still mapped; opening is tried again until the map is gone. Every other error comes back
-/// at once.
+/// Opens `path` with `flags` and runs `first` on it. While other connections hold a lock it needs,
+/// it waits for it, from the first read on, as every statement of the connection does: its busy
+/// handler ([`busy::wait_for_lock`]) tries again until the lock is free or a minute has passed. Its
+/// statements are timed ([`lock_watch`]). A process that crashed or was killed lets go of its locks
+/// on the shared memory of the write-ahead log (`-shm`) before Windows unmaps that file from it. The
+/// next process to open the database takes itself for the first one and resets the file, which fails
+/// with "disk I/O error" while the file is still mapped; opening is tried again until the map is
+/// gone, for at most [`REOPEN_TIMEOUT`]. Every other error comes back at once.
 fn connect_with<T>(
   path: &Path,
   flags: OpenFlags,
   first: impl Fn(&Connection) -> Result<T, rusqlite::Error>,
 ) -> Result<(Connection, T), rusqlite::Error> {
-  let deadline = Instant::now() + BUSY_TIMEOUT;
+  let deadline = Instant::now() + REOPEN_TIMEOUT;
   loop {
     let connection = Connection::open_with_flags(path, flags)?;
-    connection.busy_timeout(BUSY_TIMEOUT)?;
+    connection.busy_handler(Some(busy::wait_for_lock))?;
+    lock_watch::watch(&connection);
     match first(&connection) {
       Ok(value) => return Ok((connection, value)),
       Err(error) if shared_memory_still_mapped(&error) && Instant::now() < deadline => thread::sleep(REOPEN_PAUSE),

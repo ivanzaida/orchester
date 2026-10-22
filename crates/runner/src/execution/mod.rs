@@ -25,6 +25,7 @@ mod connection_check;
 mod control;
 mod conversation;
 mod environment;
+mod estimate;
 mod halt;
 mod handoff;
 mod idle;

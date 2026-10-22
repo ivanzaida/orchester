@@ -102,7 +102,9 @@ fn composer_a_failed_send_keeps_the_draft_and_try_again_stores_it_once() {
   let (mut window, seeded) = seeded();
   let key = open(&mut window, &seeded, "Localize the invoice emails");
   write(&mut window, "Keep me");
-  // Another writer holds the database: the store gives up after its busy timeout.
+  // Another writer holds the database: the store gives up once it has waited longer than a write may,
+  // five seconds here instead of a minute (process-wide, for every test of this binary).
+  orchester_store::set_lock_budget_for_test(std::time::Duration::from_secs(5));
   let database = seeded.repo.join(".orchester").join("orchester.db");
   let holder = Connection::open(&database).expect("the database opens");
   holder.execute_batch("BEGIN EXCLUSIVE").expect("the database is held");

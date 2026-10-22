@@ -1,15 +1,17 @@
-//! The card of a publication, cancel, merge, answer, message or continuation the Orchestrator's agent proposed or the
-//! chat did itself, and of a run it started without asking because auto mode is on (`Orchestrator · publish proposal`
-//! `b55NqO` and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action card's frame, its
-//! head with the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts and, while it waits,
-//! the diff of the text it publishes; what it did or would do; its notes; and its actions. While it waits, only a
-//! person applies it: lurq's synthetic input is refused in the handler, visibly; *Dismiss* changes nothing and stays
-//! open to automation. The facts are read when the card shows ([`orchester_workspace::orchestrator::facts`]).
+//! The card of a publication, cancel, merge, answer, message, continuation or repository the Orchestrator's agent
+//! proposed or the chat did itself, and of a run it started without asking because auto mode is on (`Orchestrator ·
+//! publish proposal` `b55NqO` and its states `UKgrR`, `Orchestrator · run proposals · states` `Ee2JE`): in the action
+//! card's frame, its head with the state at its end and, for a start in auto mode, the *Auto mode* chip; its facts
+//! and, while it waits, the diff of the text it publishes or the `.gitignore` a first commit honours; what it did or
+//! would do; its notes; and its actions. While it waits, only a person applies it: lurq's synthetic input is refused
+//! in the handler, visibly; *Dismiss* changes nothing and stays open to automation. The facts are read when the card
+//! shows ([`orchester_workspace::orchestrator::facts`]); a repository's are the ones its proposal keeps.
 
 pub(in crate::screens) mod answer;
 mod continuation;
 mod control;
 mod facts;
+mod repository;
 mod widens;
 mod words;
 
@@ -22,7 +24,7 @@ use lurq::{
     events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -121,8 +123,22 @@ impl Component for ChangeCard {
     let chip =
       auto_mode.then(|| TagChip::new(format!("{id}-auto-mode"), ctx.t("orchestrator.change.start.autoMode")).into());
     let head = card::head(id, (glyph, &title), chip, state);
-    let facts = facts::rows(ctx, id, &view, props.project.0);
-    let diff = facts::diff(ctx, id, &view);
+    let (facts, diff): (Option<Column>, Option<Element>) =
+      match view.action.change.as_ref().map(|change| &change.change) {
+        // A first commit shows what its proposal keeps, and the `.gitignore` it honours.
+        Some(change @ Change::InitRepository { .. }) => {
+          let root = props.scope.as_ref().map(|scope| scope.root.as_path());
+          let rows = repository::rows(ctx, change, root);
+          (
+            Some(facts::column(ctx, id, rows)),
+            repository::gitignore(ctx, id, (&view, change)),
+          )
+        }
+        _ => (
+          facts::rows(ctx, id, &view, props.project.0),
+          facts::diff(ctx, id, &view).map(Into::into),
+        ),
+      };
     let notes = self.notes(ctx, (&props, &view, person_only), (read, &loaded.error));
     // What the person is shown it widens, once its facts were read without an error; until then it cannot be applied,
     // and the apply refuses anything else than what was shown.
@@ -186,6 +202,9 @@ impl ChangeCard {
         (Icon::ShieldAlert, PaletteColor::Warning),
         &ctx.t_args("orchestrator.change.publish.widens", [("name", name.as_str())]),
       ));
+    }
+    if let Some(change) = view.action.change.as_ref() {
+      before.extend(repository::sensitive(ctx, id, (view, &change.change)));
     }
     match (view.phase(), publication) {
       (Phase::Done, Some(of)) => {

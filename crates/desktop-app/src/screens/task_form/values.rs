@@ -2,7 +2,14 @@
 //! with what is stored to know whether something changed, and kept on this computer while it is not
 //! saved (`kept`).
 
-use orchester_core::{id::ResourceId, task::TaskDetails, tokens::grouped};
+use orchester_core::{
+  id::ResourceId,
+  task::{
+    Task, TaskDetails,
+    estimate::{EstimateSource, StoryPoints},
+  },
+  tokens::grouped,
+};
 use orchester_workspace::{budget::minutes_text, tasks::form::TaskForm};
 
 /// The fields' values. Criteria are one entry per row, blank rows included.
@@ -16,12 +23,14 @@ pub struct Values {
   pub budget: String,
   /// Whole minutes as typed; empty for no limit.
   pub time_limit: String,
+  /// The person's story points; `None`: Automatic, Orchester's estimate (ORC-49).
+  pub points: Option<StoryPoints>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Values {}
 
 impl Values {
-  /// The fields of a stored task, its budget grouped with `separator`.
+  /// The fields of a stored task's details, its budget grouped with `separator`, without points of a person.
   pub fn of_details(details: &TaskDetails, separator: &str) -> Self {
     Self {
       title: details.title.as_str().to_owned(),
@@ -34,6 +43,15 @@ impl Values {
         .map(|budget| grouped(budget.get(), separator))
         .unwrap_or_default(),
       time_limit: minutes_text(details.limits.max_duration()),
+      points: None,
+    }
+  }
+
+  /// The fields of a stored task, with the story points a person set, if any.
+  pub fn of_task(task: &Task, separator: &str) -> Self {
+    Self {
+      points: person_points(task),
+      ..Self::of_details(task.details(), separator)
     }
   }
 
@@ -68,6 +86,7 @@ impl Values {
       pipeline: self.pipeline,
       budget: digits(&self.budget),
       time_limit: self.time_limit.trim().to_owned(),
+      points: self.points,
     }
   }
 
@@ -75,4 +94,12 @@ impl Values {
   pub fn differ_from(&self, stored: &Self, separator: &str) -> bool {
     self.normalized(separator) != stored.normalized(separator)
   }
+}
+
+/// The story points a person set for `task`; `None` when it has none or only Orchester's.
+pub fn person_points(task: &Task) -> Option<StoryPoints> {
+  task
+    .estimate()
+    .filter(|estimate| estimate.source() == EstimateSource::Person)
+    .map(|estimate| estimate.points())
 }

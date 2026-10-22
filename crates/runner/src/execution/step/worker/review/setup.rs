@@ -30,7 +30,7 @@ use orchester_core::{
   store::{ConnectionStore, SecretStore, SettingsStore},
   time::Timestamp,
 };
-use orchester_store::StoreError;
+use orchester_store::{ProjectDb, StoreError};
 use tokio::{runtime::Handle, sync::watch};
 
 use super::{
@@ -181,7 +181,7 @@ impl ReviewerSetup {
   }
 
   /// The provider and account a review with this reviewer is spent on; `None` when it asks no model.
-  const fn provider(&self) -> Option<(AgentProvider, Option<AgentAccountId>)> {
+  pub(super) const fn provider(&self) -> Option<(AgentProvider, Option<AgentAccountId>)> {
     match self {
       Self::Cli { kind, account, .. } => Some((kind.provider(), *account)),
       Self::Native { .. } => Some((AgentProvider::AnthropicApi, None)),
@@ -277,94 +277,104 @@ impl RequestReviewer for Unreachable {
 impl Worker {
   /// The project's reviewer, as its auto mode settings resolve against its connections.
   pub(super) fn reviewer(&self, watch: &Watch) -> Result<ReviewerSetup, StoreError> {
-    let settings = watch.db.auto_mode_settings()?;
-    let connections = watch.db.connections()?;
-    let Ok(resolved) = resolve_reviewer(&settings, &connections) else {
-      return Ok(ReviewerSetup::Missing);
-    };
-    let ResolvedReviewer {
-      connection,
-      kind,
-      model,
-      effort,
-      ..
-    } = resolved;
-    if let (ReviewerKind::AnthropicApi, Some(api)) = (kind, connection.endpoint().api()) {
-      return Ok(self.native(watch, api, (model, effort)));
-    }
-    let Some(executable) = connection.executable() else {
-      return Ok(ReviewerSetup::Missing);
-    };
-    let ConnectionKind::Agent(provider) = *connection.kind() else {
-      return Ok(ReviewerSetup::Missing);
-    };
-    if let Some(reason) = connection
-      .account()
-      .start_problem(provider, Platform::current(), Path::is_dir)
-    {
-      tracing::warn!(%reason, "the reviewer's connection cannot run on its account");
-      return Ok(ReviewerSetup::Missing);
-    }
-    let mut environment = agent_environment(std::env::vars_os());
-    watch.db.project_environment()?.add_to(&mut environment);
-    let environment = match account_environment(environment, connection.account(), provider) {
-      Ok(environment) => environment,
-      Err(error) => {
-        tracing::warn!(%error, "the reviewer's account folder cannot reach its CLI");
-        return Ok(ReviewerSetup::Missing);
-      }
-    };
-    Ok(ReviewerSetup::Cli {
-      kind,
-      executable: executable.to_path_buf(),
-      account: connection.account().id(provider),
-      model,
-      effort,
-      environment,
-    })
-  }
-
-  /// The client of a native reviewer at `api`; unreachable when its key cannot be read.
-  fn native(&self, watch: &Watch, api: &ApiEndpoint, (model, effort): (ModelId, Option<String>)) -> ReviewerSetup {
-    let key = match self.api_key(watch, api.key()) {
-      Some(key) => key,
-      None => return ReviewerSetup::Unreachable { model },
-    };
-    match client(api, key) {
-      Ok(client) => ReviewerSetup::Native { client, model, effort },
-      Err(error) => {
-        tracing::warn!(%error, "cannot make the native reviewer's client");
-        ReviewerSetup::Unreachable { model }
-      }
-    }
-  }
-
-  /// The value of the project secret `id` holding a native reviewer's API key; why not is logged, never
-  /// the value.
-  fn api_key(&self, watch: &Watch, id: SecretId) -> Option<SecretValue> {
-    let secret = match watch.db.secret(id) {
-      Ok(Some(secret)) if !secret.is_archived() => secret,
-      Ok(_) => {
-        tracing::warn!(%id, "the native reviewer's API key is missing or archived");
-        return None;
-      }
-      Err(error) => {
-        tracing::warn!(%id, %error, "cannot read the native reviewer's API key");
-        return None;
-      }
-    };
-    self
-      .reviewer_keys
-      .vault
-      .read(&secret.vault_key(self.reviewer_keys.project))
-      .inspect_err(|error| tracing::warn!(%id, %error, "the keychain did not give the native reviewer's API key"))
-      // `.ok()`: the error is logged above, and a reviewer without its key fails every review.
-      .ok()
+    reviewer_setup(&watch.db, &self.reviewer_keys)
   }
 }
 
+/// The reviewer of the project of `db`, as its auto mode settings resolve against its connections, its key read
+/// with `keys`; the story-point estimator runs on it too.
+pub(super) fn reviewer_setup(db: &ProjectDb, keys: &ReviewerKeys) -> Result<ReviewerSetup, StoreError> {
+  let settings = db.auto_mode_settings()?;
+  let connections = db.connections()?;
+  let Ok(resolved) = resolve_reviewer(&settings, &connections) else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  let ResolvedReviewer {
+    connection,
+    kind,
+    model,
+    effort,
+    ..
+  } = resolved;
+  if let (ReviewerKind::AnthropicApi, Some(api)) = (kind, connection.endpoint().api()) {
+    return Ok(native(db, keys, api, (model, effort)));
+  }
+  let Some(executable) = connection.executable() else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  let ConnectionKind::Agent(provider) = *connection.kind() else {
+    return Ok(ReviewerSetup::Missing);
+  };
+  if let Some(reason) = connection
+    .account()
+    .start_problem(provider, Platform::current(), Path::is_dir)
+  {
+    tracing::warn!(%reason, "the reviewer's connection cannot run on its account");
+    return Ok(ReviewerSetup::Missing);
+  }
+  let mut environment = agent_environment(std::env::vars_os());
+  db.project_environment()?.add_to(&mut environment);
+  let environment = match account_environment(environment, connection.account(), provider) {
+    Ok(environment) => environment,
+    Err(error) => {
+      tracing::warn!(%error, "the reviewer's account folder cannot reach its CLI");
+      return Ok(ReviewerSetup::Missing);
+    }
+  };
+  Ok(ReviewerSetup::Cli {
+    kind,
+    executable: executable.to_path_buf(),
+    account: connection.account().id(provider),
+    model,
+    effort,
+    environment,
+  })
+}
+
+/// The client of a native reviewer at `api`; unreachable when its key cannot be read.
+fn native(
+  db: &ProjectDb,
+  keys: &ReviewerKeys,
+  api: &ApiEndpoint,
+  (model, effort): (ModelId, Option<String>),
+) -> ReviewerSetup {
+  let key = match api_key(db, keys, api.key()) {
+    Some(key) => key,
+    None => return ReviewerSetup::Unreachable { model },
+  };
+  match client(api, key) {
+    Ok(client) => ReviewerSetup::Native { client, model, effort },
+    Err(error) => {
+      tracing::warn!(%error, "cannot make the native reviewer's client");
+      ReviewerSetup::Unreachable { model }
+    }
+  }
+}
+
+/// The value of the project secret `id` holding a native reviewer's API key; why not is logged, never
+/// the value.
+fn api_key(db: &ProjectDb, keys: &ReviewerKeys, id: SecretId) -> Option<SecretValue> {
+  let secret = match db.secret(id) {
+    Ok(Some(secret)) if !secret.is_archived() => secret,
+    Ok(_) => {
+      tracing::warn!(%id, "the native reviewer's API key is missing or archived");
+      return None;
+    }
+    Err(error) => {
+      tracing::warn!(%id, %error, "cannot read the native reviewer's API key");
+      return None;
+    }
+  };
+  keys
+    .vault
+    .read(&secret.vault_key(keys.project))
+    .inspect_err(|error| tracing::warn!(%id, %error, "the keychain did not give the native reviewer's API key"))
+    // `.ok()`: the error is logged above, and a reviewer without its key fails every review.
+    .ok()
+}
+
 /// Where a native reviewer's key is read: the keychain, and the project its secrets belong to.
-pub(in crate::execution::step) struct ReviewerKeys {
-  pub(in crate::execution::step) vault: std::sync::Arc<dyn SecretVault>,
-  pub(in crate::execution::step) project: orchester_core::id::ProjectId,
+pub(in crate::execution) struct ReviewerKeys {
+  pub(in crate::execution) vault: std::sync::Arc<dyn SecretVault>,
+  pub(in crate::execution) project: orchester_core::id::ProjectId,
 }

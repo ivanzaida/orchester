@@ -17,7 +17,7 @@ use crate::{
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
+  tasks::{estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::{OpenProject, Workspace},
 };
 
@@ -126,6 +126,11 @@ impl Services {
   /// The projects' merge and removal operations, shared with the task pages.
   pub(crate) const fn jobs(&self) -> &ProjectJobs {
     &self.jobs
+  }
+
+  /// Orchester's story-point estimates of saved tasks.
+  pub(super) fn estimates(&self) -> Estimates {
+    Estimates::new(self.workspace.clone(), self.runners.clone(), self.changes.clone())
   }
 
   /// The project `named` by its id or, ignoring case, its name, opened as the app opens it. Blocks on

@@ -1,7 +1,34 @@
 //! A write decision and its mutation share SQLite's writer lock, including other database handles.
 
+use rusqlite::{Connection, Transaction};
+
 use super::ProjectDb;
-use crate::StoreError;
+use crate::{
+  StoreError,
+  busy::{self, Contention},
+};
+
+/// Runs `write` in an immediate transaction and commits it. A busy error anywhere in it rolls it back
+/// and runs it again from the start, with growing pauses, for up to the time a write may wait for the
+/// database ([`busy::retry`]), logging each retry with `what`. So `write` changes nothing but the
+/// database. The run's log takes this way: its events, transcript, invocations and step results.
+pub(super) fn retried<T, E>(
+  connection: &mut Connection,
+  what: &'static str,
+  mut write: impl FnMut(&Transaction<'_>) -> Result<T, E>,
+) -> Result<T, E>
+where
+  E: From<rusqlite::Error> + Contention,
+{
+  busy::retry(what, || {
+    let transaction = connection.transaction()?;
+    #[cfg(feature = "test-support")]
+    busy::injected_failure()?;
+    let value = write(&transaction)?;
+    transaction.commit()?;
+    Ok(value)
+  })
+}
 
 impl ProjectDb {
   /// Runs `write` under an immediate transaction. The callback must not start nested transactions.

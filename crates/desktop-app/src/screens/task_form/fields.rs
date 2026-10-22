@@ -7,6 +7,7 @@ use orchester_workspace::modules::ModuleChoice;
 use super::{
   criteria::{Criterion, texts},
   plan::Pick,
+  points::Points,
   values::Values,
 };
 
@@ -18,6 +19,7 @@ pub struct Fields {
   pub pipeline: Signal<Pick>,
   pub budget: Signal<String>,
   pub time_limit: Signal<String>,
+  pub points: Signal<Points>,
   pub module: Signal<ModuleChoice>,
 }
 
@@ -30,6 +32,7 @@ impl Fields {
       pipeline: ctx.signal(Pick(None)),
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
+      points: ctx.signal(Points(None)),
       module: ctx.signal(ModuleChoice::default()),
     }
   }
@@ -43,6 +46,7 @@ impl Fields {
       pipeline: self.pipeline.get().0,
       budget: self.budget.get(),
       time_limit: self.time_limit.get(),
+      points: self.points.get().0,
     }
   }
 
@@ -59,6 +63,7 @@ impl Fields {
       pipeline: self.pipeline.get_untracked().0,
       budget: self.budget.get_untracked(),
       time_limit: self.time_limit.get_untracked(),
+      points: self.points.get_untracked().0,
     }
   }
 
@@ -69,5 +74,6 @@ impl Fields {
     self.pipeline.set(Pick(values.pipeline));
     self.budget.set(values.budget.clone());
     self.time_limit.set(values.time_limit.clone());
+    self.points.set(Points(values.points));
   }
 }

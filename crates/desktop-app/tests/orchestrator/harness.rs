@@ -30,6 +30,7 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
+use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::workspace::OrchestratorConsent;
 
@@ -77,6 +78,11 @@ pub struct Orchestrator {
 
 impl Orchestrator {
   pub fn new(setup: Setup) -> Self {
+    Self::with_git(setup, None)
+  }
+
+  /// [`Orchestrator::new`] whose window runs git (and gh) with `git_programs` when they are given.
+  pub fn with_git(setup: Setup, git_programs: Option<Programs>) -> Self {
     let programs = programs();
     let (runner, fake, fake_codex) = (programs.runner.clone(), &programs.fake_claude, &programs.fake_codex);
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orchestrator-tests");
@@ -99,6 +105,10 @@ impl Orchestrator {
       Setup::Ready | Setup::Codex | Setup::NotChosen | Setup::NoConnection | Setup::CodexOnly => runner,
     };
     let launch = data.launch_with(runner);
+    let launch = match git_programs {
+      Some(git_programs) => launch.with_programs(git_programs),
+      None => launch,
+    };
     let project = ProjectId::generate();
     let open = add_project(
       launch.workspace().expect("the session started"),
