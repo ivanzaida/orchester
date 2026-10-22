@@ -1,8 +1,8 @@
-//! Usage by the account it started on: series in Settings' order by CLI (Codex first, named accounts before
-//! Default), a colour slot by position among every connected account, the fourth and later in Other with the
-//! accounts no longer connected, No account last, the reviewer's reviews on no account, and the Account filter
-//! with *No account*; plan limits per account, a report from before accounts as its CLI's Default, and the
-//! Account filter choosing whose plan limits are shown.
+//! Usage by the account it started on: series in Settings' order by CLI (Codex first, named accounts before Default), a
+//! colour slot by position among every connected account, the fourth and later in Other with the accounts no longer
+//! connected, No account last, the reviewer's reviews on the account it ran on (on none when it was not recorded), and
+//! the Account filter with *No account*; plan limits per account, a report from before accounts as its CLI's Default,
+//! and the Account filter choosing whose plan limits are shown.
 //! `cargo test -p orchester-core --test usage_accounts usage_accounts`.
 
 use std::{num::NonZeroU32, path::PathBuf};
@@ -19,8 +19,9 @@ use orchester_core::{
   run::{RunNumber, TokenUsage},
   time::Timestamp,
   usage::{
-    AccountOrder, AccountSeries, AccountUsage, DayRange, Grouping, IndexGiven, InvocationFacts, ProjectFacts,
-    ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport, day_start,
+    AccountOrder, AccountSeries, AccountUsage, DayRange, GroupBy, GroupKey, Grouping, IndexGiven, InvocationFacts,
+    ProjectFacts, ReviewUsage, RunFacts, RunOutcome, TurnUsage, UsageFacts, UsageFilter, UsageQuery, UsageReport,
+    day_start, grouped,
     limits::{LimitHistory, LimitSnapshot},
   },
 };
@@ -142,9 +143,9 @@ fn usage_accounts_an_empty_series_keeps_its_slot() {
   );
 }
 
-/// One run on Sep 25: an invocation on `on` spent 1,000, one on no account 200, and auto mode's reviewer
-/// judged a request of the first for 50.
-fn facts(on: AgentAccountId) -> ProjectFacts {
+/// One run on Sep 25: an invocation on `on` spent 1,000, one on no account 200, and auto mode's reviewer on
+/// `reviewer` (`None`: not recorded) judged a request of the first for 50.
+fn facts(on: AgentAccountId, reviewer: Option<AgentAccountId>) -> ProjectFacts {
   let date = NaiveDate::from_ymd_opt(2026, 9, 25).expect("a day");
   let at = Timestamp::from_unix_millis(day_start(date).unix_millis() + 10 * 3_600_000);
   let run = RunFacts {
@@ -189,6 +190,7 @@ fn facts(on: AgentAccountId) -> ProjectFacts {
         at,
         invocation: agent.id,
         cli: AgentProvider::ClaudeCodeCli,
+        account: reviewer,
         model: "claude-haiku-4-5".into(),
         usage: spent(50),
       }],
@@ -199,47 +201,106 @@ fn facts(on: AgentAccountId) -> ProjectFacts {
   }
 }
 
-fn report(facts: &ProjectFacts, filter: &UsageFilter) -> UsageReport {
+fn query(filter: &UsageFilter) -> UsageQuery<'_> {
   let day = |day: u32| NaiveDate::from_ymd_opt(2026, 9, day).expect("a day");
-  let query = UsageQuery {
+  UsageQuery {
     range: DayRange::new(day(24), day(30)).expect("a week"),
     grouping: Grouping::Day,
     filter,
     now: Timestamp::from_unix_millis(day_start(day(30)).unix_millis() + 12 * 3_600_000),
-  };
-  UsageReport::build(std::slice::from_ref(facts), query)
+  }
 }
 
-#[test]
-fn usage_accounts_the_reviewer_counts_as_no_account() {
-  let client = AgentAccountId::generate();
-  let facts = facts(client);
-  let report = report(&facts, &UsageFilter::default());
+fn report(facts: &ProjectFacts, filter: &UsageFilter) -> UsageReport {
+  UsageReport::build(std::slice::from_ref(facts), query(filter))
+}
+
+/// The usage of `facts` by account, as *Tokens over time* draws it, and the reviewer's row's.
+fn by_account(facts: &ProjectFacts) -> (AccountUsage, AccountUsage) {
+  let report = report(facts, &UsageFilter::default());
   let mut by_account = AccountUsage::default();
   for bar in &report.series {
     for (account, usage) in bar.by_account.entries() {
       by_account.add(*account, *usage);
     }
   }
-  let entries = by_account.entries();
-  assert!(entries.contains(&(Some(client), spent(1_000))), "{entries:?}");
-  assert!(
-    entries.contains(&(None, spent(250))),
-    "the native invocation's 200 and the reviewer's 50: {entries:?}"
-  );
   let reviewer = report
     .breakdowns
     .profiles
     .iter()
     .find(|row| matches!(row.key, orchester_core::usage::BreakdownKey::Reviewer(_)))
     .expect("the reviewer's row");
-  assert_eq!(reviewer.by_account.entries(), [(None, spent(50))]);
+  (by_account, reviewer.by_account.clone())
+}
+
+#[test]
+fn usage_accounts_the_reviewer_counts_under_the_account_it_ran_on() {
+  let (client, work) = (AgentAccountId::generate(), AgentAccountId::generate());
+  let facts = facts(client, Some(work));
+  let (all, reviewer) = by_account(&facts);
+  let entries = all.entries();
+  assert!(entries.contains(&(Some(client), spent(1_000))), "{entries:?}");
+  assert!(entries.contains(&(Some(work), spent(50))), "{entries:?}");
+  assert!(
+    entries.contains(&(None, spent(200))),
+    "the native invocation alone: {entries:?}"
+  );
+  assert_eq!(reviewer.entries(), [(Some(work), spent(50))]);
+  let rows = grouped(
+    std::slice::from_ref(&facts),
+    query(&UsageFilter::default()),
+    GroupBy::Account,
+  )
+  .rows;
+  let work_row = rows
+    .iter()
+    .find(|row| row.key == GroupKey::Account(Some(work)))
+    .expect("the reviewer's account has a row");
+  assert_eq!(work_row.usage, spent(50));
+}
+
+#[test]
+fn usage_accounts_a_review_whose_account_was_not_recorded_counts_as_no_account() {
+  let client = AgentAccountId::generate();
+  let (all, reviewer) = by_account(&facts(client, None));
+  let entries = all.entries();
+  assert!(entries.contains(&(Some(client), spent(1_000))), "{entries:?}");
+  assert!(
+    entries.contains(&(None, spent(250))),
+    "the native invocation's 200 and the reviewer's 50: {entries:?}"
+  );
+  assert_eq!(reviewer.entries(), [(None, spent(50))]);
+}
+
+#[test]
+fn usage_accounts_the_filter_chooses_a_reviewer_by_its_account() {
+  let (client, work) = (AgentAccountId::generate(), AgentAccountId::generate());
+  let facts = facts(client, Some(work));
+  let spent_with = |filter: UsageFilter| report(&facts, &filter).summary.spent();
+  let on = |accounts: Vec<AgentAccountId>| UsageFilter {
+    accounts,
+    ..UsageFilter::default()
+  };
+  assert_eq!(spent_with(on(vec![work])), 50, "the reviewer's account alone");
+  assert_eq!(
+    spent_with(on(vec![client])),
+    1_000,
+    "the agent's account leaves the review out"
+  );
+  assert_eq!(
+    spent_with(UsageFilter {
+      no_account: true,
+      ..UsageFilter::default()
+    }),
+    200,
+    "No account leaves out a review on an account"
+  );
 }
 
 #[test]
 fn usage_accounts_the_filter_chooses_accounts_and_no_account() {
   let client = AgentAccountId::generate();
-  let facts = facts(client);
+  let facts = facts(client, None);
   let spent_with = |filter: UsageFilter| report(&facts, &filter).summary.spent();
   assert_eq!(spent_with(UsageFilter::default()), 1_250);
   assert_eq!(
