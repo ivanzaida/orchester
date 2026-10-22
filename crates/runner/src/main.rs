@@ -7,7 +7,7 @@ use std::{io, path::PathBuf, process::ExitCode, sync::Arc, time::Duration};
 
 use orchester_ipc::{EXIT_PROJECT_LOCKED, IpcError};
 use orchester_runner::{
-  approval_relay,
+  WORKER_THREADS, approval_relay,
   lock::{LockError, RunnerLock},
   log_file, private_file, server,
   shutdown_signal::ShutdownSignal,
@@ -16,8 +16,6 @@ use orchester_store::ProjectDb;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-/// Agents run on the runtime's workers while database and git calls block one of them briefly.
-const WORKER_THREADS: usize = 2;
 /// How long blocking work still running when the runner stops may take to finish.
 const BLOCKING_GRACE: Duration = Duration::from_secs(2);
 

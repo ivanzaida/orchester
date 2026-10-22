@@ -4,8 +4,11 @@
 //! base branch's head, the plan-limit reads, settings saved now and then, and the agents' builds writing and
 //! flushing files on the same disk. Each run's agents write over a thousand transcript lines, two step results and
 //! their checkpoints. No run is interrupted for the runner's failure and no reader fails; the longest write-lock
-//! holds and the largest write-ahead log are printed. Needs `git`. Run with `cargo test -p orchester-runner
-//! --features test-agent --test db_contention db_contention -- --nocapture`.
+//! holds and the largest write-ahead log are printed. And runs whose writes find the database locked by another
+//! connection for seconds: they wait for the lock and go on. Both run on a runtime with the runner's own worker
+//! count, and the runner keeps serving its other work meanwhile, as a statement that waits for a lock pauses off the
+//! async workers. Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test db_contention
+//! db_contention -- --nocapture`.
 
 mod support;
 
@@ -30,7 +33,9 @@ use orchester_core::{
   run::{BranchName, RunStatus},
   store::{ActivityStore, RunStore, SettingsStore, TaskStore},
 };
+use orchester_runner::WORKER_THREADS;
 use orchester_store::ProjectDb;
+use tokio::task::JoinHandle as TaskHandle;
 
 use self::support::{Setup, git, project, queue_another_task, scheduler, wait_for, wait_for_idle};
 
@@ -40,6 +45,13 @@ const POLL: Duration = Duration::from_millis(20);
 /// A hold of the write lock this long is logged as a warning; none comes near it. While each commit flushed the
 /// disk, the longest took up to 135 ms, and a writer waited up to a second.
 const LONG_HOLD: Duration = Duration::from_secs(1);
+/// How often the stand-in for the runner's other work (a timer, the desktop's requests) wants to run.
+const TICK: Duration = Duration::from_millis(50);
+/// The longest it may wait for a worker while the runner's writes wait for the lock.
+const RESPONSIVE: Duration = Duration::from_secs(1);
+/// How long the other connection holds the write lock in the slow-writer case: seconds, as a commit that waited for
+/// a disk flushing the agents' builds did.
+const SLOW_WRITE: Duration = Duration::from_secs(9);
 
 /// One of the readers and writers beside the runs: it works until told to stop and gives how often it did, or its
 /// first error.
@@ -154,12 +166,72 @@ fn wal_size(root: &Path, peak: Arc<AtomicU64>) -> impl Fn() -> Result<(), String
   }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+/// Runs `test` on a runtime like the runner's: multi-threaded, with its worker count.
+fn on_runners_runtime(test: impl Future<Output = ()>) {
+  tokio::runtime::Builder::new_multi_thread()
+    .worker_threads(WORKER_THREADS)
+    .enable_all()
+    .build()
+    .expect("the runner's runtime")
+    .block_on(test);
+}
+
+/// Stands in for the runner's other work (a timer, the desktop's requests): it wants a worker every [`TICK`] and keeps
+/// the longest it had to wait for one.
+struct Ticker {
+  started: Instant,
+  /// When it last ran and the longest gap between two runs, in milliseconds since `started`.
+  last: Arc<AtomicU64>,
+  longest: Arc<AtomicU64>,
+  task: TaskHandle<()>,
+}
+
+impl Ticker {
+  fn start() -> Self {
+    let started = Instant::now();
+    let (last, longest) = (Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0)));
+    let task = tokio::spawn({
+      let (last, longest) = (Arc::clone(&last), Arc::clone(&longest));
+      async move {
+        loop {
+          tokio::time::sleep(TICK).await;
+          let now = millis(started.elapsed());
+          longest.fetch_max(now - last.load(Ordering::SeqCst), Ordering::SeqCst);
+          last.store(now, Ordering::SeqCst);
+        }
+      }
+    });
+    Self {
+      started,
+      last,
+      longest,
+      task,
+    }
+  }
+
+  /// Stops it and gives the longest gap, the one still open now included: a runtime that never ran it again since
+  /// it froze fails here too.
+  fn stop(self) -> Duration {
+    self.task.abort();
+    let open = millis(self.started.elapsed()) - self.last.load(Ordering::SeqCst);
+    Duration::from_millis(self.longest.load(Ordering::SeqCst).max(open))
+  }
+}
+
+fn millis(duration: Duration) -> u64 {
+  u64::try_from(duration.as_millis()).expect("a test's milliseconds fit in u64")
+}
+
+#[test]
+fn db_contention_eight_runs_with_readers_settle_without_runner_failures() {
+  on_runners_runtime(eight_runs_with_readers());
+}
+
 #[allow(
   clippy::print_stderr,
   reason = "prints the measured write-lock holds, which the test is run to report"
 )]
-async fn db_contention_eight_runs_with_readers_settle_without_runner_failures() {
+async fn eight_runs_with_readers() {
   let project = project(&Setup {
     review: true,
     ..Setup::new("Flood standard error. Append one line.")
@@ -175,6 +247,7 @@ async fn db_contention_eight_runs_with_readers_settle_without_runner_failures() 
     .await
     .expect("a slot for each run");
   orchester_store::reset_lock_holds();
+  let ticker = Ticker::start();
   let started = Instant::now();
   let stop = Arc::new(AtomicBool::new(false));
   let runs = Arc::new(parking_lot::Mutex::new(Vec::new()));
@@ -200,6 +273,7 @@ async fn db_contention_eight_runs_with_readers_settle_without_runner_failures() 
     assert_eq!(ended.status(), &RunStatus::Succeeded, "run {run}");
   }
   wait_for_idle(&scheduler).await;
+  let longest_gap = ticker.stop();
   stop.store(true, Ordering::Release);
   for beside in besides {
     let times = beside.join().expect("the reader ends").expect("the reader never fails");
@@ -222,4 +296,63 @@ async fn db_contention_eight_runs_with_readers_settle_without_runner_failures() 
     "no write transaction holds the lock long: {:?}",
     holds.longest
   );
+  assert!(
+    longest_gap < RESPONSIVE,
+    "the runner's other work waited {longest_gap:?} for a worker"
+  );
+}
+
+#[test]
+fn db_contention_runs_wait_out_a_slow_writer_and_the_runner_stays_responsive() {
+  on_runners_runtime(runs_meet_a_slow_writer());
+}
+
+async fn runs_meet_a_slow_writer() {
+  let project = project(&Setup::new("Append one line."));
+  let root = project.repo.path();
+  let (scheduler, mut events) = scheduler(root);
+  let others = [queue_another_task(root), queue_another_task(root)];
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("the run starts");
+  wait_for(root, &mut events, id, |run| !run.running_executions().is_empty()).await;
+
+  // Its agent works now, and the run records what it does: every write of the run waits for this lock, and so does
+  // recording each of the two runs started meanwhile, more waiting writes than the runtime has workers.
+  let slow = rusqlite::Connection::open(root.join(".orchester").join("orchester.db")).expect("open");
+  slow
+    .execute_batch("BEGIN IMMEDIATE; UPDATE project SET name = 'Kontur Two';")
+    .expect("hold the write lock");
+  let ticker = Ticker::start();
+  let starts = others.map(|task| {
+    let scheduler = scheduler.clone();
+    tokio::spawn(async move { scheduler.start_run(IdempotencyKey::generate(), task).await })
+  });
+  tokio::time::sleep(SLOW_WRITE).await;
+  let longest_gap = ticker.stop();
+  assert!(
+    longest_gap < RESPONSIVE,
+    "the runner's other work waited {longest_gap:?} for a worker while its writes waited for the lock"
+  );
+  assert!(
+    starts.iter().all(|start| !start.is_finished()),
+    "the starts wait for the lock"
+  );
+  slow.execute_batch("COMMIT").expect("end the slow write");
+
+  let mut runs = vec![id];
+  for start in starts {
+    runs.push(start.await.expect("the start does not panic").expect("the run starts"));
+  }
+  for run in runs {
+    let ended = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
+    assert_eq!(ended.status(), &RunStatus::Succeeded, "run {run}");
+    assert_eq!(
+      ProjectDb::open(root).expect("open").runner_failure(run).expect("read"),
+      None,
+      "run {run}"
+    );
+  }
+  wait_for_idle(&scheduler).await;
 }

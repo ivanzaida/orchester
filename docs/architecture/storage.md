@@ -602,7 +602,10 @@ code), so these rules hold for all of them:
   This is the retry of every write, the app's (answers, merges, settings) as much as the runner's: nothing has
   run in the transaction yet when it waits. The run's log (events with step results and checkpoints,
   transcript, invocations, step outputs) also runs its whole transaction again when a busy error reaches it
-  after it began, with doubling pauses, within the same minute (`busy::retry`).
+  after it began, with doubling pauses, within the same minute (`busy::retry`). Both pause as the process sets
+  (`pause_lock_waits_with`): the runner, which calls the store from its runtime's two async workers, moves a
+  worker's other tasks off it before each pause (`tokio::task::block_in_place`), so writes waiting for the lock
+  never stop it serving the desktop, the agents' output, the relays and the timers.
 - **Past the minute.** A write that still finds the database locked gives up: the run-log writes with
   `StoreError::Unavailable` ("the database stayed locked for 60.0 s, so the write gave up: database is locked
   (SQLITE_BUSY)"), the others with the SQLite error, whose message names its extended code. The runner

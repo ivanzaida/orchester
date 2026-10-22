@@ -6,6 +6,7 @@
 //! whole transaction again when a busy error still reaches it: one SQLite answers without calling the
 //! handler (`SQLITE_BUSY_SNAPSHOT`, a read upgraded to a write), within the same budget. Past the
 //! budget the error is [`StoreError::Unavailable`], which says how long it waited and for which code.
+//! Both pause the waiting thread as the process says ([`pause_lock_waits_with`]).
 
 use std::{
   sync::atomic::{AtomicU64, Ordering},
@@ -13,6 +14,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use parking_lot::RwLock;
 use rusqlite::ffi;
 
 use crate::{RunStoreError, StoreError, lock_watch};
@@ -26,6 +28,22 @@ const PAUSES_MS: [u64; 8] = [1, 2, 5, 10, 15, 20, 25, 50];
 /// The first pause before a transaction runs again; each next one doubles, up to [`LONGEST_RETRY_PAUSE`].
 const FIRST_RETRY_PAUSE: Duration = Duration::from_millis(10);
 const LONGEST_RETRY_PAUSE: Duration = Duration::from_secs(1);
+
+/// How a wait for a lock pauses: sleeps its thread, unless the process set otherwise.
+static PAUSE: RwLock<fn(Duration)> = RwLock::new(thread::sleep);
+
+/// Makes every wait of this process for a lock, the busy handler's and [`retry`]'s, pause with `pause`
+/// instead of sleeping its thread. A process that calls the store on the workers of an async runtime
+/// (the runner) moves a worker's other tasks off it first, so a wait of up to a minute holds up no
+/// task but its own.
+pub fn pause_lock_waits_with(pause: fn(Duration)) {
+  *PAUSE.write() = pause;
+}
+
+fn pause_for(duration: Duration) {
+  let pause = *PAUSE.read();
+  pause(duration);
+}
 
 /// [`BUDGET_MS`], or the shorter budget a test set.
 static BUDGET: AtomicU64 = AtomicU64::new(BUDGET_MS);
@@ -52,7 +70,7 @@ pub(crate) fn wait_for_lock(count: i32) -> bool {
     return false;
   }
   let pause = Duration::from_millis(PAUSES_MS[count.min(PAUSES_MS.len() - 1)]);
-  thread::sleep(pause);
+  pause_for(pause);
   lock_watch::waited(waited, pause);
   true
 }
@@ -158,7 +176,7 @@ pub(crate) fn retry<T, E: Contention>(what: &'static str, mut attempt: impl FnMu
       return Err(error.unavailable(waited));
     }
     tracing::warn!(what, code, ?waited, "the database is busy; the write starts again");
-    thread::sleep(pause);
+    pause_for(pause);
     pause = (pause * 2).min(LONGEST_RETRY_PAUSE);
   }
 }
