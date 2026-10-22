@@ -134,6 +134,7 @@ impl TaskForm {
         task: task.id(),
         key: task.key().clone(),
         outcome: StartOutcome::ConfirmedNotStarted,
+        unsourced: Vec::new(),
       }));
       self.start_from(&stored);
     } else {

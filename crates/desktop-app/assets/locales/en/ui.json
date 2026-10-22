@@ -3,6 +3,18 @@
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "tabCount": "{{label}} {{count}}",
+    "addSource": {
+      "path": "Folder or file path",
+      "choose": "Choose folder…",
+      "pickerTitle": "Choose a folder agents may read",
+      "hint": "Type or paste a file path, or choose a folder. Agents only read and search inside it."
+    },
+    "source": {
+      "available": "Available",
+      "missing": "Missing",
+      "unreadable": "Can't be read",
+      "remove": "Remove {{path}}"
+    },
     "link": {
       "addressNote": "({{address}})",
       "opensBrowser": "Opens {{url}} in your browser",

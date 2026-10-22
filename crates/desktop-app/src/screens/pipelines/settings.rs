@@ -83,7 +83,8 @@ fn content(ctx: &mut Ctx, state: &State, busy: bool, sections: &super::settings_
         .ref_element(sections.target("pipelines.starts"))
         .child(starts(ctx)),
     );
-  form = proposals(ctx, sections, form);
+  let locked = busy || editing.viewing.is_some();
+  form = proposals(ctx, sections, (state, locked), form);
   Row::new()
     .id("pipeline-settings-page")
     .width(Dimension::Pct(100.0))
@@ -374,7 +375,13 @@ fn draft_strip(ctx: &Ctx, state: &State, locked: bool) -> Element {
     .child(if locked { action.disabled() } else { action })
     .into()
 }
-fn proposals(ctx: &Ctx, sections: &super::settings_nav::Sections, mut form: Column) -> Column {
+/// The sections still planned, and Sources (`Q10UQ`) among them in the design's order.
+fn proposals(
+  ctx: &mut Ctx,
+  sections: &super::settings_nav::Sections,
+  (state, locked): (&State, bool),
+  mut form: Column,
+) -> Column {
   for key in [
     "pipelines.runDefaults",
     "pipelines.failureDefaults",
@@ -383,14 +390,17 @@ fn proposals(ctx: &Ctx, sections: &super::settings_nav::Sections, mut form: Colu
     "pipelines.delivery",
     "pipelines.archive",
   ] {
-    form = form.child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .ref_element(sections.target(key))
+    let section = Column::new()
+      .width(Dimension::Pct(100.0))
+      .ref_element(sections.target(key));
+    form = form.child(if key == "pipelines.sources" {
+      section.child(super::sources::settings_section(ctx, state, locked))
+    } else {
+      section
         .spacing(SpacingSize::Md)
         .child(parts::section(ctx, key))
-        .child(parts::note(&ctx.t("pipelines.proposal"))),
-    );
+        .child(parts::note(&ctx.t("pipelines.proposal")))
+    });
   }
   form = form.child(
     property(

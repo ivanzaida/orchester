@@ -11,7 +11,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use crate::support::{Window, project_id};
+use crate::support::{Data, Window, project_id, stand_ins::StandIns};
 
 pub struct Editor {
   pub window: Window,
@@ -22,6 +22,18 @@ impl Editor {
     let window = Window::open();
     let repo = window.data.dir.path().join("repo-kontur");
     Self { window, repo }
+  }
+  /// The editor with the stand-in pickers, which hand over the folder a test chose.
+  pub fn with_stand_ins() -> (Self, StandIns) {
+    let data = Data::new();
+    let launch = data.launch();
+    data.add_kontur(launch.workspace().expect("the session started"));
+    let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
+    let repo = window.data.dir.path().join("repo-kontur");
+    (Self { window, repo }, stand_ins)
+  }
+  pub fn repo(&self) -> &std::path::Path {
+    &self.repo
   }
   pub fn go(&mut self, page: ProjectPage) {
     self.window.navigation().go(Route::Project(project_id(), page));

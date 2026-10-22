@@ -68,6 +68,12 @@ impl TaskForm {
       organization: (organization.clone(), edited.clone()),
       points: view.values.points,
       module: view.module,
+      // Read tracked: the handlers are made again once the form's sources change.
+      sources: if made_on.is_none() {
+        self.sources.get().0
+      } else {
+        Vec::new()
+      },
     });
     let (ask, keep) = (self.confirming_discard.clone(), self.confirming_discard.clone());
     Handlers {
@@ -126,6 +132,7 @@ impl TaskForm {
       organization: (organization, edited),
       points: view.values.points,
       module: view.module,
+      sources: Vec::new(),
     };
     Some(press(save, args, &self.dismissed))
   }

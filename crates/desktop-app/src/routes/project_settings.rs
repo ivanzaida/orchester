@@ -9,15 +9,18 @@ pub enum ProjectSettingsTab {
   General,
   Limits,
   Environment,
+  /// The folders agents may read without asking (`kmNiF`).
+  Sources,
   CodeIndex,
   Sharing,
 }
 
 impl ProjectSettingsTab {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::General,
     Self::Limits,
     Self::Environment,
+    Self::Sources,
     Self::CodeIndex,
     Self::Sharing,
   ];
@@ -28,6 +31,7 @@ impl ProjectSettingsTab {
       Self::General => "general",
       Self::Limits => "limits",
       Self::Environment => "environment",
+      Self::Sources => "sources",
       Self::CodeIndex => "code_index",
       Self::Sharing => "sharing",
     }

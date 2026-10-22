@@ -15,5 +15,6 @@ mod review_regressions;
 mod reviewer_authority;
 mod reviewer_refresh;
 mod run_fixture;
+mod sources;
 #[path = "../support/mod.rs"]
 mod support;
