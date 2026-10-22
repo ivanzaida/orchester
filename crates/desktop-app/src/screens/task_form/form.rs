@@ -17,7 +17,6 @@ use lurq::{
 use orchester_core::{
   id::{IdempotencyKey, TaskId},
   module::Module,
-  source::SourcePath,
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -41,7 +40,7 @@ use super::{
   module::module_section,
   plan::pipeline_section,
   points::points_section,
-  sources::{SourcesProps, context_section},
+  sources::{Drafted, SourcesProps, context_section},
   state::{Phase, Subject, View},
   unbuilt::instructions_section,
 };
@@ -100,7 +99,7 @@ pub struct TaskForm {
   /// What this form last wrote to the kept edits.
   pub(super) written: Arc<Mutex<Written>>,
   /// A new task's sources, which Create stores with it; a stored task's are saved as they change.
-  pub(super) sources: Signal<Vec<SourcePath>>,
+  pub(super) sources: Signal<Drafted>,
 }
 
 /// Leaving the form writes the edits whose pause has not ended yet.
@@ -163,7 +162,7 @@ impl Component for TaskForm {
         &batch.to_string(),
       ),
       written: Arc::default(),
-      sources: ctx.signal(Vec::new()),
+      sources: ctx.signal(Drafted::default()),
     };
     form.follow_save(ctx, &save, &props);
     form.follow_run(ctx, &run, &props);

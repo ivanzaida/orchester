@@ -39,7 +39,7 @@ use crate::{
   screens::connections::widen::{WidenConfirm, WidenProps},
   theme::{ExtraSpacing, ExtraTypography, SourcesSpacing},
   ui::{
-    add_source::{AddSource, AddSourceProps, Layout},
+    add_source::{AddSource, AddSourceProps, Asked, Layout},
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
@@ -48,6 +48,13 @@ use crate::{
     unavailable::reason_line,
   },
 };
+
+/// A new task's sources on the form, until Create stores them with it. Wrapped so a signal can hold them, as
+/// `Asked` is.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Drafted(pub Vec<SourcePath>);
+
+impl DevtoolsInspectable for Drafted {}
 
 #[derive(Clone)]
 pub struct SourcesProps {
@@ -60,7 +67,7 @@ pub struct SourcesProps {
   /// The published pipeline version the task runs.
   pub pipeline: Option<(ResourceId, VersionNumber)>,
   /// A new task's sources, stored when it is created.
-  pub drafted: Signal<Vec<SourcePath>>,
+  pub drafted: Signal<Drafted>,
   pub locked: bool,
 }
 
@@ -111,7 +118,7 @@ type Save = FutureAction<(PathBuf, TaskId, Option<(ResourceId, VersionNumber)>, 
 pub struct TaskSources {
   save: Save,
   revision: Signal<u64>,
-  asking: Signal<Option<SourcePath>>,
+  asking: Signal<Option<Asked>>,
 }
 
 impl Component for TaskSources {
@@ -179,7 +186,7 @@ impl Component for TaskSources {
         None,
       ))
       .with_children(self.own_rows(ctx, &props, &read.own, busy));
-    if let Some(path) = self.asking.get() {
+    if let Some(Asked(path)) = self.asking.get() {
       block = block.child(self.question(ctx, &props, &path));
     }
     if let Some(error) = self.save.state().get().error {
@@ -194,7 +201,7 @@ impl Component for TaskSources {
         layout: Layout::Line,
         add: ctx.t("task_form.sources.add"),
         locked: busy || self.asking.get().is_some(),
-        on_add: Arc::new(move |path| ask.set(Some(path))),
+        on_add: Arc::new(move |path| ask.set(Some(Asked(path)))),
       },
     ));
     block = inherited(ctx, &props, &read.inherited, block);
@@ -211,7 +218,7 @@ impl TaskSources {
   /// The task's own sources (the stored task's or the form's) and what it inherits; what was read before stays on
   /// screen while they are read again.
   fn read(&self, ctx: &mut Ctx, props: &SourcesProps) -> Option<Read> {
-    let drafted = props.task.is_none().then(|| props.drafted.get());
+    let drafted = props.task.is_none().then(|| props.drafted.get().0);
     let deps = (
       props.repo_root.clone(),
       props.task,
@@ -276,7 +283,7 @@ impl TaskSources {
         save.run((root.clone(), task, pipeline, Change::Remove(path.clone())));
       }
       Some(_) => {}
-      None => drafted.update(|drafted| drafted.retain(|source| *source != path)),
+      None => drafted.update(|Drafted(drafted)| drafted.retain(|source| *source != path)),
     }
   }
 
@@ -310,7 +317,7 @@ impl TaskSources {
           }
           Some(_) => {}
           None => {
-            drafted.update(|drafted| {
+            drafted.update(|Drafted(drafted)| {
               if !drafted.contains(&path) {
                 drafted.push(path.clone());
               }

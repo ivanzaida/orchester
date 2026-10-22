@@ -52,6 +52,13 @@ pub enum Layout {
 
 type OnAdd = Arc<dyn Fn(SourcePath) + Send + Sync>;
 
+/// A source that passed the check, which the person is asked about before it is added. A signal's value needs
+/// `DevtoolsInspectable`, which the app cannot give core's `SourcePath` itself (orphan rule).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Asked(pub SourcePath);
+
+impl DevtoolsInspectable for Asked {}
+
 #[derive(Clone)]
 pub struct AddSourceProps {
   /// The element ids start with it: `<id>-path`, `<id>-choose`, `<id>-add`, `<id>-hint`.

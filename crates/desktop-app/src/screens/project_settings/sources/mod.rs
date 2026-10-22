@@ -37,6 +37,7 @@ use crate::{
   services::Services,
   theme::ExtraSpacing,
   ui::{
+    add_source::Asked,
     field::field_error,
     message::message_text,
     state::{load_error, loading},
@@ -74,7 +75,7 @@ pub(super) struct Sources {
   save: Save,
   revision: Signal<u64>,
   /// The source a person is asked about before it is added.
-  asking: Signal<Option<SourcePath>>,
+  asking: Signal<Option<Asked>>,
   /// The source removed last, until the next change.
   removed: Signal<Option<Removed>>,
 }
@@ -199,9 +200,11 @@ impl Sources {
     let mut section = view::heading(ctx, props, read).child(list);
     if let Some(removed) = self.removed.get() {
       let (ask, path) = (self.asking.clone(), removed.path.clone());
-      section = section.child(view::removed(ctx, &removed, move || ask.set(Some(path.clone()))));
+      section = section.child(view::removed(ctx, &removed, move || {
+        ask.set(Some(Asked(path.clone())));
+      }));
     }
-    if let Some(path) = &asking {
+    if let Some(Asked(path)) = &asking {
       section = section.child(self.question(ctx, &root, path));
     }
     let ask = self.asking.clone();
@@ -209,7 +212,7 @@ impl Sources {
       ctx,
       read,
       busy || asking.is_some(),
-      Arc::new(move |path| ask.set(Some(path))),
+      Arc::new(move |path| ask.set(Some(Asked(path)))),
     ))
   }
 

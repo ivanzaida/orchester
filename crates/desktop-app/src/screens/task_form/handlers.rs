@@ -70,7 +70,7 @@ impl TaskForm {
       module: view.module,
       // Read tracked: the handlers are made again once the form's sources change.
       sources: if made_on.is_none() {
-        self.sources.get()
+        self.sources.get().0
       } else {
         Vec::new()
       },
