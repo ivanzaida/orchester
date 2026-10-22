@@ -15,6 +15,7 @@ pub use app_db::{
   AcceptedInvite, AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, RegisteredProject,
   ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredServer,
 };
+pub use busy::pause_lock_waits_with;
 #[cfg(feature = "test-support")]
 pub use busy::{fail_next_writes_for_test, set_lock_budget_for_test};
 pub use error::{RunStoreError, StoreError};

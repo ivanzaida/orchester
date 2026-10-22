@@ -147,6 +147,8 @@ impl Scheduler {
     vault: Arc<dyn SecretVault>,
     (relay, qa_slots): (Option<PathBuf>, QaSlots),
   ) -> Self {
+    // Every statement of the process that waits for a database lock pauses off the runtime's async workers.
+    orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),

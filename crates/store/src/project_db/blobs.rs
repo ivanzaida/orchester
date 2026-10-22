@@ -9,6 +9,7 @@ use std::{
   io::{self, ErrorKind},
   path::{Path, PathBuf},
   process,
+  sync::atomic::{AtomicU64, Ordering},
 };
 
 use orchester_core::{blob::ContentHash, store::BlobStore, time::Timestamp};
@@ -19,6 +20,8 @@ use super::ProjectDb;
 use crate::{StoreError, rows::corrupt};
 
 const DIRECTORY: &str = "blobs";
+/// Numbers this process's temporary blob files: two threads writing the same blob at once each write their own.
+static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 /// zstd's default level: fast, and text compresses several times over.
 const LEVEL: i32 = 3;
 
@@ -116,13 +119,14 @@ pub(super) fn get(connection: &Connection, orchester: &Path, hash: &BlobHash) ->
 }
 
 /// Writes the compressed `content` to a temporary file beside `path`, checks it decompresses to
-/// `hash`, then renames it into place. Another process may have stored the same blob meanwhile;
+/// `hash`, then renames it into place. Another thread or process may have stored the same blob meanwhile;
 /// its file has the same content.
 fn write_file(path: &Path, hash: &BlobHash, content: &[u8]) -> Result<(), StoreError> {
   let directory = path.parent().expect("a blob path has its two-letter directory");
   fs::create_dir_all(directory).map_err(StoreError::io(directory))?;
   let compressed = zstd::encode_all(content, LEVEL).map_err(StoreError::io(path))?;
-  let temporary = directory.join(format!("{}.{}.tmp", hash.as_str(), process::id()));
+  let number = NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed);
+  let temporary = directory.join(format!("{}.{}.{number}.tmp", hash.as_str(), process::id()));
   fs::write(&temporary, &compressed).map_err(StoreError::io(&temporary))?;
   let written = fs::read(&temporary).map_err(StoreError::io(&temporary))?;
   let verified = zstd::decode_all(written.as_slice()).is_ok_and(|read| BlobHash::of(&read) == *hash);
