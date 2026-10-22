@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use orchester_core::{blob::ContentHash, id::RunId, secret::SecretVault};
+use orchester_exec::programs::Programs;
 use orchester_workspace::tasks::local_integration::{self, ShownSnapshot};
 use parking_lot::Mutex;
 
@@ -35,7 +36,7 @@ impl LastRead {
     (root, run): (&std::path::Path, RunId),
     selected: Option<&ShownSnapshot>,
     policy: u64,
-    vault: &dyn SecretVault,
+    (vault, programs): (&dyn SecretVault, &Programs),
   ) -> Result<Shown, Problem> {
     // A fingerprint that cannot be taken only costs the shortcut: the whole read below reports its own refusal.
     let fingerprint = local_integration::fingerprint(root, run).ok();
@@ -54,8 +55,8 @@ impl LastRead {
         None => None,
       }
     };
-    let view =
-      local_integration::read_after(root, run, (selected, vault), previous.as_deref()).map_err(super::work::problem)?;
+    let view = local_integration::read_after(root, run, (selected, vault, programs), previous.as_deref())
+      .map_err(super::work::problem)?;
     let shown = Shown(Arc::new(view), policy);
     *self.0.lock() = Some(Entry {
       fingerprint,

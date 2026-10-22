@@ -3,17 +3,20 @@ use std::path::Path;
 use orchester_core::{
   blob::ContentHash,
   id::RunId,
-  integration::local::{Checkout, LocalConflict, LocalIntegrationStore, LocalOperation, LocalPath, LocalPhase},
+  integration::local::{
+    Checkout, LocalConflict, LocalIntegrationStore, LocalOperation, LocalPath, LocalPhase, ResultEvidenceKind,
+  },
   secret::{SecretVault, VaultKey},
   store::SecretStore,
 };
-use orchester_exec::local_git::LocalGit;
+use orchester_exec::{local_git::LocalGit, programs::Programs};
 use orchester_store::ProjectDb;
 
 use super::{
   IntegrationError, LocalIntegration,
   stats::{ShownSnapshot, Snapshot, SnapshotStats},
 };
+use crate::tasks::delivery::{self, Delivery};
 
 /// Only safe display content crosses into the visual layer. Sensitive content is unavailable for text editing.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,6 +48,9 @@ pub struct IntegrationView {
   pub checked_current: bool,
   pub editor_policy: EditorPolicy,
   pub external: Option<orchester_core::integration::local::ContainedResult>,
+  /// What became of the run's work by the rule the Summary reads it with ([`delivery::of_run`] on the run's
+  /// delivery target); `Waiting` while the run has a merge of Orchester's own, recorded or under way.
+  pub delivery: Delivery,
   pub stats: SnapshotStats,
   /// What the external evidence was read from, so a later read can keep it while these are unchanged.
   pub evidence_inputs: super::external::EvidenceInputs,
@@ -66,23 +72,47 @@ impl IntegrationView {
           .is_some_and(|file| !file.only_unstaged())
       })
   }
+
+  /// The branch the run's work was merged into without Orchester, as the Summary says it ([`Delivery::merged_into`]).
+  pub fn merged_outside(&self) -> Option<&str> {
+    self.delivery.merged_into()
+  }
+
+  /// Whether the page is about work found integrated outside Orchester instead of a review: merged into the run's
+  /// delivery target, or with evidence of the run's work in the checked-out target.
+  pub fn found_outside(&self) -> bool {
+    self.merged_outside().is_some() || self.external.is_some()
+  }
+
+  /// Whether the merge made without Orchester can be taken as the record's own: merged into the run's delivery
+  /// target, and the checkout's HEAD holds the whole work, the proof [`LocalIntegration::record_merged_outside`]
+  /// takes.
+  pub fn outside_merge_provable(&self) -> bool {
+    self.merged_outside().is_some()
+      && self
+        .external
+        .as_ref()
+        .is_some_and(|evidence| evidence.kind == ResultEvidenceKind::CompleteAncestry)
+  }
 }
 
 /// Reads actual checkout and retained journal independently of any worker lease, so progress stays observable.
+/// Git runs as a process, as for every other read of the checkout here.
 pub fn read(
   root: &Path,
   run: RunId,
   selected: Option<&ShownSnapshot>,
   vault: &dyn SecretVault,
 ) -> Result<IntegrationView, IntegrationError> {
-  read_after(root, run, (selected, vault), None)
+  read_after(root, run, (selected, vault, &Programs::processes()), None)
 }
 
-/// [`read`], keeping the external evidence of `previous` while what it was read from is unchanged.
+/// [`read`], with git through `programs` where the Summary reads the run's delivery, keeping the external evidence
+/// of `previous` while what it was read from is unchanged.
 pub fn read_after(
   root: &Path,
   run: RunId,
-  (selected, vault): (Option<&ShownSnapshot>, &dyn SecretVault),
+  (selected, vault, programs): (Option<&ShownSnapshot>, &dyn SecretVault, &Programs),
   previous: Option<&IntegrationView>,
 ) -> Result<IntegrationView, IntegrationError> {
   let scratch =
@@ -106,10 +136,18 @@ pub fn read_after(
   if let (Some(evidence), Some(saved)) = (&external, operation.as_mut()) {
     super::direct::settle_outside(root, &mut db, saved, evidence);
   }
+  let delivery = if evidence_inputs.merged() {
+    Delivery::Waiting
+  } else {
+    delivery::of_run(programs, root, &saved_run)
+  };
   let redact = Redaction::load(&db, vault)?;
   redact.ensure_metadata(&checkout)?;
   redact.ensure_metadata(&operation)?;
   redact.ensure_text_metadata(saved_run.branch().as_str())?;
+  if let Some(into) = delivery.merged_into() {
+    redact.ensure_text_metadata(into)?;
+  }
   if let Some(shown) = selected {
     redact.ensure_text_metadata(shown.path.as_str())?;
   }
@@ -136,6 +174,7 @@ pub fn read_after(
     editor_policy: EditorPolicy(std::sync::Arc::new(redact)),
     checked_current,
     external,
+    delivery,
     operation,
     checkout,
     conflicts,
