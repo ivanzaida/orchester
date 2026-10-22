@@ -22,6 +22,7 @@ use orchester_core::{
   id::{ConversationId, InvocationId, StepExecutionId},
   native::{
     command::CommandPolicy,
+    item::{Item, UserOrigin},
     scope::{FileScope, ScopeRoots},
     session::{Continuation as Resumed, LoopAction, LoopSettings, NativeLoop},
     store::{NativeConversation, NativeConversationStore},
@@ -257,6 +258,7 @@ impl RunTask {
       repository_instructions: instructions,
     };
     let prompt = self.with_prompt(parts, |input, _| input.assemble_native(setting))?;
+    let attached = self.attached_items(parts.continuation, UserOrigin::Task)?;
     settings.system = prompt.system;
     let conversation = NativeConversation {
       id: settings.conversation,
@@ -272,7 +274,12 @@ impl RunTask {
     ProjectDb::open(&self.root)
       .and_then(|mut db| db.create_native_conversation(&conversation))
       .map_err(|error| problem(format!("cannot store the conversation: {error}")))?;
-    let (native, first) = NativeLoop::start(settings, prepared.scope.clone(), prepared.policy.clone(), prompt.task);
+    let (native, first) = NativeLoop::start(
+      settings,
+      prepared.scope.clone(),
+      prepared.policy.clone(),
+      (prompt.task, attached),
+    );
     Ok(Started {
       native,
       first,
@@ -281,7 +288,16 @@ impl RunTask {
     })
   }
 
-  /// The stored conversation `session` continued with the resume prompt, or with the person's answer.
+  /// The items that give the agent the files people attached to the messages `continuation` delivers.
+  fn attached_items(&self, continuation: &Continuation, origin: UserOrigin) -> Result<Vec<Item>, RunnerProblem> {
+    let files = self
+      .attached_to(&continuation.messages)
+      .map_err(|error| problem(format!("cannot read the messages' attachments: {error}")))?;
+    Item::attached(&files, origin).map_err(|error| problem(format!("cannot read an attached file: {error}")))
+  }
+
+  /// The stored conversation `session` continued with the resume prompt, or with the person's answer, then the files
+  /// attached to the messages it delivers.
   fn resumed_conversation(
     &self,
     parts: PromptParts<'_>,
@@ -299,10 +315,11 @@ impl RunTask {
       .ok_or_else(|| problem(format!("the native conversation {session} is not stored")))?;
     let items = self.db.native_items(id).map_err(|error| problem(error.to_string()))?;
     let prompt = self.with_prompt(parts, |input, event| input.assemble_for(event, ResultDelivery::Tool))?;
-    let resumed = match parts.continuation.occasion {
-      Occasion::Answer(_) => Resumed::Answer(prompt.text),
-      _ => Resumed::Prompt(prompt.text),
+    let (resumed, origin) = match parts.continuation.occasion {
+      Occasion::Answer(_) => (Resumed::Answer(prompt.text), UserOrigin::Answer),
+      _ => (Resumed::Prompt(prompt.text), UserOrigin::Resume),
     };
+    let attached = self.attached_items(parts.continuation, origin)?;
     settings.conversation = id;
     settings.model = stored.model.clone();
     settings.system = stored.system.clone();
@@ -313,7 +330,7 @@ impl RunTask {
       prepared.scope.clone(),
       prepared.policy.clone(),
       items,
-      resumed,
+      (resumed, attached),
       changed,
     )
     .map_err(|error| problem(error.to_string()))?;

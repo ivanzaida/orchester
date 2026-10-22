@@ -8,7 +8,7 @@
 //! not delivered, kept, with the composer's actions under it (`composer::undelivered`). One the project's
 //! Orchestrator chat sent (ORC-45) is the Orchestrator's row, as an agent's is drawn, with how it went out.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::{
   app::{
@@ -35,6 +35,7 @@ use orchester_workspace::{
 use super::{super::super::orchestrated::sent_line, Timeline, chips};
 pub(crate) use crate::ui::chat::links;
 use crate::ui::{
+  attachments,
   chat::{Avatar, agent_text, chat_row, delivery_line, person_message as bubble, person_side_message},
   icon::Icon,
 };
@@ -73,26 +74,37 @@ pub(super) fn agent_row(ctx: &mut Ctx, timeline: &Timeline, row: &AgentRow) -> E
     .into()
 }
 
-/// A person's message (`mr4lC`) at the right: *You* (or *Automation*, for one automation wrote), its time, the bubble
-/// and its delivery line. One the project's Orchestrator chat sent is the Orchestrator's instead
-/// ([`orchestrator_message`]).
-pub(in super::super) fn person_message(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry)) -> Element {
+/// A person's message (`mr4lC`) at the right: *You* (or *Automation*, for one automation wrote), its time, the bubble,
+/// the files attached to it (`ui::attachments::sent`, kept in the project at `root`) and its delivery line. One the
+/// project's Orchestrator chat sent is the Orchestrator's instead ([`orchestrator_message`]); the chat attaches no
+/// files.
+pub(in super::super) fn person_message(
+  ctx: &mut Ctx,
+  ((project, root), entry): ((ProjectId, &Path), &Entry),
+) -> Element {
   let (glyph, color, words) = delivery(ctx, &entry.state);
   let delivery = delivery_line("conversation-delivery", (glyph, color), &words);
   let undelivered = super::super::composer::undelivered(ctx, entry);
   let id = format!("conversation-message-{}", entry.id);
+  let body: Arc<str> = if entry.attachments_only() {
+    Arc::from("")
+  } else {
+    entry.body.clone()
+  };
+  let attached = attachments::sent::sent(ctx, &id, root, &entry.attachments);
   let message = match entry.orchestrator {
     Some(from) => orchestrator_message(ctx, &id, (project, entry, from), delivery),
     None if entry.by_automation => {
       let author = ctx.t("conversation.byAutomation");
-      person_side_message(&id, (&author, &entry.body, Some(entry.at)), Some(delivery))
+      person_side_message(&id, (&author, &body, Some(entry.at)), (attached, Some(delivery)))
     }
-    None => bubble(ctx, &id, (&entry.body, Some(entry.at)), Some(delivery)),
+    None => bubble(ctx, &id, (&body, Some(entry.at)), (attached, Some(delivery))),
   };
   message
     .with_children(undelivered)
     .describe("delivery", delivery_name(&entry.state))
     .describe("by_orchestrator", entry.orchestrator.is_some().to_string())
+    .describe("attachments", entry.attachments.len().to_string())
     .into()
 }
 
@@ -160,9 +172,9 @@ pub(super) fn person_note(
 ) -> Element {
   if by == Some(orchester_core::run::Answerer::Automation) {
     let author = ctx.t("conversation.byAutomation");
-    return person_side_message(id, (&author, note, at), None).into();
+    return person_side_message(id, (&author, note, at), (None, None)).into();
   }
-  bubble(ctx, id, (note, at), None).into()
+  bubble(ctx, id, (note, at), (None, None)).into()
 }
 
 /// How the Orchestrator chat went on with the run (ORC-45): its row, with the note the work returned with when there

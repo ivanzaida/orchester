@@ -9,6 +9,7 @@ pub mod activity;
 pub mod agents;
 pub mod app_mcp;
 pub mod app_paths;
+pub mod attachments;
 pub mod background;
 pub mod base_moved;
 pub mod budget;

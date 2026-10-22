@@ -1,23 +1,27 @@
-//! What the composer keeps of each task for as long as the app runs, beyond the task's page: the draft, so
-//! leaving the task and coming back finds it; the words last sent, how, and the key they are stored under
-//! until a store succeeds, so the same words sent the same way again after an unclear failure, or after the
-//! page closed during a send whose end nobody saw, are not stored twice; and the refused messages the person
-//! put back into the composer, which offer nothing more while their words are in the draft or once they were
-//! sent; and the send under way, so a page opened again while it runs shows it busy until it ends. A send
-//! that went through clears its words from here itself, whether or not a page still shows the task. A task
-//! with nothing kept has no entry.
+//! What the composer keeps of each task for as long as the app runs, beyond the task's page: the draft and its
+//! attached files, so leaving the task and coming back finds them; the words and files last sent, how, and the key
+//! they are stored under until a store succeeds, so the same message sent the same way again after an unclear
+//! failure, or after the page closed during a send whose end nobody saw, is not stored twice; and the refused
+//! messages the person put back into the composer, which offer nothing more while their words are in the draft or
+//! once they were sent; and the send under way, so a page opened again while it runs shows it busy until it ends. A
+//! send that went through clears its words and files from here itself, whether or not a page still shows the task. A
+//! task with nothing kept has no entry.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use orchester_core::id::{IdempotencyKey, MessageId, TaskId};
+use orchester_core::{
+  attachment::NewAttachment,
+  id::{IdempotencyKey, MessageId, TaskId},
+};
 use orchester_workspace::tasks::conversation::outgoing::{Action, Way};
 use tokio::sync::watch;
 
 use crate::screens::kept::{ByKey, Entry};
 
-/// Words sent, how, and the key they are stored under.
+/// Words and files sent, how, and the key they are stored under.
 struct Attempt {
   text: String,
+  attachments: Vec<NewAttachment>,
   how: (Way, Action),
   key: IdempotencyKey,
 }
@@ -39,6 +43,7 @@ pub(super) struct Flight {
 #[derive(Default)]
 struct Kept {
   draft: String,
+  attachments: Vec<NewAttachment>,
   attempt: Option<Attempt>,
   put_back: Vec<PutBack>,
   flight: Option<Flight>,
@@ -46,7 +51,11 @@ struct Kept {
 
 impl Entry for Kept {
   fn is_empty(&self) -> bool {
-    self.draft.is_empty() && self.attempt.is_none() && self.put_back.is_empty() && self.flight.is_none()
+    self.draft.is_empty()
+      && self.attachments.is_empty()
+      && self.attempt.is_none()
+      && self.put_back.is_empty()
+      && self.flight.is_none()
   }
 }
 
@@ -67,15 +76,29 @@ pub(super) fn set_draft(task: TaskId, text: &str) {
   });
 }
 
-/// The key `text` of `task`, sent `how`, is stored under: the one of the last attempt when neither the
-/// words nor how they are sent changed.
-pub(super) fn key_for(task: TaskId, text: &str, how: (Way, Action)) -> IdempotencyKey {
+/// The files the draft of `task` holds.
+pub(super) fn attachments(task: TaskId) -> Vec<NewAttachment> {
+  KEPT.read(task, |kept| kept.attachments.clone())
+}
+
+pub(super) fn set_attachments(task: TaskId, attachments: &[NewAttachment]) {
+  KEPT.change(task, |kept| attachments.clone_into(&mut kept.attachments));
+}
+
+/// The key `text` and `attachments` of `task`, sent `how`, are stored under: the one of the last attempt when
+/// neither the words, the files nor how they are sent changed.
+pub(super) fn key_for(
+  task: TaskId,
+  (text, attachments): (&str, &[NewAttachment]),
+  how: (Way, Action),
+) -> IdempotencyKey {
   KEPT.change(task, |kept| match &kept.attempt {
-    Some(attempt) if attempt.text == text && attempt.how == how => attempt.key,
+    Some(attempt) if attempt.text == text && attempt.attachments == attachments && attempt.how == how => attempt.key,
     _ => {
       let key = IdempotencyKey::generate();
       kept.attempt = Some(Attempt {
         text: text.to_owned(),
+        attachments: attachments.to_vec(),
         how,
         key,
       });
@@ -84,9 +107,9 @@ pub(super) fn key_for(task: TaskId, text: &str, how: (Way, Action)) -> Idempoten
   })
 }
 
-/// `text` of `task`, sent under `key`, went through: its attempt goes, the draft empties unless it holds
-/// other words by now, and messages put back that it holds were sent.
-pub(super) fn stored(task: TaskId, key: IdempotencyKey, text: &str) {
+/// `text` and `attachments` of `task`, sent under `key`, went through: its attempt goes, the draft empties unless it
+/// holds other words by now and loses the files sent, and messages put back that it holds were sent.
+pub(super) fn stored(task: TaskId, key: IdempotencyKey, (text, attachments): (&str, &[NewAttachment])) {
   KEPT.change(task, |kept| {
     if kept.attempt.as_ref().is_some_and(|attempt| attempt.key == key) {
       kept.attempt = None;
@@ -94,6 +117,7 @@ pub(super) fn stored(task: TaskId, key: IdempotencyKey, text: &str) {
     if kept.draft == text {
       kept.draft.clear();
     }
+    kept.attachments.retain(|held| !attachments.contains(held));
     for put in &mut kept.put_back {
       put.sent |= text.contains(&put.text);
     }

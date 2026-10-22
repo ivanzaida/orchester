@@ -112,7 +112,7 @@ impl Component for ConversationTab {
     let (body, state) = match &detail.run {
       Some(run) => self.run_body(ctx, &task, (run, &conversation), names),
       None => {
-        let project = task.project.open.project.id();
+        let project = (task.project.open.project.id(), task.project.open.repo_root.as_path());
         (states::without_run(ctx, (project, detail), &conversation), None)
       }
     };

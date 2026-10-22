@@ -8,7 +8,13 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::connection::WireApi;
+use crate::{
+  attachment::{
+    MediaType,
+    input::{self, AttachedFile},
+  },
+  connection::WireApi,
+};
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ItemError {
@@ -106,6 +112,10 @@ pub enum Item {
   User {
     text: String,
     origin: UserOrigin,
+    /// An image or a PDF a person attached to a message, which `text` names: the project's copy, read whenever a
+    /// request sends it (`crate::attachment`). A text file is given as text instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    attached: Option<AttachedFile>,
   },
   Assistant {
     text: String,
@@ -132,12 +142,35 @@ pub enum Item {
   },
 }
 
+/// What a request counts an image for when its size is not known: about 1,600 tokens, four bytes each.
+const IMAGE_BYTES: usize = 6_400;
+
 impl Item {
   pub fn user(text: impl Into<String>, origin: UserOrigin) -> Self {
     Self::User {
       text: text.into(),
       origin,
+      attached: None,
     }
+  }
+
+  /// The items that give `files`, attached to a message delivered as `origin`: a text file as its line and its text,
+  /// an image or a PDF as its line with the file.
+  pub fn attached(files: &[AttachedFile], origin: UserOrigin) -> std::io::Result<Vec<Self>> {
+    files
+      .iter()
+      .map(|file| {
+        let line = input::header(&file.attachment);
+        Ok(match file.attachment.media() {
+          MediaType::Text => Self::user(format!("{line}\n{}", file.read_text()?), origin),
+          _ => Self::User {
+            text: line,
+            origin,
+            attached: Some(file.clone()),
+          },
+        })
+      })
+      .collect()
   }
 
   pub fn tool_result(id: ToolCallId, content: impl Into<String>, is_error: bool) -> Self {
@@ -148,13 +181,24 @@ impl Item {
     }
   }
 
-  /// The bytes of text the item adds to a request, for estimating its tokens.
+  /// The bytes of text the item adds to a request, for estimating its tokens; an attached image as the tokens its
+  /// pixels take (about one per 750), a PDF as its size.
   pub fn estimated_bytes(&self) -> usize {
     match self {
-      Self::User { text, .. } | Self::Assistant { text } | Self::Compaction { summary: text } => text.len(),
+      Self::User { text, attached, .. } => text.len() + attached.as_ref().map_or(0, attached_bytes),
+      Self::Assistant { text } | Self::Compaction { summary: text } => text.len(),
       Self::Reasoning { summary, opaque } => summary.as_ref().map_or(0, String::len) + opaque.json().len(),
       Self::ToolCall { name, input, .. } => name.len() + input.to_string().len(),
       Self::ToolResult { content, .. } => content.len(),
     }
+  }
+}
+
+fn attached_bytes(file: &AttachedFile) -> usize {
+  let attachment = &file.attachment;
+  match (attachment.media(), attachment.dimensions()) {
+    (MediaType::Pdf | MediaType::Text, _) => usize::try_from(attachment.size()).unwrap_or(usize::MAX),
+    (_, Some(size)) => usize::try_from(u64::from(size.width) * u64::from(size.height) / 750 * 4).unwrap_or(usize::MAX),
+    (_, None) => IMAGE_BYTES,
   }
 }

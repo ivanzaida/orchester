@@ -3,12 +3,13 @@
 //! invocations. Read from the project database, which the runner writes; blocks on SQLite, so
 //! the UI calls it off the UI thread.
 
-use std::{num::NonZeroU32, path::Path, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroU32, path::Path, sync::Arc};
 
 use orchester_core::{
+  attachment::Attachment,
   connection::{AgentProvider, Effort, EngineVendor},
   conversation::Message,
-  id::{InvocationId, RunId, StepExecutionId, TaskId},
+  id::{InvocationId, MessageId, RunId, StepExecutionId, TaskId},
   integration::RunMerge,
   question::AskedQuestions,
   resource::{StepKey, VersionNumber},
@@ -38,6 +39,9 @@ use super::{
   step_executors::{Reached, executed},
   unreadable::Unreadable,
 };
+
+/// A task's messages, oldest first, and the files attached to them.
+type Conversation = (Vec<Message>, BTreeMap<MessageId, Vec<Attachment>>);
 
 /// One step of the run's pipeline and its latest execution.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -265,6 +269,8 @@ pub struct TaskDetail {
   pub delivery: Delivery,
   /// The task's conversation, oldest first.
   pub messages: Vec<Message>,
+  /// The files people attached to its messages, by message, in the order they were attached.
+  pub attachments: BTreeMap<MessageId, Vec<Attachment>>,
   /// The latest run, when it cannot be read (02.R `SUuwV`): `run` is `None`.
   pub latest_unreadable: Option<Unreadable>,
   /// All the task's runs, newest first: *Runs of this task* (ORC-63).
@@ -340,7 +346,7 @@ impl TaskDetail {
     let shared = db.shared_task_info(task.id())?;
     let mut runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
     history::note_missing_worktrees(&mut db, repo_root, &runs)?;
-    let messages = db.messages(task.id())?;
+    let conversation = (db.messages(task.id())?, db.message_attachments(task.id())?);
     let history = history::read(&db, &task, &runs)?;
     let latest = runs.pop();
     if let Some(Err(latest)) = &latest {
@@ -356,7 +362,7 @@ impl TaskDetail {
         missing_pipeline,
         unsent_status,
         shared,
-        ..Self::without_runs(task, messages, requirements)
+        ..Self::without_runs(task, conversation, requirements)
       });
     }
     let earlier_unreadable = runs
@@ -394,11 +400,11 @@ impl TaskDetail {
       missing_pipeline,
       unsent_status,
       shared,
-      ..Self::without_runs(task, messages, requirements)
+      ..Self::without_runs(task, conversation, requirements)
     })
   }
 
-  fn without_runs(task: Task, messages: Vec<Message>, requirements: TaskRequirements) -> Self {
+  fn without_runs(task: Task, (messages, attachments): Conversation, requirements: TaskRequirements) -> Self {
     Self {
       task,
       run_task: None,
@@ -407,6 +413,7 @@ impl TaskDetail {
       merge: None,
       delivery: Delivery::Waiting,
       messages,
+      attachments,
       latest_unreadable: None,
       history: Vec::new(),
       earlier_unreadable: Vec::new(),

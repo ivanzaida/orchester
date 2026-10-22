@@ -1,12 +1,16 @@
 //! The composer's draft of each conversation for as long as the app runs, beyond the screen: leaving the
-//! Orchestrator and coming back, or switching conversations, finds each one's own. A new conversation's draft is the
-//! project's until its first message is kept; whatever the person wrote meanwhile then goes with the conversation.
+//! Orchestrator and coming back, or switching conversations, finds each one's own, its words and its attached files.
+//! A new conversation's draft is the project's until its first message is kept; whatever the person wrote meanwhile
+//! then goes with the conversation.
 //!
 //! Each draft also keeps the message it was last sent as until that message is kept, beyond the screen too: a send
-//! still under way when the person leaves ends with the screen, and sending the same words again then keeps the
-//! message once.
+//! still under way when the person leaves ends with the screen, and sending the same words and files again then
+//! keeps the message once.
 
-use orchester_core::id::{ChatId, ChatMessageId, ProjectId};
+use orchester_core::{
+  attachment::NewAttachment,
+  id::{ChatId, ChatMessageId, ProjectId},
+};
 use orchester_workspace::orchestrator::send::Outgoing;
 
 use crate::screens::kept::{ByKey, Entry};
@@ -30,12 +34,13 @@ impl From<Option<ChatId>> for Conversation {
 #[derive(Default)]
 struct Draft {
   text: String,
+  attachments: Vec<NewAttachment>,
   sent: Option<Outgoing>,
 }
 
 impl Entry for Draft {
   fn is_empty(&self) -> bool {
-    self.text.is_empty() && self.sent.is_none()
+    self.text.is_empty() && self.attachments.is_empty() && self.sent.is_none()
   }
 }
 
@@ -49,16 +54,30 @@ pub(super) fn set(project: ProjectId, of: Conversation, text: &str) {
   DRAFTS.change((project, of), |draft| text.clone_into(&mut draft.text));
 }
 
-/// The message the draft of `of` goes as: the one it was last sent as when its words did not change since, so that
-/// one is kept once, or a new one to `chat`.
-pub(super) fn sending(project: ProjectId, of: Conversation, (chat, text): (ChatId, String)) -> Outgoing {
+/// The files the draft of `of` holds.
+pub(super) fn attachments(project: ProjectId, of: Conversation) -> Vec<NewAttachment> {
+  DRAFTS.read((project, of), |draft| draft.attachments.clone())
+}
+
+pub(super) fn set_attachments(project: ProjectId, of: Conversation, attachments: &[NewAttachment]) {
+  DRAFTS.change((project, of), |draft| attachments.clone_into(&mut draft.attachments));
+}
+
+/// The message the draft of `of` goes as: the one it was last sent as when its words and files did not change
+/// since, so that one is kept once, or a new one to `chat`.
+pub(super) fn sending(
+  project: ProjectId,
+  of: Conversation,
+  (chat, text, attachments): (ChatId, String, Vec<NewAttachment>),
+) -> Outgoing {
   DRAFTS.change((project, of), |draft| {
     let outgoing = match draft.sent.take() {
-      Some(sent) if sent.text == text => sent,
+      Some(sent) if sent.text == text && sent.attachments == attachments => sent,
       _ => Outgoing {
         chat,
         message: ChatMessageId::generate(),
         text,
+        attachments,
       },
     };
     draft.sent = Some(outgoing.clone());
@@ -67,8 +86,8 @@ pub(super) fn sending(project: ProjectId, of: Conversation, (chat, text): (ChatI
 }
 
 /// Message `message` of conversation `chat`, a draft's, was sent and kept: the draft it came from (`chat`'s, or the
-/// new conversation's) forgets it, and empties unless it holds other words by now. Which draft it came from; `None`
-/// when no draft was sent as it.
+/// new conversation's) forgets it, and empties unless it holds other words and files by now. Which draft it came
+/// from; `None` when no draft was sent as it.
 pub(super) fn sent(project: ProjectId, (chat, message): (ChatId, ChatMessageId)) -> Option<Conversation> {
   [Conversation::Chat(chat), Conversation::New].into_iter().find(|&of| {
     DRAFTS.change((project, of), |draft| {
@@ -78,6 +97,7 @@ pub(super) fn sent(project: ProjectId, (chat, message): (ChatId, ChatMessageId))
       if draft.text == sent.text {
         draft.text.clear();
       }
+      draft.attachments.retain(|held| !sent.attachments.contains(held));
       true
     })
   })
