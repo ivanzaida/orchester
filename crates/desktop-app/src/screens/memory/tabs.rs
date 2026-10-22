@@ -71,26 +71,6 @@ pub const fn statuses(tab: MemoryTab) -> Option<StatusFilter> {
   })
 }
 
-/// The records a status tab looks in: every proposal of the project and its tasks on *Waiting for approval*, the
-/// project's own records on the others.
-pub fn pool(tab: MemoryTab, memory: &ProjectMemory) -> &[Memory] {
-  if tab == MemoryTab::Waiting {
-    &memory.waiting
-  } else {
-    &memory.records
-  }
-}
-
-/// How many records `tab` lists before any search or filter.
-pub fn count(tab: MemoryTab, memory: &ProjectMemory) -> usize {
-  statuses(tab).map_or(0, |status| {
-    pool(tab, memory)
-      .iter()
-      .filter(|record| status.shows(record.status()))
-      .count()
-  })
-}
-
 /// The tab's name: *Waiting for approval*.
 pub fn name(ctx: &Ctx, tab: MemoryTab) -> Arc<str> {
   ctx.t(match tab {
