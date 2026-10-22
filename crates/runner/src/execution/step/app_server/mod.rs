@@ -22,6 +22,7 @@ use std::{
 };
 
 use orchester_core::{
+  attachment::input::{AttachedFile, codex_items},
   command::{SecretVariable, redact_secrets},
   connection::{
     app_server::{AppServerStream, PendingApproval, Update},
@@ -69,6 +70,8 @@ impl From<String> for AppServerFailure {
 
 pub(super) struct AppServerSetup {
   pub prompt: String,
+  /// The files people attached to the messages the prompt delivers, given with it.
+  pub attached: Vec<AttachedFile>,
   pub model: String,
   pub effort: Option<String>,
   pub worktree: PathBuf,
@@ -189,13 +192,13 @@ impl AppServerSession {
     self.phase != Phase::Complete && !self.turn_working()
   }
 
-  /// Adds `text` to the running turn as request `id` (`turn/steer`, `expectedTurnId` the running
-  /// turn); its answer comes with [`Self::take_steer_answers`].
-  pub async fn steer(&self, process: &Supervised, id: &str, text: &str) -> io::Result<()> {
+  /// Adds the input items `input` (a message and its attached files, `codex_items`) to the running turn as request
+  /// `id` (`turn/steer`, `expectedTurnId` the running turn); its answer comes with [`Self::take_steer_answers`].
+  pub async fn steer(&self, process: &Supervised, id: &str, input: &[Value]) -> io::Result<()> {
     send(
       process,
       json!({"id":id,"method":"turn/steer","params":{
-        "threadId":self.thread,"input":[{"type":"text","text":text}],"expectedTurnId":self.turn
+        "threadId":self.thread,"input":input,"expectedTurnId":self.turn
       }}),
     )
     .await
@@ -497,9 +500,11 @@ impl AppServerSession {
     send(process, json!({"id":3,"method":method,"params":params})).await
   }
 
+  /// The turn of the prompt, with the files attached to the messages it delivers; a copy that cannot be read fails
+  /// the turn's start as a write to Codex would.
   async fn start_turn(&mut self, process: &Supervised) -> io::Result<()> {
-    let prompt = self.setup.prompt.clone();
-    self.turn_with(process, &prompt).await
+    let input = codex_items(&self.setup.prompt, &self.setup.attached)?;
+    self.turn_with(process, input).await
   }
 
   /// A yielded code-mode cell belongs to the thread, not to the model turn that started it.
@@ -509,14 +514,15 @@ impl AppServerSession {
     self.approval_results_to_collect = false;
     // Request 6 belongs to config/read; each continuation gets a fresh JSON-RPC id.
     self.turn_request = self.turn_request.max(6) + 1;
-    self.turn_with(
-      process,
+    let input = codex_items(
       "Collect the results of the Orchester tool calls you already started. If a code-mode exec cell yielded, use functions.wait with its existing cell_id until its result is collected. Continue this step using the approval or denial and tool results. Do not repeat the calls or report the step finished while results are pending.",
-    ).await
+      &[],
+    )?;
+    self.turn_with(process, input).await
   }
 
-  async fn turn_with(&mut self, process: &Supervised, prompt: &str) -> io::Result<()> {
-    let mut params = json!({"threadId":self.thread,"input":[{"type":"text","text":prompt}],
+  async fn turn_with(&mut self, process: &Supervised, input: Vec<Value>) -> io::Result<()> {
+    let mut params = json!({"threadId":self.thread,"input":input,
     "model":self.setup.model,"environments":[{
       "environmentId":"local","cwd":self.setup.worktree,
         "runtimeWorkspaceRoots":self.setup.runtime_roots()

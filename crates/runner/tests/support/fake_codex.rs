@@ -43,7 +43,7 @@
 use std::{
   collections::BTreeSet,
   io::{self, BufRead, Write},
-  path::PathBuf,
+  path::{Path, PathBuf},
   process::ExitCode,
   thread,
   time::Duration,
@@ -410,6 +410,7 @@ impl Session {
     let mut shown = params.clone();
     shown["input"] = Value::Null;
     eprintln!("turn: {shown}");
+    eprintln!("input-blocks: {}", input_blocks(&params["input"]));
     eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
     for line in prompt.lines() {
       eprintln!("prompt| {line}");
@@ -498,6 +499,25 @@ pub fn emit(value: &Value) {
   if io::stdout().flush().is_err() {
     eprintln!("cannot flush standard output");
   }
+}
+
+/// The input items of a turn by kind, a `localImage` with whether its file is there: `text,text,localImage:there`.
+fn input_blocks(input: &Value) -> String {
+  input
+    .as_array()
+    .into_iter()
+    .flatten()
+    .map(|item| match (item["type"].as_str(), item["path"].as_str()) {
+      (Some("localImage"), Some(path)) => {
+        format!(
+          "localImage:{}",
+          if Path::new(path).is_file() { "there" } else { "missing" }
+        )
+      }
+      (kind, _) => kind.unwrap_or("?").to_owned(),
+    })
+    .collect::<Vec<_>>()
+    .join(",")
 }
 
 /// A notification of the session's turn.

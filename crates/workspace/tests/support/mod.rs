@@ -315,6 +315,30 @@ impl Fixture {
       .id()
   }
 
+  /// Keeps the connection Builder's profile names, as an agent on `provider`.
+  pub fn connect_builder(&mut self, provider: orchester_core::connection::AgentProvider) {
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = self.snapshot.body().steps()[0].kind
+    else {
+      panic!("the fixture's first step has a Builder profile");
+    };
+    let profile = self
+      .db
+      .latest_version::<AgentProfile>(builder)
+      .expect("read Builder")
+      .expect("Builder is published");
+    let connection = orchester_core::connection::AgentConnection::new(
+      profile.body().connection(),
+      name("Agent"),
+      provider,
+      self.repo.path().join("bin").join("agent.exe"),
+      at(1),
+    )
+    .expect("absolute executable");
+    orchester_core::store::ConnectionStore::create_connection(&mut self.db, &connection).expect("kept");
+  }
+
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
     self.pending_run_into(task, (&"a".repeat(40), None), now)

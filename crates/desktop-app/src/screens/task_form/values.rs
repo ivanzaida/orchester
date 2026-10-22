@@ -7,6 +7,7 @@ use orchester_core::{
   task::{
     Task, TaskDetails,
     estimate::{EstimateSource, StoryPoints},
+    organization::TaskOrganization,
   },
   tokens::grouped,
 };
@@ -25,12 +26,15 @@ pub struct Values {
   pub time_limit: String,
   /// The person's story points; `None`: Automatic, Orchester's estimate (ORC-49).
   pub points: Option<StoryPoints>,
+  /// *Don't merge automatically* (ORC-69), a part of the task's organization.
+  pub no_automatic_merge: bool,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Values {}
 
 impl Values {
-  /// The fields of a stored task's details, its budget grouped with `separator`, without points of a person.
+  /// The fields of stored details, its budget grouped with `separator`, without points of a person and with *Don't
+  /// merge automatically* off.
   pub fn of_details(details: &TaskDetails, separator: &str) -> Self {
     Self {
       title: details.title.as_str().to_owned(),
@@ -44,15 +48,29 @@ impl Values {
         .unwrap_or_default(),
       time_limit: minutes_text(details.limits.max_duration()),
       points: None,
+      no_automatic_merge: false,
     }
   }
 
-  /// The fields of a stored task, with the story points a person set, if any.
+  /// The fields of a stored task, with the story points a person set, if any, and its *Don't merge automatically*.
   pub fn of_task(task: &Task, separator: &str) -> Self {
     Self {
       points: person_points(task),
+      no_automatic_merge: task.organization().no_automatic_merge(),
       ..Self::of_details(task.details(), separator)
     }
+  }
+
+  /// The organization a save stores, given the one the edits were made on (`base`, as these values were filled from
+  /// `base_values`) and the one stored now (`current`): *Don't merge automatically* as the person set it, or as it is
+  /// stored now when they left it as it was.
+  pub fn organization(&self, base_values: &Self, current: &TaskOrganization) -> TaskOrganization {
+    let flag = if self.no_automatic_merge == base_values.no_automatic_merge {
+      current.no_automatic_merge()
+    } else {
+      self.no_automatic_merge
+    };
+    current.clone().with_no_automatic_merge(flag)
   }
 
   /// The values as the workspace checks them. Limits are optional and have no maximum (the person's
@@ -87,6 +105,7 @@ impl Values {
       budget: digits(&self.budget),
       time_limit: self.time_limit.trim().to_owned(),
       points: self.points,
+      no_automatic_merge: self.no_automatic_merge,
     }
   }
 

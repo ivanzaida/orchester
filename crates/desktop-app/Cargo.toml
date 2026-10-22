@@ -59,8 +59,11 @@ lurq = { workspace = true, features = [
   "serde",
   # Text agents and people write, read as Markdown (`ui::markdown`).
   "markdown",
-  # Copy beside a command or another long value (`ui::code_box`).
+  # Copy beside a command or another long value (`ui::code_box`); a pasted screenshot as PNG (`ui::attachments`).
   "clipboard",
+  # Thumbnails of the images attached to a message, decoded off the UI thread (`ui::attachments`); its decoders are
+  # already built for lurq's screenshots.
+  "image",
   # The app's MCP server: lurq's window tools and the app's own (`mcp`), in every build.
   "mcp",
   # Futures and streams of screens run on the app's runtime, off the UI thread.

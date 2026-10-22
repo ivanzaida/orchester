@@ -27,6 +27,25 @@
   "common": {
     "listSeparator": ", "
   },
+  "attachments": {
+    "refused": {
+      "empty": "{{name}} is empty, so it wasn't attached.",
+      "tooLarge": "{{name}} is larger than {{limit}} MB, so it wasn't attached.",
+      "unsupported": "{{name}} wasn't attached: only images (PNG, JPEG, GIF, WebP), PDFs and text files are supported yet.",
+      "folder": "{{name}} is a folder, so it wasn't attached. Attach the files in it instead.",
+      "shortcut": "{{name}} is a shortcut, so it wasn't attached. Attach the file it points to instead.",
+      "unreadable": "{{name}} couldn't be read, so it wasn't attached.",
+      "tooMany": "{{name}} wasn't attached: a message holds at most {{limit}} files.",
+      "totalTooLarge": "{{name}} wasn't attached: a message's files hold at most {{limit}} MB together.",
+      "notTaken": {
+        "image": "Not sent · an agent this message may reach can't take images ({{name}}). Remove it first.",
+        "pdf": "Not sent · an agent this message may reach runs on Codex, which can't take PDF files ({{name}}). Remove it first.",
+        "text": "Not sent · an agent this message may reach can't take text files ({{name}}). Remove it first."
+      }
+    },
+    "planChanges": "A plan's changes are words only. Remove the attachments first.",
+    "copyUnreadable": "{{name}} couldn't be read from the project's data."
+  },
   "notifications": {
     "title": {
       "command": "A command waits for your approval",
@@ -1803,6 +1822,15 @@
       "continuePersonOnly": "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's: tell them what you recommend, and they choose it on the task's Summary. From the chat, propose allow_retry, return_to or resolve_conflicts.",
       "mergeConflictsNext": "Run #{{run}} conflicts with its base branch in {{files}}. Next: propose continue_run with resolve_conflicts, which sends the run back to an agent that may write to resolve them, or tell the person they can resolve them on the Local integration page.",
       "mergeFailedNext": "Run #{{run}} was not merged. The person resolves this on the Local integration page.",
+      "mergeLeft": {
+        "notReady": "Run #{{run}} was not merged on its own: it is no longer its task's latest run that succeeded. Nothing was merged; the merge is the person's.",
+        "stepNotPassed": "Run #{{run}} was not merged on its own: its step {{step}} has not passed. Nothing was merged; the merge is the person's.",
+        "acceptedByAutomation": "Run #{{run}} was not merged on its own: its step {{step}} passed only because automation accepted it as it was. Nothing was merged; the merge is the person's.",
+        "markedBlocked": "Run #{{run}} was not merged on its own: its task is marked Blocked ({{reason}}). Nothing was merged; the merge is the person's.",
+        "blockedByTasks": "Run #{{run}} was not merged on its own: unfinished tasks block its task ({{tasks}}). Nothing was merged; the merge is the person's.",
+        "held": "Run #{{run}} was not merged on its own: new starts are held for its group or the project. Nothing was merged; the merge is the person's.",
+        "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's."
+      },
       "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "releaseNothing": {
         "project": "New starts in {{project}} are not held: there is nothing to release. Nothing was changed.",

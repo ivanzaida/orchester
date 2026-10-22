@@ -61,7 +61,7 @@ pub use self::{
   cards::{CardsSpacing, CardsText},
   chat_links::ChatLinkLooks,
   code::{CodeText, token_color},
-  composer::{ComposerColor, ComposerRadius, ComposerText},
+  composer::{ComposerColor, ComposerRadius},
   connections::{ConnectionsSpacing, ConnectionsText},
   conversation::{ConversationRadius, ConversationShadow, ConversationSpacing, ConversationText},
   decisions::{DecisionSpacing, DecisionText},

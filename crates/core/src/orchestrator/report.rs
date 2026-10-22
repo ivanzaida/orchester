@@ -105,7 +105,7 @@ pub struct ReportTask {
   pub link: String,
 }
 
-/// A task whose run `number` was merged at `at`.
+/// A task whose run `number` was merged at `at`, `by` whom.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MergedTask {
   pub task: String,
@@ -113,6 +113,21 @@ pub struct MergedTask {
   pub number: u32,
   pub at: Timestamp,
   pub link: String,
+  #[serde(default)]
+  pub by: MergedBy,
+}
+
+/// Who merged a run (ORC-69).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MergedBy {
+  /// A person: on the task's page, or applying the Orchestrator's proposal.
+  #[default]
+  Person,
+  /// The Orchestrator chat itself, as the person asked it in the chat.
+  Orchestrator,
+  /// The Orchestrator chat on its own, in the turn the run's success started.
+  OrchestratorOnItsOwn,
 }
 
 /// A task's latest run, with the step it is at or stopped at, and since when it stands so, when the run tells.

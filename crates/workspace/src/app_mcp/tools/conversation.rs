@@ -27,7 +27,7 @@ use crate::{
   tasks::{
     conversation::{
       Author, Entry as MessageEntry, EntryState,
-      orchestrator::{Proposal, continued, message_offer, proposals},
+      orchestrator::{ChatMerge, Proposal, continued, merged_by, message_offer, proposals},
       outgoing::conversation_of,
     },
     detail::{RunView, TaskDetail},
@@ -67,7 +67,7 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
     let task = find_task(&ProjectDb::open(&root)?, &args.task)?;
     let detail = TaskDetail::load_in(&root, task.id())?;
     let link = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
-    let (items, proposed) = items(&root, &detail)?;
+    let (items, proposed, merged) = items(&root, &detail)?;
     let end = match &args.before {
       Some(cursor) => items
         .iter()
@@ -81,6 +81,7 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
     let mut entries: Vec<Value> = items[start..end]
       .iter()
       .filter_map(|item| entry(item, run, &link))
+      .map(|entry| merged_by_chat(entry, merged))
       .collect();
     if let (None, Some(run)) = (&args.before, run) {
       let number = (run.id(), run.run.number().get());
@@ -101,9 +102,13 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
   .await
 }
 
-/// The latest run's timeline as the Conversation tab builds it, and the answers and messages the Orchestrator chat
-/// proposed for the run; without a run, the messages that wait for one.
-fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<Proposal>), ToolError> {
+/// What a conversation reads of its latest run: its timeline, the chat's proposals, and the chat's merge of it.
+type ReadRun = (Vec<Item>, Vec<Proposal>, Option<ChatMerge>);
+
+/// The latest run's timeline as the Conversation tab builds it, the answers and messages the Orchestrator chat
+/// proposed for the run, and its merge of the run when it carried one out; without a run, the messages that wait for
+/// one.
+fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<ReadRun, ToolError> {
   let conversation = conversation_of(detail, false);
   let Some(run) = &detail.run else {
     let waiting = conversation
@@ -116,7 +121,7 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<
         kind: ItemKind::Message(entry.clone()),
       })
       .collect();
-    return Ok((waiting, Vec::new()));
+    return Ok((waiting, Vec::new(), None));
   };
   let transcript = transcript_in(root, run.id())?;
   let requests = requests_in(root, run.id())?;
@@ -132,7 +137,19 @@ fn items(root: &std::path::Path, detail: &TaskDetail) -> Result<(Vec<Item>, Vec<
     merge: detail.merge.as_ref(),
   });
   continued(&mut items, &requests.orchestrated);
-  Ok((items, proposed))
+  Ok((items, proposed, merged_by(&requests.orchestrated)))
+}
+
+/// `entry`, the run's end, as the Orchestrator chat's when it merged the run (`merged`): by itself (`on_its_own` when
+/// it merged a finished run in a turn nobody asked for) or applied by the person (ORC-69). Any other entry as it is.
+fn merged_by_chat(mut entry: Value, merged: Option<ChatMerge>) -> Value {
+  if let Some(merged) = merged
+    && entry["end"] == "merged"
+  {
+    entry["author"] = orchestrated::author(merged.from);
+    entry["on_its_own"] = json!(merged.on_its_own);
+  }
+  entry
 }
 
 /// `item` as the tool gives it; `None` for what other tools give (steps, tool calls, approvals, problems).
@@ -150,7 +167,7 @@ fn entry(item: &Item, run: Option<&RunView>, link: &str) -> Option<Value> {
       Some(step.to_string()),
       json!({ "text": &**text }),
     ),
-    ItemKind::Message(message) => ("message", sender(message), step_of(), message_body(message)),
+    ItemKind::Message(message) => ("message", sender(message), step_of(), message_body(message, link)),
     ItemKind::Question { entry, step } => (
       "agent_question",
       sender(entry),
@@ -258,8 +275,8 @@ fn continued_body(mark: &Mark) -> Value {
   })
 }
 
-/// A message's text and where it stands.
-fn message_body(message: &MessageEntry) -> Value {
+/// A message's text, where it stands, and the files attached to it: what each is, never its content.
+fn message_body(message: &MessageEntry, link: &str) -> Value {
   let state = match &message.state {
     EntryState::Queued(_) => "queued",
     EntryState::Delivered { .. } => "delivered",
@@ -267,7 +284,8 @@ fn message_body(message: &MessageEntry) -> Value {
     EntryState::Reply { .. } => "reply",
     EntryState::Question { .. } => "question",
   };
-  json!({ "text": &*message.body, "state": state })
+  let text = if message.attachments_only() { "" } else { &message.body };
+  json!({ "text": text, "state": state, "attachments": wire::attachments(&message.attachments, link) })
 }
 
 /// A question with suggested answers: its questions and options, where it stands, and who answered it; for the

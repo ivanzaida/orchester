@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
+  attachment::{Attachment, is_names_only},
   conversation::{AgentMessage, Arrival, Delivery, Message, Recipient, Sender, Timing, Undelivered},
   id::{MessageId, ResourceId, StepExecutionId},
   integration::Leftovers,
@@ -170,6 +171,15 @@ pub struct Entry {
   pub orchestrator: Option<FromOrchestrator>,
   /// Automation wrote this answer or continuation on the person's side.
   pub by_automation: bool,
+  /// The files the person attached to it, in the order they attached them.
+  pub attachments: Arc<[Attachment]>,
+}
+
+impl Entry {
+  /// Whether it says nothing but the names of its attachments: it shows by its attachments alone.
+  pub fn attachments_only(&self) -> bool {
+    is_names_only(&self.body, &self.attachments)
+  }
 }
 
 /// An agent at work on the run: its profile, its role, the execution it works on and whether its
@@ -236,7 +246,13 @@ impl Conversation {
     let entries = detail
       .messages
       .iter()
-      .map(|message| entry(message, (run, &working), &detail.messages, state))
+      .map(|message| Entry {
+        attachments: detail
+          .attachments
+          .get(&message.id())
+          .map_or_else(|| Arc::from([]), |attached| Arc::from(attached.as_slice())),
+        ..entry(message, (run, &working), &detail.messages, state)
+      })
       .collect();
     Self {
       state,
@@ -444,6 +460,7 @@ fn entry(
     sent_now,
     orchestrator: message.from_orchestrator(),
     by_automation: message.answerer() == Some(orchester_core::run::Answerer::Automation),
+    attachments: Arc::from([]),
   }
 }
 

@@ -14,7 +14,10 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ChatId;
+use orchester_core::{
+  attachment::{NewAttachment, names_text},
+  id::ChatId,
+};
 use orchester_workspace::{
   messages::Message,
   orchestrator::{chat::ChatView, send::SendError, settings::Readiness, tools::ChatScope},
@@ -58,11 +61,12 @@ pub(super) fn main(
   let sending = view.send.state().get();
   let thinking = matches!(&reads.shown, Shown::Chat(shown) if shown.thinking());
   let held = held(ctx, (readiness, thinking));
-  let state = if sending.is_pending() {
+  // Files still being read go with the message: it is sent once they are added.
+  let state = if sending.is_pending() || view.attached.reading.get() > 0 {
     Sending::Busy
   } else if let Some(why) = held {
     Sending::Held(why)
-  } else if view.draft.get().trim().is_empty() {
+  } else if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() {
     Sending::Empty {
       why: ctx.t("orchestrator.composer.sendEmpty"),
       press: view.send_draft(project, reads.target),
@@ -81,11 +85,18 @@ pub(super) fn main(
       .filter(|readiness| !readiness.is_ready())
       .map(|readiness| not_ready(ctx, project, readiness)),
   };
+  // The message being sent, by its words, or its files' names when it has none.
   let pending = sending
     .is_pending()
     .then(|| view.outgoing.get())
     .flatten()
-    .map(|outgoing| outgoing.text);
+    .map(|outgoing| {
+      if outgoing.text.trim().is_empty() {
+        names_text(outgoing.attachments.iter().map(NewAttachment::name))
+      } else {
+        outgoing.text
+      }
+    });
   match &reads.shown {
     Shown::New if pending.is_none() => {
       let boxed = ComposerBox {
@@ -162,7 +173,9 @@ fn conversation(
   (project, shown, pending, names): (&ShownProject, Option<&ChatView>, Option<&str>, &ProjectNames),
   (state, readiness, notices): (&Sending, Option<&Readiness>, [Option<Element>; 2]),
 ) -> Element {
-  let mut all = shown.map(|shown| turns(&shown.entries)).unwrap_or_default();
+  let mut all = shown
+    .map(|shown| turns(&shown.entries, &shown.attachments))
+    .unwrap_or_default();
   let kept = view.outgoing.get().map(|outgoing| outgoing.message);
   if let Some(text) = pending
     && !all.iter().any(|turn| turn.message.is_some() && turn.message == kept)
@@ -294,6 +307,7 @@ fn env(
   TurnEnv {
     project: open.project.id(),
     name: Arc::from(open.project.name().as_str()),
+    root: open.repo_root.clone(),
     connection,
     scope,
     stop: Arc::new(move || {
@@ -425,7 +439,7 @@ fn send_problem(
             .color(PaletteColor::TextSecondary)
         })),
     );
-  if !unconfirmed && !view.draft.get().trim().is_empty() {
+  if !unconfirmed && (!view.draft.get().trim().is_empty() || !view.attached.attached.get().0.is_empty()) {
     row = row.child(
       ActionButton::new(
         "orchestrator-send-retry",

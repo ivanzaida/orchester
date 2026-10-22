@@ -32,9 +32,8 @@
       "recipient": "To: Orchestrator",
       "permissions": "Acts with your project permissions",
       "permissionsHint": "Every action it takes is checked like the same action in the app, with your permissions in this project.",
-      "attach": "Attaching files isn't built yet.",
       "send": "Send",
-      "sendEmpty": "Write a message first.",
+      "sendEmpty": "Write a message or attach a file first.",
       "notReady": "Choose and publish what the Orchestrator runs on in its settings first.",
       "thinking": "The Orchestrator answers one message at a time.",
       "lines": "Enter adds a line ·",
@@ -422,6 +421,9 @@
         "effectWaitsInto": "Nothing is merged yet. Merge into {{into}} merges it as Merge in the task's review does, after the same checks.",
         "effectWaits": "Nothing is merged yet. Merge merges it as Merge in the task's review does, after the same checks.",
         "effectMerged": "{{into}} moved forward to {{revision}}.",
+        "onItsOwn": "On its own",
+        "effectOnItsOwn": "Merged by the Orchestrator on its own, as you let it merge finished runs: {{into}} moved forward to {{revision}}.",
+        "effectOnItsOwnPlain": "Merged by the Orchestrator on its own, as you let it merge finished runs.",
         "outsideTitle": "Run #{{run}} of {{task}} is in {{into}} already",
         "outsideState": "Merged without Orchester",
         "effectOutside": "{{into}} holds this run’s work already: it was merged without Orchester. Nothing is merged again.",
@@ -600,6 +602,17 @@
       "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads the run and tells you what happened and the choices you have.",
       "effectContinuing": "Let the Orchestrator continue interrupted runs is on too, so the Orchestrator continues the run once from its last checkpoint and tells you.",
       "effectInterruptedAgain": "It was interrupted again within 10 minutes of the time before, so the Orchestrator leaves it to you and tells you what happened and the choices you have.",
+      "effectMerging": "Let the Orchestrator merge finished runs on its own is on too, so the Orchestrator merges the run once and tells you; conflicts it proposes to send back to an agent, anything else it leaves to you.",
+      "effectMergeLeft": "Let the Orchestrator merge finished runs on its own is on, but this run is yours to merge: {{why}}. The Orchestrator tells you it is ready.",
+      "mergeLeft": {
+        "notReady": "it is no longer the task's latest run that succeeded",
+        "stepNotPassed": "its step {{step}} has not passed",
+        "acceptedByAutomation": "its step {{step}} passed only because automation accepted it as it was",
+        "markedBlocked": "the task is marked Blocked ({{reason}})",
+        "blockedByTasks": "unfinished tasks block the task ({{tasks}})",
+        "held": "new starts are held for its group or the project",
+        "optedOut": "the task says Don't merge automatically"
+      },
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
@@ -630,6 +643,8 @@
         "next": "No task waits in the queue."
       },
       "merged": "- Merged: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
+      "mergedByOrchestrator": "- Merged by the Orchestrator: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
+      "mergedOnItsOwn": "- Merged by the Orchestrator on its own: [{{task}} · {{title}}]({{link}}) — run #{{run}} at {{time}}",
       "action": {
         "direct": "- Orchestrator: [{{what}}]({{link}}) — {{tool}} at {{time}}",
         "applied": "- You applied: [{{what}}]({{link}}) — {{tool}} at {{time}}"

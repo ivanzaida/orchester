@@ -95,6 +95,10 @@ pub struct CreateTask {
   /// Tag names, matched ignoring case; a name the project has no tag of is created as a tag.
   #[serde(default)]
   pub tags: Vec<String>,
+  /// Don't merge automatically: `true` keeps the Orchestrator from merging the task's runs on its own, even while
+  /// the person lets it merge finished runs; left out, `false`.
+  #[serde(default)]
+  pub no_automatic_merge: bool,
 }
 
 /// The fields to change; those left out stay as they are.
@@ -144,6 +148,10 @@ pub struct UpdateTask {
   /// created as a tag. `[]` clears them.
   #[serde(default)]
   pub tags: Option<Vec<String>>,
+  /// Don't merge automatically: `true` keeps the Orchestrator from merging the task's runs on its own, even while
+  /// the person lets it merge finished runs; `false` lets it again.
+  #[serde(default)]
+  pub no_automatic_merge: Option<bool>,
 }
 
 impl CreateTask {
@@ -154,6 +162,7 @@ impl CreateTask {
       blocked_reason: self.blocked_reason.as_deref().map(Some),
       blocked_by: Some(&self.blocked_by),
       tags: Some(&self.tags),
+      no_automatic_merge: Some(self.no_automatic_merge),
     }
   }
 }
@@ -166,6 +175,7 @@ impl UpdateTask {
       blocked_reason: self.blocked_reason.as_ref().map(Option::as_deref),
       blocked_by: self.blocked_by.as_deref(),
       tags: self.tags.as_deref(),
+      no_automatic_merge: self.no_automatic_merge,
     }
   }
 }
@@ -251,10 +261,12 @@ fn create(services: &Services, args: &CreateTask) -> Result<Task, ToolError> {
   };
   let details = fields.details()?;
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
-  // A move a shared project refuses is refused before the task is made, so a retry makes no second task.
+  // A move or an opt-out a shared project refuses is refused before the task is made, so a retry makes no second
+  // task.
   if module.is_some() {
     writer.ensure_modules().map_err(write_error)?;
   }
+  writer.ensure_merging(&base, &edited).map_err(write_error)?;
   let edited = changes.tagged(&mut writer, edited)?;
   let target = SaveTarget::New(IdempotencyKey::generate());
   let task = writer
@@ -374,10 +386,11 @@ fn update(services: &Services, args: &UpdateTask) -> Result<Task, ToolError> {
     details.pipeline = current.pipeline;
   }
   let mut writer = TaskWriter::open(&root, &services.servers).map_err(write_error)?;
-  // A move a shared project refuses is refused before the task's details are saved.
+  // A move or an opt-out a shared project refuses is refused before the task's details are saved.
   if matches!(module, Some(Some(_))) {
     writer.ensure_modules().map_err(write_error)?;
   }
+  writer.ensure_merging(&base, &edited).map_err(write_error)?;
   let edited = changes.tagged(&mut writer, edited)?;
   let edit = Edit {
     task: task.id(),
@@ -420,6 +433,7 @@ fn saved(task: &Task) -> Value {
     "priority": Rank::from(task.organization().priority()),
     "story_points": wire::story_points(task.estimate()),
     "blocked_reason": task.organization().blocked_reason(),
+    "no_automatic_merge": task.organization().no_automatic_merge(),
     "module": task.module().map(|module| module.to_string()),
   })
 }

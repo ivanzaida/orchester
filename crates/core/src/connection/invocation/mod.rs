@@ -16,7 +16,7 @@ use std::{
 
 pub use self::{
   chat::ClaudeChat,
-  claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, input_line, result_schema},
+  claude::{ClaudeInvocation, ClaudeMcp, ClaudeSession, first_line, input_line, result_schema},
   codex::{CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION},
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
   orchester::CodexOrchester,
@@ -170,6 +170,9 @@ pub enum InvocationError {
   /// The step edits by `Edit` allow rules, and none can name this folder (a network share).
   #[error("edits on a network share can't be allowed by rule: {0}")]
   NoEditRule(PathBuf),
+  /// The project's copy of a file a person attached to a message the agent is to read cannot be read.
+  #[error("the copy of an attached file cannot be read: {0}")]
+  AttachmentUnreadable(PathBuf),
 }
 
 /// Refuses a folder the CLI would get mangled, before its arguments are built.

@@ -34,8 +34,9 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::{ClaudeSession, InvocationError, agent_environment, input_line};
+use super::{ClaudeSession, InvocationError, agent_environment, first_line};
 use crate::{
+  attachment::input::AttachedFile,
   command::Command,
   orchestrator::{MAX_TURNS, instructions::SERVER},
   permission::claude::{read_file_rule, read_rule},
@@ -120,11 +121,11 @@ impl ClaudeChat<'_> {
     args
   }
 
-  /// The command of the turn that answers `message`: in the project folder, with the allowed part of `environment`
-  /// and the variables the project adds (`project`).
+  /// The command of the turn that answers `message` with the files the person attached to it (`attached`): in the
+  /// project folder, with the allowed part of `environment` and the variables the project adds (`project`).
   pub fn command(
     &self,
-    message: &str,
+    (message, attached): (&str, &[AttachedFile]),
     environment: impl IntoIterator<Item = (OsString, OsString)>,
     project: &CommandEnvironment,
   ) -> Result<Command, InvocationError> {
@@ -139,7 +140,7 @@ impl ClaudeChat<'_> {
       Command::new(self.executable, self.args())
         .with_current_dir(self.folder)
         .with_environment(variables)
-        .with_stdin(input_line(message)),
+        .with_stdin(first_line(message, attached)?),
     )
   }
 }

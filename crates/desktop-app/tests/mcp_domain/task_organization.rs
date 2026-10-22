@@ -222,6 +222,45 @@ fn task_organization_refuses_what_the_form_refuses() {
   assert!(untouched.organization().tags().is_empty(), "nothing saved");
 }
 
+/// *Don't merge automatically* (ORC-69): `create_task` sets it, `get_task` reads it, `update_task` keeps it when left
+/// out and clears it with `false`, each change recorded as automation's.
+#[test]
+fn task_organization_no_automatic_merge_is_set_read_kept_and_cleared() {
+  let (mut served, repo) = served();
+  let created = served.ok(
+    "create_task",
+    &json!({ "project": "Kontur", "title": "Keep it for the person", "no_automatic_merge": true }),
+  );
+  assert_eq!(created["task"]["no_automatic_merge"], true, "{created}");
+  let key = created["task"]["key"].as_str().expect("a key").to_owned();
+  let task = stored(&repo, &key);
+  assert!(task.organization().no_automatic_merge());
+  assert_eq!(last_actor(&repo, &task), ChangeActor::Orchester);
+  let read = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+  assert_eq!(read["no_automatic_merge"], true, "{read}");
+
+  served.ok("update_task", &update(&key, json!({ "title": "Keep it, retitled" })));
+  assert!(
+    stored(&repo, &key).organization().no_automatic_merge(),
+    "left out, it stays"
+  );
+  let cleared = served.ok("update_task", &update(&key, json!({ "no_automatic_merge": false })));
+  assert_eq!(cleared["task"]["no_automatic_merge"], false, "{cleared}");
+  assert!(!stored(&repo, &key).organization().no_automatic_merge());
+  let read = served.ok("get_task", &json!({ "project": "Kontur", "key": key }));
+  assert_eq!(read["no_automatic_merge"], false, "{read}");
+
+  let plain = draft(&mut served, "Merge it when it succeeds");
+  assert!(
+    !stored(&repo, &plain).organization().no_automatic_merge(),
+    "off when left out"
+  );
+  served.ok("update_task", &update(&plain, json!({ "no_automatic_merge": true })));
+  let opted = stored(&repo, &plain);
+  assert!(opted.organization().no_automatic_merge());
+  assert_eq!(last_actor(&repo, &opted), ChangeActor::Orchester);
+}
+
 #[test]
 fn task_organization_list_tasks_tells_what_is_blocked() {
   let (mut served, _repo) = served();

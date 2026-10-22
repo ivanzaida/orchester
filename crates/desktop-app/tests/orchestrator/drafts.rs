@@ -17,7 +17,7 @@ use super::{
 const PLACEHOLDER: &str = "Message Orchestrator…";
 
 /// Leaves the Orchestrator for the Tasks list.
-fn leave(screen: &mut Orchestrator) {
+pub(super) fn leave(screen: &mut Orchestrator) {
   let project = screen.project;
   screen
     .window

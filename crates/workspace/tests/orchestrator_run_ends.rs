@@ -91,7 +91,7 @@ fn follow(fixture: &Fixture, answers: bool) -> Followed {
     fixture,
     Switches {
       answers,
-      continues: false,
+      ..Switches::default()
     },
   )
 }
@@ -407,6 +407,7 @@ fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() 
 const CONTINUING: Switches = Switches {
   answers: true,
   continues: true,
+  merges: false,
 };
 
 /// `run` interrupted for `cause` now.
@@ -502,8 +503,8 @@ fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_ch
   interrupt(&mut fixture, &mut gone, InterruptCause::Crashed);
   // Continuing alone starts no turn; with both on, these two stay the person's.
   let alone = Switches {
-    answers: false,
     continues: true,
+    ..Switches::default()
   };
   assert_eq!(follow_with(&fixture, alone).turn, None);
   assert!(

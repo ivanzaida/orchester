@@ -15,6 +15,7 @@ mod server;
 mod support;
 
 mod approvals;
+mod attachments;
 mod check;
 mod question;
 mod resume;

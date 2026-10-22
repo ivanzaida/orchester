@@ -1,5 +1,5 @@
 //! What the composer offers in each state of the run on `task-states`: its placeholder, whom the message goes
-//! to, the send button's words, the line over the box and the quiet line under it; *Attach* unavailable; and
+//! to, the send button's words, the line over the box and the quiet line under it; what *Attach* takes; and
 //! a lock with the reason once no agent of the run reads messages.
 
 use std::{
@@ -53,7 +53,7 @@ fn composer_a_queued_task_sends_when_the_run_starts() {
 }
 
 #[test]
-fn composer_attach_is_unavailable_and_says_why() {
+fn composer_attach_says_what_it_takes() {
   let (mut window, seeded) = seeded();
   open(&mut window, &seeded, "Localize the invoice emails");
   let bounds = window
@@ -71,7 +71,7 @@ fn composer_attach_is_unavailable_and_says_why() {
   window.pass();
   assert_eq!(
     text(&mut window, "composer-attach-tooltip"),
-    "Attaching files is not available yet."
+    "Attach images, PDFs or text files. You can also paste or drop them here."
   );
 }
 

@@ -17,11 +17,15 @@ use serde_json::{Value, json};
 static INPUT: OnceLock<Mutex<mpsc::Receiver<String>>> = OnceLock::new();
 
 /// Reads the prompt, the first user message, and keeps reading the rest of the input in the
-/// background. `None` when the first line is not a user message.
+/// background. `None` when the first line is not a user message. The kinds of the first message's content blocks are
+/// reported on standard error (`input-blocks: text,text,image:image/png`), and kept for the chat's log ([`blocks`]).
 pub fn open() -> Option<String> {
   let mut lines = std::io::stdin().lock().lines();
   let first = lines.next()?.ok()?;
   let prompt = text_of(&first)?;
+  let kinds = blocks_of(&first);
+  eprintln!("input-blocks: {kinds}");
+  BLOCKS.set(kinds).ok()?;
   drop(lines);
   if prompt.contains("Ignore messages") {
     return Some(prompt);
@@ -33,7 +37,10 @@ pub fn open() -> Option<String> {
         return;
       };
       match text_of(&line) {
-        Some(text) if sender.send(text.clone()).is_ok() => eprintln!("input: {text}"),
+        Some(text) if sender.send(text.clone()).is_ok() => {
+          eprintln!("input: {text}");
+          eprintln!("input-blocks: {}", blocks_of(&line));
+        }
         Some(_) => return,
         None => eprintln!("not a user message: {line}"),
       }
@@ -43,12 +50,36 @@ pub fn open() -> Option<String> {
   Some(prompt)
 }
 
+static BLOCKS: OnceLock<String> = OnceLock::new();
+
+/// The kinds of the first message's content blocks, as [`open`] reported them.
+pub fn blocks() -> String {
+  BLOCKS.get().cloned().unwrap_or_default()
+}
+
 fn text_of(line: &str) -> Option<String> {
   let value: Value = serde_json::from_str(line).ok()?;
   if value["type"] != "user" {
     return None;
   }
   value["message"]["content"][0]["text"].as_str().map(str::to_owned)
+}
+
+/// Each content block of the user message `line` by its type, an image or a document with its media type.
+fn blocks_of(line: &str) -> String {
+  let value: Value = serde_json::from_str(line).unwrap_or_default();
+  value["message"]["content"]
+    .as_array()
+    .into_iter()
+    .flatten()
+    .map(
+      |block| match (block["type"].as_str(), block["source"]["media_type"].as_str()) {
+        (Some(kind), Some(media)) => format!("{kind}:{media}"),
+        (kind, _) => kind.unwrap_or("?").to_owned(),
+      },
+    )
+    .collect::<Vec<_>>()
+    .join(",")
 }
 
 /// The next message that arrived, if any, waiting at most `wait`.

@@ -207,22 +207,25 @@ impl TaskForm {
 
   /// A newer version `task` came while the fields hold edits made on `base`: when the two changed
   /// different fields, the edits are put on it without asking; else the person chooses per field. Edits
-  /// that are not valid yet are compared once they are saved.
+  /// that are not valid yet are compared once they are saved. *Don't merge automatically* is the
+  /// organization's and merges by itself: the person's choice when they changed it, else the newer one's.
   fn meet_newer(&self, task: &Arc<Task>, base: &Base, (separator, at): (&str, Option<Timestamp>)) {
     self.newer.set(Some(Newer(task.clone())));
+    let values = self.fields.values_untracked();
     let made_on = base.values.task_form(separator).details().ok();
-    let mine = self.fields.values_untracked().task_form(separator).details().ok();
+    let mine = values.task_form(separator).details().ok();
     let (Some(made_on), Some(mine)) = (made_on, mine) else {
       return;
     };
     let merge = ContentMerge::new(made_on, mine, task.details().clone());
     if merge.is_clean() {
+      let organization = values.organization(&base.values, task.organization());
       // Story points are not part of the details: the person's choice in the field stays.
-      let merged = Values {
-        points: self.fields.points.get_untracked().0,
+      self.fields.fill(&Values {
+        no_automatic_merge: organization.no_automatic_merge(),
+        points: values.points,
         ..Values::of_details(&merge.merged(|_| Choice::Mine), separator)
-      };
-      self.fields.fill(&merged);
+      });
       self.base.set(Some(Base::of(task, separator)));
       self.newer.set(None);
       self.dismissed.set(true);

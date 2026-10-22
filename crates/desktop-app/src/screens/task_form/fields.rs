@@ -20,6 +20,7 @@ pub struct Fields {
   pub budget: Signal<String>,
   pub time_limit: Signal<String>,
   pub points: Signal<Points>,
+  pub no_automatic_merge: Signal<bool>,
   pub module: Signal<ModuleChoice>,
 }
 
@@ -33,6 +34,7 @@ impl Fields {
       budget: ctx.signal(String::new()),
       time_limit: ctx.signal(String::new()),
       points: ctx.signal(Points(None)),
+      no_automatic_merge: ctx.signal(false),
       module: ctx.signal(ModuleChoice::default()),
     }
   }
@@ -47,6 +49,7 @@ impl Fields {
       budget: self.budget.get(),
       time_limit: self.time_limit.get(),
       points: self.points.get().0,
+      no_automatic_merge: self.no_automatic_merge.get(),
     }
   }
 
@@ -64,6 +67,7 @@ impl Fields {
       budget: self.budget.get_untracked(),
       time_limit: self.time_limit.get_untracked(),
       points: self.points.get_untracked().0,
+      no_automatic_merge: self.no_automatic_merge.get_untracked(),
     }
   }
 
@@ -75,5 +79,6 @@ impl Fields {
     self.budget.set(values.budget.clone());
     self.time_limit.set(values.time_limit.clone());
     self.points.set(Points(values.points));
+    self.no_automatic_merge.set(values.no_automatic_merge);
   }
 }

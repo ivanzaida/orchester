@@ -160,7 +160,7 @@ fn press_element(window: &mut Window, id: &str) {
 const CONTINUE: &str = "settings-continue-interrupted";
 
 /// The Orchestrator's switches: each one's element id, its title, and the consent it saves.
-const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 4] = [
+const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 5] = [
   (
     PUBLISH,
     "Let the Orchestrator publish drafts",
@@ -175,6 +175,11 @@ const ORCHESTRATOR_SWITCHES: [(&str, &str, OrchestratorConsent); 4] = [
     "settings-merge-runs",
     "Let the Orchestrator merge runs",
     OrchestratorConsent::MergeRuns,
+  ),
+  (
+    "settings-merge-finished",
+    "Let the Orchestrator merge finished runs on its own",
+    OrchestratorConsent::MergeFinished,
   ),
   (
     CONTINUE,

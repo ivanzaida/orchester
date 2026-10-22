@@ -76,6 +76,8 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
       Ok::<_, StoreError>(Switches {
         answers: workspace.orchestrator_allows(OrchestratorConsent::AnswerAgents)?,
         continues: workspace.orchestrator_allows(OrchestratorConsent::ContinueInterrupted)?,
+        merges: workspace.orchestrator_allows(OrchestratorConsent::MergeFinished)?
+          && workspace.orchestrator_allows(OrchestratorConsent::MergeRuns)?,
       })
     })
     .await?

@@ -112,16 +112,17 @@ pub fn chat_row(id: String, avatar: Avatar, (name, meta): (&str, &str), body: Ve
     .into()
 }
 
-/// *You*, the time when it is known, the bubble with `body` as written, and `delivery` under it; `id` names the
-/// message.
+/// *You*, the time when it is known, the bubble with `body` as written, the files attached to it (`attached`,
+/// [`super::attachments::sent`]) and `delivery` under it; `id` names the message. A message of attachments only has
+/// no bubble.
 pub fn person_message(
   ctx: &mut Ctx,
   id: &str,
   (body, at): (&Arc<str>, Option<Timestamp>),
-  delivery: Option<Element>,
+  (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
   let you = ctx.t("conversation.you");
-  person_side_message(id, (&you, body, at), delivery)
+  person_side_message(id, (&you, body, at), (attached, delivery))
 }
 
 /// A message on the person's side as [`person_message`] shows it, written by `author` (the project's Orchestrator
@@ -129,7 +130,7 @@ pub fn person_message(
 pub fn person_side_message(
   id: &str,
   (author, body, at): (&str, &Arc<str>, Option<Timestamp>),
-  delivery: Option<Element>,
+  (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
   let head = Row::new()
     .spacing(ExtraSpacing::Snug.role())
@@ -147,25 +148,35 @@ pub fn person_side_message(
     }));
   // As the person wrote it, so the bubble hugs its words up to its widest (`pCzqz`): lurq's Markdown always
   // fills its parent's width.
-  let said = Text::new(body)
-    .id(format!("{id}-text"))
-    .variant(TypographyStyle::Body)
-    .selectable(true);
-  let bubble = Column::new()
-    .id(format!("{id}-bubble"))
-    .max_width(Dimension::Pct(BUBBLE_WIDTH))
-    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
-    .background(ExtraColor::OwnMessage.role())
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Lg)
-    .child(said);
+  let bubble = (!body.trim().is_empty()).then(|| {
+    let said = Text::new(body)
+      .id(format!("{id}-text"))
+      .variant(TypographyStyle::Body)
+      .selectable(true);
+    Column::new()
+      .id(format!("{id}-bubble"))
+      .max_width(Dimension::Pct(BUBBLE_WIDTH))
+      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+      .background(ExtraColor::OwnMessage.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+      .rounded(RadiusSize::Lg)
+      .child(said)
+  });
+  // The files sit at the message's end, as wide as the bubble may grow.
+  let attached = attached.map(|attached| {
+    Row::new()
+      .max_width(Dimension::Pct(BUBBLE_WIDTH))
+      .justify(Justify::End)
+      .child(attached)
+  });
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::End)
     .child(head)
-    .child(bubble)
+    .with_children(bubble)
+    .with_children(attached)
     .with_children(delivery)
 }
 

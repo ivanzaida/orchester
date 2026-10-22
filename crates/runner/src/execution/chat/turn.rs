@@ -8,6 +8,7 @@ use std::{
 };
 
 use orchester_core::{
+  attachment::input::AttachedFile,
   connection::{
     AccountStartProblem, AgentConnection, ConnectionError,
     invocation::Platform,
@@ -37,6 +38,8 @@ pub(super) struct Turn {
   pub(super) chat: Chat,
   pub(super) message: ChatMessageId,
   pub(super) text: MessageBody,
+  /// The files the person attached to the message, which the agent gets with it.
+  pub(super) attached: Vec<AttachedFile>,
   pub(super) settings: OrchestratorSettings,
   pub(super) tools: ChatTools,
   /// How long the answer may run before the runner ends it.
