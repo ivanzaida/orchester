@@ -80,12 +80,18 @@ pub fn rows(ctx: &mut Ctx, state: &State, step: &Step, locked: bool) -> Element 
   if *repository == RepositoryAccess::Write {
     body = body.child(base_moves_rows(ctx, state, (editing.shown().steps(), step), locked));
   }
+  // An agent step's own sources (`O6piA3`) come between its access and its permissions.
+  let sources = super::sources::step_section(ctx, state, &step.key, locked);
   let Some(choice) = choice else {
     return body
+      .child(sources)
       .child(note("step-narrow-note", Icon::Info, &ctx.t("pipelines.narrowHint")))
       .into();
   };
-  body.child(permission_section(ctx, state, step, choice, locked)).into()
+  body
+    .child(sources)
+    .child(permission_section(ctx, state, step, choice, locked))
+    .into()
 }
 
 /// *Merge the base branch when it moves* (ORC-65) for a writing step of `steps`, as the pipeline's rule decides it for

@@ -42,6 +42,7 @@ mod settings;
 mod shadow;
 mod shell;
 pub mod skills;
+mod sources;
 mod startup;
 mod task;
 mod task_form;
@@ -84,6 +85,7 @@ pub use self::{
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
+  sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
   task::{TaskSpacing, TaskText},
   task_form::{TaskFormRadius, TaskFormSpacing, TaskFormText},
@@ -139,6 +141,7 @@ pub fn install(app: &mut App, mode: Mode) {
   needs_you::install(theme);
   usage::install(theme);
   memory::install(theme);
+  sources::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

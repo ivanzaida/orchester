@@ -69,6 +69,15 @@ impl PipelineEdit {
     description.clone_into(&mut self.description);
   }
 
+  /// The sources the edited pipeline and its steps list; a removed step's leave once it is validated.
+  pub fn sources(&self) -> &PipelineSources {
+    &self.sources
+  }
+
+  pub fn set_sources(&mut self, sources: PipelineSources) {
+    self.sources = sources;
+  }
+
   /// Steps in the order the user arranged them.
   pub fn steps(&self) -> &[Step] {
     &self.steps

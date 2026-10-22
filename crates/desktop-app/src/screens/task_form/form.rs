@@ -40,8 +40,9 @@ use super::{
   module::module_section,
   plan::pipeline_section,
   points::points_section,
+  sources::{Drafted, SourcesProps, context_section},
   state::{Phase, Subject, View},
-  unbuilt::{context_section, instructions_section},
+  unbuilt::instructions_section,
 };
 use crate::{project::ShownProject, routes::Screen, services::Services, theme::TaskFormSpacing};
 
@@ -97,6 +98,8 @@ pub struct TaskForm {
   pub(super) kept: KeptEdits,
   /// What this form last wrote to the kept edits.
   pub(super) written: Arc<Mutex<Written>>,
+  /// A new task's sources, which Create stores with it; a stored task's are saved as they change.
+  pub(super) sources: Signal<Drafted>,
 }
 
 /// Leaving the form writes the edits whose pause has not ended yet.
@@ -159,6 +162,7 @@ impl Component for TaskForm {
         &batch.to_string(),
       ),
       written: Arc::default(),
+      sources: ctx.signal(Drafted::default()),
     };
     form.follow_save(ctx, &save, &props);
     form.follow_run(ctx, &run, &props);
@@ -236,10 +240,19 @@ impl TaskForm {
       budget: &self.fields.budget,
       time_limit: &self.fields.time_limit,
     };
+    let sources = SourcesProps {
+      repo_root: props.project.open.repo_root.clone(),
+      project: props.project.open.project.id(),
+      project_name: props.project.open.project.name().as_str().into(),
+      task: view.subject.task().map(|task| task.id()),
+      pipeline: view.pipeline().map(|choice| (choice.id, choice.version)),
+      drafted: self.sources.clone(),
+      locked: view.locked(),
+    };
     page
       .with_children(no_run_notice(ctx, view))
       .child(brief(ctx, view, &props.project.open, &brief_fields))
-      .child(context_section(ctx))
+      .child(context_section(ctx, sources))
       .child(pipeline_section(ctx, view, &self.fields.pipeline, &self.nav))
       .with_children(module_section(ctx, view, &props.modules, &self.fields.module))
       .child(limits_section(ctx, view, &limit_fields, separator))

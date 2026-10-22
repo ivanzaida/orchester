@@ -4,6 +4,7 @@
 //! be used stays in place, visibly unavailable with a reason (`unavailable`).
 
 pub mod add_slot;
+pub mod add_source;
 pub mod attachments;
 pub mod avatar;
 pub mod breadcrumb;
@@ -20,6 +21,7 @@ pub mod command_row;
 pub mod command_trigger;
 pub mod composer;
 pub mod detail_row;
+pub mod enforcement_row;
 pub mod field;
 pub mod filter;
 pub mod form_section;
@@ -53,6 +55,7 @@ pub mod rule_item;
 pub mod settings_page;
 pub mod skill_row;
 pub mod source_box;
+pub mod source_row;
 pub mod state;
 pub mod status;
 pub mod table;

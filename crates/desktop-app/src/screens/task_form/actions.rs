@@ -19,6 +19,7 @@ use orchester_core::{
   id::{ModuleId, TaskId},
   project::TaskKey,
   resource::VersionNumber,
+  source::SourcePath,
   task::{
     Task, TaskDetails, TaskStatus, TaskUpdate,
     estimate::StoryPoints,
@@ -33,11 +34,12 @@ use orchester_workspace::{
   messages::{self, Message},
   runner::{RunRequestError, Runners},
   sharing::{Servers, project::WorkClaim},
+  sources::task as sources,
   tasks::{
     conflict::{Edit, EditConflict, EditSaved, save_edit},
     data::SaveTarget,
     estimate::{Estimates, apply_person_points},
-    run::{StartOutcome, queue_in, queue_organized_in, start_messages},
+    run::{QueueFailure, QueuedStart, StartOutcome, queue_in, queue_organized_in, start_messages},
     writer::{TaskWriter, WriteError},
   },
   workspace::OpenProject,
@@ -60,6 +62,9 @@ pub struct SaveArgs {
   pub points: Option<StoryPoints>,
   /// The module the task goes in once its details are saved.
   pub module: Option<ModuleId>,
+  /// A new task's sources, each confirmed by the person on the form, stored with it; a stored task's are saved as
+  /// they change (`super::sources`).
+  pub sources: Vec<SourcePath>,
 }
 
 /// The task a save stored.
@@ -141,6 +146,7 @@ fn store(args: &SaveArgs, servers: &Servers) -> Result<SaveOutcome, Problems> {
       if task.status() != TaskStatus::Draft {
         return Err(Problems::one(messages::task_no_longer_draft()));
       }
+      sources::save_new_in(&args.repo_root, task.id(), &args.sources, true).map_err(Problems::one)?;
       (task, args.details.clone())
     }
     SaveTarget::Task(task, read) => {
@@ -183,6 +189,8 @@ pub struct QueuedTask {
   pub key: TaskKey,
   /// Whether a failed start certainly made no run.
   pub outcome: StartOutcome,
+  /// A new task's sources that were not stored when it was queued: Retry run stores them before it asks for the run.
+  pub unsourced: Vec<SourcePath>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for QueuedTask {}
@@ -241,15 +249,44 @@ pub fn run_action(ctx: &mut Ctx, services: RunServices) -> RunAction {
     async move {
       let (queued, claim) = match args {
         RunArgs::New { save, version } => queue(&services, save, version).await?,
-        RunArgs::Retry(queued) => (queued, WorkClaim::default()),
+        RunArgs::Retry(queued) => (store_unsourced(&services, queued).await?, WorkClaim::default()),
       };
       start(&services, queued, claim).await
     }
   })
 }
 
-/// Saves and queues the task, with the organization the form changed; nothing is queued when the run could not
-/// start with its configuration.
+/// Saves and queues the task, with the organization the form changed, and stores a new task's sources before its run
+/// is asked to start, which snapshots them; why they were not stored, if they were not. Blocks on SQLite.
+fn queue_with_sources(
+  save: SaveArgs,
+  servers: &Servers,
+  version: VersionNumber,
+) -> (Result<QueuedStart, QueueFailure>, Option<Message>) {
+  let (base, edited) = &save.organization;
+  let queued = if base == edited {
+    queue_in(&save.repo_root, servers, save.target, save.details, version)
+  } else {
+    queue_organized_in(
+      &save.repo_root,
+      servers,
+      save.target,
+      save.details,
+      (base, edited),
+      version,
+    )
+  };
+  let unsourced = match (&queued, save.target) {
+    (Ok(queued), SaveTarget::New(_)) => {
+      sources::save_new_in(&save.repo_root, queued.task.id(), &save.sources, true).err()
+    }
+    _ => None,
+  };
+  (queued, unsourced)
+}
+
+/// Saves and queues the task ([`queue_with_sources`]); nothing is queued when the run could not start with its
+/// configuration.
 async fn queue(
   services: &RunServices,
   save: Box<SaveArgs>,
@@ -262,22 +299,10 @@ async fn queue(
   };
   let servers = services.servers.clone();
   let (repo_root, target, points, module) = (save.repo_root.clone(), save.target, save.points, save.module);
-  let queued = background::run(move || {
-    let (base, edited) = &save.organization;
-    if base == edited {
-      return queue_in(&save.repo_root, &servers, save.target, save.details, version);
-    }
-    queue_organized_in(
-      &save.repo_root,
-      &servers,
-      save.target,
-      save.details,
-      (base, edited),
-      version,
-    )
-  })
-  .await
-  .map_err(|message| not_queued(Arc::from([message])))?;
+  let sources = save.sources.clone();
+  let (queued, unsourced) = background::run(move || queue_with_sources(*save, &servers, version))
+    .await
+    .map_err(|message| not_queued(Arc::from([message])))?;
   let queued = match queued {
     Ok(queued) => queued,
     Err(failure) => {
@@ -293,8 +318,21 @@ async fn queue(
     task: queued.task.id(),
     key: queued.task.key().clone(),
     outcome: StartOutcome::ConfirmedNotStarted,
+    unsourced: Vec::new(),
   };
   services.queued.set(Some(task.clone()));
+  if let Some(message) = unsourced {
+    // The task is queued: the form keeps it, with Retry run, which stores the sources before it asks for the run,
+    // and says why they were not stored.
+    return Err(RunProblems {
+      messages: Arc::from([message]),
+      queued: Some(QueuedTask {
+        unsourced: sources,
+        ..task
+      }),
+      saved: None,
+    });
+  }
   let in_module = queued.task.module() == module;
   keep_points(services, repo_root.clone(), queued.task, points).await;
   if !in_module {
@@ -351,6 +389,27 @@ async fn saved_draft(repo_root: PathBuf, target: SaveTarget) -> Option<Saved> {
     }
     // Background work that did not finish is logged by `background::run`.
     Err(_) => None,
+  }
+}
+
+/// Stores the sources a new task was queued without, before Retry run asks for its run, which snapshots them; the
+/// task stays queued with them when they still cannot be stored.
+async fn store_unsourced(services: &RunServices, queued: QueuedTask) -> Result<QueuedTask, RunProblems> {
+  if queued.unsourced.is_empty() {
+    return Ok(queued);
+  }
+  let (root, task, unsourced) = (services.repo_root.clone(), queued.task, queued.unsourced.clone());
+  let stored = background::run(move || sources::save_new_in(&root, task, &unsourced, true)).await;
+  match stored.and_then(|stored| stored) {
+    Ok(()) => Ok(QueuedTask {
+      unsourced: Vec::new(),
+      ..queued
+    }),
+    Err(message) => Err(RunProblems {
+      messages: Arc::from([message]),
+      queued: Some(queued),
+      saved: None,
+    }),
   }
 }
 

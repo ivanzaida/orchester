@@ -1271,6 +1271,53 @@
       "duplicateFile": "A reference file already has this path."
     }
   },
+  "sources": {
+    "personOnly": "Adding a source lets agents read more without asking: a person confirms it in the window.",
+    "check": {
+      "file": "File · readable.",
+      "folder": "Folder · {{count}} files · readable.",
+      "folderOne": "Folder · 1 file · readable.",
+      "largeFolder": "Folder · more than {{count}} files · readable.",
+      "folderWithRefused": "Folder · readable. Its .git folder and Orchester state inside stay refused."
+    },
+    "refused": {
+      "blank": "Type or paste the path of a folder or file.",
+      "tooLong": "A source's path is at most {{max}} characters long.",
+      "control": "The path holds a control character.",
+      "notAbsolute": "Use a full path, from the drive or the root folder.",
+      "notLocal": "A source is a folder or file on this computer, not a network or device path.",
+      "notFound": "Not found: there is no folder or file at this path.",
+      "unreadable": "Can't be read: access is denied for this user.",
+      "insideProject": "Inside {{project}}'s folder: agents already read it in the run's worktree, so it isn't needed as a source.",
+      "covered": "Already covered: {{source}} is a source.",
+      "git": "A .git folder is never readable by agents, even as a source.",
+      "orchesterData": "Orchester's own data (database, settings, logs) is never readable by agents.",
+      "otherProject": "{{name}}'s private Orchester state is refused. Add a folder of {{name}}'s code instead.",
+      "credentials": "Credential files and folders (.ssh, .aws, .env and the like) are never sources: sources never hold secrets."
+    },
+    "listed": {
+      "missing": "Not found. Runs start without it; a read there asks you.",
+      "unreadable": "Access is denied for this user. Runs start without it."
+    },
+    "widens": {
+      "project": "Agents of every run of this project may read and search {{path}} without asking you.",
+      "task": "This task's agents may read and search {{path}} without asking you."
+    },
+    "removed": {
+      "noRun": "New runs start without it.",
+      "oneRun": "{{task}} run {{run}} started with it and keeps reading it until it ends. New runs start without it.",
+      "runs": "{{count}} runs started with it and keep reading it until they end. New runs start without it."
+    },
+    "origin": {
+      "pipeline": "{{pipeline}} v{{version}}",
+      "step": "{{step}} in {{pipeline}} v{{version}}"
+    },
+    "steps": {
+      "oneOnStep": "{{step}} adds 1 more on its step",
+      "manyOnStep": "{{step}} adds {{count}} more on its step",
+      "onSteps": "{{steps}} steps add {{count}} more on their own"
+    }
+  },
   "appMcp": {
     "errors": {
       "noCommits": "The repository has no commit yet, and runs branch from one. Make a first commit, or create the project in Orchester’s project setup, which offers to make it.",

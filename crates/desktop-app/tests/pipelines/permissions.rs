@@ -67,6 +67,8 @@ fn command(editor: &mut Editor, index: usize) {
 
 fn changed_profile() -> (Editor, ResourceId) {
   let mut editor = Editor::new();
+  // The step's sources come before its permissions: a taller window keeps the command list in view.
+  editor.window.tree.resize(1440, 1800);
   profile(&editor, "Profile A", &["cargo check", "cargo test"]);
   profile(&editor, "Profile B", &["cargo test"]);
   let id = editor.empty("Permission transitions");

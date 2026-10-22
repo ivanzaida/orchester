@@ -17,6 +17,7 @@ mod long_chats;
 mod memory;
 mod pipelines;
 mod pull_requests;
+mod sources;
 mod task_states;
 mod tasks;
 mod tasks_memory;
@@ -68,7 +69,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 30] = [
+pub const ALL: [Scenario; 31] = [
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-empty", agents::empty),
   Scenario::of("agents-no-connections", agents::no_connections),
@@ -96,6 +97,7 @@ pub const ALL: [Scenario; 30] = [
   Scenario::of("accounts", accounts::seed),
   Scenario::of("pull-requests", pull_requests::seed),
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
+  Scenario::of("sources", sources::seed),
   Scenario::of("usage", usage::seed),
   Scenario::of("usage-empty", usage::no_runs_today),
   Scenario::of("usage-bare", usage::bare),
