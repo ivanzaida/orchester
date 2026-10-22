@@ -114,30 +114,45 @@ fn long_transcript(kontur: &mut Kontur) -> Result<(), SeedError> {
       let item = format!("long-{round}");
       let command = format!("cargo test -p webhooks case_{round}");
       [
-        (at(round, 0), AgentEvent::Message {
-          text: format!("Round {round}: the jitter bound holds for attempt {round}; checking the next case."),
-        }),
-        (at(round, 1), AgentEvent::Reasoning {
-          text: format!("Case {round} retries a 503 with Retry-After; the delay must stay under the budget."),
-        }),
-        (at(round, 2), AgentEvent::CommandStarted {
-          item: item.clone(),
-          command: command.clone(),
-        }),
-        (at(round, 3), AgentEvent::CommandFinished {
-          item,
-          command,
-          output: format!("test webhooks::retry::case_{round} ... ok\ntest result: ok. 1 passed"),
-          exit_code: Some(0),
-          status: CommandStatus::Completed,
-        }),
-        (at(round, 4), AgentEvent::FileChanged {
-          item: format!("edit-long-{round}"),
-          changes: vec![FileChange {
-            path: format!("tests/webhooks/case_{round}.rs"),
-            kind: FileChangeKind::Added,
-          }],
-        }),
+        (
+          at(round, 0),
+          AgentEvent::Message {
+            text: format!("Round {round}: the jitter bound holds for attempt {round}; checking the next case."),
+          },
+        ),
+        (
+          at(round, 1),
+          AgentEvent::Reasoning {
+            text: format!("Case {round} retries a 503 with Retry-After; the delay must stay under the budget."),
+          },
+        ),
+        (
+          at(round, 2),
+          AgentEvent::CommandStarted {
+            item: item.clone(),
+            command: command.clone(),
+          },
+        ),
+        (
+          at(round, 3),
+          AgentEvent::CommandFinished {
+            item,
+            command,
+            output: format!("test webhooks::retry::case_{round} ... ok\ntest result: ok. 1 passed"),
+            exit_code: Some(0),
+            status: CommandStatus::Completed,
+          },
+        ),
+        (
+          at(round, 4),
+          AgentEvent::FileChanged {
+            item: format!("edit-long-{round}"),
+            changes: vec![FileChange {
+              path: format!("tests/webhooks/case_{round}.rs"),
+              kind: FileChangeKind::Added,
+            }],
+          },
+        ),
       ]
     })
     .collect();

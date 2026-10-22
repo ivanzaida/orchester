@@ -11,7 +11,7 @@ use lurq::{
 
 /// A value the tab shares with what it mounts.
 #[derive(Clone)]
-pub(super) struct Shared<T: 'static>(Signal<Option<T>>);
+pub(super) struct Shared<T: DevtoolsInspectable + 'static>(Signal<Option<T>>);
 
 impl<T> Shared<T>
 where

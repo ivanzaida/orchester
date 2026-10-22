@@ -44,13 +44,13 @@ use orchester_workspace::tasks::{
 };
 
 use self::proposal::{ProposalProps, ProposalRow};
-use super::shared::Shared;
 pub(crate) use self::{divider::step_label, message::links};
 pub(super) use self::{
   message::person_message,
   proposal::ChatProject,
   working::{Wait, Working},
 };
+use super::shared::Shared;
 use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route, TaskView},

@@ -874,6 +874,43 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-71 · Opening a chat doesn't freeze the app: profile and fix the main-thread work · branch `orchester/orc-71-run-1`
+(implemented 2026-10-22; pipeline Check and Review follow). Measured with lurq profile sessions (`perf_profile`, now a
+feature of `orchester-app`, which QA copies are built with) over headless openings of the `long-chats` QA seed's size
+(two Orchestrator conversations of 300 turns with long Markdown replies and 50 cards; KON-12's run 1,500 events
+longer, ~320 rows): `tests/orchestrator/open_long.rs`, `tests/conversation/open_long.rs`, helper `tests/support/profile.rs`,
+which writes each opening's frames and lurq samples to `.tmp/orc-71/profile/<name>-<debug|release>.txt`. Numbers below
+are release builds on this machine, a frame being delivering finished futures plus the pass.
+- **Orchestrator chat, opening and switching in History** (unchanged by this task, lurq's): the frame that shows the chat
+  takes ~200–225 ms (~70–84 ms building rows, ~100–145 ms laying them out), then one ~50–65 ms frame. Cause: lurq 0.49.1's
+  `VirtualizedList` renders its first 64 rows (`BOOTSTRAP_ROWS`), from the top, before it has measured one, also after a
+  switch (no key survives, so its heights are cleared); a list that opens at its end pays for 64 long turns at once.
+  Repro: `tests/ui_kit/virtualized_list.rs` (300 rows 100 high, `scroll_to_bottom_pending`: rows 0–63 render on the
+  first pass, then the end). Not worked around in the app; misses the targets by ~100–125 ms (first frame) and ~150–175
+  ms (longest frame). The screen's own render with 300 turns is ~1 ms; a keystroke frame ~5 ms.
+- **Idle relayout, lurq's:** a Markdown document with a followed link leaves the layout dirty after every pass, so a chat
+  showing a reply with a link lays the window out on every frame (~2–3 ms release, ~2–6 ms debug), forever. Repro:
+  `tests/ui_kit/markdown_link_layout.rs`.
+- **Task Conversation, fixed:** before, the opening frame took 65–67 ms: the tab rendered twice in it (~18 ms each), each
+  time building the whole timeline (~1–2 ms) and rendering again every row lurq had bootstrapped, because the tab
+  provided `Decisions`, the composer's `Composing` and the rows' `Timeline` as contexts in `render`, and lurq renders
+  every descendant again when a component provides during render. Now the timeline is built only when its inputs change
+  (`conversation/built.rs`), its rows are shared `Arc`s, and the three values are provided once from `create`, the
+  changing two as signals set when they change (`conversation/shared.rs`). After: the opening frame takes 47 ms (first
+  frame within ~100 ms of the data, no frame over 50 ms), then 8 ms and 3 ms. No visible change.
+- Not changed, measured small: card fact reads (only built cards read), follow-to-end (settles in 1–2 frames), reads in
+  `render` (none block; the conversation's clone is ~0.3 ms). The task page frame (`TaskFrame`) still provides four
+  contexts in `render`, so its re-renders re-render the whole tab: not on the opening path measured here; left as found.
+- Not done: a side-by-side profile of real QA windows. A QA copy on `long-chats` starts with `perf_profile`
+  (`lurq_profile_read`: available) and opens the 300-turn Orchestrator chat, but `lurq_profile_end` of even a 30-sample
+  session exceeds `call_run_app`'s answer limit, so its samples could not be read back; QA copies are debug builds and
+  run one at a time. Base-moved notices and step results are not in the long run's seed.
+- Tests: `cargo test -p orchester-app --test orchestrator -- orchestrator_follow orchestrator_scroll orchestrator_open_long`,
+  `--test conversation -- timeline_`, `--test decision_cards -- card_`, `--test composer -- composer_`, `--test ui_kit --
+  virtualized_list markdown_link_layout`, `--test seed -- seed_every_scenario seed_names_every_scenario`; the release
+  profiles with `cargo test --release -p orchester-app --features perf_profile --test orchestrator --test conversation
+  open_long -- --test-threads=1`.
+
 ORC-74 · Runs don't fail on "database is locked" · branch `orchester/orc-74-run-1` (implemented 2026-10-21; pipeline
 Check and Review follow). The rules are in `docs/architecture/storage.md`, "Concurrency".
 - **Cause.** Every connection had `busy_timeout` 5 s and wrote in `BEGIN IMMEDIATE` transactions; no transaction ran

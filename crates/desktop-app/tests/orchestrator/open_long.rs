@@ -55,7 +55,7 @@ fn markdown_reply(tag: &str) -> String {
 
 /// The card of the answer of turn `turn`: a release of new starts waiting for the person, or a task the chat created.
 fn card(turn: usize) -> ChatAction {
-  if turn % (2 * CARD_EVERY) == 0 {
+  if turn.is_multiple_of(2 * CARD_EVERY) {
     return ChatAction {
       change: Some(Box::new(ProposedChange {
         subject: String::new(),
@@ -83,7 +83,7 @@ fn long_chat(screen: &Orchestrator, tag: &str, ended: i64) -> ChatId {
       .expect("kept");
     db.add_chat_reply(chat, (&markdown_reply(&format!("{tag} {turn}")), &model), at)
       .expect("reply");
-    if turn % CARD_EVERY == 0 {
+    if turn.is_multiple_of(CARD_EVERY) {
       db.add_chat_action(chat, &card(turn), at).expect("card");
     }
     db.end_chat_turn(message, &TurnState::Answered, at).expect("ended");

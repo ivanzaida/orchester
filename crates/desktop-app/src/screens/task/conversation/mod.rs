@@ -160,11 +160,9 @@ impl ConversationTab {
       }
       Err(None) => return (states::loading(ctx, run), None),
     };
-    let built = self.timeline.of(
-      (run, &task.detail),
-      (&loaded, conversation),
-      self.toggles.open_rows(),
-    );
+    let built = self
+      .timeline
+      .of((run, &task.detail), (&loaded, conversation), self.toggles.open_rows());
     let items = &built.items;
     // An agent that waits for the person (its question in its turn, C·15, a tool request or a plan decision)
     // does not work: the run waits for the person, so the line under the chat and the chip say so.
