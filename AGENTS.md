@@ -98,7 +98,7 @@ Hard requirements:
    `crates/desktop-app/src/notifications/os/windows/badge.rs`, `crates/desktop-app/src/notifications/os/macos.rs`,
    `crates/agent/src/files/entry/windows.rs`, `crates/core/src/permission/remote_drive.rs`,
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
-   `crates/exec/src/run_processes/macos/identity.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
+   `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
    `crates/exec/tests/support/process_window.rs`, `crates/exec/tests/support/process_term.rs` and
    `crates/exec/tests/support/console_children.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct

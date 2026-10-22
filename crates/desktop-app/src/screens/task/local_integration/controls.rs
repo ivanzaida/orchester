@@ -4,6 +4,7 @@
 
 mod acknowledgement;
 mod confirmation;
+mod discard;
 mod finishing;
 mod preparation;
 mod recovery;
@@ -25,7 +26,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::integration::local::{LocalOperation, LocalPhase};
-use orchester_workspace::tasks::local_integration::IntegrationView;
+use orchester_workspace::tasks::local_integration::{IntegrationView, LocalOrigin};
 pub(super) use recovery::aborted;
 
 use super::{
@@ -109,7 +110,17 @@ impl Trigger {
     action: Option<Action>,
     disabled: bool,
   ) -> ActionButton {
-    let button = ActionButton::new(id, kind, ctx.t(label));
+    self.labeled((id, kind, ctx.t(label)), action, disabled)
+  }
+
+  /// [`Self::button`] saying `label`, already in words.
+  fn labeled(
+    &self,
+    (id, kind, label): (&str, ButtonKind, Arc<str>),
+    action: Option<Action>,
+    disabled: bool,
+  ) -> ActionButton {
+    let button = ActionButton::new(id, kind, label);
     if disabled {
       return button.disabled();
     }
@@ -183,7 +194,10 @@ impl Component for Inspector {
       .as_ref()
       .map_or(LocalPhase::Review, |operation| operation.phase());
     let mode = props.mode.get();
-    let guarded = matches!(mode, Mode::Abort | Mode::Cancel | Mode::Cleanup) || phase == LocalPhase::AwaitingApproval;
+    let guarded = matches!(
+      mode,
+      Mode::Abort | Mode::Cancel | Mode::Cleanup | Mode::Discard | Mode::Discarded(_)
+    ) || phase == LocalPhase::AwaitingApproval;
     let pending = decision(&props, &mode, phase).is_some();
     let mut managed = props.managed.lock();
     if pending && managed.is_none() {
@@ -242,6 +256,9 @@ impl Inspector {
             .on_click(move || stop.store(true, Ordering::Release)),
         )
         .into();
+    }
+    if let Some(panel) = self.discarding(ctx, props, mode) {
+      return panel;
     }
     match decision(props, mode, phase) {
       Some(decision) => self.confirmation(ctx, props, (mode, phase), decision),
@@ -373,9 +390,14 @@ fn mode_button(ctx: &Ctx, props: &Props, (id, kind): (&str, ButtonKind), label: 
   ActionButton::new(id, kind, ctx.t(label))
     .fill_width()
     .on_click(move || {
-      if !gate.local_input(input_source()).allowed() {
+      let input = gate.local_input(input_source());
+      if !input.allowed() || (chosen == Mode::Discard && input.origin() != LocalOrigin::Native) {
         let mut refused = refusal.clone();
-        refused.action = Action::AuthorityRefused;
+        refused.action = if chosen == Mode::Discard {
+          Action::DiscardRefused
+        } else {
+          Action::AuthorityRefused
+        };
         work.run_if_idle(refused);
         return;
       }

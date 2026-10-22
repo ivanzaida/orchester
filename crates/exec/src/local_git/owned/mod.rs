@@ -53,6 +53,13 @@ impl OwnedFile {
   pub(crate) fn into_file(self) -> File {
     self.file
   }
+
+  /// Lets go of the file, so another program can move it, and keeps its folder held, with the path the file has in
+  /// it.
+  pub(crate) fn release(self) -> (Arc<Directory>, std::path::PathBuf) {
+    let path = self.parent.path().join(&self.name);
+    (self.parent, path)
+  }
 }
 impl OwnedFile {
   pub fn open(root: &Path, path: &LocalPath, writing: bool) -> Result<Option<Self>, LocalGitError> {

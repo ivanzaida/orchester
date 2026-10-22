@@ -5,6 +5,8 @@ mod abort;
 mod acknowledgement;
 #[path = "local_integration/candidates.rs"]
 mod candidates;
+#[path = "local_integration/discard.rs"]
+mod discard;
 #[path = "../../workspace/tests/local_integration/support.rs"]
 mod domain_support;
 #[path = "local_integration/hooks.rs"]

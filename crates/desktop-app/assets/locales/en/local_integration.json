@@ -147,7 +147,9 @@
       "containment": "Local integration cannot prove ownership of child processes on this platform. No command was started.",
       "storageOwnership": "Local integration cannot bind recovery storage to owned objects on this platform. The checkout and retained recovery have not been changed.",
       "processUncertain": "Child processes or pipes have an uncertain outcome. Retained recovery has not been removed. Inspect the recorded operation before continuing.",
-      "hookChanged": "A commit hook changed the selected files or the message. Nothing was committed; the checkout, its index and the branch are unchanged."
+      "hookChanged": "A commit hook changed the selected files or the message. Nothing was committed; the checkout, its index and the branch are unchanged.",
+      "discardPerson": "Only a person can discard changes; window automation cannot. Nothing was discarded.",
+      "noTrash": "This window has no Recycle Bin or Trash to move files to. Nothing was discarded."
     },
     "hiddenMetadata": "Sensitive metadata hidden",
     "now": {
@@ -165,7 +167,8 @@
       "cancel": "Safe cancellation",
       "abort": "Abort confirmation",
       "cleanup": "Recovery removal",
-      "blocked": "Preflight blocked"
+      "blocked": "Preflight blocked",
+      "discard": "Discard review"
     },
     "route": "{{source}} → {{target}}",
     "targetHead": "{{branch}} · {{head}}",
@@ -217,7 +220,7 @@
       "one": "1 reviewed snapshot selected. Unselected changes keep delivery paused.",
       "other": "{{count}} reviewed snapshots selected. Unselected changes keep delivery paused."
     },
-    "prepareNote": "Commit and preservation require your reviewed file selection. No blanket foreign commit.",
+    "prepareNote": "Commit, preservation and discarding require your reviewed file selection. No blanket foreign commit.",
     "prepareNarrow": "Prepare checkout",
     "prepareNarrowBody": "Partial selections leave remaining blockers.",
     "prepareNarrowNote": "Commit or preservation review precedes any mutation.",
@@ -227,6 +230,40 @@
     "preserveAgree": "I reviewed selected files and staged placement.",
     "restoreAfterMerge": "Restore after merge; pause on conflicts.",
     "preserveNote": "If snapshot verification fails, nothing is cleaned. A partial cleaning failure retains the verified recovery record.",
+    "discardReview": "Discard selected",
+    "discardTitle": "Discard these changes?",
+    "discardBodyWindows": "Nothing is deleted for good: every version that leaves goes to the Recycle Bin first, as a copy named after its file. Restoring a copy from the Recycle Bin puts it in .orchester/local-integration of this checkout, not over the file. For each selected file:",
+    "discardBodyMac": "Nothing is deleted for good: every version that leaves goes to the Trash first, as a copy named after its file. Putting a copy back from the Trash puts it in .orchester/local-integration of this checkout, not over the file. For each selected file:",
+    "discardTrashWindows": "{{path}} moves to the Recycle Bin",
+    "discardTrashMac": "{{path}} moves to the Trash",
+    "discardRestoreWindows": "{{path}} is restored to HEAD; your version goes to the Recycle Bin",
+    "discardRestoreMac": "{{path}} is restored to HEAD; your version goes to the Trash",
+    "discardRestoreDeleted": "{{path}} is restored from HEAD",
+    "discardUnstage": "{{path}} leaves the index; there is no file in the checkout to move",
+    "discardStagedWindows": "{{path}}: its staged version also goes to the Recycle Bin, as {{copy}}",
+    "discardStagedMac": "{{path}}: its staged version also goes to the Trash, as {{copy}}",
+    "discardPartial": "{{path}}: select its staged and its unstaged change both. Discarding takes the whole file.",
+    "discardConfirm": {
+      "one": "Discard 1 file",
+      "other": "Discard {{count}} files"
+    },
+    "discardKeep": "Keep them",
+    "discardNote": "Only you can discard changes; window automation is refused.",
+    "discardedTitle": "Discarding did not finish cleanly",
+    "discardedBody": "The files that stayed are as they were.",
+    "discardedUnread": "The checkout could not be read again afterwards. Review it before going on.",
+    "discardedDone": "{{path}}: discarded",
+    "discardedFailed": "{{path}}: not discarded. {{reason}}",
+    "discardFailure": {
+      "changed": "It changed since the review.",
+      "unsupported": "This kind of file or its folder can't be discarded here.",
+      "git": "Git refused to change the index.",
+      "io": "The file could not be read or written.",
+      "noBin": "Its drive has no Recycle Bin or Trash that keeps what it is given, so nothing was moved.",
+      "tooLarge": "It is larger than the Recycle Bin or Trash keeps, so nothing was moved.",
+      "notKept": "The system deleted it instead of keeping it in the Recycle Bin or Trash.",
+      "uncertain": "It went to the Recycle Bin or Trash, but the checkout still shows it. Review it."
+    },
     "cancelPreparation": "Cancel preparation",
     "queue": "Queue remains visible",
     "queueBody": "One active checkout mutation. Waiting for merge approval does not hold the queue; restore conflicts retain a checkout reservation.",

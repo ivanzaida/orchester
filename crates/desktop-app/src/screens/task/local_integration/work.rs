@@ -19,8 +19,11 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
+  accounts::trash::Trash,
   background, base_moved,
-  tasks::local_integration::{self, IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview},
+  tasks::local_integration::{
+    self, DiscardReport, IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview,
+  },
 };
 
 use super::TaskContext;
@@ -45,6 +48,11 @@ pub enum Action {
     name: String,
     paths: Vec<LocalPath>,
   },
+  /// Discards the selected paths' changes: to the Recycle Bin / Trash, or back to HEAD with the person's version
+  /// there first. Only a person's press decides it.
+  Discard(Vec<LocalPath>),
+  /// Window automation pressed *Discard selected*, which only a person may.
+  DiscardRefused,
   Sync,
   Merge {
     exact: Box<CheckedResult>,
@@ -94,6 +102,7 @@ pub enum Outcome {
   DraftSaved(orchester_core::integration::local::EditorCandidate),
   Resolved(orchester_core::integration::local::EditorCandidate),
   CommitReview { tree: String, preview: Preview },
+  Discarded(DiscardReport),
 }
 impl DevtoolsInspectable for Outcome {}
 
@@ -131,13 +140,17 @@ impl Request {
       .input
       .as_ref()
       .ok_or(Problem("local_integration.error.authority"))?;
+    // Discarding is the person's alone, whatever automation may do otherwise; it says so.
+    if matches!(self.action, Action::Discard(_)) && input.origin() != LocalOrigin::Native {
+      return Err(Problem(self.action.refusal()));
+    }
     if !input.recheck() {
       return Err(Problem("local_integration.error.authority"));
     }
     let origin = input.origin();
     origin
       .authorize(self.action.intent())
-      .map_err(|_| Problem("local_integration.error.approval"))?;
+      .map_err(|_| Problem(self.action.refusal()))?;
     Ok(origin)
   }
 }
@@ -146,6 +159,14 @@ impl Action {
     match self {
       Self::Refresh | Self::ReviewCommit(_) | Self::SaveDraft { .. } => LocalIntent::Candidate,
       _ => LocalIntent::ReviewedDecision,
+    }
+  }
+
+  /// What the page says when the action's origin may not decide it.
+  const fn refusal(&self) -> &'static str {
+    match self {
+      Self::Discard(_) | Self::DiscardRefused => "local_integration.error.discardPerson",
+      _ => "local_integration.error.approval",
     }
   }
 }
@@ -161,8 +182,8 @@ pub fn action(ctx: &mut Ctx) -> Work {
       if matches!(request.action, Action::AuthorityRefused) {
         return Err(Problem("local_integration.error.authority").into());
       }
-      if matches!(request.action, Action::Refused) {
-        return Err(Problem("local_integration.error.approval").into());
+      if matches!(request.action, Action::Refused | Action::DiscardRefused) {
+        return Err(Problem(request.action.refusal()).into());
       }
       let task = request.task.clone();
       let run = task
@@ -175,12 +196,16 @@ pub fn action(ctx: &mut Ctx) -> Work {
       let open = task.project.open.clone();
       let feed = task.project.feed.clone();
       let (vault, programs) = (services.vault.clone(), services.programs.clone());
+      let trash = services.workspace.trash();
+      if matches!(request.action, Action::Discard(_)) && trash.is_none() {
+        return Err(Problem("local_integration.error.noTrash").into());
+      }
       let result = background::run(move || {
         let _working = jobs
           .local_work(&open, &task.key)
           .ok_or(Problem("local_integration.error.foreign"))?;
         let root = &open.repo_root;
-        perform(request, (root, run), (vault.get(), &programs))
+        perform(request, (root, run), (vault.get(), &programs, trash.as_deref()))
           .map_err(|problem| refusal(problem, (root, run), vault.get()))
       })
       .await
@@ -195,7 +220,7 @@ pub fn action(ctx: &mut Ctx) -> Work {
 fn perform(
   request: Request,
   (root, run): (&Path, RunId),
-  (vault, programs): (&dyn SecretVault, &Programs),
+  (vault, programs, trash): (&dyn SecretVault, &Programs, Option<&dyn Trash>),
 ) -> Result<Outcome, Problem> {
   let origin = request.authorize()?;
   let input = request
@@ -220,7 +245,7 @@ fn perform(
   {
     return Err(Problem("local_integration.error.metadata"));
   }
-  let outcome = execute(&mut session, request.action, vault).map_err(problem)?;
+  let outcome = execute(&mut session, request.action, (vault, trash)).map_err(problem)?;
   if request.stop.load(Ordering::Acquire) {
     session.pause().map_err(problem)?;
   }
@@ -245,11 +270,11 @@ fn refusal(problem: Problem, (root, run): (&Path, RunId), vault: &dyn SecretVaul
 fn execute(
   session: &mut LocalIntegration,
   action: Action,
-  vault: &dyn orchester_core::secret::SecretVault,
+  (vault, trash): (&dyn orchester_core::secret::SecretVault, Option<&dyn Trash>),
 ) -> Result<Outcome, IntegrationError> {
   match action {
     Action::Refresh => session.refresh()?,
-    Action::Refused => return Err(LocalError::ApprovalRequired.into()),
+    Action::Refused | Action::DiscardRefused => return Err(LocalError::ApprovalRequired.into()),
     Action::AuthorityRefused => return Err(LocalError::AuthorityChanged.into()),
     Action::BusyRefused => return Err(LocalError::ForeignOperation.into()),
     Action::ReviewCommit(paths) => {
@@ -260,6 +285,10 @@ fn execute(
     }
     Action::Commit { paths, tree, message } => session.commit(&paths, &tree, &message)?,
     Action::Preserve { name, paths } => session.preserve_selected(&name, &paths)?,
+    Action::Discard(paths) => {
+      let trash = trash.ok_or(LocalError::Unsupported)?;
+      return Ok(Outcome::Discarded(session.discard(&paths, trash)?));
+    }
     Action::Sync => {
       session.prepare_if_clean()?;
       session.sync()?;

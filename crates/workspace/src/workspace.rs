@@ -183,6 +183,11 @@ impl Workspace {
     self.trash.set(trash);
   }
 
+  /// The trash [`Self::use_trash`] gave this workspace, e.g. for discarded local changes; `None` until one is given.
+  pub fn trash(&self) -> Option<Arc<dyn crate::accounts::trash::Trash>> {
+    self.trash.get()
+  }
+
   /// This workspace with new agent accounts' folders created in `root` instead of Orchester's application data.
   #[must_use]
   pub fn with_account_root(mut self, root: &Path) -> Self {

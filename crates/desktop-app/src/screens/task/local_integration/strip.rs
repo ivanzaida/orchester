@@ -102,6 +102,7 @@ fn current(view: &IntegrationView, mode: &Mode) -> &'static str {
   match mode {
     Mode::Commit { .. } => return "local_integration.now.commit",
     Mode::Preserve => return "local_integration.now.preserve",
+    Mode::Discard | Mode::Discarded(_) => return "local_integration.now.discard",
     Mode::Abort => return "local_integration.now.abort",
     Mode::Cleanup => return "local_integration.now.cleanup",
     Mode::Cancel => return "local_integration.now.cancel",
