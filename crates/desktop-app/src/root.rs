@@ -93,6 +93,9 @@ impl Component for Root {
     let RootProps { link, mcp, start } = ctx.props::<RootProps>().clone();
     // Provided on every render: a render from the root replaces the inherited context.
     ctx.provide(mcp);
+    if let Some(appearance) = link.appearance() {
+      ctx.provide(appearance);
+    }
     match start {
       Start::Ready(ready) => {
         let Ready { services, landing } = *ready;

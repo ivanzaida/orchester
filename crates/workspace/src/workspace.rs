@@ -318,16 +318,21 @@ impl Workspace {
   }
 
   pub fn set_automation_answers_approvals(&self, allowed: bool) -> Result<(), StoreError> {
-    {
+    let revision = {
       let mut consent = self.approval_consent.lock();
       if !allowed {
-        consent.revision += 1;
+        consent.revoke();
       }
       consent.begin_save();
-    }
+      consent.revision
+    };
     let mut db = self.db.lock();
     let result = db.set_automation_answers_approvals(allowed);
-    self.approval_consent.lock().finish_save(allowed && result.is_ok());
+    let mut consent = self.approval_consent.lock();
+    if result.is_ok() && consent.revision == revision {
+      consent.revoked = !allowed;
+    }
+    consent.finish_save(allowed && result.is_ok());
     result
   }
 
@@ -381,6 +386,12 @@ impl Workspace {
   /// A human revocation stops window widening before its asynchronous save is polled.
   pub fn revoke_automation_permission_consent(&self) {
     self.permission_consent.lock().revoke();
+  }
+
+  /// A person turning *Let automation answer approvals* off stops automation's answers from their click, before
+  /// the save runs and if it fails.
+  pub fn revoke_automation_approval_consent(&self) {
+    self.approval_consent.lock().revoke();
   }
 
   /// A failed or abandoned background read never retains an earlier grant.
@@ -441,6 +452,18 @@ impl Workspace {
   /// set, when the build decides.
   pub fn mcp_window_control(&self) -> Result<Option<bool>, StoreError> {
     self.db.lock().mcp_window_control()
+  }
+
+  /// Keeps a person's choice of window control (*Agents can control this window*), which the app reads when it
+  /// starts: a run keeps what it started with, so the choice applies from the next start. Only the window's setting,
+  /// which a person changes, calls it.
+  pub fn set_mcp_window_control(&self, allowed: bool) -> Result<(), StoreError> {
+    self.db.lock().set_mcp_window_control(Some(allowed))
+  }
+
+  /// The application database's file (Settings › General › *Application data*); `None` for one only in memory.
+  pub fn database_path(&self) -> Option<PathBuf> {
+    self.db.lock().path()
   }
 
   /// Whether the installed app's MCP server listens; on until a person turns it off in Settings.

@@ -1,12 +1,16 @@
-//! *What automation may do* (`Form section title` `De1nE`) with a row (`Form row` `XaNIz` with a switch) per consent
-//! only a person gives: *Let automation change agent permissions*, *Let the Orchestrator publish drafts*, *Let the
-//! Orchestrator answer agents*, *Let the Orchestrator merge runs*, *Let the Orchestrator merge finished runs on its
-//! own* (ORC-69; its description says it needs *merge runs* and *answer agents* too) and *Let the Orchestrator
-//! continue interrupted runs* (the same row; `docs/design/orchestrator-toolset.md`, "Decisions" 3 and 5). Each is an
-//! application setting that is off until a person turns it on here. While the first is off, the MCP server's setup
-//! tools refuse whatever would widen what agents may do (`person_only`), including matching window confirmations; while
-//! one of the Orchestrator's is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted
-//! or finished run, leaves it to the person. *Let Orchester estimate story points* (ORC-49, same row, no design frame
+//! *What automation may do* (`Form section title` `De1nE` in `oD7hy`, `lye6f`) opens with *Look at the window*, which
+//! every client with the token may always do (`super::window_rows`), then a row (`Form row` `XaNIz` with a switch) per
+//! consent only a person gives: *Agents can control this window* (read when the app starts, so a change applies from
+//! the next start, as the hint under it says), *Let automation answer approvals*, *Let automation change agent
+//! permissions*, *Let the Orchestrator publish drafts*, *Let the Orchestrator answer agents*, *Let the Orchestrator
+//! merge runs*, *Let the Orchestrator merge finished runs on its own* (ORC-69; its description says it needs *merge
+//! runs* and *answer agents* too) and *Let the Orchestrator continue interrupted runs* (the same row;
+//! `docs/design/orchestrator-toolset.md`, "Decisions" 3 and 5). Each is an application setting that is off until a
+//! person turns it on here (window control: the build's default until then). While *answer approvals* is off, the MCP
+//! server's approval tools refuse (`automation_not_allowed`); while *change agent permissions* is off, its setup tools
+//! refuse whatever would widen what agents may do (`person_only`), including matching window confirmations; while one
+//! of the Orchestrator's is off, the Orchestrator chat proposes what it names to the person, or, for an interrupted or
+//! finished run, leaves it to the person. *Let Orchester estimate story points* (ORC-49, same row, no design frame
 //! yet) lets Orchester's estimator size tasks on auto mode's reviewer, spending tokens. A setting is read and saved off
 //! the UI thread; while either runs, its switch cannot be flipped. While a row is mounted, the app's MCP server refuses
 //! window input (`mcp::input_gate`), and the row refuses lurq's synthetic input, so only a person flips it. The section
@@ -31,8 +35,15 @@ use orchester_workspace::{
   workspace::{OrchestratorConsent, Workspace},
 };
 
+use super::{
+  save_state::{Outcome, SaveState},
+  window_rows,
+};
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected},
+  mcp::{
+    McpSettings,
+    input_gate::{Guarded, InputGate, Protected},
+  },
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, SettingsSpacing, SettingsText},
   ui::{
@@ -47,6 +58,10 @@ use crate::{
 /// A consent of *What automation may do*.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Consent {
+  /// *Agents can control this window*: what the app takes when it starts next.
+  WindowControl,
+  /// *Let automation answer approvals*.
+  AnswerApprovals,
   /// *Let automation change agent permissions*.
   ChangePermissions,
   /// *Let the Orchestrator publish drafts*, *answer agents*, *merge runs* or *continue interrupted runs*.
@@ -70,6 +85,8 @@ impl Consent {
   /// The switch's element id, which its row's parts extend.
   const fn id(self) -> &'static str {
     match self {
+      Self::WindowControl => "settings-window-control",
+      Self::AnswerApprovals => "settings-answer-approvals",
       Self::ChangePermissions => "settings-change-permissions",
       Self::Orchestrator(OrchestratorConsent::PublishDrafts) => "settings-publish-drafts",
       Self::Orchestrator(OrchestratorConsent::AnswerAgents) => "settings-answer-agents",
@@ -82,6 +99,20 @@ impl Consent {
 
   const fn words(self) -> Words {
     match self {
+      Self::WindowControl => Words {
+        title: "settings.automation.windowControl.title",
+        description: "settings.automation.windowControl.description",
+        unreadable: "settings.automation.windowControl.unreadable",
+        not_saved: "settings.automation.windowControl.notSaved",
+        blocked: "settings.automation.windowControl.blocked",
+      },
+      Self::AnswerApprovals => Words {
+        title: "settings.automation.answerApprovals.title",
+        description: "settings.automation.answerApprovals.description",
+        unreadable: "settings.automation.answerApprovals.unreadable",
+        not_saved: "settings.automation.answerApprovals.notSaved",
+        blocked: "settings.automation.answerApprovals.blocked",
+      },
       Self::ChangePermissions => Words {
         title: "settings.automation.changePermissions.title",
         description: "settings.automation.changePermissions.description",
@@ -137,6 +168,8 @@ impl Consent {
   /// Its name in the developer log.
   const fn logged(self) -> &'static str {
     match self {
+      Self::WindowControl => "Agents can control this window",
+      Self::AnswerApprovals => "Let automation answer approvals",
       Self::ChangePermissions => "Let automation change agent permissions",
       Self::Orchestrator(OrchestratorConsent::PublishDrafts) => "Let the Orchestrator publish drafts",
       Self::Orchestrator(OrchestratorConsent::AnswerAgents) => "Let the Orchestrator answer agents",
@@ -147,9 +180,11 @@ impl Consent {
     }
   }
 
-  /// Reads it. Blocks on SQLite.
+  /// Reads it: for window control, what the next start takes. Blocks on SQLite.
   fn read(self, workspace: &Workspace) -> Result<bool, StoreError> {
     match self {
+      Self::WindowControl => workspace.mcp_window_control().map(McpSettings::next_start),
+      Self::AnswerApprovals => workspace.automation_answers_approvals(),
       Self::ChangePermissions => workspace.automation_changes_permissions(),
       Self::Orchestrator(consent) => workspace.orchestrator_allows(consent),
       Self::EstimatePoints => workspace.estimates_story_points(),
@@ -159,6 +194,8 @@ impl Consent {
   /// Saves it. Blocks on SQLite.
   fn save(self, workspace: &Workspace, allowed: bool) -> Result<(), StoreError> {
     match self {
+      Self::WindowControl => workspace.set_mcp_window_control(allowed),
+      Self::AnswerApprovals => workspace.set_automation_answers_approvals(allowed),
       Self::ChangePermissions => workspace.set_automation_changes_permissions(allowed),
       Self::Orchestrator(consent) => workspace.set_orchestrator_allows(consent, allowed),
       Self::EstimatePoints => workspace.set_estimates_story_points(allowed),
@@ -166,9 +203,11 @@ impl Consent {
   }
 }
 
-/// The section: its title over a row per consent.
+/// The section: its title, what automation may always do, and a row per consent.
 pub fn section(ctx: &mut Ctx) -> Element {
   let rows = [
+    ("window-control", Consent::WindowControl),
+    ("answer-approvals", Consent::AnswerApprovals),
     ("change-permissions", Consent::ChangePermissions),
     (
       "publish-drafts",
@@ -199,6 +238,7 @@ pub fn section(ctx: &mut Ctx) -> Element {
     .id("settings-automation")
     .width(Dimension::Pct(100.0))
     .child(section_title(&ctx.t("settings.automation.section")))
+    .child(window_rows::look_at_the_window(ctx))
     .with_children(rows)
     .child(report)
     .into()
@@ -264,18 +304,10 @@ impl Component for ConsentRow {
       .blocked
       .get()
       .then(|| field_error(&format!("{id}-blocked"), &ctx.t(words.blocked)));
-    // What a switch that is on says beside it (`Hint · publishes directly` `Bj5aS` in `IJOOq`).
-    let publishes = consent == Consent::Orchestrator(OrchestratorConsent::PublishDrafts);
-    let on = (publishes && shown == Some(true)).then(|| {
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding_bottom(ExtraSpacing::Snug.role())
-        .child(note(
-          &format!("{id}-on"),
-          Icon::MessagesSquare,
-          &ctx.t("settings.automation.publishDrafts.on"),
-        ))
-    });
+    if let Some(saves) = SaveState::of(ctx) {
+      saves.report(id, Outcome::of(&state));
+    }
+    let hint = hint(ctx, consent, shown);
     // Why it cannot be read, was not saved or did not take a change, under the row (`Error · not taken` `WYp6D`).
     let errors = (problem.is_some() || blocked.is_some()).then(|| {
       Column::new()
@@ -289,9 +321,39 @@ impl Component for ConsentRow {
     Column::new()
       .width(Dimension::Pct(100.0))
       .child(row(id, (&title, &description), switch))
-      .with_children(on)
+      .with_children(hint)
       .with_children(errors)
   }
+}
+
+/// What a row says under its line about the switch it shows: what the Orchestrator does once it may publish (`Hint ·
+/// publishes directly` `Bj5aS` in `IJOOq`), how automation's answers read once it may answer (`O0z7RK` in `HNQBR`),
+/// and when window control applies (`Hint` `iqm0X` in `oD7hy`).
+fn hint(ctx: &mut Ctx, consent: Consent, shown: Option<bool>) -> Option<Column> {
+  let (id, glyph, words) = match (consent, shown) {
+    (Consent::Orchestrator(OrchestratorConsent::PublishDrafts), Some(true)) => (
+      "settings-publish-drafts-on",
+      Icon::MessagesSquare,
+      ctx.t("settings.automation.publishDrafts.on").to_string(),
+    ),
+    (Consent::AnswerApprovals, Some(true)) => (
+      "settings-answer-approvals-on",
+      Icon::ListChecks,
+      ctx.t("settings.automation.answerApprovals.on").to_string(),
+    ),
+    (Consent::WindowControl, Some(chosen)) => (
+      "settings-window-control-hint",
+      Icon::Info,
+      window_rows::window_control_hint(ctx, chosen),
+    ),
+    _ => return None,
+  };
+  Some(
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .padding_bottom(ExtraSpacing::Snug.role())
+      .child(note(id, glyph, &words)),
+  )
 }
 
 /// The row of switch `id`: its title and description, and the switch at its end, over its line (`Form row` `XaNIz`).
@@ -335,10 +397,13 @@ impl ConsentRow {
       if !chosen {
         // Off holds from the person's click, before the save runs and if it fails.
         match consent {
+          Consent::AnswerApprovals => workspace.revoke_automation_approval_consent(),
           Consent::ChangePermissions => workspace.revoke_automation_permission_consent(),
           Consent::Orchestrator(consent) => workspace.revoke_orchestrator_consent(consent),
           // Read as stored before each estimate: off holds once it is saved.
           Consent::EstimatePoints => {}
+          // Read when the app starts: this run keeps what it started with, as the row's hint says.
+          Consent::WindowControl => {}
         }
       }
       saved.set(Some(chosen));

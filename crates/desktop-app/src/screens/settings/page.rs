@@ -1,12 +1,16 @@
 //! The page of Settings (`Header` `sr6zu` and `Tabs` `e6T2Vd` in `t098v`), in the page it shares with Project
-//! settings: the title over what Settings is, the open tab's action at the right (*Add account* on Accounts), the
-//! tabs on their line and the open tab under them.
+//! settings: the title over what Settings is, at the right the open tab's action (*Add account* on Accounts, *Connect a
+//! server* on Orchester) or whether its changes were saved (General and Automation, `Save state` `uTF2N`), the tabs on
+//! their line and the open tab under them.
 
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
 
-use super::SettingsTab;
+use super::{
+  SettingsTab,
+  save_state::{self, Summary},
+};
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, OrchesterView, Route, Screen},
@@ -18,27 +22,47 @@ use crate::{
   },
 };
 
-/// Settings on `tab`, showing `body`; `accounts` is how many accounts there are, once read.
-pub(super) fn page(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, body: Element) -> Element {
+/// Settings on `tab`, showing `body`, with what its saves did (`saved`) on a tab whose changes save as they are made;
+/// `accounts` is how many accounts there are, once read.
+pub(super) fn page(
+  ctx: &mut Ctx,
+  (tab, saved): (SettingsTab, Option<Summary>),
+  accounts: Option<usize>,
+  body: Element,
+) -> Element {
   let navigation = Navigation::of(ctx);
-  // While adding an account the panel is the way on (`IOyJl`): no second *Add account*.
-  let adding = matches!(tab, SettingsTab::Accounts(view) if view.panel == AccountsPanel::Add);
-  let action = (matches!(tab, SettingsTab::Accounts(_)) && !adding).then(|| {
-    let navigation = navigation.clone();
-    ActionButton::new(
-      "settings-add-account",
-      ButtonKind::Primary,
-      ctx.t("accounts.addAccount"),
-    )
-    .icon(Icon::Plus)
-    .opens(navigation.to(Route::Accounts(AccountsView {
-      account: None,
-      panel: AccountsPanel::Add,
-    })))
-  });
-  let action = action.or_else(|| {
-    matches!(tab, SettingsTab::Orchester(_)).then(|| {
-      let navigation = navigation.clone();
+  let action = saved
+    .map(|summary| save_state::label(ctx, summary))
+    .or_else(|| action(ctx, tab, &navigation));
+  SettingsPage::new(
+    format!("screen-{}", Screen::Settings.name()),
+    ctx.t(Screen::Settings.title_key()),
+    ctx.t("settings.sub"),
+  )
+  .action(action)
+  .tabs(tabs(ctx, tab, accounts, &navigation))
+  .body(body)
+  .into()
+}
+
+/// The open tab's action at the right of the title.
+fn action(ctx: &Ctx, tab: SettingsTab, navigation: &Navigation) -> Option<Element> {
+  match tab {
+    // While adding an account the panel is the way on (`IOyJl`): no second *Add account*.
+    SettingsTab::Accounts(view) if view.panel != AccountsPanel::Add => Some(
+      ActionButton::new(
+        "settings-add-account",
+        ButtonKind::Primary,
+        ctx.t("accounts.addAccount"),
+      )
+      .icon(Icon::Plus)
+      .opens(navigation.to(Route::Accounts(AccountsView {
+        account: None,
+        panel: AccountsPanel::Add,
+      })))
+      .into(),
+    ),
+    SettingsTab::Orchester(_) => Some(
       ActionButton::new(
         "settings-connect-server",
         ButtonKind::Primary,
@@ -46,21 +70,13 @@ pub(super) fn page(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, bod
       )
       .icon(Icon::Plus)
       .opens(navigation.to(Route::Orchester(OrchesterView::connect())))
-    })
-  });
-  SettingsPage::new(
-    format!("screen-{}", Screen::Settings.name()),
-    ctx.t(Screen::Settings.title_key()),
-    ctx.t("settings.sub"),
-  )
-  .action(action.map(Element::from))
-  .tabs(tabs(ctx, tab, accounts, &navigation))
-  .body(body)
-  .into()
+      .into(),
+    ),
+    SettingsTab::General | SettingsTab::Automation | SettingsTab::Accounts(_) => None,
+  }
 }
 
 fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &Navigation) -> Element {
-  let not_built = ctx.t("settings.tabs.notBuilt");
   let accounts_label = ctx.t("settings.tabs.accounts");
   let accounts_label = match accounts {
     Some(count) => counted(ctx, &accounts_label, count),
@@ -75,7 +91,12 @@ fn tabs(ctx: &mut Ctx, tab: SettingsTab, accounts: Option<usize>, navigation: &N
     }
   };
   let tabs = [
-    PageTab::unavailable("settings-tab-general", ctx.t("settings.tabs.general"), not_built),
+    tab_to(
+      "settings-tab-general",
+      ctx.t("settings.tabs.general"),
+      tab == SettingsTab::General,
+      Route::General,
+    ),
     tab_to(
       "settings-tab-automation",
       ctx.t("settings.tabs.automation"),

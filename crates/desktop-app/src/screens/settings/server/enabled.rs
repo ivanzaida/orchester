@@ -18,6 +18,7 @@ use orchester_workspace::messages::Message;
 use super::{Change, change, state_label, token::STORE_KEY};
 use crate::{
   mcp::{AppMcp, ServerState},
+  screens::settings::save_state::{Outcome, SaveState},
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -70,6 +71,9 @@ impl Component for EnabledRow {
       Ok(())
     });
     let pending = switch_action.state().get();
+    if let Some(saves) = SaveState::of(ctx) {
+      saves.report(SWITCH_ID, Outcome::of(&pending));
+    }
     let off = props.state == ServerState::Off;
     let title = ctx.t("settings.automation.server.enabled.title");
     let mut switch = Toggle::new(SWITCH_ID, ToggleKind::Switch, !off, title.clone()).hide_label();

@@ -37,6 +37,7 @@ pub fn open(runtime: &Runtime, launch: &Launch, position: Option<WindowPosition>
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   loader::install(&mut tree);
   let link = WindowLink::default();
+  link.attach_appearance(appearance.clone());
   let window_control = stored(workspace, Workspace::mcp_window_control, "window control").flatten();
   let mcp_settings = McpSettings::of_build().with_stored(window_control).with_environment();
   tracing::info!(
