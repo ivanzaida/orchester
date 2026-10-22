@@ -28,7 +28,7 @@ use super::{
   library, panels,
   state::{Panel, Saved, Selection, SidePanel, Tab, View},
   words,
-  work::{self, Change, Failure, Write},
+  work::{self, Author, Change, Failure, Write},
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
@@ -503,7 +503,8 @@ impl Editor {
       .icon(Icon::Save)
       .on_click(move || {
         if let Some((name, body)) = &candidate {
-          work.run(Change::Create(name.clone(), body.clone()).into());
+          // Work::run tells whether an MCP client's input wrote it or presses Create.
+          work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
         }
       });
       if busy {

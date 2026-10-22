@@ -1,6 +1,7 @@
 //! Ordinary saved project data uses authorized window input and the accepted domain APIs; review stays explicit.
-//! Publishing a skill, or a profile's new role text, reaches agents' prompts, so an MCP client's press publishes it
-//! only under *Let automation change agent permissions* (ORC-30); a person's always does.
+//! Publishing a skill or a profile's new role text, and turning on the repository's agent files, reach agents'
+//! prompts, so an MCP client's press does it only under *Let automation change agent permissions* (ORC-30); a
+//! person's always does.
 use orchester_app::routes::{AgentTab, ProjectPage, Route};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
@@ -74,7 +75,7 @@ fn skills_window_publication_matches_ordinary_saved_domain_data_without_permissi
   assert_eq!(native.body(), direct.body());
 }
 #[test]
-fn skills_window_repository_files_match_ordinary_authenticated_domain_setting() {
+fn skills_window_repository_files_turn_on_by_client_input_only_under_the_persons_switch() {
   let (mut s, project, repo) = controlled();
   let mut db = ProjectDb::open(&repo).expect("db");
   db.save_repository_agent_files(RepositoryAgentFiles::Off).expect("off");
@@ -88,8 +89,16 @@ fn skills_window_repository_files_match_ordinary_authenticated_domain_setting() 
   assert!(!db.repository_agent_files().expect("setting").is_on());
   s.click_by_client("skill-repository-files").expect("renew review");
   s.until("question again", |s| s.shows("skill-files-confirm-confirm"));
+  // Turning them on puts the repository's words in every prompt: a client's confirmation is not taken (ORC-30).
   s.click_by_client("skill-files-confirm-confirm")
-    .expect("ordinary setting review");
+    .expect("the click is delivered");
+  s.until("the refusal", |s| s.shows("skill-files-person-only"));
+  for _ in 0..5 {
+    s.pass();
+  }
+  assert!(s.shows("skill-files-confirm-confirm"), "the question stays");
+  assert!(!db.repository_agent_files().expect("setting").is_on());
+  s.click_by_person("skill-files-confirm-confirm");
   s.until("enabled", |_| db.repository_agent_files().expect("setting").is_on());
   let off = s.ok(
     "set_repository_agent_files",
@@ -116,6 +125,65 @@ fn skills_window_repository_files_match_ordinary_authenticated_domain_setting() 
   );
   assert_eq!(on["repository_agent_files"], true);
   assert!(db.repository_agent_files().expect("setting").is_on());
+}
+
+/// Whether the element `id`, or one inside it, says `text`.
+fn says(element: lurq::node::element::ElementRef<'_>, text: &str) -> bool {
+  element.text_content() == Some(text)
+    || element
+      .children()
+      .into_iter()
+      .any(|child| says(child, text))
+}
+
+#[test]
+fn project_settings_turn_on_repository_files_by_client_input_only_under_the_persons_switch() {
+  const ON: &str = "On · agents may read them";
+  const OFF: &str = "Off · Orchester's instructions and skills only";
+  // The switch shows `label` once the save before it was read back, so a press now asks for the other setting.
+  let shows_switch = |s: &mut super::Served, label: &str| {
+    s.tree
+      .get_element_by_id("settings-agent-files")
+      .is_some_and(|switch| says(switch, label))
+  };
+  let (mut s, project, repo) = controlled();
+  let mut db = ProjectDb::open(&repo).expect("db");
+  db.save_repository_agent_files(RepositoryAgentFiles::Off).expect("off");
+  s.until("navigation attached", |s| s.link.navigation().is_ok());
+  s.link
+    .navigation()
+    .expect("navigation")
+    .go(Route::Project(project, ProjectPage::Settings(Default::default())));
+  s.until("the switch off", |s| shows_switch(s, OFF));
+  s.click_by_client("settings-agent-files")
+    .expect("the click is delivered");
+  s.until("the refusal", |s| s.shows("settings-agent-files-person-only"));
+  for _ in 0..5 {
+    s.pass();
+  }
+  assert!(
+    !db.repository_agent_files().expect("setting").is_on(),
+    "an MCP client's input turns the repository's agent files on only under the person's switch"
+  );
+  s.click_by_person("settings-agent-files");
+  s.until("on", |_| db.repository_agent_files().expect("setting").is_on());
+  // Turning them off only takes the repository's words away: a client's input is taken.
+  s.until("the switch on", |s| shows_switch(s, ON));
+  assert!(!s.shows("settings-agent-files-person-only"), "a person's press clears the refusal");
+  s.click_by_client("settings-agent-files")
+    .expect("the click is delivered");
+  s.until("off", |_| !db.repository_agent_files().expect("setting").is_on());
+  s.launch
+    .as_ref()
+    .expect("launch")
+    .workspace()
+    .expect("workspace")
+    .set_automation_changes_permissions(true)
+    .expect("a person lets automation decide");
+  s.until("the switch off again", |s| shows_switch(s, OFF));
+  s.click_by_client("settings-agent-files")
+    .expect("the click is delivered");
+  s.until("on by the client", |_| db.repository_agent_files().expect("setting").is_on());
 }
 
 #[test]
@@ -214,15 +282,13 @@ fn agents_window_publishes_new_role_text_by_client_input_only_under_the_persons_
     .go(Route::Project(project, ProjectPage::Agent(id, AgentTab::default())));
   s.until("the editor", |s| s.shows("agent-publish"));
   s.click_by_client("agent-publish").expect("the click is delivered");
-  for _ in 0..10 {
-    s.pass();
-  }
+  // The refused request has ended once its refusal shows; until then a press is ignored as busy.
+  s.until("the refusal", |s| s.shows("agent-save-error"));
   assert_eq!(
     latest(),
     before,
     "an MCP client's press publishes no new role text without the person's switch"
   );
-  s.until("the press is answered", |s| s.shows("agent-publish"));
   s.click_by_person("agent-publish");
   s.until("the person's publication", |_| latest() != before);
 }

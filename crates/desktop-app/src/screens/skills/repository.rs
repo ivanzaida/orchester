@@ -19,6 +19,7 @@ use orchester_workspace::{
   activity::skill_operations,
   background,
   messages::Message,
+  prompt_changes,
   skills::{
     editor,
     repository::{self, CreatedDraft},
@@ -27,6 +28,7 @@ use orchester_workspace::{
 
 use super::PageProps;
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -36,6 +38,7 @@ use crate::{
     inspector::note,
     message::message_text,
     notice::{Notice, NoticeTone},
+    tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -204,6 +207,11 @@ pub fn found(ctx: &mut Ctx, p: &PageProps) -> Element {
 struct Found {
   asking: Signal<bool>,
   save: FutureAction<(std::path::PathBuf, bool), bool, Message>,
+  /// Turning the files on puts the repository's words in every agent's prompt (ORC-30): an MCP client's confirmation
+  /// is taken only under *Let automation change agent permissions*, as `set_repository_agent_files` takes it.
+  gate: Option<InputGate>,
+  /// An MCP client's confirmation was refused: the question says so.
+  refused: Signal<bool>,
 }
 impl Component for Found {
   type Props = PageProps;
@@ -221,6 +229,8 @@ impl Component for Found {
     Self {
       asking: ctx.signal(false),
       save,
+      gate: ctx.use_context::<InputGate>(),
+      refused: ctx.signal(false),
     }
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -266,6 +276,12 @@ impl Component for Found {
     ));
     if self.asking.get() {
       panel = panel.child(self.question(ctx, &p));
+      if self.refused.get() {
+        panel = panel.child(person_only(
+          "skill-files-person-only",
+          &message_text(ctx, &prompt_changes::agent_files_person_only()),
+        ));
+      }
     }
     if let Some(error) = self.save.state().get().error {
       panel = panel.child(field_error("skill-files-setting-error", &message_text(ctx, &error)));
@@ -275,8 +291,8 @@ impl Component for Found {
 }
 impl Found {
   fn question(&self, ctx: &Ctx, p: &PageProps) -> Element {
-    let keep = self.asking.clone();
-    let confirm = self.asking.clone();
+    let (keep, keep_refused) = (self.asking.clone(), self.refused.clone());
+    let (confirm, refused, gate) = (self.asking.clone(), self.refused.clone(), self.gate.clone());
     let save = self.save.clone();
     let root = p.project.open.repo_root.clone();
     Notice::new(
@@ -292,6 +308,12 @@ impl Found {
         ctx.t("skills.turnOn"),
       )
       .on_click(move || {
+        let may = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
+        refused.set(!may);
+        if !may {
+          tracing::warn!("synthetic input confirmed turning on the repository's agent files; not taken");
+          return;
+        }
         confirm.set(false);
         save.run((root.clone(), true));
       }),
@@ -302,7 +324,10 @@ impl Found {
         ButtonKind::Secondary,
         ctx.t("skills.keepOff"),
       )
-      .on_click(move || keep.set(false)),
+      .on_click(move || {
+        keep_refused.set(false);
+        keep.set(false);
+      }),
     )
     .into()
   }

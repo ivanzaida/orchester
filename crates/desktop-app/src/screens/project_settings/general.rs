@@ -12,17 +12,20 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{project_settings::Settings, tasks::outside::Outside};
+use orchester_workspace::{project_settings::Settings, prompt_changes, tasks::outside::Outside};
 
 use super::{
   TabProps, page,
   work::{self, Change, Read},
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::ExtraTypography,
   ui::{
     field::FieldInput,
     form_section::{Place, not_built, section},
+    message::message_text,
+    tinted_note::person_only,
     toggle::{Toggle, ToggleKind},
   },
 };
@@ -32,6 +35,9 @@ pub(super) struct General {
   stored: Signal<Option<Read>>,
   revision: Signal<u64>,
   own: work::OwnSaves,
+  gate: Option<InputGate>,
+  /// An MCP client's input asked to turn the repository's agent files on and was refused.
+  refused: Signal<bool>,
 }
 impl Component for General {
   type Props = TabProps;
@@ -49,6 +55,8 @@ impl Component for General {
           Outside::ProjectSettings,
         ],
       ),
+      gate: ctx.use_context::<InputGate>(),
+      refused: ctx.signal(false),
     };
     let save = tab.save.clone();
     work::follow(
@@ -71,7 +79,7 @@ impl Component for General {
     let settings = read.0;
     let identity = identity(ctx, &props);
     let github = github::section(ctx, &props, &settings, &save, self.revision.get());
-    let files = agent_files(ctx, &props, &settings, &save);
+    let files = agent_files(ctx, (&props, &settings, &save), (self.gate.clone(), &self.refused));
     let base = base_notices(ctx, &props, &settings, &save);
     let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
       "settings-auto-mode",
@@ -201,7 +209,15 @@ fn identity(ctx: &mut Ctx, props: &TabProps) -> Element {
   )
   .into()
 }
-fn agent_files(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &work::Save) -> Element {
+/// The switch of the repository's agent files. Turning them on puts what the repository says in every agent's prompt
+/// (ORC-30): an MCP client's input turns them on only under *Let automation change agent permissions*, as
+/// `set_repository_agent_files` does; turning them off stays open. A refused press says so under the switch
+/// (`refused`).
+fn agent_files_switch(
+  ctx: &Ctx,
+  (props, settings, save): (&TabProps, &Settings, &work::Save),
+  (gate, refused): (Option<InputGate>, &Signal<bool>),
+) -> Column {
   let on = settings.agent_files.is_on();
   let start = work::start(save, props.project.open.repo_root.clone(), Change::Files(!on));
   let toggle = Toggle::new(
@@ -217,9 +233,36 @@ fn agent_files(ctx: &mut Ctx, props: &TabProps, settings: &Settings, save: &work
   let toggle = if save.state().get().is_pending() {
     toggle
   } else {
-    toggle.on_change(move |_| start())
+    let refusal = refused.clone();
+    toggle.on_change(move |_| {
+      let may = !prompt_changes::agent_files_change_prompts(on, !on)
+        || input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
+      refusal.set(!may);
+      if may {
+        start();
+      } else {
+        tracing::warn!("synthetic input turned on the repository's agent files; not taken");
+      }
+    })
   };
-  let control = Column::new().width(Dimension::Px(page::CONTROL_WIDTH)).child(toggle);
+  Column::new()
+    .width(Dimension::Px(page::CONTROL_WIDTH))
+    .spacing(SpacingSize::Sm)
+    .child(toggle)
+    .with_children(refused.get().then(|| {
+      person_only(
+        "settings-agent-files-person-only",
+        &message_text(ctx, &prompt_changes::agent_files_person_only()),
+      )
+    }))
+}
+fn agent_files(
+  ctx: &mut Ctx,
+  (props, settings, save): (&TabProps, &Settings, &work::Save),
+  gated: (Option<InputGate>, &Signal<bool>),
+) -> Element {
+  let on = settings.agent_files.is_on();
+  let control = agent_files_switch(ctx, (props, settings, save), gated);
   let row = page::row(
     ctx,
     "settings-files",

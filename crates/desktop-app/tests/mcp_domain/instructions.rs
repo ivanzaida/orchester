@@ -116,6 +116,48 @@ fn domain_window_input_publishes_an_instruction_only_under_the_persons_switch() 
 }
 
 #[test]
+fn domain_window_input_saves_a_draft_marked_as_automations() {
+  let (mut s, project, repo) = super::connections_window::controlled();
+  s.ok("save_instruction_draft", &rule("Typed", "First words.", "start"));
+  let entry = |repo: &std::path::Path| {
+    let data = ProjectInstructions::load_in(repo).expect("read");
+    let entry = data
+      .entries
+      .iter()
+      .find(|entry| &*entry.name == "Typed")
+      .expect("saved")
+      .clone();
+    let automated = data.by_automation(&entry);
+    (entry, automated)
+  };
+  // A person's save makes the draft theirs, so what the window saves next decides the mark.
+  let (saved, _) = entry(&repo);
+  let body = Instruction::new(
+    PromptText::new("A person's words.").expect("text"),
+    saved.body.targets().clone(),
+    saved.body.events().clone(),
+    saved.body.scope().clone(),
+  )
+  .expect("a body");
+  editor::save_in(&repo, &saved, body).expect("a person saves it");
+  assert!(!entry(&repo).1, "the person's draft");
+  s.until("navigation attached", |s| s.link.navigation().is_ok());
+  s.link.navigation().expect("navigation").go(Route::Project(
+    project,
+    ProjectPage::Instructions(InstructionsView::rule(InstructionsTab::Project, Some(saved.id))),
+  ));
+  s.until("the editor", |s| s.shows("instruction-prompt"));
+  s.set_by_client("instruction-prompt", "A client's words.");
+  s.until("the client's draft saved", |_| {
+    entry(&repo).0.body.text().as_str() == "A client's words."
+  });
+  assert!(
+    entry(&repo).1,
+    "a draft an MCP client typed in the window is marked as automation's"
+  );
+}
+
+#[test]
 fn domain_instructions_publish_checks_values_at_the_rules_events() {
   let (mut served, _) = Served::seeded("empty");
   served.let_automation_widen(true);

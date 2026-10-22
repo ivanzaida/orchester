@@ -43,9 +43,16 @@ impl From<Change> for Write {
 /// A write to the instruction, recorded in the session's activity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Change {
-  Create(Name, Instruction),
-  Save(InstructionEntry, Instruction),
+  Create(Name, Instruction, Author),
+  Save(InstructionEntry, Instruction, Author),
   Publish(InstructionEntry),
+}
+/// Who wrote the edits a save takes: an MCP client's synthetic input among them makes the draft automation's, marked
+/// so on the page as one saved over MCP is (ORC-30).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Author {
+  Person,
+  Automation,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Done {
@@ -85,15 +92,34 @@ impl DevtoolsInspectable for Attempt {}
 pub struct Work {
   pub action: FutureAction<Write, Done, Failure>,
   last: Signal<Attempt>,
-  frozen: Signal<bool>,
+  fields: Fields,
 }
 impl Work {
-  /// Starts `write` unless an operation is in flight.
+  /// Starts `write` unless an operation is in flight. A save or a creation is automation's when an MCP client's input
+  /// edited what it saves or asks for it now (see [`Fields::author`]).
   pub fn run(&self, write: Write) {
     let creating = matches!(write.change(), Some(Change::Create(..)));
+    let write = match write {
+      Write::Change(change) => Write::from(self.authored(*change)),
+      reload @ Write::Reload(..) => reload,
+    };
     if self.action.run_if_idle(write.clone()) {
-      self.frozen.set(creating);
+      if matches!(write.change(), Some(Change::Save(..) | Change::Create(..))) {
+        self.fields.saving();
+      }
+      self.fields.frozen.set(creating);
       self.last.set(Attempt(Some(write)));
+    }
+  }
+  fn authored(&self, change: Change) -> Change {
+    let author = |by: Author| match (by, self.fields.author()) {
+      (Author::Person, Author::Person) => Author::Person,
+      _ => Author::Automation,
+    };
+    match change {
+      Change::Save(entry, body, by) => Change::Save(entry, body, author(by)),
+      Change::Create(name, body, by) => Change::Create(name, body, author(by)),
+      publish @ Change::Publish(..) => publish,
     }
   }
   pub fn publishing(&self) -> bool {
@@ -108,6 +134,7 @@ impl Work {
       Some(Change::Publish(..))
     )
   }
+  /// The last write again, with the fields as they are now; a save keeps who wrote what it saved.
   pub fn retry(&self, fields: &Fields) -> Option<Write> {
     // Fields display parse errors; invalid current input disables a write retry.
     let last = match self.last.get().0? {
@@ -115,18 +142,20 @@ impl Work {
       Write::Change(change) => *change,
     };
     let change = match last {
-      Change::Save(expected, _) => fields.instruction().ok().map(|body| Change::Save(expected, body)),
+      Change::Save(expected, _, by) => fields
+        .instruction()
+        .ok()
+        .map(|body| Change::Save(expected, body, by)),
       Change::Publish(expected) => fields
         .instruction()
         .ok()
         .filter(|body| *body == expected.body)
         .filter(|_| fields.blocked().is_empty())
         .map(|_| Change::Publish(expected)),
-      Change::Create(..) => fields.instruction().ok().and_then(|body| {
-        Name::new(&fields.name.get())
-          .ok()
-          .map(|name| Change::Create(name, body))
-      }),
+      Change::Create(_, _, by) => fields
+        .instruction()
+        .ok()
+        .and_then(|body| Name::new(&fields.name.get()).ok().map(|name| Change::Create(name, body, by))),
     };
     change.map(Write::from)
   }
@@ -147,7 +176,7 @@ pub fn action(ctx: &mut Ctx, project: &OpenProject, fields: &Fields) -> Work {
   Work {
     action,
     last: ctx.signal(Attempt(None)),
-    frozen: fields.frozen.clone(),
+    fields: fields.clone(),
   }
 }
 async fn reload(
@@ -170,8 +199,8 @@ async fn reload(
 }
 async fn record(project: &OpenProject, services: &crate::services::Services, change: Change) -> Result<Done, Failure> {
   let spec = match &change {
-    Change::Create(name, _) => operations::instruction_create(project, name.as_str()),
-    Change::Save(entry, _) => operations::instruction_draft(project, entry.id, &entry.name),
+    Change::Create(name, ..) => operations::instruction_create(project, name.as_str()),
+    Change::Save(entry, ..) => operations::instruction_draft(project, entry.id, &entry.name),
     Change::Publish(entry) => operations::instruction_publish(
       project,
       entry.id,
@@ -182,10 +211,17 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
   let activity = services.activity.start(spec);
   let published = matches!(change, Change::Publish(..));
   let root = project.repo_root.clone();
-  let result = background::run(move || match change {
-    Change::Create(name, body) => editor::create_in(&root, name, &body),
-    Change::Save(entry, body) => editor::save_in(&root, &entry, body),
-    Change::Publish(entry) => editor::publish_in(&root, &entry),
+  let result = background::run(move || {
+    let (saved, author) = match change {
+      Change::Create(name, body, author) => (editor::create_in(&root, name, &body)?, author),
+      Change::Save(entry, body, author) => (editor::save_in(&root, &entry, body)?, author),
+      Change::Publish(entry) => return editor::publish_in(&root, &entry),
+    };
+    // A draft a client wrote through the window is marked as one saved over MCP is.
+    if author == Author::Automation {
+      editor::mark_automation_in(&root, &saved)?;
+    }
+    Ok(saved)
   })
   .await
   .map_err(Failure::Other)

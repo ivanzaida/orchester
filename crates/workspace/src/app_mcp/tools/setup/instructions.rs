@@ -189,10 +189,7 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
     };
     let saved = saved.map_err(|error| write_error(&error))?;
     let id = saved.id;
-    // Marked on the Instructions page as automation's until a person saves it or it is published.
-    if let Some(at) = saved.draft_saved_at {
-      ProjectDb::open(&root)?.mark_automation_draft(id, at)?;
-    }
+    editor::mark_automation_in(&root, &saved).map_err(|error| write_error(&error))?;
     services
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
