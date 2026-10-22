@@ -1,15 +1,16 @@
 //! What auto mode's reviewer spends, end to end with `orchester-fake-claude` as the agent and the reviewer (and
-//! `orchester-fake-codex` as a Codex reviewer): each review that asked a model is recorded with the request it
-//! judged, its provider, model, verdict and the tokens it reported; those tokens count toward the run's budget and
-//! the project's daily budget like the agent's; the plan limits the reviewer's CLI reported go to the history; a
-//! review whose usage cannot be read is recorded as unknown and counts nothing; a review the person's answer
-//! stopped is recorded before the run ends; a reviewer whose CLI never started spent nothing and is not
+//! `orchester-fake-codex` as a Codex reviewer): each review that asked a model is recorded with the request it judged,
+//! its provider, the account its connection ran on, model, verdict and the tokens it reported; those tokens count
+//! toward the run's budget and the project's daily budget like the agent's; the plan limits the reviewer's CLI reported
+//! go to the history; a review whose usage cannot be read is recorded as unknown and counts nothing; a review the
+//! person's answer stopped is recorded before the run ends; a reviewer whose CLI never started spent nothing and is not
 //! recorded; and the answer that ends a reviewer's long output is still read. Needs `git`. Run with
 //! `cargo test -p orchester-runner --features test-agent --test reviewer_usage reviewer_usage`.
 
 mod support;
 
 use orchester_core::{
+  account::AccountCli,
   connection::{AgentConnection, AgentProvider},
   id::{ConnectionId, IdempotencyKey, RunId},
   name::Name,
@@ -141,6 +142,11 @@ async fn reviewer_usage_of_claude_code_counts_toward_the_run_and_the_day_and_kee
   let (run, db) = ended_run(&project, None).await;
   let review = only_review(&db, run.id());
   assert_eq!(review.provider, AgentProvider::ClaudeCodeCli);
+  assert_eq!(
+    review.account,
+    Some(AccountCli::ClaudeCode.default_account()),
+    "the account its connection runs on"
+  );
   assert_eq!(review.model.as_str(), DEFAULT_REVIEW_MODEL);
   assert_eq!(review.end, ReviewEnd::Approved);
   let usage = TokenUsage {
@@ -165,6 +171,7 @@ async fn reviewer_usage_of_claude_code_counts_toward_the_run_and_the_day_and_kee
   let history = db.limit_snapshots(Timestamp::from_unix_millis(0)).expect("history");
   assert_eq!(history.len(), 1, "{history:?}");
   assert_eq!(history[0].provider, AgentProvider::ClaudeCodeCli);
+  assert_eq!(history[0].account, review.account, "its limits are the same account's");
   assert_eq!(history[0].limits.windows[0].percent(), Some(42.0));
 }
 
@@ -203,6 +210,7 @@ async fn reviewer_usage_of_codex_is_read_from_its_turn() {
     (review.provider, review.model.as_str()),
     (AgentProvider::CodexCli, "gpt-5.5-codex")
   );
+  assert_eq!(review.account, Some(AccountCli::Codex.default_account()));
   let usage = TokenUsage {
     input: 1_200,
     cached_input: 1_000,

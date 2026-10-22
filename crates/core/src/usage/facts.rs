@@ -41,6 +41,9 @@ pub struct ReviewUsage {
   pub invocation: InvocationId,
   /// The reviewer's provider.
   pub cli: AgentProvider,
+  /// The account the reviewer ran on; `None` for a native reviewer or a review recorded before the account was
+  /// kept.
+  pub account: Option<AgentAccountId>,
   /// The reviewer's model.
   pub model: Arc<str>,
   pub usage: TokenUsage,
