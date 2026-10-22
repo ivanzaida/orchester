@@ -5,7 +5,8 @@
 //! `gh` acts as another account or lacks the `repo` scope, the run recorded no base branch, or the branch has an
 //! open pull request already. Once opened, the card says so with its number and *Review PR* opens it; a refused
 //! push or GitHub refusing to open it says why in place, with the recovery the rules name (06.B `YDKJS`) and *Try
-//! again*.
+//! again*. When the pull request would include commits of the local base its remote lacks, nothing is pushed and
+//! the person is asked in place ([`super::unpushed`]).
 
 use std::{num::NonZeroU64, sync::Arc};
 
@@ -24,14 +25,17 @@ use orchester_core::{
 use orchester_workspace::{
   background,
   messages::Message,
-  pull_requests::create::{CreateProblem, Created, Readiness, Unavailable, readiness_in},
+  pull_requests::create::{CreateProblem, Created, Readiness, Unavailable, UnpushedBase, readiness_in},
   tasks::{
     detail::RunView,
     integration_jobs::{PullRequestArgs, PullRequestJob},
   },
 };
 
-use super::super::TaskContext;
+use super::{
+  super::TaskContext,
+  unpushed::{self, Choices, Unpushed},
+};
 use crate::{
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
@@ -58,6 +62,8 @@ impl DevtoolsInspectable for Read {}
 pub struct PullRequestRead {
   pub readiness: Option<Result<Readiness, Message>>,
   pub draft: Signal<bool>,
+  /// Window automation answered whether to include the base's unpushed commits, which only a person may.
+  pub person_only: Signal<bool>,
 }
 
 /// Whether the task's latest run can have a pull request, read off the UI thread for each run and each time the
@@ -121,7 +127,7 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
     | (_, Some(Ok(Readiness::Open { number }))) => NonZeroU64::new(*number),
     _ => None,
   };
-  let start = start(ctx, task, run, read);
+  let start = start(ctx, task, run, (read, UnpushedBase::Refuse));
   let state = if let Some(number) = open {
     State::Unavailable(ctx.t_args("decisions.ready.pullRequest.open", [("number", number.to_string())]))
   } else if job.pull_request == PullRequestJob::Running {
@@ -137,6 +143,20 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
     }
   };
   let outcome = match &job.pull_request {
+    PullRequestJob::Failed(CreateProblem::BaseNotPushed { commits, base, remote }) if open.is_none() => {
+      let unpushed = Unpushed {
+        commits: *commits,
+        base,
+        remote,
+      };
+      let dismiss = task.project.feed.jobs.of(run.id());
+      let choices = Choices {
+        anyway: (state == State::Ready).then(|| start_anyway(ctx, task, run, read)),
+        dismiss: Arc::new(move || dismiss.dismiss_unpushed_base()),
+        person_only: read.person_only.clone(),
+      };
+      Some(unpushed::question(ctx, &unpushed, choices))
+    }
     PullRequestJob::Failed(problem) if open.is_none() => {
       let again = (state == State::Ready).then(|| start.clone());
       Some(failure(ctx, run, problem, again))
@@ -204,10 +224,21 @@ fn draft_switch(ctx: &Ctx, state: &State, draft: &Signal<bool>) -> Element {
   switch.on_change(move |on| draft.set(on)).into()
 }
 
-type Start = Arc<dyn Fn() + Send + Sync>;
+pub(super) type Start = Arc<dyn Fn() + Send + Sync>;
 
-/// Starts creating the run's pull request with the switch's choice.
-fn start(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRead) -> Start {
+/// Creates it including the base's unpushed commits, once a person read that it would.
+fn start_anyway(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRead) -> Start {
+  start(ctx, task, run, (read, UnpushedBase::Include))
+}
+
+/// Starts creating the run's pull request with the switch's choice; `unpushed` says whether it stops when the base
+/// has commits its remote lacks.
+fn start(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  run: &RunView,
+  (read, unpushed): (&PullRequestRead, UnpushedBase),
+) -> Start {
   let services = Services::of(ctx);
   let job = task.project.feed.jobs.of(run.id());
   let feed = task.project.feed.clone();
@@ -219,6 +250,7 @@ fn start(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRea
     number: run.run.number().get(),
     run: run.id(),
     draft: true,
+    unpushed,
     programs: services.programs,
     activity: services.activity,
     changed: Arc::new(move || feed.saved()),
@@ -339,6 +371,19 @@ fn failure_words(ctx: &Ctx, run: &RunView, problem: &CreateProblem) -> (Arc<str>
     CreateProblem::NotReady => (not_opened(), ctx.t("decisions.ready.pullRequest.failure.notReady")),
     CreateProblem::Store(message) => (not_opened(), message_text(ctx, message)),
     CreateProblem::AlreadyOpen { .. } => (not_opened(), ctx.t("decisions.ready.pullRequest.failure.alreadyOpen")),
+    // The card asks this in place (`unpushed::question`); these are its words, should it ever be a failure.
+    CreateProblem::BaseNotPushed { commits, base, remote } => {
+      let count = commits.to_string();
+      let args = [
+        ("base", base.as_str()),
+        ("remote", remote.as_str()),
+        ("count", count.as_str()),
+      ];
+      (
+        ctx.t_args("decisions.ready.pullRequest.unpushed.titleOther", args),
+        ctx.t_args("decisions.ready.pullRequest.unpushed.push", args),
+      )
+    }
   }
 }
 

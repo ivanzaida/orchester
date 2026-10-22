@@ -14,6 +14,7 @@ pub mod linked;
 pub mod list;
 pub mod page;
 pub mod status;
+pub mod unpushed;
 
 use std::path::Path;
 

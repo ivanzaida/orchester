@@ -1,7 +1,9 @@
 //! Creating a pull request from a run's branch on the project's shared operations, so it goes on when the task
 //! page closes ([`crate::pull_requests::create`]). One operation of the run at a time: its merge waits while the
 //! branch is pushed. Closing the window does not wait for it: pushing and opening change nothing in the checkout.
-//! A run that has its pull request is not given a second one.
+//! A run that has its pull request is not given a second one. When the base has commits its remote lacks, the job
+//! ends with [`CreateProblem::BaseNotPushed`] for the task page to ask the person, who puts it away or creates it
+//! anyway.
 
 use std::{
   panic::{AssertUnwindSafe, catch_unwind},
@@ -16,7 +18,7 @@ use super::{Active, RunJobs};
 use crate::{
   activity::{Activity, run_operations},
   messages::Message,
-  pull_requests::create::{CreateProblem, Created, create_in},
+  pull_requests::create::{CreateProblem, Created, UnpushedBase, create_in},
   workspace::OpenProject,
 };
 
@@ -41,6 +43,8 @@ pub struct PullRequestArgs {
   pub run: RunId,
   /// Opens it as a draft.
   pub draft: bool,
+  /// Whether it stops when the pull request would include commits of the local base its remote lacks.
+  pub unpushed: UnpushedBase,
   pub programs: Programs,
   pub activity: Activity,
   /// Called once it ended, so the task page reads the pull requests again.
@@ -68,6 +72,16 @@ impl RunJobs {
     true
   }
 
+  /// Puts away the question whether to create a pull request that would include commits of the local base its
+  /// remote lacks: nothing was pushed, and *Create pull request* asks again when pressed.
+  pub fn dismiss_unpushed_base(&self) {
+    self.update(|state| {
+      if matches!(state.pull_request, PullRequestJob::Failed(CreateProblem::BaseNotPushed { .. })) {
+        state.pull_request = PullRequestJob::Idle;
+      }
+    });
+  }
+
   fn create_now(&self, args: PullRequestArgs) {
     let PullRequestArgs {
       open,
@@ -76,12 +90,13 @@ impl RunJobs {
       number,
       run,
       draft,
+      unpushed,
       programs,
       activity,
       changed,
     } = args;
     let running = activity.start(run_operations::run_pull_request(&open, task, (&key, number)));
-    let result = catch_unwind(AssertUnwindSafe(|| create_in(&open.repo_root, &programs, (run, draft))));
+    let result = catch_unwind(AssertUnwindSafe(|| create_in(&open.repo_root, &programs, (run, draft, unpushed))));
     if let Ok(Err(problem)) = &result {
       tracing::warn!(?problem, %run, "no pull request was created for the run");
     }

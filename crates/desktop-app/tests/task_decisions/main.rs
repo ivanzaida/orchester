@@ -3,7 +3,8 @@
 //! the limit with its read-back, a daily budget's stop that only Resume continues, the decision after a
 //! step's retries, and Ready for review with Merge into main merging, refused at a conflict, unavailable
 //! without a branch to merge into, and merged, or settled without Orchester ([`merge`]), and Create pull request
-//! beside it through a fake `gh` and `git push` ([`pull_request`]). No runner is connected here (its program does
+//! beside it through a fake `gh` and `git push` ([`pull_request`]), which asks first when the local base has commits
+//! its remote lacks ([`unpushed`]). No runner is connected here (its program does
 //! not exist): each decision the runner carries out comes back refused, in so many words. Needs `git`.
 
 mod accounts;
@@ -17,6 +18,7 @@ mod resolve;
 mod return_ended;
 #[path = "../support/mod.rs"]
 mod support;
+mod unpushed;
 mod unverified;
 
 use std::path::{Path, PathBuf};

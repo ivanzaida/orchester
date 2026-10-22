@@ -177,6 +177,15 @@
           "ghFailed": "gh couldn't open the pull request. The app's log has the details.",
           "notReady": "Only the task's latest run, once every step passed, can have a pull request.",
           "alreadyOpen": "This run's branch already has an open pull request."
+        },
+        "unpushed": {
+          "titleOne": "Local {{base}} has 1 commit that isn't on {{remote}}",
+          "titleOther": "Local {{base}} has {{count}} commits that aren't on {{remote}}",
+          "include": "This run's branch was cut from your local {{base}}, so the pull request would include them too.",
+          "push": "Push {{base}} to {{remote}} first, then create the pull request. Orchester doesn't push {{base}} for you.",
+          "anyway": "Create anyway",
+          "cancel": "Cancel",
+          "personOnly": "Only a person decides this in the window: window automation can't create it anyway or put this away."
         }
       },
       "mergedTitle": "Merged into {{branch}}",

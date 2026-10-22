@@ -2,7 +2,8 @@
 //! with the task whose run made its branch; the page's tabs, search, sort and footer; and the deprecated
 //! desktop's inbox, which keeps only the open ones (`list`); syncing them through a fake `gh`: a rate limit
 //! that holds every later sync, how the latest sync went, and the closed ones a sync of the open ones keeps
-//! (`sync`); and creating one from a task's run (`create`).
+//! (`sync`); creating one from a task's run (`create`), and whether it would carry the local base's unpushed
+//! commits (`unpushed`).
 
 #[path = "../support/mod.rs"]
 mod support;
@@ -11,6 +12,7 @@ mod create;
 mod feedback;
 mod list;
 mod sync;
+mod unpushed;
 
 use orchester_core::{
   connection::{GitHubCheck, GitHubCheckResult, GitHubHost, GitHubLogin, SignIn},
