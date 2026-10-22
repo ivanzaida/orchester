@@ -1,6 +1,7 @@
-//! The project's Memory page's tabs (`Memory with tabs` `wMr98`), kept in its route (`/project/<id>/memory?tab=waiting`).
-//! Without a tab the page opens on the one it chooses: *Waiting for approval* while proposals wait, else *Active*.
-//! The Needs you panel's *Review records* opens `ProjectPage::Memory(Some(MemoryTab::Waiting))`.
+//! The project's Memory page's tabs (`Memory with tabs` `wMr98`), kept in its route
+//! (`/project/<id>/memory?tab=waiting`). Without a tab the page opens on the one it chooses: *Waiting for approval*
+//! while proposals wait, else *Active*. The Needs you panel's *Review records* opens
+//! `ProjectPage::Memory(Some(MemoryTab::Waiting))`.
 
 use super::{RouteError, TAB, query::Params};
 

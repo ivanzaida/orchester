@@ -1,5 +1,5 @@
-//! The Settings tab's form (`Form` `trlre` in `U2teQq`): its note with the save state (`x1fbsp`); *Saving*, a row of two
-//! cards for task memory and one for project memory (`olUlp`); *Given to each agent*, the record and token limits
+//! The Settings tab's form (`Form` `trlre` in `U2teQq`): its note with the save state (`x1fbsp`); *Saving*, a row of
+//! two cards for task memory and one for project memory (`olUlp`); *Given to each agent*, the record and token limits
 //! with what they mean read back under them (`gHr6v`); and the two notices under them (`wxF1O`, `A1TBPd`). At most
 //! 720 wide, so it narrows with the window.
 

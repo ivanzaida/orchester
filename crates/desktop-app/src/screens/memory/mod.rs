@@ -30,8 +30,6 @@ mod work;
 
 use std::sync::OnceLock;
 
-use parking_lot::Mutex;
-
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -44,6 +42,7 @@ use orchester_workspace::{
   memory::{listing::Filters, read::ProjectMemory},
   messages::{self, Message},
 };
+use parking_lot::Mutex;
 
 pub(crate) use self::{
   centered::Centered,
