@@ -6,7 +6,9 @@
 //! their colors from `theme::token_color`. A line cut short says so after its code; a note
 //! about what the diff does not show reads like the cut row of a pull request's diff (`Diff cut row`
 //! `S2U6g`), the lines left out of a very large file in the words of the page showing it, with its action
-//! at the row's end when it has one (`Long file cut` `F5MYhZ`: Open in GitHub). Rows are read-only.
+//! at the row's end when it has one (`Long file cut` `F5MYhZ`: Open in GitHub). Rows are read-only unless the
+//! page annotates the diff: then a press on a line chooses it, a marked line is on `info_muted` with a 2
+//! `info` edge at its start (`LhyWc`), and a block row holds what the page draws under a line.
 
 use std::sync::Arc;
 
@@ -14,16 +16,20 @@ use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
+    events::mouse_event::MouseEvent,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Button, Row, Text},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::diff::LineKind;
 use orchester_workspace::highlight::TokenKind;
 
-use super::rows::{DiffRow, FileNote, LineRow};
+use super::{
+  annotate::{Annotations, LinePress},
+  rows::{DiffRow, FileNote, LineRow},
+};
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, token_color},
   ui::{
@@ -36,8 +42,8 @@ use crate::{
 const LINE_HEIGHT: f32 = 20.0;
 const HUNK_HEIGHT: f32 = 26.0;
 /// Widths of a line number column and of the sign (`ey7iM`, `OtSVu`).
-const NUMBER_WIDTH: f32 = 44.0;
-const SIGN_WIDTH: f32 = 24.0;
+pub const NUMBER_WIDTH: f32 = 44.0;
+pub const SIGN_WIDTH: f32 = 24.0;
 /// Advance of one Geist Mono character at 12 (code) and 11.5 (hunk headings): 0.6 em.
 const CODE_CHAR_WIDTH: f32 = 7.2;
 const HUNK_CHAR_WIDTH: f32 = 6.9;
@@ -82,6 +88,8 @@ pub struct RowProps {
   pub row: DiffRow,
   pub width: f32,
   pub cut: CutNote,
+  /// What the page draws into the diff: a block row's content, and what a press on a line does.
+  pub annotations: Option<Annotations>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RowProps {}
@@ -96,12 +104,24 @@ impl Component for DiffRowView {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RowProps { row, width, cut } = ctx.props::<RowProps>().clone();
+    let RowProps {
+      row,
+      width,
+      cut,
+      annotations,
+    } = ctx.props::<RowProps>().clone();
     let width = Dimension::Px(width);
     match row {
       DiffRow::Hunk { old, new, section, .. } => hunk(ctx, (&old, &new, &section), width),
-      DiffRow::Line(line) => line_row(ctx, &line, width),
+      DiffRow::Line(line) => {
+        let press = annotations.and_then(|annotations| annotations.press);
+        line_row(ctx, &line, width, press)
+      }
       DiffRow::Note { note, .. } => note_row(ctx, &note, &cut, width),
+      DiffRow::Block { key, .. } => match annotations {
+        Some(annotations) => Row::new().width(width).child((annotations.block)(ctx, &key)).into(),
+        None => Element::new(),
+      },
       DiffRow::ScrollbarGap { .. } => {
         let scrollbar = ctx.theme().scrollbar().clone();
         let height = scrollbar.width + 2.0 * scrollbar.resolved_edge_inset();
@@ -136,7 +156,7 @@ fn row_width(row: &DiffRow) -> f32 {
       let marker = if line.cut || line.no_newline { MARKER_WIDTH } else { 0.0 };
       2.0 * NUMBER_WIDTH + SIGN_WIDTH + chars as f32 * CODE_CHAR_WIDTH + marker
     }
-    DiffRow::Note { .. } | DiffRow::ScrollbarGap { .. } => 0.0,
+    DiffRow::Note { .. } | DiffRow::Block { .. } | DiffRow::ScrollbarGap { .. } => 0.0,
   }
 }
 
@@ -160,17 +180,17 @@ fn hunk(ctx: &Ctx, (old, new, section): (&str, &str, &str), width: Dimension) ->
     .into()
 }
 
-fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension) -> Element {
+fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension, press: Option<LinePress>) -> Element {
   let (background, sign, sign_color, kind) = match line.kind {
     LineKind::Context => (None, None, PaletteColor::TextMuted, "context"),
     LineKind::Added => (
-      Some(ExtraColor::DiffAdded),
+      Some(ExtraColor::DiffAdded.role()),
       Some("changes.diff.added"),
       PaletteColor::Success,
       "added",
     ),
     LineKind::Removed => (
-      Some(ExtraColor::DiffRemoved),
+      Some(ExtraColor::DiffRemoved.role()),
       Some("changes.diff.removed"),
       PaletteColor::Danger,
       "removed",
@@ -189,32 +209,73 @@ fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension) -> Element {
     .text_align(TextAlign::Center)
     .nowrap()
     .width(Dimension::Px(SIGN_WIDTH));
-  let code = line.tokens.iter().map(|token| {
+  let mut parts: Vec<Element> = vec![number(line.old).into(), number(line.new).into(), sign.into()];
+  parts.extend(line.tokens.iter().map(|token| {
     Text::new(&token.text)
       .class(token_class(token.kind))
       .variant(TypographyStyle::Mono)
       .color(token_color(token.kind))
       .nowrap()
-  });
-  let mut row = Row::new()
-    .id("changes-diff-line")
-    .describe("kind", kind)
-    .describe("cut", line.cut.to_string())
+      .into()
+  }));
+  if line.cut {
+    parts.push(marker(ctx, "changes-line-cut", Icon::Scissors, "changes.diff.lineCut"));
+  }
+  if line.no_newline {
+    parts.push(marker(ctx, "changes-no-newline", Icon::Info, "changes.diff.noNewline"));
+  }
+  let background = if line.marked {
+    Some(PaletteColor::InfoMuted)
+  } else {
+    background
+  };
+  let (Some(press), Some(key)) = (press, line.key()) else {
+    let row = Row::new()
+      .id("changes-diff-line")
+      .describe("kind", kind)
+      .describe("cut", line.cut.to_string())
+      .width(row_width)
+      .height(Dimension::Px(LINE_HEIGHT))
+      .align_items(Alignment::Center)
+      .with_children(parts);
+    return match background {
+      Some(background) => row.background(background).into(),
+      None => row.into(),
+    };
+  };
+  pressable_line((line, kind, row_width), (press, key), (parts, background))
+}
+
+/// A line a page annotates: chosen by a press, Shift extending the choice, and named by its side and number; a
+/// marked one has a 2 `info` edge at its start.
+fn pressable_line(
+  (line, kind, row_width): (&LineRow, &str, Dimension),
+  (press, key): (LinePress, super::annotate::LineKey),
+  (parts, background): (Vec<Element>, Option<PaletteColor>),
+) -> Element {
+  let side = match key.side {
+    orchester_core::pull_request::feedback::DiffSide::Old => "old",
+    orchester_core::pull_request::feedback::DiffSide::New => "new",
+  };
+  let mut row = Button::empty()
+    .id(format!("changes-diff-line-{side}-{}", key.number))
+    .describe("kind", kind.to_owned())
+    .describe("marked", line.marked.to_string())
+    .focusable(false)
+    .cursor(CursorIcon::Pointer)
     .width(row_width)
     .height(Dimension::Px(LINE_HEIGHT))
     .align_items(Alignment::Center)
-    .child(number(line.old))
-    .child(number(line.new))
-    .child(sign)
-    .with_children(code);
+    .on_click(move |event: MouseEvent| {
+      event.stop_propagation();
+      press(key, event.shift);
+    })
+    .with_children(parts);
   if let Some(background) = background {
-    row = row.background(background.role());
+    row = row.background(background);
   }
-  if line.cut {
-    row = row.child(marker(ctx, "changes-line-cut", Icon::Scissors, "changes.diff.lineCut"));
-  }
-  if line.no_newline {
-    row = row.child(marker(ctx, "changes-no-newline", Icon::Info, "changes.diff.noNewline"));
+  if line.marked {
+    row = row.border_left(Border::inside(BorderSize::Lg, PaletteColor::Info));
   }
   row.into()
 }

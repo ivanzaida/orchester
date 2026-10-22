@@ -181,7 +181,7 @@
         "feedback": "Agent feedback",
         "checks": "Agent checks",
         "overview": "Overview",
-        "planned": "Agent feedback, Agent checks and Overview are planned."
+        "planned": "Agent checks and Overview are planned."
       },
       "range": "Full PR · {{base}} → {{head}}",
       "rangeHead": "Full PR · {{head}}",
@@ -231,6 +231,265 @@
         "failed": "The pull request could not be read",
         "failedFrom": "What shows was read at {{time}}. Refresh tries again; the log has the details.",
         "failedNothing": "Refresh tries again; the log has the details."
+      }
+    },
+    "feedback": {
+      "visibility": "Stays in Orchester · never posted to GitHub",
+      "visibilityShort": "Orchester only",
+      "separator": " · ",
+      "you": "You",
+      "agentMeta": "{{task}} · {{time}}",
+      "sourceAt": "{{file}} · line {{line}}",
+      "toolbar": {
+        "open": "Open {{count}}",
+        "resolved": "Resolved {{count}}",
+        "kind": "Requests",
+        "all": "All requests",
+        "questions": "Questions",
+        "fixes": "Fix requests",
+        "ask": "Ask about the pull request"
+      },
+      "provider": {
+        "codex": "Codex",
+        "claudeCode": "Claude Code",
+        "anthropic": "Anthropic API",
+        "openAi": "OpenAI API"
+      },
+      "strip": {
+        "agent": "{{agent}} · {{task}}",
+        "model": "{{provider}} / {{model}}",
+        "working": {
+          "one": "Working on 1 request",
+          "other": "Working on {{count}} requests"
+        },
+        "queued": "{{count}} queued",
+        "verify": {
+          "one": "1 waits for you to verify",
+          "other": "{{count}} wait for you to verify"
+        },
+        "idle": "No request is with {{agent}} now",
+        "budget": "Run {{run}} · {{tokens}} tokens on feedback · {{left}} of {{budget}} left",
+        "noBudget": "Run {{run}} · {{tokens}} tokens on feedback",
+        "openConversation": "Open conversation"
+      },
+      "group": {
+        "one": "1 thread",
+        "other": "{{count}} threads",
+        "whole": "Whole pull request"
+      },
+      "footer": {
+        "open": {
+          "one": "1 open thread · these are Orchester notes for the task’s agent; reviews and comments on GitHub stay in GitHub.",
+          "other": "{{count}} open threads · these are Orchester notes for the task’s agent; reviews and comments on GitHub stay in GitHub."
+        },
+        "resolved": {
+          "one": "1 resolved thread · resolving closes a thread in Orchester only; it doesn’t approve or merge the pull request.",
+          "other": "{{count}} resolved threads · resolving closes a thread in Orchester only; it doesn’t approve or merge the pull request."
+        }
+      },
+      "empty": {
+        "open": {
+          "title": "No open threads",
+          "detail": "Choose lines in Files changed to ask {{agent}} about them or to request a fix, or ask about the whole pull request."
+        },
+        "resolved": {
+          "title": "No resolved threads",
+          "detail": "Threads you mark resolved stay here and can be reopened."
+        },
+        "kind": {
+          "title": "No thread of this kind",
+          "detail": "Show all requests to see the other threads."
+        }
+      },
+      "noTask": {
+        "title": "Agent feedback needs a linked task",
+        "detail": "Feedback goes to the agent of the pull request’s task. #{{number}} isn’t linked to a task, so there is no agent to ask or to make a fix. The diff stays readable.",
+        "reason": "Linking a pull request to a task is planned."
+      },
+      "loadFailed": "Agent feedback could not be read",
+      "kind": {
+        "question": "Question",
+        "fix": "Fix request"
+      },
+      "state": {
+        "queued": "Queued",
+        "delivered": "Delivered",
+        "working": "Working",
+        "answered": "Answered",
+        "readyToVerify": "Ready to verify",
+        "notDelivered": "Not delivered",
+        "resolved": "Resolved",
+        "withdrawn": "Withdrawn",
+        "outdated": "Outdated",
+        "draft": "Draft",
+        "runEnded": "Run ended"
+      },
+      "anchor": {
+        "line": "line {{line}}",
+        "lines": "lines {{start}}–{{end}}",
+        "newLine": "new line {{line}}",
+        "newLines": "new lines {{start}}–{{end}}",
+        "oldLine": "old line {{line}}",
+        "oldLines": "old lines {{start}}–{{end}}",
+        "at": "{{lines}} · {{revision}}",
+        "moved": "{{lines}} → {{moved}} · {{revision}}",
+        "movedAt": "{{lines}} at {{revision}} → {{moved}} at {{head}}",
+        "outdated": "{{lines}} at {{revision}} · gone at {{head}}",
+        "whole": "no line · {{revision}}",
+        "wholeShort": "whole PR",
+        "short": "{{file}} {{lines}}",
+        "to": "{{anchor}} · to {{agent}} · {{task}}",
+        "file": "{{path}} · {{anchor}}"
+      },
+      "meta": {
+        "written": "You · {{time}}",
+        "working": "You · {{time}} · {{agent}} is working on it · {{elapsed}}",
+        "reason": "You · {{time}} · {{reason}}",
+        "answered": "{{agent}} answered {{time}}",
+        "answeredSource": "{{agent}} answered {{time}} · points to {{path}}, line {{line}}",
+        "committed": "{{agent}} committed {{commit}} · {{time}}",
+        "committedChanges": "{{agent}} committed {{commit}} · {{time}} · {{changes}} · check the change and mark it resolved",
+        "pushed": "{{agent}} pushed {{commit}} · {{time}}",
+        "pushedChanges": "{{agent}} pushed {{commit}} · {{time}} · {{changes}} · check the change and mark it resolved",
+        "resolved": "Resolved {{time}}",
+        "withdrawn": "Withdrawn {{time}}"
+      },
+      "hold": {
+        "afterFix": "Waits for the fix on {{anchor}} · one request changes the branch at a time",
+        "noSlot": "All {{slots}} agent slots are busy (Agents {{working}}/{{slots}}). It goes to {{agent}} when one frees up; the request stays here.",
+        "limit": "{{task}} used its token limit. The request is kept; raise or remove the limit on {{task}} to send it.",
+        "sharedLimit": "{{task}} stopped at a budget it shares with other work. The request is kept and goes when that budget has room.",
+        "question": "{{agent}} waits for your answer in {{task}}’s conversation; the request goes after you answer.",
+        "plan": "{{agent}}’s plan waits for your decision; the request goes after you decide.",
+        "merged": "{{task}}’s work was merged: no agent reads messages any more.",
+        "ended": "{{task}}’s run ended for good: no agent reads messages any more.",
+        "worktreeRemoved": "{{task}}’s worktree was removed, so its agent can’t continue.",
+        "noAgent": "{{task}}’s run has no agent to continue from.",
+        "next": "Sent at Orchester’s next look at {{task}}’s run.",
+        "waited": "It waited for {{task}}’s run to take it."
+      },
+      "queue": {
+        "afterTurn": "{{agent}} reads it after its current step",
+        "sendingNow": "{{agent}} gets it at its next tool call",
+        "nextCheckpoint": "{{agent}} reads it at the run’s next checkpoint",
+        "agentNextTurn": "{{agent}} reads it at its next turn",
+        "runStarts": "{{agent}} reads it when {{task}}’s run starts",
+        "runGoesOn": "{{agent}} reads it once {{task}}’s run goes on",
+        "nextRun": "{{agent}} reads it in {{task}}’s next run"
+      },
+      "event": {
+        "delivered": "To {{agent}} in {{task}}’s conversation, with the file, the lines and revision {{revision}}.",
+        "deliveredWhole": "To {{agent}} in {{task}}’s conversation, with revision {{revision}}.",
+        "working": "{{agent}} took the request into its current run.",
+        "answered": "{{agent}} answered in {{task}}’s conversation.",
+        "committed": "{{agent}} committed {{commit}} after reading it.",
+        "cli": "{{agent}}’s program didn’t take it. The request is saved here; nothing reached {{agent}}.",
+        "runEnded": "{{task}}’s run ended before {{agent}} read it. The request is saved here."
+      },
+      "activity": {
+        "working": "{{agent}} is working on it",
+        "run": "{{task}} · {{step}} · run {{run}} · on {{branch}} with {{agent}}’s permissions",
+        "time": "Started {{time}} · {{elapsed}}",
+        "tokens": "{{tokens}} tokens on this request so far · {{left}} of {{task}}’s {{budget}} left",
+        "tokensNoBudget": "{{tokens}} tokens on this request so far"
+      },
+      "commit": {
+        "changes": {
+          "one": "1 file · +{{additions}} / −{{deletions}}",
+          "other": "{{files}} files · +{{additions}} / −{{deletions}}"
+        },
+        "checks": "{{count}} passed"
+      },
+      "notes": {
+        "compared": "Compared above ({{from}} → {{to}}): your {{lines}} are now {{moved}}, same code.",
+        "comparedGone": "Compared above ({{from}} → {{to}}): the code of your {{lines}} changed.",
+        "usedRun": "Run {{run}} of {{task}} · {{elapsed}} · {{tokens}} tokens on this request · {{left}} of {{budget}} left",
+        "usedRunNoBudget": "Run {{run}} of {{task}} · {{elapsed}} · {{tokens}} tokens on this request",
+        "resolveOnly": "Mark resolved closes this thread only; it doesn’t approve or merge the pull request.",
+        "noCode": "A question doesn’t change code. Answered isn’t resolved: the thread stays open until you mark it.",
+        "answerUsed": "The answer used {{tokens}} tokens of {{task}}’s budget · {{left}} of {{budget}} left",
+        "answerUsedNoBudget": "The answer used {{tokens}} tokens of {{task}}’s budget",
+        "outdated": "The code of {{lines}} at {{revision}} isn’t in the pull request at {{head}}, so this thread can’t follow it to new lines. It keeps the code it was about and {{agent}}’s answer."
+      },
+      "actions": {
+        "reply": "Reply",
+        "notFixed": "Not fixed — reply",
+        "resolve": "Mark resolved",
+        "reopen": "Reopen",
+        "withdraw": "Withdraw request",
+        "retry": "Retry",
+        "edit": "Edit",
+        "limits": "Open {{task}} limits",
+        "showAt": "Show at {{revision}}",
+        "requestFix": "Request a fix",
+        "openThread": "Open thread",
+        "goToLine": "Go to line",
+        "close": "Close",
+        "addOnLine": "Add feedback on this line",
+        "threadsOnLine": "{{count}} threads on line {{line}}"
+      },
+      "composer": {
+        "mode": "What you ask",
+        "ask": "Ask a question",
+        "fix": "Request a fix",
+        "to": "To",
+        "target": "{{agent}} · {{task}}",
+        "request": "Your request",
+        "placeholderQuestion": "Ask {{agent}} about this…",
+        "placeholderFix": "What should {{agent}} change?",
+        "saved": "Draft kept · {{time}}",
+        "esc": "Esc",
+        "escape": "closes and keeps the draft",
+        "send": "Ctrl Enter",
+        "sendMac": "⌘ Enter",
+        "sendQuestion": "Ask",
+        "sendFix": "Request fix",
+        "sendFollowUp": "Start follow-up run and send",
+        "sendReply": "Send reply",
+        "cancel": "Cancel",
+        "replyQuestion": "Reply · no code changes",
+        "replyFix": "Fix request · changes code",
+        "runQuestion": "{{agent}} answers in {{task}}’s conversation · no code changes",
+        "runFix": "Continues {{task}} with {{agent}}’s permissions · {{left}} of {{budget}} tokens left",
+        "runFixNoBudget": "Continues {{task}} with {{agent}}’s permissions",
+        "runFixAfter": "Continues {{task}} with {{agent}}’s permissions after the request on {{anchor}} · {{left}} of {{budget}} tokens left",
+        "runFixAfterNoBudget": "Continues {{task}} with {{agent}}’s permissions after the request on {{anchor}}",
+        "ended": {
+          "title": "{{task}}’s run ended at {{time}} · Done",
+          "titleUnknown": "{{task}}’s run ended · Done",
+          "body": "{{agent}} can’t take messages in an ended run. Sending starts a follow-up run of {{task}} on {{branch}} with {{agent}}’s permissions and {{task}}’s limits · {{left}} of {{budget}} tokens left.",
+          "bodyNoBudget": "{{agent}} can’t take messages in an ended run. Sending starts a follow-up run of {{task}} on {{branch}} with {{agent}}’s permissions and {{task}}’s limits."
+        },
+        "closed": "{{task}} takes no feedback: {{why}}",
+        "changed": {
+          "title": "The pull request changed while you were writing",
+          "range": "{{from}} → {{to}}",
+          "moved": "Your {{lines}} is {{moved}} at {{head}}, with the same code. A fix is always made on the current head, so choose where this request applies before you send it.",
+          "gone": "The code of your {{lines}} isn’t in the pull request at {{head}}. A fix is always made on the current head, so select other lines before you send it.",
+          "use": "Use {{moved}} at {{head}}",
+          "show": "Show what changed",
+          "select": "Select other lines",
+          "reason": "Choose where it applies first"
+        }
+      },
+      "head": {
+        "notice": "Showing {{from}} while you write · the pull request is now at {{to}}",
+        "noticeAt": "Showing {{from}}, where the thread was written · the pull request is now at {{to}}",
+        "show": "Show {{to}}",
+        "kept": "Kept while you write"
+      },
+      "range": {
+        "full": "Full PR",
+        "since": "Since your request · {{from}} → {{to}}",
+        "sinceNote": "Opened from the thread · Full PR is {{files}} files",
+        "files": "of {{total}} · since your request",
+        "choose": "Revision range",
+        "unreadable": "What changed since the request could not be read: {{reason}}"
+      },
+      "threads": {
+        "heading": "THREADS",
+        "open": "{{count}} open",
+        "openDrafts": "{{count}} open · {{drafts}} draft"
       }
     }
   }

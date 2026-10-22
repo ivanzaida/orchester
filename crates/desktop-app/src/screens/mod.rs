@@ -33,6 +33,8 @@ mod tools;
 mod unavailable_project;
 mod usage;
 
+use std::sync::Arc;
+
 use lurq::{
   app::ctx::Ctx,
   components::Column,
@@ -100,7 +102,18 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Modules => modules::list(ctx, project),
     ProjectPage::Module(id) => modules::page(ctx, project, *id),
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
-    ProjectPage::PullRequest(number, file) => pull_requests::pull_request(ctx, project, *number, file.as_deref()),
+    ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
+      ctx,
+      project,
+      *number,
+      pull_requests::PullRequestShown::Files(file.as_deref().map(Arc::from)),
+    ),
+    ProjectPage::PullRequestFeedback(number, thread) => pull_requests::pull_request(
+      ctx,
+      project,
+      *number,
+      pull_requests::PullRequestShown::Feedback(*thread),
+    ),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),

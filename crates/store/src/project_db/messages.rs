@@ -174,7 +174,11 @@ impl ConversationStore for ProjectDb {
   }
 }
 
-fn insert(connection: &Connection, message: &Message, key: Option<IdempotencyKey>) -> Result<(), StoreError> {
+pub(super) fn insert(
+  connection: &Connection,
+  message: &Message,
+  key: Option<IdempotencyKey>,
+) -> Result<(), StoreError> {
   let (author, kind, recipient, columns) = match *message.sender() {
     Sender::Person { recipient, delivery } => {
       let recipient = match recipient {

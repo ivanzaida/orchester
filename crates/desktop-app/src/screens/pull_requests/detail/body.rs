@@ -1,24 +1,23 @@
-//! Under a pull request's header: the toolbar (`Changes toolbar` `C4AKw`) with the revision range, locked
-//! since choosing another is planned, and the totals; why the latest read failed, if it did; then the changed
-//! files (`File list` `sLQan`: FILES and their count, Find a file, the task page's file rows) beside the
-//! selected file's diff with the task page's diff view, or what stands in their place (`c07NAC`): the pull
-//! request being read, too large to show, without changes, a diff Orchester cannot read.
+//! Under a pull request's header on Files changed: the toolbar ([`super::toolbar`]); why the latest read failed, if it
+//! did; then the changed files (`File list` `sLQan`: FILES and their count, Find a file, the task page's file rows,
+//! and the feedback threads, `Threads head` `kVI2F`) beside the selected file's diff with the task page's diff view,
+//! feedback drawn into it; or what stands in their place (`c07NAC`): the pull request being read, too large to show,
+//! without changes, a diff Orchester cannot read.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::pull_request::PullRequest;
+use orchester_core::{diff::Diff, pull_request::PullRequest};
 use orchester_workspace::{
-  display::short_revision,
   messages::Message,
   pull_requests::{
     detail::ReadDiff,
@@ -27,7 +26,11 @@ use orchester_workspace::{
   tasks::changes::ReadChanges,
 };
 
-use super::super::{labels::grouped, notice::detail_notice};
+use super::{
+  super::{labels::grouped, notice::detail_notice},
+  feedback::{self, Env},
+  toolbar::{Fixed, Instead, InsteadWhy, Range, head_notice, toolbar},
+};
 use crate::{
   routes::ChangeSource,
   screens::task::changes::{
@@ -36,10 +39,7 @@ use crate::{
     files::{FILE_LIST_WIDTH, FileItem, FileList, FileListProps, FileSummary, SelectFile},
     listed::FileListing,
   },
-  theme::{
-    ControlHeight, DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing,
-    PullRequestsText,
-  },
+  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, PullRequestsSpacing, PullRequestsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
@@ -47,18 +47,14 @@ use crate::{
     message::message_text,
     notice::{Notice, NoticeTone},
     state::EmptyState,
-    unavailable::reason_line,
   },
 };
 
-type Handler = Arc<dyn Fn() + Send + Sync>;
-
-/// The toolbar's height (`C4AKw`), the range's width (`jHagN`), the widest a state's card is and the side
-/// of the reading glyph's tile (`aqHH2`).
-const TOOLBAR_HEIGHT: f32 = 44.0;
-const RANGE_WIDTH: f32 = 248.0;
+/// The widest a state's card is and the side of the reading glyph's tile (`aqHH2`).
 const CARD_WIDTH: f32 = 600.0;
 const READING_TILE: f32 = 36.0;
+
+type Handler = Arc<dyn Fn() + Send + Sync>;
 
 /// What the body is shown with.
 pub(super) struct Shown {
@@ -70,6 +66,13 @@ pub(super) struct Shown {
   /// Open in GitHub, once the pull request's address is known.
   pub open: Option<Handler>,
   pub reading: bool,
+  /// The diff shown instead of the pull request's latest.
+  pub instead: Option<Instead>,
+  /// Fixes the range can show what changed since their request.
+  pub fixed: Vec<Fixed>,
+  /// The pull request's feedback, once read: drawn into the diff and listed beside the files.
+  pub feedback: Option<Env>,
+  pub state: feedback::FeedbackState,
 }
 
 pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Element {
@@ -79,7 +82,16 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
     .flex(1.0)
     .min_height(Dimension::Px(0.0));
   let column = match &view.pull_request {
-    Some(pull_request) => column.child(toolbar(ctx, view, pull_request)),
+    Some(pull_request) => column.child(toolbar(
+      ctx,
+      &Range {
+        view,
+        pull_request,
+        instead: shown.instead.as_ref(),
+        fixed: &shown.fixed,
+        state: shown.feedback.as_ref().map(|_| &shown.state),
+      },
+    )),
     None => column,
   };
   let notice = view
@@ -96,10 +108,11 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
       )
       .child(notice)
   }));
-  let content = match view.body() {
-    Body::Files(read) => files(ctx, &read, shown),
-    Body::NotRead if shown.reading => reading(ctx),
-    Body::NotRead => card(
+  let content = match (&shown.instead, view.body()) {
+    (Some(instead), _) => files(ctx, (&instead.read, view), shown),
+    (None, Body::Files(read)) => files(ctx, (&read, view), shown),
+    (None, Body::NotRead) if shown.reading => reading(ctx),
+    (None, Body::NotRead) => card(
       ctx,
       (
         Icon::GitPullRequest,
@@ -108,7 +121,7 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
       ),
       None,
     ),
-    Body::NoChanges => card(
+    (None, Body::NoChanges) => card(
       ctx,
       (
         Icon::GitCompare,
@@ -117,7 +130,7 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
       ),
       None,
     ),
-    Body::TooLarge => {
+    (None, Body::TooLarge) => {
       let detail = too_large(ctx, view.pull_request.as_ref());
       card(
         ctx,
@@ -125,7 +138,7 @@ pub(super) fn body(ctx: &mut Ctx, view: &PullRequestView, shown: &Shown) -> Elem
         shown.open.clone(),
       )
     }
-    Body::Unreadable => card(
+    (None, Body::Unreadable) => card(
       ctx,
       (
         Icon::FileX,
@@ -159,82 +172,10 @@ pub(super) fn load_failed(ctx: &Ctx, error: &Message) -> Element {
     .into()
 }
 
-/// The range, locked, and why; the totals at the end.
-fn toolbar(ctx: &Ctx, view: &PullRequestView, pull_request: &PullRequest) -> Row {
-  let head = short_revision(pull_request.head_sha().as_str());
-  let range = match &view.diff {
-    orchester_workspace::pull_requests::page::PageDiff::Read(read) => ctx.t_args(
-      "pull_requests.detail.range",
-      [("base", short_revision(read.base.as_str())), ("head", head)],
-    ),
-    _ => ctx.t_args("pull_requests.detail.rangeHead", [("head", head)]),
-  };
-  let range = Row::new()
-    .id("pull-request-range")
-    .width(Dimension::Px(RANGE_WIDTH))
-    .height(Dimension::Px(ControlHeight::Md.value()))
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .opacity(DISABLED_OPACITY)
-    .describe("state", "unavailable")
-    .child(
-      Text::new(&range)
-        .variant(ExtraTypography::MonoKey.role())
-        .color(PaletteColor::TextPrimary)
-        .flex(1.0)
-        .nowrap(),
-    )
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted));
-  let changes = pull_request.changes();
-  let key = if changes.files == 1 {
-    "pull_requests.detail.total.one"
-  } else {
-    "pull_requests.detail.total.other"
-  };
-  let total = ctx.t_args(
-    key,
-    [
-      ("files", grouped(ctx, changes.files)),
-      ("additions", grouped(ctx, changes.additions)),
-      ("deletions", grouped(ctx, changes.deletions)),
-    ],
-  );
-  Row::new()
-    .id("pull-request-toolbar")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(TOOLBAR_HEIGHT))
-    .padding(Padding::horizontal(PullRequestsSpacing::Detail.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(range)
-    .child(Row::new().child(
-      reason_line("pull-request-range-reason", &ctx.t("pull_requests.detail.rangePlanned")).width(Dimension::Auto),
-    ))
-    .child(Row::new().flex(1.0))
-    .child(
-      Text::new(&total)
-        .id("pull-request-total")
-        .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
-}
-
-/// The files Find a file leaves, the selected one's diff beside them.
-fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
-  let changes = ReadChanges {
-    from: read.base.clone(),
-    diff: read.diff.clone(),
-    key: Arc::from(read.head.as_str()),
-  };
-  let all = FileListing::of(Some(&changes), None);
-  let find = shown.find.get().trim().to_lowercase();
-  let listing = FileListing {
+/// The files of `all` whose path holds `find`, in any case.
+fn found(all: &FileListing, find: &str) -> FileListing {
+  let find = find.trim().to_lowercase();
+  FileListing {
     keys: all.keys.clone(),
     files: Arc::new(
       all
@@ -244,7 +185,18 @@ fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
         .cloned()
         .collect(),
     ),
+  }
+}
+
+/// The files Find a file leaves, the selected one's diff beside them, feedback drawn into it.
+fn files(ctx: &mut Ctx, (read, view): (&Arc<ReadDiff>, &PullRequestView), shown: &Shown) -> Element {
+  let changes = ReadChanges {
+    from: read.base.clone(),
+    diff: read.diff.clone(),
+    key: Arc::from(read.head.as_str()),
   };
+  let all = FileListing::of(Some(&changes), None);
+  let listing = found(&all, &shown.find.get());
   let position = shown
     .selected
     .as_ref()
@@ -263,34 +215,37 @@ fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
       selected: at == position,
     })
     .collect();
+  let since = shown
+    .instead
+    .as_ref()
+    .filter(|instead| instead.why == InsteadWhy::Since);
+  let total = view.file_count().unwrap_or(all.files.len());
   let list = Column::new()
     .id("pull-request-files")
     .width(Dimension::Px(FILE_LIST_WIDTH))
     .height(Dimension::Pct(100.0))
     .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(files_head(ctx, all.files.len(), &shown.find))
+    .child(files_head(ctx, (all.files.len(), since.map(|_| total)), &shown.find))
     .child(ctx.mount_keyed::<FileList>(
       "pull-request-file-list",
       FileListProps {
         items: Arc::new(items),
         select: select.clone(),
       },
-    ));
-  let diff = listing.files.get(position).map(|listed| {
-    ctx.mount_keyed::<DiffView>(
-      "pull-request-diff-view",
-      DiffViewProps {
-        diff: read.diff.clone(),
-        key: changes.key.clone(),
-        index: listed.index,
-        file: format!("{}:{}", ChangeSource::Checkpoint.name(), listed.path).into(),
-        source: Arc::from(""),
-        open: None,
-        viewed: Some(ctx.t("pull_requests.detail.viewedPlanned")),
-        cut: cut_note(ctx, shown.open.clone()),
-      },
-    )
-  });
+    ))
+    .with_children(shown.feedback.as_ref().map(|env| feedback::threads(ctx, env)));
+  let latest = match &view.diff {
+    orchester_workspace::pull_requests::page::PageDiff::Read(read) => Some(read.diff.clone()),
+    _ => None,
+  };
+  let diff = listing
+    .files
+    .get(position)
+    .map(|listed| diff_view(ctx, (read, &changes, listed), (shown, latest)));
+  let notice = match (&shown.instead, &view.pull_request, &shown.feedback) {
+    (Some(instead), Some(pull_request), Some(_)) => head_notice(ctx, (instead, pull_request.head_sha(), &shown.state)),
+    _ => None,
+  };
   Row::new()
     .id("pull-request-files-body")
     .width(Dimension::Pct(100.0))
@@ -298,8 +253,53 @@ fn files(ctx: &mut Ctx, read: &Arc<ReadDiff>, shown: &Shown) -> Element {
     .min_height(Dimension::Px(0.0))
     .on_key_down(arrow_keys(&listing, position, select))
     .child(list)
-    .with_children(diff)
+    .child(
+      Column::new()
+        .flex(1.0)
+        .height(Dimension::Pct(100.0))
+        .min_width(Dimension::Px(0.0))
+        .with_children(notice)
+        .with_children(diff),
+    )
     .into()
+}
+
+/// The selected file's diff, feedback drawn into it once read.
+fn diff_view(
+  ctx: &mut Ctx,
+  (read, changes, listed): (
+    &Arc<ReadDiff>,
+    &ReadChanges,
+    &crate::screens::task::changes::listed::Listed,
+  ),
+  (shown, latest): (&Shown, Option<Arc<Diff>>),
+) -> Element {
+  let file = &read.diff.files()[listed.index];
+  let annotations = match (&shown.feedback, &shown.instead) {
+    (Some(env), None)
+    | (
+      Some(env),
+      Some(Instead {
+        why: InsteadWhy::Earlier { .. },
+        ..
+      }),
+    ) => Some(feedback::annotations(env, (&read.head, file, &listed.path), latest)),
+    _ => None,
+  };
+  ctx.mount_keyed::<DiffView>(
+    "pull-request-diff-view",
+    DiffViewProps {
+      diff: read.diff.clone(),
+      key: changes.key.clone(),
+      index: listed.index,
+      file: format!("{}:{}", ChangeSource::Checkpoint.name(), listed.path).into(),
+      source: Arc::from(""),
+      open: None,
+      viewed: Some(ctx.t("pull_requests.detail.viewedPlanned")),
+      cut: cut_note(ctx, shown.open.clone()),
+      annotations,
+    },
+  )
 }
 
 /// The note under a file cut short: the rest is read in GitHub, with Open in GitHub once the address is
@@ -316,8 +316,9 @@ fn cut_note(ctx: &Ctx, open: Option<Handler>) -> CutNote {
   }
 }
 
-/// FILES and their count over Find a file (`Files head` `WOZwy`), 10 inside the list's own 8 at the sides.
-fn files_head(ctx: &mut Ctx, count: usize, find: &Signal<String>) -> Column {
+/// FILES and their count over Find a file (`Files head` `WOZwy`), 10 inside the list's own 8 at the sides; with what
+/// a request's range leaves out of the pull request's `total` files (`of 6 · since your request`, `M1u6GA`).
+fn files_head(ctx: &mut Ctx, (count, of): (usize, Option<usize>), find: &Signal<String>) -> Column {
   let field = FieldInput::new(
     "pull-request-find-file",
     ctx.t("pull_requests.detail.files.find"),
@@ -327,6 +328,12 @@ fn files_head(ctx: &mut Ctx, count: usize, find: &Signal<String>) -> Column {
   .clearable(ctx.t("pull_requests.detail.files.clear"))
   .placeholder(ctx.t("pull_requests.detail.files.findPlaceholder"))
   .render(ctx);
+  let of = of.map(|total| {
+    Text::new(&ctx.t_args("pull_requests.feedback.range.files", [("total", total.to_string())]))
+      .id("pull-request-files-of")
+      .variant(TypographyStyle::Caption)
+      .nowrap()
+  });
   let head = Column::new()
     .id("pull-request-files-head")
     .width(Dimension::Pct(100.0))
@@ -338,7 +345,8 @@ fn files_head(ctx: &mut Ctx, count: usize, find: &Signal<String>) -> Column {
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(Text::new(&ctx.t("pull_requests.detail.files.heading")).variant(ExtraTypography::ColumnHeading.role()))
-        .child(Text::new(&count.to_string()).variant(PullRequestsText::FileCount.role())),
+        .child(Text::new(&count.to_string()).variant(PullRequestsText::FileCount.role()))
+        .with_children(of),
     )
     .child(field);
   Column::new()

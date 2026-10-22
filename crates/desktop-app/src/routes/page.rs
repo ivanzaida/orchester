@@ -1,7 +1,7 @@
 use std::num::NonZeroU64;
 
 use orchester_core::{
-  id::{ConnectionId, ModuleId, ResourceId},
+  id::{ConnectionId, FeedbackId, ModuleId, ResourceId},
   project::TaskKey,
   resource::VersionNumber,
 };
@@ -23,6 +23,9 @@ use super::{
 
 /// The query parameter of the file a pull request's page shows.
 const FILE: &str = "file";
+/// A pull request's Agent feedback tab, and the thread it shows open.
+const FEEDBACK: &str = "feedback";
+const THREAD: &str = "thread";
 /// What Project settings' Sharing tab asks once open.
 const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
@@ -54,6 +57,8 @@ pub enum ProjectPage {
   /// A pull request of the project's repository, by its number, with the path of the file whose diff it
   /// shows (`None`: the first).
   PullRequest(NonZeroU64, Option<String>),
+  /// A pull request's Agent feedback tab, with the thread open beside its list (`?tab=feedback&thread=…`).
+  PullRequestFeedback(NonZeroU64, Option<FeedbackId>),
   /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
   Usage(Box<UsageQuery>),
   /// The Delivery view beside Usage, over its period.
@@ -161,7 +166,7 @@ impl ProjectPage {
       Self::Task(..) | Self::KeptTask(..) => Screen::Task,
       Self::Modules | Self::Module(_) => Screen::Modules,
       Self::MergeQueue => Screen::MergeQueue,
-      Self::PullRequests(_) | Self::PullRequest(..) => Screen::PullRequests,
+      Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines | Self::NewPipeline | Self::NewEmptyPipeline | Self::Pipeline(..) | Self::PipelineVersion(..) => {
         Screen::Pipelines
@@ -223,6 +228,13 @@ impl ProjectPage {
       Self::PullRequest(number, file) => with_query(
         format!("{project_root}/{PULL_REQUESTS}/{number}"),
         &[(FILE, file.as_deref())],
+      ),
+      Self::PullRequestFeedback(number, thread) => with_query(
+        format!("{project_root}/{PULL_REQUESTS}/{number}"),
+        &[
+          (TAB, Some(FEEDBACK)),
+          (THREAD, thread.map(|thread| thread.to_string()).as_deref()),
+        ],
       ),
       Self::Usage(query) => super::usage::path(project_root, query),
       Self::Delivery(period) => delivery_path(project_root, *period),
@@ -312,7 +324,7 @@ impl ProjectPage {
       [USAGE, rest @ ..] => usage(rest, params),
       [PULL_REQUESTS, number] => {
         let number = number.parse::<NonZeroU64>().map_err(|_| RouteError::NoScreen)?;
-        Ok(Self::PullRequest(number, params.take(FILE)?))
+        pull_request(number, params)
       }
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
@@ -346,6 +358,30 @@ fn usage(rest: &[&str], params: &mut Params) -> Result<ProjectPage, RouteError> 
         })
     }
     _ => Err(RouteError::NoScreen),
+  }
+}
+
+/// Pull request `number` on the tab the query names: Files changed with its file, or Agent feedback
+/// (`tab=feedback`) with its open thread.
+fn pull_request(number: NonZeroU64, params: &mut Params) -> Result<ProjectPage, RouteError> {
+  match params.take(TAB)?.as_deref() {
+    None => Ok(ProjectPage::PullRequest(number, params.take(FILE)?)),
+    Some(FEEDBACK) => {
+      let thread = params
+        .take(THREAD)?
+        .map(|value| {
+          value.parse().map_err(|_| RouteError::InvalidParam {
+            param: THREAD.to_owned(),
+            value,
+          })
+        })
+        .transpose()?;
+      Ok(ProjectPage::PullRequestFeedback(number, thread))
+    }
+    Some(value) => Err(RouteError::InvalidParam {
+      param: TAB.to_owned(),
+      value: value.to_owned(),
+    }),
   }
 }
 

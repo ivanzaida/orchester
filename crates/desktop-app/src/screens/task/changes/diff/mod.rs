@@ -5,6 +5,7 @@
 //! highlighted when a background thread finished them; the tokens are kept by the file's content
 //! (`cache`), so a file whose content did not change keeps its colors.
 
+mod annotate;
 mod cache;
 mod line;
 mod rows;
@@ -30,7 +31,10 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-pub use self::line::{CutAction, CutNote};
+pub use self::{
+  annotate::{Annotations, BlockView, LineKey, LinePress},
+  line::{CutAction, CutNote},
+};
 use self::{
   cache::{ContentKey, Highlights, ShownRows},
   line::{DiffRowView, RowProps},
@@ -74,6 +78,8 @@ pub struct DiffViewProps {
   pub viewed: Option<Arc<str>>,
   /// What the note under a file cut short says and offers.
   pub cut: CutNote,
+  /// What the page draws into the diff besides its lines; `None`: it is read-only.
+  pub annotations: Option<Annotations>,
 }
 
 impl PartialEq for DiffViewProps {
@@ -86,6 +92,7 @@ impl PartialEq for DiffViewProps {
       && self.open == other.open
       && self.viewed == other.viewed
       && self.cut == other.cut
+      && self.annotations == other.annotations
   }
 }
 
@@ -140,21 +147,37 @@ impl Component for DiffView {
     let tokens = self.tokens(ctx, &props, &content);
     let shown = {
       let mut kept = self.shown.lock();
-      let shown = ShownRows::of(kept.as_ref(), &content, file, tokens.as_deref());
+      let shown = ShownRows::of(
+        kept.as_ref(),
+        &content,
+        (file, tokens.as_deref()),
+        props.annotations.as_ref(),
+      );
       *kept = Some(shown.clone());
       shown
     };
     let width = shown.width.max(self.width.get());
     let cut = props.cut.clone();
+    // The row of the block to reveal, by its position: the rows' keys.
+    let reveal = props.annotations.as_ref().and_then(|annotations| {
+      let block = annotations.reveal.as_ref()?;
+      shown.rows.iter().find_map(|row| match row {
+        DiffRow::Block { index, key } if key == block => Some(index.to_string()),
+        _ => None,
+      })
+    });
+    let annotations = props.annotations.clone();
     let list: Element = VirtualizedList::new_shared(ctx, shown.rows)
       .list_key(format!("changes-diff-rows-{}", props.file))
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .horizontal_scroll(true)
+      .reveal_key(reveal)
       .mount_keyed::<DiffRowView, _, _, _>(DiffRow::index, move |row| RowProps {
         row: row.clone(),
         width,
         cut: cut.clone(),
+        annotations: annotations.clone(),
       });
     column
       .describe("highlighted", tokens.is_some().to_string())

@@ -12,6 +12,7 @@ use orchester_core::diff::FileDiff;
 use orchester_workspace::highlight::FileTokens;
 
 use super::{
+  annotate::Annotations,
   line::content_width,
   rows::{DiffRow, rows},
 };
@@ -75,19 +76,30 @@ impl Highlights {
 /// the last, and the width the widest needs.
 #[derive(Clone)]
 pub struct ShownRows {
-  key: (ContentKey, bool),
+  /// The content, whether it is highlighted, and the version of the page's annotations it was made with.
+  key: (ContentKey, bool, Option<u64>),
   pub rows: Arc<Vec<DiffRow>>,
   pub width: f32,
 }
 
 impl ShownRows {
-  /// The rows of `file` with `tokens`: `kept` while it is of the same content and highlighting.
-  pub fn of(kept: Option<&Self>, key: &ContentKey, file: &FileDiff, tokens: Option<&FileTokens>) -> Self {
-    let key = (key.clone(), tokens.is_some());
+  /// The rows of `file` with `tokens` and `annotations`: `kept` while it is of the same content, highlighting and
+  /// annotations.
+  pub fn of(
+    kept: Option<&Self>,
+    key: &ContentKey,
+    (file, tokens): (&FileDiff, Option<&FileTokens>),
+    annotations: Option<&Annotations>,
+  ) -> Self {
+    let key = (
+      key.clone(),
+      tokens.is_some(),
+      annotations.map(|annotations| annotations.version),
+    );
     if let Some(kept) = kept.filter(|kept| kept.key == key) {
       return kept.clone();
     }
-    let mut rows = rows(file, tokens);
+    let mut rows = rows(file, tokens, annotations.map(Annotations::marks));
     let width = content_width(&rows);
     rows.push(DiffRow::ScrollbarGap { index: rows.len() });
     Self {

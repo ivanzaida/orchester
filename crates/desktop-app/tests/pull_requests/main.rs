@@ -14,6 +14,7 @@ mod kontur;
 mod support;
 
 mod detail;
+mod feedback;
 mod harness;
 mod list;
 mod states;

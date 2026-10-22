@@ -9,6 +9,7 @@
 
 mod daily_report;
 pub mod feed;
+mod feedback;
 pub mod hold;
 mod host;
 mod known;

@@ -1,12 +1,15 @@
 //! The rows a changed file's diff is drawn as, one virtualised list item each: hunk headings (`Diff hunk`
 //! `sphVU`), lines (`Diff line/context` `L5WYtA`, `/remove` `tWgTT`, `/add` `C8FPa`) and notes for what a
 //! file's diff does not show as lines (binary content, a mode change, a rename without changes, lines
-//! left out of a very large file).
+//! left out of a very large file); and what a page draws into it ([`super::annotate`]): marked lines and
+//! blocks under the line they follow.
 
 use std::sync::Arc;
 
 use orchester_core::diff::{FileChange, FileDiff, LineKind, ModeChange};
 use orchester_workspace::highlight::{FileTokens, LineTokens, plain};
+
+use super::annotate::{LineKey, Marks};
 
 /// One row of a file's diff. `index` is the row's position, its key in the list.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,6 +25,11 @@ pub enum DiffRow {
     index: usize,
     note: FileNote,
   },
+  /// A page's block under a line, which the page draws by its key.
+  Block {
+    index: usize,
+    key: Arc<str>,
+  },
   /// Room under the last row for the horizontal scrollbar, so it does not cover that row.
   ScrollbarGap {
     index: usize,
@@ -31,7 +39,10 @@ pub enum DiffRow {
 impl DiffRow {
   pub const fn index(&self) -> usize {
     match self {
-      Self::Hunk { index, .. } | Self::Note { index, .. } | Self::ScrollbarGap { index } => *index,
+      Self::Hunk { index, .. }
+      | Self::Note { index, .. }
+      | Self::Block { index, .. }
+      | Self::ScrollbarGap { index } => *index,
       Self::Line(line) => line.index,
     }
   }
@@ -48,6 +59,14 @@ pub struct LineRow {
   /// The line was cut to its first characters.
   pub cut: bool,
   pub no_newline: bool,
+  /// A page marked it as chosen.
+  pub marked: bool,
+}
+
+impl LineRow {
+  pub fn key(&self) -> Option<LineKey> {
+    LineKey::of_numbers(self.kind, (self.old, self.new))
+  }
 }
 
 /// What a file's diff says without lines.
@@ -69,8 +88,8 @@ pub enum FileNote {
 }
 
 /// The rows of `file`, its lines drawn with `tokens` when highlighting finished (one entry per hunk and
-/// kept line), plain otherwise.
-pub fn rows(file: &FileDiff, tokens: Option<&FileTokens>) -> Vec<DiffRow> {
+/// kept line), plain otherwise; with `marks`, a page's marked lines and its blocks under their lines.
+pub fn rows(file: &FileDiff, tokens: Option<&FileTokens>, marks: Option<Marks<'_>>) -> Vec<DiffRow> {
   let mut rows: Vec<DiffRow> = notes(file)
     .into_iter()
     .enumerate()
@@ -89,6 +108,7 @@ pub fn rows(file: &FileDiff, tokens: Option<&FileTokens>) -> Vec<DiffRow> {
         .and_then(|lines| lines.get(line_index))
         .cloned()
         .unwrap_or_else(|| plain(line.text()));
+      let key = LineKey::of_numbers(line.kind(), (line.old_number(), line.new_number()));
       rows.push(DiffRow::Line(Box::new(LineRow {
         index: rows.len(),
         kind: line.kind(),
@@ -97,7 +117,18 @@ pub fn rows(file: &FileDiff, tokens: Option<&FileTokens>) -> Vec<DiffRow> {
         tokens,
         cut: line.is_cut(),
         no_newline: line.has_no_newline(),
+        marked: marks.is_some_and(|marks| key.is_some_and(|key| marks.marked.contains(&key))),
       })));
+      let blocks = marks
+        .into_iter()
+        .flat_map(|marks| marks.blocks.iter())
+        .filter(|(under, _)| Some(*under) == key);
+      for (_, block) in blocks {
+        rows.push(DiffRow::Block {
+          index: rows.len(),
+          key: block.clone(),
+        });
+      }
     }
   }
   if file.omitted_lines() > 0 {

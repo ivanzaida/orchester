@@ -1,16 +1,20 @@
-//! `run_rebases`: the proven rebase of a run's branch, one row per run, and the revisions of a run's
-//! checkpoints a rebase is checked against.
+//! `run_rebases`: the proven rebase of a run's branch, one row per run, and a run's checkpoints, which a rebase is
+//! checked against and agent feedback names the commits of.
 
 use orchester_core::{
   id::RunId,
   integration::local::{RebaseStore, RebasedCheckpoint, RunRebase},
   revision::Revision,
+  run::Checkpoint,
   time::Timestamp,
 };
 use rusqlite::{OptionalExtension, params};
 
 use super::ProjectDb;
-use crate::{StoreError, rows::corrupt};
+use crate::{
+  StoreError,
+  rows::{corrupt, parse},
+};
 
 impl RebaseStore for ProjectDb {
   type Error = StoreError;
@@ -74,6 +78,34 @@ impl ProjectDb {
     revisions
       .iter()
       .map(|text| revision("checkpoint revision", text))
+      .collect()
+  }
+
+  /// Every checkpoint of `run`, in the order they were recorded.
+  pub fn run_checkpoints(&self, run: RunId) -> Result<Vec<Checkpoint>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT id, step_execution_id, revision, created_at FROM checkpoints WHERE run_id = ?1 ORDER BY sequence",
+    )?;
+    let rows = statement
+      .query_map([run.to_string()], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, String>(2)?,
+          row.get::<_, i64>(3)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .iter()
+      .map(|(id, execution, text, at)| {
+        Ok(Checkpoint::new(
+          parse("checkpoint id", id)?,
+          parse("step execution id", execution)?,
+          revision("checkpoint revision", text)?,
+          Timestamp::from_unix_millis(*at),
+        ))
+      })
       .collect()
   }
 }

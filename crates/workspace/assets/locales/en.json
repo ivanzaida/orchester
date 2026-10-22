@@ -784,6 +784,16 @@
         "part": "{{shown}} of {{count}} closed pull requests · From this project’s repository",
         "limited": "{{count}} closed among the {{limit}} most recently updated closed pull requests · From this project’s repository"
       }
+    },
+    "feedback": {
+      "errors": {
+        "unlinked": "The project has no linked GitHub repository any more.",
+        "notFound": "The pull request or the thread is no longer among what Orchester read. Refresh the pull request.",
+        "noTask": "The pull request isn’t linked to a task, so no agent can be asked.",
+        "headMoved": "The pull request is now at {{revision}}. Choose where your request applies before you send it.",
+        "blank": "Write what you ask first.",
+        "invalid": "The thread could not be kept as written; the log has the details."
+      }
     }
   },
   "agents": {

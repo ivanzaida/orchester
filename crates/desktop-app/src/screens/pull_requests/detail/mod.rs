@@ -1,13 +1,16 @@
-//! A pull request's page (`Pull request · Files changed · dark` `mVTVX`, its states in `c07NAC`): its header
-//! with the state, review, branches, task and checks and how its latest read went; its tabs, of which only
-//! Files changed is built (Agent feedback, Agent checks and Overview, `whwRb`, are planned and locked); the
-//! toolbar with the revision range (choosing another is planned) and the totals; and the changed files beside
-//! the selected file's diff, with the task page's file list and diff view. What it shows and why is
-//! `orchester_workspace::pull_requests::page`'s. The page reads the pull request and its diff from GitHub when
-//! it opens and on Refresh; what was read before shows meanwhile.
+//! A pull request's page (`Pull request · Files changed · dark` `mVTVX`, its states in `c07NAC`; agent feedback in
+//! `Pull request feedback` `seN1p`): its header with the state, review, branches, task and checks and how its latest
+//! read went; its tabs, of which Files changed and Agent feedback are built (Agent checks and Overview are planned and
+//! locked); on Files changed the toolbar with the revision range and the totals, and the changed files beside the
+//! selected file's diff with the task page's file list and diff view, feedback threads drawn into it; on Agent
+//! feedback the threads and what they ask of the task's agent ([`feedback`]). What it shows and why is
+//! `orchester_workspace::pull_requests::page`'s and `::feedback`'s. The page reads the pull request and its diff from
+//! GitHub when it opens and on Refresh; what was read before shows meanwhile.
 
 mod body;
+mod feedback;
 mod header;
+mod toolbar;
 
 use std::{num::NonZeroU64, sync::Arc};
 
@@ -20,15 +23,24 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension},
 };
+use orchester_core::{id::FeedbackId, revision::Revision};
 use orchester_exec::external;
 use orchester_workspace::{
   activity::operations,
   background,
   messages::Message,
-  pull_requests::page::{PullRequestPage, load_page_in, refresh_page_in},
+  pull_requests::{
+    detail::ReadDiff,
+    feedback::{FeedbackBoard, ThreadState},
+    page::{PageDiff, PullRequestPage, PullRequestView, between_in, diff_at_in, load_page_in, refresh_page_in},
+  },
   workspace::OpenProject,
 };
 
+use self::{
+  feedback::{BoardRead, Env, FeedbackState, TabProps, Writes, feedback_tab, read_board},
+  toolbar::{Fixed, Instead, InsteadWhy},
+};
 use super::states;
 use crate::{
   navigation::Navigation,
@@ -41,13 +53,22 @@ use crate::{
 type PageAction = FutureAction<(), PullRequestPage, Message>;
 type OpenAction = FutureAction<Arc<str>, (), Message>;
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, file: Option<&str>) -> Element {
+/// Which of the page's tabs the route names, with what it names in it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Shown {
+  /// Files changed, on the file whose diff shows.
+  Files(Option<Arc<str>>),
+  /// Agent feedback, with the thread open beside its list.
+  Feedback(Option<FeedbackId>),
+}
+
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, shown: Shown) -> Element {
   ctx.mount_keyed::<PullRequestScreen>(
     &format!("pull-request-{}-{number}", project.open.project.id()),
     Props {
       project: project.clone(),
       number,
-      file: file.map(Arc::from),
+      shown,
     },
   )
 }
@@ -56,8 +77,7 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, file: O
 struct Props {
   project: ShownProject,
   number: NonZeroU64,
-  /// The file whose diff shows, as the route names it.
-  file: Option<Arc<str>>,
+  shown: Shown,
 }
 
 impl DevtoolsInspectable for Props {}
@@ -71,6 +91,8 @@ struct PullRequestScreen {
   failed: Signal<Option<Message>>,
   /// What Find a file narrows the list to.
   find: Signal<String>,
+  feedback: FeedbackState,
+  writes: Writes,
 }
 
 impl Component for PullRequestScreen {
@@ -79,12 +101,15 @@ impl Component for PullRequestScreen {
   fn create(ctx: &mut Ctx) -> Self {
     let Props { project, number, .. } = ctx.props::<Props>().clone();
     let refresh = refresh_action(ctx, &project.open, number.get());
+    let feedback = FeedbackState::new(ctx);
     let screen = Self {
       open: open_action(ctx, &project.open, number.get()),
       latest: ctx.signal(None),
       failed: ctx.signal(None),
       find: ctx.signal(String::new()),
       refresh: refresh.clone(),
+      writes: Writes::new(ctx, (&project.open, number), &feedback),
+      feedback,
     };
     let (latest, failed) = (screen.latest.clone(), screen.failed.clone());
     ctx.watch(&refresh.state(), move |state| {
@@ -103,13 +128,8 @@ impl Component for PullRequestScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props {
-      project,
-      number: page_number,
-      file,
-    } = ctx.props::<Props>().clone();
-    let number = page_number.get();
-    let stored = load(ctx, &project.open, number).state().get();
+    let Props { project, number, shown } = ctx.props::<Props>().clone();
+    let stored = load(ctx, &project.open, number.get()).state().get();
     let page = self.latest.get().or(stored.data);
     let reading = self.refresh.state().get().is_pending();
     let frame = Column::new()
@@ -121,19 +141,100 @@ impl Component for PullRequestScreen {
       Some(PullRequestPage::Unlinked) => {
         let name = project.open.project.name().as_str().to_owned();
         return frame
-          .child(header::compact(ctx, &project, number, reading))
+          .child(header::compact(
+            ctx,
+            (&project, number.get()),
+            reading,
+            &tabs(&shown, None),
+          ))
           .child(states::unavailable(ctx, project.open.project.id(), &name));
       }
       None => {
-        return frame.child(header::compact(ctx, &project, number, true)).with_children(
-          stored
-            .error
-            .or(self.failed.get())
-            .map(|error| body::load_failed(ctx, &error)),
-        );
+        return frame
+          .child(header::compact(
+            ctx,
+            (&project, number.get()),
+            true,
+            &tabs(&shown, None),
+          ))
+          .with_children(
+            stored
+              .error
+              .or(self.failed.get())
+              .map(|error| body::load_failed(ctx, &error)),
+          );
       }
     };
-    let actions = header::Actions {
+    let (head, board) = board_of(ctx, (&project, number), &view, self.feedback.written.get());
+    let actions = self.actions(&view);
+    let open_count = board.board.as_ref().map(|board| board.open().count());
+    let frame = frame
+      .child(header::header(
+        ctx,
+        (&project, &view),
+        &actions,
+        reading,
+        &tabs(&shown, open_count),
+      ))
+      .with_children(self.failed.get().map(|error| body::load_failed(ctx, &error)));
+    match shown {
+      Shown::Feedback(selected) => frame.child(feedback_tab(
+        ctx,
+        &TabProps {
+          project,
+          number,
+          board: board.board,
+          failed: board.failed,
+          head,
+          selected,
+          state: self.feedback.clone(),
+          writes: self.writes.clone(),
+        },
+      )),
+      Shown::Files(file) => {
+        let files = self.files(ctx, (&project, number), (&view, head.as_ref()), (file, &board));
+        frame.child(body::body(ctx, &view, &files))
+      }
+    }
+  }
+}
+
+/// The page's tabs as the route names them.
+fn tabs(shown: &Shown, feedback_count: Option<usize>) -> header::Tabs {
+  header::Tabs {
+    feedback_shown: matches!(shown, Shown::Feedback(_)),
+    feedback_count,
+  }
+}
+
+/// The pull request's head as last read, and its feedback read against it and its diff.
+fn board_of(
+  ctx: &mut Ctx,
+  (project, number): (&ShownProject, NonZeroU64),
+  view: &PullRequestView,
+  written: u64,
+) -> (Option<Revision>, BoardRead) {
+  let head = view
+    .pull_request
+    .as_ref()
+    .map(|pull_request| pull_request.head_sha().clone());
+  let latest_diff = match &view.diff {
+    PageDiff::Read(read) => Some(read.diff.clone()),
+    _ => None,
+  };
+  let board = read_board(
+    ctx,
+    (project, number),
+    head.clone().map(|head| (head, latest_diff)),
+    written,
+  );
+  (head, board)
+}
+
+impl PullRequestScreen {
+  fn actions(&self, view: &PullRequestView) -> header::Actions {
+    let reading = self.refresh.state().get().is_pending();
+    header::Actions {
       refresh: (!reading).then(|| {
         let refresh = self.refresh.clone();
         Arc::new(move || refresh.run(())) as Arc<dyn Fn() + Send + Sync>
@@ -142,24 +243,115 @@ impl Component for PullRequestScreen {
         let (open, url) = (self.open.clone(), Arc::<str>::from(pull_request.url()));
         Arc::new(move || open.run(url.clone())) as Arc<dyn Fn() + Send + Sync>
       }),
-    };
+    }
+  }
+
+  /// What Files changed is shown with: the file the route names, the diff instead of the latest when one is asked
+  /// for, and the feedback once read.
+  fn files(
+    &self,
+    ctx: &mut Ctx,
+    (project, number): (&ShownProject, NonZeroU64),
+    (view, head): (&PullRequestView, Option<&Revision>),
+    (file, board): (Option<Arc<str>>, &BoardRead),
+  ) -> body::Shown {
     let navigation = Navigation::of(ctx);
     let id = project.open.project.id();
-    let shown = body::Shown {
+    let fixed = board.board.as_deref().map(fixed).unwrap_or_default();
+    let instead = instead(ctx, (project, number), (&self.feedback, head), &fixed);
+    let env = board.board.clone().map(|board| Env {
+      project: project.clone(),
+      number,
+      head: head.cloned(),
+      state: self.feedback.clone(),
+      writes: self.writes.clone(),
+      board,
+      navigation: navigation.clone(),
+    });
+    let reading = self.refresh.state().get().is_pending();
+    body::Shown {
       selected: file,
       select: Arc::new(move |listed: &Listed, at| {
-        let page = ProjectPage::PullRequest(page_number, Some(listed.path.to_string()));
+        let page = ProjectPage::PullRequest(number, Some(listed.path.to_string()));
         navigation.open(Route::Project(id, page), at);
       }),
       find: self.find.clone(),
-      open: actions.open.clone(),
+      open: view.pull_request.as_ref().map(|pull_request| {
+        let (open, url) = (self.open.clone(), Arc::<str>::from(pull_request.url()));
+        Arc::new(move || open.run(url.clone())) as Arc<dyn Fn() + Send + Sync>
+      }),
       reading,
-    };
-    frame
-      .child(header::header(ctx, &project, &view, &actions, reading))
-      .with_children(self.failed.get().map(|error| body::load_failed(ctx, &error)))
-      .child(body::body(ctx, &view, &shown))
+      instead,
+      fixed,
+      feedback: env,
+      state: self.feedback.clone(),
+    }
   }
+}
+
+/// The fixes whose commit the range can show what changed since their request.
+fn fixed(board: &FeedbackBoard) -> Vec<Fixed> {
+  board
+    .threads
+    .iter()
+    .filter_map(|thread| match &thread.state {
+      ThreadState::ReadyToVerify { commit, .. } => Some(Fixed {
+        thread: thread.id,
+        from: thread.current().revision.clone(),
+        to: commit.clone(),
+      }),
+      _ => None,
+    })
+    .collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Read(Option<Arc<ReadDiff>>);
+
+impl DevtoolsInspectable for Read {}
+
+/// The diff shown instead of the pull request's latest: what changed since a fix's request when the range asks for
+/// it, else an earlier head when one is pinned or a new thread is being written at one; read off the UI thread.
+fn instead(
+  ctx: &mut Ctx,
+  (project, number): (&ShownProject, NonZeroU64),
+  (state, head): (&FeedbackState, Option<&Revision>),
+  fixed: &[Fixed],
+) -> Option<Instead> {
+  let since = state
+    .since
+    .get()
+    .and_then(|thread| fixed.iter().find(|fixed| fixed.thread == thread))
+    .map(|fixed| (fixed.from.clone(), fixed.to.clone()));
+  let earlier = state.shown_head(head).filter(|_| since.is_none());
+  let writing = earlier.is_some() && state.pinned.get().is_none();
+  let programs = Services::of(ctx).programs;
+  let deps = (project.open.repo_root.clone(), number, since.clone(), earlier);
+  let load = ctx.future(deps, move |(root, number, since, earlier)| {
+    let programs = programs.clone();
+    async move {
+      background::run(move || match (since, earlier) {
+        (Some((from, to)), _) => between_in(&root, &programs, (&from, &to)).map_err(|error| {
+          tracing::warn!(%error, "cannot read what a fix changed since its request");
+          error.message()
+        }),
+        (None, Some(at)) => diff_at_in(&root, number.get(), &at).map_err(|error| {
+          tracing::warn!(%error, "cannot read the pull request's diff at an earlier head");
+          error.message()
+        }),
+        (None, None) => Ok(None),
+      })
+      .await?
+      .map(Read)
+    }
+  });
+  let read = load.state().get().data.and_then(|Read(read)| read)?;
+  let why = if since.is_some() {
+    InsteadWhy::Since
+  } else {
+    InsteadWhy::Earlier { writing }
+  };
+  Some(Instead { read, why })
 }
 
 /// The pull request as stored, read once when the page opens.

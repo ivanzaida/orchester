@@ -8,6 +8,7 @@
 //! the program reaches *gh not found*.
 
 mod diffs;
+pub mod feedback;
 mod gh;
 
 use PullRequestState::{Closed, Draft, Merged, Open};

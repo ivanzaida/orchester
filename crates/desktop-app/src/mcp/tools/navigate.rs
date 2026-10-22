@@ -31,7 +31,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
-  takes `tab`, or `number` for one pull request; usage takes `query`, the page's query as a link carries it, and \
+  takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
+  page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it. A tab or kind left out is the one the screen opens on. Answers the \
   route the tab shows, whose params navigate takes back. Errors are JSON with \
@@ -81,7 +82,7 @@ fn schema() -> Value {
       "chat": { "type": "string", "description": "orchestrator: a conversation's id, or new; omitted opens the latest." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
-      "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142." },
+      "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
       "query": {
         "type": "string",
         "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
@@ -374,26 +375,34 @@ fn connection(args: &Map<String, Value>, param: &'static str) -> Result<Connecti
   })
 }
 
-/// Pull request `number`, or the page on `tab`; not both.
+/// Pull request `number` on Files changed, or on Agent feedback with `tab` `feedback`; or the list on `tab`.
 fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
   let Some(number) = string(args, "number")? else {
     let known = PullRequestTab::ALL.map(PullRequestTab::name);
     return Ok(ProjectPage::PullRequests(tab(args, PullRequestTab::from_name, &known)?));
   };
-  if args.contains_key("tab") {
-    return Err(ToolError::InvalidParam {
-      param: "number",
-      reason: "a pull request is shown without the list's tab".to_owned(),
-    });
-  }
-  number
+  let feedback = match string(args, "tab")? {
+    None => false,
+    Some("feedback") => true,
+    Some(_) => {
+      return Err(ToolError::InvalidParam {
+        param: "tab",
+        reason: "a pull request's own tabs are files (no tab) and feedback".to_owned(),
+      });
+    }
+  };
+  let number = number
     .trim_start_matches('#')
     .parse::<NonZeroU64>()
-    .map(|number| ProjectPage::PullRequest(number, None))
     .map_err(|_| ToolError::InvalidParam {
       param: "number",
       reason: format!("`{number}` is not a pull request number"),
-    })
+    })?;
+  Ok(if feedback {
+    ProjectPage::PullRequestFeedback(number, None)
+  } else {
+    ProjectPage::PullRequest(number, None)
+  })
 }
 
 fn connections_view(args: &Map<String, Value>) -> Result<ConnectionsView, ToolError> {

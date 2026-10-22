@@ -96,6 +96,27 @@ fn domain_pull_requests_of_a_project_without_a_repository_are_none() {
 }
 
 #[test]
+fn domain_navigate_opens_a_pull_requests_agent_feedback() {
+  // Window tools act on a window a client controls.
+  let (folder, seeded) = Served::seed("pull-requests", None);
+  let runner = folder.path().join("no-runner").join("orchester-runner");
+  let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
+  let project = seeded.project.to_string();
+  served.ok(
+    "navigate",
+    &json!({ "route": "pull_requests", "project": project, "number": "142", "tab": "feedback" }),
+  );
+  let navigation = served.link.navigation().expect("the window attached its navigation");
+  let path = format!("/project/{project}/pull-requests/142?tab=feedback");
+  served.until("Agent feedback to open", |_| navigation.route_now().path() == path);
+  let refused = served.refused(
+    "navigate",
+    &json!({ "route": "pull_requests", "project": project, "number": "142", "tab": "merged" }),
+  );
+  assert!(refused.to_string().contains("feedback"), "{refused}");
+}
+
+#[test]
 fn domain_one_pull_request_outside_the_list_is_read_from_github_once_in_30_seconds() {
   let (mut served, seeded) = Served::seeded("pull-requests");
   let asked = json!({ "project": "Kontur", "number": 9999, "refresh": true });

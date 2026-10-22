@@ -105,6 +105,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     ProjectPage::Memory(Some(tab)) => insert("tab", tab.name()),
     ProjectPage::PullRequests(tab) => insert("tab", tab.name()),
     ProjectPage::PullRequest(number, _) => insert("number", &number.to_string()),
+    ProjectPage::PullRequestFeedback(number, _) => {
+      insert("number", &number.to_string());
+      insert("tab", "feedback");
+    }
     ProjectPage::Usage(query) => {
       let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {

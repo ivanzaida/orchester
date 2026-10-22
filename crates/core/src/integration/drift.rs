@@ -31,6 +31,18 @@ pub fn branch_head(
     .transpose()
 }
 
+/// The first line of the message of commit `commit` in the repository at `repo`, e.g. the commit an agent made
+/// for a fix request.
+pub fn commit_subject(
+  runner: &impl CommandRunner,
+  git: &Path,
+  (repo, commit): (&Path, &Revision),
+) -> Result<String, GitError> {
+  Git::new(runner, git, repo)
+    .stdout(&["log", "-1", "--format=%s", commit.as_str()])
+    .map(|subject| subject.trim().to_owned())
+}
+
 /// What `branch` lacks of `head` in the repository at `repo`; `None` when it holds `head` already, or when there is
 /// no such branch (the run never made it, or it was deleted).
 pub fn drift(

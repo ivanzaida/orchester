@@ -8,6 +8,7 @@
 mod support;
 
 mod create;
+mod feedback;
 mod list;
 mod sync;
 

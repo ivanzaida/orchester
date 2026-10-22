@@ -6,6 +6,7 @@
 mod checks;
 mod create;
 mod detail;
+pub mod feedback;
 mod gh;
 mod open;
 mod push;

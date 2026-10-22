@@ -245,6 +245,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
   let placeholder = |title| vec![title, NOT_BUILT];
+  let pull_request = NonZeroU64::new(142).expect("a pull request number");
   // Settings is built in part; `tests/settings.rs` shows it.
   let mut all = vec![(Route::AllProjects, Vec::new()), (Route::AddProject(None), Vec::new())];
   all.extend([
@@ -277,13 +278,8 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::PullRequests(PullRequestTab::Merged)),
       placeholder("Pull requests"),
     ),
-    (
-      at(ProjectPage::PullRequest(
-        NonZeroU64::new(142).expect("a pull request number"),
-        None,
-      )),
-      Vec::new(),
-    ),
+    (at(ProjectPage::PullRequest(pull_request, None)), Vec::new()),
+    (at(ProjectPage::PullRequestFeedback(pull_request, None)), Vec::new()),
     (at(ProjectPage::Usage(Box::new(filtered_usage()))), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),

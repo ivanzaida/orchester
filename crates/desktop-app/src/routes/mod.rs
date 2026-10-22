@@ -176,7 +176,9 @@ impl Route {
       Self::Project(_, ProjectPage::Pipeline(..) | ProjectPage::PipelineVersion(..)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::PullRequest(..)) => PULL_REQUEST_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::PullRequest(..) | ProjectPage::PullRequestFeedback(..)) => {
+        PULL_REQUEST_PATTERN.to_owned()
+      }
       Self::Project(_, ProjectPage::Module(_)) => MODULE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Delivery(_)) => DELIVERY_PATTERN.to_owned(),
       Self::Invite(_) => INVITE_PATTERN.to_owned(),

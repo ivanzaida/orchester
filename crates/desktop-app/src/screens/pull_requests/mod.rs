@@ -70,10 +70,12 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, tab: PullRequestTab) -> Ele
   )
 }
 
-/// Pull request `number`'s own page, showing the diff of `file` (the first when `None`).
-pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, file: Option<&str>) -> Element {
-  detail::screen(ctx, project, number, file)
+/// Pull request `number`'s own page on the tab `shown` names.
+pub fn pull_request(ctx: &mut Ctx, project: &ShownProject, number: NonZeroU64, shown: detail::Shown) -> Element {
+  detail::screen(ctx, project, number, shown)
 }
+
+pub use self::detail::Shown as PullRequestShown;
 
 #[derive(Clone, PartialEq)]
 struct Props {

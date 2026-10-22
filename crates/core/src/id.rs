@@ -174,3 +174,11 @@ define_id!(
   /// One file a person attached to a message (`crate::attachment`).
   AttachmentId
 );
+define_id!(
+  /// One thread of agent feedback on a pull request (`crate::pull_request::feedback`).
+  FeedbackId
+);
+define_id!(
+  /// One request or reply a person wrote in a feedback thread.
+  FeedbackPostId
+);

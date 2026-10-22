@@ -276,7 +276,10 @@ impl Component for FeedLoader {
     // The Orchestrator chat follows what the project's agents wait for (ORC-42), and gets its daily report (ORC-47).
     super::waits::follow(ctx, (&open, states));
     super::daily_report::deliver(ctx, &open);
-    publish(&self.feed.status, status(ctx, &runners, &root));
+    let runner = status(ctx, &runners, &root);
+    // Held pull request feedback goes once the runs' state lets it (ORC-14).
+    super::feedback::follow(ctx, (&open, states), runner.as_ref());
+    publish(&self.feed.status, runner);
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);
     let outside = outside(ctx, (services.changes.clone(), project));

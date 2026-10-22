@@ -196,6 +196,7 @@ fn seed_names_every_scenario_once() {
       "pipelines-empty",
       "accounts",
       "pull-requests",
+      "pull-request-feedback",
       "usage",
       "usage-empty",
       "usage-bare"

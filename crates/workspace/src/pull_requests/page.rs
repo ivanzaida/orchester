@@ -8,9 +8,12 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   pull_request::{Fields, PullRequest, SyncFailure},
   repository::GitHubRepo,
+  revision::Revision,
+  store::{PullRequestDiffStore, RepositoryStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
+use orchester_store::ProjectDb;
 
 use super::{
   InboxError,
@@ -18,6 +21,7 @@ use super::{
   linked::LinkedTask,
   status::SyncStatus,
 };
+use crate::tasks::changes::{ChangesError, Checkpointed, checkpointed_in};
 
 /// What the page shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,6 +115,43 @@ pub fn load_page_in(repo_root: &Path, number: u64) -> Result<PullRequestPage, In
 /// does, unless a rate limit holds syncs back; then what is stored comes back with the rate limit.
 pub fn refresh_page_in(repo_root: &Path, number: u64, programs: &Programs) -> Result<PullRequestPage, InboxError> {
   Ok(page(refresh_found_in(repo_root, (number, Fields::Page), programs)?))
+}
+
+/// The diff Orchester read for pull request `number` at an earlier head `head`, e.g. the one a feedback thread was
+/// written on; `None` when none was read for it, or it is not a unified diff.
+pub fn diff_at_in(repo_root: &Path, number: u64, head: &Revision) -> Result<Option<Arc<ReadDiff>>, InboxError> {
+  let db = ProjectDb::open(repo_root)?;
+  let Some(link) = db.repository_link()? else {
+    return Ok(None);
+  };
+  let Some(stored) = db.pull_request_diff(link.repo(), number, head)? else {
+    return Ok(None);
+  };
+  Ok(match ReadDiff::parse(stored) {
+    Ok(read) => Some(Arc::new(read)),
+    Err(error) => {
+      tracing::warn!(%error, number, "a stored diff of the pull request is not a unified diff");
+      None
+    }
+  })
+}
+
+/// What changed from `from` to `to`, commits of the pull request's branch, read with git: what an agent's fix commit
+/// changed since the request's revision. `None` when it is larger than Orchester reads.
+pub fn between_in(
+  repo_root: &Path,
+  programs: &Programs,
+  (from, to): (&Revision, &Revision),
+) -> Result<Option<Arc<ReadDiff>>, ChangesError> {
+  Ok(match checkpointed_in(repo_root, programs, from, Some(to))? {
+    Checkpointed::Read { changes, .. } => Some(Arc::new(ReadDiff {
+      base: from.clone(),
+      head: to.clone(),
+      synced_at: Timestamp::now(),
+      diff: changes.diff.clone(),
+    })),
+    Checkpointed::TooLarge { .. } | Checkpointed::NoCheckpoint => None,
+  })
 }
 
 fn page(found: Option<Found>) -> PullRequestPage {

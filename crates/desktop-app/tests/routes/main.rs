@@ -14,7 +14,7 @@ use orchester_app::routes::{
   ProjectPage, Route, RouteError, RouteFolder, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
 };
 use orchester_core::{
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, FeedbackId, ProjectId},
   project::TaskKey,
 };
 use orchester_workspace::pull_requests::list::PullRequestTab;
@@ -46,6 +46,11 @@ fn join_target() -> JoinTarget {
 
 fn pull_request() -> NonZeroU64 {
   NonZeroU64::new(142).expect("a pull request number")
+}
+
+/// A feedback thread of [`pull_request`], with [`CONNECTION`]'s id.
+fn thread() -> FeedbackId {
+  CONNECTION.parse().expect("a thread id")
 }
 
 fn key(key: &str) -> TaskKey {
@@ -116,6 +121,8 @@ fn every_route() -> Vec<Route> {
   all.extend(MemoryTab::ALL.map(|tab| at(ProjectPage::Memory(Some(tab)))));
   all.push(at(ProjectPage::PullRequest(pull_request(), None)));
   all.push(at(ProjectPage::PullRequest(pull_request(), Some(AWKWARD.to_owned()))));
+  all.push(at(ProjectPage::PullRequestFeedback(pull_request(), None)));
+  all.push(at(ProjectPage::PullRequestFeedback(pull_request(), Some(thread()))));
   for source in ChangeSource::ALL {
     for path in ["src/webhooks/sender.rs", AWKWARD] {
       let view = TaskView::Changes(Some(file(path, source)));

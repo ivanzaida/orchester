@@ -26,7 +26,7 @@ pub use self::{
     Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, WORKTREES_DIR,
     WorktreeOwner, clean_up, leftovers, leftovers_of, parse_worktree_list,
   },
-  drift::{Drift, MAX_LANDED, branch_head, drift},
+  drift::{Drift, MAX_LANDED, branch_head, commit_subject, drift},
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
   merge::{MergeError, MergeKind, MergeOutcome, RunMerge, TemporaryLeft, merge_run, merge_run_at},

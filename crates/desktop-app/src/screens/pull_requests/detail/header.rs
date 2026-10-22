@@ -1,10 +1,11 @@
 //! The top of a pull request's page (`PR header` `nQXR1`): the crumbs, the title with its number, Refresh
 //! and Open in GitHub; the organization row with the state, the review, the branches, the task, the checks and,
-//! at its end, the head and how its latest read went; and the page's tabs (`Page tabs` `UMBLT`), Files changed
-//! with its count and the planned ones locked, why at the row's end. While nothing is known yet the title is
-//! the pull request's number and the status says it is read (`Reading` in `c07NAC`).
+//! at its end, the head and how its latest read went; and the page's tabs (`Page tabs` `Vlhg7` in `S5G87Z`), Files
+//! changed with its count, Agent feedback with its open threads, and the planned ones locked, why at the row's end.
+//! While nothing is known yet the title is the pull request's number and the status says it is read (`Reading` in
+//! `c07NAC`).
 
-use std::sync::Arc;
+use std::{num::NonZeroU64, sync::Arc};
 
 use lurq::{
   app::{
@@ -48,6 +49,12 @@ pub(super) struct Actions {
   pub open: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
+/// The page's own tabs: which shows, and how many feedback threads are open once read.
+pub(super) struct Tabs {
+  pub feedback_shown: bool,
+  pub feedback_count: Option<usize>,
+}
+
 /// The organization row's height (`Organization` `pp4Q0`), a separator's (`Sep` `uKnbH`), the gap under the
 /// organization row besides the header's own (`Gap` in `nQXR1`) and the tab row's height (`Page tabs` `UMBLT`).
 const ORGANIZATION_HEIGHT: f32 = 28.0;
@@ -56,16 +63,16 @@ const SEPARATOR_HEIGHT: f32 = 14.0;
 const TABS_HEIGHT: f32 = 34.0;
 
 /// The header of a pull request nothing is known of yet.
-pub(super) fn compact(ctx: &mut Ctx, project: &ShownProject, number: u64, reading: bool) -> Column {
+pub(super) fn compact(ctx: &mut Ctx, (project, number): (&ShownProject, u64), reading: bool, shown: &Tabs) -> Column {
   let title = Text::new(&ctx.t_args("pull_requests.detail.title", [("number", number.to_string())]))
     .id("pull-request-title")
     .variant(TypographyStyle::Heading);
-  let shown = if reading {
+  let status = if reading {
     Shown::Syncing
   } else {
     Shown::After(SyncStatus::NotSynced)
   };
-  let status = status_line(ctx, &shown, Timestamp::now());
+  let status = status_line(ctx, &status, Timestamp::now());
   frame()
     .child(crumbs(ctx, project, number))
     .child(
@@ -76,18 +83,18 @@ pub(super) fn compact(ctx: &mut Ctx, project: &ShownProject, number: u64, readin
         .child(Row::new().flex(1.0))
         .child(status),
     )
-    .child(tabs(ctx, None))
+    .child(tabs(ctx, (project, number), (None, shown)))
 }
 
 pub(super) fn header(
   ctx: &mut Ctx,
-  project: &ShownProject,
-  view: &PullRequestView,
+  (project, view): (&ShownProject, &PullRequestView),
   actions: &Actions,
   reading: bool,
+  shown: &Tabs,
 ) -> Column {
   let Some(pull_request) = view.pull_request.as_ref() else {
-    return compact(ctx, project, view.number, reading);
+    return compact(ctx, (project, view.number), reading, shown);
   };
   let organization = organization(ctx, project, view, pull_request, reading);
   frame()
@@ -95,7 +102,7 @@ pub(super) fn header(
     .child(title_row(ctx, pull_request, actions))
     .child(organization)
     .child(Row::new().height(Dimension::Px(ORGANIZATION_GAP)))
-    .child(tabs(ctx, view.file_count()))
+    .child(tabs(ctx, (project, view.number), (view.file_count(), shown)))
 }
 
 fn frame() -> Column {
@@ -307,21 +314,34 @@ fn context(ctx: &Ctx, view: &PullRequestView, pull_request: &PullRequest, readin
     )
 }
 
-/// Files changed with its count, `count` once known, then Agent feedback, Agent checks and Overview, locked,
-/// and why at the row's end.
-fn tabs(ctx: &mut Ctx, count: Option<usize>) -> Element {
-  let files = ctx.t("pull_requests.detail.tabs.files");
-  let files = match count {
-    Some(count) => counted(ctx, &files, count),
-    None => files,
+/// Files changed with its count once known, Agent feedback with its open threads once read, then Agent checks and
+/// Overview, locked, and why at the row's end.
+fn tabs(ctx: &mut Ctx, (project, number): (&ShownProject, u64), (count, shown): (Option<usize>, &Tabs)) -> Element {
+  let label = |ctx: &Ctx, key: &str, count: Option<usize>| {
+    let label = ctx.t(key);
+    match count {
+      Some(count) => counted(ctx, &label, count),
+      None => label,
+    }
   };
+  let files = label(ctx, "pull_requests.detail.tabs.files", count);
+  let feedback = label(ctx, "pull_requests.detail.tabs.feedback", shown.feedback_count);
+  let navigation = Navigation::of(ctx);
+  let id = project.open.project.id();
+  let page = NonZeroU64::new(number).expect("a pull request's page has its number");
   let planned = ctx.t("pull_requests.detail.tabs.planned");
   let tabs = [
-    PageTab::new("pull-request-tab-files", files, true, || {}),
-    PageTab::unavailable(
+    PageTab::to(
+      "pull-request-tab-files",
+      files,
+      !shown.feedback_shown,
+      navigation.to(Route::Project(id, ProjectPage::PullRequest(page, None))),
+    ),
+    PageTab::to(
       "pull-request-tab-feedback",
-      ctx.t("pull_requests.detail.tabs.feedback"),
-      planned.clone(),
+      feedback,
+      shown.feedback_shown,
+      navigation.to(Route::Project(id, ProjectPage::PullRequestFeedback(page, None))),
     ),
     PageTab::unavailable(
       "pull-request-tab-checks",

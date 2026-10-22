@@ -16,6 +16,7 @@ mod conversation;
 mod creation_snapshots;
 mod decision_authors;
 mod editor_drafts;
+mod feedback;
 mod import;
 mod invocation_permissions;
 mod joining;

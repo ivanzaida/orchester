@@ -290,6 +290,7 @@ impl ChangesTab {
           key: "changes.diff.omitted",
           action: None,
         },
+        annotations: None,
       },
     );
     Row::new()

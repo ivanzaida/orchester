@@ -68,7 +68,7 @@ fn pull_request_page_shows_its_files_beside_the_selected_files_diff() {
   assert_eq!(seeded.text("pull-request-tab-files"), "Files changed 6");
   assert_eq!(
     seeded.text("pull-request-tabs-reason"),
-    "Agent feedback, Agent checks and Overview are planned."
+    "Agent checks and Overview are planned."
   );
   assert_eq!(seeded.text("pull-request-total"), "6 files · +133 / −15");
   assert!(seeded.shows("changes-file:src/webhooks/sender.rs"));

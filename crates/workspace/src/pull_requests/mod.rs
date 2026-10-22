@@ -9,6 +9,7 @@
 
 pub mod create;
 pub mod detail;
+pub mod feedback;
 pub mod linked;
 pub mod list;
 pub mod page;
