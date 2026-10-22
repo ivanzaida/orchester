@@ -230,7 +230,7 @@ impl Inspector {
       .operation
       .as_ref()
       .is_some_and(LocalOperation::reserves_checkout);
-    (props.view.external.is_none() || holds).then(|| self.step(ctx, props, mode, phase))
+    (!props.view.found_outside() || holds).then(|| self.step(ctx, props, mode, phase))
   }
 
   fn step(&self, ctx: &mut Ctx, props: &Props, mode: &Mode, phase: LocalPhase) -> Element {
@@ -245,7 +245,7 @@ impl Inspector {
     }
     match decision(props, mode, phase) {
       Some(decision) => self.confirmation(ctx, props, (mode, phase), decision),
-      None if props.view.external.is_some() => self.finishing(ctx, props, phase),
+      None if props.view.found_outside() => self.finishing(ctx, props, phase),
       None => self.available(ctx, props, phase),
     }
   }

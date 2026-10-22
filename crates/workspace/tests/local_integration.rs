@@ -6,6 +6,8 @@ mod authority;
 mod base_merged;
 #[path = "local_integration/cleanup_edits.rs"]
 mod cleanup_edits;
+#[path = "local_integration/delivery_target.rs"]
+mod delivery_target;
 #[path = "local_integration/direct_merge.rs"]
 mod direct_merge;
 #[path = "local_integration/drafts.rs"]

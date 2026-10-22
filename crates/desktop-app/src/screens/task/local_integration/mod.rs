@@ -188,7 +188,7 @@ impl Component for LocalPage {
       return Element::from(Column::new());
     };
     let root = task.project.open.repo_root.clone();
-    let vault = Services::of(ctx).vault;
+    let Services { vault, programs, .. } = Services::of(ctx);
     let last = self.last.clone();
     let read = ctx
       .future(
@@ -200,11 +200,18 @@ impl Component for LocalPage {
           self.shown_file.get(),
         ),
         move |(root, run, _, policy_revision, selected)| {
-          let (vault, last) = (vault.clone(), last.clone());
+          let (vault, programs, last) = (vault.clone(), programs.clone(), last.clone());
           async move {
-            background::run(move || last.read((&root, run), selected.0.as_ref(), policy_revision, vault.get()))
-              .await
-              .map_err(|_| Problem("local_integration.error.io"))?
+            background::run(move || {
+              last.read(
+                (&root, run),
+                selected.0.as_ref(),
+                policy_revision,
+                (vault.get(), &programs),
+              )
+            })
+            .await
+            .map_err(|_| Problem("local_integration.error.io"))?
           }
         },
       )
@@ -265,8 +272,12 @@ impl LocalPage {
       NoticeTone::Danger,
       ctx.t(reason.0),
     ));
-    if let Some(error) = self.work.state().get().error {
-      body = body.child(Notice::new("local-work-error", NoticeTone::Danger, ctx.t(error.0)));
+    if let Some(refused) = self.work.state().get().error {
+      body = body.child(Notice::new(
+        "local-work-error",
+        NoticeTone::Danger,
+        ctx.t(refused.problem.0),
+      ));
     }
     if self.resolver.editor.dirty() {
       let source = self.resolver.seeded.lock().clone();

@@ -19,6 +19,8 @@ mod merged_outside;
 mod privacy;
 #[path = "local_integration/release.rs"]
 mod release;
+#[path = "local_integration/stale.rs"]
+mod stale;
 mod support;
 #[path = "local_integration/worktree_removal.rs"]
 mod worktree_removal;

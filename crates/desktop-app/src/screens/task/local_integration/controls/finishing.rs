@@ -6,7 +6,7 @@ use lurq::{app::ctx::Ctx, components::Text, node::Element};
 use orchester_core::integration::local::{LocalOperation, LocalPhase};
 
 use super::{Action, Inspector, Mode, Props, action_panel, button, mode_button, phase_title};
-use crate::{screens::task::local_integration::words, theme::LocalText, ui::button::ButtonKind};
+use crate::{theme::LocalText, ui::button::ButtonKind};
 
 impl Inspector {
   /// What is left to do for a record that holds the person's work once the run's work is found integrated outside
@@ -17,9 +17,7 @@ impl Inspector {
   /// reconciled first, which reviews the checkout as it is now.
   pub(super) fn finishing(&self, ctx: &Ctx, props: &Props, phase: LocalPhase) -> Element {
     let operation = props.view.operation.as_ref();
-    if props.view.external.as_ref().is_some_and(words::merged_outside)
-      && operation.is_some_and(LocalOperation::can_record_merged_outside)
-    {
+    if props.view.outside_merge_provable() && operation.is_some_and(LocalOperation::can_record_merged_outside) {
       return record_panel(ctx, props, phase);
     }
     if phase == LocalPhase::Canceled {
@@ -55,12 +53,13 @@ impl Inspector {
   }
 }
 
-/// *Record this merge and finish*, under what it does.
+/// *Record this merge and finish*, under what it does, naming the run's delivery target that holds the work.
 fn record_panel(ctx: &Ctx, props: &Props, phase: LocalPhase) -> Element {
-  let body = ctx.t_args(
-    "local_integration.recordOutsideBody",
-    [("branch", props.view.checkout.branch.as_str())],
-  );
+  let into = props
+    .view
+    .merged_outside()
+    .unwrap_or(props.view.checkout.branch.as_str());
+  let body = ctx.t_args("local_integration.recordOutsideBody", [("branch", into)]);
   action_panel(ctx, phase_title(phase), None)
     .child(
       Text::new(&body)

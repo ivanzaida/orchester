@@ -124,7 +124,7 @@ pub(super) fn decision(props: &Props, mode: &Mode, phase: LocalPhase) -> Option<
       },
     ),
     // Work found integrated outside Orchester is not merged or resolved again; only finishing the record is left.
-    Mode::Review if props.view.external.is_some() => return None,
+    Mode::Review if props.view.found_outside() => return None,
     Mode::Review => review_decision(props, phase)?,
   })
 }

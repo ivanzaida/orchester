@@ -3,6 +3,7 @@
 mod abort;
 mod authority;
 mod cancel;
+mod changed;
 mod checks;
 mod direct;
 mod drafts;
@@ -26,6 +27,7 @@ mod view;
 use std::path::Path;
 
 pub use authority::{LocalAuthorization, LocalIntent, LocalOrigin};
+pub use changed::changed_since_review;
 pub use direct::CheckoutHolder;
 pub(crate) use direct::{checkout_holder, managed_checkout, settle_review};
 pub use external::{EvidenceInputs, external_integration};

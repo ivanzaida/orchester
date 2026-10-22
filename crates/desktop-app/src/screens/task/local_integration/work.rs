@@ -1,6 +1,9 @@
-use std::sync::{
-  Arc,
-  atomic::{AtomicBool, Ordering},
+use std::{
+  path::Path,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
 };
 
 use lurq::app::{
@@ -10,11 +13,14 @@ use lurq::app::{
 };
 use orchester_core::{
   blob::ContentHash,
+  id::RunId,
   integration::local::{CheckedResult, LocalConflict, LocalError, LocalPath, Placement, Resolution},
+  secret::SecretVault,
 };
+use orchester_exec::programs::Programs;
 use orchester_workspace::{
   background, base_moved,
-  tasks::local_integration::{IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview},
+  tasks::local_integration::{self, IntegrationError, LocalIntegration, LocalIntent, LocalOrigin, Preview},
 };
 
 use super::TaskContext;
@@ -93,7 +99,28 @@ impl DevtoolsInspectable for Outcome {}
 
 pub use crate::ui::local_integration_error::{Problem, problem};
 
-pub type Work = FutureAction<Request, Outcome, Problem>;
+/// Why the page's work was refused: its problem and, after a refusal as stale, the paths a hashed check of the
+/// checkout found changed since the review, which Git's cached status may not list
+/// ([`local_integration::changed_since_review`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Refusal {
+  pub problem: Problem,
+  pub changed: Vec<LocalPath>,
+}
+impl DevtoolsInspectable for Refusal {}
+
+impl From<Problem> for Refusal {
+  fn from(problem: Problem) -> Self {
+    Self {
+      problem,
+      changed: Vec::new(),
+    }
+  }
+}
+
+pub type Work = FutureAction<Request, Outcome, Refusal>;
+
+const STALE: &str = "local_integration.error.stale";
 
 impl Request {
   pub fn initiate(&mut self, gate: &InputGate) {
@@ -129,13 +156,13 @@ pub fn action(ctx: &mut Ctx) -> Work {
     let services = services.clone();
     async move {
       if matches!(request.action, Action::BusyRefused) {
-        return Err(Problem("local_integration.error.foreign"));
+        return Err(Problem("local_integration.error.foreign").into());
       }
       if matches!(request.action, Action::AuthorityRefused) {
-        return Err(Problem("local_integration.error.authority"));
+        return Err(Problem("local_integration.error.authority").into());
       }
       if matches!(request.action, Action::Refused) {
-        return Err(Problem("local_integration.error.approval"));
+        return Err(Problem("local_integration.error.approval").into());
       }
       let task = request.task.clone();
       let run = task
@@ -152,39 +179,9 @@ pub fn action(ctx: &mut Ctx) -> Work {
         let _working = jobs
           .local_work(&open, &task.key)
           .ok_or(Problem("local_integration.error.foreign"))?;
-        let origin = request.authorize()?;
-        let input = request
-          .input
-          .clone()
-          .ok_or(Problem("local_integration.error.authority"))?;
-        let intent = request.action.intent();
-        let authorize = Arc::new(move || {
-          if !input.recheck() {
-            return Err(LocalError::AuthorityChanged);
-          }
-          input.origin().authorize(intent)
-        });
-        let mut session =
-          LocalIntegration::open_authorized_at(&open.repo_root, run, request.generation, authorize).map_err(problem)?;
-        session
-          .authorize(origin, request.action.intent(), request.generation)
-          .map_err(problem)?;
-        request.authorize()?;
-        if origin == LocalOrigin::WindowAutomation
-          && let Action::SaveDraft { candidate, .. } = &request.action
-          && session.candidate_sensitive(candidate, vault.get()).map_err(problem)?
-        {
-          return Err(Problem("local_integration.error.metadata"));
-        }
-        let outcome = execute(&mut session, request.action, vault.get()).map_err(problem)?;
-        if request.stop.load(Ordering::Acquire) {
-          session.pause().map_err(problem)?;
-        }
-        // The run's merge moved its base branch: the runs still at work on it are told (ORC-54).
-        if session.operation().merged().is_some() {
-          base_moved::after_merge(&open.repo_root, &programs);
-        }
-        Ok(outcome)
+        let root = &open.repo_root;
+        perform(request, (root, run), (vault.get(), &programs))
+          .map_err(|problem| refusal(problem, (root, run), vault.get()))
       })
       .await
       .map_err(|_| Problem("local_integration.error.unknown"))?;
@@ -192,6 +189,57 @@ pub fn action(ctx: &mut Ctx) -> Work {
       result
     }
   })
+}
+
+/// `request`'s action on run `run` of the checkout at `root`, in a session of its own.
+fn perform(
+  request: Request,
+  (root, run): (&Path, RunId),
+  (vault, programs): (&dyn SecretVault, &Programs),
+) -> Result<Outcome, Problem> {
+  let origin = request.authorize()?;
+  let input = request
+    .input
+    .clone()
+    .ok_or(Problem("local_integration.error.authority"))?;
+  let intent = request.action.intent();
+  let authorize = Arc::new(move || {
+    if !input.recheck() {
+      return Err(LocalError::AuthorityChanged);
+    }
+    input.origin().authorize(intent)
+  });
+  let mut session = LocalIntegration::open_authorized_at(root, run, request.generation, authorize).map_err(problem)?;
+  session
+    .authorize(origin, request.action.intent(), request.generation)
+    .map_err(problem)?;
+  request.authorize()?;
+  if origin == LocalOrigin::WindowAutomation
+    && let Action::SaveDraft { candidate, .. } = &request.action
+    && session.candidate_sensitive(candidate, vault).map_err(problem)?
+  {
+    return Err(Problem("local_integration.error.metadata"));
+  }
+  let outcome = execute(&mut session, request.action, vault).map_err(problem)?;
+  if request.stop.load(Ordering::Acquire) {
+    session.pause().map_err(problem)?;
+  }
+  // The run's merge moved its base branch: the runs still at work on it are told (ORC-54).
+  if session.operation().merged().is_some() {
+    base_moved::after_merge(root, programs);
+  }
+  Ok(outcome)
+}
+
+/// The refusal `problem` is; after a refusal as stale, with the paths a hashed check finds changed since the review.
+/// That check only reads: when it cannot be taken, or a path is sensitive, the refusal names none.
+fn refusal(problem: Problem, (root, run): (&Path, RunId), vault: &dyn SecretVault) -> Refusal {
+  let changed = if problem.0 == STALE {
+    local_integration::changed_since_review(root, run, vault).unwrap_or_default()
+  } else {
+    Vec::new()
+  };
+  Refusal { problem, changed }
 }
 
 fn execute(
