@@ -2,7 +2,8 @@
 //! gh 2.97 and git 2.46 write: whether a run can have one (no GitHub remote, no usable connection, another account,
 //! a missing scope, no base branch, an open one already), creating it (the branch pushed, a draft from it into the
 //! base with the task's words, then the sync that links it to the task and run), a refused push and GitHub refusing
-//! to open it, and the job on the project's shared operations that does not open a second one.
+//! to open it, and the job on the project's shared operations that does not open a second one. Before it pushes,
+//! a base ahead of its remote stops it until a person creates it anyway; a base without one on the remote goes on.
 
 use std::{
   sync::Arc,
@@ -13,15 +14,15 @@ use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{GitHubHost, GitHubLogin},
   pull_request::{PullRequestState, PushFailure},
-  repository::RepositoryError,
-  run::Run,
+  repository::{RemoteName, RepositoryError},
+  run::{BranchName, Run},
   store::PullRequestStore,
 };
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   activity::Activity,
   pull_requests::{
-    create::{CreateProblem, Readiness, Unavailable, create_in, readiness_in},
+    create::{CreateProblem, Readiness, Unavailable, UnpushedBase, create_in, readiness_in},
     list::{PullRequestList, load_list_in},
   },
   tasks::integration_jobs::{IntegrationJobs, PullRequestArgs, PullRequestJob},
@@ -69,6 +70,9 @@ struct FakeGitHub {
   push: CommandOutput,
   create: CommandOutput,
   head: String,
+  /// The commits of the local base on the run's branch that `origin/main` lacks; `None` when the remote has no
+  /// `main`.
+  base_ahead: Option<u64>,
   ran: Mutex<Vec<Command>>,
   opened: Mutex<bool>,
 }
@@ -81,6 +85,7 @@ impl FakeGitHub {
       push: answer(0, "", "To https://github.com/ivanzaida/kontur.git\n * [new branch]\n"),
       create: answer(0, CREATED, ""),
       head: head.to_owned(),
+      base_ahead: None,
       ran: Mutex::new(Vec::new()),
       opened: Mutex::new(false),
     }
@@ -121,6 +126,37 @@ impl CommandRunner for FakeGitHub {
       args if args.starts_with("--git-dir ") && args.ends_with(" remote -v") => answer(0, self.remotes, ""),
       args if args.starts_with("auth status") => answer(0, self.auth, ""),
       args if args.starts_with("push ") => self.push.clone(),
+      "fetch --quiet --no-tags origin +refs/heads/main:refs/remotes/origin/main" => answer(0, "", ""),
+      "rev-parse --verify --quiet --end-of-options refs/remotes/origin/main^{commit}" => match self.base_ahead {
+        Some(_) => answer(
+          0,
+          &format!(
+            "{:0>40}
+",
+            7
+          ),
+          "",
+        ),
+        None => answer(1, "", ""),
+      },
+      args if args.starts_with("merge-base --all --end-of-options refs/heads/main ") => answer(
+        0,
+        &format!(
+          "{:0>40}
+",
+          5
+        ),
+        "",
+      ),
+      args if args.starts_with("rev-list --count ") => answer(
+        0,
+        &format!(
+          "{}
+",
+          self.base_ahead.unwrap_or_default()
+        ),
+        "",
+      ),
       CREATE => {
         *self.opened.lock() |= self.create.code == Some(0);
         self.create.clone()
@@ -221,7 +257,11 @@ fn pull_request_readiness_needs_the_branch_the_run_started_from() {
     Readiness::Unavailable(Unavailable::NoBaseBranch)
   );
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&fake), (run.id(), true)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&fake),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::Unavailable(Unavailable::NoBaseBranch))
   );
   assert!(fake.ran_one("push").is_none(), "nothing was pushed");
@@ -233,7 +273,12 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
   let run = finished(&mut fixture);
   link(&mut fixture);
   let fake = Arc::new(FakeGitHub::new(run.branch().as_str()));
-  let created = create_in(fixture.repo.path(), &programs(&fake), (run.id(), true)).expect("created");
+  let created = create_in(
+    fixture.repo.path(),
+    &programs(&fake),
+    (run.id(), true, UnpushedBase::Refuse),
+  )
+  .expect("created");
   assert_eq!((created.pull_request.number, created.draft), (143, true));
   let branch = run.branch().as_str();
   let push = fake.ran_one("push").expect("the branch was pushed");
@@ -296,7 +341,7 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   );
   let fake = Arc::new(fake);
   assert!(matches!(
-    create_in(&root, &programs(&fake), (run.id(), true)),
+    create_in(&root, &programs(&fake), (run.id(), true, UnpushedBase::Refuse)),
     Err(CreateProblem::Push {
       failure: PushFailure::Authentication,
       ..
@@ -306,13 +351,21 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.create = refused(&format!("No commits between main and {}", run.branch()));
   assert_eq!(
-    create_in(&root, &programs(&Arc::new(fake)), (run.id(), true)),
+    create_in(
+      &root,
+      &programs(&Arc::new(fake)),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::NoCommits)
   );
   let mut fake = FakeGitHub::new(run.branch().as_str());
   fake.create = answer(1, "", "gh: Server Error (HTTP 502)\n");
   assert!(matches!(
-    create_in(&root, &programs(&Arc::new(fake)), (run.id(), false)),
+    create_in(
+      &root,
+      &programs(&Arc::new(fake)),
+      (run.id(), false, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::GitHub(RepositoryError::ServerError {
       status: Some(502),
       ..
@@ -322,7 +375,7 @@ fn pull_request_creation_stops_at_a_refused_push_and_says_why_gh_failed() {
   fake.auth = OTHER_ACCOUNT;
   let fake = Arc::new(fake);
   assert!(matches!(
-    create_in(&root, &programs(&fake), (run.id(), true)),
+    create_in(&root, &programs(&fake), (run.id(), true, UnpushedBase::Refuse)),
     Err(CreateProblem::Unavailable(Unavailable::WrongAccount { .. }))
   ));
   assert!(fake.ran_one("push").is_none(), "nothing is pushed for another account");
@@ -341,7 +394,11 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
   ));
   *fake.opened.lock() = true;
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&Arc::new(fake)), (run.id(), true)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&Arc::new(fake)),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::AlreadyOpen { number: Some(143) })
   );
   fixture
@@ -360,7 +417,11 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
     .expect("stored");
   let fake = Arc::new(FakeGitHub::new(run.branch().as_str()));
   assert_eq!(
-    create_in(fixture.repo.path(), &programs(&fake), (run.id(), true)),
+    create_in(
+      fixture.repo.path(),
+      &programs(&fake),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
     Err(CreateProblem::AlreadyOpen { number: Some(141) })
   );
   assert!(
@@ -387,6 +448,7 @@ fn pull_request_job_runs_on_the_shared_operations_once() {
     number: run.number().get(),
     run: run.id(),
     draft: true,
+    unpushed: UnpushedBase::Refuse,
     programs: programs(&fake),
     activity: Activity::new(),
     changed: Arc::new(|| {}),
@@ -403,4 +465,61 @@ fn pull_request_job_runs_on_the_shared_operations_once() {
   }
   assert!(!jobs.state().run(run.id()).busy());
   assert!(!jobs.of(run.id()).start_pull_request(args), "a second one is refused");
+}
+
+#[test]
+fn pull_request_creation_asks_before_including_unpushed_base_commits() {
+  let mut fixture = Fixture::keyed("KON");
+  let run = finished(&mut fixture);
+  link(&mut fixture);
+  let mut fake = FakeGitHub::new(run.branch().as_str());
+  fake.base_ahead = Some(202);
+  let fake = Arc::new(fake);
+  assert_eq!(
+    create_in(
+      fixture.repo.path(),
+      &programs(&fake),
+      (run.id(), true, UnpushedBase::Refuse)
+    ),
+    Err(CreateProblem::BaseNotPushed {
+      commits: 202,
+      base: BranchName::new("main").expect("branch"),
+      remote: RemoteName::origin(),
+    })
+  );
+  assert!(
+    fake.ran_one("fetch").is_some(),
+    "the base is fetched before it is compared"
+  );
+  assert!(fake.ran_one("push").is_none(), "nothing was pushed");
+  assert!(fake.ran_one(CREATE).is_none(), "GitHub was asked nothing");
+  let created = create_in(
+    fixture.repo.path(),
+    &programs(&fake),
+    (run.id(), true, UnpushedBase::Include),
+  )
+  .expect("created anyway");
+  assert_eq!(created.pull_request.number, 143);
+  let pushes = fake.ran().iter().filter(|args| args.starts_with("push ")).count();
+  assert_eq!(pushes, 1, "only the run's branch was pushed, never main");
+  let push = fake.ran_one("push").expect("pushed");
+  assert!(!push.args().join(" ").contains("refs/heads/main"));
+}
+
+#[test]
+fn pull_request_creation_goes_on_with_the_base_in_sync() {
+  let mut fixture = Fixture::keyed("KON");
+  let run = finished(&mut fixture);
+  link(&mut fixture);
+  let mut fake = FakeGitHub::new(run.branch().as_str());
+  fake.base_ahead = Some(0);
+  let fake = Arc::new(fake);
+  let created = create_in(
+    fixture.repo.path(),
+    &programs(&fake),
+    (run.id(), false, UnpushedBase::Refuse),
+  )
+  .expect("created");
+  assert_eq!((created.pull_request.number, created.draft), (143, false));
+  assert!(fake.ran_one("rev-list --count").is_some(), "the base was compared");
 }

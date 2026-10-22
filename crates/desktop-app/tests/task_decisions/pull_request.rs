@@ -43,7 +43,7 @@ use super::{
   merge::{git, latest_run},
 };
 
-const READY: &str = "ready for review, merges cleanly";
+pub(super) const READY: &str = "ready for review, merges cleanly";
 const CONFLICTS: &str = "ready for review, conflicts with main";
 const NO_BRANCH: &str = "ready for review, no branch to merge into";
 const SIGNED_IN: &str = r#"{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"ivanzaida","scopes":"repo"}]}}"#;
@@ -66,7 +66,7 @@ fn output(code: i32, stdout: &str, stderr: &str) -> CommandOutput {
 
 /// `gh` signed in as `auth` says, and `git push` answering `push` once `held` lets it go; every other git command
 /// runs for real. Once it opened pull request 143, its list holds it.
-struct FakeGitHub {
+pub(super) struct FakeGitHub {
   real: ProcessRunner,
   auth: Mutex<&'static str>,
   push: Mutex<CommandOutput>,
@@ -74,12 +74,12 @@ struct FakeGitHub {
   held: AtomicBool,
   pushes: AtomicUsize,
   /// The request of the last pull request GitHub was asked to open, and the branch it opened 143 from.
-  created: Mutex<Option<Value>>,
+  pub(super) created: Mutex<Option<Value>>,
   opened: Mutex<Option<String>>,
 }
 
 impl FakeGitHub {
-  fn new() -> Arc<Self> {
+  pub(super) fn new() -> Arc<Self> {
     Arc::new(Self {
       real: ProcessRunner::new(Duration::from_secs(60)),
       auth: Mutex::new(SIGNED_IN),
@@ -92,12 +92,12 @@ impl FakeGitHub {
     })
   }
 
-  fn pushes(&self) -> usize {
+  pub(super) fn pushes(&self) -> usize {
     self.pushes.load(Ordering::SeqCst)
   }
 
   /// The request of the last pull request GitHub was asked to open.
-  fn request(&self) -> Value {
+  pub(super) fn request(&self) -> Value {
     self
       .created
       .lock()
@@ -199,7 +199,7 @@ fn link(page: &Page) {
 }
 
 /// A linked page on the `decisions` scenario whose `gh` and `git push` are `fake`'s.
-fn linked(fake: &Arc<FakeGitHub>) -> Page {
+pub(super) fn linked(fake: &Arc<FakeGitHub>) -> Page {
   let page = Page::seeded_with_programs("decisions", Programs::with_runner(fake.clone()));
   link(&page);
   page
