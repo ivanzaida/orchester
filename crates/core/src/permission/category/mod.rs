@@ -307,6 +307,13 @@ fn classify_part(
   if let Some(words) = &judged.build_words {
     build_output::place(&mut part, words, placing);
   }
+  // A Cargo read or lookup writes nothing only under Cargo's own name of it.
+  if program == "cargo"
+    && part.writes_nothing()
+    && part.subcommand().is_some_and(|sub| build_output::aliased(scope, sub))
+  {
+    part.at_least(CommandCategory::Unknown);
+  }
   let mut part = redirected(part, raw, placing);
   if program == "cd" {
     part.moves_inside = enters_plainly(args) && part.known_safe_read();

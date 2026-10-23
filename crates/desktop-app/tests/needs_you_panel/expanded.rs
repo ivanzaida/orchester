@@ -1,5 +1,6 @@
 //! An approval expanded in the panel (`t7zhw`, `YDJsC`): the card starts at its subject, its parts 10 apart as
-//! the item's, and the project's header stays pinned over the list while the list scrolls under it (`o1BDj`).
+//! the item's, says why auto mode left it to the person, and the project's header stays pinned over the list while
+//! the list scrolls under it (`o1BDj`).
 
 use lurq::{app::events::ScrollPhase, core::ElementRect};
 
@@ -64,4 +65,19 @@ fn needs_you_panel_shows_an_approval_from_its_subject_with_the_items_gaps() {
   let deny = bounds(&mut window, &format!("{card}-deny-tells"));
   let gap = deny.y - (facts.y + facts.height);
   assert!((gap - 10.0).abs() < 0.5, "10 between the card's parts: {gap}");
+}
+
+#[test]
+fn needs_you_panel_says_why_auto_mode_left_an_approval_to_the_person() {
+  let (mut window, _) = seeded("cards");
+  open(&mut window);
+  let (_, card) = expand_approval(&mut window, "Add serde to the webhook payloads");
+  let held = format!("{card}-hold-cause");
+  window.until("why auto mode held it", |window| {
+    window.tree.get_element_by_id(&held).is_some()
+  });
+  assert_eq!(
+    text(&mut window, &held),
+    "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install."
+  );
 }

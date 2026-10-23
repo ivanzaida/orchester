@@ -139,6 +139,38 @@ fn domain_reads_runs_questions_and_plans_with_links_to_their_cards() {
   assert_eq!(missing["code"], "plan_not_found", "{missing}");
 }
 
+/// A request auto mode held by a hard rule says why in the card's words, in `list_approvals` and in `get_run`; one it
+/// did not look at says nothing of it.
+#[test]
+fn domain_reads_say_why_auto_mode_left_a_request_to_the_person() {
+  const CAUSE: &str =
+    "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install.";
+  let (mut served, _) = Served::seeded("cards");
+  let approvals = served.ok("list_approvals", &json!({ "project": "Kontur" }));
+  let listed = list(&approvals, "approvals");
+  let held = listed
+    .iter()
+    .find(|approval| approval["auto_mode"]["outcome"] == "held")
+    .unwrap_or_else(|| panic!("the request auto mode held: {approvals}"));
+  assert_eq!(held["auto_mode"]["hold"], "network_off", "{held}");
+  assert_eq!(held["hold_cause"], CAUSE, "{held}");
+  assert!(
+    listed
+      .iter()
+      .filter(|approval| approval["id"] != held["id"])
+      .all(|approval| approval["hold_cause"].is_null()),
+    "{approvals}"
+  );
+  let number = held["run"]["number"].as_u64().expect("its run").to_string();
+  let run = served.ok("get_run", &json!({ "project": "Kontur", "run": number }));
+  let waiting = list(&run["awaiting"], "approvals");
+  let same = waiting
+    .iter()
+    .find(|approval| approval["id"] == held["id"])
+    .unwrap_or_else(|| panic!("the run's waiting request: {run}"));
+  assert_eq!(same["hold_cause"], CAUSE, "{same}");
+}
+
 #[test]
 fn domain_reads_existing_results_carry_links_the_router_opens() {
   let (mut served, seeded) = Served::seeded("cards");

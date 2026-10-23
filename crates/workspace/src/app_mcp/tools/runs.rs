@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::RunId,
+  id::{ProjectId, RunId},
   run::{
     Plan, Run, RunStatus,
     review::{ReviewRecord, reviews_usage},
@@ -23,7 +23,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
-  approvals::approval, base_moved, message_waits::message_waits, orchestrated, plans, wire, worktree::worktree_state,
+  Translate, approvals::approval, base_moved, message_waits::message_waits, orchestrated, plans, wire,
+  worktree::worktree_state,
 };
 use crate::{
   app_mcp::{
@@ -33,7 +34,7 @@ use crate::{
   links::{Link, TaskPage},
   sharing::project::WorkClaim,
   tasks::{
-    approvals::pending,
+    approvals::{ShownApproval, pending},
     delivery::{self, Delivery},
     detail::{RunView, StepView, run_store_error, run_view},
     history,
@@ -61,85 +62,93 @@ pub enum Control {
   Cancel,
 }
 
-pub async fn get_run(services: &Services, args: InRun) -> Result<Value, ToolError> {
+/// The run as its task page shows it; its waiting requests in the app's words (`translate`), as `list_approvals`
+/// gives them.
+pub async fn get_run(services: &Services, args: InRun, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let (project, root) = (open.project.id(), open.repo_root);
-    let db = ProjectDb::open(&root)?;
-    let run = find_run(&db, &args.run)?;
-    let task = db
-      .task(run.task())?
-      .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
-    let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
-    let waiting: Vec<Value> = pending(&db, &root)?
-      .iter()
-      .filter(|shown| shown.approval.run == run.id())
-      .map(|shown| approval(shown, project))
-      .collect();
-    let asked = db.questions(run.id())?;
-    let (questions, proposed) = orchestrated::awaiting(&root, &run, (&asked, &conversation))?;
-    let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
-    let auto_mode = db.run_auto_mode(run.id())?;
-    let worktree = worktree_state(&db, &root, run.id())?;
-    let merge = merge_state(&db, (&root, &services.programs), &run)?;
-    let view = run_view(&db, run)?;
-    let plan = PlanReview::of(&view).map(|review| {
-      let mut plan = plans::waiting(&review, true);
-      plan["link"] = json!(conversation);
-      plan
-    });
-    let decided = decided_plans(&view, &conversation);
-    let usage = view.usage();
-    let reviewer = reviewer_tokens(&view.reviews);
-    let run = &view.run;
-    let steps: Vec<Value> = view.steps.iter().map(step).collect();
-    let unverified: Vec<Value> = view
-      .unverified()
-      .iter()
-      .map(|check| json!({ "check": check.check, "reason": check.reason }))
-      .collect();
-    Ok(json!({
-      "id": run.id().to_string(),
-      "number": run.number().get(),
-      "task": task.key().to_string(),
-      "pipeline": { "name": &*view.pipeline, "version": view.version.get() },
-      "status": wire::run_status(run.status(), view.runner_failure),
-      "unverified": unverified,
-      "tokens": {
-        "used": run.used().get(),
-        "budget": run.budget().map(TokenBudget::get),
-        "input": usage.input,
-        "cached_input": usage.cached_input,
-        "output": usage.output,
-        "reviewer": reviewer,
-      },
-      "time": {
-        "active_seconds": view.active_time(Timestamp::now()).as_secs(),
-        "limit_seconds": run.max_duration().map(|limit| limit.as_secs()),
-      },
-      "steps": steps,
-      "plans": decided,
-      "auto_mode": auto_mode,
-      "worktree": worktree,
-      "merge": merge,
-      "delivery": super::merge_queue::run_delivery(&db, run.id())?,
-      "base_moved": base_moved::of_run(&view),
-      "awaiting": {
-        "plan_decisions": run.awaiting_plan().len(),
-        "plan": plan,
-        "answers": run.awaiting_answer().len(),
-        "approvals": waiting,
-        "questions": questions,
-        "messages": messages,
-        "orchestrator_proposals": proposed,
-      },
-      "created_at": wire::time(run.created_at()),
-      "finished_at": view.finished_at.map(wire::time),
-      "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
-    }))
-  })
-  .await
+  let (mut read, waiting, project) = blocking(move || read_run(&services, &args)).await?;
+  read["awaiting"]["approvals"] = waiting
+    .iter()
+    .map(|shown| approval(shown, project, translate))
+    .collect();
+  Ok(read)
+}
+
+/// The run `args` names as its task page shows it but for its waiting requests, which come apart with its project.
+fn read_run(services: &Services, args: &InRun) -> Result<(Value, Vec<ShownApproval>, ProjectId), ToolError> {
+  let open = services.project(&args.project)?;
+  let (project, root) = (open.project.id(), open.repo_root);
+  let db = ProjectDb::open(&root)?;
+  let run = find_run(&db, &args.run)?;
+  let task = db
+    .task(run.task())?
+    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
+  let waiting: Vec<ShownApproval> = pending(&db, &root)?
+    .into_iter()
+    .filter(|shown| shown.approval.run == run.id())
+    .collect();
+  let asked = db.questions(run.id())?;
+  let (questions, proposed) = orchestrated::awaiting(&root, &run, (&asked, &conversation))?;
+  let messages = message_waits(&db, &run, &asked, Some(&conversation))?;
+  let auto_mode = db.run_auto_mode(run.id())?;
+  let worktree = worktree_state(&db, &root, run.id())?;
+  let merge = merge_state(&db, (&root, &services.programs), &run)?;
+  let view = run_view(&db, run)?;
+  let plan = PlanReview::of(&view).map(|review| {
+    let mut plan = plans::waiting(&review, true);
+    plan["link"] = json!(conversation);
+    plan
+  });
+  let decided = decided_plans(&view, &conversation);
+  let usage = view.usage();
+  let reviewer = reviewer_tokens(&view.reviews);
+  let run = &view.run;
+  let steps: Vec<Value> = view.steps.iter().map(step).collect();
+  let unverified: Vec<Value> = view
+    .unverified()
+    .iter()
+    .map(|check| json!({ "check": check.check, "reason": check.reason }))
+    .collect();
+  let read = json!({
+    "id": run.id().to_string(),
+    "number": run.number().get(),
+    "task": task.key().to_string(),
+    "pipeline": { "name": &*view.pipeline, "version": view.version.get() },
+    "status": wire::run_status(run.status(), view.runner_failure),
+    "unverified": unverified,
+    "tokens": {
+      "used": run.used().get(),
+      "budget": run.budget().map(TokenBudget::get),
+      "input": usage.input,
+      "cached_input": usage.cached_input,
+      "output": usage.output,
+      "reviewer": reviewer,
+    },
+    "time": {
+      "active_seconds": view.active_time(Timestamp::now()).as_secs(),
+      "limit_seconds": run.max_duration().map(|limit| limit.as_secs()),
+    },
+    "steps": steps,
+    "plans": decided,
+    "auto_mode": auto_mode,
+    "worktree": worktree,
+    "merge": merge,
+    "delivery": super::merge_queue::run_delivery(&db, run.id())?,
+    "base_moved": base_moved::of_run(&view),
+    "awaiting": {
+      "plan_decisions": run.awaiting_plan().len(),
+      "plan": plan,
+      "answers": run.awaiting_answer().len(),
+      "questions": questions,
+      "messages": messages,
+      "orchestrator_proposals": proposed,
+    },
+    "created_at": wire::time(run.created_at()),
+    "finished_at": view.finished_at.map(wire::time),
+    "link": Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
+  });
+  Ok((read, waiting, project))
 }
 
 /// Whether `run`'s work was merged, as its task's Summary tells it: by Orchester, with the merge it recorded, or
