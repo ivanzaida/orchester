@@ -186,19 +186,20 @@ fn reject(ctx: &Ctx, view: &View<'_>) -> ActionButton {
   )
 }
 
-/// The decision's card: its glyph, title and note, then `parts`, and why the last decision did not happen.
+/// The decision's card, in a `warning` stroke as it waits for the person: its glyph, title and note, then `parts`, and
+/// why the last decision did not happen.
 fn decision(ctx: &Ctx, view: &View<'_>, (glyph, title, note): (Icon, &str, &str), parts: Vec<Element>) -> Element {
   let refused = view
     .acts
     .refused()
-    .map(|refused| field_error("task-delivery-refused", &message_text(ctx, &refused)));
+    .map(|refused| field_error("task-delivery-refused", &message_text(ctx, &refused.message)));
   Column::new()
     .id("task-delivery-decision")
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Loose.role())
     .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
     .rounded(RadiusSize::Lg)
     .child(
       Row::new()

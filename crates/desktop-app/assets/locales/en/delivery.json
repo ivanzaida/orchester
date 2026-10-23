@@ -324,7 +324,12 @@
         "title": "Review before merging",
         "meta": "Run #{{run}} · {{pipeline}} · {{mode}}",
         "synced": "synced with {{base}} {{revision}} at {{time}}",
-        "onBase": "on {{base}} {{revision}}"
+        "onBase": "on {{base}} {{revision}}",
+        "changes": "Changes",
+        "checks": "Checks",
+        "commits": "Commits",
+        "readingCommits": "Reading the run's commits…",
+        "noCommits": "The run has no commits of its own."
       },
       "stage": {
         "passed": "Every step passed",
@@ -397,7 +402,16 @@
         "check": "Check on the merged result",
         "checkDetail": "The run's steps after Integrate pass again, then Check runs on the merged result",
         "back": "Back in the merge queue",
-        "backDetail": "Then your approval and the merge, as before"
+        "backDetail": "Then your approval and the merge, as before",
+        "checksTitle": "I've resolved it · checks",
+        "checking": "Checking your resolution · started {{time}}",
+        "markersLeft": {
+          "one": "Markers left in {{files}}",
+          "other": "Markers left in {{count}} files: {{files}}"
+        },
+        "notChecked": "Not checked",
+        "notRun": "Not run",
+        "removeMarkers": "Remove the markers, then press it again."
       },
       "details": {
         "title": "Delivery",
@@ -419,6 +433,37 @@
         "removed": "Taken out at {{time}}",
         "joined": "Joined at {{time}}"
       }
+    },
+    "conversation": {
+      "theBase": "the base branch",
+      "joined": "Every step passed · joined the merge queue · {{time}}",
+      "syncPhase": "{{step}} · sync with {{base}} · {{time}}",
+      "syncCommand": "git merge {{base}} {{revision}} into {{branch}}",
+      "clean": "clean",
+      "conflicts": "{{count}} files conflict",
+      "integrate": "Syncing with {{base}} conflicted in {{count}} files · Integrate starts with {{integrator}} · {{time}}",
+      "checkPhase": "{{step}} · Check on the merged result with {{base}} {{revision}} · {{time}}",
+      "checkPassed": "passed on {{base}} {{revision}}",
+      "checkFailed": "failed on {{base}} {{revision}}",
+      "superseded": "Check superseded: {{base}} moved to {{revision}} during the check · {{time}}",
+      "approved": "You approved the merge into {{base}} · {{time}}",
+      "blocked": {
+        "uncommitted": "Delivery blocked: your checkout of {{base}} has uncommitted changes · {{time}}",
+        "otherBranch": "Delivery blocked: your checkout is not on {{base}} · {{time}}",
+        "inProgress": "Delivery blocked: a merge is in progress in your checkout · {{time}}",
+        "held": "Delivery blocked: a local integration holds your checkout · {{time}}"
+      },
+      "merged": "Merged into {{base}} · merge commit {{revision}} · {{time}}",
+      "squashed": "Squashed into {{base}} · {{revision}} · {{time}}",
+      "removedWorktree": "Removed the run's worktree",
+      "removedIndex": "Removed the run's code index",
+      "deletedBranch": "Deleted branch {{branch}}",
+      "done": "done",
+      "notCleared": "The run's worktree stayed · {{time}}",
+      "left": "Left the merge queue: {{reason}} · {{time}}",
+      "removed": "Taken out of the merge queue · {{time}}",
+      "requeued": "Back in the merge queue · {{time}}",
+      "waitsForApproval": "Waiting for your approval · ready to merge into {{base}} · {{time}}"
     }
   }
 }

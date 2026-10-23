@@ -92,14 +92,53 @@ pub fn columns(
   read: Option<&Result<Checkpointed, Message>>,
   (delivered, head): (Vec<Element>, Option<Arc<str>>),
 ) -> Element {
+  laid_out(
+    ctx,
+    task,
+    (read, None),
+    (delivered, head),
+    ["decisions.ready.whatChanged", "decisions.ready.verification"],
+  )
+}
+
+/// *Changes* with `commits` under it, beside *Checks*, as the review before a queued run merges lays them out
+/// (`Columns` `tWblU` in `wN5Bz`).
+pub fn review_columns(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  (read, commits): (Option<&Result<Checkpointed, Message>>, Element),
+  (delivered, head): (Vec<Element>, Option<Arc<str>>),
+) -> Element {
+  laid_out(
+    ctx,
+    task,
+    (read, Some(commits)),
+    (delivered, head),
+    ["delivery.task.review.changes", "delivery.task.review.checks"],
+  )
+}
+
+/// The two columns, titled `titles`, with `under` below the changed files.
+fn laid_out(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  (read, under): (Option<&Result<Checkpointed, Message>>, Option<Element>),
+  (delivered, head): (Vec<Element>, Option<Arc<str>>),
+  [changed_title, verified_title]: [&str; 2],
+) -> Element {
   let run = task.detail.run.as_ref();
-  let verified = run.map(|run| verification(ctx, run, (delivered, head)));
+  let verified = run.map(|run| verification(ctx, run, (delivered, head), verified_title));
+  let left = Column::new()
+    .flex(1.0)
+    .spacing(DecisionSpacing::Columns.role())
+    .child(what_changed(ctx, task, read, changed_title))
+    .with_children(under);
   Row::new()
     .id("task-ready-columns")
     .width(Dimension::Pct(100.0))
     .spacing(DecisionSpacing::Columns.role())
     .align_items(Alignment::Start)
-    .child(Column::new().flex(1.0).child(what_changed(ctx, task, read)))
+    .child(left)
     .with_children(verified.map(|verified| Column::new().flex(1.0).child(verified)))
     .into()
 }
@@ -121,7 +160,12 @@ pub(in super::super) fn size(ctx: &Ctx, read: Option<&Result<Checkpointed, Messa
   }
 }
 
-fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpointed, Message>>) -> Element {
+fn what_changed(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  read: Option<&Result<Checkpointed, Message>>,
+  title: &str,
+) -> Element {
   let size = size(ctx, read);
   let body: Element = match read {
     None => note(&ctx.t("decisions.ready.reading")),
@@ -130,7 +174,7 @@ fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpoi
     Some(Ok(Checkpointed::TooLarge { .. })) => files_card(ctx, task, &[]),
     Some(Ok(Checkpointed::Read { changes, .. })) => files_card(ctx, task, changes.diff.files()),
   };
-  section(ctx, ("task-ready-changes", "decisions.ready.whatChanged"), size, body)
+  section(ctx, ("task-ready-changes", title), size, body)
 }
 
 /// "4 files · +120 / −18".
@@ -204,9 +248,9 @@ fn count(text: &str, color: PaletteColor) -> Element {
     .into()
 }
 
-/// *Verification*: the commit the run's work ended at (or `head`), the steps that passed after the work was
-/// first committed, and what its delivery adds (`delivered`).
-fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Option<Arc<str>>)) -> Element {
+/// *Verification*, titled `title`: the commit the run's work ended at (or `head`), the steps that passed after the work
+/// was first committed, and what its delivery adds (`delivered`).
+fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Option<Arc<str>>), title: &str) -> Element {
   let revision = head.or_else(|| {
     run.run.last_checkpoint().map(|checkpoint| {
       ctx.t_args(
@@ -231,12 +275,7 @@ fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Opti
       .with_children(checks)
       .into()
   };
-  section(
-    ctx,
-    ("task-ready-verification", "decisions.ready.verification"),
-    revision,
-    body,
-  )
+  section(ctx, ("task-ready-verification", title), revision, body)
 }
 
 /// The steps that passed after the first step whose agent writes to the repository, the one that made the

@@ -1,7 +1,8 @@
 //! *Resolve myself* (`Task · Resolve myself · in page` `fAcWt`): the base merged into the run's worktree waits for the
 //! person. The card (`L3U2Al`) says where, with the worktree's path to copy (`h6jKOa`), *Open folder*, *Open in
-//! editor*, *Back to the decision* and *I've resolved it*; under it the stages, the files that conflicted as they stand
-//! now, read again every few seconds, and what *I've resolved it* checks (`D3QztR`).
+//! editor*, *Reject*, *Back to the decision* and *I've resolved it*; under it the stages, the files that conflicted as
+//! they stand now, read again every few seconds, and what *I've resolved it* checks (`D3QztR`), which becomes its panel
+//! once pressed: checking, or the conflict markers it found left (`e7geY3`).
 
 use std::path::{Path, PathBuf};
 
@@ -11,29 +12,30 @@ use lurq::{
     events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{integration::resolve::Resolution, merge_queue::QueueEvent};
+use orchester_core::{integration::resolve::Resolution, merge_queue::QueueEvent, time::Timestamp};
 use orchester_workspace::{
-  display::{plain_path, short_revision},
+  display::{clock, plain_path, short_revision},
   tasks::changes::run_worktree,
 };
 
 use super::{
   super::ready::changed::section,
-  Act, View,
+  Act, Refused, View,
   card::base,
   integrate::{checks_card, conflicting},
   rows::{Look, Stage, check_row},
 };
 use crate::{
   services::Services,
-  theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DeliverySpacing, DeliveryText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
+    card::{CardSurface, card as outline},
     clipboard::Clipboard,
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -51,47 +53,186 @@ pub(super) fn resolving(
   back: &Signal<bool>,
 ) -> Vec<Element> {
   let worktree = run_worktree(&view.task.project.open.repo_root, view.run.id());
-  let base = base(view.run);
-  let pending = |id: &str, title: String, detail: String| check_row(id, Look::PENDING, (&title, &detail), None);
-  let listed = files.join(", ");
-  let checks = vec![
-    pending(
-      "task-delivery-resolve-markers",
-      ctx.t("delivery.task.resolve.markers").to_string(),
-      ctx
-        .t_args("delivery.task.resolve.markersDetail", [("files", listed.as_str())])
-        .to_string(),
-    ),
-    pending(
-      "task-delivery-resolve-merges",
-      ctx.t_args("delivery.task.resolve.merges", [("base", base)]).to_string(),
-      ctx
-        .t_args("delivery.task.resolve.mergesDetail", [("base", base)])
-        .to_string(),
-    ),
-    pending(
-      "task-delivery-resolve-check",
-      ctx.t("delivery.task.resolve.check").to_string(),
-      ctx.t("delivery.task.resolve.checkDetail").to_string(),
-    ),
-    pending(
-      "task-delivery-resolve-back",
-      ctx.t("delivery.task.resolve.back").to_string(),
-      ctx.t("delivery.task.resolve.backDetail").to_string(),
-    ),
-  ];
-  let when = section(
-    ctx,
-    ("task-delivery-resolve-when", "delivery.task.resolve.when"),
-    None,
-    checks_card(ctx, "task-delivery-resolve-checks", checks),
-  );
   vec![
     card(ctx, view, &worktree, back),
     view.stages(ctx, Stage::Waiting),
     conflicting(ctx, files, Some(resolution)),
-    when,
+    checks(ctx, view, files),
   ]
+}
+
+/// Where *I've resolved it* stands with its checks (`e7geY3`).
+enum Checking {
+  /// Not pressed yet: what it checks.
+  NotYet,
+  /// Under way since then.
+  Running(Timestamp),
+  /// It found conflict markers left in these files, at that time: the checks after it did not run.
+  MarkersLeft(Vec<String>, Timestamp),
+}
+
+impl Checking {
+  fn of(view: &View<'_>) -> Self {
+    if let Some((Act::Resolved, at)) = view.acts.under_way() {
+      return Self::Running(at);
+    }
+    match (view.acts.last(), view.acts.refused()) {
+      (
+        Some((Act::Resolved, at)),
+        Some(Refused {
+          markers: Some(files), ..
+        }),
+      ) => Self::MarkersLeft(files, at),
+      _ => Self::NotYet,
+    }
+  }
+}
+
+/// The ids of what *I've resolved it* checks, in its order.
+const CHECK_IDS: [&str; 4] = [
+  "task-delivery-resolve-markers",
+  "task-delivery-resolve-merges",
+  "task-delivery-resolve-check",
+  "task-delivery-resolve-back",
+];
+
+/// What *I've resolved it* checks, in its order, each with what it says now `checking` stands where it does; the
+/// first one shows how it went, the rest wait for it.
+fn check_rows(ctx: &Ctx, (base, files): (&str, &[String]), checking: &Checking) -> Vec<Element> {
+  let titles = [
+    ctx.t("delivery.task.resolve.markers"),
+    ctx.t_args("delivery.task.resolve.merges", [("base", base)]),
+    ctx.t("delivery.task.resolve.check"),
+    ctx.t("delivery.task.resolve.back"),
+  ];
+  let listed = files.join(", ");
+  let details = match checking {
+    Checking::NotYet | Checking::Running(_) => [
+      ctx.t_args("delivery.task.resolve.markersDetail", [("files", listed.as_str())]),
+      ctx.t_args("delivery.task.resolve.mergesDetail", [("base", base)]),
+      ctx.t("delivery.task.resolve.checkDetail"),
+      ctx.t("delivery.task.resolve.backDetail"),
+    ],
+    Checking::MarkersLeft(marked, _) => [
+      ctx.t_args(
+        if marked.len() == 1 {
+          "delivery.task.resolve.markersLeft.one"
+        } else {
+          "delivery.task.resolve.markersLeft.other"
+        },
+        [("count", marked.len().to_string()), ("files", marked.join(", "))],
+      ),
+      ctx.t("delivery.task.resolve.notChecked"),
+      ctx.t("delivery.task.resolve.notRun"),
+      ctx.t("delivery.task.resolve.backDetail"),
+    ],
+  };
+  let first = match checking {
+    Checking::NotYet => Look::PENDING,
+    Checking::Running(_) => Look::WORKING,
+    Checking::MarkersLeft(..) => Look::FAILED,
+  };
+  titles
+    .iter()
+    .zip(details)
+    .zip(CHECK_IDS)
+    .enumerate()
+    .map(|(index, ((title, detail), id))| {
+      let look = if index == 0 { first.clone() } else { Look::PENDING };
+      check_row(id, look, (title, &detail), None)
+    })
+    .collect()
+}
+
+/// What *I've resolved it* checks, before it is pressed (*When you press I've resolved it*), and while and after it
+/// checks, as its panel (*I've resolved it · checks*) with the time it was pressed.
+fn checks(ctx: &mut Ctx, view: &View<'_>, files: &[String]) -> Element {
+  let checking = Checking::of(view);
+  let mut rows = check_rows(ctx, (base(view.run), files), &checking);
+  let (at, note) = match &checking {
+    Checking::NotYet => {
+      return section(
+        ctx,
+        ("task-delivery-resolve-when", "delivery.task.resolve.when"),
+        None,
+        checks_card(ctx, "task-delivery-resolve-checks", rows),
+      );
+    }
+    Checking::Running(at) => (*at, working(ctx, *at)),
+    Checking::MarkersLeft(marked, at) => {
+      rows.splice(
+        1..1,
+        marked.iter().enumerate().map(|(index, path)| file_line(index, path)),
+      );
+      (*at, actions_note(&ctx.t("delivery.task.resolve.removeMarkers")))
+    }
+  };
+  let head = Row::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(Text::new(&ctx.t("delivery.task.resolve.checksTitle")).variant(TaskText::SectionTitle.role()))
+    .child(Spacer::new().flex(1.0))
+    .child(
+      Text::new(&clock(at))
+        .id("task-delivery-resolve-checks-at")
+        .variant(ExtraTypography::Note.role())
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    );
+  outline("task-delivery-resolve-checks", CardSurface::Outline)
+    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
+    .spacing(ExtraSpacing::Loose.role())
+    .child(head)
+    .child(Column::new().width(Dimension::Pct(100.0)).with_children(rows))
+    .child(note)
+    .into()
+}
+
+/// A file with markers left, under the check that found them (`File line` `mjqx2`).
+fn file_line(index: usize, path: &str) -> Element {
+  Row::new()
+    .id(format!("task-delivery-resolve-marked-{index}"))
+    .width(Dimension::Pct(100.0))
+    .padding(
+      Padding::new()
+        .left(DeliverySpacing::FileIndent.role())
+        .bottom(ExtraSpacing::Snug.role()),
+    )
+    .child(
+      Text::new(path)
+        .variant(DeliveryText::File.role())
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .into()
+}
+
+/// *Checking your resolution · started 17:12* (`Working line` `dWKsn`).
+fn working(ctx: &Ctx, at: Timestamp) -> Element {
+  Row::new()
+    .id("task-delivery-resolve-working")
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t_args("delivery.task.resolve.checking", [("time", clock(at))]))
+        .variant(ExtraTypography::Note.role())
+        .color(PaletteColor::TextMuted),
+    )
+    .into()
+}
+
+fn actions_note(text: &str) -> Element {
+  Text::new(text)
+    .id("task-delivery-resolve-note")
+    .variant(ExtraTypography::Note.role())
+    .color(PaletteColor::TextMuted)
+    .width(Dimension::Pct(100.0))
+    .into()
 }
 
 fn card(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>) -> Element {
@@ -116,7 +257,7 @@ fn card(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>) ->
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Md)
     .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
     .rounded(RadiusSize::Lg)
     .child(
       Row::new()
@@ -180,11 +321,14 @@ fn path_box(ctx: &mut Ctx, worktree: &Path) -> Element {
     .rounded(RadiusSize::Md)
     .child(icon(Icon::FolderGit2, IconSize::Base, PaletteColor::TextSecondary))
     .child(
+      // A long path is cut at its end, so *Copy path* stays in the box.
       Text::new(&path)
         .id("task-delivery-worktree-path")
         .variant(DeliveryText::Branch.role())
         .flex(1.0)
-        .nowrap(),
+        .min_width(Dimension::Px(0.0))
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     )
     .child(copy)
     .into()
@@ -244,12 +388,15 @@ fn actions(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>)
     .icon(Icon::Check),
     Act::Resolved,
   );
-  let refused = view.acts.refused().map(|refused| {
-    crate::ui::field::field_error(
-      "task-delivery-refused",
-      &crate::ui::message::message_text(ctx, &refused),
+  let reject = view.acts.button(
+    ActionButton::new(
+      "task-delivery-reject",
+      ButtonKind::DangerGhost,
+      ctx.t("delivery.task.decision.reject"),
     )
-  });
+    .icon(Icon::X),
+    Act::Reject,
+  );
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
@@ -262,11 +409,25 @@ fn actions(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>)
         .child(open_folder)
         .child(open_editor)
         .child(Spacer::new().flex(1.0))
+        .child(reject)
         .child(back_button)
         .child(resolved),
     )
-    .with_children(refused)
+    .with_children(refused(ctx, view))
     .into()
+}
+
+/// Why the last decision did not happen. Markers left are what the checks under the card say; any other refusal is said
+/// here.
+fn refused(ctx: &Ctx, view: &View<'_>) -> Option<Element> {
+  let refused = view.acts.refused().filter(|refused| refused.markers.is_none())?;
+  Some(
+    crate::ui::field::field_error(
+      "task-delivery-refused",
+      &crate::ui::message::message_text(ctx, &refused.message),
+    )
+    .into(),
+  )
 }
 
 /// The files that conflicted, as the queue recorded them.

@@ -89,10 +89,12 @@ pub enum DeliverySpacing {
   Sections,
   /// 40: the Merge queue screen's sides (`SMzTk`).
   Page,
+  /// 26: a file under the check that found it, in from the check's glyph (`File line` `mjqx2` in `e7geY3`).
+  FileIndent,
 }
 
 impl DeliverySpacing {
-  pub const ALL: [Self; 2] = [Self::Sections, Self::Page];
+  pub const ALL: [Self; 3] = [Self::Sections, Self::Page, Self::FileIndent];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -102,6 +104,7 @@ impl DeliverySpacing {
     match self {
       Self::Sections => "delivery_sections",
       Self::Page => "delivery_page",
+      Self::FileIndent => "delivery_file_indent",
     }
   }
 
@@ -109,6 +112,7 @@ impl DeliverySpacing {
     match self {
       Self::Sections => 20.0,
       Self::Page => 40.0,
+      Self::FileIndent => 26.0,
     }
   }
 }

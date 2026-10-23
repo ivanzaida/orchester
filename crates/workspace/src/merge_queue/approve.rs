@@ -29,7 +29,6 @@ use crate::{
     changes::{GIT, run_worktree},
     detail::run_store_error,
     integration::file_list,
-    resolve::markers_left,
   },
 };
 
@@ -251,10 +250,10 @@ fn head(programs: &Programs, worktree: &Path) -> Result<orchester_core::revision
   orchester_core::integration::delivery::head(&runner, Path::new(GIT), worktree).map_err(|error| refusal(&error.into()))
 }
 
-/// What a person reads when resolving did not go on.
+/// Why resolving did not go on.
 fn refusal(error: &ResolveError) -> QueueRefusal {
   QueueRefusal::Resolve(match error {
-    ResolveError::MarkersLeft(files) => markers_left(files),
+    ResolveError::MarkersLeft(files) => return QueueRefusal::MarkersLeft(files.clone()),
     ResolveError::Uncommitted(files) => Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", ")),
     other => Message::new("mergeQueue.refused.resolve").with("detail", other.to_string()),
   })

@@ -30,12 +30,13 @@ use crate::{
 /// A conflicting file's row (`Nanwh`).
 const CONFLICT_ROW_HEIGHT: f32 = 34.0;
 
-/// How a line of the verification looks: its glyph in its color and its title's color.
+/// How a line of the verification looks: its glyph in its color, its title's color and its detail's.
 #[derive(Clone)]
 pub(super) struct Look {
   pub glyph: Icon,
   pub color: PaletteColor,
   pub title: PaletteColor,
+  pub detail: PaletteColor,
 }
 
 impl Look {
@@ -43,26 +44,32 @@ impl Look {
     glyph: Icon::CircleCheck,
     color: PaletteColor::Success,
     title: PaletteColor::TextPrimary,
+    detail: PaletteColor::TextSecondary,
   };
   pub(super) const WORKING: Self = Self {
     glyph: Icon::LoaderCircle,
     color: PaletteColor::TextSecondary,
     title: PaletteColor::TextPrimary,
+    detail: PaletteColor::TextSecondary,
   };
   pub(super) const PENDING: Self = Self {
     glyph: Icon::CircleDashed,
     color: PaletteColor::TextMuted,
     title: PaletteColor::TextMuted,
+    detail: PaletteColor::TextSecondary,
   };
+  /// What failed says why in `danger` too (`ZOr8X`, `NILKO` in `e7geY3`).
   pub(super) const FAILED: Self = Self {
     glyph: Icon::CircleX,
     color: PaletteColor::Danger,
     title: PaletteColor::TextPrimary,
+    detail: PaletteColor::Danger,
   };
   pub(super) const CONFLICTED: Self = Self {
     glyph: Icon::GitCompareArrows,
     color: PaletteColor::TextSecondary,
     title: PaletteColor::TextPrimary,
+    detail: PaletteColor::TextSecondary,
   };
 }
 
@@ -83,8 +90,9 @@ pub(super) fn check_row(id: &str, look: Look, (title, detail): (&str, &str), end
         .child(Text::new(title).variant(TypographyStyle::Label).color(look.title))
         .child(
           Text::new(detail)
+            .id(format!("{id}-detail"))
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary),
+            .color(look.detail),
         ),
     )
     .with_children(end.map(|end| Text::new(end).variant(DeliveryText::Stage.role()).nowrap()))

@@ -11,6 +11,7 @@
 //! A person's decision changes the queue off the UI thread; the queue's driver goes on from there.
 
 mod card;
+mod commits;
 pub(super) mod details;
 mod integrate;
 mod resolve;
@@ -95,25 +96,57 @@ impl DevtoolsInspectable for Act {}
 /// A decision on a run, and who pressed it: a person, or an MCP client driving the window.
 type Decision = (RunId, Act, Answerer);
 
-/// The person's decisions on the run, the one last pressed, and why the last one did not happen.
+/// Why a decision did not happen: what the person reads, and the files *I've resolved it* found conflict markers left
+/// in when that was why.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Refused {
+  pub message: Message,
+  pub markers: Option<Vec<String>>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Refused {}
+
+impl From<Message> for Refused {
+  fn from(message: Message) -> Self {
+    Self { message, markers: None }
+  }
+}
+
+/// The person's decisions on the run, the one last pressed and when, and why the last one did not happen.
 #[derive(Clone)]
 pub(super) struct Acts {
-  action: FutureAction<Decision, Act, Message>,
-  pressed: Signal<Option<Act>>,
+  action: FutureAction<Decision, Act, Refused>,
+  pressed: Signal<Option<(Act, Timestamp)>>,
   run: RunId,
 }
 
 impl Acts {
   /// Why the last decision did not happen.
-  pub(super) fn refused(&self) -> Option<Message> {
+  pub(super) fn refused(&self) -> Option<Refused> {
     let state = self.action.state().get();
     if state.is_pending() { None } else { state.error }
+  }
+
+  /// The decision under way and when it was pressed.
+  pub(super) fn under_way(&self) -> Option<(Act, Timestamp)> {
+    self
+      .action
+      .state()
+      .get()
+      .is_pending()
+      .then(|| self.pressed.get())
+      .flatten()
+  }
+
+  /// The decision last pressed and when.
+  pub(super) fn last(&self) -> Option<(Act, Timestamp)> {
+    self.pressed.get()
   }
 
   /// `button` making `act`: under way while it is, waiting while another decision is.
   pub(super) fn button(&self, button: ActionButton, act: Act) -> ActionButton {
     if self.action.state().get().is_pending() {
-      return if self.pressed.get() == Some(act) {
+      return if self.pressed.get().map(|(pressed, _)| pressed) == Some(act) {
         button.loading()
       } else {
         button.disabled()
@@ -128,7 +161,7 @@ impl Acts {
         } else {
           Answerer::Person
         };
-        pressed.set(Some(act));
+        pressed.set(Some((act, Timestamp::now())));
         action.run((run, act, by));
       }
     })
@@ -141,9 +174,9 @@ pub struct DeliveryDecision {
   looking: Interval,
   /// *Back to the decision* from the view of the worktree the person resolves in.
   back: Signal<bool>,
-  /// The decision last pressed, for its button.
-  pressed: Signal<Option<Act>>,
-  action: FutureAction<Decision, Act, Message>,
+  /// The decision last pressed and when, for its button.
+  pressed: Signal<Option<(Act, Timestamp)>>,
+  action: FutureAction<Decision, Act, Refused>,
 }
 
 impl Component for DeliveryDecision {
@@ -167,9 +200,11 @@ impl Component for DeliveryDecision {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TaskContext>().clone();
     // Read on every render, before the parts only some states build: lurq keeps futures by their order. The run's
-    // worktree is read again when the queue changes too: *Resolve myself* merges the base into it.
+    // worktree and commits are read again when the queue changes too: *Resolve myself* merges the base into the
+    // worktree, and a sync adds its merge commit.
     let read = changed::read(ctx, &props);
     let changes = crate::project::merge_queue::changes(ctx, &props.project.open.repo_root);
+    let commits = commits::read(ctx, &props, changes);
     let (Some(run), Some(queue)) = (props.detail.run.as_ref(), props.detail.queue.as_ref()) else {
       return Column::new().into();
     };
@@ -192,6 +227,7 @@ impl Component for DeliveryDecision {
       run,
       queue,
       read: read.as_ref(),
+      commits: commits.as_ref(),
       acts: &acts,
     };
     let (mut parts, lead) = match &state {
@@ -226,6 +262,7 @@ pub(super) struct View<'a> {
   pub run: &'a RunView,
   pub queue: &'a TaskDelivery,
   pub read: Option<&'a Result<orchester_workspace::tasks::changes::Checkpointed, Message>>,
+  pub commits: Option<&'a Result<commits::Commits, Message>>,
   pub acts: &'a Acts,
 }
 
@@ -278,7 +315,7 @@ impl View<'_> {
     parts
   }
 
-  /// *Review before merging*.
+  /// *Review before merging*: its changes and commits beside its checks.
   fn review(&self, ctx: &mut Ctx) -> Vec<Element> {
     let size = changed::size(ctx, self.read);
     let checked = self
@@ -295,10 +332,12 @@ impl View<'_> {
           ],
         )
       });
+    let delivered = self.delivered(ctx);
+    let commits = commits::section(ctx, self.commits);
     vec![
       card::review_head(ctx, (self.run, self.queue), size),
       self.stages(ctx, Stage::Waiting),
-      self.columns(ctx, checked),
+      changed::review_columns(ctx, self.task, (self.read, commits), (delivered, checked)),
     ]
   }
 
@@ -338,7 +377,7 @@ impl View<'_> {
 /// Makes the person's decisions on the queue of `task`'s project off the UI thread; *I've resolved it* also sends the
 /// run's work back to its Integrate step through the project's runner, then puts the run back in the queue. Only a
 /// person approves a merge: the press of an MCP client driving the window is refused by the queue's rule.
-fn decide(ctx: &mut Ctx, task: &TaskContext) -> FutureAction<Decision, Act, Message> {
+fn decide(ctx: &mut Ctx, task: &TaskContext) -> FutureAction<Decision, Act, Refused> {
   let services = Services::of(ctx);
   let (runners, programs, project) = (services.runners, services.programs, task.project.open.clone());
   ctx.future_action(move |(run, act, by): Decision| {
@@ -367,9 +406,12 @@ fn decide(ctx: &mut Ctx, task: &TaskContext) -> FutureAction<Decision, Act, Mess
   })
 }
 
-fn refused(refusal: &QueueRefusal) -> Message {
+fn refused(refusal: &QueueRefusal) -> Refused {
   tracing::info!(code = refusal.code(), "a decision on the merge queue did not happen");
-  refusal.message()
+  Refused {
+    message: refusal.message(),
+    markers: refusal.markers_left().map(<[String]>::to_vec),
+  }
 }
 
 /// What a decision left to do once it was made.

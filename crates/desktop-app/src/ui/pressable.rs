@@ -32,6 +32,11 @@ pub fn opening(open: Open) -> Button {
   Press::Open(open).on(surface())
 }
 
+/// [`pressable`] or [`opening`], as `press` says.
+pub fn pressed(press: Press) -> Button {
+  press.on(surface())
+}
+
 fn surface() -> Button {
   Button::empty()
     .align_items(Alignment::Center)

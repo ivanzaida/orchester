@@ -51,7 +51,7 @@ pub(super) fn row(ctx: &mut Ctx, rows: &Rows, row: &QueueRow) -> Element {
   Row::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Lg))
+    .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
     .spacing(SpacingSize::Lg)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))

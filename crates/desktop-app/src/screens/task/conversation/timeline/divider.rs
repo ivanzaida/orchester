@@ -40,7 +40,7 @@ use crate::{
   theme::{ConversationText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::pressable,
+    pressable::{Press, pressable, pressed},
   },
 };
 
@@ -68,13 +68,13 @@ fn ruled(id: String, gap: SpacingSize, label: Element) -> Element {
     .into()
 }
 
-/// An event divider: `glyph`, `text` and `link` (its words and what a press does).
 /// A link's words and what a press on it does.
-type Link = (Arc<str>, Box<dyn Fn() + Send + Sync>);
+pub(super) type Link = (Arc<str>, Press);
 
-fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> Element {
-  let link = link.map(|(words, action)| {
-    pressable(action).id(format!("{id}-link")).child(
+/// An event divider: `glyph`, `text` and `link` (its words and what a press does).
+pub(super) fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> Element {
+  let link = link.map(|(words, press)| {
+    pressed(press).id(format!("{id}-link")).child(
       Text::new(&words)
         .variant(TypographyStyle::FieldLabel)
         .color(ExtraColor::AccentText.role())
@@ -98,6 +98,19 @@ fn event(id: String, glyph: Icon, text: &str, link: Option<Link>) -> Element {
     )
     .with_children(link);
   ruled(id, SpacingSize::Sm, label.into())
+}
+
+/// A divider drawn as a step's, for a phase that is no step of the run's pipeline: the queue's *07 Deliver · sync with
+/// main · 16:58* (`Jg2cJ` in `Urfxj`).
+pub(super) fn phase(id: String, text: &str) -> Element {
+  let text = Text::new(text)
+    .id(format!("{id}-text"))
+    .variant(ConversationText::Divider.role())
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis)
+    .min_width(Dimension::Px(0.0))
+    .flex_shrink(1.0);
+  ruled(id, ExtraSpacing::Loose.role(), text.into())
 }
 
 /// "03 Implement".
@@ -247,7 +260,7 @@ pub(super) fn folded(ctx: &Ctx, timeline: &Timeline, key: &Arc<str>, steps: &[(A
     timeline.toggles.clone(),
     steps.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>(),
   );
-  let show: Box<dyn Fn() + Send + Sync> = Box::new(move || toggles.open_all(keys.clone()));
+  let show = Press::run(move || toggles.open_all(keys.clone()));
   event(
     format!("conversation-{key}"),
     Icon::ListCollapse,

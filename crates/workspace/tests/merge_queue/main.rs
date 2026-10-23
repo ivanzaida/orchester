@@ -7,6 +7,7 @@
 //! Deliver step keeps its runs out of the queue. The check is a command tool whose program the tests answer for
 //! (`harness`). `cargo test -p orchester-workspace --test merge_queue merge_queue`.
 
+mod conversation;
 mod decisions;
 mod harness;
 

@@ -51,6 +51,8 @@ pub enum QueueRefusal {
   Store(Message),
   /// What git or the run's worktree said.
   Resolve(Message),
+  /// *I've resolved it* found git's conflict markers left in these files of the run's worktree.
+  MarkersLeft(Vec<String>),
 }
 
 impl QueueRefusal {
@@ -61,7 +63,7 @@ impl QueueRefusal {
       Self::First => "already_first",
       Self::PersonOnly => "person_only",
       Self::Store(_) => "store",
-      Self::Resolve(_) => "not_resolved",
+      Self::Resolve(_) | Self::MarkersLeft(_) => "not_resolved",
     }
   }
 
@@ -72,6 +74,15 @@ impl QueueRefusal {
       Self::First => Message::new("mergeQueue.refused.first"),
       Self::PersonOnly => Message::new("mergeQueue.refused.personOnly"),
       Self::Store(message) | Self::Resolve(message) => message.clone(),
+      Self::MarkersLeft(files) => crate::tasks::resolve::markers_left(files),
+    }
+  }
+
+  /// The files *I've resolved it* found conflict markers left in, when that is why it did not go on.
+  pub fn markers_left(&self) -> Option<&[String]> {
+    match self {
+      Self::MarkersLeft(files) => Some(files),
+      _ => None,
     }
   }
 }

@@ -268,7 +268,10 @@ pub(super) fn review_head(ctx: &Ctx, (run, queue): (&RunView, &TaskDelivery), si
   let base = base(run);
   let pipeline = ctx.t_args(
     "delivery.queue.empty.pipeline",
-    [("name", run.pipeline.to_string()), ("version", run.version.to_string())],
+    [
+      ("name", run.pipeline.to_string()),
+      ("version", run.version.get().to_string()),
+    ],
   );
   let meta = ctx.t_args(
     "delivery.task.review.meta",

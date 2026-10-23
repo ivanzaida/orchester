@@ -936,9 +936,11 @@ the design doc's Delivery › Built for what differs.
   myself, resolved, requeue). The final merge compares the checked base again under the integration lease
   (`Delivering`); approval is person-only and void once the run works again.
 - **UI**: Merge queue screen and sidebar count; the pipeline editor's Deliver card, chip and inspector; the task
-  Summary's delivering / integrating / review / integrate failed / resolve myself / merged views and Run details'
-  Delivery rows; Needs you cards (Ready to merge, Conflicts need you, Delivery stopped, Delivery blocked); Recent
-  activity lines. QA seeds `delivery`, `delivery-blocked`, `delivery-empty`.
+  Summary's delivering / integrating / review (Changes, Commits, Checks) / integrate failed / resolve myself (with
+  its checks panel: checking, markers left) / merged views and Run details' Delivery rows; the Conversation's lines
+  of what the queue did (`tasks::timeline::delivery`, `Urfxj`); Needs you cards (Ready to merge, Conflicts need you,
+  Delivery stopped, Delivery blocked); Recent activity lines. QA seeds `delivery`, `delivery-blocked`,
+  `delivery-empty`.
 - **MCP**: `get_run`, `list_runs`, `get_daily_report` report delivery; `merge_run` refuses a run the queue delivers.
 - Tests: `cargo test -p orchester-workspace --test merge_queue merge_queue`, `--test needs_you`, `--test overview`;
   `cargo test -p orchester-app --test merge_queue merge_queue`, `--test screens`, `--test i18n`.

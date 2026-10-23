@@ -214,7 +214,7 @@ fn today_section(ctx: &mut Ctx, today: &[&QueueRow], rows: &Rows) -> Element {
     let nothing = Row::new()
       .id("merge-queue-today-nothing")
       .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Lg))
+      .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
       .child(
         Text::new(&ctx.t("delivery.queue.section.nothingToday"))
           .variant(ExtraTypography::Prose.role())
