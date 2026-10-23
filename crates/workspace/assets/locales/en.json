@@ -30,6 +30,19 @@
   "common": {
     "listSeparator": ", "
   },
+  "autoModeHold": {
+    "secrets": "Auto mode didn’t review this: it reads a credential location or store.",
+    "unreadable": "Auto mode didn’t review this: Orchester couldn’t read all of it, and the step’s network is off or the step only reads the repository.",
+    "destructive": "Auto mode didn’t review this: it rewrites or discards history, or deletes outside the worktree.",
+    "push": "Auto mode didn’t review this: it pushes something other than the run’s own branch to origin, or forces the push.",
+    "readOnlyStep": "Auto mode didn’t review this: the step only reads the repository, and this command may write.",
+    "networkOff": "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install.",
+    "outsideFolders": "Auto mode didn’t review this: it writes outside the worktree and the step’s writable folders.",
+    "permissionsUnknown": "Auto mode didn’t review this: the step’s permissions weren’t recorded, so nothing tells what is within them.",
+    "tooLong": "Auto mode didn’t review this: the request is longer than a review reads whole.",
+    "escalation": "Auto mode didn’t review this: Codex asks to run it outside its sandbox.",
+    "projectProgram": "Auto mode didn’t review this: it runs one of the project’s programs, outside every sandbox."
+  },
   "attachments": {
     "refused": {
       "empty": "{{name}} is empty, so it wasn't attached.",

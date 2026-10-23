@@ -512,6 +512,23 @@ anything not read to the end. What the step's permissions refuse never reaches a
 Answers read *auto-approved · <category>* (or the MCP tool). The per-category Allow / Ask me / Deny policy of
 "Command categories and approval policy" is not built, so no category can be set to Deny yet.
 
+**Auto mode in a read-only step** (ORC-80; `run::review::hold`). The hard rule *read-only step* holds a request
+for the person when a part of it may write; a part that writes nothing goes to the reviewer like any other
+(`CommandPart::writes_nothing`): a read, and a lookup over the network that keeps nothing (`cargo search`,
+`git ls-remote` with only its listing options spelled out in full, `git remote show`; git takes a shortening of an
+option's name, so `git ls-remote --upload=<command>` is unreadable). The network rule still holds such a lookup while the step's network is off,
+and a redirect into a file, an alias or a manifest elsewhere still hold. **A write to a tool's own cache outside
+the worktree counts as a write for the read-only rule** (the person's decision of 2026-10-23): a lookup or read
+that may refresh Cargo's registry index or downloads under the Cargo home, npm's or pip's cache, or bring
+`Cargo.lock` up to date holds in a read-only step: `cargo info`, `cargo metadata`, `cargo tree` and `cargo pkgid`
+unless run `--frozen` or `--offline --locked` (`cargo metadata --no-deps` resolves nothing), `npm view`, `npm
+outdated`, `npm audit`, `pip index versions` and `pip search` unless `--no-cache-dir`, `go list`, `brew search`, … .
+For the outside-folders rule it does not count: in a step that may write such a lookup goes to the reviewer, as a
+build that fills the same caches does. A held request says why in plain words, one per hard rule
+(`tasks::approvals::hold_cause`, *Auto mode didn’t review this: the step only reads the repository, and this
+command may write.*): on its approval card, in the task's conversation and in the Needs you panel, and as
+`hold_cause` beside `auto_mode` in `list_approvals` and `get_run`.
+
 **Waiting requests.** The dialog shows one request at a time, oldest first, with *1 of 3 waiting* and ‹ ›.
 *Decide later* (or Esc) closes it and answers nothing: the agent keeps waiting with its active time stopped, the
 request stays in *Needs you* (which counts each waiting request, the dialog open or not), on the task page (*Review

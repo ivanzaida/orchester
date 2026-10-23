@@ -4,6 +4,12 @@
 //! Read-only, and what looks packages up in a registry is Network. Any other subcommand is Unknown. A
 //! build, test or read must name only paths inside (`--target-dir`, `--manifest-path`, `-o`), else it
 //! is Unknown.
+//!
+//! A lookup or a read that keeps what it read in the tool's own cache outside the worktree (Cargo's registry index
+//! and downloads, npm's and pip's caches), or may bring a lock file up to date, writes all the same
+//! ([`Judged::updates_cache`], the person's decision of 2026-10-23): only `cargo search` asks the registry and keeps
+//! nothing, and Cargo resolves without writing only `--frozen` (or `--offline --locked`), `cargo metadata` not at all
+//! with `--no-deps`; pip keeps nothing with `--no-cache-dir`.
 
 use super::{
   build_output::BuildWords,
@@ -20,8 +26,13 @@ struct Manager {
   installs: &'static [&'static str],
   builds: &'static [&'static str],
   reads: &'static [&'static str],
+  /// Of `reads`, those that resolve the project's dependencies, which may refresh the registry's cache and the lock
+  /// file unless told not to ([`resolves_quietly`]).
+  resolves: &'static [&'static str],
   /// Subcommands that only read, from the package registry.
   looks_up: &'static [&'static str],
+  /// Of `looks_up`, those that keep nothing of what they read.
+  keeps_nothing: &'static [&'static str],
 }
 
 const MANAGERS: [Manager; 11] = [
@@ -32,8 +43,19 @@ const MANAGERS: [Manager; 11] = [
     builds: &[
       "build", "check", "test", "clippy", "fmt", "run", "doc", "bench", "clean", "b", "c", "t", "r", "nextest",
     ],
-    reads: &["metadata", "tree", "--version", "-V", "locate-project", "pkgid"],
-    looks_up: &["search"],
+    reads: &[
+      "metadata",
+      "tree",
+      "--version",
+      "-V",
+      "version",
+      "locate-project",
+      "pkgid",
+      "verify-project",
+    ],
+    resolves: &["metadata", "tree", "pkgid"],
+    looks_up: &["search", "info"],
+    keeps_nothing: &["search"],
   },
   Manager {
     programs: &["npm", "pnpm", "yarn", "bun"],
@@ -43,7 +65,9 @@ const MANAGERS: [Manager; 11] = [
     ],
     builds: &["run", "test", "start", "build", "lint", "t", "pack"],
     reads: &["ls", "list", "why", "--version", "-v"],
+    resolves: &[],
     looks_up: &["view", "outdated", "audit"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["pip", "pip3", "pipx", "uv", "poetry", "conda", "mamba"],
@@ -53,7 +77,9 @@ const MANAGERS: [Manager; 11] = [
     ],
     builds: &["build"],
     reads: &["list", "show", "freeze", "--version", "tree", "check", "info"],
-    looks_up: &["search"],
+    resolves: &[],
+    looks_up: &["search", "index"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["go"],
@@ -61,7 +87,9 @@ const MANAGERS: [Manager; 11] = [
     installs: &["get", "install", "mod"],
     builds: &["build", "test", "vet", "fmt", "run", "generate"],
     reads: &["version", "env", "doc"],
+    resolves: &[],
     looks_up: &["list"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["dotnet"],
@@ -69,7 +97,9 @@ const MANAGERS: [Manager; 11] = [
     installs: &["add", "tool", "restore", "new", "workload"],
     builds: &["build", "test", "run", "format", "publish", "pack", "clean"],
     reads: &["--version", "--info", "--list-sdks"],
+    resolves: &[],
     looks_up: &["list"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["gem", "bundle", "bundler", "composer"],
@@ -77,7 +107,9 @@ const MANAGERS: [Manager; 11] = [
     installs: &["install", "update", "add", "require", "exec"],
     builds: &["test"],
     reads: &["list", "show", "--version"],
+    resolves: &[],
     looks_up: &["outdated"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["brew", "apt", "apt-get", "yum", "dnf", "pacman", "apk", "port"],
@@ -95,7 +127,9 @@ const MANAGERS: [Manager; 11] = [
     ],
     builds: &[],
     reads: &["list", "info", "--version", "show", "policy"],
+    resolves: &[],
     looks_up: &["search"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["winget", "choco", "scoop"],
@@ -103,7 +137,9 @@ const MANAGERS: [Manager; 11] = [
     installs: &["install", "upgrade", "update", "add"],
     builds: &[],
     reads: &["list", "--version"],
+    resolves: &[],
     looks_up: &["search", "show"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["rustup"],
@@ -119,7 +155,9 @@ const MANAGERS: [Manager; 11] = [
     ],
     builds: &[],
     reads: &["show", "--version", "which"],
+    resolves: &[],
     looks_up: &[],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["deno"],
@@ -127,7 +165,9 @@ const MANAGERS: [Manager; 11] = [
     installs: &["install", "add", "cache", "upgrade", "run"],
     builds: &["test", "check", "fmt", "lint"],
     reads: &["--version"],
+    resolves: &[],
     looks_up: &["info"],
+    keeps_nothing: &[],
   },
   Manager {
     programs: &["nvm", "volta", "asdf", "mise", "fnm"],
@@ -135,7 +175,9 @@ const MANAGERS: [Manager; 11] = [
     installs: &["install", "use", "pin", "plugin"],
     builds: &[],
     reads: &["list", "ls", "current", "--version"],
+    resolves: &[],
     looks_up: &[],
+    keeps_nothing: &[],
   },
 ];
 
@@ -192,14 +234,30 @@ pub(super) fn judge(program: &str, args: &[String]) -> Option<Judged> {
     }
     if sub == "clean" { judged } else { judged.prefix_stays() }
   } else if manager.reads.contains(&sub) {
-    Judged::of(Kind::ReadOnly).inside_all(rest)
+    let judged = Judged::of(Kind::ReadOnly).inside_all(rest);
+    if manager.resolves.contains(&sub) && !resolves_quietly(sub, args) {
+      judged.updating_cache()
+    } else {
+      judged
+    }
   } else if manager.looks_up.contains(&sub) {
-    Judged::of(Kind::Network).inside_all(rest)
+    let judged = Judged::of(Kind::Network).inside_all(rest).looking_up();
+    let keeps_nothing = manager.keeps_nothing.contains(&sub)
+      || (matches!(program, "pip" | "pip3") && args.iter().any(|arg| arg == "--no-cache-dir"));
+    if keeps_nothing { judged } else { judged.updating_cache() }
   } else {
     // `python -m pip install` reaches pip through python, which is not read.
     Judged::unknown()
   };
   Some(judged.subcommand(at, sub.to_owned()))
+}
+
+/// Whether Cargo's `sub` with `args` resolves the dependencies without writing: from what it has already, keeping
+/// the lock file as it is (`--frozen`, or `--offline` with `--locked`), or, for `cargo metadata --no-deps`, not at
+/// all. Only Cargo's own options count, not what follows `--`.
+fn resolves_quietly(sub: &str, args: &[String]) -> bool {
+  let given = |option: &str| args.iter().take_while(|arg| *arg != "--").any(|arg| arg == option);
+  given("--frozen") || (given("--offline") && given("--locked")) || (sub == "metadata" && given("--no-deps"))
 }
 
 /// The first argument that is not an option or a toolchain (`cargo +nightly fmt`), or a version option

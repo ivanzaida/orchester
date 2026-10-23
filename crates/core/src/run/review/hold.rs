@@ -16,6 +16,15 @@
 //! `.cargo/config.toml` (`runner`, `rustc-wrapper`, `rustflags`) and `rust-toolchain.toml`; and that a project rule
 //! for `start_qa_app` lets agents run code they wrote outside every sandbox, pinned only by the script's blob.
 //!
+//! A command that writes nothing is no write in a read-only step either ([`CommandPart::writes_nothing`]): a read,
+//! and a lookup over the network that keeps nothing (`cargo search`, `git ls-remote`, `git remote show`). It goes to
+//! the reviewer; the network rule still holds it while the step's network is off, and a redirect into a file, an
+//! alias, or a manifest elsewhere still hold. A write to a tool's own cache outside the worktree counts as a write
+//! here (the person's decision of 2026-10-23): a lookup or read that may refresh Cargo's registry index or downloads,
+//! npm's or pip's cache, or bring `Cargo.lock` up to date (`cargo info`, `cargo tree` without `--frozen`, `npm
+//! view`, `pip index versions`) holds in a read-only step. For the outside-folders rule it does not count: in a step
+//! that may write, such a lookup goes to the reviewer, as a build that fills the same caches does.
+//!
 //! A part Orchester cannot read to the end (an unknown program or form, a script whose content it does
 //! not read) goes to the reviewer, which is told so ([`unread_parts`]), except in a step whose network is
 //! off or that only reads: Orchester cannot hold such a part to those limits, so the person decides.
@@ -116,9 +125,9 @@ pub fn review_hold(subject: &ApprovalSubject, rules: &HoldRules<'_>) -> Option<R
   outside_permissions(parts, permissions, rules.build_output)
 }
 
-/// The hard rule a part outside the step's permissions breaks: a write in a read-only step but a build's
-/// output in `ignored` ([`writes_build_output`]), the network or an install while it is off, a write outside the
-/// folders.
+/// The hard rule a part outside the step's permissions breaks: in a read-only step a part that may write, but
+/// a build's output in `ignored` ([`writes_build_output`]); the network or an install while it is off; a write
+/// outside the folders.
 fn outside_permissions(
   parts: &[CommandPart],
   permissions: &AgentPermissions,
@@ -127,7 +136,7 @@ fn outside_permissions(
   if permissions.repository() == RepositoryAccess::ReadOnly
     && parts
       .iter()
-      .any(|part| part.category() != CommandCategory::ReadOnly && !writes_build_output(part, ignored))
+      .any(|part| !part.writes_nothing() && !writes_build_output(part, ignored))
   {
     return Some(ReviewHold::ReadOnlyStep);
   }

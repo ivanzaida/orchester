@@ -91,8 +91,12 @@ pub async fn list_approvals(
     })
   })
   .await?;
-  let mut approvals =
-    read.items(|open, (shown, _)| shown.iter().map(|shown| approval(shown, open.project.id())).collect());
+  let mut approvals = read.items(|open, (shown, _)| {
+    shown
+      .iter()
+      .map(|shown| approval(shown, open.project.id(), translate))
+      .collect()
+  });
   oldest_first(&mut approvals, "waiting_since");
   let mut plans = read.items(|_, (_, plans)| plans.clone());
   oldest_first(&mut plans, "proposed_at");
@@ -157,9 +161,10 @@ const fn decision_name(decision: Decision) -> &'static str {
 }
 
 /// A waiting request of `project` as the approval card shows it: what asks, from which run, task, step and
-/// agent, since when, and what auto mode did with it, with the link to its card, on its task's Conversation.
-/// Recorded arguments have secret values removed already.
-pub fn approval(shown: &ShownApproval, project: ProjectId) -> Value {
+/// agent, since when, and what auto mode did with it and why it did not review it, in the app's words
+/// (`translate`), with the link to its card, on its task's Conversation. Recorded arguments have secret values
+/// removed already.
+pub fn approval(shown: &ShownApproval, project: ProjectId, translate: &Translate) -> Value {
   let request = &shown.approval;
   let (kind, arguments, reason) = if request.command {
     ("command", None, request.scope.as_deref())
@@ -183,6 +188,8 @@ pub fn approval(shown: &ShownApproval, project: ProjectId) -> Value {
     "waiting_since": wire::time(request.requested_at),
     // What auto mode did with it, and which model reviewed; absent when auto mode did not look at it.
     "auto_mode": shown.review.as_ref(),
+    // The hard rule that held it, as the card says it; absent unless a hard rule held it.
+    "hold_cause": shown.hold_cause().map(|cause| translate.text(&cause)),
     "link": shown.task.as_deref().and_then(|key| wire::task_link(project, key, TaskPage::Conversation)),
   })
 }

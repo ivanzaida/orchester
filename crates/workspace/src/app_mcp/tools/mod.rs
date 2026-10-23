@@ -425,7 +425,7 @@ async fn dispatch(
     "create_task" => task_write::create_task(services, parse(arguments)?).await,
     "update_task" => task_write::update_task(services, parse(arguments)?).await,
     "run_task" => run_task::run_task(services, parse(arguments)?).await,
-    "get_run" => runs::get_run(services, parse(arguments)?).await,
+    "get_run" => runs::get_run(services, parse(arguments)?, translate).await,
     "list_runs" => run_list::list_runs(services, parse(arguments)?, translate).await,
     "pause_run" => runs::control_run(services, parse(arguments)?, Control::Pause).await,
     "resume_run" => runs::control_run(services, parse(arguments)?, Control::Resume).await,

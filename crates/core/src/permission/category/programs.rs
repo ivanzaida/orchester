@@ -82,6 +82,12 @@ pub(super) struct Judged {
   pub(super) folder_code: bool,
   /// A Cargo build that writes only build output, with the words that tell where ([`super::build_output`]).
   pub(super) build_words: Option<BuildWords>,
+  /// A Network command that only asks: it writes no file, keeps nothing and changes nothing anywhere (`cargo
+  /// search`, `git ls-remote`), unless [`Self::updates_cache`] says it keeps what it read.
+  pub(super) looks_up: bool,
+  /// It may write a tool's own cache outside the worktree (Cargo's registry index, npm's or pip's cache), or a
+  /// lock file it resolves (`cargo tree` without `--frozen`).
+  pub(super) updates_cache: bool,
 }
 
 impl Judged {
@@ -109,6 +115,8 @@ impl Judged {
       repository: None,
       folder_code: false,
       build_words: None,
+      looks_up: false,
+      updates_cache: false,
     }
   }
 
@@ -174,6 +182,18 @@ impl Judged {
   /// A Read-only command of the known-safe tables.
   pub(super) const fn known_safe(mut self) -> Self {
     self.known_safe = true;
+    self
+  }
+
+  /// A Network command that only asks, as [`Self::looks_up`] says.
+  pub(super) const fn looking_up(mut self) -> Self {
+    self.looks_up = true;
+    self
+  }
+
+  /// A command that may write a tool's cache or a lock file, as [`Self::updates_cache`] says.
+  pub(super) const fn updating_cache(mut self) -> Self {
+    self.updates_cache = true;
     self
   }
 
