@@ -279,7 +279,9 @@ fn client_sets(s: &mut Skills, id: &str, value: &str) {
 }
 
 fn marked(s: &Skills, id: ResourceId) -> bool {
-  ProjectSkills::load_in(&s.repo).expect("read").by_automation(&s.entry(id))
+  ProjectSkills::load_in(&s.repo)
+    .expect("read")
+    .by_automation(&s.entry(id))
 }
 
 #[test]
