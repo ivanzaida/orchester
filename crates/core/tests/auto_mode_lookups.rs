@@ -116,6 +116,8 @@ fn lookups_that_write_nothing_go_to_the_reviewer_in_a_read_only_step() {
     "git diff",
     "git status",
     "git ls-remote origin",
+    "git ls-remote --heads --tags --refs origin",
+    "git ls-remote --sort=-version:refname --symref -q origin",
     "git remote show origin",
     "rustup show",
     "pip index versions lurq --no-cache-dir",
@@ -168,6 +170,11 @@ fn lookups_keep_the_writing_forms_and_the_other_hard_rules() {
     ("git fetch origin", ReviewHold::ReadOnlyStep),
     ("git remote update", ReviewHold::ReadOnlyStep),
     ("git ls-remote --upload-pack=x origin", ReviewHold::Unreadable),
+    // Git takes a shortening of an option's name: `--upload` is `--upload-pack`.
+    ("git ls-remote --upload=x .", ReviewHold::Unreadable),
+    ("git ls-remote --upload x .", ReviewHold::Unreadable),
+    ("git ls-remote --exe=x origin", ReviewHold::Unreadable),
+    ("git ls-remote --hea origin", ReviewHold::Unreadable),
     ("cargo search lurq; cat ~/.cargo/credentials.toml", ReviewHold::Secrets),
   ] {
     assert_eq!(fixture.held(command), Some(hold), "{command}");

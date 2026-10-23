@@ -173,8 +173,7 @@ fn judge_subcommand(sub: &str, with_sub: &[String]) -> Judged {
     ),
     "apply" | "am" if has_option(rest, &["--directory"]) => Judged::unknown(),
     "fetch" | "pull" => Judged::of(Kind::Network),
-    // It asks the remote and prints its answer; nothing is kept.
-    "ls-remote" => Judged::of(Kind::Network).looking_up(),
+    "ls-remote" => ls_remote(rest),
     "submodule" => submodule(rest),
     "lfs" => lfs(rest),
     "notes" => Judged::of(Kind::Worktree),
@@ -262,6 +261,35 @@ fn remote(rest: &[String]) -> Judged {
     Some("show") => Judged::of(Kind::Network).looking_up(),
     Some("update" | "prune") => Judged::of(Kind::Network),
     Some(_) => Judged::unknown(),
+  }
+}
+
+/// `git ls-remote` asks the remote and prints its answer, keeping nothing, when each option is one of
+/// these spelled out; any other option is Unknown, since git takes a shortening of an option's name
+/// (`--upload=<command>` is `--upload-pack`, which starts that command).
+fn ls_remote(rest: &[String]) -> Judged {
+  const PLAIN: [&str; 12] = [
+    "-h",
+    "--heads",
+    "-t",
+    "--tags",
+    "-b",
+    "--branches",
+    "--refs",
+    "-q",
+    "--quiet",
+    "--exit-code",
+    "--get-url",
+    "--symref",
+  ];
+  let plain = rest
+    .iter()
+    .filter(|arg| arg.starts_with('-'))
+    .all(|option| PLAIN.contains(&option.as_str()) || option.starts_with("--sort="));
+  if plain {
+    Judged::of(Kind::Network).looking_up()
+  } else {
+    Judged::unknown()
   }
 }
 

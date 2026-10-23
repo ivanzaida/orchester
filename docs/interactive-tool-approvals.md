@@ -515,7 +515,8 @@ Answers read *auto-approved · <category>* (or the MCP tool). The per-category A
 **Auto mode in a read-only step** (ORC-80; `run::review::hold`). The hard rule *read-only step* holds a request
 for the person when a part of it may write; a part that writes nothing goes to the reviewer like any other
 (`CommandPart::writes_nothing`): a read, and a lookup over the network that keeps nothing (`cargo search`,
-`git ls-remote`, `git remote show`). The network rule still holds such a lookup while the step's network is off,
+`git ls-remote` with only its listing options spelled out in full, `git remote show`; git takes a shortening of an
+option's name, so `git ls-remote --upload=<command>` is unreadable). The network rule still holds such a lookup while the step's network is off,
 and a redirect into a file, an alias or a manifest elsewhere still hold. **A write to a tool's own cache outside
 the worktree counts as a write for the read-only rule** (the person's decision of 2026-10-23): a lookup or read
 that may refresh Cargo's registry index or downloads under the Cargo home, npm's or pip's cache, or bring
