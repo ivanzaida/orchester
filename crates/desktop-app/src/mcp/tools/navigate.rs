@@ -16,16 +16,16 @@ use super::{ToolError, WindowLink, object, reply, route_json, string};
 use crate::{
   navigation::Navigation,
   routes::{
-    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, InstructionsView, MemoryTab,
-    NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route, Screen,
-    SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
+    AccountsView, ChangeSource, ChangedFile, ConnectionsTab, ConnectionsView, FilesView, ImportTab, InstructionsView,
+    MemoryTab, NewConnection, OrchesterView, OrchestratorChat, OverviewTab, ProjectPage, ProjectSettingsTab, Route,
+    Screen, SecretsView, SkillsFilter, TaskList, TaskListTab, TaskTab, TaskView,
   },
 };
 
 const DESCRIPTION: &str = "Take the active tab of the Orchester window to a route, as a new entry of its history \
   (the mouse's back button, or Alt+Left, Cmd+[ on macOS, returns). `route` is the screen's name: all_projects takes no \
   other argument; settings takes `tab` only; every other screen takes `project`, the project's id (a UUID, as app_state \
-  reports it). overview and memory also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
+  reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the search) and `highlight` (a task key, as \
   after Create); edit_task `key`; task `key`, `tab` and, on its changes tab, `file` with `from`; connections `tab` and \
   `selected` (the id of the connection its inspector shows); new_connection `kind`; edit_connection `connection` \
   (an MCP server's id); tools takes tool (a tool id, or new), and its editor tab; orchestrator takes `chat` (a \
@@ -51,13 +51,14 @@ fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
     "The screen's tab, the one it opens on when left out: settings automation, general, accounts, orchester, connect; \
-     overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}.",
+     overview {}; tasks {}; task {}; connections {}; pull_requests {}; memory {}; import_resources {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     ConnectionsTab::ALL.map(ConnectionsTab::name).join(", "),
     PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
     MemoryTab::ALL.map(MemoryTab::name).join(", "),
+    ImportTab::ALL.map(ImportTab::name).join(", "),
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
@@ -163,8 +164,16 @@ fn target(args: &Map<String, Value>) -> Result<Route, ToolError> {
     Screen::EditConnection => ProjectPage::EditConnection(connection(args, "connection")?),
     Screen::ProjectSettings => ProjectPage::Settings(ProjectSettingsTab::default()),
     Screen::Files => ProjectPage::Files(files_view(args)?),
+    Screen::ImportResources => return import_route(args),
   };
   Ok(Route::Project(project(args)?, page))
+}
+
+/// Import resources of `project` on the kind tab `tab` names, or All.
+fn import_route(args: &Map<String, Value>) -> Result<Route, ToolError> {
+  let names = ImportTab::ALL.map(ImportTab::name);
+  let tab = tab(args, ImportTab::from_name, &names)?;
+  Ok(Route::Project(project(args)?, ProjectPage::Import(tab)))
 }
 
 /// The parameters besides `route` that `screen` takes.
@@ -172,7 +181,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
   match screen {
     Screen::AllProjects | Screen::AddProject => &[],
     Screen::Settings => &["tab"],
-    Screen::Overview => &["project", "tab"],
+    Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "file", "from"],

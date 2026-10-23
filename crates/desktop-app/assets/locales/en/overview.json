@@ -2,7 +2,6 @@
   "overview": {
     "description": "What is moving in {{project}} and what needs you.",
     "importResources": "Import resources",
-    "importReason": "Import resources isn't built in this app yet.",
     "newTask": "New task",
     "unknown": "—",
     "separator": "·",

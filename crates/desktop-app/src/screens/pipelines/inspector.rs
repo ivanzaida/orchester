@@ -110,7 +110,8 @@ impl Component for Summary {
       description
     }
     .render(ctx);
-    let mut body = summary_metadata(ctx, &editing, name, description);
+    let imported = imported_sections(ctx, &editing);
+    let mut body = summary_metadata(ctx, &editing, (name, description), imported);
     let history = editing.panels.clone();
     if editing.opened.latest.is_some() {
       body = body.child(
@@ -319,7 +320,25 @@ impl StepInspector {
       .into()
   }
 }
-fn summary_metadata(ctx: &Ctx, editing: &super::state::Editing, name: Element, description: Element) -> Column {
+/// What an imported pipeline's summary says of its import (`diBqj`, `TyfNt`, `U5Vgf` in `z3vhzo`); nothing for a
+/// pipeline made here.
+fn imported_sections(ctx: &mut Ctx, editing: &super::state::Editing) -> Vec<Element> {
+  let (Some(imported), Some(project)) = (
+    editing.opened.imported.clone(),
+    ctx
+      .use_context::<super::sources::EditorProject>()
+      .map(|project| project.0),
+  ) else {
+    return Vec::new();
+  };
+  crate::screens::import::imported::sections(ctx, (project.project.id(), project.project.name().as_str()), &imported)
+}
+fn summary_metadata(
+  ctx: &Ctx,
+  editing: &super::state::Editing,
+  (name, description): (Element, Element),
+  imported: Vec<Element>,
+) -> Column {
   let shown = editing.shown();
   let published = super::summary::published(ctx, editing);
   let draft = super::summary::draft(ctx, editing);
@@ -345,6 +364,7 @@ fn summary_metadata(ctx: &Ctx, editing: &super::state::Editing, name: Element, d
       &ctx.t("pipelines.description"),
       description,
     ))
+    .with_children(imported)
     .child(parts::section(ctx, "pipelines.runsTitle"))
     .child(property(
       "pipeline-starts",

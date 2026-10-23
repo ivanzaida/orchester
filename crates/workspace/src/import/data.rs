@@ -62,13 +62,61 @@ pub fn import_into(target: &Path, batch: &ImportBatch) -> Result<Vec<Resource>, 
 
 /// Why the project called `source` could not be read, or this one.
 pub fn load_error(error: &LoadError, source: &str) -> Message {
+  match error {
+    LoadError::Source(error) => source_error(error, source),
+    LoadError::Target(error) => messages::store_error(error),
+  }
+}
+
+fn source_error(error: &StoreError, source: &str) -> Message {
   let named = |key| Message::new(key).with("project", source.to_owned());
   match error {
-    LoadError::Source(StoreError::NotInitialized(_)) => named("projectImport.errors.sourceMissing"),
-    LoadError::Source(StoreError::SchemaTooOld { .. }) => named("projectImport.errors.sourceOutdated"),
-    LoadError::Source(StoreError::SchemaTooNew { .. }) => named("projectImport.errors.sourceNewer"),
-    LoadError::Source(_) => named("projectImport.errors.sourceUnreadable"),
-    LoadError::Target(error) => messages::store_error(error),
+    StoreError::NotInitialized(_) => named("projectImport.errors.sourceMissing"),
+    StoreError::SchemaTooOld { .. } => named("projectImport.errors.sourceOutdated"),
+    StoreError::SchemaTooNew { .. } => named("projectImport.errors.sourceNewer"),
+    _ => named("projectImport.errors.sourceUnreadable"),
+  }
+}
+
+/// What a page says when the project called `source`, or this one, could not be read: what happened, and what
+/// can be done.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LoadNotice {
+  pub title: Message,
+  pub body: Message,
+  /// The file system refused reading the folder, rather than its data being unreadable.
+  pub refused: bool,
+}
+
+pub fn load_notice(error: &LoadError, source: &str) -> LoadNotice {
+  match error {
+    LoadError::Source(error) => match refused_folder(error) {
+      Some(folder) => LoadNotice {
+        title: Message::new("projectImport.errors.sourceRefused").with("project", source.to_owned()),
+        body: Message::new("projectImport.errors.sourceRefusedDetail").with("folder", folder),
+        refused: true,
+      },
+      None => LoadNotice {
+        title: source_error(error, source),
+        body: Message::new("projectImport.errors.chooseAnother").with("project", source.to_owned()),
+        refused: false,
+      },
+    },
+    LoadError::Target(error) => LoadNotice {
+      title: Message::new("projectImport.errors.targetUnreadable"),
+      body: messages::store_error(error),
+      refused: refused_folder(error).is_some(),
+    },
+  }
+}
+
+/// The folder whose access the file system refused, if that is why `error` happened.
+fn refused_folder(error: &StoreError) -> Option<String> {
+  match error {
+    StoreError::Io { path, source } if source.kind() == std::io::ErrorKind::PermissionDenied => {
+      Some(path.display().to_string())
+    }
+    _ => None,
   }
 }
 
@@ -80,5 +128,29 @@ pub fn import_error(error: &StoreError) -> Message {
     | StoreError::SecretNotFound(_)
     | StoreError::DuplicateSlug { .. } => Message::new("projectImport.errors.targetChanged"),
     other => messages::store_error(other),
+  }
+}
+
+/// Why writing the copies failed, as the page tells it apart. Nothing was written, and the choices are kept.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImportFailure {
+  /// This project changed while the person chose: something the plan uses is gone, or a copy's slug was taken.
+  Changed,
+  /// The file system refused writing to this project's folder.
+  Refused { folder: String },
+  /// Anything else, with why; the log has the details.
+  Failed(Message),
+}
+
+pub fn import_failure(error: &StoreError) -> ImportFailure {
+  if let Some(folder) = refused_folder(error) {
+    return ImportFailure::Refused { folder };
+  }
+  match error {
+    StoreError::ResourceNotFound(_)
+    | StoreError::ConnectionNotFound(_)
+    | StoreError::SecretNotFound(_)
+    | StoreError::DuplicateSlug { .. } => ImportFailure::Changed,
+    other => ImportFailure::Failed(messages::store_error(other)),
   }
 }

@@ -16,6 +16,8 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use crate::import::imported::{Imported, imported};
+
 /// A published agent profile a step can run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfileChoice {
@@ -186,6 +188,8 @@ pub struct OpenedPipeline {
   /// Tasks that use the pipeline.
   pub used_by: usize,
   pub assignables: Arc<Assignables>,
+  /// The import that created the pipeline; `None` when it was not imported.
+  pub imported: Option<Arc<Imported>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -224,6 +228,7 @@ impl OpenedPipeline {
       latest,
       used_by: tasks_using(db, id)?,
       assignables: Arc::new(Assignables::load(db)?),
+      imported: imported(db, id)?.map(Arc::new),
     })
   }
 

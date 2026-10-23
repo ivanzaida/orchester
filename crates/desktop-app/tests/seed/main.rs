@@ -151,10 +151,11 @@ fn seed_every_scenario_builds_a_repository_and_registers_kontur() {
       .every_project()
       .expect("projects");
     // `conversation`, and `long-chats` on it, register Atlas too, opened before Kontur, for its links into another
-    // project.
+    // project; `import` registers Personal website, to import from.
     let names: Vec<&str> = projects.iter().map(|project| project.name.as_str()).collect();
     let expected: &[&str] = match scenario.name() {
       "conversation" | "long-chats" => &["Kontur", "Atlas"],
+      "import" => &["Kontur", "Personal website"],
       _ => &["Kontur"],
     };
     assert_eq!(names, expected, "{}", scenario.name());
@@ -203,7 +204,8 @@ fn seed_names_every_scenario_once() {
       "sources",
       "usage",
       "usage-empty",
-      "usage-bare"
+      "usage-bare",
+      "import"
     ]
   );
   for name in names {

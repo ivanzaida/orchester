@@ -93,6 +93,7 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   };
   match page {
     ProjectPage::Overview(tab) => insert("tab", tab.name()),
+    ProjectPage::Import(tab) => insert("tab", tab.name()),
     ProjectPage::Orchestrator(OrchestratorChat::New) => insert("chat", "new"),
     ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)) => insert("chat", &chat.to_string()),
     ProjectPage::Tasks(list) => {

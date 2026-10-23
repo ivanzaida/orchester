@@ -40,6 +40,8 @@ macro_rules! markers {
     impl $inspect for crate::files::VersionChoice {}
     impl $inspect for crate::files::Versions {}
     impl $inspect for crate::import::data::Catalogs {}
+    impl $inspect for crate::import::data::ImportFailure {}
+    impl $inspect for crate::import::data::LoadNotice {}
     impl $inspect for crate::import::data::Sources {}
     impl $inspect for crate::instructions::data::NewInstruction {}
     impl $inspect for crate::instructions::data::ProjectInstructions {}

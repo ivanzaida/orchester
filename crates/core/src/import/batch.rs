@@ -39,6 +39,8 @@ pub struct Provenance {
   pub project: ProjectId,
   pub project_name: Name,
   pub resource: ResourceId,
+  /// The source resource's name, which a renamed copy does not have.
+  pub resource_name: Name,
   /// The published version copied; `None` for a draft.
   pub version: Option<VersionNumber>,
 }
@@ -65,12 +67,24 @@ impl CopiedResource {
   }
 }
 
+/// A source resource, connection, MCP server or secret the import did not copy: one of the target's is used in
+/// its place, or it is left unresolved and the copies keep naming it. Recorded for display only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Resolved {
+  pub source: Entity,
+  /// Its name in the source.
+  pub source_name: String,
+  /// The target's own used in its place; `None` when it is left unresolved.
+  pub target: Option<Entity>,
+}
+
 /// Everything one import creates in the target, written at once.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImportBatch {
   key: IdempotencyKey,
   copies: Vec<CopiedResource>,
   relies_on: Vec<Entity>,
+  resolved: Vec<Resolved>,
 }
 
 impl ImportBatch {
@@ -88,6 +102,11 @@ impl ImportBatch {
   /// when the batch is written.
   pub fn relies_on(&self) -> &[Entity] {
     &self.relies_on
+  }
+
+  /// What the import used of the target's instead of copying it, and what it left unresolved, in plan order.
+  pub fn resolved(&self) -> &[Resolved] {
+    &self.resolved
   }
 }
 
@@ -140,7 +159,28 @@ impl Plan {
         _ => None,
       })
       .collect();
-    Ok(ImportBatch { key, copies, relies_on })
+    let resolved = self
+      .items()
+      .iter()
+      .filter_map(|item| {
+        let target = match item.resolution() {
+          Resolution::Use(target) => Some(*target),
+          Resolution::Unresolved => None,
+          Resolution::Copy { .. } | Resolution::Rename(_) | Resolution::LeftOut => return None,
+        };
+        Some(Resolved {
+          source: item.source(),
+          source_name: source.name(item.source()).unwrap_or_default().to_owned(),
+          target,
+        })
+      })
+      .collect();
+    Ok(ImportBatch {
+      key,
+      copies,
+      relies_on,
+      resolved,
+    })
   }
 
   fn remap(&self, source: &Catalog, named: &[Named<'_>]) -> Remap {
@@ -167,10 +207,8 @@ impl Plan {
 }
 
 fn copy(source: &Catalog, remap: &Remap, named: &Named<'_>, now: Timestamp) -> Result<CopiedResource, ImportError> {
-  let content = source
-    .resource(named.source)
-    .and_then(|entry| entry.content(named.pick))
-    .ok_or(ImportError::NotReady)?;
+  let entry = source.resource(named.source).ok_or(ImportError::NotReady)?;
+  let content = entry.content(named.pick).ok_or(ImportError::NotReady)?;
   let kind = content.kind();
   let content = content
     .with_value(remap.rewrite(content.to_value()))
@@ -183,6 +221,7 @@ fn copy(source: &Catalog, remap: &Remap, named: &Named<'_>, now: Timestamp) -> R
     project: source.project().id(),
     project_name: source.project().name().clone(),
     resource: named.source,
+    resource_name: entry.resource().name().clone(),
     version: match named.pick {
       Pick::Published(number) => Some(number),
       Pick::Draft => None,

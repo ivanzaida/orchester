@@ -13,9 +13,9 @@ use orchester_workspace::{
 };
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, InstructionsView, JoinTarget, MODULES, MemoryTab, NEW,
-  NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel, ProjectSettingsTab,
-  RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
+  MemoryTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelinePanel,
+  ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   project_screen_path,
   query::{Params, with_query},
@@ -99,6 +99,8 @@ pub enum ProjectPage {
   Join(JoinTarget),
   /// The code viewer: a file, its version and lines.
   Files(FilesView),
+  /// Import resources on its kind tab.
+  Import(ImportTab),
 }
 
 impl ProjectPage {
@@ -152,6 +154,7 @@ impl ProjectPage {
       Screen::NewConnection => Self::NewConnection(NewConnection::default()),
       Screen::ProjectSettings => Self::Settings(ProjectSettingsTab::default()),
       Screen::Files => Self::Files(FilesView::default()),
+      Screen::ImportResources => Self::Import(ImportTab::default()),
     })
   }
 
@@ -182,6 +185,7 @@ impl ProjectPage {
       Self::EditConnection(_) => Screen::EditConnection,
       Self::Settings(_) | Self::MakeLocal | Self::Join(_) => Screen::ProjectSettings,
       Self::Files(_) => Screen::Files,
+      Self::Import(_) => Screen::ImportResources,
     }
   }
 
@@ -242,6 +246,7 @@ impl ProjectPage {
       Self::NewConnection(kind) => kind.path(format!("{connections}/{NEW}")),
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
+      Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
       Self::MakeLocal => with_query(
         segment(Screen::ProjectSettings),
         &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
@@ -316,6 +321,7 @@ impl ProjectPage {
       }
       ["instructions"] => InstructionsView::take(params).map(Self::Instructions),
       ["secrets"] => SecretsView::take(params).map(Self::Secrets),
+      [IMPORT] => ImportTab::take(params).map(Self::Import),
       ["memory"] => MemoryTab::take(params).map(Self::Memory),
       [SETTINGS] => settings(params),
       [PULL_REQUESTS] => Ok(Self::PullRequests(

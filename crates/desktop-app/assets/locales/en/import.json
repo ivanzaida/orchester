@@ -1,0 +1,311 @@
+{
+  "import": {
+    "title": "Import resources",
+    "explanation": "Copy pipelines, agent profiles, instructions and tools from another project into {{project}}. Each copy is an independent local draft that records where it came from: nothing is published or run, and later edits in the source never reach it.",
+    "back": "Back",
+    "steps": {
+      "select": "Select resources",
+      "resolve": "Resolve dependencies",
+      "create": "Create drafts"
+    },
+    "source": "Source project",
+    "noSources": "No other projects",
+    "destination": "Destination",
+    "destinationValue": "{{project}} · independent project copies",
+    "search": "Search resources…",
+    "clearSearch": "Clear search",
+    "tabs": {
+      "all": "All",
+      "pipelines": "Pipelines",
+      "agents": "Agents",
+      "instructions": "Instructions",
+      "tools": "Tools",
+      "secrets": "Secrets"
+    },
+    "secretsReason": "Secrets are not imported: a secret's value stays in its own project.",
+    "columns": {
+      "resource": "RESOURCE",
+      "version": "VERSION",
+      "dependsOn": "DEPENDS ON",
+      "source": "SOURCE / VERSION",
+      "target": "TARGET IN {{project}}",
+      "resolution": "RESOLUTION"
+    },
+    "pick": {
+      "published": "Published v{{version}}",
+      "draft": "Draft"
+    },
+    "version": {
+      "published": "v{{version}}",
+      "draft": "draft"
+    },
+    "kind": {
+      "pipeline": "Pipeline",
+      "agentProfile": "Agent profile",
+      "instruction": "Instruction",
+      "httpTool": "HTTP tool",
+      "commandTool": "Command tool",
+      "databaseTool": "Database tool",
+      "connection": "Connection",
+      "mcpServer": "MCP server",
+      "secret": "Secret"
+    },
+    "program": {
+      "codex": "Codex CLI",
+      "claude": "Claude Code CLI",
+      "anthropicApi": "Anthropic API",
+      "openaiApi": "OpenAI API",
+      "github": "GitHub"
+    },
+    "reach": {
+      "local": "Local",
+      "remote": "Remote"
+    },
+    "environment": {
+      "development": "Development",
+      "staging": "Staging",
+      "production": "Production"
+    },
+    "parts": {
+      "two": "{{first}} · {{second}}",
+      "three": "{{first}} · {{second}} · {{third}}"
+    },
+    "stepCount": {
+      "one": "1 step",
+      "other": "{{count}} steps"
+    },
+    "dependencyCount": {
+      "none": "no dependencies",
+      "one": "1 dependency",
+      "other": "{{count}} dependencies"
+    },
+    "usedBy": {
+      "none": "Not used yet",
+      "one": "Used by {{name}}",
+      "other": "Used by {{count}} resources"
+    },
+    "scope": {
+      "project": "Project rule",
+      "role": "For the {{role}} role",
+      "pipeline": "For {{pipeline}}"
+    },
+    "includedWith": "Included with {{name}}",
+    "dependsOn": {
+      "none": "None",
+      "more": "{{names}} +{{count}}"
+    },
+    "dependencyNote": "Selecting a pipeline includes its dependencies for review in the next step.",
+    "selected": "{{count}} selected",
+    "toResolve": {
+      "none": "nothing to resolve",
+      "one": "1 dependency to resolve",
+      "other": "{{count}} dependencies to resolve"
+    },
+    "nothingSelected": "Nothing selected",
+    "blocked": {
+      "noSources": "There is no other project to import from.",
+      "noSource": "Choose a project to import from.",
+      "selectOne": "Select a resource to continue.",
+      "rename": "Rename {{name}} to continue.",
+      "name": "Name the copy of {{name}} to continue.",
+      "chooseAgain": "Choose again for {{name}} to continue."
+    },
+    "cancel": "Cancel",
+    "resolve": "Resolve dependencies",
+    "continue": "Continue",
+    "previous": "Back",
+    "import": "Import resources",
+    "importing": "Importing…",
+    "tryAgain": "Try again",
+    "checkMappings": "Check the mappings",
+    "empty": {
+      "noSourcesTitle": "No other projects",
+      "noSourcesText": "Orchester knows no other project yet. Add one to import its resources here.",
+      "openAllProjects": "Open All projects",
+      "listing": "Reading the projects…",
+      "readingTitle": "Reading {{project}}…",
+      "readingText": "Orchester reads its pipelines, agent profiles, instructions and tools. Nothing in {{project}} changes.",
+      "nothingTitle": "Nothing to import",
+      "nothingText": "{{project}} has no pipelines, agent profiles, instructions or tools yet.",
+      "kindTitle": "Nothing of this kind",
+      "kindText": "{{project}} has none of these yet. Pick another kind.",
+      "noMatchTitle": "No resources match.",
+      "noMatchText": "Nothing in {{project}} is called {{search}}. Clear the search or pick another kind.",
+      "secretsTitle": "Secrets are not imported yet",
+      "secretsText": "A secret's value stays in its own project. When you import a tool, its secret is mapped to one of {{project}}'s in Resolve dependencies, or left unresolved.",
+      "showAll": "Show all resources"
+    },
+    "context": {
+      "one": "{{source}} → {{target}} · {{name}} {{version}}",
+      "other": "{{source}} → {{target}} · {{count}} resources"
+    },
+    "groups": {
+      "selected": "SELECTED · {{count}}",
+      "dependencies": "DEPENDENCIES · {{count}}"
+    },
+    "offer": {
+      "copy": "New copy · {{name}}",
+      "rename": "Rename copy",
+      "usePublished": "Use {{name}} · published v{{version}}",
+      "useDraft": "Use {{name}} · draft only",
+      "useConnection": "Use {{name}}",
+      "useSecret": "Use {{name}} · {{environment}}",
+      "unresolved": "Leave unresolved",
+      "leaveOut": "Leave out"
+    },
+    "offerDetail": {
+      "targetHas": "{{project}} already has {{name}}",
+      "nameBeside": "Name the copy in the field beside",
+      "missing": "Copies show it as missing",
+      "notImported": "Not imported"
+    },
+    "planned": {
+      "importSecret": "Import as new secret",
+      "importSecretReason": "A secret's value stays in its own project · not available yet",
+      "supplyValue": "Supply a new value",
+      "supplyValueReason": "Enter a value for {{project}}, masked · not available yet",
+      "authorize": "Authorize in {{project}}",
+      "authorizeReason": "Importing never grants access; add the server in Connections · not available yet"
+    },
+    "choice": "Resolution of {{name}}",
+    "renameName": "Name of the copy of {{name}}",
+    "renamePlaceholder": "Name of the copy",
+    "status": {
+      "ready": "Ready",
+      "nameResolved": "Name resolved",
+      "nameTaken": "Name taken",
+      "nameNeeded": "Name needed",
+      "nameTooLong": "Name too long",
+      "reused": "Reuse local",
+      "mapped": "Mapped",
+      "chooseAgain": "Choose again",
+      "unresolved": "Unresolved",
+      "leftOut": "Left out"
+    },
+    "statusDetail": {
+      "newPipeline": "New local pipeline",
+      "newAgentProfile": "New local agent profile",
+      "newInstruction": "New local instruction",
+      "newTool": "New local tool",
+      "alreadyExists": "{{name}} already exists",
+      "renamed": "Copy of {{name}} under a new name",
+      "targetHas": "{{project}} already has {{name}}",
+      "anotherCopy": "Another copy in this import is called {{name}}",
+      "enterName": "Enter a name for the copy",
+      "tooLong": "Use at most {{max}} characters",
+      "inTarget": "{{name}} in {{project}}",
+      "gone": "{{project}} no longer has it",
+      "missing": "Copies show it as missing",
+      "notImported": "Not imported"
+    },
+    "accessNote": "A connection or secret is never copied, so access does not move between projects: map it to one of {{project}}'s, or leave it unresolved and the copies show it as missing. No credential value is shown or copied.",
+    "totals": {
+      "copies": {
+        "one": "1 new copy",
+        "other": "{{count}} new copies"
+      },
+      "reused": {
+        "one": "1 local resource reused",
+        "other": "{{count}} local resources reused"
+      },
+      "unresolved": {
+        "one": "1 left unresolved",
+        "other": "{{count}} left unresolved"
+      }
+    },
+    "readiness": {
+      "ready": "Creates local drafts",
+      "readyUnresolved": "Creates local drafts · unresolved connections, MCP servers and secrets show as missing"
+    },
+    "ready": {
+      "title": "Ready to create local drafts",
+      "detail": "{{context}}. Nothing runs and nothing is published: each copy starts as a draft you review and publish yourself.",
+      "creates": {
+        "one": "CREATES · 1 LOCAL DRAFT",
+        "other": "CREATES · {{count}} LOCAL DRAFTS"
+      },
+      "reuses": {
+        "one": "REUSES · 1 LOCAL RESOURCE",
+        "other": "REUSES · {{count}} LOCAL RESOURCES"
+      },
+      "unresolved": "LEFT UNRESOLVED · {{count}}",
+      "from": "from {{project}} · {{name}} {{version}}",
+      "fromRenamed": "from {{project}} · {{name}} {{version}} · renamed",
+      "insteadOf": "instead of {{name}} {{version}} from {{project}}",
+      "insteadOfEntity": "instead of {{name}} from {{project}}",
+      "draftKind": {
+        "pipeline": "Draft pipeline v1",
+        "agentProfile": "Draft agent profile v1",
+        "instruction": "Draft instruction v1",
+        "httpTool": "Draft HTTP tool v1",
+        "commandTool": "Draft command tool v1",
+        "databaseTool": "Draft database tool v1"
+      },
+      "inTarget": {
+        "published": "Published v{{version}} in {{project}}",
+        "draft": "Draft in {{project}}",
+        "own": "{{project}}'s own"
+      },
+      "missing": {
+        "secretOne": "{{users}} shows the secret as missing until it selects one of {{project}}'s.",
+        "secretOther": "{{users}} show the secret as missing until they select one of {{project}}'s.",
+        "mcpServer": "shows as missing until one of {{project}}'s MCP servers is chosen.",
+        "connection": "shows as missing until one of {{project}}'s connections is chosen."
+      }
+    },
+    "policy": {
+      "title": "Target access policy",
+      "detail": "Copied tools keep access only for pipelines copied with them. Every other caller is denied.",
+      "steps": "STEPS OF {{pipeline}}",
+      "step": "{{number}} {{name}}",
+      "allowed": "Allowed",
+      "others": "Every other caller",
+      "othersScope": "any other pipeline or step",
+      "denied": "Denied",
+      "notApplied": "Access rules · not applied yet: environment and approval for each deployment are planned."
+    },
+    "authorized": {
+      "title": "Authorized in {{project}}",
+      "meta": "Nothing",
+      "detail": "Importing never grants access. Copies use {{project}}'s own connections and secrets; what is left unresolved stays missing until you choose one in {{project}}."
+    },
+    "provenance": "Each copy records its source project, resource and version. Later edits in {{project}} never reach it.",
+    "result": {
+      "title": "Imported from {{project}}",
+      "created": {
+        "one": "1 draft created",
+        "other": "{{count}} drafts created"
+      },
+      "summary": "{{totals}}. Nothing is published and nothing runs until you review and publish.",
+      "openTools": "Open Tools",
+      "imported": "Imported",
+      "today": "Today {{time}}",
+      "day": "{{month}} {{day}}, {{time}}",
+      "from": "From",
+      "sourceVersion": "Source version",
+      "sourcePublished": "{{name}} v{{version}}",
+      "sourceDraft": "{{name}} · draft",
+      "independent": "An independent copy: later edits in {{project}} never reach it.",
+      "withIt": "Imported with it",
+      "link": {
+        "draft": "{{name}} · Draft v1",
+        "draftRenamed": "{{name}} · Draft v1 · renamed",
+        "published": "{{name}} v{{version}}",
+        "publishedRenamed": "{{name}} v{{version}} · renamed",
+        "reused": "{{name}} v{{version}} · reused",
+        "reusedDraft": "{{name}} · draft · reused"
+      },
+      "missing": "Missing in {{project}}",
+      "missingNote": "The copies show them as missing until you choose {{project}}'s own."
+    },
+    "failed": {
+      "title": "Could not import from {{project}}",
+      "detail": "The drafts could not be created; nothing was imported. Your choices are kept: Try again repeats this import and never creates a copy twice.",
+      "changedTitle": "This project changed while you chose",
+      "changedDetail": "Check the mappings, then import again. A row whose choice is gone asks you to choose again.",
+      "refusedTitle": "Orchester may not write to {{project}}",
+      "refusedDetail": "Access to {{folder}} was refused; nothing was imported. Your choices are kept. Check the folder's permissions, then try again.",
+      "invalidCopy": "A copy could not be prepared. The log has the details."
+    }
+  }
+}
