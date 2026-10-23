@@ -161,6 +161,7 @@ fn left_words(ctx: &Ctx, why: &MergeLeft) -> Arc<str> {
     ),
     MergeLeft::Held => ctx.t("orchestrator.end.mergeLeft.held"),
     MergeLeft::OptedOut => ctx.t("orchestrator.end.mergeLeft.optedOut"),
+    MergeLeft::DeliveredByQueue => ctx.t("orchestrator.end.mergeLeft.deliveredByQueue"),
   }
 }
 

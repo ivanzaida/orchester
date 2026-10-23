@@ -53,24 +53,37 @@ fn chip(key: &str, (number, name): (usize, &str), state: ProgressState, focused:
   } else {
     (PaletteColor::Border, PaletteColor::TextSecondary)
   };
+  stage_chip(
+    &format!("task-stage-{key}"),
+    (Some(&format!("{number:02}")), name),
+    ((glyph, color), name_color, stroke),
+  )
+  .describe("focused", if focused { "true" } else { "false" })
+  .into()
+}
+
+/// A chip: its glyph in its color, its number when it has one, and its name, in a pill of `stroke`.
+pub fn stage_chip(
+  id: &str,
+  (number, name): (Option<&str>, &str),
+  ((glyph, color), name_color, stroke): ((Icon, PaletteColor), PaletteColor, PaletteColor),
+) -> Row {
   Row::new()
-    .id(format!("task-stage-{key}"))
+    .id(id.to_owned())
     .height(Dimension::Px(CHIP_HEIGHT))
     .padding(Padding::horizontal(ExtraSpacing::Inline.role()))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(ExtraRadius::Full.role())
-    .describe("focused", if focused { "true" } else { "false" })
     .child(icon(glyph, IconSize::Sm, color))
-    .child(Text::new(&format!("{number:02}")).variant(ExtraTypography::MonoNote.role()))
+    .with_children(number.map(|number| Text::new(number).variant(ExtraTypography::MonoNote.role())))
     .child(
       Text::new(name)
         .variant(ExtraTypography::Note.role())
         .color(name_color)
         .nowrap(),
     )
-    .into()
 }
 
 /// The icon of a step in `state` and its color; the step the decision is about waits for the person.

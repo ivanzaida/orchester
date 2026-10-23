@@ -84,20 +84,68 @@ pub fn read(ctx: &mut Ctx, task: &TaskContext) -> Option<Result<Checkpointed, Me
   }
 }
 
-pub fn columns(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpointed, Message>>) -> Element {
+/// *What changed* and *Verification* side by side; `delivered` are the rows the run's delivery adds under its
+/// steps' checks, `head` the figure at *Verification*'s end in place of the commit the run's work ended at.
+pub fn columns(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  read: Option<&Result<Checkpointed, Message>>,
+  (delivered, head): (Vec<Element>, Option<Arc<str>>),
+) -> Element {
+  laid_out(
+    ctx,
+    task,
+    (read, None),
+    (delivered, head),
+    ["decisions.ready.whatChanged", "decisions.ready.verification"],
+  )
+}
+
+/// *Changes* with `commits` under it, beside *Checks*, as the review before a queued run merges lays them out
+/// (`Columns` `tWblU` in `wN5Bz`).
+pub fn review_columns(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  (read, commits): (Option<&Result<Checkpointed, Message>>, Element),
+  (delivered, head): (Vec<Element>, Option<Arc<str>>),
+) -> Element {
+  laid_out(
+    ctx,
+    task,
+    (read, Some(commits)),
+    (delivered, head),
+    ["delivery.task.review.changes", "delivery.task.review.checks"],
+  )
+}
+
+/// The two columns, titled `titles`, with `under` below the changed files.
+fn laid_out(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  (read, under): (Option<&Result<Checkpointed, Message>>, Option<Element>),
+  (delivered, head): (Vec<Element>, Option<Arc<str>>),
+  [changed_title, verified_title]: [&str; 2],
+) -> Element {
   let run = task.detail.run.as_ref();
+  let verified = run.map(|run| verification(ctx, run, (delivered, head), verified_title));
+  let left = Column::new()
+    .flex(1.0)
+    .spacing(DecisionSpacing::Columns.role())
+    .child(what_changed(ctx, task, read, changed_title))
+    .with_children(under);
   Row::new()
     .id("task-ready-columns")
     .width(Dimension::Pct(100.0))
     .spacing(DecisionSpacing::Columns.role())
     .align_items(Alignment::Start)
-    .child(Column::new().flex(1.0).child(what_changed(ctx, task, read)))
-    .with_children(run.map(|run| Column::new().flex(1.0).child(verification(ctx, run))))
+    .child(left)
+    .with_children(verified.map(|verified| Column::new().flex(1.0).child(verified)))
     .into()
 }
 
-fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpointed, Message>>) -> Element {
-  let size = match read {
+/// "4 files · +120 / −18" of what was read, once it was.
+pub(in super::super) fn size(ctx: &Ctx, read: Option<&Result<Checkpointed, Message>>) -> Option<Arc<str>> {
+  match read {
     Some(Ok(Checkpointed::Read { changes, .. })) => Some(size_line(
       ctx,
       changes.diff.files().len(),
@@ -109,7 +157,16 @@ fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpoi
       (size.additions, size.deletions),
     )),
     _ => None,
-  };
+  }
+}
+
+fn what_changed(
+  ctx: &mut Ctx,
+  task: &TaskContext,
+  read: Option<&Result<Checkpointed, Message>>,
+  title: &str,
+) -> Element {
+  let size = size(ctx, read);
   let body: Element = match read {
     None => note(&ctx.t("decisions.ready.reading")),
     Some(Err(error)) => note(&message_text(ctx, error)),
@@ -117,7 +174,7 @@ fn what_changed(ctx: &mut Ctx, task: &TaskContext, read: Option<&Result<Checkpoi
     Some(Ok(Checkpointed::TooLarge { .. })) => files_card(ctx, task, &[]),
     Some(Ok(Checkpointed::Read { changes, .. })) => files_card(ctx, task, changes.diff.files()),
   };
-  section(ctx, ("task-ready-changes", "decisions.ready.whatChanged"), size, body)
+  section(ctx, ("task-ready-changes", title), size, body)
 }
 
 /// "4 files · +120 / −18".
@@ -191,18 +248,21 @@ fn count(text: &str, color: PaletteColor) -> Element {
     .into()
 }
 
-/// *Verification*: the commit the run's work ended at, and the steps that passed after the work was
-/// first committed.
-fn verification(ctx: &Ctx, run: &RunView) -> Element {
-  let revision = run.run.last_checkpoint().map(|checkpoint| {
-    ctx.t_args(
-      "decisions.ready.commit",
-      [("revision", display::short_revision(checkpoint.revision().as_str()))],
-    )
+/// *Verification*, titled `title`: the commit the run's work ended at (or `head`), the steps that passed after the work
+/// was first committed, and what its delivery adds (`delivered`).
+fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Option<Arc<str>>), title: &str) -> Element {
+  let revision = head.or_else(|| {
+    run.run.last_checkpoint().map(|checkpoint| {
+      ctx.t_args(
+        "decisions.ready.commit",
+        [("revision", display::short_revision(checkpoint.revision().as_str()))],
+      )
+    })
   });
   let checks: Vec<Element> = verifying_steps(run)
     .into_iter()
     .map(|step| check(ctx, run, step))
+    .chain(delivered)
     .collect();
   let body = if checks.is_empty() {
     note(&ctx.t("decisions.ready.noChecks"))
@@ -215,12 +275,7 @@ fn verification(ctx: &Ctx, run: &RunView) -> Element {
       .with_children(checks)
       .into()
   };
-  section(
-    ctx,
-    ("task-ready-verification", "decisions.ready.verification"),
-    revision,
-    body,
-  )
+  section(ctx, ("task-ready-verification", title), revision, body)
 }
 
 /// The steps that passed after the first step whose agent writes to the repository, the one that made the
@@ -276,7 +331,12 @@ fn check(ctx: &Ctx, run: &RunView, step: &StepView) -> Element {
 }
 
 /// A section with its title, a figure at its end, and its body.
-fn section(ctx: &Ctx, (id, title): (&str, &str), figure: Option<Arc<str>>, body: Element) -> Element {
+pub(in super::super) fn section(
+  ctx: &Ctx,
+  (id, title): (&str, &str),
+  figure: Option<Arc<str>>,
+  body: Element,
+) -> Element {
   let head = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -299,7 +359,7 @@ fn section(ctx: &Ctx, (id, title): (&str, &str), figure: Option<Arc<str>>, body:
     .into()
 }
 
-fn note(text: &str) -> Element {
+pub(in super::super) fn note(text: &str) -> Element {
   Text::new(text)
     .variant(ExtraTypography::Note.role())
     .width(Dimension::Pct(100.0))

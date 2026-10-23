@@ -611,7 +611,8 @@
         "markedBlocked": "the task is marked Blocked ({{reason}})",
         "blockedByTasks": "unfinished tasks block the task ({{tasks}})",
         "held": "new starts are held for its group or the project",
-        "optedOut": "the task says Don't merge automatically"
+        "optedOut": "the task says Don't merge automatically",
+        "deliveredByQueue": "its pipeline ends in a Deliver step, so the merge queue delivers it"
       },
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
       "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",

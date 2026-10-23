@@ -89,6 +89,7 @@ pub fn merged(ctx: &Ctx, task: &TaskContext, merge: &RunMerge) -> Element {
     MergeKind::FastForward => "decisions.ready.merged.fastForward",
     MergeKind::MergeCommit => "decisions.ready.merged.mergeCommit",
     MergeKind::AlreadyMerged => "decisions.ready.merged.alreadyMerged",
+    MergeKind::Squash => "decisions.ready.merged.squash",
   };
   let branch = merge.into.as_str();
   let moved = ctx.t_args(

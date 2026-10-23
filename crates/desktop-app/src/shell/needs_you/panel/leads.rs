@@ -26,12 +26,14 @@ pub(super) fn key_of(project: ProjectId, item: &WaitingItem) -> Arc<str> {
   }
   let kind = match item.kind {
     WaitingKind::Memory { .. } => return Arc::from(format!("memory-{project}")),
+    WaitingKind::DeliveryBlocked { .. } => return Arc::from(format!("merge-queue-{project}")),
     WaitingKind::Question(_) => "question",
     WaitingKind::Plan(_) => "plan",
     WaitingKind::Decision(_) => "decision",
     WaitingKind::Interrupted { .. } => "interrupted",
     WaitingKind::StoppedAtLimit { .. } => "limit",
     WaitingKind::ReadyToMerge => "merge",
+    WaitingKind::DeliveryLeft(_) => "delivery",
     WaitingKind::Approval(_) | WaitingKind::Choice(_) => "card",
   };
   let task = item.task.as_ref().map_or_else(String::new, |task| task.id.to_string());

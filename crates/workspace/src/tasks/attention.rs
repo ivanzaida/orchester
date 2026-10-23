@@ -6,7 +6,12 @@
 
 use std::sync::Arc;
 
-use orchester_core::{run::RunNumber, time::Timestamp, tokens::compact_tokens};
+use orchester_core::{
+  merge_queue::{Blocked, Left},
+  run::RunNumber,
+  time::Timestamp,
+  tokens::compact_tokens,
+};
 
 use super::{
   data::ProjectTasks,
@@ -33,6 +38,13 @@ pub enum NeedKind {
   Interrupted,
   /// A run whose every step passed: its work waits to be reviewed and merged.
   ReadyToMerge,
+  /// A run out of the merge queue with conflicts its Integrate step could not resolve.
+  Conflicts,
+  /// A run out of the merge queue for another reason: a failed check on the merged result, a base that kept
+  /// moving, delivery that stopped.
+  DeliveryStopped,
+  /// The merge queue, blocked by the person's checkout.
+  DeliveryBlocked,
   /// The project's memory records waiting for the person's approval.
   Memory,
 }
@@ -49,6 +61,9 @@ impl NeedKind {
       Self::StoppedAtLimit => "overview.needs.kind.stoppedAtLimit",
       Self::Interrupted => "overview.needs.kind.interrupted",
       Self::ReadyToMerge => "overview.needs.kind.readyToMerge",
+      Self::Conflicts => "overview.needs.kind.conflicts",
+      Self::DeliveryStopped => "overview.needs.kind.deliveryStopped",
+      Self::DeliveryBlocked => "overview.needs.kind.deliveryBlocked",
       Self::Memory => "overview.needs.kind.memory",
     })
   }
@@ -60,9 +75,11 @@ impl NeedKind {
       Self::Question => "overview.needs.action.answer",
       Self::PlanReview => "overview.needs.action.reviewPlan",
       Self::Decision => "overview.needs.action.decide",
-      Self::Input | Self::Interrupted => "overview.needs.action.openTask",
+      Self::Input | Self::Interrupted | Self::DeliveryStopped => "overview.needs.action.openTask",
       Self::StoppedAtLimit => "overview.needs.action.raiseLimit",
       Self::ReadyToMerge => "overview.needs.action.reviewMerge",
+      Self::Conflicts => "overview.needs.action.openConflicts",
+      Self::DeliveryBlocked => "overview.needs.action.openMergeQueue",
       Self::Memory => "overview.needs.action.reviewRecords",
     })
   }
@@ -91,6 +108,8 @@ pub enum Decided {
   Summary(Option<SummaryCard>),
   /// On the project's Memory page, in its *Waiting for approval* queue.
   Memory,
+  /// On the project's Merge queue screen.
+  MergeQueue,
   /// Nowhere it can be opened, and why.
   Unavailable(Message),
 }
@@ -127,14 +146,17 @@ impl NeedItem {
     self.waiting.since
   }
 
-  /// The task it is about: *KON-16 · Rate-limit messages from GitHub*, the project's memory, or that it
-  /// is not known.
+  /// The task it is about: *KON-16 · Rate-limit messages from GitHub*, the project's memory, the merge queue, or
+  /// that it is not known.
   pub fn context(&self) -> Message {
-    match (self.task(), self.kind) {
+    match (self.task(), &self.waiting.kind) {
       (Some(task), _) => Message::new("overview.needs.context")
         .with("task", task.key.to_string())
         .with("title", task.title.to_string()),
-      (None, NeedKind::Memory) => Message::new("overview.needs.contextMemory"),
+      (None, WaitingKind::Memory { .. }) => Message::new("overview.needs.contextMemory"),
+      (None, WaitingKind::DeliveryBlocked { waiting, .. }) => {
+        Message::new("overview.needs.contextMergeQueue").with("count", waiting.to_string())
+      }
       (None, _) => Message::new("overview.needs.contextUnread"),
     }
   }
@@ -158,10 +180,12 @@ impl NeedItem {
 
   /// Where it is decided: a request at its card, an agent's question in the conversation, a plan, a limit
   /// and a decision after retries at their card of the Summary, the rest on the Summary; the project's memory
-  /// records on its Memory page; what has no task to open nowhere.
+  /// records on its Memory page, a blocked merge queue on its screen; what has no task to open nowhere.
   pub fn decided(&self) -> Decided {
-    if self.kind == NeedKind::Memory {
-      return Decided::Memory;
+    match self.kind {
+      NeedKind::Memory => return Decided::Memory,
+      NeedKind::DeliveryBlocked => return Decided::MergeQueue,
+      _ => {}
     }
     if self.task().is_none() {
       return Decided::Unavailable(Message::new("overview.needs.unavailable.task"));
@@ -174,7 +198,13 @@ impl NeedItem {
       NeedKind::PlanReview => Decided::Summary(Some(SummaryCard::Plan)),
       NeedKind::StoppedAtLimit => Decided::Summary(Some(SummaryCard::RaiseLimit)),
       NeedKind::Decision => Decided::Summary(Some(SummaryCard::Retries)),
-      NeedKind::Approval | NeedKind::Interrupted | NeedKind::ReadyToMerge | NeedKind::Memory => Decided::Summary(None),
+      NeedKind::DeliveryBlocked => Decided::MergeQueue,
+      NeedKind::Approval
+      | NeedKind::Interrupted
+      | NeedKind::ReadyToMerge
+      | NeedKind::Conflicts
+      | NeedKind::DeliveryStopped
+      | NeedKind::Memory => Decided::Summary(None),
     }
   }
 }
@@ -275,10 +305,49 @@ fn words(tasks: &ProjectTasks, item: &WaitingItem) -> (NeedKind, Message) {
         item.task.as_ref().map(|task| task.key.to_string()).unwrap_or_default(),
       ),
     ),
+    WaitingKind::DeliveryLeft(left) => delivery_left(left, number),
+    WaitingKind::DeliveryBlocked { blocked, .. } => (
+      NeedKind::DeliveryBlocked,
+      Message::new(match blocked {
+        Blocked::Uncommitted { .. } => "overview.needs.title.blockedUncommitted",
+        Blocked::OtherBranch { .. } => "overview.needs.title.blockedOtherBranch",
+        Blocked::InProgress => "overview.needs.title.blockedInProgress",
+        Blocked::HeldLocally => "overview.needs.title.blockedHeld",
+      }),
+    ),
     WaitingKind::Memory { count: 1 } => (NeedKind::Memory, Message::new("overview.needs.title.memoryOne")),
     WaitingKind::Memory { count } => (
       NeedKind::Memory,
       Message::new("overview.needs.title.memoryOther").with("count", count.to_string()),
+    ),
+  }
+}
+
+/// Why run `number` left the merge queue without being merged.
+fn delivery_left(left: &Left, number: Option<RunNumber>) -> (NeedKind, Message) {
+  match left {
+    Left::Conflicts { files } => (
+      NeedKind::Conflicts,
+      Message::new("overview.needs.title.conflicts").with("files", files.join(", ")),
+    ),
+    Left::CheckFailed { tool, .. } => (
+      NeedKind::DeliveryStopped,
+      Message::new("overview.needs.title.checkFailed").with("tool", tool.clone()),
+    ),
+    Left::KeepsMoving { base, heads } => (
+      NeedKind::DeliveryStopped,
+      Message::new("overview.needs.title.keepsMoving")
+        .with("base", base.clone())
+        .with("count", heads.len().to_string()),
+    ),
+    Left::Stopped { detail } => (
+      NeedKind::DeliveryStopped,
+      run_message("overview.needs.title.deliveryStopped", number)
+        .with("detail", detail.lines().next().unwrap_or_default().to_owned()),
+    ),
+    Left::LaterRun => (
+      NeedKind::DeliveryStopped,
+      run_message("overview.needs.title.laterRun", number),
     ),
   }
 }

@@ -198,8 +198,8 @@ fn queued(kontur: &mut Kontur, pipeline: &Published, (title, state): (&str, &'st
 }
 
 /// `main` moves on after the runs started: the sender and its settings change where the conflicting run
-/// changes them.
-fn move_main_on(kontur: &Kontur) -> Result<(), SeedError> {
+/// changes them. Gives `main`'s new head.
+pub(super) fn move_main_on(kontur: &Kontur) -> Result<orchester_core::revision::Revision, SeedError> {
   let initial = files::initial();
   let file = |path: &str| {
     initial
@@ -220,10 +220,9 @@ fn move_main_on(kontur: &Kontur) -> Result<(), SeedError> {
     ("src/webhooks/sender.rs", sender),
     ("src/webhooks/settings.rs", settings),
   ];
-  git::commit(
+  Ok(git::commit(
     &kontur.repo,
     &changed,
     &format!("Kontur: deliveries time out on {MAIN}"),
-  )?;
-  Ok(())
+  )?)
 }

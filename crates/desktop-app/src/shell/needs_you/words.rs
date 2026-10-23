@@ -23,9 +23,11 @@ pub(super) fn kind(ctx: &Ctx, item: &NeedItem) -> (Icon, Arc<str>) {
     NeedKind::Question | NeedKind::Input => Icon::MessageCircleQuestion,
     NeedKind::PlanReview => Icon::Map,
     NeedKind::Decision => Icon::CircleAlert,
-    NeedKind::Interrupted => Icon::CirclePause,
+    NeedKind::Interrupted | NeedKind::DeliveryBlocked => Icon::CirclePause,
     NeedKind::StoppedAtLimit => Icon::Gauge,
     NeedKind::ReadyToMerge => Icon::GitMerge,
+    NeedKind::Conflicts => Icon::GitCompareArrows,
+    NeedKind::DeliveryStopped => Icon::GitBranch,
     NeedKind::Memory => Icon::Brain,
   };
   (glyph, message_text(ctx, &item.kind.label()))
@@ -92,6 +94,8 @@ pub(super) fn place(ctx: &Ctx, item: &WaitingItem) -> Option<Arc<str>> {
     | WaitingKind::Interrupted { .. }
     | WaitingKind::StoppedAtLimit { .. }
     | WaitingKind::ReadyToMerge
+    | WaitingKind::DeliveryLeft(_)
+    | WaitingKind::DeliveryBlocked { .. }
     | WaitingKind::Memory { .. } => None,
   };
   Some(match agent {

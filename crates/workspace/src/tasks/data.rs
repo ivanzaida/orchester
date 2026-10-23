@@ -104,6 +104,9 @@ pub struct ProjectTasks {
   pub asked: Arc<Vec<AskedQuestions>>,
   /// When each memory record of the project and of its tasks that waits for a person's approval was written.
   pub proposed_memory: Arc<Vec<Timestamp>>,
+  /// The runs in the project's merge queue, those that left it and wait for a person and those a person took out of
+  /// it, in the queue's order; not the merged ones (`crate::merge_queue`).
+  pub merge_queue: Arc<Vec<orchester_core::merge_queue::QueueEntry>>,
   /// The phase of each task that has a run, from its latest run, or that it cannot be read.
   pub phases: Arc<Phases>,
   /// How many runs of each task were started and can be read.
@@ -245,6 +248,12 @@ impl ProjectTasks {
           .collect::<Result<_, _>>()?,
       ),
       proposed_memory: Arc::new(proposed_memory(db)?),
+      merge_queue: Arc::new(
+        db.merge_queue()?
+          .into_iter()
+          .filter(|entry| !matches!(entry.state, orchester_core::merge_queue::QueueState::Merged(_)))
+          .collect(),
+      ),
       tasks: Arc::new(tasks),
       not_shared: Arc::new(not_shared),
       kept_tags: Arc::new(kept_tags),

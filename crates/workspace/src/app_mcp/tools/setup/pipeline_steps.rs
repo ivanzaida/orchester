@@ -133,8 +133,10 @@ pub async fn save_pipeline_draft(
     let description = args
       .description
       .unwrap_or_else(|| current.body.description().to_owned());
-    // The pipeline keeps the sources it lists, those of the steps it still has.
-    let edit = PipelineEdit::from_steps(&description, current.body.sources().clone(), steps);
+    // The pipeline keeps the sources it lists, those of the steps it still has, and its Deliver step, which the
+    // editor sets.
+    let mut edit = PipelineEdit::from_steps(&description, current.body.sources().clone(), steps);
+    edit.set_deliver(current.body.deliver().cloned());
     // The editor keeps no draft whose steps break a rule; steps without a profile or tool only wait to
     // be published.
     let broken: Vec<Message> = edit

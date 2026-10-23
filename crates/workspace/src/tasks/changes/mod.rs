@@ -19,9 +19,9 @@ use orchester_core::{
   },
   id::RunId,
   integration::{
-    RunWork, WORKTREES_DIR,
+    GitError, LoggedCommit, RunWork, WORKTREES_DIR, branch_head,
     local::{RebaseStore, RunRebase},
-    own_base,
+    own_base, own_commits,
   },
   revision::Revision,
   run::{Run, RunStatus},
@@ -122,6 +122,9 @@ pub enum ChangesError {
   Store(#[from] StoreError),
   #[error(transparent)]
   Git(#[from] GitDiffError),
+  /// Git could not list the run's commits.
+  #[error(transparent)]
+  Log(#[from] GitError),
   #[error("git's diff is not a unified diff: {0}")]
   Diff(#[from] DiffParseError),
   #[error("the worktree {0} of a run that has not ended is missing")]
@@ -141,8 +144,10 @@ impl ChangesError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) => crate::messages::store_error(error),
-      Self::Git(GitDiffError::Run(CommandError::NotFound)) => Message::new("runs.changes.failure.gitMissing"),
-      Self::Git(_) | Self::Diff(_) => Message::new("runs.changes.failure.git"),
+      Self::Git(GitDiffError::Run(CommandError::NotFound)) | Self::Log(GitError::Run(CommandError::NotFound)) => {
+        Message::new("runs.changes.failure.gitMissing")
+      }
+      Self::Git(_) | Self::Log(_) | Self::Diff(_) => Message::new("runs.changes.failure.git"),
       Self::WorktreeMissing(_) => Message::new("runs.changes.failure.worktreeMissing"),
     }
   }
@@ -173,23 +178,50 @@ pub fn run_changes_in(repo_root: &Path, programs: &Programs, range: &RunRange) -
   let Some(head) = &range.head else {
     return Ok(Checkpointed::NoCheckpoint);
   };
+  let base = own_start(repo_root, programs, range, head)?;
+  checkpointed_in(repo_root, programs, &base, Some(head))
+}
+
+/// The commits the run's work is made of (ORC-19, the review before a queued run merges): its branch's own, newest
+/// first, from where its work starts ([`own_base`]) up to the branch's tip, or its latest checkpoint once the branch is
+/// gone; none before its first checkpoint.
+pub fn run_commits_in(
+  repo_root: &Path,
+  programs: &Programs,
+  range: &RunRange,
+) -> Result<Vec<LoggedCommit>, ChangesError> {
+  let Some(head) = &range.head else {
+    return Ok(Vec::new());
+  };
+  let runner = programs.runner();
+  let tip = branch_head(&runner, Path::new(GIT), (repo_root, &range.work.branch))?.unwrap_or_else(|| head.clone());
+  let base = own_start(repo_root, programs, range, &tip)?;
+  Ok(own_commits(&runner, Path::new(GIT), (repo_root, &base, &tip))?)
+}
+
+/// Where the run's own work up to `head` starts.
+fn own_start(
+  repo_root: &Path,
+  programs: &Programs,
+  range: &RunRange,
+  head: &Revision,
+) -> Result<Revision, ChangesError> {
   let db = ProjectDb::open(repo_root)?;
   let checkpoints = db.checkpoint_revisions(range.run)?;
   let proven = db.run_rebase(range.run)?;
-  let base = match own_base(
+  match own_base(
     &programs.runner(),
     (Path::new(GIT), repo_root),
     (&range.work, head),
     (&checkpoints, proven.as_ref().map(RunRebase::base)),
   ) {
-    Ok(base) => base,
-    // The diff read next tells what git cannot read; the run's own start is the safe one meanwhile.
+    Ok(base) => Ok(base),
+    // What is read next tells what git cannot read; the run's own start is the safe one meanwhile.
     Err(error) => {
       tracing::warn!(%error, run = %range.run, "cannot tell where the run's own work starts; reading from its start");
-      range.work.base.clone()
+      Ok(range.work.base.clone())
     }
-  };
-  checkpointed_in(repo_root, programs, &base, Some(head))
+  }
 }
 
 /// The run's changes from `base` to `head`, its latest checkpoint (`None` before its first).

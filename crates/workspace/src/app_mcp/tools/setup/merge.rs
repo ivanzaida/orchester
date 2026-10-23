@@ -171,6 +171,7 @@ async fn merge_at(
       MergeKind::FastForward => "fast_forward",
       MergeKind::MergeCommit => "merge_commit",
       MergeKind::AlreadyMerged => "already_merged",
+      MergeKind::Squash => "squash",
     };
     Ok(json!({
       "merge": {
@@ -284,6 +285,9 @@ fn ready(db: &ProjectDb, run: &Run, (root, programs): (&Path, &Programs)) -> Res
   }
   if db.run_merge(run.id())?.is_some() {
     return Err(refused("already_merged", "appMcp.errors.alreadyMerged"));
+  }
+  if crate::merge_queue::delivered_by_queue(db, run)? {
+    return Err(refused("delivered_by_queue", "appMcp.errors.deliveredByQueue"));
   }
   if let Delivery::MergedOutside(into) = delivery::of_run(programs, root, run) {
     return Err(ToolError::refused(

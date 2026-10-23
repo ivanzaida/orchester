@@ -32,6 +32,13 @@ pub fn canvas(ctx: &mut Ctx, state: &State, busy: bool) -> Element {
   let readonly = editing.viewing.is_some() || busy;
   let toolbar = toolbar(ctx, state, readonly);
   let flow = graph(ctx, state, readonly);
+  // The Delivers chip at the top right, 12 from the canvas's edges (`gURMA`).
+  let chip = Row::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::new().right(SpacingSize::Md))
+    .justify(lurq::layout::layout_kind::Justify::End)
+    .hit_test(lurq::node::HitTestBehavior::ContentOnly)
+    .child(super::deliver_card::chip(ctx, state));
   Stack::new()
     .id("pipeline-canvas")
     .flex(1.0)
@@ -49,6 +56,7 @@ pub fn canvas(ctx: &mut Ctx, state: &State, busy: bool) -> Element {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0)),
     )
+    .child(chip.absolute_position(0.0, 12.0))
     .child(Column::new().child(toolbar).absolute_position(12.0, 12.0))
     .into()
 }
@@ -122,9 +130,30 @@ fn graph(ctx: &Ctx, state: &State, readonly: bool) -> Element {
   if shown.steps().is_empty() {
     graph = empty_graph(ctx, state, graph, y, readonly);
     y += 200.0;
+  } else if let Some(deliver) = shown.deliver() {
+    (graph, y) = deliver_card(ctx, state, graph, (deliver, shown.steps().len() + 1), (center, y));
   }
   graph = super::graph_routes::routes(ctx, graph, &shown, &positions);
   graph.height(Dimension::Px(y + GRAPH_TOP)).into()
+}
+
+/// The Deliver step's card, always the last, under its edge at `(center, y)`; the graph and where it ends.
+fn deliver_card(
+  ctx: &Ctx,
+  state: &State,
+  graph: Stack,
+  (deliver, number): (&orchester_core::resource::DeliverStep, usize),
+  (center, y): (f32, f32),
+) -> (Stack, f32) {
+  let graph = graph.child(Column::new().child(edge(ctx)).absolute_position(center - 6.0, y));
+  let y = y + EDGE_HEIGHT;
+  let card = super::deliver_card::card(ctx, state, (deliver, number), CARD_WIDTH);
+  let graph = graph.child(
+    Column::new()
+      .child(card)
+      .absolute_position(center - CARD_WIDTH / 2.0, y),
+  );
+  (graph, y + super::deliver_card::DELIVER_HEIGHT)
 }
 pub fn start_node(ctx: &Ctx) -> Row {
   Row::new()
@@ -240,7 +269,7 @@ fn card(ctx: &Ctx, state: &State, step: &Step, index: usize) -> Element {
   card.child(body).into()
 }
 /// Co8O6: compact rectangular badge, not the round status chip.
-fn step_badge(text: &str, glyph: Icon) -> Row {
+pub(super) fn step_badge(text: &str, glyph: Icon) -> Row {
   let gate = glyph == Icon::Hand;
   Row::new()
     .height(Dimension::Px(18.0))

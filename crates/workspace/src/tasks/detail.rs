@@ -264,6 +264,9 @@ pub struct TaskDetail {
   pub run: Option<RunView>,
   /// The merge of the latest run into its base branch, once it was merged.
   pub merge: Option<RunMerge>,
+  /// How the latest run is delivered when its pipeline ends in a Deliver step, with its place in the project's merge
+  /// queue once it joined it (`crate::merge_queue`).
+  pub queue: Option<crate::merge_queue::TaskDelivery>,
   /// What became of the latest run's work when it passed every step and Orchester did not merge it, as git
   /// tells it ([`Self::load_settled`]); `Waiting` as far as [`Self::load_in`] knows.
   pub delivery: Delivery,
@@ -381,9 +384,9 @@ impl TaskDetail {
       .map(|run| db.task_for_run(task.id(), run.id()))
       .transpose()?
       .flatten();
-    let merge = match &latest {
-      Some(run) => db.run_merge(run.id())?,
-      None => None,
+    let (merge, queue) = match &latest {
+      Some(run) => (db.run_merge(run.id())?, crate::merge_queue::task_delivery(&db, run)?),
+      None => (None, None),
     };
     let first_agent = match latest {
       None => super::first_agent::first_agent(&db, &task)?,
@@ -394,6 +397,7 @@ impl TaskDetail {
       first_agent,
       run_task,
       merge,
+      queue,
       history,
       earlier_unreadable,
       blocked_by,
@@ -411,6 +415,7 @@ impl TaskDetail {
       requirements,
       run: None,
       merge: None,
+      queue: None,
       delivery: Delivery::Waiting,
       messages,
       attachments,

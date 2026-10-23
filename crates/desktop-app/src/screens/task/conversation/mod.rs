@@ -201,7 +201,13 @@ impl ConversationTab {
     let proposed = proposals(&loaded.orchestrated, (offered.as_ref(), &loaded.questions));
     let working = working_line(run, conversation, (items, &loaded.entries), asking);
     let arrived = arrivals(items, &loaded.entries) + proposed.len();
-    let chat = timeline::chat(ctx, &self.follow, (&built.rows, items, &proposed), (working, arrived));
+    let chat = timeline::chat(
+      ctx,
+      &self.follow,
+      (&built.rows, &built.delivery),
+      (items, &proposed),
+      (working, arrived),
+    );
     (
       states::shown_as_last_read(ctx, chat, stale.as_ref(), &self.retry),
       Some(state),

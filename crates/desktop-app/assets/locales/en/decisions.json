@@ -192,7 +192,8 @@
       "merged": {
         "fastForward": "{{branch}} moved forward to {{revision}} at {{time}}.",
         "mergeCommit": "{{branch}} got merge commit {{revision}} at {{time}}.",
-        "alreadyMerged": "{{branch}} already held the run's work at {{time}}."
+        "alreadyMerged": "{{branch}} already held the run's work at {{time}}.",
+        "squash": "{{branch}} got the run's work squashed into {{revision}} at {{time}}."
       },
       "sentences": "{{first}} {{second}}",
       "left": {

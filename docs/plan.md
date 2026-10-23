@@ -952,6 +952,29 @@ ORC-78 · Modules in shared projects: made, changed and synced through the team 
 - **Open:** with S4 the module entries of the outbox (row 71); with S2d the `modules` event and a `task` event's module
   applied from the stream.
 
+ORC-19 · Delivery: merge queue and Deliver step · branch `orchester/orc-19-run-1` (implemented 2026-10-23; pipeline
+Check, Review and Verify follow). Built against `data/orchester2.pen` layer `p9aqZc` *Delivery* (not `i2o8ko`); see
+the design doc's Delivery › Built for what differs.
+- **Domain**: `Pipeline.deliver` (`DeliverStep`: Approve to merge / Auto-merge, merge commit / squash, integrator,
+  re-check locked on for Auto-merge; Pull request *Coming later*); `orchester_core::merge_queue` records, store
+  `merge_queue` + append-only `merge_queue_events`, `run_merges.kind` `squash`; `orchester_workspace::merge_queue`
+  (join, advance one step at a time: sync, Check on the merged result, Integrate via the run's own step, approval,
+  land with clean-up; at most 3 re-syncs; dirty checkout blocks; move up / to top / remove; approve, reject, resolve
+  myself, resolved, requeue). The final merge compares the checked base again under the integration lease
+  (`Delivering`); approval is person-only and void once the run works again.
+- **UI**: Merge queue screen and sidebar count; the pipeline editor's Deliver card, chip and inspector; the task
+  Summary's delivering / integrating / review (Changes, Commits, Checks) / integrate failed / resolve myself (with
+  its checks panel: checking, markers left) / merged views and Run details' Delivery rows; the Conversation's lines
+  of what the queue did (`tasks::timeline::delivery`, `Urfxj`); Needs you cards (Ready to merge, Conflicts need you,
+  Delivery stopped, Delivery blocked); Recent activity lines. QA seeds `delivery`, `delivery-blocked`,
+  `delivery-empty`.
+- **MCP**: `get_run`, `list_runs`, `get_daily_report` report delivery; `merge_run` refuses a run the queue delivers.
+- Tests: `cargo test -p orchester-workspace --test merge_queue merge_queue`, `--test needs_you`, `--test overview`;
+  `cargo test -p orchester-app --test merge_queue merge_queue`, `--test screens`, `--test i18n`.
+- **Open:** task header status chip and *Open merge queue* in the header, per-file *Open file*, OS notifications for
+  delivery, the 960 frame `MIQ3j`, a project base-branch setting; the Integrating state holds the queue while the
+  Integrate step's agent waits for a person; a failed check's output reaches the Orchestrator's run reads as printed.
+
 ORC-50 · Delivery charts and a delivery forecast · branch `orchester/orc-50-run-1` (implemented 2026-10-22; pipeline
 Check and Review follow).
 - **Domain** (`orchester_workspace::delivery`): facts read from the store only (`DeliveryFacts::read`: each task's

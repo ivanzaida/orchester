@@ -251,6 +251,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::pull_requests::typography(palette))
       .chain(super::usage::typography(palette))
       .chain(super::memory::typography(palette))
+      .chain(super::delivery::typography(palette))
       .chain(super::sources::typography(palette))
       .chain(super::import::typography(palette))
       .collect(),

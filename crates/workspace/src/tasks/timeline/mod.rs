@@ -7,9 +7,11 @@
 //! rule of the run, auto-approval) is no card: its call's entry in the tool group carries the mark. An attempt that
 //! returned or restarted the work starts with its mark ([`mark`]). Orchester's notices that the base branch moved sit
 //! in the step that read them ([`base_moved`]). Messages and notices that wait for a step follow, and a run that
-//! ended closes with its end. What is shown of it is [`view`]'s.
+//! ended closes with its end. What is shown of it is [`view`]'s; what the merge queue did with the run joins the
+//! shown rows by time ([`delivery`]).
 
 pub mod base_moved;
+pub mod delivery;
 pub mod group;
 pub mod load;
 pub mod mark;

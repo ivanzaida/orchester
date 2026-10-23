@@ -319,7 +319,9 @@ impl Component for TaskFrame {
     ctx.provide(self.state.clone());
     ctx.provide(self.changes.clone());
     let feed = &props.project.feed;
-    let saves = feed.revision.get() + feed.outside.get().tasks;
+    // A change of the merge queue changes where the task's run stands in its delivery (ORC-19).
+    let queue = crate::project::merge_queue::changes(ctx, &props.project.open.repo_root);
+    let saves = feed.revision.get() + feed.outside.get().tasks + queue;
     let again = ReadAgain {
       changes: feed.run_changes(self.live.get()),
       saves,

@@ -17,6 +17,7 @@ use crate::{id::ResourceId, name::Name, permission::StepPermissions, tokens::Tok
 mod base_moves;
 mod budget;
 mod changes;
+mod deliver;
 mod edit;
 mod sources;
 mod starter;
@@ -24,7 +25,8 @@ mod strictness;
 
 pub use self::{
   base_moves::{takes_base_moves, takes_base_moves_by_default},
-  changes::{PipelineChange, StepChange, changes},
+  changes::{DeliverChange, PipelineChange, StepChange, changes},
+  deliver::{DeliverMode, DeliverStep, MergeMethod},
   edit::{EditProblem, PipelineEdit},
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
@@ -163,6 +165,10 @@ pub struct Pipeline {
   #[serde(default, skip_serializing_if = "PipelineSources::is_empty")]
   sources: PipelineSources,
   steps: Vec<Step>,
+  /// The Deliver step it ends in; versions saved before delivery existed, and pipelines whose runs a person merges
+  /// from the task, have none.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  deliver: Option<DeliverStep>,
 }
 
 #[derive(Deserialize)]
@@ -172,6 +178,8 @@ struct PipelineFields {
   #[serde(default)]
   sources: PipelineSources,
   steps: Vec<Step>,
+  #[serde(default)]
+  deliver: Option<DeliverStep>,
 }
 
 /// Why a stored pipeline body is not a pipeline.
@@ -190,6 +198,7 @@ impl TryFrom<PipelineFields> for Pipeline {
     Ok(
       Self::new(fields.steps)?
         .with_description(fields.description)
+        .with_deliver(fields.deliver)
         .with_sources(fields.sources)?,
     )
   }
@@ -205,12 +214,20 @@ impl Pipeline {
       description: String::new(),
       sources: PipelineSources::default(),
       steps,
+      deliver: None,
     })
   }
 
   #[must_use]
   pub fn with_description(mut self, description: String) -> Self {
     self.description = description;
+    self
+  }
+
+  /// This pipeline ending in `deliver`, or in no Deliver step.
+  #[must_use]
+  pub fn with_deliver(mut self, deliver: Option<DeliverStep>) -> Self {
+    self.deliver = deliver;
     self
   }
 
@@ -230,6 +247,11 @@ impl Pipeline {
   /// The sources the pipeline and its steps list.
   pub fn sources(&self) -> &PipelineSources {
     &self.sources
+  }
+
+  /// The Deliver step the pipeline ends in: its runs join the project's merge queue once every step passed.
+  pub const fn deliver(&self) -> Option<&DeliverStep> {
+    self.deliver.as_ref()
   }
 
   /// Steps in the order the user arranged them.

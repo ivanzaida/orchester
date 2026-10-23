@@ -121,6 +121,9 @@ pub struct LatestRun {
   /// It reads interrupted only because no runner looks after it ([`LatestRun::without_runner`]); a runner
   /// records it once one does.
   pub lost_runner: bool,
+  /// Its pipeline ends in a Deliver step: once every step passed, the project's merge queue delivers it
+  /// (`crate::merge_queue`), not the person.
+  pub delivers: bool,
 }
 
 impl LatestRun {
@@ -166,6 +169,7 @@ impl LatestRun {
       decision: AwaitedDecision::of(run),
       step: CurrentStep::of(run),
       lost_runner: false,
+      delivers: run.snapshot().body().deliver().is_some(),
     }
   }
 

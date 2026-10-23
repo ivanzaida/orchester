@@ -245,6 +245,9 @@ fn left_words(why: &MergeLeft) -> String {
     MergeLeft::BlockedByTasks { tasks } => format!("unfinished tasks block its task ({})", tasks.join(", ")),
     MergeLeft::Held => "new starts are held for its group or the project".to_owned(),
     MergeLeft::OptedOut => "its task says Don't merge automatically".to_owned(),
+    MergeLeft::DeliveredByQueue => {
+      "its pipeline ends in a Deliver step, so the merge queue delivers it (do not call merge_run)".to_owned()
+    }
   }
 }
 
