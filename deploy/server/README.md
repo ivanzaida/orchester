@@ -18,7 +18,7 @@ and ports 80 and 443 reachable from the internet:
 1. **Copy the two files** into a new folder (`mkdir orchester-server && cd orchester-server`): `compose.yaml` as it
    is, and `.env.example` as `.env`. They are in this folder at the release's tag (`server-v<version>`), attached to
    its GitHub Release (`.env.example` as `env.example`), and inline on the Docker Hub page.
-2. **Fill in `.env`.** Set `ORCHESTER_VERSION` to the release (`0.1.2`), `ORCHESTER_HOST` to the DNS name, and
+2. **Fill in `.env`.** Set `ORCHESTER_VERSION` to the release (`0.1.3`), `ORCHESTER_HOST` to the DNS name, and
    `ORCHESTER_ADMIN_SECRET` to the output of `openssl rand -base64 32`. Every other value has a working default; the
    file explains each. Then `chmod 600 .env`.
 3. **Start it:** `docker compose up -d`. Caddy gets the certificate for `ORCHESTER_HOST`. `docker compose ps` shows
@@ -90,15 +90,15 @@ Use `compose.private.yaml`; Caddy's public certificate needs the internet.
 1. On a computer with the internet, fetch the images and the files, and save the images to one archive:
 
    ```sh
-   docker pull ivanzaida/orchester-server:0.1.2
-   docker pull ivanzaida/orchester-server-admin:0.1.2
-   docker save -o orchester-server-0.1.2.tar ivanzaida/orchester-server:0.1.2 ivanzaida/orchester-server-admin:0.1.2
+   docker pull ivanzaida/orchester-server:0.1.3
+   docker pull ivanzaida/orchester-server-admin:0.1.3
+   docker save -o orchester-server-0.1.3.tar ivanzaida/orchester-server:0.1.3 ivanzaida/orchester-server-admin:0.1.3
    ```
 
    For an arm64 host, add `--platform linux/arm64` to both `docker pull`s.
-2. Carry `orchester-server-0.1.2.tar`, `compose.private.yaml` and `.env.example` to the host, and run
-   `docker load -i orchester-server-0.1.2.tar` there.
-3. In `.env` (from `.env.example`): `ORCHESTER_VERSION=0.1.2`, `ORCHESTER_ADMIN_SECRET`, `ORCHESTER_ADMIN_CLOUD_URL=`
+2. Carry `orchester-server-0.1.3.tar`, `compose.private.yaml` and `.env.example` to the host, and run
+   `docker load -i orchester-server-0.1.3.tar` there.
+3. In `.env` (from `.env.example`): `ORCHESTER_VERSION=0.1.3`, `ORCHESTER_ADMIN_SECRET`, `ORCHESTER_ADMIN_CLOUD_URL=`
    (empty), and `ORCHESTER_SERVER_TLS_NAMES` with the names and addresses people reach the host by. The names are read
    only when the server makes its certificate, on its first start.
 4. `docker compose -f compose.private.yaml up -d`, then `docker compose -f compose.private.yaml logs server` for the
